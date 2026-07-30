@@ -31,7 +31,9 @@ class EpisodeMetrics:
         predicted_answer: Raw model output string.
         correct: Whether the prediction matches gold (see :func:`grade_mcq_answer`).
         confident: Harness-level confidence flag (planner reached an answer).
-        planning_steps: Number of navigation / EQA steps taken.
+        planning_steps: Observation frames captured (``agent.obs_count``). This is a
+            perception counter, not a count of planning decisions -- see
+            ``decision_rounds`` for the agentic loop's actual tool rounds.
         success: Episode completed without fatal error.
         parsed_answer_letter: Letter extracted from ``predicted_answer``.
         model_confident: Optional model-reported confidence.
@@ -75,6 +77,19 @@ class EpisodeMetrics:
     error: str = ""
     # Harness fingerprint for reproducibility (merge / explore / git, etc.).
     harness: dict = field(default_factory=dict)
+    # Agentic dual salvage metrics: scored answer stays no-salvage; counterfactual logged.
+    salvage_pred: str = ""
+    salvage_correct: bool = False
+    scored_policy: str = ""
+    # Agentic decision accounting, distinct from ``planning_steps`` (obs frames).
+    decision_rounds: int = 0
+    budget_hit: bool = False
+    # Which answer channel produced the scored letter, and its calibrated confidence.
+    answer_provenance: str = ""
+    answer_confidence: float = 0.0
+    # Set when the scored letter came from a location MCQ whose target was never
+    # visible in the attached views (previously blanked to "").
+    unverified_location_guess: bool = False
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""
@@ -202,8 +217,48 @@ def choices_are_count_mcq(choices: list[str] | None) -> bool:
     return hits >= max(2, (len(real) + 1) // 2)
 
 
+_TIME_OF_DAY_CHOICES = frozenset(
+    {
+        "morning",
+        "late morning",
+        "early morning",
+        "noon",
+        "midday",
+        "afternoon",
+        "late afternoon",
+        "early afternoon",
+        "evening",
+        "dusk",
+        "sunset",
+        "sunrise",
+        "night",
+        "late night",
+        "midnight",
+        "daytime",
+        "nighttime",
+    }
+)
+
+
+def choices_are_time_of_day(choices: list[str] | None) -> bool:
+    """True for ``Morning``/``Afternoon``/``Evening``/``Night`` style options.
+
+    These are neither places nor states, so without this check they fell through
+    to :func:`choices_are_location_mcq` and got routed into the location-visibility
+    gate and salvage prompts that assume a physical target was observed.
+    """
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower().rstrip(".") for c in choices[:4] if (c or "").strip()]
+    real = [c for c in cleaned if not c.startswith("(do not choose")]
+    if len(real) < 2:
+        return False
+    hits = sum(1 for c in real if c in _TIME_OF_DAY_CHOICES)
+    return hits >= max(2, (len(real) + 1) // 2)
+
+
 def choices_are_location_mcq(choices: list[str] | None) -> bool:
-    """True when MCQ options are places/things, not yes/no or count answers."""
+    """True when MCQ options are places/things, not yes/no, count, state, or time."""
     if not choices:
         return False
     cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
@@ -215,10 +270,10 @@ def choices_are_location_mcq(choices: list[str] | None) -> bool:
         return False
     if choices_are_attribute_state(choices):
         return False
+    if choices_are_time_of_day(choices):
+        return False
     yes_no_like = sum(
-        1
-        for c in cleaned
-        if c in _YES_NO_CHOICE_HINTS or any(h in c.split() for h in ("yes", "no", "true", "false"))
+        1 for c in cleaned if c in _YES_NO_CHOICE_HINTS or any(h in c.split() for h in ("yes", "no", "true", "false"))
     )
     return yes_no_like < max(1, len(cleaned) // 2)
 

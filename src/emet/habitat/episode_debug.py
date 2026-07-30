@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,36 @@ def _git_head() -> str:
     return ""
 
 
+@lru_cache(maxsize=1)
+def code_state_fingerprint() -> str:
+    """Identify the code that is actually running, not just ``HEAD``.
+
+    Runs launched from a dirty tree all report the same ``git_commit`` even though
+    they execute different code, which made two 2026-07 HM-EQA sweeps look like
+    nondeterminism from identical configs. Appending a hash of the uncommitted diff
+    makes those runs distinguishable. Cached once per process, since the code was
+    imported at start-up and later edits do not affect this process.
+    """
+    head = _git_head() or "nogit"
+    try:
+        root = Path(__file__).resolve().parents[3]
+        r = subprocess.run(
+            ["git", "-C", str(root), "diff", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return f"{head}+unknown"
+    if r.returncode != 0:
+        return f"{head}+unknown"
+    diff = r.stdout
+    if not diff.strip():
+        return f"{head}+clean"
+    return f"{head}+dirty.{hashlib.sha1(diff.encode('utf-8')).hexdigest()[:12]}"
+
+
 def coerce_parameters_dict(parameters: Any) -> dict[str, Any]:
     """Normalize :class:`~emet.core.parameters.Parameters` or a plain dict for JSON manifests."""
     if parameters is None:
@@ -62,6 +94,7 @@ def harness_fingerprint_from_parameters(parameters: Any) -> dict[str, Any]:
         block = {}
     return {
         "git_commit": _git_head(),
+        "code_state": code_state_fingerprint(),
         "dynagraph_merge_xy_m": params.get("dynagraph_merge_xy_m"),
         "dynagraph_staleness_horizon": params.get("dynagraph_staleness_horizon"),
         "fallback_spatial_merge_xy_m": fusion.get("fallback_spatial_merge_xy_m"),
@@ -116,6 +149,7 @@ def write_run_manifest(
         "device": device,
         "resume": resume,
         "git_commit": _git_head(),
+        "code_state": code_state_fingerprint(),
         "harness": harness_fingerprint_from_parameters(params),
         "graph_eqa_frontier_nodes": params.get("graph_eqa_frontier_nodes"),
         "export_full_graph": os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower()

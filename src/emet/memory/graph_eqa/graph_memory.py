@@ -637,6 +637,8 @@ class GraphEQAMemory:
         self.last_room_clusters: list[Any] = []
         self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
+        # Frames attached to the last EQA call, kept for salvage / counterfactual re-asks.
+        self.last_relevant_images: list[Any] = []
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
         self._nodes: list[GraphNode] = []
@@ -907,6 +909,7 @@ class GraphEQAMemory:
         self.last_eqa_spatial_rag = None
         self.last_eqa_nav_fallback_count = 0
         self.last_eqa_model_confident = False
+        self.last_relevant_images = []
 
     def invalidate_nodes_near(
         self,
@@ -4021,6 +4024,9 @@ class GraphEQAMemory:
             relevant_images.append(im)
             commands.append(im)
         self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
+        # Keep the attached frames reachable after query_answer returns so the salvage
+        # counterfactual can re-ask on the same images instead of silently no-op'ing.
+        self.last_relevant_images = list(relevant_images)
 
         _logger.info(
             f"query_answer: calling eqa_client (n_images={len(relevant_images)} "

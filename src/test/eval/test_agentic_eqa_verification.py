@@ -431,8 +431,8 @@ def test_unknown_without_action_obs_explores():
     assert agent.run_exploration.called
 
 
-def test_finalize_unknown_location_letter_salvages_after_explore():
-    """After Action/explore is exhausted, force a VLM letter — not empty Unknown (q105)."""
+def test_finalize_unknown_location_letter_counterfactual_salvage():
+    """Scored Unknown stays; salvage VLM is called and logged as counterfactual."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
@@ -440,6 +440,8 @@ def test_finalize_unknown_location_letter_salvages_after_explore():
     agent.parameters = {}
     agent.graph_memory = MagicMock()
     agent.graph_memory._salvage_location_mcq_letter.return_value = "A"
+    agent.graph_memory.last_eqa_images = None
+    agent.graph_memory.last_relevant_images = None
     img = Image.new("RGB", (8, 8), color=(10, 20, 30))
     ex = AgenticEQAExecutor(
         agent,
@@ -455,20 +457,62 @@ def test_finalize_unknown_location_letter_salvages_after_explore():
         max_rounds=4,
         max_nav_steps=2,
         router=False,
+        collect_trace=True,
     )
     ex._n_unknown_explore = 2
     out = ex._finalize_unknown_location_letter(
         {"ok": True, "answer": "Unknown", "confidence": False, "relevant_images": [img]}
     )
-    assert out["answer"] == "A"
-    assert "final-location-salvage" in out["discord_text"]
+    assert out["answer"] == "Unknown"
+    assert "final-location-salvage" not in str(out.get("discord_text") or "")
     agent.graph_memory._salvage_location_mcq_letter.assert_called_once()
-    # Non-location / already-letter answers are left alone.
+    assert ex._salvage_counterfactual_letter == "A"
+    assert any(r.get("event") == "final_location_salvage_skipped" for r in ex._trace_rows)
+    assert any(
+        r.get("event") == "final_location_salvage_counterfactual"
+        and r.get("letter") == "A"
+        and r.get("applied") is False
+        for r in ex._trace_rows
+    )
+    # Non-location / already-letter answers are left alone (no salvage call).
+    agent.graph_memory._salvage_location_mcq_letter.reset_mock()
     keep = ex._finalize_unknown_location_letter(
         {"ok": True, "answer": "B", "confidence": False, "relevant_images": [img]}
     )
     assert keep["answer"] == "B"
+    agent.graph_memory._salvage_location_mcq_letter.assert_not_called()
 
+
+def test_finalize_unknown_skips_salvage_without_images():
+    """No images → skip counterfactual VLM call; still mark scored no-salvage."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = agent.graph_memory
+    gm._salvage_location_mcq_letter = MagicMock(return_value="A")
+    gm.last_eqa_images = None
+    gm.last_relevant_images = None
+    q = "\n".join(
+        [
+            "Where is the wall clock?",
+            "A) Above the sink",
+            "B) Next to the refrigerator",
+            "C) Near the stove",
+            "D) On the wall opposite the windows",
+        ]
+    )
+    ex = AgenticEQAExecutor(agent, q, max_rounds=2, max_nav_steps=4, collect_trace=True)
+    out = ex._finalize_unknown_location_letter({"answer": "Unknown", "confidence": False, "relevant_images": []})
+    assert out.get("answer") == "Unknown"
+    assert gm._salvage_location_mcq_letter.call_count == 0
+    assert ex._salvage_counterfactual_letter == ""
+    assert any(r.get("event") == "final_location_salvage_skipped" for r in ex._trace_rows)
+    assert not any(r.get("event") == "final_location_salvage_counterfactual" for r in ex._trace_rows)
+
+
+def test_submit_answer_ok_when_nav_exhausted_without_present():
     """Nav exhausted → submit_answer ok without PRESENT (so Action:N can be followed)."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
@@ -1205,10 +1249,14 @@ def test_presence_without_answerability_does_not_auto_submit(monkeypatch):
 
     out = ex._tool_submit_answer("")
     assert out.get("ok") is True
-    assert "Unknown" in str(out.get("answer") or out.get("discord_text") or "")
-    assert out.get("verified") is False
-    assert any(row.get("tool") == "abstain_unverified" for row in ex._trace_rows)
-    assert not any(row.get("tool") == "submit_answer" and row.get("event") != "tool_pick" for row in ex._trace_rows)
+    # Evidence never established answerability, so the letter is a forced best guess
+    # carrying its provenance and a low calibrated confidence — not a silent Unknown.
+    assert out.get("answer_provenance") == "uniform_prior"
+    assert out.get("answer") in {"A", "B", "C", "D"}
+    assert float(out.get("answer_confidence")) <= 0.5
+    forced = [row for row in ex._trace_rows if row.get("tool") == "forced_answer"]
+    assert len(forced) == 1
+    assert forced[0]["reason"] == "target evidence did not establish answer sufficiency"
 
 
 def test_voxel_sim_upgrades_full_frame_absent_to_present():
@@ -1347,7 +1395,7 @@ def test_image_verify_three_band_absent_candidate_present():
 
 
 def test_vlm_assess_unlocks_even_when_siglip_absent(monkeypatch):
-    """Qwen answerable unlocks submit; SigLIP ABSENT is proposal info, not a hard block."""
+    """Qwen answerable + phrase corroboration unlocks; SigLIP ABSENT is not a hard block."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
 
@@ -1369,6 +1417,9 @@ def test_vlm_assess_unlocks_even_when_siglip_absent(monkeypatch):
         img_feat=None,
     )
     gm.eqa_client = MagicMock()
+    gm.labels_near_obs = MagicMock(return_value=["utensils", "table"])
+    gm._observations = [MagicMock(labels=["utensils", "plate"])]
+    gm._nodes = []
 
     class _Assess:
         target = "utensils"
@@ -1402,6 +1453,184 @@ def test_vlm_assess_unlocks_even_when_siglip_absent(monkeypatch):
     vlm_rows = [r for r in ex._trace_rows if r.get("tool") == "vlm_assess"]
     assert vlm_rows[-1].get("suggested_answer") == "A"
     assert vlm_rows[-1].get("proposal_status") == "ABSENT"
+    assert any(r.get("event") == "answerable_confirmed" for r in ex._trace_rows)
+
+
+def test_answerable_deferred_without_phrase_hit(monkeypatch):
+    """First answerable without inventory corroboration does not unlock submit."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = MagicMock(rgb=np.zeros((4, 4, 3), dtype=np.uint8))
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="PRESENT",
+        sim=0.2,
+        ok=True,
+        obs_id=9,
+        phrase="clock",
+        text_feat=None,
+        img_feat=None,
+    )
+    gm.eqa_client = MagicMock()
+    gm.labels_near_obs = MagicMock(return_value=["sofa", "lamp"])
+    gm._observations = [MagicMock(labels=["sofa"])]
+    gm._nodes = []
+    gm.memory_summary_enabled = False
+
+    class _Assess:
+        target = "clock"
+        present = True
+        answerable = True
+        need_more_views = False
+        suggested_answer = "B"
+        reason = "clock on wall"
+        raw = "{}"
+
+        def to_dict(self):
+            return {}
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.build_inventory_brief",
+        lambda **k: "brief",
+    )
+
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "clock"
+    ex._tool_verify_siglip("clock", 9)
+    assert ex._verified is False
+    assert ex._pending_answerable is not None
+    assert ex._pending_answerable.get("letter") == "B"
+    assert ex._evidence_policy.state == AgenticState.REPLAN
+    assert any(r.get("event") == "answerable_deferred" for r in ex._trace_rows)
+    msg = build_state_message(ex)
+    assert "pending_answer=B" in msg
+
+
+def test_answerable_two_view_agree_unlocks(monkeypatch):
+    """Second answerable with same letter on a different obs unlocks."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = MagicMock(rgb=np.zeros((4, 4, 3), dtype=np.uint8))
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.eqa_client = MagicMock()
+    gm.labels_near_obs = MagicMock(return_value=["sofa"])
+    gm._observations = [MagicMock(labels=["sofa"])]
+    gm._nodes = []
+
+    class _Assess:
+        target = "clock"
+        present = True
+        answerable = True
+        need_more_views = False
+        suggested_answer = "B"
+        reason = "guess"
+        raw = "{}"
+
+        def to_dict(self):
+            return {}
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.build_inventory_brief",
+        lambda **k: "brief",
+    )
+
+    def _verify_ret(obs_id: int):
+        return MagicMock(
+            status="CANDIDATE",
+            sim=0.11,
+            ok=True,
+            obs_id=obs_id,
+            phrase="clock",
+            text_feat=None,
+            img_feat=None,
+        )
+
+    gm.verify_phrase_at_obs.side_effect = lambda phrase, obs_id, **k: _verify_ret(int(obs_id))
+
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "clock"
+    ex._tool_verify_siglip("clock", 9)
+    assert ex._verified is False
+    # Allow second assess on a new obs (clear same-view skip set entry is automatic via new id).
+    ex._tool_verify_siglip("clock", 11)
+    assert ex._verified is True
+    assert ex._evidence_policy.state == AgenticState.ANSWER
+    assert any(r.get("event") == "answerable_confirmed" and r.get("reason") == "two_view_agree" for r in ex._trace_rows)
+
+
+def test_need_more_views_blocks_unlock(monkeypatch):
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = MagicMock(rgb=np.zeros((4, 4, 3), dtype=np.uint8))
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="PRESENT", sim=0.2, ok=True, obs_id=9, phrase="clock", text_feat=None, img_feat=None
+    )
+    gm.eqa_client = MagicMock()
+    gm.labels_near_obs = MagicMock(return_value=["clock", "wall"])
+    gm._observations = [MagicMock(labels=["clock"])]
+    gm._nodes = []
+
+    class _Assess:
+        target = "clock"
+        present = True
+        answerable = True
+        need_more_views = True
+        suggested_answer = "A"
+        reason = "need another angle"
+        raw = "{}"
+
+        def to_dict(self):
+            return {}
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.build_inventory_brief",
+        lambda **k: "brief",
+    )
+
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "clock"
+    ex._tool_verify_siglip("clock", 9)
+    assert ex._verified is False
+    assert ex._evidence_policy.state == AgenticState.REPLAN
+    assert any(r.get("event") == "answerable_deferred" and r.get("reason") == "need_more_views" for r in ex._trace_rows)
 
 
 def test_submit_keeps_qwen_letter_when_query_echoes_xyz():
@@ -1432,7 +1661,7 @@ def test_submit_keeps_qwen_letter_when_query_echoes_xyz():
     )
     ex._verified = True
     ex._verified_obs_id = 1
-    ex._last_vlm_assess = {"suggested_answer": "C"}
+    ex._last_vlm_assess = {"present": True, "suggested_answer": "C"}
     out = ex._do_submit_answer()
     assert out["answer"] == "C"
     submit = next(r for r in ex._trace_rows if r.get("tool") == "submit_answer")
@@ -1465,6 +1694,9 @@ def test_vlm_assess_unlocks_verified_submit_gate(monkeypatch):
         img_feat=None,
     )
     gm.eqa_client = MagicMock()
+    gm.labels_near_obs = MagicMock(return_value=["utensils", "table"])
+    gm._observations = [MagicMock(labels=["utensils"])]
+    gm._nodes = []
 
     class _Assess:
         target = "utensils"
@@ -1986,7 +2218,7 @@ def test_station_obs_excluded_from_investigate_cards():
 
 
 def test_prefer_explore_after_close_absent():
-    """Close+ABSENT sets prefer_explore; fallback and state nudge coverage growth."""
+    """Close + VLM present=false sets prefer_explore; SigLIP ABSENT alone does not."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     from emet.memory.graph_eqa.agentic_tools import build_state_message
@@ -2014,21 +2246,32 @@ def test_prefer_explore_after_close_absent():
             source="frontier",
         ),
     ]
+    # SigLIP ABSENT alone must not set prefer_explore.
     ex._record_place_inspect(
         38,
         closest_m=0.4,
         verify_out={"status": "ABSENT", "phrase": "fruit bowl"},
         approach_index=0,
     )
+    assert ex._prefer_explore is False
+    # VLM assess present=false at a close look does.
+    ex._record_place_inspect(
+        38,
+        closest_m=0.4,
+        verify_out={
+            "status": "ABSENT",
+            "phrase": "fruit bowl",
+            "present": False,
+            "answerable": False,
+        },
+        approach_index=1,
+    )
     assert ex._prefer_explore is True
+    assert ex._prefer_explore_reason == "absent"
     msg = build_state_message(ex)
     assert "Prefer explore_frontier" in msg
     tool, _args = ex._fallback_tool()
     assert tool == "explore_frontier"
-    ex._prefer_explore = False
-    # Simulate successful explore clearing the nudge.
-    ex._prefer_explore = True
-    ex._n_explore = 0
     # Direct clear path used by explore tool:
     ex._prefer_explore = False
     assert ex._prefer_explore is False
@@ -2067,8 +2310,29 @@ _CLOCK_LOCATION_Q = "\n".join(
 )
 
 
-def test_router_room_mismatch_sets_prefer_explore():
-    """Wrong room vs MCQ targets → prefer_explore + room-mismatch nudge."""
+def test_agentic_skips_final_location_salvage():
+    """Scored path never applies salvage; counterfactual may still fire with images."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = agent.graph_memory
+    gm._salvage_location_mcq_letter = MagicMock(return_value="A")
+    gm.last_eqa_images = None
+    gm.last_relevant_images = None
+    img = Image.new("RGB", (8, 8), color=(1, 2, 3))
+    ex = AgenticEQAExecutor(agent, _CLOCK_LOCATION_Q, max_rounds=2, max_nav_steps=4, collect_trace=True)
+    out = ex._finalize_unknown_location_letter({"answer": "Unknown", "confidence": False, "relevant_images": [img]})
+    assert out.get("answer") == "Unknown"
+    assert gm._salvage_location_mcq_letter.call_count == 1
+    assert ex._salvage_counterfactual_letter == "A"
+    assert any(r.get("event") == "final_location_salvage_skipped" for r in ex._trace_rows)
+    assert any(r.get("event") == "final_location_salvage_counterfactual" for r in ex._trace_rows)
+
+
+def test_router_room_mismatch_is_diagnostic_only():
+    """Wrong room vs MCQ targets is traced but does not set prefer_explore."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     from emet.memory.graph_eqa.agentic_tools import build_state_message
@@ -2106,28 +2370,28 @@ def test_router_room_mismatch_sets_prefer_explore():
     assert picked_by == "vlm"
     assert calls == [("explore_frontier", {})]
     assert meta.get("current_room") == "patio"
-    assert meta.get("prefer_explore_room_mismatch") is True
+    assert meta.get("prefer_explore_room_mismatch") is None
+    assert meta.get("room_mismatch_diagnostic") is True
     assert meta.get("rooms_line") == "Rooms: patio(3), kitchen(8)"
     assert "kitchen" in meta.get("question_target_rooms", [])
     assert "living_room" in meta.get("question_target_rooms", [])
     assert "dining_room" in meta.get("question_target_rooms", [])
     assert ex._last_room_estimate == "patio"
-    assert ex._prefer_explore is True
-    assert ex._prefer_explore_reason == "room_mismatch"
+    assert ex._prefer_explore is False
+    assert ex._prefer_explore_reason == ""
     room_rows = [r for r in ex._trace_rows if r.get("event") == "router_room"]
     assert len(room_rows) == 1
     assert room_rows[0].get("rooms_line") == "Rooms: patio(3), kitchen(8)"
     assert room_rows[0].get("question_target_rooms") == meta.get("question_target_rooms")
-    assert room_rows[0].get("prefer_explore_reason") == "room_mismatch"
     msg = build_state_message(ex)
     assert "Current room (router): patio" in msg
-    assert "does not match rooms named" in msg
+    assert "does not match rooms named" not in msg
     tool, _args = ex._fallback_tool()
     assert tool == "explore_frontier"
 
 
-def test_prefer_explore_redirect_blocks_wrong_room_investigate():
-    """Graph patio + location MCQ: VLM investigate is forced to explore_frontier."""
+def test_room_mismatch_does_not_redirect_investigate():
+    """Graph patio + location MCQ: VLM investigate is NOT forced to explore."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     from emet.memory.graph_eqa.graph_memory import NavHypothesis
@@ -2172,23 +2436,14 @@ def test_prefer_explore_redirect_blocks_wrong_room_investigate():
     ]
     calls, picked_by, meta = ex._route_tool_calls()
     assert meta.get("current_room_graph") == "patio"
-    assert ex._prefer_explore_reason == "room_mismatch"
+    assert meta.get("room_mismatch_diagnostic") is True
+    assert ex._prefer_explore_reason != "room_mismatch"
     assert calls[0][0] == "investigate"
-    if (
-        ex._prefer_explore
-        and calls
-        and calls[0][0] in ("investigate", "navigate_to_obs")
-        and ex._n_nav + ex._n_explore < ex.max_nav_steps
-        and ex._frontier_count() > 0
-    ):
-        calls = [("explore_frontier", {"toward": ex.query_text})]
-        picked_by = f"{picked_by}+prefer_explore"
-    assert calls[0][0] == "explore_frontier"
-    assert "prefer_explore" in picked_by
+    assert picked_by == "vlm"
 
 
-def test_room_mismatch_clears_when_room_matches():
-    """Once merged room is a question target, drop room_mismatch prefer_explore."""
+def test_room_mismatch_diagnostic_when_room_matches():
+    """Matched question room clears room_mismatch_diagnostic."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
@@ -2205,12 +2460,56 @@ def test_room_mismatch_clears_when_room_matches():
 
     ex = AgenticEQAExecutor(agent, _CLOCK_LOCATION_Q, max_rounds=2, max_nav_steps=4)
     ex._prefer_explore = True
-    ex._prefer_explore_reason = "room_mismatch"
+    ex._prefer_explore_reason = "absent"
     _calls, _picked, meta = ex._route_tool_calls()
     assert meta.get("current_room") == "kitchen"
+    assert meta.get("room_mismatch_diagnostic") is False
     assert meta.get("prefer_explore_room_mismatch") is None
-    assert ex._prefer_explore is False
-    assert ex._prefer_explore_reason == ""
+    assert ex._prefer_explore_reason == "absent"
+
+
+def test_frontier_nearby_labels_tolerates_numpy_xyz():
+    """Graph node xyz is ndarray — must not use ``a or b`` boolean (probe crash)."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import _frontier_nearby_labels, build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.graph_room_at_robot = MagicMock(return_value="kitchen")
+    gm._nodes = [
+        SimpleNamespace(
+            is_frontier=False,
+            labels=["stove", "fridge"],
+            xyz=np.array([0.2, 0.1, 0.5]),
+            centroid=None,
+        ),
+        SimpleNamespace(
+            is_frontier=True,
+            labels=["frontier"],
+            xyz=np.array([1.0, 0.0, 0.0]),
+            centroid=None,
+        ),
+    ]
+    ex = AgenticEQAExecutor(agent, "Where is the stove?", router=False, max_nav_steps=4)
+    frontier = NavHypothesis(
+        phrase="unexplored frontier",
+        obs_id=99,
+        xyz=np.array([0.0, 0.0, 0.0]),
+        score=0.2,
+        source="frontier",
+    )
+    ex._hypotheses = [frontier]
+    near = _frontier_nearby_labels(ex, frontier)
+    assert "stove" in near or "fridge" in near
+    msg = build_state_message(ex)
+    assert "Explore" in msg
+    assert "near=" in msg
 
 
 def test_navigate_rejects_obs_not_in_evidence():

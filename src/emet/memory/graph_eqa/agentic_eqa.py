@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -31,7 +32,6 @@ from emet.memory.graph_eqa.agentic_tools import (
 )
 from emet.memory.graph_eqa.graph_memory import (
     _QUESTION_VERB_FILLERS,
-    SIGLIP_CONFIRM_THRESHOLD,
     SIGLIP_PRESENT_THRESHOLD,
     NavHypothesis,
     VerifyResult,
@@ -73,6 +73,17 @@ _FALSE = frozenset({"0", "false", "no", "off"})
 # leaves the area instead of re-scanning it (holdout q104/q105 circled their spawn).
 NOT_PRESENT_ESCAPE_STREAK = 2
 ESCAPE_MIN_TRAVEL_M = 3.0
+
+# Confidence prior per answer channel, ordered by reliability in the 2026-07 trace
+# audit (docs/experiments/agentic_eqa_trace_audit.md). Priors, not fitted values.
+_PROVENANCE_CONFIDENCE = {
+    "prefer": 0.70,
+    "eqa_answer": 0.65,
+    "vlm_suggested": 0.50,
+    "query": 0.45,
+    "pending_letter": 0.35,
+    "uniform_prior": 0.25,
+}
 
 # Same hyp obs_id navigated this many times without a fresh graph obs → stall / break loop.
 # Multi-view investigate samples up to PLACE_APPROACH_SAMPLES distinct bearings first.
@@ -215,11 +226,24 @@ def env_eqa_collect_trace() -> bool:
     return v in _TRUE
 
 
+def env_eqa_force_answer() -> bool:
+    """Emit a best-guess letter instead of ``Unknown`` at exhaustion (default on).
+
+    ``EMET_EQA_FORCE_ANSWER=0`` restores the legacy abstain for A/B comparison.
+    Forced answers still carry ``answer_provenance`` and a calibrated confidence,
+    so downstream consumers can present "I think X, but I'm unsure".
+    """
+    v = os.environ.get("EMET_EQA_FORCE_ANSWER", "").strip().lower()
+    if v in _FALSE:
+        return False
+    return True
+
+
 def env_eqa_agentic_require_verified() -> bool | None:
     """When True, refuse unverified ``submit_answer`` (incl. fallback / budget exhaust).
 
-    Env: ``EMET_EQA_AGENTIC_REQUIRE_VERIFIED=1``. Unverified exhaust → abstain
-    (``Unknown``) instead of a guessed letter.
+    Env: ``EMET_EQA_AGENTIC_REQUIRE_VERIFIED=1``. Unverified exhaust falls to the
+    forced-answer ladder (or, with ``EMET_EQA_FORCE_ANSWER=0``, to ``Unknown``).
     """
     v = os.environ.get("EMET_EQA_AGENTIC_REQUIRE_VERIFIED", "").strip().lower()
     if v in _TRUE:
@@ -227,6 +251,16 @@ def env_eqa_agentic_require_verified() -> bool | None:
     if v in _FALSE:
         return False
     return None
+
+
+def env_eqa_answerable_confirm() -> bool:
+    """Hybrid confirm before unlock (default on). ``EMET_EQA_ANSWERABLE_CONFIRM=0`` disables."""
+    v = os.environ.get("EMET_EQA_ANSWERABLE_CONFIRM", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return True
 
 
 def _eqa_cfg(agent: Any) -> dict[str, Any]:
@@ -265,6 +299,12 @@ class AgenticEQAResult:
     n_explore: int = 0
     wall_s: float = 0.0
     budget_hit: bool = False
+    # Counterfactual location-MCQ salvage letter (not applied to scored answer).
+    salvage_counterfactual_letter: str = ""
+    # Which answer channel produced ``answer`` and how much to trust it.
+    answer_provenance: str = ""
+    answer_confidence: float = 0.0
+    decision_rounds: int = 0
 
 
 class AgenticEQAExecutor:
@@ -278,7 +318,7 @@ class AgenticEQAExecutor:
         goal: str = "",
         max_rounds: int = 8,
         max_nav_steps: int = 8,
-        verify_min_sim: float = SIGLIP_CONFIRM_THRESHOLD,
+        verify_min_sim: float = SIGLIP_IMAGE_PRESENT_THRESHOLD,
         trace_path: Path | str | None = None,
         trace_meta: dict[str, Any] | None = None,
         collect_trace: bool | None = None,
@@ -310,9 +350,20 @@ class AgenticEQAExecutor:
         self._place_inspect: dict[int, PlaceInspectRecord] = {}
         # Capture stations from investigate — not place cards (avoids patio station-chase).
         self._station_obs_ids: set[int] = set()
-        # After close+ABSENT or wrong-room mismatch, prefer one explore before the next investigate.
+        # After VLM assess_present=False, prefer one explore before the next investigate.
         self._prefer_explore: bool = False
         self._prefer_explore_reason: str = ""
+        # Soft answerable waiting for phrase hit / second agreeing view.
+        self._pending_answerable: dict[str, Any] | None = None
+        self._answerable_confirm = env_eqa_answerable_confirm()
+        # Last view assess that actually saw the target. A ``present: false`` assess
+        # reports what is missing from one frame and must never supply the scored
+        # letter (see docs/experiments/agentic_eqa_trace_audit.md).
+        self._last_positive_letter: str = ""
+        self._last_positive_obs_id: int | None = None
+        # How the final letter was obtained when the episode could not verify.
+        self._answer_provenance: str = ""
+        self._force_answer = env_eqa_force_answer()
         self._last_room_estimate: str = "unknown"
         self._graph_room_estimate: str = "unknown"
         self._room_estimates: list[str] = []
@@ -332,6 +383,8 @@ class AgenticEQAExecutor:
         self._followed_eqa_actions: set[int] = set()
         # Soft explores after Unknown when Action:N is missing/OOB or already followed.
         self._n_unknown_explore = 0
+        # Counterfactual salvage letter (logged, never applied to scored answer).
+        self._salvage_counterfactual_letter = ""
         # Obs ids freshly produced by capture_and_update this turn (eligible for one verify).
         self._fresh_obs_ids: set[int] = set()
         self._vlm_assessed_obs_ids: set[int] = set()
@@ -767,8 +820,8 @@ class AgenticEQAExecutor:
         rec.last_assess_answerable = visit.assess_answerable
         rec.last_suggested = suggested
         self._place_inspect[oid] = rec
-        # Close look disproved the stem object — grow the map before chasing new cards.
-        if dist <= 1.0 and (verify_status.upper() == "ABSENT" or visit.assess_present is False):
+        # Close look: only VLM assess_present=False nudges explore (not SigLIP ABSENT alone).
+        if dist <= 1.0 and visit.assess_present is False:
             self._prefer_explore = True
             self._prefer_explore_reason = "absent"
         return rec
@@ -1860,6 +1913,104 @@ class AgenticEQAExecutor:
             _logger.warning(f"frontier pick panel failed: {e}")
             return None
 
+    @staticmethod
+    def _mcq_letter_from_suggested(raw: Any) -> str:
+        s = str(raw or "").strip().upper()
+        if re.fullmatch(r"[A-E]", s):
+            return s
+        m = re.search(r"\b([A-E])\b", s)
+        return m.group(1) if m else ""
+
+    def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
+        """True when target/stem tokens appear in inventory or labels near obs."""
+        needle = str(phrase or self._target_phrase or "").strip().lower()
+        if not needle:
+            needle = question_stem_for_keywords(self.question or "").lower()
+        tokens = [t for t in re.findall(r"[a-z0-9]+", needle) if len(t) >= 3]
+        # Drop ultra-common stems that don't corroborate objects.
+        stop = {"the", "and", "where", "what", "how", "many", "did", "leave", "there", "this", "that"}
+        tokens = [t for t in tokens if t not in stop]
+        if not tokens:
+            return False
+        labels: list[str] = list(self._inventory_labels(limit=32))
+        gm = self.graph_memory
+        if gm is not None:
+            near_fn = getattr(gm, "labels_near_obs", None)
+            if callable(near_fn):
+                try:
+                    labels.extend(str(x) for x in (near_fn(int(obs_id)) or []))
+                except Exception:
+                    pass
+            for node in list(getattr(gm, "_nodes", None) or []):
+                if int(getattr(node, "obs_id", -1) or -1) != int(obs_id):
+                    continue
+                labels.extend(str(x) for x in (getattr(node, "labels", None) or []))
+        blob = " ".join(labels).lower()
+        if not blob.strip():
+            return False
+        return any(t in blob for t in tokens)
+
+    def _maybe_confirm_answerable(
+        self,
+        *,
+        obs_id: int,
+        present: bool,
+        answerable: bool,
+        need_more_views: bool,
+        suggested_answer: Any,
+        phrase: str,
+    ) -> tuple[bool, str]:
+        """Hybrid unlock: corroborated single view or two-view same letter.
+
+        Returns ``(confirmed, reason)``.
+        """
+        if not answerable:
+            if present is False:
+                # Keep pending for a later agreeing view; absent does not clear it.
+                pass
+            return False, "not_answerable"
+        if not self._answerable_confirm:
+            # Legacy: raw answerable unlocks (ignore need_more_views for parity).
+            return True, "confirm_disabled"
+        if need_more_views:
+            letter = self._mcq_letter_from_suggested(suggested_answer)
+            self._pending_answerable = {
+                "letter": letter,
+                "obs_id": int(obs_id),
+                "phrase": str(phrase or self._target_phrase or ""),
+                "present": bool(present),
+            }
+            return False, "need_more_views"
+        letter = self._mcq_letter_from_suggested(suggested_answer)
+        phrase_hit = bool(present) and bool(letter) and self._answerable_phrase_hit(obs_id=int(obs_id), phrase=phrase)
+        pending = self._pending_answerable
+        # Two views that both failed to see the target are not corroboration. Without
+        # this guard q28/q39 confirmed an absence letter twice and scored it 0/5.
+        two_view = False
+        if (
+            pending
+            and letter
+            and bool(present)
+            and bool(pending.get("present"))
+            and str(pending.get("letter") or "") == letter
+            and int(pending.get("obs_id", -1)) != int(obs_id)
+        ):
+            two_view = True
+        if phrase_hit:
+            self._pending_answerable = None
+            return True, "phrase_corroborated"
+        if two_view:
+            self._pending_answerable = None
+            return True, "two_view_agree"
+        # Defer — stash / refresh pending for a later confirm.
+        self._pending_answerable = {
+            "letter": letter,
+            "obs_id": int(obs_id),
+            "phrase": str(phrase or self._target_phrase or ""),
+            "present": bool(present),
+        }
+        return False, "deferred"
+
     def _run_vlm_view_assess(
         self,
         *,
@@ -1872,6 +2023,7 @@ class AgenticEQAExecutor:
 
         Qwen looks at pixels + inventory and decides whether this view is enough.
         SigLIP/OWL stay proposals in the inventory — they do not hard-block unlock.
+        Hybrid confirm (phrase hit / two-view) gates ``_verified``.
         """
         oid = int(obs_id)
         if oid in self._vlm_assessed_obs_ids:
@@ -1927,9 +2079,46 @@ class AgenticEQAExecutor:
             )
         except (RuntimeError, ValueError) as exc:
             _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
-        if vlm_assessment is not None and vlm_assessment.answerable:
+        confirmed = False
+        confirm_reason = "no_vlm"
+        if vlm_assessment is not None:
+            confirmed, confirm_reason = self._maybe_confirm_answerable(
+                obs_id=oid,
+                present=bool(assessment.present),
+                answerable=bool(assessment.answerable),
+                need_more_views=bool(assessment.need_more_views),
+                suggested_answer=assessment.suggested_answer,
+                phrase=phrase,
+            )
+        if confirmed:
+            try:
+                self._evidence_policy.confirm_answerable()
+            except (RuntimeError, ValueError) as exc:
+                _logger.warning(f"evidence-policy confirm_answerable rejected: {exc}")
             self._verified = True
             self._verified_obs_id = oid
+            self._append_trace(
+                {
+                    "event": "answerable_confirmed",
+                    "obs_id": oid,
+                    "reason": confirm_reason,
+                    "suggested_answer": assessment.suggested_answer,
+                }
+            )
+        elif assessment.answerable:
+            self._append_trace(
+                {
+                    "event": "answerable_deferred",
+                    "obs_id": oid,
+                    "reason": confirm_reason,
+                    "suggested_answer": assessment.suggested_answer,
+                    "pending": dict(self._pending_answerable or {}),
+                }
+            )
+        # Qwen says target not in this view — prefer coverage before the next investigate.
+        if assessment.present is False and not assessment.answerable:
+            self._prefer_explore = True
+            self._prefer_explore_reason = "absent"
         self._update_escape_streak(present=assessment.present)
         payload = {
             "tool": "vlm_assess",
@@ -1943,12 +2132,20 @@ class AgenticEQAExecutor:
             "reason": assessment.reason,
             "policy_state": str(self._evidence_policy.state),
             "verified": self._verified,
+            "vlm_answerable": bool(self._verified),
+            "answerable_confirm_reason": confirm_reason,
+            "pending_answerable": dict(self._pending_answerable or {}) or None,
             "proposal_status": proposal_status or None,
             "not_present_streak": self._not_present_streak,
             "explore_min_travel_m": self._escape_min_travel_m(),
             "inventory": inventory,
         }
         self._last_vlm_assess = payload
+        if assessment.present:
+            positive = self._mcq_letter_from_suggested(assessment.suggested_answer)
+            if positive:
+                self._last_positive_letter = positive
+                self._last_positive_obs_id = oid
         self._append_trace(payload)
         return {
             "ok": True,
@@ -1958,7 +2155,10 @@ class AgenticEQAExecutor:
             "need_more_views": assessment.need_more_views,
             "suggested_answer": assessment.suggested_answer,
             "verified": self._verified,
+            "vlm_answerable": bool(self._verified),
+            "answerable_confirm_reason": confirm_reason,
             "policy_state": str(self._evidence_policy.state),
+            "reason": assessment.reason,
         }
 
     def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]:
@@ -2184,8 +2384,9 @@ class AgenticEQAExecutor:
             ),
             "positive_channels": (list(assessment.positive_channels) if assessment is not None else []),
             "contradiction_channels": (list(assessment.contradiction_channels) if assessment is not None else []),
-            # Submit unlock (VLM answerable on a non-ABSENT view), not cheap-channel alone.
+            # Submit unlock = VLM answerable (not cheap SigLIP/OWL alone).
             "fused_verified": bool(self._verified),
+            "vlm_answerable": bool(self._verified),
             "answerable": bool(self._evidence_policy.state == AgenticState.ANSWER),
             "vlm_assess": vlm_out,
             "present_bar": (
@@ -2221,6 +2422,7 @@ class AgenticEQAExecutor:
             "status": result.status,
             "sim": float(result.sim),
             "verified": self._verified,
+            "vlm_answerable": bool(self._verified),
             "obs_id": int(result.obs_id),
             "verify_channel": verify_channel,
             "fused_verified": bool(self._verified),
@@ -2241,15 +2443,19 @@ class AgenticEQAExecutor:
         nav_exhausted = self._n_nav + self._n_explore >= self.max_nav_steps
         if self._verified and self._evidence_policy.state != AgenticState.ANSWER:
             if nav_exhausted or self._round >= self.max_rounds - 1:
-                return self._abstain_unverified(reason="target evidence did not establish answer sufficiency")
+                return self._forced_answer_fallback(
+                    reason="target evidence did not establish answer sufficiency",
+                    prefer_answer=answer,
+                )
             return {
                 "ok": False,
                 "error": "target present but answer relation/count is unresolved — replan for a disambiguating view",
             }
         if self._require_verified and not self._verified:
-            # Exhausted candidates → honest abstain (do not burn rounds on rejected submits).
+            # Exhausted candidates → best guess with provenance (do not burn rounds
+            # on rejected submits, and do not throw away the four-image EQA).
             if nav_exhausted or self._round >= self.max_rounds - 1:
-                return self._abstain_unverified()
+                return self._forced_answer_fallback(prefer_answer=answer)
             return {
                 "ok": False,
                 "error": "not verified — require_verified=1; VLM assess must mark answerable before submit_answer",
@@ -2307,11 +2513,111 @@ class AgenticEQAExecutor:
             "relevant_images": [],
         }
 
+    def _pending_answerable_letter(self) -> str:
+        """Letter from a deferred answerable assess, only if that view saw the target."""
+        pending = self._pending_answerable or {}
+        if not pending.get("present"):
+            return ""
+        return str(pending.get("letter") or "").strip().upper()
+
+    def _uniform_prior_letter(self, n_choices: int) -> str:
+        """Last-resort guess when no channel produced a letter.
+
+        Deterministic per question so reruns stay comparable, and spread across the
+        option set so a whole benchmark is not biased toward one letter.
+        """
+        n = max(1, min(int(n_choices), len("ABCDE")))
+        digest = hashlib.sha1((self.question or "").encode("utf-8")).hexdigest()
+        return chr(ord("A") + int(digest[:8], 16) % n)
+
+    def _confidence_for_provenance(self, provenance: str) -> float:
+        """Coarse calibrated confidence so a robot can say "I think X, but I'm unsure".
+
+        Ordered by channel reliability in the 2026-07 trace audit; these are priors,
+        not fitted values. Refit them from the per-channel accuracy report before
+        quoting them anywhere.
+        """
+        score = _PROVENANCE_CONFIDENCE.get(provenance, 0.4)
+        if self._verified:
+            score += 0.15
+        return round(min(score, 0.95), 2)
+
+    def _forced_answer_fallback(
+        self,
+        *,
+        reason: str = "require_verified and no fused verification before budget/rounds exhausted",
+        prefer_answer: str = "",
+    ) -> dict[str, Any]:
+        """Budget or verification exhausted: still commit to a best guess.
+
+        The previous behavior returned a bare ``Unknown`` without ever calling the
+        four-image EQA, so every budget-exhausted episode scored zero even when the
+        graph held the evidence. Now we run the EQA, walk the answer channels in
+        reliability order, and fall back to a uniform-prior letter, recording which
+        rung fired so accuracy and calibration can be measured separately.
+        """
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        if not self._force_answer:
+            return self._abstain_unverified(reason=reason)
+
+        out = self._do_submit_answer(prefer_answer=prefer_answer)
+        answer = str(out.get("answer") or "")
+        provenance = str(out.get("answer_source") or "query")
+        choices = parse_mcq_choices_from_question(self.question)
+        if choices and (self._answer_unknownish(answer) or not self._mcq_letter_from_text(answer)):
+            letter = self._trusted_vlm_letter() or self._pending_answerable_letter()
+            if letter:
+                answer, provenance = letter, "pending_letter"
+            else:
+                answer, provenance = self._uniform_prior_letter(len(choices)), "uniform_prior"
+        self._answer_provenance = provenance
+        confidence_score = self._confidence_for_provenance(provenance)
+        self._append_trace(
+            {
+                "tool": "forced_answer",
+                "reason": reason,
+                "answer": answer,
+                "answer_provenance": provenance,
+                "answer_confidence": confidence_score,
+                "verified": bool(self._verified),
+                "n_nav": self._n_nav,
+                "n_explore": self._n_explore,
+                "last_verify": (
+                    None
+                    if self._last_verify is None
+                    else {
+                        "status": self._last_verify.status,
+                        "sim": float(self._last_verify.sim),
+                        "obs_id": int(self._last_verify.obs_id),
+                        "phrase": self._last_verify.phrase,
+                    }
+                ),
+            }
+        )
+        out = dict(out)
+        out.update(
+            {
+                "ok": True,
+                "answer": answer,
+                "answer_source": provenance,
+                "answer_provenance": provenance,
+                "answer_confidence": confidence_score,
+                "confidence": bool(self._verified),
+                "discord_text": (
+                    f"Answer:{answer}\nConfidence:{confidence_score}\n"
+                    f"[answer_provenance:{provenance}] [forced: {reason}]"
+                ),
+                "verified": bool(self._verified),
+            }
+        )
+        return out
+
     def _abstain_unverified(
         self,
         reason: str = "require_verified and no fused verification before budget/rounds exhausted",
     ) -> dict[str, Any]:
-        """Budget exhausted without PRESENT — do not guess a letter."""
+        """Legacy no-guess path, kept behind ``EMET_EQA_FORCE_ANSWER=0`` for A/B."""
         msg = f"Unknown (unverified — {reason})"
         self._append_trace(
             {
@@ -2360,38 +2666,103 @@ class AgenticEQAExecutor:
             return raw.upper()
         return ""
 
+    def _trusted_vlm_letter(self) -> str:
+        """MCQ letter from the most recent assess that actually saw the target.
+
+        Absence in a single frame is not an answer: mapping ``present: false`` onto
+        an option (``None`` / ``No, there is none``) scored 0/7 in the trace audit
+        and overrode correct four-image answers on q28 and q39.
+        """
+        assess = self._last_vlm_assess or {}
+        if assess.get("present"):
+            letter = self._mcq_letter_from_text(str(assess.get("suggested_answer") or ""))
+            if letter:
+                return letter
+        return self._last_positive_letter
+
+    def _eqa_self_answer_letter(self) -> str:
+        """Letter from the four-image EQA's own ``Answer:`` block.
+
+        ``extract_mcq_letter_from_raw_eqa`` intentionally reads the *last* ``answer:``
+        field, which by submit time can be a ``[salvage]`` / ``[memory-location]``
+        override. Here we want the EQA's own verdict, so we stop at the first
+        override marker. Falls back to free-form choice matching so a prose answer
+        (``The time is 2:30 PM``) still scores instead of going blank.
+        """
+        from emet.habitat.metrics import (
+            extract_mcq_letter,
+            parse_mcq_choices_from_question,
+            should_abstain_location_mcq,
+        )
+        from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
+
+        gm = self.graph_memory
+        raw = str(getattr(gm, "last_eqa_raw", "") or "") if gm is not None else ""
+        if not raw.strip():
+            return ""
+        head = re.split(r"\n\s*\[(?:salvage|memory-location|agentic_submit)\]", raw, maxsplit=1)[0]
+        m = re.search(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", head, flags=re.IGNORECASE)
+        if not m:
+            return ""
+        field = m.group(1).strip()
+        if not field:
+            return ""
+        choices = parse_mcq_choices_from_question(self.question)
+        # The EQA explicitly declining ("answer: No, I did not see it") is a real
+        # signal — let the ladder move on rather than forcing this text to a letter.
+        if should_abstain_location_mcq(head, choices or None):
+            return ""
+        letter = extract_mcq_letter(field, choices or None)
+        if letter:
+            return letter
+        if choices:
+            idx = match_freeform_to_choice(field, choices)
+            if idx is not None and 0 <= idx < 5:
+                return chr(ord("A") + idx)
+        return ""
+
     def _resolve_submit_answer_text(
         self,
         *,
         prefer_answer: str,
         query_answer: str,
     ) -> tuple[str, str]:
-        """Keep Qwen's MCQ letter when ``query_answer`` collapses to graph XYZ prose.
+        """Pick the scored answer text and record which channel produced it.
 
-        Dynagraph may put meter coordinates in the EQA prompt; small VLMs sometimes
-        echo those instead of A–D. If the router or view-assess already gave a letter,
-        do not let that echo overwrite it. Otherwise trust ``query_answer`` (also Qwen).
+        Precedence, in order of measured reliability:
+
+        1. ``prefer`` — an explicit letter the caller/router already committed to.
+        2. ``eqa_answer`` — the four-image EQA's own ``Answer:`` block.
+        3. ``vlm_suggested`` — a single view assess that *saw* the target.
+        4. ``query`` — ``query_answer`` prose, unless it is a nearest-furniture XYZ
+           dump, which is about whatever object happened to be closest and is
+           therefore not an answer at all.
         """
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
         prefer = (prefer_answer or "").strip()
         qa = (query_answer or "").strip()
-        suggested = ""
-        if self._last_vlm_assess:
-            suggested = str(self._last_vlm_assess.get("suggested_answer") or "").strip()
 
         prefer_letter = self._mcq_letter_from_text(prefer)
         if prefer_letter:
             return prefer_letter, "prefer"
 
-        suggested_letter = self._mcq_letter_from_text(suggested)
-        if suggested_letter and self._looks_like_coordinate_dump(qa):
+        eqa_letter = self._eqa_self_answer_letter()
+        if eqa_letter:
+            return eqa_letter, "eqa_answer"
+
+        suggested_letter = self._trusted_vlm_letter()
+        if suggested_letter:
             return suggested_letter, "vlm_suggested"
 
-        if qa:
+        # A coordinate dump is not an answer; fall through rather than let it win.
+        if qa and not self._looks_like_coordinate_dump(qa):
             return qa, "query"
         if prefer:
             return prefer, "prefer"
-        if suggested:
-            return suggested, "vlm_suggested"
+        if qa and not parse_mcq_choices_from_question(self.question):
+            # Non-MCQ: the prose is all we have, so return it verbatim.
+            return qa, "query"
         return "Unknown", "query"
 
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
@@ -2498,62 +2869,71 @@ class AgenticEQAExecutor:
         return (not ans) or ans in {"unknown", "none", "n/a", "na"} or "frontier" in ans
 
     def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[str, Any]:
-        """Last-chance VLM letter when Action:/explore is done and answer is still Unknown.
+        """Keep scored Unknown; optionally log a salvage counterfactual letter.
 
-        Mid-episode we keep Unknown so the loop can follow ``Action:N`` / frontiers
-        (memory invent caused failfix5 B/B). Once that path is exhausted, an empty
-        letter is worse than a terse image re-ask — same helper as truncated-stream
-        salvage, not nearest-furniture memory.
+        Scored answer stays honest Unknown/empty (no ``final_location_salvage``
+        lottery). When the question is a location MCQ and images are available,
+        still call ``_salvage_location_mcq_letter`` once and record
+        ``final_location_salvage_counterfactual`` so summaries can report both
+        no-salvage and with-salvage accuracies.
         """
+        self._salvage_counterfactual_letter = ""
+        if self.graph_memory is not None:
+            self.graph_memory.last_salvage_counterfactual_letter = ""
         if self.mode != "answer" or not self._answer_unknownish(submit_out.get("answer")):
             return submit_out
+
+        prior = submit_out.get("answer")
+        self._append_trace(
+            {
+                "event": "final_location_salvage_skipped",
+                "reason": "agentic_no_salvage",
+                "prior_answer": prior,
+            }
+        )
+
         gm = self.graph_memory
         if gm is None or not hasattr(gm, "_salvage_location_mcq_letter"):
             return submit_out
+
         from emet.habitat.metrics import (
-            choices_are_attribute_state,
             choices_are_location_mcq,
             parse_mcq_choices_from_question,
             question_is_attribute_state,
         )
 
         choices = parse_mcq_choices_from_question(self.question)
-        if (
-            not choices
-            or question_is_attribute_state(self.question)
-            or choices_are_attribute_state(choices)
-            or not choices_are_location_mcq(choices)
-        ):
+        if not choices or question_is_attribute_state(self.question) or not choices_are_location_mcq(choices):
             return submit_out
+
         images = list(submit_out.get("relevant_images") or [])
         if not images:
-            # Fall back to whatever the last query_answer attached, if still around.
             for attr in ("last_eqa_images", "last_relevant_images"):
                 cand = getattr(gm, attr, None)
                 if cand:
                     images = list(cand)
                     break
+        if not images:
+            return submit_out
+
         letter = str(gm._salvage_location_mcq_letter(self.question, choices, images) or "").strip()
         if not letter:
             return submit_out
-        prior = submit_out.get("answer")
+
+        self._salvage_counterfactual_letter = letter
+        if gm is not None:
+            gm.last_salvage_counterfactual_letter = letter
         self._append_trace(
             {
-                "event": "final_location_salvage",
+                "event": "final_location_salvage_counterfactual",
                 "letter": letter,
                 "prior_answer": prior,
                 "n_unknown_explore": self._n_unknown_explore,
                 "n_images": len(images),
+                "applied": False,
             }
         )
-        return {
-            **submit_out,
-            "answer": letter,
-            "discord_text": (
-                f"Answer:{letter}\n[final-location-salvage]\nprior:{prior}\n{submit_out.get('discord_text') or ''}"
-            ).strip(),
-            "confidence": False,
-        }
+        return submit_out
 
     def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
         """Navigate to EQA ``Action: N`` when submit returned unconfident Unknown.
@@ -2853,16 +3233,12 @@ class AgenticEQAExecutor:
                 except Exception as e:
                     _logger.warning(f"format_rooms_line for router_room trace failed: {e}")
                     rooms_line = ""
+        # Diagnostic only — do not hard-redirect investigate on room_mismatch (Hydra
+        # exposes rooms to the VLM; it does not force leave-wrong-room).
         target_rooms = sorted(question_target_rooms(self.question))
         meta["rooms_line"] = rooms_line
         meta["question_target_rooms"] = target_rooms
-        if room_mismatches_question(room, self.question):
-            self._prefer_explore = True
-            self._prefer_explore_reason = "room_mismatch"
-            meta["prefer_explore_room_mismatch"] = True
-        elif self._prefer_explore_reason == "room_mismatch":
-            self._prefer_explore = False
-            self._prefer_explore_reason = ""
+        meta["room_mismatch_diagnostic"] = bool(room_mismatches_question(room, self.question))
         calls: list[tuple[str, dict[str, Any]]] = []
         for tc in parsed.get("tool_calls", []):
             name = str(tc.get("name") or "").strip().lower()
@@ -2884,6 +3260,7 @@ class AgenticEQAExecutor:
                 "rooms_line": rooms_line,
                 "question_target_rooms": target_rooms,
                 "prefer_explore_reason": str(self._prefer_explore_reason or ""),
+                "room_mismatch_diagnostic": bool(meta.get("room_mismatch_diagnostic")),
                 "tool_calls": list(meta["tool_calls"]),
                 "router_ms": meta["router_ms"],
                 "n_room_images": meta["n_room_images"],
@@ -2891,6 +3268,24 @@ class AgenticEQAExecutor:
             }
         )
         return calls, "vlm", meta
+
+    def _finalize_at_budget(self) -> dict[str, Any]:
+        """Produce the scored answer once rounds / nav budget are spent.
+
+        Always runs the four-image EQA through the forced-answer ladder rather than
+        returning a bare Unknown, and still honors one EQA ``Action: N`` follow-up.
+        """
+        if self.mode != "answer":
+            return self._do_finish()
+        if self._evidence_policy.state != AgenticState.ANSWER:
+            final = self._forced_answer_fallback(reason="budget exhausted without VLM answerable")
+        elif self._require_verified and not self._verified:
+            final = self._forced_answer_fallback()
+        else:
+            final = self._do_submit_answer()
+        if self._evidence_policy.state == AgenticState.ANSWER and self._maybe_follow_eqa_explore_action(final):
+            final = self._do_submit_answer()
+        return final
 
     def run(self) -> AgenticEQAResult:
         t0 = time.monotonic()
@@ -2946,8 +3341,15 @@ class AgenticEQAExecutor:
                     continue
                 final = out
                 break
+            # Reserve the last round for answering. Otherwise the router could spend it
+            # on an explore call and the loop fell through to the exhaustion branch
+            # without submit_answer ever being offered.
+            if self.mode == "answer" and r >= self.max_rounds - 1:
+                budget_hit = True
+                final = self._finalize_at_budget()
+                break
             calls, picked_by, router_meta = self._route_tool_calls()
-            # Wrong-room / close+ABSENT → force explore so the VLM cannot skip coverage growth.
+            # Close+VLM-absent → force explore so coverage grows before the next investigate.
             if (
                 self._prefer_explore
                 and self.mode == "answer"
@@ -3022,27 +3424,17 @@ class AgenticEQAExecutor:
                 break
         else:
             budget_hit = True
-            if self.mode == "answer" and self._require_verified:
-                if not self._verified:
-                    final = self._abstain_unverified()
-                elif self._evidence_policy.state != AgenticState.ANSWER:
-                    final = self._abstain_unverified(reason="target evidence did not establish answer sufficiency")
-                else:
-                    final = self._do_submit_answer()
-            else:
-                final = self._do_submit_answer() if self.mode == "answer" else self._do_finish()
-            # Rounds ran out before a submit round; still honor one Action:N /
-            # unknown-explore follow-up so the EQA hint is not silently dropped.
-            if (
-                self.mode == "answer"
-                and self._evidence_policy.state == AgenticState.ANSWER
-                and self._maybe_follow_eqa_explore_action(final)
-            ):
-                final = self._do_submit_answer()
+            final = self._finalize_at_budget()
 
         wall = time.monotonic() - t0
         assert final is not None
         final = self._finalize_unknown_location_letter(final)
+        provenance = str(final.get("answer_provenance") or final.get("answer_source") or "")
+        confidence_score = final.get("answer_confidence")
+        if not isinstance(confidence_score, (int, float)):
+            confidence_score = self._confidence_for_provenance(provenance)
+        confidence_score = float(confidence_score)
+        self._answer_provenance = provenance
         result = AgenticEQAResult(
             discord_text=str(final.get("discord_text") or f"Answer:{final.get('answer', 'Unknown')}"),
             answer=str(final.get("answer") or "Unknown"),
@@ -3056,8 +3448,32 @@ class AgenticEQAExecutor:
             n_explore=self._n_explore,
             wall_s=wall,
             budget_hit=budget_hit,
+            salvage_counterfactual_letter=str(self._salvage_counterfactual_letter or ""),
+            answer_provenance=provenance,
+            answer_confidence=confidence_score,
+            decision_rounds=self._round + 1,
         )
         self._sync_scored_answer_to_graph_memory(result, final)
+        # Always expose salvage CF for Habitat jsonl even when collect_trace is off.
+        salvage_cf = str(result.salvage_counterfactual_letter or "")
+        prev_summary = getattr(self.agent, "_agentic_eqa_summary", None)
+        summary = dict(prev_summary) if isinstance(prev_summary, dict) else {}
+        summary.update(
+            {
+                "answer": result.answer,
+                "confidence": result.confidence,
+                "verified": result.verified,
+                "salvage_counterfactual_letter": salvage_cf,
+                "scored_policy": "no_salvage",
+                "answer_provenance": result.answer_provenance,
+                "answer_confidence": result.answer_confidence,
+                "decision_rounds": result.decision_rounds,
+                "budget_hit": result.budget_hit,
+            }
+        )
+        self.agent._agentic_eqa_summary = summary
+        if self.graph_memory is not None:
+            self.graph_memory.last_salvage_counterfactual_letter = salvage_cf
         self._append_trace(
             {
                 "tool": "summary",
@@ -3070,6 +3486,10 @@ class AgenticEQAExecutor:
                 "wall_s": result.wall_s,
                 "budget_hit": result.budget_hit,
                 "tools": result.tool_log,
+                "salvage_counterfactual_letter": salvage_cf,
+                "answer_provenance": result.answer_provenance,
+                "answer_confidence": result.answer_confidence,
+                "decision_rounds": result.decision_rounds,
             }
         )
         self._flush_trace_to_agent(result)
@@ -3134,6 +3554,7 @@ class AgenticEQAExecutor:
         if not rows:
             return
         self.agent._agentic_trace_rows = rows
+        salvage_cf = str(result.salvage_counterfactual_letter or self._salvage_counterfactual_letter or "")
         self.agent._agentic_eqa_summary = {
             "answer": result.answer,
             "confidence": result.confidence,
@@ -3143,7 +3564,15 @@ class AgenticEQAExecutor:
             "n_explore": result.n_explore,
             "budget_hit": result.budget_hit,
             "tools": list(result.tool_log),
+            "salvage_counterfactual_letter": salvage_cf,
+            "scored_policy": "no_salvage",
+            "answer_provenance": result.answer_provenance,
+            "answer_confidence": result.answer_confidence,
+            "decision_rounds": result.decision_rounds,
         }
+        gm = self.graph_memory
+        if gm is not None:
+            gm.last_salvage_counterfactual_letter = salvage_cf
         if self._trace_path is None:
             default = Path.home() / ".cache" / "habitat_eqa" / "agentic_traces" / "last_agentic_trace.jsonl"
             default.parent.mkdir(parents=True, exist_ok=True)
@@ -3187,7 +3616,7 @@ def run_agentic_eqa(
         verify_min_sim=float(
             verify_min_sim
             if verify_min_sim is not None
-            else cfg.get("agentic_verify_min_sim", SIGLIP_CONFIRM_THRESHOLD) or SIGLIP_CONFIRM_THRESHOLD
+            else cfg.get("agentic_verify_min_sim", SIGLIP_IMAGE_PRESENT_THRESHOLD) or SIGLIP_IMAGE_PRESENT_THRESHOLD
         ),
         trace_path=trace_path,
         trace_meta=trace_meta,
