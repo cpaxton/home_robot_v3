@@ -154,3 +154,41 @@ EQA_PROMPT = """
                     While Image 1 shows that there is no monitor on one part of the table, I have not seen the whole table yet, so maybe there is a monitor on the table.
                     Image 1 is associated with observation description 1.Since we observed the table there, going there again might allow us to see the second half of the table.
         """
+
+_CAPTION_INSTRUCTION = "you should first caption each image in order to better understand (1-indexed), reason about the answer in the reasoning field, and then give the final answer."
+
+_NO_CAPTION_INSTRUCTION = "you should reason about the answer in the reasoning field and then give the final answer. Do not caption the images; reasoning is the first field you write."
+
+_OUTPUT_FIELDS = ("Reasoning:", "Answer:", "Confidence:", "Action:", "Confidence_reasoning:")
+
+
+def without_caption(prompt: str) -> str:
+    """
+    Return ``prompt`` with the caption instruction rewritten, every ``Caption:`` block
+    dropped from the examples, and legacy ``IMAGE_DESCRIPTIONS:`` example lines removed.
+
+    The caption earns its place when the model must read raw pixels, but on a capped decode
+    budget it is pure overhead: HM-EQA already attaches RGB + SCENE_GRAPH. Appending "do not
+    caption" does not work — the model follows the five examples that demonstrate one — so
+    callers that cannot afford it strip the demonstrations instead.
+
+    Raises ``ValueError`` if the caption instruction is gone, so an upstream edit fails here
+    rather than silently returning a prompt that still asks for a caption.
+    """
+    if _CAPTION_INSTRUCTION not in prompt:
+        raise ValueError("EQA_PROMPT no longer contains the caption instruction; update without_caption()")
+    kept: list[str] = []
+    dropping = False
+    for line in prompt.replace(_CAPTION_INSTRUCTION, _NO_CAPTION_INSTRUCTION).splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("image_descriptions:"):
+            continue
+        if stripped == "Caption:":
+            dropping = True
+            continue
+        if dropping:
+            if stripped and stripped not in _OUTPUT_FIELDS:
+                continue
+            dropping = False
+        kept.append(line)
+    return "\n".join(kept)

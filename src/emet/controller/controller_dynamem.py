@@ -608,10 +608,12 @@ class DynamemController(BaseController):
             self.space,
             min_clearance_m=self._min_clearance_m,
             clearance_cost_weight=self._clearance_cost_weight,
-            start_escape_max_ring=int(
-                parameters.get("motion_planner/start_escape_max_ring", 8)
-            ),
+            start_escape_max_ring=int(parameters.get("motion_planner/start_escape_max_ring", 8)),
         )
+        # Frontier / explore memory: mark goals blocked after waypoint timeout so
+        # multi-goal A* skips stuck frontiers instead of re-picking them.
+        self._habitat_blocked_goals: set[tuple[float, float]] = set()
+        self._habitat_recent_goals: list[tuple[float, float]] = []
 
         cfg = self.embodied_agent
         if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
@@ -1825,6 +1827,7 @@ class DynamemController(BaseController):
         kept: list = []
         reject: str | None = None
         clearances: list[float] = []
+        prev_xy: tuple[float, float] | None = None
         for raw in body:
             arr = np.asarray(raw, dtype=np.float64).reshape(-1)
             if arr.size < 2 or not np.isfinite(arr[:2]).all():
@@ -1840,7 +1843,17 @@ class DynamemController(BaseController):
             if not is_start and min_c > 0 and c < min_c:
                 reject = "rejected_low_clearance"
                 break
+            # Mid-segment samples: reject chords that scrape low-clearance cells
+            # between two individually-safe waypoints (post-simplify hazard).
+            if prev_xy is not None and not is_start and hasattr(planner, "to_pt"):
+                try:
+                    if not planner.is_in_line_of_sight(planner.to_pt(prev_xy), planner.to_pt(xy)):
+                        reject = "rejected_low_clearance_segment"
+                        break
+                except Exception:
+                    pass
             kept.append(raw if isinstance(raw, list) else arr.tolist())
+            prev_xy = xy
 
         min_along = float(min(clearances)) if clearances else None
         if not kept:
@@ -1851,6 +1864,40 @@ class DynamemController(BaseController):
         if object_tail:
             kept.extend(object_tail)
         return kept, None, min_along
+
+    def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") -> None:
+        """Remember the last nav goal so explore multi-goal A* skips it next time."""
+        blocked = getattr(self, "_habitat_blocked_goals", None)
+        if blocked is None:
+            self._habitat_blocked_goals = set()
+            blocked = self._habitat_blocked_goals
+        recent = getattr(self, "_habitat_recent_goals", None)
+        if recent is None:
+            self._habitat_recent_goals = []
+            recent = self._habitat_recent_goals
+
+        meta = dict(getattr(self, "_last_nav_plan", None) or {})
+        candidates: list[tuple[float, float]] = []
+        for key in ("goal_xyt", "object_xyz", "effective_goal_xy"):
+            raw = meta.get(key)
+            if raw is None:
+                continue
+            arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+            if arr.size >= 2 and np.isfinite(arr[:2]).all():
+                candidates.append((float(arr[0]), float(arr[1])))
+        traj = meta.get("traj") or []
+        for p in reversed(list(traj)):
+            arr = np.asarray(p, dtype=np.float64).reshape(-1)
+            if arr.size >= 2 and np.isfinite(arr[:2]).all():
+                candidates.append((float(arr[0]), float(arr[1])))
+                break
+        for xy in candidates:
+            key = goal_key_xy(xy)
+            blocked.add(key)
+            recent.append(key)
+        del recent[:-16]
+        self._record_nav_plan_fields(outcome=reason, blocked_after_abort=True)
+        logger.warning(f"Nav abort ({reason}): marked {len(candidates)} goal key(s) blocked for replan/explore skip")
 
     def _record_nav_plan_fields(self, **fields: Any) -> None:
         meta = dict(getattr(self, "_last_nav_plan", None) or {})
@@ -1939,6 +1986,7 @@ class DynamemController(BaseController):
                     )
                     if exec_ok is False:
                         self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                        self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                         logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
                         return None, None
 
@@ -1957,6 +2005,7 @@ class DynamemController(BaseController):
                 )
                 if exec_ok is False:
                     self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                    self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                     logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
                     return None, None
                 self.robot.look_front()
@@ -2784,12 +2833,23 @@ class DynamemController(BaseController):
                 logger.info(f"EQA habitat navmesh: {nav_res.note} dist={nav_res.dist_m:.2f}m")
             else:
                 logger.info(f"EQA habitat navmesh failed: {nav_res.note} (dist={nav_res.dist_m:.2f}m)")
+            self._last_nav_plan = {
+                "mode": "navigation",
+                "localize_source": "eqa_target",
+                "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), float(target_theta or 0.0)],
+                "method": "habitat_navmesh",
+                "note": nav_res.note,
+            }
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-            blocked = getattr(self, "_habitat_blocked_goals", None)
-            if blocked is not None and (
-                nav_res.note.startswith("already_at_goal") or (not nav_res.finished and nav_res.dist_m < 0.08)
-            ):
-                blocked.add(goal_key_xy(goal_xy))
+            # Stuck / noop / no-progress: same blocked-goal memory as voxel timeout abort
+            # so uncover explore / multi-goal A* skip this frontier.
+            stuck = (
+                str(nav_res.note or "").startswith("already_at_goal")
+                or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
+                or (not nav_res.success and float(nav_res.dist_m) < 0.12)
+            )
+            if stuck:
+                self._mark_nav_goal_blocked(reason=f"habitat_navmesh_{nav_res.note or 'stuck'}")
             return nav_res.finished
 
         target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
@@ -2835,26 +2895,38 @@ class DynamemController(BaseController):
                 traj[-1][2] = target_theta
             traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
             if reject_reason is not None or not traj:
-                logger.warning(
-                    "navigate_to_target_pose rejected after safety filter: %s",
-                    reject_reason,
-                )
+                logger.warning(f"navigate_to_target_pose rejected after safety filter: {reject_reason}")
                 self._last_nav_plan = {
                     "mode": "navigation",
                     "localize_source": "eqa_target",
+                    "goal_xyt": list(np.asarray(target_pose, dtype=np.float64).reshape(-1)[:3])
+                    if target_pose is not None
+                    else [float(goal_xy[0]), float(goal_xy[1]), 0.0],
+                    "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
                     "n_planned": n_planned,
                     "chunked": truncated,
                     "min_clearance_m": min_clr,
                     "outcome": reject_reason or "rejected_low_clearance",
                 }
-                traj = None
-            else:
-                logger.info(
-                    "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
-                    len(traj),
-                    n_planned,
-                    finished,
+                reason = reject_reason or "rejected_low_clearance"
+                self._mark_nav_goal_blocked(reason=reason)
+                nav_res = NavAttemptResult(
+                    success=False,
+                    finished=False,
+                    dist_m=0.0,
+                    method="voxel_astar",
+                    note=reason,
+                    target_obs_id=target_obs_id,
                 )
+                self._last_nav_attempt = nav_res
+                self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
+                return False
+            logger.info(
+                "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
+                len(traj),
+                n_planned,
+                finished,
+            )
         else:
             traj = None
 
@@ -2919,6 +2991,7 @@ class DynamemController(BaseController):
             )
             if exec_ok is False:
                 self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                 nav_res = NavAttemptResult(
                     success=False,
                     finished=False,
@@ -2943,7 +3016,15 @@ class DynamemController(BaseController):
             )
         else:
             note = res.reason if res is not None else "sample_nav_failed"
-            logger.info("EQA voxel nav failed: %s", note)
+            logger.info(f"EQA voxel nav failed: {note}")
+            self._last_nav_plan = {
+                "mode": "navigation",
+                "localize_source": "eqa_target",
+                "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), 0.0],
+                "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
+                "outcome": str(note),
+            }
+            self._mark_nav_goal_blocked(reason=str(note))
             nav_res = NavAttemptResult(
                 success=False,
                 finished=False,

@@ -165,6 +165,49 @@ def get_eqa_vl_int(parameters: Parameters | dict | None, key: str, default: int)
         return default
 
 
+# Enough for the caption-free HM-EQA format (short reasoning, letter, confidence) on the
+# models we currently slot in. Per-model tuning belongs in ``eqa_vl/answer_max_new_tokens``,
+# not here: a verbose or reasoning-heavy VLM needs more, and 256 truncated 31 of 32
+# generations in the 2026-07-29 bal-32 run.
+_DEFAULT_ANSWER_MAX_NEW_TOKENS = 384
+
+
+def resolve_eqa_answer_max_new_tokens(parameters: Parameters | dict | None) -> int:
+    """
+    Decode cap for the EQA answer call: ``EMET_EQA_ANSWER_MAX_NEW_TOKENS``, then
+    ``eqa_vl/answer_max_new_tokens``, then a default.
+
+    ``0`` means "impose no per-call cap" and lets the VL client's own ``max_tokens`` apply.
+    """
+    env = os.environ.get("EMET_EQA_ANSWER_MAX_NEW_TOKENS", "").strip()
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            logger.warning(f"Invalid EMET_EQA_ANSWER_MAX_NEW_TOKENS={env!r}; falling back to config")
+    return get_eqa_vl_int(parameters, "answer_max_new_tokens", _DEFAULT_ANSWER_MAX_NEW_TOKENS)
+
+
+def resolve_eqa_include_image_descriptions(parameters: Parameters | dict | None) -> bool:
+    """
+    Whether the EQA user message includes an ``IMAGE_DESCRIPTIONS`` text block.
+
+    Default **off**: RGB frames + ``SCENE_GRAPH`` already carry the visual/spatial signal;
+    the legacy per-image label dump mostly duplicated graph nodes and invited the model to
+    re-caption. Env ``EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS`` (0/1) overrides config
+    ``eqa_vl/include_image_descriptions``.
+    """
+    env = os.environ.get("EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS", "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
+        return True
+    v = _pget(parameters, "eqa_vl/include_image_descriptions", False)
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
 def get_eqa_vl_str(parameters: Parameters | dict | None, key: str, default: str) -> str:
     """Read ``eqa_vl/<key>`` from parameters (dynav_config) with fallback."""
     v = _pget(parameters, f"eqa_vl/{key}", default)
@@ -210,12 +253,7 @@ def resolve_vl_hf_model_id(
     eqa = _eqa_cfg(parameters)
     cfg_fam = normalize_vl_family(str(eqa.get("vl_family", "") or ""))
     cfg_id = eqa.get("vl_hf_model_id")
-    if (
-        cfg_id
-        and str(cfg_id).strip()
-        and (not cfg_fam or cfg_fam == fam)
-        and _hf_id_matches_family(str(cfg_id), fam)
-    ):
+    if cfg_id and str(cfg_id).strip() and (not cfg_fam or cfg_fam == fam) and _hf_id_matches_family(str(cfg_id), fam):
         return str(cfg_id).strip()
     if fam != "gemma4":
         return default_hf_model_id(fam) or ""

@@ -37,8 +37,8 @@ from emet.habitat.metrics import (
     choices_are_location_mcq,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
-    should_abstain_location_mcq,
     grade_mcq_answer,
+    should_abstain_location_mcq,
 )
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.simulator import HabitatEQASimulator
@@ -166,12 +166,17 @@ def _configure_eqa_parameters(
     eqa_hf_model_id: str | None,
     device: str = "cuda",
 ) -> None:
+    """HM-EQA always uses the MCQ system prompt; optional VL family/HF id overrides."""
+    eqa = dict(parameters.get("eqa", {}) or {})
+    # Must run even when no VL CLI override — otherwise GraphEQAMemory sees an empty
+    # variant, loads the caption-heavy EQA_PROMPT, and skips Reasoning: prefill.
+    eqa.setdefault("prompt_variant", "hmeqa")
     if eqa_vl_family is None and eqa_hf_model_id is None:
+        parameters.set("eqa", eqa)
         return
     from emet.llms.eqa_vl_settings import resolve_vl_hf_model_id
     from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
 
-    eqa = dict(parameters.get("eqa", {}) or {})
     if eqa_vl_family is not None:
         eqa["backend"] = "qwen_vl"
         eqa["vl_family"] = eqa_vl_family
@@ -187,7 +192,6 @@ def _configure_eqa_parameters(
                     eqa["vl_hf_model_id"] = default_hf_model_id(fam)
     if eqa_hf_model_id is not None:
         eqa["vl_hf_model_id"] = eqa_hf_model_id
-    eqa.setdefault("prompt_variant", "hmeqa")
     parameters.set("eqa", eqa)
 
 
@@ -399,11 +403,7 @@ def run_hmeqa_episode(
         if save_debug_bundle and debug_run_tag:
             from emet.habitat.episode_debug import default_episodes_root
 
-            ep_dir = (
-                default_episodes_root()
-                / debug_run_tag
-                / f"q{int(question_id):04d}_{method}"
-            )
+            ep_dir = default_episodes_root() / debug_run_tag / f"q{int(question_id):04d}_{method}"
             ep_dir.mkdir(parents=True, exist_ok=True)
             agent._episode_debug_dir = str(ep_dir)
             (ep_dir / "frontier_picks").mkdir(exist_ok=True)
@@ -433,26 +433,23 @@ def run_hmeqa_episode(
         if not predicted:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
-        # Unverified location guesses: do not score a letter when the target was never
-        # in attached views and the model did not confirm (towel/fruit-bowl false locks).
-        if (
-            agent.graph_memory is not None
-            and q.choices
-            and choices_are_location_mcq(q.choices)
-            and not model_confident
-        ):
+        # Location MCQ where the target never appeared in the attached views. Prefer a
+        # geometric equipment letter when we have one, but keep the model's letter
+        # otherwise: blanking it here scored a guaranteed zero where a guess scores
+        # 0.25 in expectation. The episode is flagged so calibration can separate
+        # these from grounded answers.
+        unverified_location_guess = False
+        if agent.graph_memory is not None and q.choices and choices_are_location_mcq(q.choices) and not model_confident:
             obs_ids = list(getattr(agent.graph_memory, "last_eqa_obs_ids", []) or [])
             visible_fn = getattr(agent.graph_memory, "_target_visible_in_obs_ids", None)
             visible = bool(callable(visible_fn) and visible_fn(obs_ids))
             if not visible:
+                unverified_location_guess = True
                 equip_fn = getattr(agent.graph_memory, "_equipment_letter_from_target_distances", None)
                 equip = equip_fn(q.choices) if callable(equip_fn) else ""
                 if equip:
                     predicted = equip
                     parsed_letter = equip
-                else:
-                    predicted = ""
-                    parsed_letter = ""
         predebias_letter = ""
         debias_votes = ""
         if (
@@ -469,6 +466,23 @@ def run_hmeqa_episode(
                 predicted = vote_letter
                 parsed_letter = vote_letter
         correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices) if predicted else False
+
+        salvage_pred = ""
+        summary = getattr(agent, "_agentic_eqa_summary", None)
+        if isinstance(summary, dict):
+            salvage_pred = str(summary.get("salvage_counterfactual_letter") or "").strip().upper()[:1]
+        if not salvage_pred and agent.graph_memory is not None:
+            salvage_pred = (
+                str(getattr(agent.graph_memory, "last_salvage_counterfactual_letter", "") or "").strip().upper()[:1]
+            )
+        if salvage_pred and salvage_pred not in "ABCD":
+            salvage_pred = ""
+        salvage_correct = grade_mcq_answer(salvage_pred, q.answer_letter, choices=q.choices) if salvage_pred else False
+        scored_policy = ""
+        if isinstance(summary, dict) and summary.get("scored_policy"):
+            scored_policy = str(summary.get("scored_policy") or "")
+        elif salvage_pred or (isinstance(summary, dict) and "salvage_counterfactual_letter" in summary):
+            scored_policy = "no_salvage"
 
         eqa_cfg = dict(parameters.get("eqa", {}) or {})
         metrics = EpisodeMetrics(
@@ -487,11 +501,26 @@ def run_hmeqa_episode(
             parsed_answer_letter=parsed_letter,
             model_confident=model_confident,
             raw_eqa_output=raw_eqa[:8000],
+            salvage_pred=salvage_pred,
+            salvage_correct=bool(salvage_correct),
+            scored_policy=scored_policy,
         )
         # 4000 comfortably exceeds the bounded payload (4 x 200-char replies + 300-char
         # freeform + JSON escaping) so the stored JSON is never truncated mid-string.
         metrics.predebias_letter = predebias_letter
         metrics.debias_votes = debias_votes[:4000]
+        metrics.unverified_location_guess = unverified_location_guess
+        if agent.graph_memory is not None:
+            metrics.eqa_answer_field_missing = not agent.graph_memory.last_eqa_answer_field_emitted
+            metrics.eqa_salvage_used = agent.graph_memory.last_eqa_salvage_used
+        if isinstance(summary, dict):
+            metrics.decision_rounds = int(summary.get("decision_rounds") or 0)
+            metrics.budget_hit = bool(summary.get("budget_hit"))
+            metrics.answer_provenance = str(summary.get("answer_provenance") or "")
+            try:
+                metrics.answer_confidence = float(summary.get("answer_confidence") or 0.0)
+            except (TypeError, ValueError):
+                metrics.answer_confidence = 0.0
         enrich_episode_metrics(
             metrics,
             agent=agent,

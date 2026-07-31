@@ -138,8 +138,10 @@ class Gemma4VLLMClient(AbstractVLLMClient):
             self.model = AutoModelForImageTextToText.from_pretrained(source, **pretrained_kw)
         except (ValueError, RuntimeError) as e:
             err = str(e).lower()
-            recoverable = device == "cuda" and quantization_config is not None and (
-                "dispatched" in err or "disk" in err or "out of memory" in err or "cuda out of memory" in err
+            recoverable = (
+                device == "cuda"
+                and quantization_config is not None
+                and ("dispatched" in err or "disk" in err or "out of memory" in err or "cuda out of memory" in err)
             )
             if not recoverable:
                 raise
@@ -157,9 +159,7 @@ class Gemma4VLLMClient(AbstractVLLMClient):
             warnings.warn(f"Gemma VLM falling back to CPU bf16 after int4 GPU failure: {e}", UserWarning, stacklevel=2)
             self._device = "cpu"
             self._quantization = None
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                source, torch_dtype=dtype, **local_kw
-            )
+            self.model = AutoModelForImageTextToText.from_pretrained(source, torch_dtype=dtype, **local_kw)
             self.model = self.model.to("cpu")
         else:
             if device == "cpu" and quantization_config is None:
@@ -198,6 +198,7 @@ class Gemma4VLLMClient(AbstractVLLMClient):
         reset_context: bool = True,
         verbose: bool = False,
         image: Any | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         if reset_context:
             self.reset()

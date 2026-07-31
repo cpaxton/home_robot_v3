@@ -565,8 +565,7 @@ class Qwen3VLClient(AbstractVLLMClient):
         generated = self.model.generate(**model_inputs, **gen_kw)
         if hard_stop is not None and hard_stop.fired:
             raise VlGenerateTimeoutError(
-                f"VL generate decode stopped after {timeout_s:g}s "
-                f"(EMET_VL_GENERATE_TIMEOUT_S). Set 0 to disable."
+                f"VL generate decode stopped after {timeout_s:g}s (EMET_VL_GENERATE_TIMEOUT_S). Set 0 to disable."
             )
         return generated
 
@@ -616,6 +615,7 @@ class Qwen3VLClient(AbstractVLLMClient):
         verbose: bool = False,
         image: Any | None = None,
         progress_callback: Callable[[str], None] | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         def _progress(msg: str) -> None:
             if progress_callback is not None:
@@ -652,7 +652,27 @@ class Qwen3VLClient(AbstractVLLMClient):
             except Exception:
                 pass
         t_prep0 = timeit.default_timer()
-        inputs = self._processor_inputs(messages, add_generation_prompt=True)
+        prefill = (assistant_prefill or "").strip("\n")
+        if prefill:
+            # Seed the assistant turn so the model cannot open with Caption: — HM-EQA
+            # prompt edits alone still left a ~26% caption share on Qwen3-VL-8B.
+            text = self.processor.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                **self._TEMPLATE_KWARGS,
+            )
+            text = text + prefill + "\n"
+            image_inputs, video_inputs = process_vision_info(messages)
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            ).to(self._model_device())
+        else:
+            inputs = self._processor_inputs(messages, add_generation_prompt=True)
         prep_s = timeit.default_timer() - t_prep0
         ntok = max_new_tokens if max_new_tokens is not None else self.max_tokens
         input_len = int(inputs.input_ids.shape[1])
@@ -672,7 +692,8 @@ class Qwen3VLClient(AbstractVLLMClient):
         if env_agent_model_debug() or verbose:
             print(
                 f"[vl] generate prep={prep_s:.2f}s tokens={input_len} device={model_dev} "
-                f"vision={has_vision} max_new={ntok} prefix_cache={self.cache_system_prefix}",
+                f"vision={has_vision} max_new={ntok} prefix_cache={self.cache_system_prefix}"
+                + (f" prefill={prefill!r}" if prefill else ""),
                 flush=True,
             )
 
@@ -689,8 +710,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             + (" prefix_cache" if (self.cache_system_prefix and sys_txt and not has_vision) else "")
         )
         print(
-            f"[vl] generate start prompt={input_len} max_new={ntok} device={model_dev} "
-            f"vision={has_vision}",
+            f"[vl] generate start prompt={input_len} max_new={ntok} device={model_dev} vision={has_vision}",
             flush=True,
         )
         t_gen0 = timeit.default_timer()
@@ -712,9 +732,7 @@ class Qwen3VLClient(AbstractVLLMClient):
                     )
                     trim_from_len = int(inputs.input_ids.shape[1])
                     if used_cache and env_agent_model_debug():
-                        logger.info(
-                            f"VL prefix cache: hit ({prefix_entry.prefix_token_len}-token system prefix)"
-                        )
+                        logger.info(f"VL prefix cache: hit ({prefix_entry.prefix_token_len}-token system prefix)")
                     return generated
                 if prefix_entry is not None and env_agent_model_debug():
                     logger.info("VL prefix cache: token mismatch; full generate")
@@ -743,6 +761,10 @@ class Qwen3VLClient(AbstractVLLMClient):
                 generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
             )[0]
         )
+        if prefill:
+            # Prefill tokens were part of the prompt, not the generated ids — put them back
+            # so parsers see a complete Reasoning:/Answer: stream.
+            output_text = f"{prefill}\n{output_text}" if output_text else f"{prefill}\n"
 
         self.add_history({"role": "assistant", "content": output_text})
         t1 = timeit.default_timer()

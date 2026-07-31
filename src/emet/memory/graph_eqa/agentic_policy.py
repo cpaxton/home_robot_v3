@@ -153,9 +153,7 @@ class EvidencePolicy:
         positives: list[str] = []
         contradictions: list[str] = []
 
-        image_scores = [
-            score for score in (record.full_frame_sim, record.dense_sim) if score is not None
-        ]
+        image_scores = [score for score in (record.full_frame_sim, record.dense_sim) if score is not None]
         if image_scores:
             image_score = max(image_scores)
             if image_score >= 0.12:
@@ -192,16 +190,13 @@ class EvidencePolicy:
             contradictions.append("geometry")
         if record.vlm_present_probability is not None:
             log_odds += 0.8 * _logit(record.vlm_present_probability)
-            (positives if record.vlm_present_probability >= 0.5 else contradictions).append(
-                "vlm"
-            )
+            (positives if record.vlm_present_probability >= 0.5 else contradictions).append("vlm")
 
         belief.presence_probability = _sigmoid(log_odds)
         belief.relation_sufficient = bool(relation_sufficient)
         evidence_diversity = len(set(positives))
         strong_channel = any(
-            channel in positives
-            for channel in ("siglip_voxel", "graph_label", "owlv2", "yoloe", "vlm")
+            channel in positives for channel in ("siglip_voxel", "graph_label", "owlv2", "yoloe", "vlm")
         )
         verified = belief.presence_probability >= self.verify_probability and (
             evidence_diversity >= 2 or strong_channel
@@ -227,7 +222,12 @@ class EvidencePolicy:
         answerable: bool,
         need_more_views: bool = False,
     ) -> Assessment:
-        """Multimodal VLM decides presence/answerability for the active hypothesis."""
+        """Multimodal VLM updates presence; does **not** open ANSWER alone.
+
+        Raw ``answerable`` is returned for the executor confirm gate. Call
+        :meth:`confirm_answerable` only after hybrid corroboration (phrase hit
+        or two-view letter agreement).
+        """
         if self.active_hypothesis_id is None:
             raise RuntimeError("apply_vlm_assessment requires an active hypothesis")
         if self.state not in (AgenticState.ASSESS, AgenticState.REPLAN, AgenticState.VERIFY):
@@ -236,17 +236,18 @@ class EvidencePolicy:
         vlm_p = 0.85 if present else 0.15
         log_odds = _logit(belief.presence_probability) + 0.8 * _logit(vlm_p)
         belief.presence_probability = _sigmoid(log_odds)
-        belief.relation_sufficient = bool(answerable)
+        # Soft signal only — submit unlock is confirm_answerable.
+        belief.relation_sufficient = False
         if answerable:
-            belief.answerability_probability = max(self.answerability_threshold, 0.9)
+            belief.answerability_probability = max(self.answerability_threshold, 0.75)
         elif present:
             belief.answerability_probability = min(self.answerability_threshold - 0.05, 0.45)
         else:
             belief.answerability_probability = 0.1
-        if need_more_views and not answerable:
+        if need_more_views:
             belief.answerability_probability = min(belief.answerability_probability, 0.35)
         verified = bool(present) or belief.presence_probability >= self.verify_probability
-        self.state = AgenticState.ANSWER if answerable else AgenticState.REPLAN
+        self.state = AgenticState.REPLAN
         positives = ("vlm",) if present or answerable else ()
         contradictions = () if present or answerable else ("vlm",)
         return Assessment(
@@ -256,7 +257,33 @@ class EvidencePolicy:
             positive_channels=positives,
             contradiction_channels=contradictions,
             verified=verified,
+            # Raw VLM claim — not yet confirmed for submit.
             answerable=bool(answerable),
+        )
+
+    def confirm_answerable(self) -> Assessment:
+        """Open ANSWER after executor hybrid confirm (phrase hit or two-view agree)."""
+        if self.active_hypothesis_id is None:
+            raise RuntimeError("confirm_answerable requires an active hypothesis")
+        if self.state not in (
+            AgenticState.ASSESS,
+            AgenticState.REPLAN,
+            AgenticState.VERIFY,
+            AgenticState.ANSWER,
+        ):
+            raise RuntimeError(f"confirm_answerable is invalid in state {self.state}")
+        belief = self.beliefs[self.active_hypothesis_id]
+        belief.relation_sufficient = True
+        belief.answerability_probability = max(self.answerability_threshold, 0.9)
+        self.state = AgenticState.ANSWER
+        return Assessment(
+            hypothesis_id=belief.hypothesis_id,
+            presence_probability=belief.presence_probability,
+            answerability_probability=belief.answerability_probability,
+            positive_channels=("vlm", "answerable_confirmed"),
+            contradiction_channels=(),
+            verified=True,
+            answerable=True,
         )
 
     def replan(self) -> None:

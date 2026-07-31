@@ -228,7 +228,15 @@ eqa_vl:
   graph_keyword_max_tokens: 64
   voxel_keyword_max_tokens: 20
   eqa_max_tokens: 512
+  # Per-call decode cap for the EQA answer, separate from the client-wide eqa_max_tokens.
+  # Raise for a verbose or reasoning-heavy VLM: too low and the model is cut off before
+  # ``answer:`` and only a salvage re-ask saves the episode. Env: EMET_EQA_ANSWER_MAX_NEW_TOKENS.
+  answer_max_new_tokens: 384
   eqa_max_images: 4
+  # Legacy text block listing labels/coords for the same obs already attached as RGB.
+  # Default off: SCENE_GRAPH + pixels are enough; the dump invited Caption: loops.
+  # Env: EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1 to restore for A/B.
+  include_image_descriptions: false
   # Cap SCENE_GRAPH object/frontier lines in the EQA prompt (full graph still in exports).
   eqa_max_graph_nodes: 48
   # Cap how many prior planning iterations are replayed in the prompt. Unbounded history

@@ -114,6 +114,7 @@ class GraphEQAVLMClient:
             command,
             system_prompt=system_prompt,
             max_new_tokens=max_new,
+            assistant_prefill=kwargs.get("assistant_prefill"),
         )
 
 

@@ -164,12 +164,9 @@ def media_paths(bundle: Path) -> dict[str, Any]:
         "maps_n": _count_glob(maps, "*.png"),
         "episode_rgb_mp4": str(rgb_mp4) if rgb_mp4.is_file() else None,
         "topdown_exploration_mp4": str(topdown_mp4) if topdown_mp4.is_file() else None,
-        "topdown_map": str(bundle / "topdown_map.png")
-        if (bundle / "topdown_map.png").is_file()
-        else None,
-        "trace": str(bundle / "agentic_trace.jsonl")
-        if (bundle / "agentic_trace.jsonl").is_file()
-        else None,
+        "topdown_map": str(bundle / "topdown_map.png") if (bundle / "topdown_map.png").is_file() else None,
+        "topdown_rooms": str(bundle / "topdown_rooms.png") if (bundle / "topdown_rooms.png").is_file() else None,
+        "trace": str(bundle / "agentic_trace.jsonl") if (bundle / "agentic_trace.jsonl").is_file() else None,
     }
 
 
@@ -283,10 +280,7 @@ def format_inspect_text(payload: dict[str, Any]) -> str:
             lines.append(f"Q: {ep['question']}")
         top = ep.get("top_labels") or []
         if top:
-            labs = ", ".join(
-                f"{t.get('label')}×{t.get('count')}" if isinstance(t, dict) else str(t)
-                for t in top[:8]
-            )
+            labs = ", ".join(f"{t.get('label')}×{t.get('count')}" if isinstance(t, dict) else str(t) for t in top[:8])
             lines.append(f"graph top_labels: {labs}")
     tr = payload.get("trace")
     if tr:
