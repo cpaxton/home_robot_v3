@@ -94,14 +94,20 @@ uv run emet deploy llm --profile unified-7b
 # or from olympia: ./scripts/deploy_caliban_vl.sh --profile dual-2b
 ```
 
-### Unified bigger VL (recommended when you want more capacity)
+### Quantization on caliban (JP5)
 
-```bash
-# from olympia (weights must be cached locally first)
-uv run python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2-VL-7B-Instruct')"
-uv run emet deploy llm --profile unified-7b
-# Herman preset configs/agent_innate_mars.yaml uses caliban:8000 for text + VL
-```
+Workstation emet uses **bitsandbytes int4** for local Qwen3-VL. That path does **not** work in the Tegra-CUDA Jetson container today:
+
+| Approach | Status on JP5 `emet-jetson-llm` |
+|----------|----------------------------------|
+| fp16 (current) | Works — Orin ~64 GiB unified memory fits Qwen2-VL-7B with headroom |
+| bitsandbytes int4/int8 | Not installed; Tegra torch is not the PyPI CUDA build bnb expects |
+| AutoAWQ / `Qwen2-VL-*-AWQ` | `pip install autoawq` pulls CPU `torch` + needs Triton |
+| Quanto int8 | Installs but upgrades to CPU torch 2.4 / needs `float8` absent in nv23.05 |
+
+So we stay on **fp16** for `emet deploy llm`. Pre-quantized AWQ weights (~7 GiB on disk vs ~16 GiB fp16) are attractive once a **JP6 / dustynv vLLM** image can load them without replacing Tegra torch. Until then, use `unified-7b` fp16 or `dual-2b` for a smaller second model.
+
+Pass `--quant awq|int4|int8` to `jetson_llm_server.py` only to get that explanation (it exits non-zero on JP5).
 
 Workstation Herman preset ([`configs/agent_innate_mars.yaml`](../configs/agent_innate_mars.yaml)):
 

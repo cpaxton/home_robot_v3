@@ -172,6 +172,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
 | `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
+| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` (only supported on JP5 Tegra image). `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md) § Quantization. |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |

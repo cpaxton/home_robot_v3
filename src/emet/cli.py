@@ -3362,9 +3362,13 @@ def deploy_llm_cmd(
 ) -> None:
     """Rsync VL weights and start the Tegra-CUDA OpenAI container on caliban.
 
-    AGX Orin has ~64 GiB unified memory — enough for Qwen2-VL-7B (unified-7b).
+    AGX Orin has ~64 GiB unified memory — enough for Qwen2-VL-7B fp16 (unified-7b).
     eMMC cannot hold both a 7B CausalLM and a 7B VL; use dual-2b for a small VL
     beside text, or unified-7b for the larger single model.
+
+    Quantization (bitsandbytes / AWQ / Quanto) is **not** available on the JP5
+    Tegra-CUDA image yet — pip installs replace NVIDIA torch. Stay on fp16 or
+    use a JP6/vLLM container; see docs/llm_serve.md § Quantization on caliban.
 
     Examples:
       emet deploy llm

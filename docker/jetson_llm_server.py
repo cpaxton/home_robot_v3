@@ -460,6 +460,16 @@ def main(argv=None):
         action="store_true",
         help="Load Qwen2-VL multimodal weights (image_url data URLs). Prefer --port 8001.",
     )
+    p.add_argument(
+        "--quant",
+        default=os.environ.get("EMET_LLM_SERVE_QUANT", "fp16"),
+        choices=("fp16", "none", "awq", "int4", "int8", "bnb"),
+        help=(
+            "Weight format. JP5 Tegra container only supports fp16/none today: "
+            "bitsandbytes/AutoAWQ/Quanto need newer torch+kernels and pip-install "
+            "replaces NVIDIA torch with CPU wheels. Use a JP6/vLLM image for AWQ."
+        ),
+    )
     p.add_argument("--model", default=None, help="HF model id (text default 7B; --vl default Qwen2-VL-2B).")
     p.add_argument("--host", default=os.environ.get("EMET_LLM_SERVE_HOST", "0.0.0.0"))
     p.add_argument("--port", type=int, default=None)
@@ -476,6 +486,20 @@ def main(argv=None):
     )
     p.add_argument("--api-key", default=os.environ.get("EMET_LLM_SERVE_API_KEY") or None)
     args = p.parse_args(argv)
+
+    quant = (args.quant or "fp16").strip().lower()
+    if quant in ("none",):
+        quant = "fp16"
+    if quant not in ("fp16",):
+        _log(
+            "FATAL: --quant %s is not supported on this Jetson JP5 Tegra-CUDA image "
+            "(torch %s). bitsandbytes / AutoAWQ / Quanto need newer PyTorch + CUDA "
+            "kernels; pip installing them replaces NVIDIA torch with CPU wheels. "
+            "Stay on fp16 (Orin ~64 GiB unified memory fits Qwen2-VL-7B), or move to "
+            "a JP6 / dustynv vLLM container for AWQ. See docs/llm_serve.md."
+            % (quant, "nv/tegra")
+        )
+        return 1
 
     multimodal = bool(args.vl) or os.environ.get("EMET_LLM_SERVE_VL", "").strip().lower() in (
         "1",
