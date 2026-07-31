@@ -1934,13 +1934,22 @@ class GraphEQAMemory:
             self.refresh_room_clusters()
         return format_rooms_compact(self._room_clusters, max_chars=max_chars)
 
-    def stamp_vlm_room_at_robot(self, robot_xy: Any, room: str | None) -> str:
+    def stamp_vlm_room_at_robot(
+        self,
+        robot_xy: Any,
+        room: str | None,
+        *,
+        protect_indoor_from_outdoor: bool = True,
+        corroborating_labels: list[str] | tuple[str, ...] | None = None,
+    ) -> str:
         """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown.
 
         ``room`` should already be policy-coerced (canonical bucket or free-text phrase).
+        By default refuses outdoor overwriting a named indoor cluster without corroboration.
+        Returns ``unknown`` when the stamp is skipped/blocked.
         """
         from emet.memory.graph_eqa.agentic_tools import sanitize_room_phrase
-        from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
+        from emet.memory.graph_eqa.room_clusters import estimate_room_at_xy, stamp_room_at_xy
 
         name = sanitize_room_phrase(room)
         if name == "unknown" or robot_xy is None:
@@ -1951,13 +1960,30 @@ class GraphEQAMemory:
             xy = (float(robot_xy[0]), float(robot_xy[1]))
         except Exception:
             return "unknown"
+        prev = estimate_room_at_xy(
+            self._room_clusters,
+            xy,
+            max_dist_m=self._room_assign_max_m(),
+        )
+        labs = [str(x) for x in (corroborating_labels or ()) if str(x).strip()] or None
         self._room_clusters = stamp_room_at_xy(
             self._room_clusters,
             xy,
             name,
             max_dist_m=self._room_assign_max_m(),
+            protect_indoor_from_outdoor=bool(protect_indoor_from_outdoor),
+            corroborating_labels=labs,
         )
         self.last_room_clusters = list(self._room_clusters)
+        after = estimate_room_at_xy(
+            self._room_clusters,
+            xy,
+            max_dist_m=self._room_assign_max_m(),
+        )
+        after_s = sanitize_room_phrase(after)
+        if after_s != name:
+            # Protection blocked the write (or nearest cluster out of range).
+            return "unknown" if sanitize_room_phrase(prev) != name else after_s
         return name
 
     def nearby_object_observations(

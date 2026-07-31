@@ -50,7 +50,7 @@ Rules:
   never a substitute for investigate(obs_id).
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - After a close look where VLM assess says present=false, prefer explore_frontier
-  once to grow coverage before investigating a new capture-station card.
+  once to grow coverage, then investigate remaining Question-relevant place cards.
 - SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
   vlm_assess for answerability (agentic verify). State verified= means VLM
   answerable, not detector confirmation.
@@ -93,7 +93,10 @@ Rules:
   letting the frontier VLM pick from the Question + images.
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - After a close look where VLM assess says present=false, prefer explore_frontier
-  once to grow coverage before investigating a new capture-station card.
+  once to grow coverage, then investigate remaining Question-relevant place cards
+  (do not explore forever).
+- in_target_area=false means leave OR look closer at a listed Investigate card that
+  could answer the Question — never "explore_frontier only" while place cards exist.
 - SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
   vlm_assess for answerability (agentic verify). State verified= means VLM
   answerable, not detector confirmation.
@@ -103,8 +106,10 @@ Rules:
 # Examples
 State: Question about bathroom shower rug; Investigate obs_id=3 phrase='sink' room=bathroom
 {"current_room": "bathroom", "in_target_area": true, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Question about bathroom shower; Current room: living room; Prefer explore
+State: Question about bathroom shower; Current room: living room; no Investigate cards
 {"current_room": "living room", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
+State: Question about dining chairs; Current room: kitchen; in_target_area=false; Investigate obs_id=12 phrase='dining table'
+{"current_room": "kitchen", "in_target_area": false, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 12}}], "message": ""}
 State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
 {"current_room": "open living area", "in_target_area": true, "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
@@ -391,11 +396,15 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         reason = str(getattr(executor, "_prefer_explore_reason", "") or "")
         if reason == "absent":
             lines.append(
-                "Prefer explore_frontier: last close look VLM assess present=false — "
-                "grow coverage before chasing a new capture station."
+                "Prefer explore_frontier once: last close look VLM assess present=false — "
+                "grow coverage, then investigate remaining Question-relevant place cards "
+                "(do not explore forever)."
             )
         else:
-            lines.append("Prefer explore_frontier: grow coverage before chasing a new capture station.")
+            lines.append(
+                "Prefer explore_frontier once to grow coverage, then investigate a place card "
+                "if any remain for the Question."
+            )
     leave = room_leave_needed(
         room_policy=policy,
         current_room=last_room or graph_room,
@@ -405,7 +414,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if leave:
         here = last_room or graph_room or "unknown"
         lines.append(
-            f"Not in a useful place yet (here: {here}) — explore_frontier; pick views that help answer the Question."
+            f"Not in a useful place yet (here: {here}) — explore_frontier to leave, "
+            "OR investigate a listed place card whose room=/labels help answer the Question "
+            "(close looks are allowed while leaving)."
         )
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")

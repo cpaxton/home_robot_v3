@@ -2269,12 +2269,280 @@ def test_prefer_explore_after_close_absent():
     assert ex._prefer_explore is True
     assert ex._prefer_explore_reason == "absent"
     msg = build_state_message(ex)
-    assert "Prefer explore_frontier" in msg
+    assert "Prefer explore_frontier once" in msg
+    assert "do not explore forever" in msg
     tool, _args = ex._fallback_tool()
     assert tool == "explore_frontier"
+    # After one explore in the streak, fallback should close-look remaining place cards.
+    ex._n_consecutive_explore = 1
+    tool2, args2 = ex._fallback_tool()
+    assert tool2 == "investigate"
+    assert int(args2.get("obs_id")) == 38
     # Direct clear path used by explore tool:
     ex._prefer_explore = False
     assert ex._prefer_explore is False
+
+
+def test_explore_streak_forces_investigate_over_frontier():
+    """Two successful explores in a row → rewrite explore pick to investigate."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import (
+        EXPLORE_STREAK_FORCE_INVESTIGATE,
+        AgenticEQAExecutor,
+    )
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
+    gm.memory_summary_enabled = False
+    gm.eqa_client = MagicMock(
+        return_value=(
+            '{"current_room": "outdoor", "in_target_area": false, '
+            '"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
+        )
+    )
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the silver trash can?",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    ex.room_policy = "llm"
+    ex._in_target_area = False
+    ex._last_room_estimate = "outdoor"
+    ex._n_consecutive_explore = EXPLORE_STREAK_FORCE_INVESTIGATE
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="trash can",
+            obs_id=7,
+            xyz=np.array([1.0, 2.0, 0.5]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=99,
+            xyz=np.array([-15.0, 0.0, 0.0]),
+            score=0.2,
+            source="frontier",
+        ),
+    ]
+    msg = build_state_message(ex)
+    assert "close looks are allowed while leaving" in msg
+    tool, args = ex._fallback_tool()
+    assert tool == "investigate"
+    assert int(args["obs_id"]) == 7
+    # Soft prefer_explore + streak>=1 also investigates.
+    ex._prefer_explore = True
+    ex._prefer_explore_reason = "absent"
+    ex._n_consecutive_explore = 1
+    tool2, args2 = ex._fallback_tool()
+    assert tool2 == "investigate"
+    assert int(args2["obs_id"]) == 7
+
+
+def test_stamp_room_after_investigate_updates_graph_and_estimate():
+    """Close look stamps nearest cluster from place labels (not stuck on outdoor)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+    from emet.memory.graph_eqa.room_clusters import RoomCluster
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._room_clusters = [
+        RoomCluster(
+            cluster_id=1,
+            node_ids=(1,),
+            labels=("toilet", "sink"),
+            centroid_xy=(1.0, 2.0),
+            room_name="outdoor",
+        )
+    ]
+    gm.last_room_clusters = list(gm._room_clusters)
+    # Local evidence only: obs labels (not hyp.phrase / labels_near_obs).
+    gm._observations = [MagicMock(obs_id=3, labels=["toilet", "bath mat"])]
+
+    def _stamp(xy, room, protect_indoor_from_outdoor=True, corroborating_labels=None):
+        from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
+
+        gm._room_clusters = stamp_room_at_xy(
+            gm._room_clusters,
+            xy,
+            room,
+            protect_indoor_from_outdoor=protect_indoor_from_outdoor,
+            corroborating_labels=corroborating_labels,
+        )
+        gm.last_room_clusters = list(gm._room_clusters)
+        return room
+
+    def _room_at(xy):
+        from emet.memory.graph_eqa.room_clusters import estimate_room_at_xy
+
+        return estimate_room_at_xy(gm._room_clusters, xy)
+
+    gm.stamp_vlm_room_at_robot.side_effect = _stamp
+    gm.graph_room_at_robot.side_effect = _room_at
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Which rug is at the shower in the bathroom?",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    ex.room_policy = "llm"
+    ex._last_room_estimate = "outdoor"
+    hyp = NavHypothesis(
+        phrase="rug shower bathroom",  # question-shaped; must not drive the stamp alone
+        obs_id=3,
+        xyz=np.array([1.0, 2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    out = ex._stamp_room_after_investigate(3, hyp=hyp, station_oid=10)
+    assert out.get("ok") is True
+    assert out.get("proposed") == "bathroom"
+    assert out.get("label_source") == "obs_and_hyp_labels"
+    assert ex._last_room_estimate == "bathroom"
+    assert gm._room_clusters[0].room_name == "bathroom"
+    assert any(r.get("event") == "room_stamp_investigate" for r in ex._trace_rows)
+
+
+def test_stamp_room_ignores_question_phrase_and_station_leakage():
+    """hyp.phrase / station kitchen labels must not force a kitchen stamp."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+    from emet.memory.graph_eqa.room_clusters import RoomCluster
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._room_clusters = [
+        RoomCluster(
+            cluster_id=1,
+            node_ids=(1,),
+            labels=("bouquet", "picture"),
+            centroid_xy=(1.0, 2.0),
+            room_name="unknown",
+        )
+    ]
+    gm.last_room_clusters = list(gm._room_clusters)
+    gm._observations = [
+        MagicMock(obs_id=3, labels=["bouquet", "picture"]),
+        MagicMock(obs_id=10, labels=["refrigerator", "kitchen cabinet"]),
+    ]
+    gm.stamp_vlm_room_at_robot = MagicMock(return_value="kitchen")
+    gm.graph_room_at_robot = MagicMock(return_value="unknown")
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the wall clock? A) kitchen B) living room",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    ex.room_policy = "llm"
+    ex._last_room_estimate = "kitchen"
+    hyp = NavHypothesis(
+        phrase="wall clock kitchen",
+        obs_id=3,
+        xyz=np.array([1.0, 2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    out = ex._stamp_room_after_investigate(3, hyp=hyp, station_oid=10)
+    assert out.get("ok") is False
+    assert out.get("reason") == "no_room"
+    assert ex._last_room_estimate == "kitchen"
+    gm.stamp_vlm_room_at_robot.assert_not_called()
+
+
+def test_stamp_room_ignores_bathroom_phrase_without_local_evidence():
+    """``rug shower bathroom`` phrase alone must not stamp bathroom over living-room obs."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [
+        MagicMock(obs_id=3, labels=["console table", "lamp", "painting"]),
+    ]
+    gm.stamp_vlm_room_at_robot = MagicMock(return_value="bathroom")
+    gm.graph_room_at_robot = MagicMock(return_value="unknown")
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Which rug is at the shower in the bathroom?",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    ex.room_policy = "llm"
+    ex._last_room_estimate = "unknown"
+    hyp = NavHypothesis(
+        phrase="rug shower bathroom",
+        obs_id=3,
+        xyz=np.array([1.0, 2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    out = ex._stamp_room_after_investigate(3, hyp=hyp, station_oid=None)
+    assert out.get("ok") is False
+    assert out.get("reason") == "no_room"
+    gm.stamp_vlm_room_at_robot.assert_not_called()
+
+
+def test_stamp_room_skips_when_sticky_estimate_only():
+    """Empty local labels + kitchen estimate → skip stamp (no sticky fallback)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=3, labels=["toddler chair", "door"])]
+    gm.stamp_vlm_room_at_robot = MagicMock(return_value="kitchen")
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the toddler chair?",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    ex.room_policy = "llm"
+    ex._last_room_estimate = "kitchen"
+    hyp = NavHypothesis(
+        phrase="toddler chair child",
+        obs_id=3,
+        xyz=np.array([1.0, 2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    out = ex._stamp_room_after_investigate(3, hyp=hyp, station_oid=None)
+    assert out.get("ok") is False
+    assert out.get("reason") == "no_room"
+    assert ex._last_room_estimate == "kitchen"
+    gm.stamp_vlm_room_at_robot.assert_not_called()
 
 
 def test_normalize_current_room_aliases():

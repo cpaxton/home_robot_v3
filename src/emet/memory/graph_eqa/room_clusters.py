@@ -5,9 +5,9 @@
 """Graph-derived room / region clusters for GraphEQA.
 
 Partitions object nodes into connected components using ``near`` edges and a
-planar link radius. Room *names* come from VLM stamps (router ``current_room``)
-and explicit room words in labels — not furniture-class heuristics
-(chair/table → dining).
+planar link radius. Room *names* come from VLM stamps (router ``current_room``
+and close-look investigate evidence) and explicit room words in labels — not
+furniture-class heuristics (chair/table → dining).
 """
 
 from __future__ import annotations
@@ -20,7 +20,9 @@ from typing import Any
 import numpy as np
 
 from emet.memory.graph_eqa.agentic_tools import (
+    coerce_room_label,
     normalize_current_room,
+    room_is_outdoor,
     sanitize_room_phrase,
 )
 
@@ -135,6 +137,101 @@ def hypothesize_room_name(labels: Sequence[str]) -> str:
     if not votes:
         return "unknown"
     return votes.most_common(1)[0][0]
+
+
+def room_from_observation_labels(labels: Sequence[str]) -> str:
+    """Room from explicit room words, else sparse landmark hints (toilet/bed/stove…).
+
+    Unlike :func:`hypothesize_room_name`, allows a small object→room map for close-look
+    stamps (investigate) — still no chair/table→dining invention.
+    """
+    name = hypothesize_room_name(labels)
+    if name != "unknown":
+        return name
+    votes: Counter[str] = Counter()
+    for lab in labels:
+        blob = str(lab).lower().replace("-", " ")
+        for tok in blob.split():
+            hint = _OBJECT_ROOM_HINTS.get(tok)
+            if not hint:
+                continue
+            tname = normalize_current_room(hint)
+            if tname != "unknown":
+                votes[tname] += 1
+    if not votes:
+        return "unknown"
+    return votes.most_common(1)[0][0]
+
+
+def labels_corroborate_outdoor(labels: Sequence[str]) -> bool:
+    """True when labels mention outdoor/patio/yard (or normalize to outdoor)."""
+    for lab in labels:
+        if room_is_outdoor(str(lab)):
+            return True
+        blob = str(lab).lower()
+        if any(w in blob for w in ("outdoor", "patio", "yard", "deck", "porch", "lawn", "fence")):
+            return True
+    return False
+
+
+def _is_named_indoor_room(room: str | None) -> bool:
+    n = normalize_current_room(room)
+    if n != "unknown" and not room_is_outdoor(n):
+        return True
+    # Free-text that did not bucket but is clearly not outdoor (e.g. rare phrases).
+    s = sanitize_room_phrase(room)
+    if s == "unknown":
+        return False
+    return not room_is_outdoor(s)
+
+
+def should_apply_room_stamp(
+    existing: str | None,
+    proposed: str | None,
+    *,
+    cluster_labels: Sequence[str] | None = None,
+    corroborating_labels: Sequence[str] | None = None,
+) -> bool:
+    """Whether ``proposed`` may replace ``existing`` on a cluster.
+
+    Blocks outdoor/patio from overwriting a named indoor room (or a cluster whose
+    labels already look indoor) unless outdoor evidence appears in labels.
+    """
+    name = sanitize_room_phrase(proposed)
+    if name == "unknown":
+        return False
+    labs = [str(x) for x in list(cluster_labels or ()) + list(corroborating_labels or ()) if str(x).strip()]
+    if not room_is_outdoor(name):
+        return True
+    if labels_corroborate_outdoor(labs):
+        return True
+    if _is_named_indoor_room(existing):
+        return False
+    # Unknown / region cluster: still refuse outdoor when landmark labels look indoor.
+    from_lab = room_from_observation_labels(labs)
+    if from_lab != "unknown" and not room_is_outdoor(from_lab):
+        return False
+    return True
+
+
+def resolve_investigate_room_stamp(
+    *,
+    labels: Sequence[str],
+    current_room: str | None,
+    room_policy: str = ROOM_POLICY_CANONICAL,
+) -> str:
+    """Room to stamp after a close look from local label evidence only.
+
+    ``current_room`` is accepted for API compatibility but is **not** used as a
+    fallback — sticky estimates re-painted kitchens when labels were empty.
+    Callers skip the stamp when this returns ``unknown``.
+    """
+    _ = current_room  # API compat; do not fall back to sticky estimates.
+    policy = resolve_room_policy(room_policy)
+    label_room = room_from_observation_labels(labels)
+    if label_room != "unknown":
+        return coerce_room_label(label_room, room_policy=policy)
+    return "unknown"
 
 
 # Back-compat alias used by older tests / imports.
@@ -325,11 +422,17 @@ def stamp_room_at_xy(
     room: str | None,
     *,
     max_dist_m: float = DEFAULT_ROOM_ASSIGN_MAX_M,
+    protect_indoor_from_outdoor: bool = False,
+    corroborating_labels: Sequence[str] | None = None,
 ) -> list[RoomCluster]:
     """Set nearest cluster's ``room_name`` (immutable list copy).
 
     ``room`` should already be policy-coerced by the caller (canonical bucket or
     free-text phrase). This only light-sanitizes and rejects ``unknown``.
+
+    When ``protect_indoor_from_outdoor`` is set, refuse outdoor/patio stamps that
+    would clobber a named indoor room (or indoor-looking cluster labels) without
+    outdoor corroboration in ``corroborating_labels`` / cluster labels.
     """
     name = sanitize_room_phrase(room)
     if name == "unknown" or not clusters:
@@ -343,6 +446,14 @@ def stamp_room_at_xy(
             best_d = d
             best_i = i
     if best_i < 0 or best_d > float(max_dist_m):
+        return list(clusters)
+    existing = clusters[best_i]
+    if protect_indoor_from_outdoor and not should_apply_room_stamp(
+        existing.room_name,
+        name,
+        cluster_labels=existing.labels,
+        corroborating_labels=corroborating_labels,
+    ):
         return list(clusters)
     out = list(clusters)
     out[best_i] = replace(out[best_i], room_name=name)
