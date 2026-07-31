@@ -2346,6 +2346,41 @@ def test_explore_streak_forces_investigate_over_frontier():
     assert int(args2["obs_id"]) == 7
 
 
+def test_stamp_room_disabled_by_default():
+    """Investigate room stamps are off unless EMET_EQA_ROOM_STAMP_INVESTIGATE=1."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=3, labels=["toilet", "bath mat"])]
+    gm.stamp_vlm_room_at_robot = MagicMock(return_value="bathroom")
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Which rug is at the shower in the bathroom?",
+        max_rounds=4,
+        max_nav_steps=8,
+        collect_trace=True,
+    )
+    assert ex._room_stamp_investigate is False
+    hyp = NavHypothesis(
+        phrase="toilet",
+        obs_id=3,
+        xyz=np.array([1.0, 2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    out = ex._stamp_room_after_investigate(3, hyp=hyp, station_oid=None)
+    assert out.get("ok") is False
+    assert out.get("reason") == "disabled"
+    gm.stamp_vlm_room_at_robot.assert_not_called()
+
+
 def test_stamp_room_after_investigate_updates_graph_and_estimate():
     """Close look stamps nearest cluster from place labels (not stuck on outdoor)."""
     _require_agentic()
@@ -2400,6 +2435,7 @@ def test_stamp_room_after_investigate_updates_graph_and_estimate():
         collect_trace=True,
     )
     ex.room_policy = "llm"
+    ex._room_stamp_investigate = True
     ex._last_room_estimate = "outdoor"
     hyp = NavHypothesis(
         phrase="rug shower bathroom",  # question-shaped; must not drive the stamp alone
@@ -2454,6 +2490,7 @@ def test_stamp_room_ignores_question_phrase_and_station_leakage():
         collect_trace=True,
     )
     ex.room_policy = "llm"
+    ex._room_stamp_investigate = True
     ex._last_room_estimate = "kitchen"
     hyp = NavHypothesis(
         phrase="wall clock kitchen",
@@ -2494,6 +2531,7 @@ def test_stamp_room_ignores_bathroom_phrase_without_local_evidence():
         collect_trace=True,
     )
     ex.room_policy = "llm"
+    ex._room_stamp_investigate = True
     ex._last_room_estimate = "unknown"
     hyp = NavHypothesis(
         phrase="rug shower bathroom",
@@ -2530,6 +2568,7 @@ def test_stamp_room_skips_when_sticky_estimate_only():
         collect_trace=True,
     )
     ex.room_policy = "llm"
+    ex._room_stamp_investigate = True
     ex._last_room_estimate = "kitchen"
     hyp = NavHypothesis(
         phrase="toddler chair child",

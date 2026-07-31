@@ -269,6 +269,21 @@ def env_eqa_agentic_require_verified() -> bool | None:
     return None
 
 
+def env_eqa_room_stamp_investigate() -> bool:
+    """Stamp room clusters after investigate (default **off**).
+
+    ``EMET_EQA_ROOM_STAMP_INVESTIGATE=1`` enables close-look stamps. Default off:
+    stamps regressed HM-EQA accuracy vs explore-streak-only; keep for A/B.
+    Also ``eqa.room_stamp_investigate``.
+    """
+    v = os.environ.get("EMET_EQA_ROOM_STAMP_INVESTIGATE", "").strip().lower()
+    if v in _TRUE:
+        return True
+    if v in _FALSE:
+        return False
+    return False
+
+
 def env_eqa_answerable_confirm() -> bool:
     """Hybrid confirm before unlock (default on). ``EMET_EQA_ANSWERABLE_CONFIRM=0`` disables."""
     v = os.environ.get("EMET_EQA_ANSWERABLE_CONFIRM", "").strip().lower()
@@ -391,6 +406,13 @@ class AgenticEQAExecutor:
         env_policy = env_eqa_room_policy()
         cfg_policy = _eqa_cfg(agent).get("room_policy", "canonical")
         self.room_policy = resolve_room_policy(env_policy if env_policy is not None else cfg_policy)
+        cfg_stamp = _eqa_cfg(agent).get("room_stamp_investigate", None)
+        if os.environ.get("EMET_EQA_ROOM_STAMP_INVESTIGATE", "").strip():
+            self._room_stamp_investigate = env_eqa_room_stamp_investigate()
+        elif cfg_stamp is not None:
+            self._room_stamp_investigate = bool(cfg_stamp)
+        else:
+            self._room_stamp_investigate = False
         self._in_target_area: bool | None = None
         self._collect_trace = (
             bool(collect_trace)
@@ -968,6 +990,8 @@ class AgenticEQAExecutor:
         station_oid: int | None,
     ) -> dict[str, Any]:
         """Refresh graph room cluster from close-look evidence (deferred room-stamp)."""
+        if not bool(getattr(self, "_room_stamp_investigate", False)):
+            return {"ok": False, "reason": "disabled"}
         gm = self.graph_memory
         if gm is None or not hasattr(gm, "stamp_vlm_room_at_robot"):
             return {"ok": False, "reason": "no_graph"}
