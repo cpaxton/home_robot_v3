@@ -639,6 +639,10 @@ class GraphEQAMemory:
         self.last_eqa_nav_fallback_count: int = 0
         # Frames attached to the last EQA call, kept for salvage / counterfactual re-asks.
         self.last_relevant_images: list[Any] = []
+        # Decode-budget health: did the generation reach ``answer:``, and did the terse
+        # re-ask have to rescue it?
+        self.last_eqa_answer_field_emitted: bool = False
+        self.last_eqa_salvage_used: bool = False
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
         self._nodes: list[GraphNode] = []
@@ -910,6 +914,8 @@ class GraphEQAMemory:
         self.last_eqa_nav_fallback_count = 0
         self.last_eqa_model_confident = False
         self.last_relevant_images = []
+        self.last_eqa_answer_field_emitted = False
+        self.last_eqa_salvage_used = False
 
     def invalidate_nodes_near(
         self,
@@ -1929,11 +1935,14 @@ class GraphEQAMemory:
         return format_rooms_compact(self._room_clusters, max_chars=max_chars)
 
     def stamp_vlm_room_at_robot(self, robot_xy: Any, room: str | None) -> str:
-        """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown."""
-        from emet.memory.graph_eqa.agentic_tools import normalize_current_room
+        """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown.
+
+        ``room`` should already be policy-coerced (canonical bucket or free-text phrase).
+        """
+        from emet.memory.graph_eqa.agentic_tools import sanitize_room_phrase
         from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
 
-        name = normalize_current_room(room)
+        name = sanitize_room_phrase(room)
         if name == "unknown" or robot_xy is None:
             return "unknown"
         if not self._room_clusters:
@@ -2036,6 +2045,21 @@ class GraphEQAMemory:
                 last_nav_at_step=st,
             )
         self.last_nav_result_note = note
+
+    @staticmethod
+    def strip_caption_block_from_history(text: str) -> str:
+        """Drop a leading ``Caption:`` block so HISTORY cannot reinforce caption loops."""
+        if not text:
+            return text
+        return re.sub(
+            r"(?is)^\s*Caption:\s*.*?(?=\n\s*(?:Reasoning|Answer)\s*:|\Z)",
+            "",
+            text,
+            count=1,
+        ).lstrip()
+
+    def _append_eqa_history(self, text: str) -> None:
+        self._history_outputs.append(self.strip_caption_block_from_history(text))
 
     def append_nav_outcome_to_last_history(self, *, dist_m: float, success: bool, note: str) -> None:
         if not self._history_outputs:
@@ -3921,7 +3945,11 @@ class GraphEQAMemory:
             question_is_attribute_state,
             question_is_visibility_location,
         )
-        from emet.llms.eqa_vl_settings import get_eqa_vl_int
+        from emet.llms.eqa_vl_settings import (
+            get_eqa_vl_int,
+            resolve_eqa_answer_max_new_tokens,
+            resolve_eqa_include_image_descriptions,
+        )
 
         _t0 = _time.monotonic()
         _logger.info("query_answer: ensure_llm_clients…")
@@ -3934,6 +3962,7 @@ class GraphEQAMemory:
             _logger.info("query_answer: refresh_siglip_confirmed_memory…")
             self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
+        include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         forced: list[int] = []
@@ -3976,20 +4005,40 @@ class GraphEQAMemory:
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
         if obs_ids:
-            img_desc_str = self._get_image_descriptions_str(obs_ids)
+            if include_image_descriptions:
+                img_desc_str = self._get_image_descriptions_str(obs_ids)
+            else:
+                n = len(obs_ids)
+                img_desc_str = (
+                    f"Attached images: Image 1..{n} are RGB views; match them to SCENE_GRAPH "
+                    "nodes via Image tags on nodes. Do not re-list objects from the images."
+                )
         elif self._nav_samples:
             nav_fallback_tail = self._nav_samples[-max_images:]
-            lines = [
-                "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
-            ]
-            for i, nv in enumerate(nav_fallback_tail, start=1):
-                tail = f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
-                lines.append(
-                    f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
+            if include_image_descriptions:
+                lines = [
+                    "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
+                ]
+                for i, nv in enumerate(nav_fallback_tail, start=1):
+                    tail = (
+                        f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
+                    )
+                    lines.append(
+                        f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
+                    )
+                img_desc_str = "\n".join(lines)
+            else:
+                n = len(nav_fallback_tail)
+                img_desc_str = (
+                    f"Attached images: Image 1..{n} are navigation-only RGB views "
+                    "(no object graph nodes yet). Do not re-list objects from the images."
                 )
-            img_desc_str = "\n".join(lines)
         else:
-            img_desc_str = "IMAGE_DESCRIPTIONS: (none — explore for a real camera view before answering)"
+            img_desc_str = (
+                "IMAGE_DESCRIPTIONS: (none — explore for a real camera view before answering)"
+                if include_image_descriptions
+                else "Attached images: (none — explore for a real camera view before answering)"
+            )
 
         commands: list[Any] = ["Question: " + question]
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
@@ -4030,15 +4079,35 @@ class GraphEQAMemory:
 
         _logger.info(
             f"query_answer: calling eqa_client (n_images={len(relevant_images)} "
-            f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f})…"
+            f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f} "
+            f"include_image_descriptions={include_image_descriptions} "
+            f"history_n={len(self._history_outputs)})…"
         )
+        assistant_prefill: str | None = None
         try:
             t_vl = _time.monotonic()
-            # Cap decode length for post-explore banks (full 512 made hung prefills worse).
-            ans_cap = int(os.environ.get("EMET_EQA_ANSWER_MAX_NEW_TOKENS", "256") or 256)
+            ans_cap = resolve_eqa_answer_max_new_tokens(self.parameters)
             eqa_kw: dict[str, Any] = {}
             if ans_cap > 0:
                 eqa_kw["max_new_tokens"] = ans_cap
+            # Force the first output field so Qwen cannot open with Caption: — prompt edits
+            # alone still left a 26% caption share on the 2026-07-30 q2 probe.
+            _variant = ""
+            if hasattr(self.parameters, "get"):
+                slash = self.parameters.get("eqa/prompt_variant", None)
+                if slash is not None and str(slash).strip():
+                    _variant = str(slash).strip().lower()
+                else:
+                    eqa_cfg = self.parameters.get("eqa", {}) or {}
+                    if isinstance(eqa_cfg, dict):
+                        _variant = str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
+            if _variant in ("hmeqa", "mcq"):
+                assistant_prefill = "Reasoning:"
+                eqa_kw["assistant_prefill"] = assistant_prefill
+            _logger.info(
+                f"query_answer: eqa_kw max_new_tokens={eqa_kw.get('max_new_tokens')} "
+                f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r}"
+            )
             try:
                 raw = self.eqa_client(commands, **eqa_kw)
             except TypeError:
@@ -4051,7 +4120,7 @@ class GraphEQAMemory:
             raw = f"Error: {exc}"
             self.last_eqa_raw = raw
             self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:Unknown\nReasoning:"
                 + str(exc)
                 + "\nConfidence:False\nAction:\nConfidence_reasoning:"
@@ -4085,6 +4154,10 @@ class GraphEQAMemory:
         # from inventing one out of nearest-furniture memory, which q104/q105 banned.
         _answer_field_emitted = bool(re.search(r"answer\s*:", answer_outputs))
         _truncated_before_answer = _ans_unknownish and not _answer_field_emitted
+        # Surfaced per episode so a decode-budget regression is visible in the results
+        # table instead of only showing up as a mysterious accuracy drop.
+        self.last_eqa_answer_field_emitted = _answer_field_emitted
+        self.last_eqa_salvage_used = False
         # Location MCQ: never invent A–D from memory, but do recover a truncated stream.
         _should_salvage = _ans_unknownish and (not _loc_mcq or _truncated_before_answer)
         if _loc_mcq and _ans_unknownish and not _ans_stripped:
@@ -4100,6 +4173,7 @@ class GraphEQAMemory:
                 answer = salvage
                 raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
                 self.last_eqa_raw = raw
+                self.last_eqa_salvage_used = True
         elif (
             parsed_choices
             and choices_are_location_mcq(parsed_choices)
@@ -4269,7 +4343,7 @@ class GraphEQAMemory:
                     nav_fallback_tail=nav_fallback_tail,
                     robot_xyt=xyt,
                 )
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:"
                 + raw_answer
                 + "\nReasoning:"
@@ -4282,7 +4356,7 @@ class GraphEQAMemory:
                 + confidence_reasoning
             )
         else:
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:"
                 + raw_answer
                 + "\nReasoning:"

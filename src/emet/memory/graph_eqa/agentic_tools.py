@@ -25,8 +25,9 @@ _logger = Logger(__name__)
 
 # Response format block. Constant string (with the tools block) so the routing
 # system prompt is byte-identical across rounds and question banks — required
-# for Qwen3-VL system-prefix KV cache hits.
-_EQA_FORMAT_BLOCK = """\
+# for Qwen3-VL system-prefix KV cache hits. Canonical vs LLM are separate
+# stable strings (policy is fixed per episode).
+_EQA_FORMAT_BLOCK_CANONICAL = """\
 # Response format
 Respond with ONLY a JSON object (no other text):
 {"current_room": "<room>", "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
@@ -68,11 +69,56 @@ State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
 State: Investigate (none); Explore frontiers available
 {"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
 
+_EQA_FORMAT_BLOCK_LLM = """\
+# Response format
+Respond with ONLY a JSON object (no other text):
+{"current_room": "<short place phrase>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
+
+Rules:
+- Always set current_room to where the robot is NOW from the room-context images
+  (current view + nearby object images) — a short natural phrase (2–6 words),
+  e.g. "master bathroom", "open kitchen living", "brick patio", "hallway",
+  or "unknown". Do not force a closed room vocabulary.
+- Always set in_target_area: true if the current place looks useful for answering
+  the Question (you could gather the needed evidence here); false if you are
+  clearly elsewhere; omit only if truly unsure.
+- Prefer Investigate cards whose room=/near=/labels help answer the Question;
+  otherwise explore_frontier. Graph room= tags are context — trust your judgment.
+- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage.
+- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
+  Do not investigate frontiers — those are Explore-only.
+- explore_frontier: map growth when no place is worth a closer look, or after
+  places look fruitless. toward= is optional weak bias ONLY —
+  never a substitute for investigate(obs_id). Prefer leaving toward= empty and
+  letting the frontier VLM pick from the Question + images.
+- Use Recent actions to avoid repeating a stuck investigate/explore loop.
+- After a close look where VLM assess says present=false, prefer explore_frontier
+  once to grow coverage before investigating a new capture-station card.
+- SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
+  vlm_assess for answerability (agentic verify). State verified= means VLM
+  answerable, not detector confirmation.
+- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
+- One or two tool calls per turn.
+
+# Examples
+State: Question about bathroom shower rug; Investigate obs_id=3 phrase='sink' room=bathroom
+{"current_room": "bathroom", "in_target_area": true, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
+State: Question about bathroom shower; Current room: living room; Prefer explore
+{"current_room": "living room", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
+State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
+{"current_room": "open living area", "in_target_area": true, "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
+State: Investigate (none); Explore frontiers available
+{"current_room": "unknown", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
+
+# Back-compat alias (canonical).
+_EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
+
 _EQA_IDENTITY = """\
-You are a robot answering questions about a home. You maintain a 3D map and scene graph
-with room clusters (objects belong to rooms). Decide each turn: investigate a promising
-place for a closer look (prefer room-relevant cards), or explore to grow coverage when
-places are exhausted or none look good. Do NOT output reasoning — only JSON."""
+You are a robot answering questions about a home. The map/scene graph (rooms, labels,
+nearby objects) is context for you — use it, then decide. Each turn: investigate a
+promising place for a closer look, or explore to grow coverage when places are
+exhausted or none look good. Prefer cards/views that help answer the Question.
+Do NOT output reasoning — only JSON."""
 
 # Canonical room labels for router current_room (aliases normalize into these).
 ROOM_CANONICAL = frozenset(
@@ -129,8 +175,26 @@ _INDOOR_QUESTION_CUES = frozenset(
 )
 
 
+def sanitize_room_phrase(raw: Any, *, max_chars: int = 48) -> str:
+    """Light cleanup for room labels. Preserves canonical buckets; free-text stays phrases."""
+    if raw is None:
+        return "unknown"
+    s = str(raw).strip().lower()
+    if not s or s in {"unknown", "none", "n/a", "null"}:
+        return "unknown"
+    token = "_".join(s.replace("-", " ").replace("/", " ").replace("_", " ").split())
+    if token in ROOM_CANONICAL:
+        return token
+    phrase = " ".join(s.replace("_", " ").replace("-", " ").replace("/", " ").split())
+    if not phrase:
+        return "unknown"
+    if len(phrase) > int(max_chars):
+        phrase = phrase[: max(0, int(max_chars) - 1)].rstrip() + "…"
+    return phrase
+
+
 def normalize_current_room(raw: Any) -> str:
-    """Map free-text router ``current_room`` onto a small vocabulary."""
+    """Map free-text router ``current_room`` onto a small vocabulary (canonical policy / metrics)."""
     if raw is None:
         return "unknown"
     s = str(raw).strip().lower().replace("-", " ").replace("/", " ")
@@ -156,6 +220,17 @@ def normalize_current_room(raw: Any) -> str:
     if "garage" in s:
         return "garage"
     return "unknown"
+
+
+# Metrics / histogram alias — same as normalize; not used for LLM-policy decisions.
+room_bucket = normalize_current_room
+
+
+def coerce_room_label(raw: Any, *, room_policy: str = "canonical") -> str:
+    """Policy-aware room identity: closed vocab vs free-text phrase."""
+    if str(room_policy or "").strip().lower() == "llm":
+        return sanitize_room_phrase(raw)
+    return normalize_current_room(raw)
 
 
 def room_is_outdoor(room: str) -> bool:
@@ -186,10 +261,12 @@ def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
     return build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
 
 
-def build_graph_eqa_system_prompt(tools: list[Tool]) -> str:
+def build_graph_eqa_system_prompt(tools: list[Tool], *, room_policy: str = "canonical") -> str:
     """Fixed routing system prompt (identity + tools + format). Keep byte-stable per mode."""
     tools_block = get_tool_descriptions_for_prompt(tools)
-    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{_EQA_FORMAT_BLOCK}"
+    policy = str(room_policy or "canonical").strip().lower()
+    fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
+    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}"
 
 
 def _graph_stats_line(gm: Any) -> str:
@@ -201,7 +278,9 @@ def _graph_stats_line(gm: Any) -> str:
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
     from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES
+    from emet.memory.graph_eqa.room_clusters import room_leave_needed
 
+    policy = str(getattr(executor, "room_policy", "canonical") or "canonical").strip().lower()
     gm = executor.graph_memory
     lines: list[str] = []
     if getattr(executor, "mode", "answer") == "explore":
@@ -218,7 +297,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 robot_fn = getattr(executor, "_robot_xyt", None)
                 if callable(robot_fn):
                     xyt = robot_fn()
-                graph_room = normalize_current_room(room_fn(xyt))
+                graph_room = coerce_room_label(room_fn(xyt), room_policy=policy)
                 executor._graph_room_estimate = graph_room
             except Exception as e:
                 _logger.warning(f"graph room for router state failed: {e}")
@@ -227,6 +306,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append(f"Current room (graph): {graph_room}")
     if last_room:
         lines.append(f"Current room (router): {last_room}")
+    ita = getattr(executor, "_in_target_area", None)
+    if policy == "llm" and ita is not None:
+        lines.append(f"in_target_area (last): {bool(ita)}")
     n_room_imgs = int(getattr(executor, "_last_router_n_images", 0) or 0)
     if n_room_imgs > 0:
         lines.append(
@@ -314,6 +396,17 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             )
         else:
             lines.append("Prefer explore_frontier: grow coverage before chasing a new capture station.")
+    leave = room_leave_needed(
+        room_policy=policy,
+        current_room=last_room or graph_room,
+        question=str(getattr(executor, "question", "") or ""),
+        in_target_area=ita if isinstance(ita, bool) else None,
+    )
+    if leave:
+        here = last_room or graph_room or "unknown"
+        lines.append(
+            f"Not in a useful place yet (here: {here}) — explore_frontier; pick views that help answer the Question."
+        )
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")
     loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])
@@ -404,7 +497,8 @@ def _hyp_room(executor: AgenticEQAExecutor, hyp: Any) -> str:
     if not callable(room_fn):
         return "unknown"
     try:
-        return normalize_current_room(room_fn(xy))
+        policy = str(getattr(executor, "room_policy", "canonical") or "canonical")
+        return coerce_room_label(room_fn(xy), room_policy=policy)
     except Exception:
         return "unknown"
 

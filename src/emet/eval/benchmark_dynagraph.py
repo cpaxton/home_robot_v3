@@ -144,7 +144,9 @@ def apply_dynagraph_profile(
     effective_merge = merge_xy_m
     if effective_merge is None:
         effective_merge = params.get("dynagraph_merge_xy_m")
-    apply_eval_graph_fusion_parameters(params, merge_xy_m=float(effective_merge) if effective_merge is not None else None)
+    apply_eval_graph_fusion_parameters(
+        params, merge_xy_m=float(effective_merge) if effective_merge is not None else None
+    )
     return params
 
 
@@ -339,16 +341,10 @@ def apply_dynagraph_harness(
     elif method == DYNAGRAPH:
         apply_eval_graph_fusion_parameters(params, merge_xy_m=merge_xy_m)
 
-    method_opts = {
-        k: v
-        for k, v in harness_controller_options(harness, method, path=path).items()
-        if k != "profile"
-    }
+    method_opts = {k: v for k, v in harness_controller_options(harness, method, path=path).items() if k != "profile"}
     # YAML 1.1 parses bare on/off as bools; store the canonical string mode.
     if "explore_when_uncovered" in method_opts:
-        method_opts["explore_when_uncovered"] = _normalize_explore_mode(
-            method_opts["explore_when_uncovered"]
-        )
+        method_opts["explore_when_uncovered"] = _normalize_explore_mode(method_opts["explore_when_uncovered"])
     merged = dict(params.get("dynagraph_harness") or {})
     merged.update(method_opts)
     merged["harness"] = str(harness)
@@ -380,6 +376,11 @@ def apply_habitat_eqa_method_parameters(
     method = normalize_hmeqa_method(method)
     params = _as_parameters(parameters)
     apply_dynagraph_harness(params, "habitat_eqa", method)
+    # Habitat HM-EQA is always MCQ A–D. Without this, default runs load the open
+    # GraphEQA system prompt (Caption: demos) and skip Reasoning: prefill.
+    eqa = dict(params.get("eqa", {}) or {})
+    eqa.setdefault("prompt_variant", "hmeqa")
+    params.set("eqa", eqa)
     return params
 
 

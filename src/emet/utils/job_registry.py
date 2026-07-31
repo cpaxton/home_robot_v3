@@ -713,6 +713,7 @@ class EpisodeScore:
     confident: bool | None = None  # EQA VLM Confidence: (legacy alias of eqa_confident)
     verified: bool | None = None  # agentic verify / VLM-assess gate
     answerable: bool | None = None  # agentic policy ANSWER (from summary/trace)
+    answer_provenance: str | None = None  # forced-answer / submit channel tag
     path: str | None = None
 
     @property
@@ -866,6 +867,8 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
             qid,
             debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
         )
+        prov_raw = row.get("answer_provenance")
+        provenance = str(prov_raw).strip() if prov_raw not in (None, "") else None
         scores.append(
             EpisodeScore(
                 arm=arm,
@@ -877,11 +880,35 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
                 confident=eqa_conf if isinstance(eqa_conf, bool) else None,
                 verified=verified,
                 answerable=answerable,
+                answer_provenance=provenance,
                 path=str(path),
             )
         )
     scores.sort(key=lambda s: (s.arm, s.question_id))
     return scores
+
+
+def provenance_accuracy_breakdown(
+    episodes: list[EpisodeScore],
+) -> dict[str, dict[str, Any]]:
+    """Per ``answer_provenance`` n/correct/accuracy for scored episodes."""
+    from collections import Counter
+
+    counts: Counter[str] = Counter()
+    correct: Counter[str] = Counter()
+    for e in episodes:
+        if e.correct is None:
+            continue
+        key = (e.answer_provenance or "").strip() or "unset"
+        counts[key] += 1
+        if e.correct is True:
+            correct[key] += 1
+    out: dict[str, dict[str, Any]] = {}
+    for key in sorted(counts):
+        n = counts[key]
+        ok = correct[key]
+        out[key] = {"n": n, "correct": ok, "accuracy": (float(ok) / float(n)) if n else None}
+    return out
 
 
 def list_crash_markers(out_dir: str | Path | None) -> list[str]:
@@ -907,6 +934,9 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
     remaining = [q for q in planned if q not in scored_ids]
     n_ok = sum(1 for e in episodes if e.correct is True)
     n_fail = sum(1 for e in episodes if e.correct is False)
+    by_prov = provenance_accuracy_breakdown(episodes)
+    excl = [e for e in episodes if e.correct is not None and (e.answer_provenance or "") != "uniform_prior"]
+    excl_ok = sum(1 for e in excl if e.correct is True)
     return {
         "id": job.id,
         "name": job.name,
@@ -927,6 +957,10 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
         "n_incorrect": n_fail,
         "n_scored": len(episodes),
         "accuracy": (float(n_ok) / float(n_ok + n_fail)) if (n_ok + n_fail) else None,
+        "by_provenance": by_prov,
+        "n_excl_uniform_prior": len(excl),
+        "correct_excl_uniform_prior": excl_ok,
+        "accuracy_excl_uniform_prior": (float(excl_ok) / float(len(excl))) if excl else None,
         "crashes": list_crash_markers(job.out_dir),
         "episodes": [asdict(e) for e in episodes],
     }

@@ -2351,6 +2351,7 @@ def _hmeqa_launch(
     foreground: bool,
     eqa_hf_model_id: str | None = None,
     eqa_vl_family: str | None = None,
+    eqa_answer_max_new_tokens: int | None = None,
     description: str | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
@@ -2375,6 +2376,8 @@ def _hmeqa_launch(
         env_parts.append(f"EQA_HF_MODEL_ID={shlex.quote(eqa_hf_model_id)}")
     if eqa_vl_family:
         env_parts.append(f"EQA_VL_FAMILY={shlex.quote(eqa_vl_family)}")
+    if eqa_answer_max_new_tokens is not None:
+        env_parts.append(f"EMET_EQA_ANSWER_MAX_NEW_TOKENS={int(eqa_answer_max_new_tokens)}")
     if resume:
         env_parts.append("RESUME=1")
     inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
@@ -2463,6 +2466,13 @@ def _hmeqa_launch(
     default=None,
     help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
 )
+@click.option(
+    "--eqa-answer-max-new-tokens",
+    type=int,
+    default=None,
+    help="Override eqa_vl.answer_max_new_tokens for this run (answer decode cap). "
+    "Raise it when swapping in a more verbose VLM.",
+)
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option(
     "--description",
@@ -2489,6 +2499,7 @@ def hmeqa_h2h(
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
+    eqa_answer_max_new_tokens: int | None,
     job_name: str,
     description: str | None,
     need_mib: int,
@@ -2527,6 +2538,7 @@ def hmeqa_h2h(
         foreground=foreground,
         eqa_hf_model_id=eqa_hf_model_id,
         eqa_vl_family=eqa_vl_family,
+        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
         description=description,
     )
 

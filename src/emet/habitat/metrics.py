@@ -90,6 +90,11 @@ class EpisodeMetrics:
     # Set when the scored letter came from a location MCQ whose target was never
     # visible in the attached views (previously blanked to "").
     unverified_location_guess: bool = False
+    # Decode-budget health. ``eqa_answer_field_missing`` means the generation was cut off
+    # before emitting ``answer:``; a run where this is common is losing to the token cap,
+    # not to perception.
+    eqa_answer_field_missing: bool = False
+    eqa_salvage_used: bool = False
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""

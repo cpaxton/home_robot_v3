@@ -192,6 +192,34 @@ def test_forced_guess_is_deterministic_and_low_confidence():
     assert out_a["confidence"] is False
 
 
+def test_forced_ladder_tags_trusted_view_as_vlm_suggested_not_pending():
+    """Calibration must not conflate a view that saw the target with a deferred letter."""
+    ex, _ = _executor(Q28, query_answer="")
+    ex._round = 7
+    ex._last_vlm_assess = {"present": True, "suggested_answer": "D"}
+    ex._pending_answerable = {"present": True, "letter": "B"}
+
+    out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
+
+    assert out["answer"] == "D"
+    assert out["answer_provenance"] == "vlm_suggested"
+    assert out["answer_confidence"] == pytest.approx(0.50)
+
+
+def test_forced_ladder_tags_deferred_assess_as_pending_letter():
+    ex, _ = _executor(Q28, query_answer="")
+    ex._round = 7
+    ex._last_vlm_assess = {"present": False, "suggested_answer": "C"}
+    ex._last_positive_letter = ""
+    ex._pending_answerable = {"present": True, "letter": "B"}
+
+    out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
+
+    assert out["answer"] == "B"
+    assert out["answer_provenance"] == "pending_letter"
+    assert out["answer_confidence"] == pytest.approx(0.35)
+
+
 def test_uniform_prior_spreads_across_choices():
     """A fixed guess letter would bias a whole benchmark; the prior must vary."""
     letters = set()

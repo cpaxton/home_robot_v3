@@ -182,9 +182,12 @@ class GraphEQAController(DynamemController):
         self._eqa_explore_uncovered_habitat_frontier = False
         # Experiment flag: classic coverage path only. Agentic explore always calls
         # ``_vlm_frontier_choice`` when present. Enable classic with EMET_VLM_FRONTIER_SCORING=1.
-        self._vlm_frontier_scoring = os.environ.get(
-            "EMET_VLM_FRONTIER_SCORING", ""
-        ).strip().lower() in ("1", "true", "yes", "on")
+        self._vlm_frontier_scoring = os.environ.get("EMET_VLM_FRONTIER_SCORING", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         self._habitat_blocked_goals: set[tuple[float, float]] = set()
         self._habitat_recent_goals: list[tuple[float, float]] = []
 
@@ -299,9 +302,7 @@ class GraphEQAController(DynamemController):
             return None
         _sim, xyz = sig
         gm = getattr(self, "graph_memory", None)
-        frontier_nodes = (
-            [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)] if gm is not None else []
-        )
+        frontier_nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)] if gm is not None else []
         best = None
         best_d = float("inf")
         for n in frontier_nodes:
@@ -319,16 +320,25 @@ class GraphEQAController(DynamemController):
                 return np.array([float(fr[0]), float(fr[1]), 1.0], dtype=float)
         return None
 
-    def _vlm_frontier_choice(self, question: str, *, max_candidates: int = 6) -> np.ndarray | None:
-        """Ask the EQA VLM which frontier view most likely leads to the question objects.
+    def _vlm_frontier_choice(
+        self,
+        question: str,
+        *,
+        max_candidates: int = 6,
+        current_room: str | None = None,
+        room_policy: str = "canonical",
+        leave_hint: bool = False,
+    ) -> np.ndarray | None:
+        """Ask the EQA VLM which frontier view best helps answer the question.
 
         Samples up to ``max_candidates`` **reachable** frontier nodes that have RGB
-        (ranked by region utility, not raw graph order), then asks the VLM which
-        image to pursue. Returns a nav waypoint ``[x, y, 1.0]`` or ``None``.
+        (ranked by region utility), attaches graph ``room=`` / ``near=`` context,
+        and asks which image is most useful for the Question. Returns ``[x,y,1]``.
         """
         gm = getattr(self, "graph_memory", None)
         if gm is None or gm.eqa_client is None:
             return None
+        from emet.memory.graph_eqa.agentic_tools import coerce_room_label
         from emet.memory.graph_eqa.frontier_regions import (
             frontier_region_utility,
             region_from_node,
@@ -340,7 +350,42 @@ class GraphEQAController(DynamemController):
         blocked = set(getattr(self, "_habitat_blocked_goals", None) or set())
         recent = list(getattr(self, "_habitat_recent_goals", None) or [])
         grid_m = explore_grid_resolution_m(self)
-        scored: list[tuple[float, float, Any, Any, np.ndarray]] = []
+        policy = str(room_policy or "canonical").strip().lower()
+
+        def _frontier_room_near(n: Any) -> tuple[str, list[str]]:
+            xy = (float(n.xyz[0]), float(n.xyz[1]))
+            room = "unknown"
+            room_fn = getattr(gm, "graph_room_at_robot", None)
+            if callable(room_fn):
+                try:
+                    room = coerce_room_label(room_fn(xy), room_policy=policy)
+                except Exception:
+                    room = "unknown"
+            near: list[str] = []
+            scored_labs: list[tuple[float, str]] = []
+            for node in list(getattr(gm, "_nodes", None) or []):
+                if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                    continue
+                try:
+                    nxy = (float(node.xyz[0]), float(node.xyz[1]))
+                    d = float(np.hypot(nxy[0] - xy[0], nxy[1] - xy[1]))
+                except Exception:
+                    continue
+                if d > 2.5:
+                    continue
+                for lab in list(getattr(node, "labels", None) or [])[:2]:
+                    s = str(lab).strip()
+                    if s and s.lower() != "frontier":
+                        scored_labs.append((d, s))
+            scored_labs.sort(key=lambda t: t[0])
+            for _d, s in scored_labs:
+                if s not in near:
+                    near.append(s)
+                if len(near) >= 3:
+                    break
+            return room, near
+
+        scored: list[tuple[float, float, Any, Any, np.ndarray, str, list[str]]] = []
         for n in gm.get_nodes():
             if not getattr(n, "is_frontier", False):
                 continue
@@ -369,27 +414,35 @@ class GraphEQAController(DynamemController):
                 grid_resolution_m=grid_m,
                 recent=recent,
             )
-            dist = float(
-                np.hypot(float(waypoint[0]) - robot_xy[0], float(waypoint[1]) - robot_xy[1])
-            )
-            scored.append((util, dist, n, obs, waypoint))
+            froom, fnear = _frontier_room_near(n)
+            dist = float(np.hypot(float(waypoint[0]) - robot_xy[0], float(waypoint[1]) - robot_xy[1]))
+            scored.append((util, dist, n, obs, waypoint, froom, fnear))
         if not scored:
             return None
         scored.sort(key=lambda t: (-t[0], t[1]))
         candidates = scored[: max(1, int(max_candidates))]
-        lines = [
-            f"Image {i}: unexplored direction at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})"
-            for i, (_u, _d, n, _obs, _wp) in enumerate(candidates, start=1)
-        ]
+        lines: list[str] = []
+        for i, (_u, _d, n, _obs, _wp, froom, fnear) in enumerate(candidates, start=1):
+            near_bit = f" near={fnear}" if fnear else ""
+            lines.append(f"Image {i}: unexplored room={froom}{near_bit} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})")
+        ctx: list[str] = []
+        if current_room:
+            ctx.append(f"Current place: {current_room}")
+        if leave_hint:
+            ctx.append(
+                "Current place looks unhelpful for the question — prefer a view that "
+                "could lead somewhere more informative."
+            )
+        ctx_block = ("\n".join(ctx) + "\n") if ctx else ""
         directive = (
-            "You are exploring a home to answer a question. Each image shows an "
-            "unexplored direction. Which image is most likely to lead to what the "
-            "question asks about? Reply with ONLY the image number.\n"
+            "You are exploring a home. Each image is an unexplored direction "
+            "(with graph room/nearby-object context). Which image would best help "
+            "determine the answer to the question? Reply with ONLY the image number.\n"
+            f"{ctx_block}"
             f"Question: {question}\n" + "\n".join(lines)
         )
         images = [
-            Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB")
-            for _u, _d, _n, obs, _wp in candidates
+            Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB") for _u, _d, _n, obs, _wp, _fr, _fn in candidates
         ]
         try:
             reply = gm.eqa_client([directive, *images])
@@ -478,7 +531,7 @@ class GraphEQAController(DynamemController):
             confidence_reasoning = str(e)
             target_point = None
             if self.graph_memory is not None:
-                self.graph_memory._history_outputs.append(
+                self.graph_memory._append_eqa_history(
                     "Answer:Unknown\nReasoning:"
                     + reasoning
                     + "\nConfidence:False\nAction:\nConfidence_reasoning:"
@@ -522,9 +575,7 @@ class GraphEQAController(DynamemController):
             short_cr = (confidence_reasoning or reasoning or "").strip()
             if len(short_cr) > 280:
                 short_cr = short_cr[:277] + "..."
-            discord_text = (
-                f"{answer} I am not fully confident yet; {short_cr}" if short_cr else answer
-            )
+            discord_text = f"{answer} I am not fully confident yet; {short_cr}" if short_cr else answer
         discord_text += "\nI also provide relevant images here."
 
         if confidence or not allow_navigation:
@@ -537,11 +588,7 @@ class GraphEQAController(DynamemController):
         # in an unexplored room) stay unanswerable. Once those objects are in the graph (or
         # the VLM is confident) we follow its inspection target.
         # Use blocked/recent-aware pick (Habitat navmesh + MuJoCo sample_frontier).
-        if (
-            not confidence
-            and self.graph_memory is not None
-            and getattr(self, "_eqa_explore_when_uncovered", False)
-        ):
+        if not confidence and self.graph_memory is not None and getattr(self, "_eqa_explore_when_uncovered", False):
             try:
                 covered = self.graph_memory._graph_covers_relevant_objects()
             except Exception:
@@ -582,8 +629,11 @@ class GraphEQAController(DynamemController):
                 blocked=self._habitat_blocked_goals,
                 recent_goals=self._habitat_recent_goals,
             )
-        if target_point is None and not confidence and hasattr(self, "space") and hasattr(
-            self.space, "sample_frontier"
+        if (
+            target_point is None
+            and not confidence
+            and hasattr(self, "space")
+            and hasattr(self.space, "sample_frontier")
         ):
             frontier = self.space.sample_frontier(
                 self.planner,
@@ -610,9 +660,7 @@ class GraphEQAController(DynamemController):
                 target_point = alt
             else:
                 eff_key = goal_key_xy(resolved)
-                if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(
-                    self.robot, resolved
-                ):
+                if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved):
                     self._habitat_blocked_goals.add(eff_key)
                     self._habitat_blocked_goals.add(goal_key_xy(target_point))
                     alt = pick_uncovered_explore_target(
@@ -817,8 +865,7 @@ class GraphEQAController(DynamemController):
                 )
                 if not discord_text:
                     discord_text = (
-                        f"Answer:Unknown\nEQA timed out after {question_timeout_s:.0f}s "
-                        f"(partial answer={answer!r})"
+                        f"Answer:Unknown\nEQA timed out after {question_timeout_s:.0f}s (partial answer={answer!r})"
                     )
                 break
             q_preview = question if isinstance(question, str) else str(question)[:80]

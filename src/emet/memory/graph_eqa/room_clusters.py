@@ -19,12 +19,20 @@ from typing import Any
 
 import numpy as np
 
-from emet.memory.graph_eqa.agentic_tools import normalize_current_room
+from emet.memory.graph_eqa.agentic_tools import (
+    normalize_current_room,
+    sanitize_room_phrase,
+)
 
 DEFAULT_ROOM_LINK_RADIUS_M = 2.0
 DEFAULT_ROOM_ASSIGN_MAX_M = 3.0
+ROOM_POLICY_CANONICAL = "canonical"
+ROOM_POLICY_LLM = "llm"
+ROOM_POLICIES = frozenset({ROOM_POLICY_CANONICAL, ROOM_POLICY_LLM})
 
-# Only for MCQ/target parsing (fireplace → living_room). Not used to name clusters.
+# Canonical-policy targets / mismatch only (metrics + optional leave hint).
+# Do not invent a frozen "question_area" from MCQ options — explore asks the VLM
+# the real question each frontier pick.
 _OBJECT_ROOM_HINTS: dict[str, str] = {
     "stove": "kitchen",
     "oven": "kitchen",
@@ -133,6 +141,14 @@ def hypothesize_room_name(labels: Sequence[str]) -> str:
 name_cluster_from_labels = hypothesize_room_name
 
 
+def resolve_room_policy(raw: Any) -> str:
+    """Return ``canonical`` or ``llm`` (default canonical)."""
+    s = str(raw or "").strip().lower()
+    if s in ROOM_POLICIES:
+        return s
+    return ROOM_POLICY_CANONICAL
+
+
 def question_target_rooms(question: str) -> set[str]:
     """Canonical rooms the question is about (MCQ landmarks + room words in stem)."""
     targets: set[str] = set()
@@ -169,7 +185,7 @@ def question_target_rooms(question: str) -> set[str]:
 def room_mismatches_question(current_room: str | None, question: str) -> bool:
     """True when current room is known and not among question target rooms.
 
-    Uniform explore nudge (leave the wrong room) — no outdoor special case.
+    Canonical-policy explore nudge (leave the wrong room) — no outdoor special case.
     """
     current = normalize_current_room(current_room)
     if current == "unknown":
@@ -178,6 +194,23 @@ def room_mismatches_question(current_room: str | None, question: str) -> bool:
     if not targets:
         return False
     return current not in targets
+
+
+def room_leave_needed(
+    *,
+    room_policy: str,
+    current_room: str | None,
+    question: str,
+    in_target_area: bool | None,
+) -> bool:
+    """Whether explore should soft-bias away from the current place."""
+    policy = resolve_room_policy(room_policy)
+    if policy == ROOM_POLICY_LLM:
+        cur = sanitize_room_phrase(current_room)
+        if cur == "unknown" or in_target_area is None:
+            return False
+        return in_target_area is False
+    return room_mismatches_question(current_room, question)
 
 
 def cluster_object_nodes(
@@ -266,7 +299,11 @@ def estimate_room_at_xy(
     *,
     max_dist_m: float = DEFAULT_ROOM_ASSIGN_MAX_M,
 ) -> str:
-    """Nearest cluster room name within ``max_dist_m``, else ``unknown``."""
+    """Nearest cluster room name within ``max_dist_m``, else ``unknown``.
+
+    Returns the stored cluster phrase as-is (light sanitize). Callers applying
+    canonical policy should run :func:`normalize_current_room` / ``coerce_room_label``.
+    """
     if not clusters:
         return "unknown"
     xy = (float(robot_xy[0]), float(robot_xy[1]))
@@ -279,7 +316,7 @@ def estimate_room_at_xy(
             best = c
     if best is None or best_d > float(max_dist_m):
         return "unknown"
-    return normalize_current_room(best.room_name)
+    return sanitize_room_phrase(best.room_name)
 
 
 def stamp_room_at_xy(
@@ -289,8 +326,12 @@ def stamp_room_at_xy(
     *,
     max_dist_m: float = DEFAULT_ROOM_ASSIGN_MAX_M,
 ) -> list[RoomCluster]:
-    """Set nearest cluster's ``room_name`` from a VLM stamp (immutable list copy)."""
-    name = normalize_current_room(room)
+    """Set nearest cluster's ``room_name`` (immutable list copy).
+
+    ``room`` should already be policy-coerced by the caller (canonical bucket or
+    free-text phrase). This only light-sanitizes and rejects ``unknown``.
+    """
+    name = sanitize_room_phrase(room)
     if name == "unknown" or not clusters:
         return list(clusters)
     xy = (float(robot_xy[0]), float(robot_xy[1]))
@@ -322,8 +363,20 @@ def format_rooms_compact(clusters: Sequence[RoomCluster], *, max_chars: int = 20
     return line
 
 
-def merge_room_estimates(vlm_room: str | None, graph_room: str | None) -> str:
+def merge_room_estimates(
+    vlm_room: str | None,
+    graph_room: str | None,
+    *,
+    room_policy: str = ROOM_POLICY_CANONICAL,
+) -> str:
     """Prefer a known VLM estimate; fall back to graph/stamp when VLM is unknown."""
+    policy = resolve_room_policy(room_policy)
+    if policy == ROOM_POLICY_LLM:
+        v = sanitize_room_phrase(vlm_room)
+        g = sanitize_room_phrase(graph_room)
+        if v != "unknown":
+            return v
+        return g
     g = normalize_current_room(graph_room)
     v = normalize_current_room(vlm_room)
     if v != "unknown":

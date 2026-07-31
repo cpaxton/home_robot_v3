@@ -67,6 +67,12 @@ eqa:
   agentic_verify_min_sim: 0.28
   # VLM router picks tools via the shared JSON tool-calling contract; false = deterministic fallback only.
   agentic_vlm_router: true
+  # Room identity / leave hint for agentic explore (ablation):
+  #   canonical — closed vocab + question_target_rooms mismatch hint
+  #   llm — free-text current_room + router in_target_area
+  # Frontier VLM always re-asks the Question (no frozen question_area).
+  # Override: EMET_EQA_ROOM_POLICY=canonical|llm
+  room_policy: canonical
   collect_agentic_trace: false
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
@@ -220,7 +226,15 @@ eqa_vl:
   graph_keyword_max_tokens: 64
   voxel_keyword_max_tokens: 20
   eqa_max_tokens: 512
+  # Per-call decode cap for the EQA answer, separate from the client-wide eqa_max_tokens.
+  # Raise for a verbose or reasoning-heavy VLM: too low and the model is cut off before
+  # ``answer:`` and only a salvage re-ask saves the episode. Env: EMET_EQA_ANSWER_MAX_NEW_TOKENS.
+  answer_max_new_tokens: 384
   eqa_max_images: 4
+  # Legacy text block listing labels/coords for the same obs already attached as RGB.
+  # Default off: SCENE_GRAPH + pixels are enough; the dump invited Caption: loops.
+  # Env: EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1 to restore for A/B.
+  include_image_descriptions: false
   # Cap SCENE_GRAPH object/frontier lines in the EQA prompt (full graph still in exports).
   # Blowups (e.g. HM-EQA q94) otherwise starve the VLM with 600+ nodes.
   eqa_max_graph_nodes: 48

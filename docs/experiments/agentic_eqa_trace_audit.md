@@ -325,9 +325,104 @@ about *where the robot went* and silent about *how the answer was chosen*.
 
 ---
 
+## 8. Follow-up: the decode budget was the binding constraint (2026-07-29 bal-32)
+
+Re-reading `raw_eqa_output` across all 32 episodes of
+`~/runs/emet/hmeqa_agentic_h2h_20260729_231049` shows the answer VLM was not reasoning
+badly — it was running out of tokens before it reached `answer:`.
+
+| Measure | Value |
+|---|---|
+| Generations that hit the 256-token cap | 31 / 32 |
+| Generations that never emitted `answer:` (salvage re-ask rescued the letter) | 21 / 32 |
+| Generations cut off before `confidence_reasoning:` | 22 / 32 |
+| Share of generated text spent on the `Caption:` block | ~40% mean, 88% on q2 |
+
+The cap evidence is the `[vl] generate heartbeat` ladder in `agentic.log`: it logs at
+`tokens=1, 33, 65, …, 225` and 31 generations reached the last rung with nothing beyond it.
+The caption itself was pure waste — it re-listed IMAGE_DESCRIPTIONS and scene-graph
+coordinates that were already in the prompt, e.g. q11:
+
+```
+Caption:
+Image 1: A kitchen with a refrigerator at (1.71, 1.06) and a sink at (0.16, -1.39). …
+Reasoning:
+… The refrigerator is the only object with a clear location
+[salvage]
+answer:
+D
+```
+
+This matters for how §2-§5 are read: a salvaged letter is a *terse re-ask under a different
+prompt*, not the model's considered answer, so any per-episode analysis that treats
+`raw_eqa_output` as one decision is really reading two on those 21 episodes.
+
+### Fix
+
+1. **Drop the caption from the HM-EQA prompt at the source.** Instructing the model not to
+   caption does not work: a 2026-07-30 q2 probe that appended an override after the examples
+   still opened with a full Caption: block (48% of output). The shared `EQA_PROMPT` asks for a
+   caption once and demonstrates one five times, so `hmeqa_eqa_prompt.py` now builds
+   `without_caption(EQA_PROMPT)` — instruction rewritten, every `Caption:` demonstration
+   removed — before the HM-EQA examples and format override.
+2. **Force-start decode with `assistant_prefill="Reasoning:"`.** Even after the source strip,
+   Qwen3-VL-8B still opened with Caption: (26% of output) as model habit with empty history.
+   HM-EQA answer calls now seed the assistant turn so Caption: is not a legal first token.
+3. **Make the answer decode cap a config value and raise it 256 → 384.** It now resolves via
+   `eqa_vl.answer_max_new_tokens` (`resolve_eqa_answer_max_new_tokens`), with
+   `EMET_EQA_ANSWER_MAX_NEW_TOKENS` as an operator override. The right budget is a property of
+   the VLM you slot in, not of the codebase — a terser or more verbose model wants a different
+   number, and it should be reachable from config. 512 was tried earlier on Qwen3-VL-8B and made
+   hung prefills worse.
+4. **Stop pinning the cap in eval scripts.** `run_agentic_vs_answeronly_h2h.sh` and
+   `run_dynagraph_dynamic_improve_smokes.sh` both forced `64`, which cannot fit reasoning plus a
+   letter — those runs were comparing salvage re-asks, not the arms under test.
+5. **Make the failure visible.** `EpisodeMetrics` now carries `eqa_answer_field_missing` and
+   `eqa_salvage_used`, so the next run reports a decode-budget regression directly instead of
+   surfacing it as an unexplained accuracy drop. Guarded by
+   [`test_hmeqa_prompt_budget.py`](../../src/test/llms/test_hmeqa_prompt_budget.py).
+
+### Probe ladder on q2 (same scene / gold C)
+
+| Run | Change | Caption share | Provenance | Pred | Conf |
+|---|---|---|---|---|---|
+| bal-32 (`…231049`) | 256 cap | 83% (truncated mid-Reasoning) | `uniform_prior` | A | 0.25 |
+| decode-cap (`…095747`) | override + 512 | 48% | `uniform_prior` | A | 0.25 |
+| caption-free (`…132955`) | `without_caption` + 512 | 26% | `eqa_answer` | D | 0.65 |
+
+Accuracy did not move on this episode (bathroom never reached in exploration). The binding
+decode failure did: field-complete answers, no salvage, and after the source strip the letter
+came from the model rather than the forced ladder.
+
+---
+
+## 9. Four layers that were all called "caption" (2026-07-30)
+
+Do not conflate these when reading traces or designing A/Bs:
+
+| Layer | Where | Keep? |
+|---|---|---|
+| **RGB frames** | user message (PIL, up to `eqa_max_images`) | Yes — real pixels |
+| **SCENE_GRAPH** | user message text | Yes — structured object/frontier memory |
+| **IMAGE_DESCRIPTIONS** | user message text | **No (default off)** — labels+coords for the *same* attached obs; duplicated the graph and invited re-captioning |
+| **Model `Caption:` output** | `raw_eqa_output` | Never wanted — decode waste; stripped from HISTORY so it cannot reinforce itself |
+
+`eqa_vl.include_image_descriptions` defaults to `false`; restore with
+`EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1` for legacy A/B only.
+
+### Experiment hygiene
+
+H2H debug tags are now `h2h_${arm}_qNNNN_${OUT_LEAF}` so repeated probes do not overwrite
+`~/.cache/habitat_eqa/episodes/...`. Compare **only** `~/runs/emet/<OUT>/*.jsonl` — never a
+shared cache path after multi-probe days. Answer calls log
+`n_images=`, `include_image_descriptions=`, `assistant_prefill=`, `history_n=`.
+
+---
+
 ## See also
 
 - [agentic_qwen_context.md](agentic_qwen_context.md) — agentic loop context and Qwen prompt design
 - [agentic_scale.md](agentic_scale.md) — SigLIP role and scale ladder
 - [habitat_eqa_results.md](habitat_eqa_results.md) — scored HM-EQA result tables
 - [../known_issues.md](../known_issues.md) — Mode A / Mode B segfault taxonomy
+- [../environment_variables.md](../environment_variables.md) — `EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS`

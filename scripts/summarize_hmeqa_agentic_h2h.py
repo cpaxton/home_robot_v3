@@ -14,7 +14,35 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
+
+# Coin-flip last rung of the forced-answer ladder — keep in the headline score for
+# measurement integrity, but also report accuracy with these rows dropped so a
+# lucky A–D prior cannot inflate the agentic story.
+_GUESS_PROVENANCE = frozenset({"uniform_prior"})
+
+
+def _provenance_key(row: dict) -> str:
+    prov = str(row.get("answer_provenance") or "").strip()
+    return prov or "unset"
+
+
+def provenance_breakdown(rows: list[dict]) -> dict[str, dict]:
+    """Per-channel n / correct / accuracy (sorted by channel name)."""
+    counts: Counter[str] = Counter()
+    correct: Counter[str] = Counter()
+    for r in rows:
+        key = _provenance_key(r)
+        counts[key] += 1
+        if r.get("correct"):
+            correct[key] += 1
+    out: dict[str, dict] = {}
+    for key in sorted(counts):
+        n = counts[key]
+        ok = correct[key]
+        out[key] = {"n": n, "correct": ok, "accuracy": (ok / n) if n else None}
+    return out
 
 
 def summarize(out: Path) -> dict:
@@ -55,13 +83,21 @@ def summarize(out: Path) -> dict:
                     "salvage_pred": salvage_pred,
                     "salvage_correct": bool(salvage_ok) if salvage_pred else False,
                     "scored_policy": r.get("scored_policy") or "",
+                    "answer_provenance": _provenance_key(r) if r.get("answer_provenance") else "",
                 }
             )
+        by_prov = provenance_breakdown(rows)
+        kept = [r for r in rows if _provenance_key(r) not in _GUESS_PROVENANCE]
+        kept_ok = sum(1 for r in kept if r.get("correct"))
         block: dict = {
             "n": len(rows),
             "correct": ok,
             "accuracy": (ok / len(rows)) if rows else None,
             "mean_planning_steps": (sum(steps) / len(steps)) if steps else None,
+            "by_provenance": by_prov,
+            "n_excl_uniform_prior": len(kept),
+            "correct_excl_uniform_prior": kept_ok,
+            "accuracy_excl_uniform_prior": (kept_ok / len(kept)) if kept else None,
             "per": per,
         }
         if m == "agentic" and rows:
@@ -78,6 +114,15 @@ def summarize(out: Path) -> dict:
             )
         else:
             print(f"{m}: {ok}/{len(rows)} acc={block['accuracy']} mean_steps={block['mean_planning_steps']}")
+        if rows and by_prov:
+            bits = [f"{k}={v['correct']}/{v['n']}" for k, v in by_prov.items()]
+            excl = block["accuracy_excl_uniform_prior"]
+            excl_s = (
+                f" excl_uniform={kept_ok}/{len(kept)} ({excl:.0%})"
+                if excl is not None and len(kept) != len(rows)
+                else ""
+            )
+            print(f"  provenance: {', '.join(bits)}{excl_s}")
         summary[m] = block
     (out / "h2h_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary

@@ -338,7 +338,8 @@ snapshot_bundle() {
         " "$ep" 2>/dev/null || true)"
     fi
     if [[ -z "$src" || ! -d "$src" ]]; then
-        src="$HOME/.cache/habitat_eqa/episodes/h2h_${arm}_q$(printf '%04d' "$qid")/q$(printf '%04d' "$qid")_dynagraph"
+        # Fallback only — prefer debug_bundle_dir from the jsonl (unique per OUT).
+        src="$HOME/.cache/habitat_eqa/episodes/h2h_${arm}_q$(printf '%04d' "$qid")_$(basename "$OUT")/q$(printf '%04d' "$qid")_dynagraph"
     fi
     if [[ ! -d "$src" ]]; then
         log "WARN: no bundle to snapshot for $arm q$qid"
@@ -445,7 +446,7 @@ run_arm() {
         while [[ "$attempt" -lt "$max_attempts" ]]; do
             attempt=$((attempt + 1))
             : >"$ep"
-            tag="h2h_${name}_q$(printf '%04d' "$qid")"
+            tag="h2h_${name}_q$(printf '%04d' "$qid")_$(basename "$OUT")"
             log "----- $name q$qid attempt=${attempt}/${max_attempts} (bundle tag=$tag) -----"
             jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
             STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"

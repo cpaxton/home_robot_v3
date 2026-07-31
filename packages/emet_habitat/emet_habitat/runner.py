@@ -166,12 +166,17 @@ def _configure_eqa_parameters(
     eqa_hf_model_id: str | None,
     device: str = "cuda",
 ) -> None:
+    """HM-EQA always uses the MCQ system prompt; optional VL family/HF id overrides."""
+    eqa = dict(parameters.get("eqa", {}) or {})
+    # Must run even when no VL CLI override — otherwise GraphEQAMemory sees an empty
+    # variant, loads the caption-heavy EQA_PROMPT, and skips Reasoning: prefill.
+    eqa.setdefault("prompt_variant", "hmeqa")
     if eqa_vl_family is None and eqa_hf_model_id is None:
+        parameters.set("eqa", eqa)
         return
     from emet.llms.eqa_vl_settings import resolve_vl_hf_model_id
     from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
 
-    eqa = dict(parameters.get("eqa", {}) or {})
     if eqa_vl_family is not None:
         eqa["backend"] = "qwen_vl"
         eqa["vl_family"] = eqa_vl_family
@@ -187,7 +192,6 @@ def _configure_eqa_parameters(
                     eqa["vl_hf_model_id"] = default_hf_model_id(fam)
     if eqa_hf_model_id is not None:
         eqa["vl_hf_model_id"] = eqa_hf_model_id
-    eqa.setdefault("prompt_variant", "hmeqa")
     parameters.set("eqa", eqa)
 
 
@@ -506,6 +510,9 @@ def run_hmeqa_episode(
         metrics.predebias_letter = predebias_letter
         metrics.debias_votes = debias_votes[:4000]
         metrics.unverified_location_guess = unverified_location_guess
+        if agent.graph_memory is not None:
+            metrics.eqa_answer_field_missing = not agent.graph_memory.last_eqa_answer_field_emitted
+            metrics.eqa_salvage_used = agent.graph_memory.last_eqa_salvage_used
         if isinstance(summary, dict):
             metrics.decision_rounds = int(summary.get("decision_rounds") or 0)
             metrics.budget_hit = bool(summary.get("budget_hit"))

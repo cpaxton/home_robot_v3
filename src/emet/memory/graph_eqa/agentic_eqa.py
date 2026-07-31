@@ -28,6 +28,7 @@ from emet.memory.graph_eqa.agentic_tools import (
     build_agentic_eqa_tools,
     build_graph_eqa_system_prompt,
     build_state_message,
+    coerce_room_label,
     normalize_current_room,
 )
 from emet.memory.graph_eqa.graph_memory import (
@@ -41,6 +42,8 @@ from emet.memory.graph_eqa.graph_memory import (
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     question_target_rooms,
+    resolve_room_policy,
+    room_leave_needed,
     room_mismatches_question,
 )
 from emet.utils.logger import Logger
@@ -197,6 +200,14 @@ def env_eqa_agentic_router() -> bool | None:
     if v in _FALSE:
         return False
     return None
+
+
+def env_eqa_room_policy() -> str | None:
+    """Override ``eqa.room_policy``: ``canonical`` or ``llm``."""
+    v = os.environ.get("EMET_EQA_ROOM_POLICY", "").strip().lower()
+    if not v:
+        return None
+    return resolve_room_policy(v)
 
 
 def env_eqa_router_room_images() -> int:
@@ -370,6 +381,10 @@ class AgenticEQAExecutor:
         self._last_router_n_images: int = 0
         self._last_router_ms: float | None = None
         self._last_capture_status: str | None = None
+        env_policy = env_eqa_room_policy()
+        cfg_policy = _eqa_cfg(agent).get("room_policy", "canonical")
+        self.room_policy = resolve_room_policy(env_policy if env_policy is not None else cfg_policy)
+        self._in_target_area: bool | None = None
         self._collect_trace = (
             bool(collect_trace)
             if collect_trace is not None
@@ -620,10 +635,20 @@ class AgenticEQAExecutor:
     def _tool_explore_frontier(self, toward: str = "") -> dict[str, Any]:
         if self._n_nav + self._n_explore >= self.max_nav_steps:
             return {"ok": False, "error": "nav budget exhausted"}
-        bias = (toward or "").strip() or self.query_text
+        toward = (toward or "").strip()
+        leave = room_leave_needed(
+            room_policy=self.room_policy,
+            current_room=self._last_room_estimate,
+            question=self.question,
+            in_target_area=self._in_target_area,
+        )
+        # Do not invent toward= from MCQ options / room enums — pass the Question
+        # to the frontier VLM and let it pick among graph-contexted views.
+        bias = toward or self.query_text
         agent = self.agent
         frontier_xyz = None
         pick_source = "pick_uncovered"
+        frontier_room = "unknown"
         try:
             from emet.controller.habitat_nav import pick_uncovered_explore_target
 
@@ -633,7 +658,19 @@ class AgenticEQAExecutor:
             # Agentic always tries this; classic coverage path still uses EMET_VLM_FRONTIER_SCORING.
             if hasattr(agent, "_vlm_frontier_choice"):
                 try:
-                    vlm_pt = agent._vlm_frontier_choice(bias)
+                    vlm_pt = agent._vlm_frontier_choice(
+                        bias,
+                        current_room=self._last_room_estimate,
+                        room_policy=self.room_policy,
+                        leave_hint=leave,
+                    )
+                except TypeError:
+                    # Older controllers without room kwargs.
+                    try:
+                        vlm_pt = agent._vlm_frontier_choice(bias)
+                    except Exception as e:
+                        _logger.warning(f"vlm_frontier_choice failed: {e}")
+                        vlm_pt = None
                 except Exception as e:
                     _logger.warning(f"vlm_frontier_choice failed: {e}")
                     vlm_pt = None
@@ -672,6 +709,22 @@ class AgenticEQAExecutor:
         except Exception as e:
             _logger.warning(f"explore_frontier pick failed: {e}")
             pick_source = "pick_uncovered"
+        if frontier_xyz is not None:
+            gm = self.graph_memory
+            room_fn = getattr(gm, "graph_room_at_robot", None) if gm is not None else None
+            if callable(room_fn):
+                try:
+                    frontier_room = coerce_room_label(
+                        room_fn(
+                            (
+                                float(np.asarray(frontier_xyz).reshape(-1)[0]),
+                                float(np.asarray(frontier_xyz).reshape(-1)[1]),
+                            )
+                        ),
+                        room_policy=self.room_policy,
+                    )
+                except Exception:
+                    frontier_room = "unknown"
         frontier_key = -1_000_000 - self._n_explore
         hypothesis_id = self._begin_policy_approach(
             "frontier",
@@ -724,6 +777,15 @@ class AgenticEQAExecutor:
             frontier_xyz,
             robot_xyt_before=start,
         )
+        room_aligned: bool | None = None
+        if self.room_policy == "canonical":
+            targets = question_target_rooms(self.question)
+            fr = normalize_current_room(frontier_room)
+            if fr != "unknown" and targets:
+                room_aligned = fr in targets
+        elif self._in_target_area is False:
+            # Soft leave explore: alignment unknown until next router turn.
+            room_aligned = None
         row = {
             "tool": "explore_frontier",
             "ok": ok,
@@ -733,6 +795,13 @@ class AgenticEQAExecutor:
             "source": pick_source,
             "pick_panel": str(panel_path) if panel_path else None,
             "look_around_on_no_new_obs": look_retry,
+            "room_policy": self.room_policy,
+            "current_room": self._last_room_estimate,
+            "frontier_room": frontier_room,
+            "room_leave_hint": leave,
+            "toward": toward or None,
+            "room_aligned": room_aligned,
+            "in_target_area": self._in_target_area,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
@@ -2566,11 +2635,17 @@ class AgenticEQAExecutor:
         provenance = str(out.get("answer_source") or "query")
         choices = parse_mcq_choices_from_question(self.question)
         if choices and (self._answer_unknownish(answer) or not self._mcq_letter_from_text(answer)):
-            letter = self._trusted_vlm_letter() or self._pending_answerable_letter()
-            if letter:
-                answer, provenance = letter, "pending_letter"
+            # Keep channel tags distinct so calibration / H2H summaries can separate a
+            # view that saw the target from a deferred assess letter from a coin-flip prior.
+            trusted = self._trusted_vlm_letter()
+            if trusted:
+                answer, provenance = trusted, "vlm_suggested"
             else:
-                answer, provenance = self._uniform_prior_letter(len(choices)), "uniform_prior"
+                pending = self._pending_answerable_letter()
+                if pending:
+                    answer, provenance = pending, "pending_letter"
+                else:
+                    answer, provenance = self._uniform_prior_letter(len(choices)), "uniform_prior"
         self._answer_provenance = provenance
         confidence_score = self._confidence_for_provenance(provenance)
         self._append_trace(
@@ -2785,8 +2860,9 @@ class AgenticEQAExecutor:
                 force_obs_ids = gm.select_obs_ids_for_verified_answer(self._verified_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(force_obs_ids)
             # Do not clamp EMET_EQA_ANSWER_MAX_NEW_TOKENS here. A prior setdefault("64")
-            # truncated Caption/Reasoning mid-stream and forced [salvage] on every bal-32
-            # agentic answer; graph_memory.query_answer defaults to 256.
+            # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
+            # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
+            # per VLM.
             xyt = self._robot_xyt()
             planner = getattr(agent, "planner", None)
             try:
@@ -3073,7 +3149,7 @@ class AgenticEQAExecutor:
         if self._tools is None:
             self._tools = build_agentic_eqa_tools(self)
             self._tool_names = {t.name for t in self._tools}
-            self._system_prompt = build_graph_eqa_system_prompt(self._tools)
+            self._system_prompt = build_graph_eqa_system_prompt(self._tools, room_policy=self.room_policy)
 
     def _live_rgb(self) -> np.ndarray | None:
         robot = getattr(self.agent, "robot", None)
@@ -3199,7 +3275,7 @@ class AgenticEQAExecutor:
         meta["n_room_images"] = int(self._last_router_n_images)
         meta["nearby_obs"] = nearby_meta
         parsed = parse_tool_calls_response(text)
-        vlm_room = normalize_current_room(parsed.get("current_room"))
+        vlm_room = coerce_room_label(parsed.get("current_room"), room_policy=self.room_policy)
         graph_room = "unknown"
         xyt = self._robot_xyt()
         if gm is not None:
@@ -3211,11 +3287,11 @@ class AgenticEQAExecutor:
             room_fn = getattr(gm, "graph_room_at_robot", None)
             if callable(room_fn):
                 try:
-                    graph_room = normalize_current_room(room_fn(xyt))
+                    graph_room = coerce_room_label(room_fn(xyt), room_policy=self.room_policy)
                 except Exception as e:
                     _logger.warning(f"graph_room_at_robot failed: {e}")
                     graph_room = "unknown"
-        room = merge_room_estimates(vlm_room, graph_room)
+        room = merge_room_estimates(vlm_room, graph_room, room_policy=self.room_policy)
         self._graph_room_estimate = graph_room
         self._last_room_estimate = room
         self._room_estimates.append(room)
@@ -3224,6 +3300,27 @@ class AgenticEQAExecutor:
         meta["current_room"] = room
         meta["current_room_vlm"] = vlm_room
         meta["current_room_graph"] = graph_room
+        meta["room_policy"] = self.room_policy
+        in_target: bool | None = None
+        if "in_target_area" in parsed:
+            raw_ita = parsed.get("in_target_area")
+            if isinstance(raw_ita, bool):
+                in_target = raw_ita
+            elif raw_ita is not None:
+                s = str(raw_ita).strip().lower()
+                if s in _TRUE:
+                    in_target = True
+                elif s in _FALSE:
+                    in_target = False
+        if self.room_policy == "llm" and in_target is not None:
+            self._in_target_area = in_target
+        elif self.room_policy == "canonical":
+            targets_now = question_target_rooms(self.question)
+            if room != "unknown" and targets_now:
+                self._in_target_area = not room_mismatches_question(room, self.question)
+            else:
+                self._in_target_area = None
+        meta["in_target_area"] = self._in_target_area
         rooms_line = ""
         if gm is not None:
             rooms_fn = getattr(gm, "format_rooms_line", None)
@@ -3238,7 +3335,14 @@ class AgenticEQAExecutor:
         target_rooms = sorted(question_target_rooms(self.question))
         meta["rooms_line"] = rooms_line
         meta["question_target_rooms"] = target_rooms
-        meta["room_mismatch_diagnostic"] = bool(room_mismatches_question(room, self.question))
+        meta["room_mismatch_diagnostic"] = bool(
+            room_leave_needed(
+                room_policy=self.room_policy,
+                current_room=room,
+                question=self.question,
+                in_target_area=self._in_target_area,
+            )
+        )
         calls: list[tuple[str, dict[str, Any]]] = []
         for tc in parsed.get("tool_calls", []):
             name = str(tc.get("name") or "").strip().lower()
@@ -3257,8 +3361,10 @@ class AgenticEQAExecutor:
                 "current_room": room,
                 "current_room_vlm": vlm_room,
                 "current_room_graph": graph_room,
-                "rooms_line": rooms_line,
+                "room_policy": self.room_policy,
+                "in_target_area": self._in_target_area,
                 "question_target_rooms": target_rooms,
+                "rooms_line": rooms_line,
                 "prefer_explore_reason": str(self._prefer_explore_reason or ""),
                 "room_mismatch_diagnostic": bool(meta.get("room_mismatch_diagnostic")),
                 "tool_calls": list(meta["tool_calls"]),
@@ -3302,6 +3408,7 @@ class AgenticEQAExecutor:
         self._last_room_estimate = "unknown"
         self._graph_room_estimate = "unknown"
         self._room_estimates = []
+        self._in_target_area = None
         self._last_router_n_images = 0
         self._last_router_ms = None
         gm0 = self.graph_memory
