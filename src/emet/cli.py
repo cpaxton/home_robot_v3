@@ -3030,32 +3030,82 @@ def connect_show() -> None:
         click.echo("password: (set)")
 
 
-@main.group("llm", short_help="Remote OpenAI text/VL health + smoke (caliban / LAN)")
+@main.group("llm", short_help="Remote OpenAI text/VL health + smoke (LAN Jetson / workstation)")
 def llm_cmd() -> None:
-    """Probe and smoke OpenAI-compatible text (:8000) and VL (:8001) servers.
+    """Probe and smoke OpenAI-compatible text/VL servers.
 
-    See docs/llm_serve.md. Typical Herman layout: text on caliban:8000, VL on
-    caliban:8001 or a workstation ``emet serve llm --vl --port 8001``.
+    See docs/llm_serve.md. Pass ``--host`` (or ``EMET_LLM_HOST``). unified-7b serves
+    text+VL on ``:8000``; dual-2b keeps VL on ``:8001`` (``--vl-port 8001``).
     """
 
 
+def _llm_targets_from_host(
+    *,
+    host: str | None,
+    port: int,
+    vl_port: int | None,
+    text_url: str | None,
+    vl_url: str | None,
+    check_text: bool,
+    check_vl: bool,
+) -> tuple[str | None, str | None]:
+    from emet.llms.remote_ops import (
+        DEFAULT_VL_PORT,
+        openai_base_for_host,
+        resolve_llm_host,
+    )
+
+    resolved = resolve_llm_host(host)
+    text_target: str | None = None
+    vl_target: str | None = None
+    if check_text:
+        if text_url is not None and text_url.strip() != "":
+            text_target = text_url
+        elif text_url is not None and text_url.strip() == "":
+            text_target = None
+        elif resolved:
+            text_target = openai_base_for_host(resolved, port)
+        else:
+            env = (os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
+            text_target = env or None
+    if check_vl:
+        if vl_url is not None and vl_url.strip() != "":
+            vl_target = vl_url
+        elif vl_url is not None and vl_url.strip() == "":
+            vl_target = None
+        elif resolved:
+            vl_target = openai_base_for_host(
+                resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
+            )
+        else:
+            env = (os.environ.get("EMET_VL_ENDPOINT") or os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
+            vl_target = env or None
+    return text_target, vl_target
+
+
 @llm_cmd.command("health", short_help="GET /health for text and/or VL endpoints")
+@click.option("--host", default=None, help="LAN host (or EMET_LLM_HOST). Builds http://HOST:PORT/v1.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Text/OpenAI port with --host.")
+@click.option("--vl-port", default=None, type=int, help="VL port with --host (default same as --port / 8000).")
 @click.option(
     "--text",
     "text_url",
     default=None,
-    help="Text base URL (default http://caliban:8000/v1). Empty string skips.",
+    help="Text base URL override. Empty string skips. Else --host or EMET_OPENAI_BASE_URL.",
 )
 @click.option(
     "--vl",
     "vl_url",
     default=None,
-    help="VL base URL (default http://caliban:8001/v1). Pass '' to skip.",
+    help="VL base URL override. Empty string skips. Else --host or EMET_VL_ENDPOINT.",
 )
 @click.option("--text-only", is_flag=True, help="Only check text endpoint.")
 @click.option("--vl-only", is_flag=True, help="Only check VL endpoint.")
 @click.option("--json", "as_json", is_flag=True, help="Print JSON.")
 def llm_health_cmd(
+    host: str | None,
+    port: int,
+    vl_port: int | None,
     text_url: str | None,
     vl_url: str | None,
     text_only: bool,
@@ -3063,7 +3113,7 @@ def llm_health_cmd(
     as_json: bool,
 ) -> None:
     """Check ``/health`` readiness for LAN LLM/VLM servers."""
-    from emet.llms.remote_ops import DEFAULT_TEXT_BASE, DEFAULT_VL_BASE, fetch_health
+    from emet.llms.remote_ops import fetch_health
 
     check_text = not vl_only
     check_vl = not text_only
@@ -3071,8 +3121,19 @@ def llm_health_cmd(
         check_text = False
     if vl_url is not None and vl_url.strip() == "":
         check_vl = False
-    text_target = (text_url if text_url is not None else DEFAULT_TEXT_BASE) if check_text else None
-    vl_target = (vl_url if vl_url is not None else DEFAULT_VL_BASE) if check_vl else None
+    text_target, vl_target = _llm_targets_from_host(
+        host=host,
+        port=port,
+        vl_port=vl_port,
+        text_url=text_url,
+        vl_url=vl_url,
+        check_text=check_text,
+        check_vl=check_vl,
+    )
+    if check_text and text_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --text URL, or EMET_OPENAI_BASE_URL")
+    if check_vl and vl_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --vl URL, or EMET_VL_ENDPOINT")
 
     results: dict[str, Any] = {}
     ok_all = True
@@ -3096,8 +3157,11 @@ def llm_health_cmd(
 
 
 @llm_cmd.command("smoke", short_help="Chat-completions smoke for text and/or VL")
-@click.option("--text", "text_url", default=None, help="Text base URL (default caliban:8000/v1).")
-@click.option("--vl", "vl_url", default=None, help="VL base URL (default caliban:8001/v1).")
+@click.option("--host", default=None, help="LAN host (or EMET_LLM_HOST). Builds http://HOST:PORT/v1.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Text/OpenAI port with --host.")
+@click.option("--vl-port", default=None, type=int, help="VL port with --host (default 8000; dual-2b: 8001).")
+@click.option("--text", "text_url", default=None, help="Text base URL override.")
+@click.option("--vl", "vl_url", default=None, help="VL base URL override.")
 @click.option("--text-only", is_flag=True, help="Only smoke text.")
 @click.option("--vl-only", is_flag=True, help="Only smoke VL.")
 @click.option(
@@ -3107,6 +3171,9 @@ def llm_health_cmd(
     help="Optional image for VL smoke (else a tiny synthetic RGB).",
 )
 def llm_smoke_cmd(
+    host: str | None,
+    port: int,
+    vl_port: int | None,
     text_url: str | None,
     vl_url: str | None,
     text_only: bool,
@@ -3114,19 +3181,25 @@ def llm_smoke_cmd(
     image: str | None,
 ) -> None:
     """POST a short completion to text and/or VL OpenAI servers."""
-    from emet.llms.remote_ops import (
-        DEFAULT_TEXT_BASE,
-        DEFAULT_VL_BASE,
-        smoke_chat_completions,
-        smoke_vl_completions,
-    )
+    from emet.llms.remote_ops import smoke_chat_completions, smoke_vl_completions
 
     check_text = not vl_only
     check_vl = not text_only
-    text_target = text_url or DEFAULT_TEXT_BASE
-    vl_target = vl_url or DEFAULT_VL_BASE
+    text_target, vl_target = _llm_targets_from_host(
+        host=host,
+        port=port,
+        vl_port=vl_port,
+        text_url=text_url,
+        vl_url=vl_url,
+        check_text=check_text,
+        check_vl=check_vl,
+    )
+    if check_text and text_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --text URL, or EMET_OPENAI_BASE_URL")
+    if check_vl and vl_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --vl URL, or EMET_VL_ENDPOINT")
     failed = False
-    if check_text:
+    if check_text and text_target is not None:
         click.echo(f"[llm smoke] text {text_target}")
         try:
             out = smoke_chat_completions(text_target)
@@ -3134,7 +3207,7 @@ def llm_smoke_cmd(
         except Exception as exc:
             click.echo(f"  FAIL: {type(exc).__name__}: {exc}", err=True)
             failed = True
-    if check_vl:
+    if check_vl and vl_target is not None:
         click.echo(f"[llm smoke] vl {vl_target}" + (f" image={image}" if image else " (synthetic)"))
         try:
             out = smoke_vl_completions(vl_target, image_path=image)
@@ -3283,7 +3356,7 @@ def preview_cameras(ctx: click.Context) -> None:
 @main.group(
     "deploy",
     invoke_without_command=True,
-    short_help="Deploy Mars bridge to a robot, or LLM/VLM to caliban (Orin ~64 GiB)",
+    short_help="Deploy Mars bridge to a robot, or LLM/VLM to a Jetson (Orin ~64 GiB)",
 )
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
 @click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
@@ -3306,15 +3379,15 @@ def deploy(
     """Deploy to a robot (Mars bridge) or a Jetson LAN LLM/VLM host.
 
     Bare ``emet deploy`` (no subcommand) syncs ``emet_core`` + innate_mars_bridge
-    to the robot. Use ``emet deploy llm`` for caliban OpenAI serve (AGX Orin
-    ~60–64 GiB unified memory).
+    to the robot. Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve
+    (AGX Orin ~60–64 GiB unified memory).
 
     Examples:
       emet connect save 192.168.1.43 --user jetson1
       emet deploy
       emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
-      emet deploy llm --profile unified-7b
-      emet deploy llm --profile dual-2b --host caliban
+      emet deploy llm --host caliban --profile unified-7b
+      emet deploy llm --host caliban --profile dual-2b
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -3332,7 +3405,7 @@ def deploy(
     )
 
 
-@deploy.command("llm", short_help="Deploy Jetson OpenAI LLM/VLM on caliban (Orin ~64 GiB)")
+@deploy.command("llm", short_help="Deploy Jetson OpenAI LLM/VLM (Orin ~64 GiB)")
 @click.option(
     "--profile",
     type=click.Choice(["dual-2b", "unified-7b", "2b", "7b", "big"]),
@@ -3348,7 +3421,7 @@ def deploy(
     "--host",
     "-H",
     default=None,
-    help="LLM host (default: EMET_CALIBAN_HOST or caliban).",
+    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host caliban",
 )
 @click.option("--model", default=None, help="Override HF model id for the VL container.")
 @click.option("--port", default=None, type=int, help="Override serve port (unified-7b→8000, dual-2b→8001).")
@@ -3360,7 +3433,7 @@ def deploy_llm_cmd(
     port: int | None,
     container_name: str | None,
 ) -> None:
-    """Rsync VL weights and start the Tegra-CUDA OpenAI container on caliban.
+    """Rsync VL weights and start the Tegra-CUDA OpenAI container on a Jetson host.
 
     AGX Orin has ~64 GiB unified memory — enough for Qwen2-VL-7B fp16 (unified-7b).
     eMMC cannot hold both a 7B CausalLM and a 7B VL; use dual-2b for a small VL
@@ -3368,14 +3441,13 @@ def deploy_llm_cmd(
 
     Quantization (bitsandbytes / AWQ / Quanto) is **not** available on the JP5
     Tegra-CUDA image yet — pip installs replace NVIDIA torch. Stay on fp16 or
-    use a JP6/vLLM container; see docs/llm_serve.md § Quantization on caliban.
+    use a JP6/vLLM container; see docs/llm_serve.md § Quantization on Jetson.
 
     Examples:
-      emet deploy llm
-      emet deploy llm --profile unified-7b
-      emet deploy llm --profile dual-2b
-      emet llm health --text-only
-      emet llm smoke --vl-only --vl http://caliban:8000/v1
+      emet deploy llm --host caliban --profile unified-7b
+      emet deploy llm --host caliban --profile dual-2b
+      emet llm health --host caliban
+      emet llm smoke --host caliban --vl-only
     """
     from emet.deploy_llm import deploy_llm
 

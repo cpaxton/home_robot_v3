@@ -11,16 +11,15 @@
 
 Examples::
 
-    # Local gemma (legacy)
-    emet run chat --llm gemma
+    # Local gemma (legacy Stretch prompt)
+    emet run chat --llm gemma --prompt simple
 
-    # Caliban text router
-    emet run chat --caliban --once "Reply with exactly: pong"
+    # Remote multi-turn REPL (history retained; conversational prompt)
+    emet run chat --host caliban
+    emet run chat --host caliban --once "Reply with exactly: pong"
 
-    # Local / LAN VL serve (``emet serve llm --vl --port 8001``)
-    emet run chat --vl --image /path/to.jpg --once "What do you see?"
-    emet run chat --caliban --vl --vl-endpoint openai@http://127.0.0.1:8001/v1 \\
-      --image shot.jpg --once "Describe briefly"
+    # Vision-language
+    emet run chat --host caliban --vl --image /path/to.jpg --once "What do you see?"
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.controller.zmq_client import StretchZmqClient
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
-from emet.llms.remote_ops import DEFAULT_TEXT_BASE, DEFAULT_VL_BASE
+from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, apply_llm_host, resolve_llm_host
 
 
 def _load_rgb(path: str) -> np.ndarray:
@@ -73,7 +72,13 @@ def _build_vl_client(vl_endpoint: str, *, max_tokens: int = 512):
         f"Common: {', '.join(sorted(get_llm_choices())[:8])}…"
     ),
 )
-@click.option("--prompt", default="simple", help="The prompt to use", type=click.Choice(get_prompt_choices()))
+@click.option(
+    "--prompt",
+    default=None,
+    help="Prompt builder (default: chat with --host, else simple). "
+    f"Choices: {', '.join(sorted(get_prompt_choices()))}.",
+)
+@click.option("--name", "persona_name", default="Assistant", show_default=True, help="Persona for --prompt chat.")
 @click.option("--max_audio_duration", default=10.0, help="The maximum duration of the audio recording")
 @click.option("--silence_limit", default=2.0, help="The amount of silence before stopping the recording")
 @click.option("--robot_ip", default="", help="IP address of the robot")
@@ -81,9 +86,24 @@ def _build_vl_client(vl_endpoint: str, *, max_tokens: int = 512):
 @click.option("--talk", default=False, help="Robot will speak its responses out load", is_flag=True)
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
-    "--caliban",
-    is_flag=True,
-    help=f"Preset text LLM to openai@{DEFAULT_TEXT_BASE} (Herman / LAN router).",
+    "--host",
+    "llm_host",
+    default=None,
+    help="LAN OpenAI host (sets EMET_* endpoints). Example: --host caliban",
+)
+@click.option(
+    "--port",
+    "llm_port",
+    default=DEFAULT_LLM_PORT,
+    show_default=True,
+    type=int,
+    help="OpenAI serve port used with --host (text; also VL unless --vl-port).",
+)
+@click.option(
+    "--vl-port",
+    default=None,
+    type=int,
+    help=f"VL port with --host (default {DEFAULT_VL_PORT}; use 8001 for dual-2b).",
 )
 @click.option(
     "--vl/--no-vl",
@@ -95,10 +115,7 @@ def _build_vl_client(vl_endpoint: str, *, max_tokens: int = 512):
 @click.option(
     "--vl-endpoint",
     default=None,
-    help=(
-        "Remote VL openai@URL (default: EMET_VL_ENDPOINT or "
-        f"openai@{DEFAULT_VL_BASE})."
-    ),
+    help="Remote VL openai@URL (default: EMET_VL_ENDPOINT or --host / EMET_LLM_HOST).",
 )
 @click.option(
     "--image",
@@ -118,30 +135,47 @@ def main(
     max_audio_duration: float = 10.0,
     silence_limit: float = 2.0,
     voice=False,
-    prompt="simple",
+    prompt: str | None = None,
+    persona_name: str = "Assistant",
     robot_ip="",
     talk=False,
     port_offset: int = 0,
-    caliban: bool = False,
+    llm_host: str | None = None,
+    llm_port: int = DEFAULT_LLM_PORT,
+    vl_port: int | None = None,
     use_vl: bool = False,
     vl_endpoint: str | None = None,
     images: tuple[str, ...] = (),
     once: str | None = None,
     max_tokens: int = 512,
 ):
-    if caliban:
-        llm = f"openai@{DEFAULT_TEXT_BASE}"
+    specs = apply_llm_host(llm_host, port=llm_port, vl_port=vl_port)
+    host = resolve_llm_host(llm_host)
+    if specs is not None:
+        llm = specs[0]
+    prompt_key = prompt
+    if prompt_key is None:
+        prompt_key = "chat" if host else "simple"
+
     if use_vl:
         ep = (vl_endpoint or os.environ.get("EMET_VL_ENDPOINT") or "").strip()
         if not ep:
-            ep = f"openai@{DEFAULT_VL_BASE}"
+            if specs is not None:
+                ep = specs[1]
+            else:
+                raise click.UsageError(
+                    "--vl needs --vl-endpoint, EMET_VL_ENDPOINT, or --host / EMET_LLM_HOST"
+                )
         client: Any = _build_vl_client(ep, max_tokens=max_tokens)
         prompt_builder = None
         click.echo(colored(f"VL client: {ep}", "cyan"))
     else:
-        prompt_builder = get_prompt_builder(prompt)
+        if prompt_key == "chat":
+            prompt_builder = get_prompt_builder("chat", name=persona_name)
+        else:
+            prompt_builder = get_prompt_builder(prompt_key)
         client = _build_text_client(llm, prompt_builder)
-        click.echo(colored(f"Text LLM: {llm}", "cyan"))
+        click.echo(colored(f"Text LLM: {llm}  prompt={prompt_key}", "cyan"))
 
     if talk:
         robot = StretchZmqClient(robot_ip, port_offset=port_offset)
@@ -159,7 +193,7 @@ def main(
 
     image_arrays = [_load_rgb(p) for p in images]
 
-    def _one_turn(input_text: str) -> None:
+    def _one_turn(input_text: str, *, reset_context: bool = False) -> None:
         t0 = timeit.default_timer()
         if use_vl:
             parts: list[Any] = []
@@ -171,10 +205,11 @@ def main(
             assistant_response = client.generate_multimodal(
                 parts if len(parts) > 1 else parts[0],
                 max_new_tokens=max_tokens,
+                reset_context=reset_context or once is not None,
             )
             response: Any = assistant_response
         else:
-            assistant_response = client(input_text)
+            assistant_response = client(input_text, reset_context=reset_context)
             response = prompt_builder.parse_response(assistant_response) if prompt_builder else assistant_response
         t1 = timeit.default_timer()
 
@@ -193,11 +228,13 @@ def main(
         print("-" * 80)
 
     if once is not None:
-        _one_turn(once)
+        _one_turn(once, reset_context=True)
         return
 
     if voice:
-        print("Talk to me, Stretch! If you don't say anything, I will give up.")
+        print("Talk to me! If you don't say anything, I will give up.")
+    else:
+        print(colored("Multi-turn chat (history on). Empty line to exit.", "yellow"))
     for _i in range(50):
         if voice:
             input(colored("Press enter to speak or ctrl+c to exit.", "yellow"))

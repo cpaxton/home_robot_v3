@@ -2,10 +2,10 @@
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
 #   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
-#   # Caliban: prefer unified Qwen2-VL-7B on :8000 for text + captions
-#   #   (./scripts/deploy_caliban_vl.sh --profile unified-7b). dual-2b keeps text
-#   #   :8000 CausalLM + VL :8001 (smaller). See docs/llm_serve.md.
-#   uv run emet run agent --connection herman
+#   # Remote Orin (caliban): unified Qwen2-VL-7B on :8000 for text + captions
+#   #   (./scripts/deploy_caliban_vl.sh --profile unified-7b). dual-2b: --vl-port 8001.
+#   uv run emet run agent --connection herman --host caliban
+#   # or: export EMET_LLM_HOST=caliban
 extends: configs/emet/default.yaml
 
 robot: innate_mars
@@ -13,10 +13,10 @@ connection: herman
 
 agent:
   name: Herman
-  # Tool-router + (when unified-7b) caption VLM on caliban :8000.
-  # Override with ``--llm qwen35-4B`` for local, or ``EMET_OPENAI_MODEL=…`` to label the remote id.
-  llm: openai@http://caliban:8000/v1
-  # Load caption/EQA path (remote VLM via mapping.eqa.vl_endpoint when set).
+  # OpenAI-compatible remote (EMET_OPENAI_BASE_URL / --host). Override with
+  # ``--llm qwen35-4B`` for local weights, or ``openai@http://HOST:PORT/v1``.
+  llm: openai
+  # Load caption/EQA path (remote VLM via EMET_VL_ENDPOINT / --host fallthrough).
   eqa: true
   discord: true
   # Single Dynagraph memory plug-in on the voxel map (not open_vocab + GraphEQA).
@@ -38,10 +38,8 @@ embodied_agent:
       bounds_3d_iou_min: 0.08
 
 mapping:
-  # Caption / EQA frames → same caliban OpenAI serve as text when using unified-7b
-  # (Qwen2-VL-7B on :8000). For dual-2b, point at :8001 instead (or EMET_VL_ENDPOINT).
-  eqa:
-    vl_endpoint: openai@http://caliban:8000/v1
-  # Dynagraph/eval VL sizing (used when vl_endpoint is unset / local weights).
+  # Leave eqa.vl_endpoint unset so resolve_vl_endpoint uses EMET_VL_ENDPOINT /
+  # EMET_OPENAI_BASE_URL / EMET_LLM_HOST (unified-7b same-port default).
+  # For dual-2b without --host: EMET_VL_ENDPOINT=openai@http://HOST:8001/v1
   eqa_vl:
     model_size: "4B"

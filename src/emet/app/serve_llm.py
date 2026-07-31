@@ -89,7 +89,7 @@ def main(
     On a workstation::
 
         export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
-        # caption/EQA: mapping.eqa.vl_endpoint: openai@http://caliban:8001/v1
+        # caption/EQA (unified-7b): mapping.eqa.vl_endpoint: openai@http://caliban:8000/v1
         emet run agent --llm openai
     """
     use_vl = multimodal if multimodal_alias is None else bool(multimodal_alias)

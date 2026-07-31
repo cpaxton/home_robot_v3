@@ -52,6 +52,13 @@ def test_deploy_group_help_lists_llm() -> None:
     assert "llm" in r.output
 
 
+def test_deploy_llm_requires_host(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("EMET_LLM_HOST", raising=False)
+    monkeypatch.delenv("EMET_CALIBAN_HOST", raising=False)
+    rc = deploy_llm(host=None, profile="unified-7b", root=tmp_path)
+    assert rc == 1
+
+
 def test_deploy_llm_missing_script_returns_error(tmp_path) -> None:
     rc = deploy_llm(host="caliban", profile="unified-7b", root=tmp_path)
     assert rc == 1

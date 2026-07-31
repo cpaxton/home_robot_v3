@@ -41,7 +41,14 @@ from emet.app.config_cli import (
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
-from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
+from emet.llms import (
+    get_llm_choices,
+    get_llm_client,
+    get_prompt_builder,
+    get_prompt_choices,
+    validate_llm_client_type,
+)
+from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, apply_llm_host
 from emet.utils.logger import Logger
 
 log = Logger(__name__)
@@ -51,11 +58,28 @@ log = Logger(__name__)
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
-    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
-    "Default ``qwen35-4B``: fast text tool-router. "
-    "Shared VL for chat+EQA: ``qwen3-vl-eqa`` / ``gemma4-vl-eqa``. "
-    "Alternatives: gemma4-e2b/e4b, qwen35-vlm-*, qwen35-9B.",
-    type=click.Choice(get_llm_choices(), case_sensitive=False),
+    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Registry key, 'openai', or "
+    "openai@http://host:port/v1[#model]. "
+    f"Examples: {', '.join(sorted(get_llm_choices())[:6])}…",
+)
+@click.option(
+    "--host",
+    "llm_host",
+    default=None,
+    help="LAN OpenAI host for text+VL (sets EMET_* + forces openai@HOST). Example: --host caliban",
+)
+@click.option(
+    "--llm-port",
+    default=DEFAULT_LLM_PORT,
+    show_default=True,
+    type=int,
+    help="Text OpenAI port with --host.",
+)
+@click.option(
+    "--vl-port",
+    default=None,
+    type=int,
+    help=f"VL port with --host (default {DEFAULT_VL_PORT}; dual-2b: 8001).",
 )
 @click.option(
     "--prompt",
@@ -519,6 +543,9 @@ def main(
     sim_show_viewer_ui: bool = False,
     sim_debug_molmospaces_spawn: bool = False,
     sim_show_subprocess_output: bool = False,
+    llm_host: str | None = None,
+    llm_port: int = DEFAULT_LLM_PORT,
+    vl_port: int | None = None,
 ) -> None:
     """Run the agent chatbot (default: fast ``qwen35-4B`` text tool-router).
 
@@ -539,6 +566,7 @@ def main(
       emet run agent --config configs/agent_rby1_discord.yaml   # uses robot: from YAML
       emet run agent --robot stretch --config configs/agent_stretch_discord.yaml
       emet run agent --robot innate_mars --config configs/agent_innate_mars.yaml
+      emet run agent --connection herman --host caliban   # remote text+VL on Orin :8000
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -577,6 +605,8 @@ def main(
         )
         print(json.dumps(payload, indent=2, default=str))
         return
+
+    host_specs = apply_llm_host(llm_host, port=llm_port, vl_port=vl_port)
 
     config_path = resolve_effective_config_path(
         ctx,
@@ -651,7 +681,10 @@ def main(
         memory_backend=memory_backend,
         agent_name=agent_name,
     )
-    llm = agent_opts.llm
+    # --host / EMET_LLM_HOST wins over YAML agent.llm (and forces openai@…).
+    llm = host_specs[0] if host_specs is not None else agent_opts.llm
+    if not no_llm:
+        llm = validate_llm_client_type(llm)
     prompt = agent_opts.prompt
     device = agent_opts.device
     max_tokens = agent_opts.max_tokens
@@ -660,6 +693,8 @@ def main(
     share_memory_vllm = agent_opts.share_memory_vllm
     memory_backend = str(agent_opts.memory_backend or "dynagraph").strip().lower()
     agent_name = agent_opts.name
+    if host_specs is not None:
+        log.info("Remote LLM host: text=%s vl=%s", host_specs[0], host_specs[1])
 
     sim_cli_used = any(
         [

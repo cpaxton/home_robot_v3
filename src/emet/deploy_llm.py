@@ -2,7 +2,7 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Deploy OpenAI-compatible LLM/VLM containers to a Jetson LAN host (caliban)."""
+"""Deploy OpenAI-compatible LLM/VLM containers to a Jetson LAN host."""
 
 from __future__ import annotations
 
@@ -15,6 +15,19 @@ from pathlib import Path
 CALIBAN_ORIN_VRAM_GIB = 64
 
 LLM_PROFILES = ("dual-2b", "unified-7b")
+
+
+def resolve_deploy_llm_host(host: str | None = None) -> str | None:
+    """``--host``, else ``EMET_LLM_HOST``, else ``EMET_CALIBAN_HOST`` (compat)."""
+    for candidate in (
+        host,
+        os.environ.get("EMET_LLM_HOST"),
+        os.environ.get("EMET_CALIBAN_HOST"),
+    ):
+        s = (candidate or "").strip()
+        if s:
+            return s
+    return None
 
 
 def deploy_llm(
@@ -46,7 +59,13 @@ def deploy_llm(
         print(f"ERROR: unknown profile {profile!r}; use {LLM_PROFILES}", file=sys.stderr)
         return 1
 
-    host_s = (host or os.environ.get("EMET_CALIBAN_HOST") or "caliban").strip()
+    host_s = resolve_deploy_llm_host(host)
+    if not host_s:
+        print(
+            "ERROR: pass --host HOST (or set EMET_LLM_HOST). Example: --host caliban",
+            file=sys.stderr,
+        )
+        return 1
     cmd: list[str] = ["bash", str(script), "--profile", prof, "--host", host_s]
     if model:
         cmd.extend(["--model", model])

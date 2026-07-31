@@ -269,12 +269,30 @@ def test_config_agent_name_when_cli_omitted(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured == ["Herman"]
 
 
-def test_agent_innate_mars_routes_llm_to_caliban() -> None:
-    """Herman preset uses OpenAI-compatible caliban URL for the chat router."""
+def test_agent_innate_mars_uses_openai_remote_llm() -> None:
+    """Herman preset uses openai client; host/URL comes from --host / EMET_*."""
     from emet.config.loader import load_config
 
     cfg = load_config("configs/agent_innate_mars.yaml")
-    assert cfg.agent_section().llm.startswith("openai@http://caliban:8000/v1")
+    assert cfg.agent_section().llm.strip().lower() == "openai"
+    # No hardcoded caliban URLs in the preset (operator passes --host).
+    text = open("configs/agent_innate_mars.yaml", encoding="utf-8").read()
+    assert "openai@http://caliban" not in text
+
+
+def test_help_lists_host_and_accepts_openai_spec() -> None:
+    """Agent --help documents --host; openai@ specs are valid llm values."""
+    from click.testing import CliRunner
+
+    from emet.app.run_agent import main
+    from emet.llms import validate_llm_client_type
+
+    r = CliRunner().invoke(main, ["--help"])
+    assert r.exit_code == 0, r.output
+    assert "--host" in r.output
+    assert "--llm-port" in r.output
+    assert validate_llm_client_type("openai@http://orin:8000/v1") == "openai@http://orin:8000/v1"
+    assert validate_llm_client_type("openai") == "openai"
 
 
 def test_connection_profile_config_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -341,6 +359,9 @@ def test_cli_eqa_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_set_agent_llm_offline(monkeypatch: pytest.MonkeyPatch) -> None:
     """Offline mode honors --set agent.llm when --llm is omitted."""
     from emet.app import run_agent as ra
+
+    for key in ("EMET_LLM_HOST", "EMET_CALIBAN_HOST", "EMET_OPENAI_BASE_URL", "EMET_VL_ENDPOINT"):
+        monkeypatch.delenv(key, raising=False)
 
     seen: list[str] = []
 
