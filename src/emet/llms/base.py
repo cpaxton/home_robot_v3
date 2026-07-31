@@ -163,12 +163,17 @@ class AbstractVLLMClient(AbstractLLMClient):
         reset_context: bool = True,
         verbose: bool = False,
         image: Any | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         """One VL turn.
 
         ``user_content`` is a string or a list of strings / images (``PIL.Image`` or ``ndarray``) in
         model-specific order. When ``image`` is set, it is combined with text per subclass rules.
         If ``reset_context`` is True, clear history before this turn (default for DynaMem).
+
+        ``assistant_prefill`` (optional) seeds the assistant turn so decode cannot open with a
+        different field — used by HM-EQA to force ``Reasoning:`` and kill the caption habit.
+        Subclasses that cannot honor it may ignore it.
         """
 
     def __call__(

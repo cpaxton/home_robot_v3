@@ -14,8 +14,8 @@ from typing import Any
 
 import numpy as np
 
-from emet.utils.logger import Logger
 from emet.eval.episode_video import normalize_yaw_delta
+from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
@@ -143,9 +143,7 @@ class EpisodeDiagnosticsRecorder:
     habitat_floor_y: float | None = None
     _frames: list[_RecordedFrame] = field(default_factory=list, init=False, repr=False)
     _stride_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
-    _stride_overlay_snapshots: list[tuple[int, np.ndarray]] = field(
-        default_factory=list, init=False, repr=False
-    )
+    _stride_overlay_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
     _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _floor_area_series: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _planning_step: int = field(default=0, init=False, repr=False)
@@ -363,9 +361,7 @@ class EpisodeDiagnosticsRecorder:
             res = float(getattr(vm, "grid_resolution", 0.1))
             explored_b = np.asarray(explored, dtype=bool)
             obstacles_b = (
-                np.asarray(obstacles, dtype=bool)
-                if obstacles is not None
-                else np.zeros_like(explored_b, dtype=bool)
+                np.asarray(obstacles, dtype=bool) if obstacles is not None else np.zeros_like(explored_b, dtype=bool)
             )
             free_floor = explored_b & ~obstacles_b
             explored_cells = int(explored_b.sum())
@@ -404,6 +400,17 @@ class EpisodeDiagnosticsRecorder:
 
         xy = robot_xy_from_agent(agent)
         traj = self._trajectory_poses() if (self.cfg.export_trajectory or include_trajectory) else None
+        rooms = None
+        gm = getattr(agent, "graph_memory", None)
+        if gm is not None:
+            try:
+                refresh = getattr(gm, "refresh_room_clusters", None)
+                if callable(refresh):
+                    rooms = list(refresh())
+                else:
+                    rooms = list(getattr(gm, "last_room_clusters", None) or [])
+            except Exception:
+                rooms = None
         img, _ = snapshot_eval_from_voxel_map(
             vm,
             xy,
@@ -411,6 +418,7 @@ class EpisodeDiagnosticsRecorder:
             min_map_side=self.cfg.min_map_side,
             trajectory_xyt=traj,
             filter_islands=self.cfg.filter_map_islands,
+            room_clusters=rooms,
         )
         return img
 
@@ -448,15 +456,13 @@ class EpisodeDiagnosticsRecorder:
         res = float(getattr(vm, "grid_resolution", 0.1) or 0.1)
         floor_y = self.habitat_floor_y
         if floor_y is None and isinstance(self.spawn_record, dict):
-            snapped = (self.spawn_record.get("init_pose_snapped") or {})
+            snapped = self.spawn_record.get("init_pose_snapped") or {}
             if isinstance(snapped, dict) and "y" in snapped:
                 floor_y = float(snapped["y"])
         if floor_y is None:
             floor_y = 0.0
         shape = (int(np.asarray(explored).shape[0]), int(np.asarray(explored).shape[1]))
-        return rasterize_habitat_navmesh_grid(
-            pf, shape, go, res, floor_y=float(floor_y)
-        )
+        return rasterize_habitat_navmesh_grid(pf, shape, go, res, floor_y=float(floor_y))
 
     def _maybe_snapshot_maps(self, agent: Any, *, root: Path) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -475,6 +481,10 @@ class EpisodeDiagnosticsRecorder:
                 map_path = root / "topdown_map.png"
                 _save_rgb_png(map_path, img)
                 out["topdown_map"] = str(map_path)
+                # Also keep an explicit rooms-annotated copy when clusters exist.
+                rooms_path = root / "topdown_rooms.png"
+                _save_rgb_png(rooms_path, img)
+                out["topdown_rooms"] = str(rooms_path)
 
         if self.cfg.export_gt_navmesh_map and gt_nav is not None:
             from emet.habitat.navmesh_topdown import habitat_gt_topdown_cropped
@@ -648,6 +658,7 @@ def flush_episode_diagnostics(
         return {}
     return recorder.flush(episode_dir, agent=agent)
 
+
 def habitat_export_voxel_history_default() -> bool:
     """Habitat runners enable voxel history unless explicitly disabled."""
     raw = os.environ.get("EMET_EVAL_EXPORT_VOXEL_HISTORY", "").strip().lower()
@@ -768,9 +779,7 @@ def _observation_history_row(
         "depth_median_m": depth_stats["median_m"],
         "n_world_points": n_world_points,
         "gps_camera_grid_delta_ij": (
-            [cam_ij_xy[0] - gps_grid_ij[0], cam_ij_xy[1] - gps_grid_ij[1]]
-            if gps_grid_ij is not None
-            else None
+            [cam_ij_xy[0] - gps_grid_ij[0], cam_ij_xy[1] - gps_grid_ij[1]] if gps_grid_ij is not None else None
         ),
     }
 
@@ -816,7 +825,6 @@ def _depth_summary(depth: Any) -> dict[str, float | None]:
     valid_frac = float(positive.size / max(1, flat.size))
     median_m = float(np.median(positive)) if positive.size else None
     return {"valid_frac": valid_frac, "median_m": median_m}
-
 
 
 def _save_rgb_png(path: Path, rgb: np.ndarray) -> None:
@@ -906,10 +914,7 @@ def _plot_floor_area_growth(series: list[dict[str, Any]], root: Path) -> Path | 
 
         steps = [int(r["step"]) for r in series]
         explored = [float(r["explored_area_m2"]) for r in series]
-        free = [
-            float(r["free_floor_area_m2"]) if "free_floor_area_m2" in r else float("nan")
-            for r in series
-        ]
+        free = [float(r["free_floor_area_m2"]) if "free_floor_area_m2" in r else float("nan") for r in series]
         has_free = any(np.isfinite(v) for v in free)
         fig, ax = plt.subplots(figsize=(6.5, 3.6), dpi=120)
         ax.plot(

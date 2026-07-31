@@ -634,12 +634,20 @@ class GraphEQAMemory:
         self.last_eqa_prompt_node_count: int = 0
         self.last_eqa_prompt_regions: int = 0
         self.last_eqa_spatial_rag: dict[str, Any] | None = None
+        self.last_room_clusters: list[Any] = []
         self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
+        # Frames attached to the last EQA call, kept for salvage / counterfactual re-asks.
+        self.last_relevant_images: list[Any] = []
+        # Decode-budget health: did the generation reach ``answer:``, and did the terse
+        # re-ask have to rescue it?
+        self.last_eqa_answer_field_emitted: bool = False
+        self.last_eqa_salvage_used: bool = False
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
+        self._room_clusters: list[Any] = []
         self._relation_beliefs: dict[tuple[int, int, str], RelationBelief] = {}
         self._change_events: list[dict[str, Any]] = []
         self._observations: list[GraphObservation] = []
@@ -800,11 +808,7 @@ class GraphEQAMemory:
             }
         )
         samples = np.asarray([entry["xyz"] for entry in history[-20:]], dtype=float)
-        covariance = (
-            np.cov(samples.T)
-            if samples.shape[0] >= 2
-            else np.zeros((3, 3), dtype=float)
-        )
+        covariance = np.cov(samples.T) if samples.shape[0] >= 2 else np.zeros((3, 3), dtype=float)
         return updated, covariance, history[-64:], changes[-32:], confidence
 
     def observe_visible_labels(
@@ -835,18 +839,10 @@ class GraphEQAMemory:
             expected_view = getattr(original, "viewer_xyz", None) if original is not None else None
             if expected_view is None:
                 continue
-            distance = float(
-                np.linalg.norm(
-                    np.asarray(expected_view, dtype=float).reshape(-1)[:2]
-                    - viewer[:2]
-                )
-            )
+            distance = float(np.linalg.norm(np.asarray(expected_view, dtype=float).reshape(-1)[:2] - viewer[:2]))
             if distance > float(viewpoint_tolerance_m):
                 continue
-            seen = any(
-                label_matches_relevant_object(node.labels[0], label)
-                for label in visible
-            )
+            seen = any(label_matches_relevant_object(node.labels[0], label) for label in visible)
             if seen:
                 self._nodes[index] = replace(
                     node,
@@ -917,6 +913,9 @@ class GraphEQAMemory:
         self.last_eqa_spatial_rag = None
         self.last_eqa_nav_fallback_count = 0
         self.last_eqa_model_confident = False
+        self.last_relevant_images = []
+        self.last_eqa_answer_field_emitted = False
+        self.last_eqa_salvage_used = False
 
     def invalidate_nodes_near(
         self,
@@ -1150,8 +1149,8 @@ class GraphEQAMemory:
                 ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
                 if float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m:
                     sc = int(existing.support_count) + 1
-                    new_xyz, covariance, history, changes, belief_confidence = (
-                        self._position_update(existing, xyz_a, step=step)
+                    new_xyz, covariance, history, changes, belief_confidence = self._position_update(
+                        existing, xyz_a, step=step
                     )
                     merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
                     new_desc = description if description else existing.description
@@ -1210,8 +1209,7 @@ class GraphEQAMemory:
             ],
             identity_key=(
                 description[len(GT_BODY_DESC_PREFIX) :]
-                if isinstance(description, str)
-                and description.startswith(GT_BODY_DESC_PREFIX)
+                if isinstance(description, str) and description.startswith(GT_BODY_DESC_PREFIX)
                 else f"{re.sub(r'[^a-z0-9]+', '-', primary).strip('-')}:{obs_id}"
             ),
         )
@@ -1275,8 +1273,8 @@ class GraphEQAMemory:
                 if existing.is_viewpoint:
                     break
                 sc = int(existing.support_count) + 1
-                new_xyz, covariance, history, changes, belief_confidence = (
-                    self._position_update(existing, xyz_a, step=step)
+                new_xyz, covariance, history, changes, belief_confidence = self._position_update(
+                    existing, xyz_a, step=step
                 )
                 merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
                 new_emb = embedding
@@ -1826,17 +1824,11 @@ class GraphEQAMemory:
                 nearest = min(
                     viewpoints,
                     key=lambda view: float(
-                        np.linalg.norm(
-                            np.asarray(view.xyz, dtype=float)[:2]
-                            - np.asarray(node.xyz, dtype=float)[:2]
-                        )
+                        np.linalg.norm(np.asarray(view.xyz, dtype=float)[:2] - np.asarray(node.xyz, dtype=float)[:2])
                     ),
                 )
                 distance = float(
-                    np.linalg.norm(
-                        np.asarray(nearest.xyz, dtype=float)[:2]
-                        - np.asarray(node.xyz, dtype=float)[:2]
-                    )
+                    np.linalg.norm(np.asarray(nearest.xyz, dtype=float)[:2] - np.asarray(node.xyz, dtype=float)[:2])
                 )
                 failure_risk = float(node.nav_failures) / max(1, int(node.nav_attempts))
                 if distance <= max(2.0, self.max_near_distance) and failure_risk < 0.8:
@@ -1877,6 +1869,144 @@ class GraphEQAMemory:
                     contradiction_count=int(old.contradiction_count) + 1,
                 )
         self._relation_beliefs = current
+        self.refresh_room_clusters()
+
+    def _room_link_radius_m(self) -> float:
+        env = os.environ.get("EMET_EQA_ROOM_LINK_RADIUS_M", "").strip()
+        if env:
+            try:
+                return float(env)
+            except ValueError:
+                pass
+        try:
+            return float(self._eqa_cfg_value("room_link_radius_m", 2.0))
+        except Exception:
+            return 2.0
+
+    def _room_assign_max_m(self) -> float:
+        env = os.environ.get("EMET_EQA_ROOM_ASSIGN_MAX_M", "").strip()
+        if env:
+            try:
+                return float(env)
+            except ValueError:
+                pass
+        try:
+            return float(self._eqa_cfg_value("room_assign_max_m", 3.0))
+        except Exception:
+            return 3.0
+
+    def refresh_room_clusters(self) -> list[Any]:
+        """Recompute near+planar connected components over object nodes."""
+        from emet.memory.graph_eqa.room_clusters import cluster_object_nodes
+
+        clusters = cluster_object_nodes(
+            self._nodes,
+            self._edges,
+            link_radius_m=self._room_link_radius_m(),
+        )
+        self._room_clusters = list(clusters)
+        self.last_room_clusters = list(clusters)
+        return self._room_clusters
+
+    def graph_room_at_robot(self, robot_xy: Any) -> str:
+        """Nearest graph room-cluster label at ``robot_xy``, or ``unknown``."""
+        from emet.memory.graph_eqa.room_clusters import estimate_room_at_xy
+
+        if not self._room_clusters:
+            self.refresh_room_clusters()
+        if robot_xy is None:
+            return "unknown"
+        try:
+            xy = (float(robot_xy[0]), float(robot_xy[1]))
+        except Exception:
+            return "unknown"
+        return estimate_room_at_xy(
+            self._room_clusters,
+            xy,
+            max_dist_m=self._room_assign_max_m(),
+        )
+
+    def format_rooms_line(self, *, max_chars: int = 200) -> str:
+        """Compact ``Rooms: …`` summary for router / memory prompts."""
+        from emet.memory.graph_eqa.room_clusters import format_rooms_compact
+
+        if not self._room_clusters:
+            self.refresh_room_clusters()
+        return format_rooms_compact(self._room_clusters, max_chars=max_chars)
+
+    def stamp_vlm_room_at_robot(self, robot_xy: Any, room: str | None) -> str:
+        """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown.
+
+        ``room`` should already be policy-coerced (canonical bucket or free-text phrase).
+        """
+        from emet.memory.graph_eqa.agentic_tools import sanitize_room_phrase
+        from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
+
+        name = sanitize_room_phrase(room)
+        if name == "unknown" or robot_xy is None:
+            return "unknown"
+        if not self._room_clusters:
+            self.refresh_room_clusters()
+        try:
+            xy = (float(robot_xy[0]), float(robot_xy[1]))
+        except Exception:
+            return "unknown"
+        self._room_clusters = stamp_room_at_xy(
+            self._room_clusters,
+            xy,
+            name,
+            max_dist_m=self._room_assign_max_m(),
+        )
+        self.last_room_clusters = list(self._room_clusters)
+        return name
+
+    def nearby_object_observations(
+        self,
+        robot_xy: Any,
+        *,
+        k: int = 3,
+        max_dist_m: float = 5.0,
+    ) -> list[dict[str, Any]]:
+        """Nearest object observations with RGB for multimodal router room context."""
+        if robot_xy is None or k <= 0:
+            return []
+        try:
+            rxy = np.asarray(robot_xy, dtype=float).reshape(-1)[:2]
+        except Exception:
+            return []
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for obs in list(getattr(self, "_observations", None) or []):
+            rgb = getattr(obs, "rgb", None)
+            if not isinstance(rgb, np.ndarray) or rgb.ndim != 3:
+                continue
+            labels = [str(x).strip() for x in list(getattr(obs, "labels", None) or []) if str(x).strip()]
+            if any(lab.lower() == "frontier" for lab in labels) and len(labels) <= 1:
+                continue
+            xyz = getattr(obs, "xyz", None)
+            if xyz is None:
+                continue
+            try:
+                oxy = np.asarray(xyz, dtype=float).reshape(-1)[:2]
+                dist = float(np.linalg.norm(oxy - rxy))
+            except Exception:
+                continue
+            if dist > float(max_dist_m):
+                continue
+            phrase = labels[0] if labels else f"obs_{int(obs.obs_id)}"
+            scored.append(
+                (
+                    dist,
+                    {
+                        "obs_id": int(obs.obs_id),
+                        "dist_m": round(dist, 2),
+                        "labels": labels[:6],
+                        "phrase": phrase,
+                        "rgb": np.asarray(rgb),
+                    },
+                )
+            )
+        scored.sort(key=lambda t: t[0])
+        return [item for _, item in scored[: int(k)]]
 
     def _node_nav_status_suffix(self, node: GraphNode) -> str:
         failures = int(getattr(node, "nav_failures", 0) or 0)
@@ -1915,6 +2045,21 @@ class GraphEQAMemory:
                 last_nav_at_step=st,
             )
         self.last_nav_result_note = note
+
+    @staticmethod
+    def strip_caption_block_from_history(text: str) -> str:
+        """Drop a leading ``Caption:`` block so HISTORY cannot reinforce caption loops."""
+        if not text:
+            return text
+        return re.sub(
+            r"(?is)^\s*Caption:\s*.*?(?=\n\s*(?:Reasoning|Answer)\s*:|\Z)",
+            "",
+            text,
+            count=1,
+        ).lstrip()
+
+    def _append_eqa_history(self, text: str) -> None:
+        self._history_outputs.append(self.strip_caption_block_from_history(text))
 
     def append_nav_outcome_to_last_history(self, *, dist_m: float, success: bool, note: str) -> None:
         if not self._history_outputs:
@@ -2031,11 +2176,7 @@ class GraphEQAMemory:
             s = ", ".join(labels) if labels else "object"
             return s if len(s) <= max_len else s[: max_len - 3] + "..."
 
-        if (
-            max_object_nodes is not None
-            and max_object_nodes > 0
-            and self._spatial_rag_enabled()
-        ):
+        if max_object_nodes is not None and max_object_nodes > 0 and self._spatial_rag_enabled():
             from emet.memory.graph_eqa.spatial_rag import (
                 format_regions_for_prompt,
                 select_spatial_regions,
@@ -2230,11 +2371,7 @@ class GraphEQAMemory:
         enrich_hints = getattr(self, "_enrich_object_hints", None) or []
         llm_parts = [s.strip() for s in out.split(",") if s.strip()]
         mcq_landmarks = location_mcq_landmark_phrases(question)
-        phrase_seed = (
-            list(enrich_hints)
-            + heuristic_relevant_phrases(question)
-            + list(mcq_landmarks)
-        )
+        phrase_seed = list(enrich_hints) + heuristic_relevant_phrases(question) + list(mcq_landmarks)
         if enrich_hints:
             for hint in enrich_hints:
                 h = hint.strip().lower()
@@ -2243,9 +2380,7 @@ class GraphEQAMemory:
         extra_seed = llm_parts + heuristic_relevant_objects(question) + list(mcq_landmarks)
         # Location MCQs need stem object + option landmarks in the same recall set.
         max_items = 8 if mcq_landmarks else 4
-        phrases, objects = consolidate_relevant_keywords(
-            phrase_seed, extra_seed, max_items=max_items
-        )
+        phrases, objects = consolidate_relevant_keywords(phrase_seed, extra_seed, max_items=max_items)
         self._relevant_phrases = phrases
         self._relevant_objects = objects
 
@@ -2285,11 +2420,7 @@ class GraphEQAMemory:
 
     def _node_for_obs(self, obs_id: int) -> GraphNode | None:
         return next(
-            (
-                node
-                for node in self._nodes
-                if int(node.obs_id) == int(obs_id) and not node.is_viewpoint
-            ),
+            (node for node in self._nodes if int(node.obs_id) == int(obs_id) and not node.is_viewpoint),
             None,
         )
 
@@ -2305,11 +2436,7 @@ class GraphEQAMemory:
             choices = []
         if not choices:
             return 1.0 if target_hit else 0.25
-        landmark_hit = any(
-            label_matches_relevant_object(choice, label)
-            for choice in choices
-            for label in labels
-        )
+        landmark_hit = any(label_matches_relevant_object(choice, label) for choice in choices for label in labels)
         if target_hit and landmark_hit:
             return 1.0
         if target_hit or landmark_hit:
@@ -2339,8 +2466,7 @@ class GraphEQAMemory:
         if robot_xyt is not None and np.asarray(robot_xyt).size >= 2:
             path_cost = float(
                 np.linalg.norm(
-                    np.asarray(hypothesis.xyz, dtype=float)[:2]
-                    - np.asarray(robot_xyt, dtype=float).reshape(-1)[:2]
+                    np.asarray(hypothesis.xyz, dtype=float)[:2] - np.asarray(robot_xyt, dtype=float).reshape(-1)[:2]
                 )
             )
         tier = float(_RECALL_SOURCE_TIER.get(str(hypothesis.source), 0.0))
@@ -2402,9 +2528,7 @@ class GraphEQAMemory:
         Ranking is **recall only** (source tier + keyword/landmark hit + distance
         tiebreak). The VLM router decides where to go among the returned cards.
         """
-        if not self._observations and not any(
-            getattr(n, "is_frontier", False) for n in self._nodes
-        ):
+        if not self._observations and not any(getattr(n, "is_frontier", False) for n in self._nodes):
             return []
         phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
         if not phrases and question:
@@ -2508,13 +2632,9 @@ class GraphEQAMemory:
             seen.add(int(node.obs_id))
         if not scored:
             return []
-        scored = [
-            self._recall_rank_score(hypothesis, question, robot_xyt)
-            for hypothesis in scored
-        ]
+        scored = [self._recall_rank_score(hypothesis, question, robot_xyt) for hypothesis in scored]
         scored.sort(key=lambda h: (-h.score, h.path_cost, -h.obs_id))
         return self._pack_diversified_hypotheses(scored, max_k)
-
 
     def retire_frontier_obs(self, obs_id: int) -> bool:
         """Drop a frontier node after visit — visited space is not a frontier."""
@@ -2561,11 +2681,7 @@ class GraphEQAMemory:
                 if int(o.obs_id) != oid:
                     continue
                 before = list(o.labels or [])
-                kept = [
-                    lab
-                    for lab in before
-                    if not label_matches_relevant_object(key_phrase, lab)
-                ]
+                kept = [lab for lab in before if not label_matches_relevant_object(key_phrase, lab)]
                 if len(kept) != len(before):
                     o.labels = kept if kept else ["object"]
                     stripped_obs += 1
@@ -2575,11 +2691,7 @@ class GraphEQAMemory:
                 if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
                     continue
                 before = list(n.labels or [])
-                kept = [
-                    lab
-                    for lab in before
-                    if not label_matches_relevant_object(key_phrase, lab)
-                ]
+                kept = [lab for lab in before if not label_matches_relevant_object(key_phrase, lab)]
                 if len(kept) != len(before):
                     self._nodes[i] = replace(
                         n,
@@ -3636,9 +3748,7 @@ class GraphEQAMemory:
                 from scipy.ndimage import binary_dilation
 
                 frontier = binary_dilation(exp) & ~exp & ~obs
-            n = count_frontier_in_footprint(
-                fp, frontier, xy_to_ij=xy_to_ij, resolution_m=res
-            )
+            n = count_frontier_in_footprint(fp, frontier, xy_to_ij=xy_to_ij, resolution_m=res)
             return coverage_from_frontier_count(n)
         except Exception as e:
             _logger.warning(f"place_coverage_for_obs({obs_id}) failed: {e}")
@@ -3654,11 +3764,7 @@ class GraphEQAMemory:
     ) -> list[np.ndarray]:
         """Legacy evenly spaced bearings (fallback when voxel sampling is unavailable)."""
         n_ap = max(1, int(n))
-        radius = float(
-            radius_m
-            if radius_m is not None
-            else max(0.85, float(self.image_nav_min_approach_m) + 0.5)
-        )
+        radius = float(radius_m if radius_m is not None else max(0.85, float(self.image_nav_min_approach_m) + 0.5))
         ax, ay = float(anchor[0]), float(anchor[1])
         if robot_xy is not None:
             rx, ry = robot_xy
@@ -3712,9 +3818,7 @@ class GraphEQAMemory:
                     frontier = None
                     if robot_xyt is not None and planner is not None:
                         if hasattr(voxel_map, "get_reachable_map"):
-                            reachable = _as_bool_numpy(
-                                voxel_map.get_reachable_map(robot_xyt, planner)
-                            )
+                            reachable = _as_bool_numpy(voxel_map.get_reachable_map(robot_xyt, planner))
                         if hasattr(voxel_map, "get_outside_frontier"):
                             outside = voxel_map.get_outside_frontier(robot_xyt, planner)
                             frontier = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
@@ -3734,12 +3838,8 @@ class GraphEQAMemory:
                     if xy is not None:
                         return np.array([float(xy[0]), float(xy[1]), 1.0], dtype=float)
                 except Exception as e:
-                    _logger.warning(
-                        f"annulus approach sample for obs_id={obs_id} failed: {e}"
-                    )
-        samples = self._orbit_approach_samples(
-            anchor, robot_xy, n=max(1, int(n_approaches))
-        )
+                    _logger.warning(f"annulus approach sample for obs_id={obs_id} failed: {e}")
+        samples = self._orbit_approach_samples(anchor, robot_xy, n=max(1, int(n_approaches)))
         idx = int(approach_index) % len(samples)
         return samples[idx]
 
@@ -3845,7 +3945,11 @@ class GraphEQAMemory:
             question_is_attribute_state,
             question_is_visibility_location,
         )
-        from emet.llms.eqa_vl_settings import get_eqa_vl_int
+        from emet.llms.eqa_vl_settings import (
+            get_eqa_vl_int,
+            resolve_eqa_answer_max_new_tokens,
+            resolve_eqa_include_image_descriptions,
+        )
 
         _t0 = _time.monotonic()
         _logger.info("query_answer: ensure_llm_clients…")
@@ -3858,6 +3962,7 @@ class GraphEQAMemory:
             _logger.info("query_answer: refresh_siglip_confirmed_memory…")
             self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
+        include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         forced: list[int] = []
@@ -3900,20 +4005,40 @@ class GraphEQAMemory:
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
         if obs_ids:
-            img_desc_str = self._get_image_descriptions_str(obs_ids)
+            if include_image_descriptions:
+                img_desc_str = self._get_image_descriptions_str(obs_ids)
+            else:
+                n = len(obs_ids)
+                img_desc_str = (
+                    f"Attached images: Image 1..{n} are RGB views; match them to SCENE_GRAPH "
+                    "nodes via Image tags on nodes. Do not re-list objects from the images."
+                )
         elif self._nav_samples:
             nav_fallback_tail = self._nav_samples[-max_images:]
-            lines = [
-                "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
-            ]
-            for i, nv in enumerate(nav_fallback_tail, start=1):
-                tail = f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
-                lines.append(
-                    f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
+            if include_image_descriptions:
+                lines = [
+                    "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
+                ]
+                for i, nv in enumerate(nav_fallback_tail, start=1):
+                    tail = (
+                        f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
+                    )
+                    lines.append(
+                        f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
+                    )
+                img_desc_str = "\n".join(lines)
+            else:
+                n = len(nav_fallback_tail)
+                img_desc_str = (
+                    f"Attached images: Image 1..{n} are navigation-only RGB views "
+                    "(no object graph nodes yet). Do not re-list objects from the images."
                 )
-            img_desc_str = "\n".join(lines)
         else:
-            img_desc_str = "IMAGE_DESCRIPTIONS: (none — explore for a real camera view before answering)"
+            img_desc_str = (
+                "IMAGE_DESCRIPTIONS: (none — explore for a real camera view before answering)"
+                if include_image_descriptions
+                else "Attached images: (none — explore for a real camera view before answering)"
+            )
 
         commands: list[Any] = ["Question: " + question]
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
@@ -3948,32 +4073,54 @@ class GraphEQAMemory:
             relevant_images.append(im)
             commands.append(im)
         self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
+        # Keep the attached frames reachable after query_answer returns so the salvage
+        # counterfactual can re-ask on the same images instead of silently no-op'ing.
+        self.last_relevant_images = list(relevant_images)
 
         _logger.info(
             f"query_answer: calling eqa_client (n_images={len(relevant_images)} "
-            f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f})…"
+            f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f} "
+            f"include_image_descriptions={include_image_descriptions} "
+            f"history_n={len(self._history_outputs)})…"
         )
+        assistant_prefill: str | None = None
         try:
             t_vl = _time.monotonic()
-            # Cap decode length for post-explore banks (full 512 made hung prefills worse).
-            ans_cap = int(os.environ.get("EMET_EQA_ANSWER_MAX_NEW_TOKENS", "256") or 256)
+            ans_cap = resolve_eqa_answer_max_new_tokens(self.parameters)
             eqa_kw: dict[str, Any] = {}
             if ans_cap > 0:
                 eqa_kw["max_new_tokens"] = ans_cap
+            # Force the first output field so Qwen cannot open with Caption: — prompt edits
+            # alone still left a 26% caption share on the 2026-07-30 q2 probe.
+            _variant = ""
+            if hasattr(self.parameters, "get"):
+                slash = self.parameters.get("eqa/prompt_variant", None)
+                if slash is not None and str(slash).strip():
+                    _variant = str(slash).strip().lower()
+                else:
+                    eqa_cfg = self.parameters.get("eqa", {}) or {}
+                    if isinstance(eqa_cfg, dict):
+                        _variant = str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
+            if _variant in ("hmeqa", "mcq"):
+                assistant_prefill = "Reasoning:"
+                eqa_kw["assistant_prefill"] = assistant_prefill
+            _logger.info(
+                f"query_answer: eqa_kw max_new_tokens={eqa_kw.get('max_new_tokens')} "
+                f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r}"
+            )
             try:
                 raw = self.eqa_client(commands, **eqa_kw)
             except TypeError:
                 # Older / test doubles that only accept the command list.
                 raw = self.eqa_client(commands)
             _logger.info(
-                f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} "
-                f"out_chars={len(raw or '')}"
+                f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}"
             )
         except Exception as exc:
             raw = f"Error: {exc}"
             self.last_eqa_raw = raw
             self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:Unknown\nReasoning:"
                 + str(exc)
                 + "\nConfidence:False\nAction:\nConfidence_reasoning:"
@@ -4007,6 +4154,10 @@ class GraphEQAMemory:
         # from inventing one out of nearest-furniture memory, which q104/q105 banned.
         _answer_field_emitted = bool(re.search(r"answer\s*:", answer_outputs))
         _truncated_before_answer = _ans_unknownish and not _answer_field_emitted
+        # Surfaced per episode so a decode-budget regression is visible in the results
+        # table instead of only showing up as a mysterious accuracy drop.
+        self.last_eqa_answer_field_emitted = _answer_field_emitted
+        self.last_eqa_salvage_used = False
         # Location MCQ: never invent A–D from memory, but do recover a truncated stream.
         _should_salvage = _ans_unknownish and (not _loc_mcq or _truncated_before_answer)
         if _loc_mcq and _ans_unknownish and not _ans_stripped:
@@ -4022,6 +4173,7 @@ class GraphEQAMemory:
                 answer = salvage
                 raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
                 self.last_eqa_raw = raw
+                self.last_eqa_salvage_used = True
         elif (
             parsed_choices
             and choices_are_location_mcq(parsed_choices)
@@ -4191,7 +4343,7 @@ class GraphEQAMemory:
                     nav_fallback_tail=nav_fallback_tail,
                     robot_xyt=xyt,
                 )
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:"
                 + raw_answer
                 + "\nReasoning:"
@@ -4204,7 +4356,7 @@ class GraphEQAMemory:
                 + confidence_reasoning
             )
         else:
-            self._history_outputs.append(
+            self._append_eqa_history(
                 "Answer:"
                 + raw_answer
                 + "\nReasoning:"

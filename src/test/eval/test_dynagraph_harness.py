@@ -22,6 +22,8 @@ def test_habitat_eqa_harness_profile_and_flags():
     assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
     assert params.get("dynagraph_merge_xy_m") == 0.45
     assert params.get("dynagraph_staleness_horizon") == 256
+    assert params.get("eqa/prompt_variant") == "hmeqa"
+    assert (params.get("eqa") or {}).get("prompt_variant") == "hmeqa"
     flags = dynagraph_harness_flags(params)
     assert flags["memory_summary"] is True
     assert flags["mcq_debias"] is False
@@ -35,6 +37,8 @@ def test_habitat_eqa_static_graph_baseline_flags():
         assert params.get("dynagraph_merge_xy_m") == 0.0
         assert params.get("dynagraph_staleness_horizon") == 0
         assert (params.get("dynagraph_harness") or {}).get("profile") == "static_graph"
+        assert params.get("eqa/prompt_variant") == "hmeqa"
+        assert (params.get("eqa") or {}).get("prompt_variant") == "hmeqa"
         flags = dynagraph_harness_flags(params)
         assert flags["memory_summary"] is False
         assert flags["mcq_debias"] is False

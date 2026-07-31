@@ -142,6 +142,7 @@ def dynamem_vllm_call(
     *,
     system_prompt: str | None,
     max_new_tokens: int,
+    assistant_prefill: str | None = None,
 ) -> str:
     """Dispatch to :meth:`generate_multimodal` for VLLM clients; otherwise ``__call__``."""
     if isinstance(client, AbstractVLLMClient):
@@ -150,5 +151,6 @@ def dynamem_vllm_call(
             system_prompt=system_prompt,
             max_new_tokens=max_new_tokens,
             reset_context=True,
+            assistant_prefill=assistant_prefill,
         )
     return client(user_content)

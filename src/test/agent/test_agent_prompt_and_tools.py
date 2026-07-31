@@ -28,6 +28,19 @@ def test_parse_strips_think_block():
     assert result["message"] == "Taking a picture."
 
 
+def test_parse_passes_through_current_room():
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = '{"current_room": "patio", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
+    result = parse_tool_calls_response(raw)
+    assert result["current_room"] == "patio"
+    assert result["tool_calls"][0]["name"] == "explore_frontier"
+    # CHAT-style replies without the field still work.
+    bare = parse_tool_calls_response('{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "hi"}')
+    assert "current_room" not in bare
+    assert bare["message"] == "hi"
+
+
 def test_parse_partial_think_block():
     """Parser handles partial think block where opening <think> was stripped by tokenizer."""
     from emet.agent.prompt import parse_tool_calls_response

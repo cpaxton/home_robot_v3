@@ -251,41 +251,72 @@ class AStar(Planner):
     def step_cost(self, current: tuple[int, int], nxt: tuple[int, int]) -> float:
         return self.compute_dis(current, nxt) + self._clearance_soft_cost(nxt)
 
-    def is_in_line_of_sight(self, start_pt: tuple[int, int], end_pt: tuple[int, int]) -> bool:
-        """Checks if there is a line-of-sight between two points.
+    def _cell_blocks_line_of_sight(self, x: int, y: int) -> bool:
+        """True if a grid cell is unsafe for path simplification chords.
 
-        Implements using Bresenham's line algorithm.
-
-        Args:
-            start_pt: The starting point.
-            end_pt: The ending point.
-
-        Returns:
-            Whether there is a line-of-sight between the two points.
+        Uses the same hard gate as search (``point_is_occupied`` / navigable ∩
+        ``min_clearance_m``). Explicit clearance check keeps LOS aligned with
+        clearance-aware A* even if navigable is stale.
         """
+        if self.point_is_occupied(x, y):
+            return True
+        min_c = float(self.min_clearance_m or 0.0)
+        if min_c > 0 and self._clearance_m is not None:
+            if self.clearance_at_pt((int(x), int(y))) < min_c:
+                return True
+        return False
 
-        dx = end_pt[0] - start_pt[0]
-        dy = end_pt[1] - start_pt[1]
+    def is_in_line_of_sight(self, start_pt: tuple[int, int], end_pt: tuple[int, int]) -> bool:
+        """Clearance-aware line-of-sight for path simplification.
+
+        Bresenham samples (with floor/ceil thickening) plus dense samples along the
+        continuous segment. Any obstacle / unexplored / below-``min_clearance_m``
+        cell rejects the chord so ``clean_path`` cannot cut corners into walls.
+        """
+        a = (int(start_pt[0]), int(start_pt[1]))
+        b = (int(end_pt[0]), int(end_pt[1]))
+        if a == b:
+            return not self._cell_blocks_line_of_sight(a[0], a[1])
+
+        dx = b[0] - a[0]
+        dy = b[1] - a[1]
+        start_pt, end_pt = a, b
 
         if abs(dx) > abs(dy):
             if dx < 0:
                 start_pt, end_pt = end_pt, start_pt
+                dx = -dx
+                dy = -dy
             for x in range(start_pt[0], end_pt[0] + 1):
                 yf = start_pt[1] + (x - start_pt[0]) / dx * dy
                 for y in list({math.floor(yf), math.ceil(yf)}):
-                    if self.point_is_occupied(x, y):
+                    if self._cell_blocks_line_of_sight(x, int(y)):
                         return False
-
         else:
             if dy < 0:
                 start_pt, end_pt = end_pt, start_pt
+                dx = -dx
+                dy = -dy
             for y in range(start_pt[1], end_pt[1] + 1):
                 xf = start_pt[0] + (y - start_pt[1]) / dy * dx
                 for x in list({math.floor(xf), math.ceil(xf)}):
-                    if self.point_is_occupied(x, y):
+                    if self._cell_blocks_line_of_sight(int(x), y):
                         return False
 
+        # Dense continuous samples catch thin diagonal gaps Bresenham can miss.
+        steps = max(abs(dx), abs(dy), 1) * 2
+        for k in range(1, steps):
+            t = k / float(steps)
+            xf = a[0] + t * (b[0] - a[0])
+            yf = a[1] + t * (b[1] - a[1])
+            for x in list({math.floor(xf), math.ceil(xf)}):
+                for y in list({math.floor(yf), math.ceil(yf)}):
+                    if self._cell_blocks_line_of_sight(int(x), int(y)):
+                        return False
         return True
+
+    # Alias used by docs / callers that want the clearance-aware name.
+    is_clearance_line_of_sight = is_in_line_of_sight
 
     def is_a_line(self, a, b, c):
         if a[0] == b[0]:
@@ -319,20 +350,14 @@ class AStar(Planner):
         return traj
 
     def clean_path(self, path) -> list[tuple[int, int]]:
-        """Cleans up the final path.
+        """Simplify path with clearance-aware line-of-sight.
 
-        This implements a simple algorithm where, given some current position,
-        we find the last point in the path that is in line-of-sight, and then
-        we set the current position to that point. This is repeated until we
-        reach the end of the path. This is not particularly efficient, but
-        it's simple and works well enough.
-
-        Args:
-            path: The path to clean up.
-
-        Returns:
-            The cleaned up path.
+        Given the current waypoint, jump to the farthest later waypoint that still
+        has clearance-safe LOS. Prefer keeping an original mid waypoint over an
+        unsafe chord (never invent a geometric midpoint that may be occupied).
         """
+        if not path:
+            return []
         cleaned_path = [path[0]]
         i = 0
         while i < len(path) - 1:
@@ -341,9 +366,14 @@ class AStar(Planner):
                     break
             else:
                 j = i + 1
-            # Include the mid waypoint to avoid the collision
-            if j - i >= 2 and self.point_is_occupied((path[i][0] + path[j][0]) // 2, (path[i][1] + path[j][1]) // 2):
-                cleaned_path.append(path[(i + j) // 2])
+            # Long chords: if the geometric midpoint is blocked but an original
+            # mid waypoint exists, keep that waypoint so we densify safely.
+            if j - i >= 2:
+                mid_i = (i + j) // 2
+                mx = (int(path[i][0]) + int(path[j][0])) // 2
+                my = (int(path[i][1]) + int(path[j][1])) // 2
+                if self._cell_blocks_line_of_sight(mx, my):
+                    cleaned_path.append(path[mid_i])
             cleaned_path.append(path[j])
             i = j
         return cleaned_path

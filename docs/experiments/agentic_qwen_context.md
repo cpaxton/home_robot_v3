@@ -34,8 +34,51 @@ graph labels + SigLIP hits + frontiers
   a visited frontier is not a frontier anymore.
 - **Explore:** agentic `explore_frontier` prefers `_vlm_frontier_choice` (≤6 reachable
   frontier RGBs) before uncovered heuristics; `agentic_max_nav_steps` default 8.
+- **Router `current_room`:** each VLM routing turn must emit top-level
+  ``current_room`` (patio / outdoor / kitchen / living_room / … / unknown).
+  Normalized and shown as ``Current room (router): …`` in the next state.
+  Object nodes are partitioned into room clusters
+  ([`room_clusters.py`](../../src/emet/memory/graph_eqa/room_clusters.py):
+  ``near`` edges + planar link radius + VLM-stamped names) →
+  ``Current room (graph): …``, compact ``Rooms: …``, ``room=`` on evidence cards,
+  and labels on saved ``topdown_map.png`` / ``topdown_rooms.png``. This is the
+  Hydra Layer-4 stand-in: belonging + hierarchy for the router (room then place),
+  **not** a hard leave-wrong-room override. Mismatch vs question targets is
+  traced as ``room_mismatch_diagnostic`` only.
+- **Agentic verify:** Qwen ``vlm_assess`` sets answerability / ``vlm_answerable``.
+  Paper-router default ``EMET_EQA_AGENTIC_VERIFIER=none`` (OWL/YoloE opt-in).
+  Tool name ``verify_siglip`` remains for traces; it is a proposal channel.
+  **Confirm gate** (default on, ``EMET_EQA_ANSWERABLE_CONFIRM``): raw
+  ``answerable`` does not unlock submit until phrase/inventory corroboration
+  **or** a second agreeing letter on another obs; ``need_more_views`` defers.
+  State shows ``pending_answer=B (need confirm)`` while deferred.
 - **Detectors** (SigLIP/OWL/YoloE): proposals in state only; do not unlock submit.
+- **Scored answer:** no `final_location_salvage` on the agentic path (honest Unknown
+  on exhaust). On location-MCQ exhaust the executor still runs one salvage VLM call
+  as a **counterfactual** (`final_location_salvage_counterfactual`, `applied=false`)
+  and writes `salvage_pred` / `salvage_correct` on the episode jsonl. Summaries report
+  both `accuracy_no_salvage` (official) and `accuracy_with_salvage` (counterfactual).
 - **Inspect episodes:** `uv run emet hmeqa inspect OUT --qid N [--open rgb]`.
+
+### rooms_verify_probe (not holdout-8)
+
+High-signal smoke for rooms + Qwen-verify changes (11 bal-32 ids, disjoint from
+holdout-8 ``15,56,65,68,79,88,104,105``):
+
+```text
+6,8,11,12,21,28,39,47,48,80,84
+```
+
+```bash
+OUT=~/runs/emet/hmeqa_rooms_verify_probe_$(date +%Y%m%d_%H%M%S)
+uv run emet hmeqa h2h "$OUT" --preset paper-router --arms agentic \
+  --ids 6,8,11,12,21,28,39,47,48,80,84 --job-name hmeqa-rooms-verify-probe
+```
+
+Pass: q48 may ``investigate`` dining hyps (no ``prefer_explore_redirect`` from
+room_mismatch); scored path has zero applied ``final_location_salvage`` (counterfactual
+events / ``salvage_pred`` ok); ``EMET_EQA_AGENTIC_VERIFIER=none``.
+Do **not** use holdout-8 ≥7/8 as the gate for this work.
 
 Paper method text: `paper/sections/03_method.tex` (§ Exploration and EQA loop);
 tools appendix: `paper/sections/appendix/07_agentic_eqa_tools.tex`.
@@ -56,8 +99,8 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
 | Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
-| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Recent actions** (last ~6 investigate/explore outcomes); after close+ABSENT, **Prefer explore_frontier** nudge; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
-| Agentic ``vlm_assess`` | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH) |
+| Agentic router ``build_state_message`` | live + nearby room crops (default ``EMET_EQA_ROUTER_ROOM_IMAGES=3``; ``0`` = text-only) | counts + **evidence cards** with ``room=``; **Current room (graph/router)** + ``Rooms:``; **Recent actions**; after VLM ``present=false``, soft **Prefer explore_frontier**; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
+| Agentic ``vlm_assess`` (verify gate) | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH); sets ``vlm_answerable`` / ANSWER |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
 
 ## Spatial RAG (prompt retrieval)

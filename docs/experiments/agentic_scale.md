@@ -32,7 +32,7 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 - Method: `dynagraph`
 - VLM: `Qwen/Qwen3-VL-8B-Instruct` (override with `EQA_HF_MODEL_ID` / `emet hmeqa h2h --eqa-hf-model-id`)
 - `explore_when_uncovered=off`, `--no-mcq-debias`, `--memory-summary`
-- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; paper-router preset sets router=1 + owlv2 + allow-unverified
+- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; paper-router preset sets router=1 + `agentic_verifier=none` (Qwen assess) + allow-unverified
 - Hyp recall: evidence cards (`EMET_EQA_HYP_RECALL_K`, default 6); visited frontiers retired from the graph — see [agentic_qwen_context.md](agentic_qwen_context.md#approach-current)
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
 - Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`; inspect with `emet hmeqa inspect OUT --qid N`
@@ -48,7 +48,7 @@ SigLIP is a **high-recall / high-false-positive** open-vocab scorer that **suppo
 | Full-frame / dense patch (image) | three-band: **ABSENT &lt; 0.10**, **CANDIDATE [0.10, 0.12)**, **PRESENT ≥ 0.12** | High-recall proposal; ABSENT = true-negative *for this view* (move on), not scene-level absence |
 | Voxel per-point (DynaMem `verify_point`) | bar **0.21** / confirm **0.28** | Stronger when dense map features exist; still not letter-level truth |
 
-**Explicit evidence policy:** `SEARCH → APPROACH → VERIFY → ASSESS → REPLAN → ANSWER`. `VERIFY` accepts exactly one fresh observation produced by `APPROACH`; stale router requests are rejected. `EvidenceRecord` retains full-frame, dense, voxel, detector, detector-crop, graph-label, geometry, and optional VLM channels. Image SigLIP / OWLv2 `PRESENT` is only a **proposal**. Answerability is **VLM-first**: text Qwen picks `target_phrase` once; multimodal Qwen assess on fresh RGB + inventory sets `answerable` / `ANSWER`. Cheap fusion never opens the submit gate alone. Non-advancing captures (`NO_NEW_OBS`) and one VLM assess per `obs_id` block re-verify spam.
+**Explicit evidence policy:** `SEARCH → APPROACH → VERIFY → ASSESS → REPLAN → ANSWER`. `VERIFY` accepts exactly one fresh observation produced by `APPROACH`; stale router requests are rejected. `EvidenceRecord` retains full-frame, dense, voxel, detector, detector-crop, graph-label, geometry, and optional VLM channels. Image SigLIP / OWLv2 `PRESENT` is only a **proposal**. Answerability is **VLM-first**: text Qwen picks `target_phrase` once; multimodal Qwen assess on fresh RGB + inventory proposes `answerable`. Submit unlock (`ANSWER` / `_verified`) requires hybrid **confirm** (default `EMET_EQA_ANSWERABLE_CONFIRM=1`): phrase/inventory corroboration **or** a second agreeing letter on another obs; `need_more_views` defers. Cheap fusion never opens the submit gate alone. Non-advancing captures (`NO_NEW_OBS`) and one VLM assess per `obs_id` block re-verify spam.
 
 **Region-aware exploration:** frontier clusters are navigation *regions*, ranked by expected area gain per unit travel (`frontier_regions.frontier_region_utility`) rather than nearest-cell distance, so a large room several meters away beats a sliver underfoot. Frontier `GraphNode`s carry `frontier_cell_count` and `frontier_keyword_score` from clustering. After two consecutive "target not visible" view assessments the executor sets an escape floor (`agent._explore_min_travel_m = 3 m`) that demotes nearby regions and disables SigLIP-guided frontier candidates, which otherwise re-aim at the area just rejected.
 
@@ -85,6 +85,9 @@ Same letter-balanced set as overnight scripts:
 # Preferred: overnight ladder (holdout gate → bal-32) or direct H2H
 uv run emet eval recover --need-mib 12000
 uv run emet hmeqa overnight
+# Pause / resume (same --base; skips DONE; RESUME=1 on partial H2H):
+#   uv run emet jobs cancel JOB_ID
+#   uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_… --job-name hmeqa-overnight
 # or:
 OUT=~/runs/emet/hmeqa_agentic_bal32_$(date +%Y%m%d_%H%M%S)
 uv run emet hmeqa h2h "$OUT" --preset paper-router --job-name hmeqa-bal32
@@ -107,17 +110,18 @@ uv run emet hmeqa significance --from-summary paper/data/hmeqa_agentic_h2h/balan
 - **Holdout variance (paper-router):** agentic **5/8** vs headline **8/8** — appendix/docs only.
 - **Go for efficiency claim** (agentic fewer planning steps vs classic on bal-32; ~3× on matched holdout-8). **Soft go on letter gap** for paper-router composite (50% vs 28%) with explicit cross-policy footnote; keep matched holdout-8 as the clean letter win.
 - Wave 2/3 agentic-113 for *accuracy* remains optional; classic-113 for the paper baseline is still useful.
+- Rooms + Qwen-verify probe (not holdout-8): ids `6,8,11,12,21,28,39,47,48,80,84` — see [`agentic_qwen_context.md`](agentic_qwen_context.md) § rooms_verify_probe.
 
 ## Wave: larger VLM (recipe only)
 
 Default first candidate: **Qwen3-VL-32B-Instruct int4**. During 8B int4 runs the 4090 shows ~13 GiB used / ~11 GiB free — 32B is a candidate with OOM risk, not ruled out.
 
-1. **Smoke (no Habitat):**  
-   `uv run python scripts/smoke_vl_model.py qwen3_vl Qwen/Qwen3-VL-32B-Instruct int4`  
+1. **Smoke (no Habitat):**
+   `uv run python scripts/smoke_vl_model.py qwen3_vl Qwen/Qwen3-VL-32B-Instruct int4`
    Record peak VRAM. Abort on OOM. Fallback: larger `gemma4` HF id from the registry, or `qwen3_5` 27B only if `fla` kernels OK.
-2. **Holdout-4 agentic** (ids `15,68,105,17`):  
+2. **Holdout-4 agentic** (ids `15,68,105,17`):
    `uv run emet hmeqa h2h --preset paper-router --arms agentic --ids 15,68,105,17 \
-     --eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct`  
+     --eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct`
    (or `EQA_HF_MODEL_ID=…` into `run_hmeqa_agentic_h2h.sh`).
 3. **Abort rules:** OOM / EGL fail streak / episode wall ≫ 2× 8B → stop; do **not** start bal-32.
 4. Optional holdout-8 only if holdout-4 looks healthy; bal-32 only after that.

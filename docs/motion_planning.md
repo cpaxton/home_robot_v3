@@ -56,6 +56,20 @@ Preset files: `src/emet/config/default_planner.yaml`, `a_star_planner.yaml`, `si
 
 **Important:** A\* is wired to `space.voxel_map.get_2d_map()` (navigable = explored ∧ ¬obstacle). RRT\* uses the same `is_valid` footprint check.
 
+### Clearance-safe path simplification (anti-stuck)
+
+Dynamem always post-processes A\* trajectories with `AStar.clean_path` / `clean_path_for_xy`. Line-of-sight is **clearance-aware**: Bresenham + dense samples reject any cell that is obstacle, unexplored, or below `min_clearance_m` (same hard gate as search). That stops LOS chords from cutting corners into walls after a clearance-preferring plan.
+
+Before exec, `_filter_unsafe_nav_traj` also checks mid-segments between waypoints. On `aborted_waypoint_timeout`, planner failure, or Habitat navmesh stuck/noop, Dynamem marks the goal in `_habitat_blocked_goals` so multi-goal / uncover explore skips it and replans elsewhere.
+
+Arm RRT-Connect wraps [`Shortcut`](../src/emet/motion/algo/shortcut.py); every mid-config from `ConfigurationSpace.extend` must validate (prefer no shorten over an unsafe chord).
+
+**Sim impact note:** HM-EQA agentic with `eqa.habitat_perfect_nav` routes `navigate_to_target_pose` / explore through **navmesh** (not A\* `clean_path`). Clearance-safe simplify mainly helps Molmo/Robocasa Dynamem and any Habitat path that falls back to voxel A\*. Stuck-goal marking still helps Habitat agentic when navmesh returns noop/stuck so frontiers are not re-picked. Expect modest holdout lifts vs baseline; do not treat a flat accuracy curve as a motion-planner failure.
+
+```bash
+uv run emet test src/test/motion/test_a_star_clearance.py src/test/motion/algo/test_rrt.py src/test/controller/test_nav_abort_blocked.py --no-sim -q
+```
+
 ---
 
 ## Arm kinematic planning (RRT-Connect)

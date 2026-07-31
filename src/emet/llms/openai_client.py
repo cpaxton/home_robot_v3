@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import base64
+import os
 from io import BytesIO
 from typing import Any
 
@@ -18,11 +19,38 @@ from PIL import Image
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
 
+def resolve_openai_base_url(base_url: str | None = None) -> str | None:
+    """Return OpenAI-compatible API base URL, or None for the public OpenAI default.
+
+    Precedence: explicit ``base_url`` arg, then ``EMET_OPENAI_BASE_URL``, then ``OPENAI_BASE_URL``.
+    """
+    if base_url is not None and str(base_url).strip():
+        return str(base_url).strip().rstrip("/")
+    for key in ("EMET_OPENAI_BASE_URL", "OPENAI_BASE_URL"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            return raw.rstrip("/")
+    return None
+
+
+def resolve_openai_api_key(api_key: str | None = None) -> str | None:
+    if api_key is not None and str(api_key).strip():
+        return str(api_key).strip()
+    for key in ("EMET_OPENAI_API_KEY", "OPENAI_API_KEY", "EMET_LLM_SERVE_API_KEY"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            return raw
+    # Local emet serve llm often has no auth; OpenAI SDK still wants a string.
+    return "emet-local"
+
+
 class OpenaiClient(AbstractLLMClient):
-    """Simple client for creating agents using an OpenAI API call.
+    """Client for OpenAI or any OpenAI-compatible HTTP server (e.g. ``emet serve llm``).
 
     Parameters:
         use_specific_objects(bool): override list of objects and have the AI only return those.
+        base_url: API root including ``/v1`` (or set ``EMET_OPENAI_BASE_URL``).
+        api_key: Bearer token (or ``OPENAI_API_KEY`` / ``EMET_LLM_SERVE_API_KEY``).
 
     TODO: add the support for audio input
     """
@@ -34,15 +62,22 @@ class OpenaiClient(AbstractLLMClient):
         prompt: str | AbstractPromptBuilder,
         prompt_kwargs: dict[str, Any] | None = None,
         model: str = "gpt-4o",
+        base_url: str | None = None,
+        api_key: str | None = None,
     ):
         super().__init__(prompt, prompt_kwargs)
         self.model = model
-        if self.model not in self.model_choices:
+        self.base_url = resolve_openai_base_url(base_url)
+        self.api_key = resolve_openai_api_key(api_key)
+        if self.base_url is None and self.model not in self.model_choices:
             print("Your GPT model:", self.model)
             print("Below are some recommended GPT models:")
             for model_choice in self.model_choices:
                 print(model_choice)
-        self._openai = OpenAI()
+        client_kwargs: dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url:
+            client_kwargs["base_url"] = self.base_url
+        self._openai = OpenAI(**client_kwargs)
 
     def _process_input(self, command, verbose=False):
         """
@@ -98,6 +133,8 @@ class OpenaiClient(AbstractLLMClient):
     def __call__(self, command: str | list, verbose: bool = False, tools: list | None = None):
         if verbose:
             print(f"{self.system_prompt=}")
+            if self.base_url:
+                print(f"base_url={self.base_url}")
 
         command = self._process_input(command, verbose=verbose)  # type:ignore
 

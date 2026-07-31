@@ -17,6 +17,7 @@ import signal
 import subprocess
 import time
 import uuid
+from collections import Counter
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Literal
@@ -70,6 +71,8 @@ class JobRecord:
     created_at: float = field(default_factory=_now)
     updated_at: float = field(default_factory=_now)
     meta: dict[str, Any] = field(default_factory=dict)
+    # Human “what / why” for queue visibility (``emet jobs`` list + status).
+    description: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -80,7 +83,30 @@ class JobRecord:
         kwargs = {k: v for k, v in data.items() if k in known}
         kwargs.setdefault("wait_pids", [])
         kwargs.setdefault("meta", {})
+        kwargs.setdefault("description", "")
+        # Legacy: some scripts stashed a note under meta.
+        if not str(kwargs.get("description") or "").strip():
+            meta = kwargs.get("meta") or {}
+            if isinstance(meta, dict):
+                for key in ("description", "note", "why"):
+                    val = meta.get(key)
+                    if isinstance(val, str) and val.strip():
+                        kwargs["description"] = val.strip()
+                        break
         return cls(**kwargs)
+
+
+def job_description(job: JobRecord) -> str:
+    """Resolved description for display (field, else legacy meta note)."""
+    text = str(job.description or "").strip()
+    if text:
+        return text
+    meta = job.meta or {}
+    for key in ("description", "note", "why"):
+        val = meta.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
 
 
 def _job_path(job_id: str) -> Path:
@@ -170,7 +196,12 @@ def register_job(
     status: JobStatus = "queued",
     meta: dict[str, Any] | None = None,
     job_id: str | None = None,
+    description: str | None = None,
 ) -> JobRecord:
+    desc = str(description or "").strip()
+    meta_dict = dict(meta or {})
+    if desc and "description" not in meta_dict:
+        meta_dict.setdefault("note", desc)
     job = JobRecord(
         id=job_id or _new_id(),
         name=str(name),
@@ -182,7 +213,8 @@ def register_job(
         log_path=str(log_path) if log_path is not None else None,
         repo=str(repo) if repo is not None else None,
         wait_pids=[int(p) for p in (wait_pids or [])],
-        meta=dict(meta or {}),
+        meta=meta_dict,
+        description=desc,
     )
     save_job(job)
     return job
@@ -203,10 +235,15 @@ def update_job(
     phase: str | None = None,
     current_id: str | None = None,
     write_progress_json: bool = True,
+    description: str | None = None,
 ) -> JobRecord:
     job = load_job(job_id)
     if job is None:
         raise KeyError(f"unknown job id: {job_id}")
+    if description is not None:
+        job.description = str(description).strip()
+        if job.description:
+            job.meta["note"] = job.description
     if status is not None:
         job.status = status
     if pid is not None:
@@ -504,10 +541,7 @@ def format_progress_brief(prog: JobProgress) -> str:
 
 
 def format_job_header() -> str:
-    return (
-        f"{'ID':<26}  {'STATUS':<10}  {'PID':>8}  {'AGE':>6}  {'NAME':<18}  "
-        f"{'PROGRESS':<28}  OUT"
-    )
+    return f"{'ID':<26}  {'STATUS':<10}  {'PID':>8}  {'AGE':>6}  {'NAME':<18}  {'PROGRESS':<28}  OUT"
 
 
 def format_job_row(job: JobRecord) -> str:
@@ -516,10 +550,13 @@ def format_job_row(job: JobRecord) -> str:
     out = _ellipsize(job.out_dir or "-", 40)
     prog = format_progress_brief(compute_job_progress(job))
     prog_s = _ellipsize(prog, 28)
-    return (
-        f"{job.id:<26}  {job.status:<10}  {pid_s:>8}  {_format_age(job.created_at):>6}  "
-        f"{name:<18}  {prog_s:<28}  {out}"
+    line = (
+        f"{job.id:<26}  {job.status:<10}  {pid_s:>8}  {_format_age(job.created_at):>6}  {name:<18}  {prog_s:<28}  {out}"
     )
+    desc = job_description(job)
+    if desc:
+        line = f"{line}\n  why: {_ellipsize(desc, 96)}"
+    return line
 
 
 @dataclass
@@ -617,12 +654,19 @@ def format_job_detail(job: JobRecord) -> str:
     lines = [
         f"id:        {job.id}",
         f"name:      {job.name}",
-        f"status:    {job.status}",
-        f"pid:       {job.pid if job.pid is not None else '-'}",
-        f"age:       {_format_age(job.created_at)}",
-        f"out_dir:   {job.out_dir or '-'}",
-        f"log_path:  {job.log_path or '-'}",
     ]
+    desc = job_description(job)
+    if desc:
+        lines.append(f"why:       {desc}")
+    lines.extend(
+        [
+            f"status:    {job.status}",
+            f"pid:       {job.pid if job.pid is not None else '-'}",
+            f"age:       {_format_age(job.created_at)}",
+            f"out_dir:   {job.out_dir or '-'}",
+            f"log_path:  {job.log_path or '-'}",
+        ]
+    )
     lines.extend(format_viz_artifact_lines(job.out_dir))
     if prog.source != "none":
         lines.append(f"progress:  {format_progress_brief(prog)}")
@@ -641,9 +685,7 @@ def format_job_detail(job: JobRecord) -> str:
     if job.meta:
         # Avoid dumping huge blobs; show progress-related keys first.
         interesting = {
-            k: job.meta[k]
-            for k in ("units_done", "units_total", "phase", "current_id", "note")
-            if k in job.meta
+            k: job.meta[k] for k in ("units_done", "units_total", "phase", "current_id", "note") if k in job.meta
         }
         if interesting:
             lines.append(f"meta:      {interesting}")
@@ -672,6 +714,7 @@ class EpisodeScore:
     confident: bool | None = None  # EQA VLM Confidence: (legacy alias of eqa_confident)
     verified: bool | None = None  # agentic verify / VLM-assess gate
     answerable: bool | None = None  # agentic policy ANSWER (from summary/trace)
+    answer_provenance: str | None = None  # forced-answer / submit channel tag
     path: str | None = None
 
     @property
@@ -747,9 +790,7 @@ def resolve_report_job(job_id: str | None = None) -> JobRecord | None:
         return active[0]
 
     terminal = [
-        refresh_job_liveness(j)
-        for j in list_jobs(include_terminal=True)
-        if j.status in TERMINAL_STATUSES and j.out_dir
+        refresh_job_liveness(j) for j in list_jobs(include_terminal=True) if j.status in TERMINAL_STATUSES and j.out_dir
     ]
     if not terminal:
         return None
@@ -805,11 +846,7 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
             if path.stat().st_size <= 0:
                 continue
             line = next(
-                (
-                    ln
-                    for ln in path.read_text(encoding="utf-8", errors="replace").splitlines()
-                    if ln.strip()
-                ),
+                (ln for ln in path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()),
                 "",
             )
             if not line:
@@ -831,6 +868,8 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
             qid,
             debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
         )
+        prov_raw = row.get("answer_provenance")
+        provenance = str(prov_raw).strip() if prov_raw not in (None, "") else None
         scores.append(
             EpisodeScore(
                 arm=arm,
@@ -842,11 +881,33 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
                 confident=eqa_conf if isinstance(eqa_conf, bool) else None,
                 verified=verified,
                 answerable=answerable,
+                answer_provenance=provenance,
                 path=str(path),
             )
         )
     scores.sort(key=lambda s: (s.arm, s.question_id))
     return scores
+
+
+def provenance_accuracy_breakdown(
+    episodes: list[EpisodeScore],
+) -> dict[str, dict[str, Any]]:
+    """Per ``answer_provenance`` n/correct/accuracy for scored episodes."""
+    counts: Counter[str] = Counter()
+    correct: Counter[str] = Counter()
+    for e in episodes:
+        if e.correct is None:
+            continue
+        key = (e.answer_provenance or "").strip() or "unset"
+        counts[key] += 1
+        if e.correct is True:
+            correct[key] += 1
+    out: dict[str, dict[str, Any]] = {}
+    for key in sorted(counts):
+        n = counts[key]
+        ok = correct[key]
+        out[key] = {"n": n, "correct": ok, "accuracy": (float(ok) / float(n)) if n else None}
+    return out
 
 
 def list_crash_markers(out_dir: str | Path | None) -> list[str]:
@@ -872,6 +933,9 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
     remaining = [q for q in planned if q not in scored_ids]
     n_ok = sum(1 for e in episodes if e.correct is True)
     n_fail = sum(1 for e in episodes if e.correct is False)
+    by_prov = provenance_accuracy_breakdown(episodes)
+    excl = [e for e in episodes if e.correct is not None and (e.answer_provenance or "") != "uniform_prior"]
+    excl_ok = sum(1 for e in excl if e.correct is True)
     return {
         "id": job.id,
         "name": job.name,
@@ -891,12 +955,21 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
         "n_correct": n_ok,
         "n_incorrect": n_fail,
         "n_scored": len(episodes),
+        "accuracy": (float(n_ok) / float(n_ok + n_fail)) if (n_ok + n_fail) else None,
+        "by_provenance": by_prov,
+        "n_excl_uniform_prior": len(excl),
+        "correct_excl_uniform_prior": excl_ok,
+        "accuracy_excl_uniform_prior": (float(excl_ok) / float(len(excl))) if excl else None,
         "crashes": list_crash_markers(job.out_dir),
         "episodes": [asdict(e) for e in episodes],
     }
 
 
-def format_job_report(job: JobRecord) -> str:
+def format_job_report(
+    job: JobRecord,
+    *,
+    fail_only: bool = False,
+) -> str:
     """Operator-facing progress + per-episode score table (default ``emet jobs report``)."""
     prog = compute_job_progress(job)
     episodes = collect_episode_scores(job.out_dir)
@@ -906,6 +979,8 @@ def format_job_report(job: JobRecord) -> str:
     crashes = list_crash_markers(job.out_dir)
     n_ok = sum(1 for e in episodes if e.correct is True)
     n_fail = sum(1 for e in episodes if e.correct is False)
+    n_scored = n_ok + n_fail
+    acc = (100.0 * n_ok / n_scored) if n_scored else None
 
     done_s = (
         f"{prog.units_done}/{prog.units_total}"
@@ -913,18 +988,15 @@ def format_job_report(job: JobRecord) -> str:
         else (str(prog.units_done) if prog.units_done is not None else f"{len(episodes)}/?")
     )
     eta_s = f"ETA {_format_duration(prog.eta_s)}" if prog.eta_s is not None else ""
-    rate_s = (
-        f"~{_format_duration(prog.rate_s_per_unit)}/ep"
-        if prog.rate_s_per_unit is not None
-        else ""
-    )
+    rate_s = f"~{_format_duration(prog.rate_s_per_unit)}/ep" if prog.rate_s_per_unit is not None else ""
     headline_bits = [f"{done_s} done", job.status]
     if eta_s:
         headline_bits.append(eta_s)
     if rate_s:
         headline_bits.append(rate_s)
     if n_ok or n_fail:
-        headline_bits.append(f"scored {n_ok} ok / {n_fail} fail")
+        acc_s = f"  ({acc:.0f}%)" if acc is not None else ""
+        headline_bits.append(f"scored {n_ok} ok / {n_fail} fail{acc_s}")
 
     lines = [
         "  ".join(headline_bits),
@@ -934,9 +1006,9 @@ def format_job_report(job: JobRecord) -> str:
     for viz_line in format_viz_artifact_lines(job.out_dir):
         # Re-indent status-style "viz:" / "feh:" lines for the report layout.
         if viz_line.startswith("viz:"):
-            lines.append("viz:  " + viz_line[len("viz:"):].lstrip())
+            lines.append("viz:  " + viz_line[len("viz:") :].lstrip())
         elif viz_line.startswith("feh:"):
-            lines.append("feh:  " + viz_line[len("feh:"):].lstrip())
+            lines.append("feh:  " + viz_line[len("feh:") :].lstrip())
         else:
             lines.append("      " + viz_line.strip())
     if prog.phase or prog.current_id:
@@ -945,17 +1017,44 @@ def format_job_report(job: JobRecord) -> str:
             cur = f" q{prog.current_id}" if str(prog.current_id).isdigit() else f" {prog.current_id}"
         lines.append(f"now:  {prog.phase or '-'}{cur}")
 
+    by_prov = provenance_accuracy_breakdown(episodes)
+    if by_prov:
+        bits = [f"{k}={v['correct']}/{v['n']}" for k, v in by_prov.items()]
+        excl = [e for e in episodes if e.correct is not None and (e.answer_provenance or "") != "uniform_prior"]
+        excl_ok = sum(1 for e in excl if e.correct is True)
+        excl_bit = ""
+        if excl and len(excl) < n_scored:
+            excl_bit = f"  excl_uniform={excl_ok}/{len(excl)}"
+        lines.append(f"prov: {'  '.join(bits)}{excl_bit}")
+
+    by_arm: dict[str, list[EpisodeScore]] = {}
+    for e in episodes:
+        by_arm.setdefault(e.arm, []).append(e)
+    if len(by_arm) > 1 and n_scored:
+        arm_bits = []
+        for arm_name, rows in sorted(by_arm.items()):
+            ok = sum(1 for e in rows if e.correct is True)
+            tot = sum(1 for e in rows if e.correct is not None)
+            if tot:
+                arm_bits.append(f"{arm_name} {ok}/{tot}")
+        if arm_bits:
+            lines.append("arms: " + "  |  ".join(arm_bits))
+
+    table_eps = [e for e in episodes if (e.correct is False) or not fail_only]
     if episodes:
         lines.append("")
+        if fail_only:
+            lines.append(f"fails only ({sum(1 for e in table_eps if e.correct is False)}):")
         lines.append(f"{'Q':>4}  {'arm':<8}  {'result':<5}  {'pred/gold':<10}  {'steps':>5}  conf")
-        for e in episodes:
+        for e in table_eps:
             pg = f"{e.predicted or '—'}/{e.gold or '—'}"
             steps = "-" if e.planning_steps is None else str(e.planning_steps)
-            lines.append(
-                f"{e.question_id:>4}  {e.arm:<8}  {e.result_label:<5}  {pg:<10}  {steps:>5}  {e.conf_cell()}"
-            )
+            lines.append(f"{e.question_id:>4}  {e.arm:<8}  {e.result_label:<5}  {pg:<10}  {steps:>5}  {e.conf_cell()}")
+        if not table_eps and fail_only:
+            lines.append("(no incorrect episodes)")
         if any(e.verified is not None or e.confident is not None for e in episodes):
             lines.append("conf: v=verify-gate  e=EQA Confidence: (a=answerable only if ≠ v)")
+        lines.append("tip:  emet jobs report JOB --question ID --rooms")
     else:
         lines.append("")
         lines.append("(no scored episode jsonl yet)")
@@ -1013,24 +1112,68 @@ def _episode_row_for_qid(out_dir: str | Path | None, qid: int, arm: str | None =
 
 
 def _find_agentic_trace(out_dir: str | Path | None, qid: int, row: dict[str, Any] | None) -> Path | None:
-    """Locate ``agentic_trace.jsonl`` for a question from the episode row or caches."""
+    """Locate ``agentic_trace.jsonl`` for a question from the episode row or caches.
+
+    Prefer the job ``OUT/bundles/`` copy over Habitat episode-cache paths — the
+    cache can lag H2H bundle copies (e.g. missing ``router_room`` / ``rooms_line``).
+    """
     candidates: list[Path] = []
-    if row:
-        bundle = row.get("debug_bundle_dir")
-        if bundle:
-            candidates.append(Path(bundle).expanduser() / "agentic_trace.jsonl")
     if out_dir:
         root = Path(out_dir).expanduser()
         candidates.append(root / "bundles" / f"agentic_q{qid}" / "agentic_trace.jsonl")
         candidates.extend(sorted(root.glob(f"bundles/agentic_q{qid}/**/agentic_trace.jsonl")))
+    if row:
+        bundle = row.get("debug_bundle_dir")
+        if bundle:
+            candidates.append(Path(bundle).expanduser() / "agentic_trace.jsonl")
     cache = Path.home() / ".cache" / "habitat_eqa" / "episodes"
     if cache.is_dir():
         candidates.append(cache / f"h2h_agentic_q{qid:04d}" / f"q{qid:04d}_dynagraph" / "agentic_trace.jsonl")
         candidates.extend(sorted(cache.glob(f"*q{qid:04d}*/**/agentic_trace.jsonl")))
+    seen: set[Path] = set()
     for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        if resolved in seen:
+            continue
+        seen.add(resolved)
         if path.is_file() and path.stat().st_size > 0:
             return path
     return None
+
+
+def job_record_for_out_dir(out_dir: str | Path, *, name: str | None = None) -> JobRecord:
+    """Synthetic job record so ``emet jobs report --out-dir`` works without a registry id."""
+    root = Path(out_dir).expanduser().resolve()
+    return JobRecord(
+        id="out-dir",
+        name=name or root.name,
+        status="done",
+        out_dir=str(root),
+    )
+
+
+def _find_episode_map_paths(out_dir: str | Path | None, qid: int, row: dict[str, Any] | None) -> list[str]:
+    """Topdown / room-label map paths for a question (OUT bundle preferred)."""
+    found: list[str] = []
+    roots: list[Path] = []
+    if out_dir:
+        roots.append(Path(out_dir).expanduser() / "bundles" / f"agentic_q{qid}")
+    if row and row.get("debug_bundle_dir"):
+        roots.append(Path(str(row["debug_bundle_dir"])).expanduser())
+    names = ("topdown_rooms.png", "topdown_map.png", "topdown_map_overlay.png")
+    seen: set[str] = set()
+    for root in roots:
+        for name in names:
+            path = root / name
+            if path.is_file():
+                key = str(path)
+                if key not in seen:
+                    seen.add(key)
+                    found.append(key)
+    return found
 
 
 def _load_trace_rows(path: Path | None) -> list[dict[str, Any]]:
@@ -1072,9 +1215,7 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
     phrases = sorted({str(r.get("phrase")) for r in verifies if r.get("phrase")})
     det_scores = [float(r["detector_score"]) for r in verifies if isinstance(r.get("detector_score"), (int, float))]
     abstains = [str(r.get("reason") or "") for r in rows if r.get("tool") == "abstain_unverified"]
-    fallback_submits = sum(
-        1 for r in rows if r.get("tool") == "submit_answer" and r.get("picked_by") == "fallback"
-    )
+    fallback_submits = sum(1 for r in rows if r.get("tool") == "submit_answer" and r.get("picked_by") == "fallback")
     seen: set[Any] = set()
     dup_verify_obs = sorted({o for o in verify_obs if o in seen or seen.add(o)})  # type: ignore[func-returns-value]
 
@@ -1131,11 +1272,7 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "status": r.get("status"),
             "nav_success": r.get("nav_success"),
             "target_xy": _xy2(r.get("target_xyz")),
-            "closest_m": (
-                round(float(r["closest_m"]), 3)
-                if isinstance(r.get("closest_m"), (int, float))
-                else None
-            ),
+            "closest_m": (round(float(r["closest_m"]), 3) if isinstance(r.get("closest_m"), (int, float)) else None),
             "place_inspect": r.get("place_inspect"),
             "station_obs_id": r.get("station_obs_id"),
         }
@@ -1170,18 +1307,11 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )
 
     nav_loop_blocked = sum(
-        1
-        for r in rows
-        if str(r.get("status") or "") == "NAV_LOOP_BLOCKED"
-        or r.get("tool") == "nav_loop_redirect"
+        1 for r in rows if str(r.get("status") or "") == "NAV_LOOP_BLOCKED" or r.get("tool") == "nav_loop_redirect"
     )
     station_inspects = [e for e in investigates if e.get("event") == "station_inspect"]
     closest_ms = [e["closest_m"] for e in station_inspects if e.get("closest_m") is not None]
-    place_ledger = [
-        str(e["place_inspect"])
-        for e in station_inspects
-        if e.get("place_inspect")
-    ]
+    place_ledger = [str(e["place_inspect"]) for e in station_inspects if e.get("place_inspect")]
 
     salvage = next(
         (
@@ -1189,12 +1319,28 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "letter": r.get("letter"),
                 "prior_answer": r.get("prior_answer"),
                 "n_images": r.get("n_images"),
+                "applied": True,
             }
             for r in rows
             if r.get("event") == "final_location_salvage"
         ),
         None,
     )
+    if salvage is None:
+        salvage = next(
+            (
+                {
+                    "letter": r.get("letter"),
+                    "prior_answer": r.get("prior_answer"),
+                    "n_images": r.get("n_images"),
+                    "applied": False,
+                    "counterfactual": True,
+                }
+                for r in rows
+                if r.get("event") == "final_location_salvage_counterfactual"
+            ),
+            None,
+        )
     summary = next((r for r in rows if r.get("tool") == "summary"), None)
     summary_bits: dict[str, Any] | None = None
     if summary is not None:
@@ -1216,6 +1362,76 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
         and "ABSENT" in e["place_inspect"]
         for e in station_inspects
     )
+
+    room_turns: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("event") != "router_room":
+            continue
+        targets = r.get("question_target_rooms")
+        if isinstance(targets, list):
+            target_list = [str(t) for t in targets]
+        elif isinstance(targets, set):
+            target_list = sorted(str(t) for t in targets)
+        else:
+            target_list = []
+        rooms_line = r.get("rooms_line")
+        room_turns.append(
+            {
+                "round": r.get("round"),
+                "merged": r.get("current_room"),
+                "vlm": r.get("current_room_vlm"),
+                "graph": r.get("current_room_graph"),
+                "rooms_line": str(rooms_line).strip() if rooms_line else "",
+                "question_target_rooms": target_list,
+                "prefer_explore_reason": str(r.get("prefer_explore_reason") or ""),
+                "tool_calls": list(r.get("tool_calls") or []),
+                "router_ms": (float(r["router_ms"]) if isinstance(r.get("router_ms"), (int, float)) else None),
+                "n_room_images": (
+                    int(r["n_room_images"]) if isinstance(r.get("n_room_images"), (int, float)) else None
+                ),
+            }
+        )
+
+    redirects = [
+        {
+            "round": r.get("round"),
+            "from": r.get("from") or r.get("from_tool"),
+            "to": r.get("to") or r.get("to_tool"),
+            "from_args": r.get("from_args") if isinstance(r.get("from_args"), dict) else {},
+        }
+        for r in rows
+        if r.get("event") == "prefer_explore_redirect"
+    ]
+
+    target_rooms: list[str] = []
+    for turn in room_turns:
+        if turn.get("question_target_rooms"):
+            target_rooms = list(turn["question_target_rooms"])
+            break
+    rooms_line_latest = ""
+    for turn in reversed(room_turns):
+        if turn.get("rooms_line"):
+            rooms_line_latest = str(turn["rooms_line"])
+            break
+    merged_seq = [str(t.get("merged") or "unknown") for t in room_turns]
+    n_mismatch = sum(
+        1
+        for t in room_turns
+        if t.get("prefer_explore_reason") == "room_mismatch"
+        or t.get("room_mismatch_diagnostic")
+        or t.get("prefer_explore_room_mismatch")
+    )
+    n_disagree = sum(
+        1
+        for t in room_turns
+        if t.get("vlm")
+        and t.get("graph")
+        and t["vlm"] != t["graph"]
+        and t["vlm"] != "unknown"
+        and t["graph"] != "unknown"
+    )
+    unique_rooms = sorted({m for m in merged_seq if m and m != "unknown"})
+    router_ms_vals = [float(t["router_ms"]) for t in room_turns if isinstance(t.get("router_ms"), (int, float))]
 
     return {
         "n_rows": len(rows),
@@ -1244,6 +1460,26 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "close_absent": close_absent,
         "salvage": salvage,
         "summary": summary_bits,
+        "rooms": {
+            "turns": room_turns,
+            "question_target_rooms": target_rooms,
+            "rooms_line": rooms_line_latest,
+            "merged_sequence": merged_seq,
+            "unique_rooms": unique_rooms,
+            "n_turns": len(room_turns),
+            "n_mismatch": n_mismatch,
+            "n_vlm_graph_disagree": n_disagree,
+            "n_prefer_explore_redirect": len(redirects),
+            "redirects": redirects,
+            "router_ms_mean": (sum(router_ms_vals) / len(router_ms_vals)) if router_ms_vals else None,
+            "router_ms_max": max(router_ms_vals) if router_ms_vals else None,
+            "n_room_images_mean": (
+                sum(int(t["n_room_images"]) for t in room_turns if t.get("n_room_images") is not None)
+                / max(1, sum(1 for t in room_turns if t.get("n_room_images") is not None))
+                if any(t.get("n_room_images") is not None for t in room_turns)
+                else None
+            ),
+        },
     }
 
 
@@ -1252,11 +1488,13 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
     row = _episode_row_for_qid(job.out_dir, qid, arm=arm)
     trace_path = _find_agentic_trace(job.out_dir, qid, row)
     trace = analyze_agentic_trace(_load_trace_rows(trace_path)) if trace_path else None
+    maps = _find_episode_map_paths(job.out_dir, qid, row)
     payload: dict[str, Any] = {
         "id": job.id,
         "question_id": qid,
         "found": row is not None,
         "trace_path": str(trace_path) if trace_path else None,
+        "maps": maps,
     }
     if row is not None:
         pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
@@ -1305,13 +1543,142 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
             "jsonl_path": row.get("_jsonl_path"),
         }
     if trace is not None:
+        rooms = trace.get("rooms")
+        if isinstance(rooms, dict) and not rooms.get("question_target_rooms"):
+            qtext = ""
+            if row is not None:
+                qtext = str(row.get("question") or "").strip()
+                choices = row.get("choices")
+                if isinstance(choices, (list, tuple)) and choices:
+                    letters = "ABCDEFGH"
+                    mcq = "\n".join(f"{letters[i]}) {c}" for i, c in enumerate(choices) if i < len(letters))
+                    qtext = f"{qtext}\n{mcq}".strip()
+                elif choices:
+                    qtext = f"{qtext} {choices}".strip()
+            if qtext:
+                try:
+                    from emet.memory.graph_eqa.room_clusters import question_target_rooms
+
+                    rooms["question_target_rooms"] = sorted(question_target_rooms(qtext))
+                except Exception:
+                    pass
         payload["trace"] = trace
     return payload
 
 
-def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> str:
+_QUESTION_REPORT_SECTIONS = (
+    "summary",
+    "rooms",
+    "router",
+    "nav",
+    "assess",
+    "verify",
+    "flags",
+)
+
+
+def _normalize_report_sections(
+    sections: list[str] | tuple[str, ...] | None,
+    *,
+    rooms_focus: bool = False,
+    brief: bool = False,
+) -> set[str]:
+    if rooms_focus:
+        return {"summary", "rooms", "flags"}
+    if sections:
+        out: set[str] = set()
+        for raw in sections:
+            for part in str(raw).lower().replace(" ", "").split(","):
+                if part in ("all", "*"):
+                    return set(_QUESTION_REPORT_SECTIONS)
+                if part:
+                    out.add(part)
+        return out or set(_QUESTION_REPORT_SECTIONS)
+    if brief:
+        return {"summary", "rooms", "router", "flags"}
+    return set(_QUESTION_REPORT_SECTIONS)
+
+
+def _format_rooms_section(rooms: dict[str, Any], *, verbose: bool = False) -> list[str]:
+    """Pretty room timeline for ``emet jobs report -q …``."""
+
+    def _turn_line(t: dict[str, Any]) -> list[str]:
+        reason = str(t.get("prefer_explore_reason") or "")
+        reason_s = f"  [{reason}]" if reason else ""
+        tools = t.get("tool_calls") or []
+        tool_s = ",".join(str(x) for x in tools) if tools else "-"
+        vlm = t.get("vlm") or "?"
+        graph = t.get("graph") or "?"
+        merged = t.get("merged") or "?"
+        disagree = " *" if (vlm != graph and vlm != "unknown" and graph != "unknown") else ""
+        out = [f"  r{t.get('round')}: {merged:<12}  vlm={vlm:<12} graph={graph:<12}{disagree}  → {tool_s}{reason_s}"]
+        if verbose and t.get("rooms_line"):
+            out.append(f"         {t['rooms_line']}")
+        return out
+
+    lines: list[str] = ["── rooms ──"]
+    targets = rooms.get("question_target_rooms") or []
+    if targets:
+        lines.append(f"targets: {', '.join(targets)}")
+    else:
+        lines.append("targets: (none / not logged)")
+    rooms_line = rooms.get("rooms_line") or ""
+    if rooms_line:
+        lines.append(rooms_line if rooms_line.startswith("Rooms:") else f"Rooms: {rooms_line}")
+    else:
+        lines.append("Rooms: (not logged — re-run with newer router_room trace)")
+    seq = rooms.get("merged_sequence") or []
+    if seq:
+        compact: list[str] = []
+        for name in seq:
+            if not compact or compact[-1] != name:
+                compact.append(str(name))
+        lines.append(f"path:   {' → '.join(compact)}")
+    lines.append(
+        f"turns={rooms.get('n_turns', 0)}  "
+        f"mismatch={rooms.get('n_mismatch', 0)}  "
+        f"vlm≠graph={rooms.get('n_vlm_graph_disagree', 0)}  "
+        f"redirects={rooms.get('n_prefer_explore_redirect', 0)}"
+    )
+    router_ms = [
+        float(t["router_ms"]) for t in (rooms.get("turns") or []) if isinstance(t.get("router_ms"), (int, float))
+    ]
+    # Also accept top-level if we add it later; primary is per-turn in analyze.
+    if not router_ms and isinstance(rooms.get("router_ms_mean"), (int, float)):
+        router_ms = [float(rooms["router_ms_mean"])]
+    if router_ms:
+        mean_ms = sum(router_ms) / len(router_ms)
+        lines.append(
+            f"router_ms: mean={mean_ms:.0f}  min={min(router_ms):.0f}  max={max(router_ms):.0f}  n={len(router_ms)}"
+        )
+    turns = list(rooms.get("turns") or [])
+    if not verbose and len(turns) > 10:
+        for t in turns[:8]:
+            lines.extend(_turn_line(t))
+        lines.append(f"  … (+{len(turns) - 10} turns)")
+        for t in turns[-2:]:
+            lines.extend(_turn_line(t))
+    else:
+        for t in turns:
+            lines.extend(_turn_line(t))
+    for red in (rooms.get("redirects") or [])[: (12 if verbose else 6)]:
+        lines.append(f"  redirect r{red.get('round')}: {red.get('from')} → {red.get('to')}")
+    return lines
+
+
+def format_question_report(
+    job: JobRecord,
+    qid: int,
+    arm: str | None = None,
+    *,
+    sections: list[str] | tuple[str, ...] | None = None,
+    rooms_focus: bool = False,
+    verbose: bool = False,
+    brief: bool = False,
+) -> str:
     """Human-readable per-question deep dive (episode row + agentic trace signals)."""
     data = question_report_dict(job, qid, arm=arm)
+    want = _normalize_report_sections(sections, rooms_focus=rooms_focus, brief=brief)
     lines = [f"q{qid}  job {job.id}  ({job.name})"]
     if not data["found"]:
         lines.append(f"(no scored jsonl for q{qid} under {job.out_dir or '-'})")
@@ -1325,22 +1692,23 @@ def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> 
     result = "ok" if ep["correct"] is True else ("FAIL" if ep["correct"] is False else "?")
     pg = f"{ep['predicted'] or '—'}/{ep['gold'] or '—'}"
     conf_s = ep.get("conf_detail") or str(ep.get("confident"))
-    lines.append(f"result: {result}  pred/gold {pg}  steps {ep['planning_steps']}  conf {conf_s}")
-    if ep.get("verified") is not None or ep.get("confident") is not None:
-        lines.append(
-            f"gate: verified={ep.get('verified')} answerable={ep.get('answerable')}  "
-            f"eqa_Confidence={ep.get('confident')}"
-        )
-    if ep.get("arm") or ep.get("scene"):
-        lines.append(f"arm/scene: {ep.get('arm') or '-'} / {ep.get('scene') or '-'}")
-    if ep.get("question"):
-        lines.append(f"Q: {str(ep['question'])[:200]}")
-    if ep.get("choices"):
-        lines.append(f"choices: {ep['choices']}")
-    if ep.get("error"):
-        lines.append(f"error: {ep['error']}")
-    if ep.get("confidence_reasoning"):
-        lines.append(f"reason: {str(ep['confidence_reasoning'])[:220]}")
+    if "summary" in want:
+        lines.append(f"result: {result}  pred/gold {pg}  steps {ep['planning_steps']}  conf {conf_s}")
+        if ep.get("verified") is not None or ep.get("confident") is not None:
+            lines.append(
+                f"gate: verified={ep.get('verified')} answerable={ep.get('answerable')}  "
+                f"eqa_Confidence={ep.get('confident')}"
+            )
+        if ep.get("arm") or ep.get("scene"):
+            lines.append(f"arm/scene: {ep.get('arm') or '-'} / {ep.get('scene') or '-'}")
+        if ep.get("question"):
+            lines.append(f"Q: {str(ep['question'])[:200]}")
+        if ep.get("choices") and not brief:
+            lines.append(f"choices: {ep['choices']}")
+        if ep.get("error"):
+            lines.append(f"error: {ep['error']}")
+        if ep.get("confidence_reasoning") and verbose:
+            lines.append(f"reason: {str(ep['confidence_reasoning'])[:220]}")
 
     trace = data.get("trace")
     if not trace:
@@ -1348,108 +1716,147 @@ def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> 
         lines.append("trace: (none found)")
         return "\n".join(lines)
 
-    lines.append("")
-    lines.append(f"trace: {data['trace_path']}")
-    summ = trace.get("summary") or {}
-    if summ:
-        lines.append(
-            f"summary: answer={summ.get('final_answer')} conf={summ.get('confidence')} "
-            f"verified={summ.get('verified')} rounds={summ.get('n_rounds')} "
-            f"nav={summ.get('n_nav')} explore={summ.get('n_explore')} "
-            f"budget_hit={summ.get('budget_hit')}"
-        )
-    lines.append(
-        f"actions: investigate={trace.get('n_investigate', 0)} "
-        f"station={trace.get('n_station_inspect', 0)} "
-        f"explore={trace.get('n_explore', 0)} "
-        f"nav_loop_blocked={trace.get('n_nav_loop_blocked', 0)} "
-        f"min_closest_m={trace.get('min_closest_m')}"
-    )
-    if trace.get("hypotheses"):
-        hyp_bits = []
-        for h in trace["hypotheses"][:6]:
-            hyp_bits.append(
-                f"obs={h.get('obs_id')} {h.get('source')}:{h.get('phrase')!r} xy={h.get('xy')}"
-            )
-        lines.append("hyp: " + " | ".join(hyp_bits))
-    if trace.get("router_picks"):
-        picks = trace["router_picks"]
-        shown = picks if len(picks) <= 12 else picks[:10] + [f"…(+{len(picks) - 10})"]
-        lines.append(f"router: {' → '.join(shown)}")
-    if trace.get("investigates"):
-        for e in trace["investigates"]:
-            if e.get("event") == "station_inspect":
-                lines.append(
-                    f"  station r{e.get('round')} obs={e.get('obs_id')} "
-                    f"closest={e.get('closest_m')}m  {e.get('place_inspect')}"
-                )
-            elif e.get("status") == "NAV_LOOP_BLOCKED" or e.get("ok") is False:
-                lines.append(
-                    f"  investigate r{e.get('round')} obs={e.get('obs_id')} "
-                    f"BLOCKED status={e.get('status')}"
-                )
-            else:
-                lines.append(
-                    f"  investigate r{e.get('round')} obs={e.get('obs_id')} "
-                    f"nav={e.get('nav_success')} target={e.get('target_xy')}"
-                )
-    if trace.get("explores"):
-        ex = []
-        for e in trace["explores"][:8]:
-            ex.append(f"r{e.get('round')}:{e.get('source')}@{e.get('xy')}")
-        lines.append("explore: " + " | ".join(ex))
-    if trace.get("assesses"):
-        for a in trace["assesses"][:8]:
-            reason = a.get("reason") or ""
+    if "summary" in want:
+        lines.append("")
+        lines.append(f"trace: {data['trace_path']}")
+        summ = trace.get("summary") or {}
+        if summ:
             lines.append(
-                f"  assess r{a.get('round')} obs={a.get('obs_id')} "
-                f"present={a.get('present')} ans={a.get('answerable')}  {reason}"
+                f"summary: answer={summ.get('final_answer')} conf={summ.get('confidence')} "
+                f"verified={summ.get('verified')} rounds={summ.get('n_rounds')} "
+                f"nav={summ.get('n_nav')} explore={summ.get('n_explore')} "
+                f"budget_hit={summ.get('budget_hit')}"
             )
-    if trace.get("place_ledger"):
-        lines.append("ledger: " + " || ".join(trace["place_ledger"][:4]))
-    if trace.get("salvage"):
-        s = trace["salvage"]
         lines.append(
-            f"salvage: letter={s.get('letter')} prior={s.get('prior_answer')} "
-            f"n_images={s.get('n_images')}"
+            f"actions: investigate={trace.get('n_investigate', 0)} "
+            f"station={trace.get('n_station_inspect', 0)} "
+            f"explore={trace.get('n_explore', 0)} "
+            f"nav_loop_blocked={trace.get('n_nav_loop_blocked', 0)} "
+            f"min_closest_m={trace.get('min_closest_m')}"
         )
+        maps = data.get("maps") or []
+        if maps:
+            lines.append("maps:  " + "  |  ".join(maps[:3]))
 
-    lines.append(f"tools: {trace['tool_counts']}")
-    if trace["phrases"]:
-        lines.append(f"verify phrases: {trace['phrases']}")
-    md = trace["max_detector_score"]
-    lines.append(
-        f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  "
-        f"max_detector={md:.3f}" if md is not None else
-        f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  max_detector=-"
-    )
-    lines.append(f"capture_obs: {trace['capture_obs']}")
-    lines.append(f"verify_obs:  {trace['verify_obs']}")
+    rooms = trace.get("rooms") or {}
+    if "rooms" in want:
+        lines.append("")
+        lines.extend(_format_rooms_section(rooms, verbose=verbose))
+        if not rooms.get("n_turns"):
+            lines.append("  (no router_room events — older trace)")
 
-    flags: list[str] = []
-    if trace["duplicate_verify_obs"]:
-        flags.append(f"stale re-verify obs {trace['duplicate_verify_obs']}")
-    if trace["fallback_submits"] >= 3:
-        flags.append(f"{trace['fallback_submits']} fallback submit picks")
-    if trace["n_verify"] and not trace["answerable_any"]:
-        flags.append("never answerable (presence≠sufficiency or weak detect)")
-    if len(trace["phrases"]) == 1 and any(
-        w in trace["phrases"][0].lower() for w in ("already", "sets ", "how many")
-    ):
-        flags.append(f"suspect verify phrase {trace['phrases'][0]!r}")
-    if trace.get("n_nav_loop_blocked", 0) >= 2:
-        flags.append(f"nav-loop blocked x{trace['n_nav_loop_blocked']} (re-investigate same place)")
-    if trace.get("close_absent"):
-        flags.append("close look (≤0.6m) still ABSENT — VLM miss or wrong surface")
-    if trace.get("n_explore", 0) >= 3 and not trace.get("present_any"):
-        flags.append("explore-heavy with no present assess")
-    if flags:
-        lines.append("RED FLAGS: " + "; ".join(flags))
-    else:
-        lines.append("red flags: none")
+    if "router" in want:
+        lines.append("")
+        lines.append("── router ──")
+        if trace.get("hypotheses"):
+            hyp_bits = []
+            limit = 10 if verbose else 6
+            for h in trace["hypotheses"][:limit]:
+                hyp_bits.append(f"obs={h.get('obs_id')} {h.get('source')}:{h.get('phrase')!r} xy={h.get('xy')}")
+            lines.append("hyp: " + " | ".join(hyp_bits))
+        if trace.get("router_picks"):
+            picks = trace["router_picks"]
+            lim = 20 if verbose else 12
+            shown = picks if len(picks) <= lim else picks[: lim - 2] + [f"…(+{len(picks) - lim + 2})"]
+            lines.append(f"picks: {' → '.join(shown)}")
 
-    if trace["abstain_reasons"]:
-        lines.append("abstain: " + " | ".join(trace["abstain_reasons"][-2:]))
+    if "nav" in want and not brief:
+        lines.append("")
+        lines.append("── nav ──")
+        if trace.get("investigates"):
+            for e in trace["investigates"]:
+                if e.get("event") == "station_inspect":
+                    lines.append(
+                        f"  station r{e.get('round')} obs={e.get('obs_id')} "
+                        f"closest={e.get('closest_m')}m  {e.get('place_inspect')}"
+                    )
+                elif e.get("status") == "NAV_LOOP_BLOCKED" or e.get("ok") is False:
+                    lines.append(
+                        f"  investigate r{e.get('round')} obs={e.get('obs_id')} BLOCKED status={e.get('status')}"
+                    )
+                else:
+                    lines.append(
+                        f"  investigate r{e.get('round')} obs={e.get('obs_id')} "
+                        f"nav={e.get('nav_success')} target={e.get('target_xy')}"
+                    )
+        if trace.get("explores"):
+            ex = []
+            for e in trace["explores"][: (12 if verbose else 8)]:
+                ex.append(f"r{e.get('round')}:{e.get('source')}@{e.get('xy')}")
+            lines.append("explore: " + " | ".join(ex))
+        if trace.get("place_ledger") and verbose:
+            lines.append("ledger: " + " || ".join(trace["place_ledger"][:4]))
+        if trace.get("salvage"):
+            s = trace["salvage"]
+            kind = "counterfactual" if s.get("counterfactual") or s.get("applied") is False else "applied"
+            lines.append(
+                f"salvage({kind}): letter={s.get('letter')} prior={s.get('prior_answer')} n_images={s.get('n_images')}"
+            )
+
+    if "assess" in want and not brief:
+        assesses = trace.get("assesses") or []
+        if assesses:
+            lines.append("")
+            lines.append("── assess ──")
+            limit = len(assesses) if verbose else min(8, len(assesses))
+            for a in assesses[:limit]:
+                reason = a.get("reason") or ""
+                if not verbose and len(reason) > 100:
+                    reason = reason[:97] + "…"
+                lines.append(
+                    f"  r{a.get('round')} obs={a.get('obs_id')} "
+                    f"present={a.get('present')} ans={a.get('answerable')}  {reason}"
+                )
+            if not verbose and len(assesses) > limit:
+                lines.append(f"  … (+{len(assesses) - limit} more)")
+
+    if "verify" in want and not brief:
+        lines.append("")
+        lines.append("── verify ──")
+        lines.append(f"tools: {trace['tool_counts']}")
+        if trace["phrases"]:
+            lines.append(f"phrases: {trace['phrases']}")
+        md = trace["max_detector_score"]
+        lines.append(
+            f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  max_detector={md:.3f}"
+            if md is not None
+            else f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  max_detector=-"
+        )
+        if verbose or not brief:
+            lines.append(f"capture_obs: {trace['capture_obs']}")
+            lines.append(f"verify_obs:  {trace['verify_obs']}")
+
+    if "flags" in want:
+        flags: list[str] = []
+        if trace["duplicate_verify_obs"]:
+            flags.append(f"stale re-verify obs {trace['duplicate_verify_obs']}")
+        if trace["fallback_submits"] >= 3:
+            flags.append(f"{trace['fallback_submits']} fallback submit picks")
+        if trace["n_verify"] and not trace["answerable_any"]:
+            flags.append("never answerable (presence≠sufficiency or weak detect)")
+        if len(trace["phrases"]) == 1 and any(
+            w in trace["phrases"][0].lower() for w in ("already", "sets ", "how many")
+        ):
+            flags.append(f"suspect verify phrase {trace['phrases'][0]!r}")
+        if trace.get("n_nav_loop_blocked", 0) >= 2:
+            flags.append(f"nav-loop blocked x{trace['n_nav_loop_blocked']} (re-investigate same place)")
+        if trace.get("close_absent"):
+            flags.append("close look (≤0.6m) still ABSENT — VLM miss or wrong surface")
+        if trace.get("n_explore", 0) >= 3 and not trace.get("present_any"):
+            flags.append("explore-heavy with no present assess")
+        rooms = trace.get("rooms") or {}
+        if rooms.get("n_mismatch", 0) >= 2 and rooms.get("n_prefer_explore_redirect", 0) == 0:
+            # Diagnostic only after Hydra-aligned rooms (no hard leave-wrong-room).
+            flags.append("room_mismatch diagnostic (informational; no hard redirect)")
+        if rooms.get("n_vlm_graph_disagree", 0) >= 3:
+            flags.append(f"vlm≠graph on {rooms['n_vlm_graph_disagree']} router turns")
+        lines.append("")
+        if flags:
+            lines.append("RED FLAGS: " + "; ".join(flags))
+        else:
+            lines.append("red flags: none")
+        if trace["abstain_reasons"]:
+            lines.append("abstain: " + " | ".join(trace["abstain_reasons"][-2:]))
     return "\n".join(lines)
 
 

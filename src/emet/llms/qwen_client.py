@@ -119,6 +119,9 @@ class Qwen25Client(AbstractLLMClient):
 
         print(f"Loading model: {model_name}")
         model_kwargs = {"dtype": "auto"}
+        if device == "cpu":
+            # Prefer fp16 on CPU so larger Qwen checkpoints fit (Orin has ~61 GiB RAM).
+            model_kwargs["dtype"] = torch.float16
 
         quantization_config = None
         if quantization is not None:
@@ -379,8 +382,10 @@ class Qwen25VLClient(AbstractVLLMClient):
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **pretrained_kw)
         except (ValueError, RuntimeError) as e:
             err = str(e).lower()
-            recoverable = device == "cuda" and quantization_config is not None and (
-                "dispatched" in err or "disk" in err or "out of memory" in err or "expanded size" in err
+            recoverable = (
+                device == "cuda"
+                and quantization_config is not None
+                and ("dispatched" in err or "disk" in err or "out of memory" in err or "expanded size" in err)
             )
             if not recoverable:
                 raise
@@ -435,6 +440,7 @@ class Qwen25VLClient(AbstractVLLMClient):
         reset_context: bool = True,
         verbose: bool = False,
         image: Any | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         if reset_context:
             self.reset()

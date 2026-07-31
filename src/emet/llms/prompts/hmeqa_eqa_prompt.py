@@ -2,18 +2,29 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""EQA system prompt for HM-EQA multiple-choice (A–D) questions in Habitat."""
+"""EQA system prompt for HM-EQA multiple-choice (A–D) questions in Habitat.
 
-from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+The decode budget, not the reasoning, was the binding constraint here. In the
+2026-07-29 bal-32 run 31 of 32 answer generations ran into the 256-token cap and 21
+never emitted ``answer:`` at all, so a terse re-ask had to salvage the letter. The
+cause was the caption: it took ~40% of the generated text on average (88% on q2) to
+re-list IMAGE_DESCRIPTIONS that were already in the prompt.
+
+Instructing the model not to caption does not work. The 2026-07-30 q2 probe appended
+an override after the examples and still got a full caption block using 48% of the
+output, because the shared :data:`EQA_PROMPT` asks for a caption once and demonstrates
+one five times. So the caption is removed at the source with
+:func:`without_caption`, and the override below only tightens what remains.
+"""
+
+from emet.llms.prompts.eqa_prompt import EQA_PROMPT, without_caption
 
 _HMEQA_HEADER = """
         HM-EQA questions are multiple-choice. The question text includes options A, B, C, and D.
         Your final Answer must be exactly one letter: A, B, C, or D (not yes/no prose).
         Always output these fields in order with lowercase labels on their own lines:
-        caption:, reasoning:, answer:, confidence:, action:, confidence_reasoning:
-        Caption only the attached images (Image 1 .. Image N in the user message). One short phrase per image.
-        Do not caption scene-graph nodes or IMAGE_DESCRIPTIONS entries that are not attached as images.
-        After a brief caption, you must output reasoning:, answer:, confidence:, action:, and confidence_reasoning:.
+        reasoning:, answer:, confidence:, action:, confidence_reasoning:
+        Do NOT output a caption: field.
         The answer: line must contain only a single letter (A, B, C, or D). Never leave answer: blank.
         If uncertain, still output your best-guess letter on answer: and set confidence: FALSE.
 """
@@ -26,20 +37,18 @@ _HMEQA_MCQ_EXAMPLE = """
                 B. The lamp is off.
                 C. There is no lamp.
                 D. The lamp is broken.
-                IMAGE: <2 images>
-                IMAGE_DESCRIPTIONS: <10 image descriptions>
+                SCENE_GRAPH: Node 3: floor lamp at (1.2, -0.4) [Image 1]
+                IMAGE: <2 RGB frames>
             Output:
-                Caption:
-                    Image 1 shows a living room with a floor lamp; the shade is lit.
                 Reasoning:
-                    The lamp shade is glowing, so the lamp is on. That matches option A.
+                    Image 1 shows the floor lamp with a glowing shade, so the lamp is on.
                 Answer:
                     A
                 Confidence:
                     TRUE
                 Action:
                 Confidence_reasoning:
-                    I can see the lit lamp clearly in Image 1.
+                    The lit lamp is clearly visible in Image 1.
 
         Example (visibility + location — pick WHERE, not yes/no):
             Input:
@@ -49,13 +58,11 @@ _HMEQA_MCQ_EXAMPLE = """
                 C) Next to the dining table
                 D) Next to the living room armchairs
                 CONFIRMED_MEMORY: woven basket: PRESENT — 1 graph node(s) at (-6.5, 3.6)
-                IMAGE: <2 images>
+                SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
+                IMAGE: <2 RGB frames>
             Output:
-                Caption:
-                    Image 1 shows a living room seating area; the basket is not in frame.
                 Reasoning:
-                    CONFIRMED_MEMORY shows the woven basket was observed near (-6.5, 3.6).
-                    That location is closest to the living room armchairs (option D).
+                    CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.
                 Answer:
                     D
                 Confidence:
@@ -65,4 +72,20 @@ _HMEQA_MCQ_EXAMPLE = """
                     Graph memory confirms the basket; option D matches that area.
 """
 
-HMEQA_EQA_PROMPT = _HMEQA_HEADER + EQA_PROMPT + _HMEQA_MCQ_EXAMPLE
+_HMEQA_FORMAT_OVERRIDE = """
+        OUTPUT FORMAT — this governs every example above:
+
+        1. Do NOT write a caption: block. Your first line is reasoning:.
+        2. reasoning: at most three sentences. Do not re-list objects from the attached RGB
+           frames, and do not copy scene-graph coordinates unless they decide the answer.
+           Cite an Image N or SCENE_GRAPH node only when it decides the letter.
+        3. answer: exactly one letter, A, B, C, or D, on its own line. Emit this before you
+           elaborate on anything else. Never leave it blank.
+        4. confidence: TRUE or FALSE. action: image id or empty. confidence_reasoning: one
+           short sentence.
+
+        You have a limited output budget. Spending it describing images instead of answering
+        counts as a wrong answer.
+"""
+
+HMEQA_EQA_PROMPT = _HMEQA_HEADER + without_caption(EQA_PROMPT) + _HMEQA_MCQ_EXAMPLE + _HMEQA_FORMAT_OVERRIDE

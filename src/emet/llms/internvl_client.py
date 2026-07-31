@@ -54,9 +54,7 @@ def _content_to_internvl_messages(
                     }
                 )
             else:
-                raise NotImplementedError(
-                    "InternVL: only str, PIL, ndarray supported in list content."
-                )
+                raise NotImplementedError("InternVL: only str, PIL, ndarray supported in list content.")
     messages.append({"role": "user", "content": parts})
     return messages
 
@@ -94,9 +92,7 @@ class InternVLClient(AbstractVLLMClient):
         self._resolved_hf_model_id = hf_model_id
         self._quantization = quantization
         dtype = (
-            torch_dtype
-            if isinstance(torch_dtype, torch.dtype)
-            else getattr(torch, str(torch_dtype), torch.bfloat16)
+            torch_dtype if isinstance(torch_dtype, torch.dtype) else getattr(torch, str(torch_dtype), torch.bfloat16)
         )
 
         model_kwargs: dict[str, Any] = {}
@@ -146,10 +142,7 @@ class InternVLClient(AbstractVLLMClient):
         except (ValueError, RuntimeError) as e:
             err = str(e).lower()
             recoverable = device == "cuda" and (
-                "dispatched" in err
-                or "disk" in err
-                or "out of memory" in err
-                or "cuda out of memory" in err
+                "dispatched" in err or "disk" in err or "out of memory" in err or "cuda out of memory" in err
             )
             if not recoverable:
                 raise
@@ -164,9 +157,7 @@ class InternVLClient(AbstractVLLMClient):
             )
             self._device = "cpu"
             self._quantization = None
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                source, dtype=dtype, **local_kw
-            )
+            self.model = AutoModelForImageTextToText.from_pretrained(source, dtype=dtype, **local_kw)
             self.model = self.model.to("cpu")
         else:
             if device == "cpu" and quantization_config is None:
@@ -193,13 +184,12 @@ class InternVLClient(AbstractVLLMClient):
         reset_context: bool = True,
         verbose: bool = False,
         image: Any | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         if reset_context:
             self.reset()
         sys_use = system_prompt if system_prompt is not None else (self.system_prompt or None)
-        messages = _content_to_internvl_messages(
-            user_content, system_prompt=sys_use, image=image
-        )
+        messages = _content_to_internvl_messages(user_content, system_prompt=sys_use, image=image)
         ntok = max_new_tokens if max_new_tokens is not None else self.max_tokens
         t0 = timeit.default_timer()
         inputs = self.processor.apply_chat_template(

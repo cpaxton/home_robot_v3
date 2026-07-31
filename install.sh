@@ -20,11 +20,13 @@ FORCE_DOWNLOAD="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
 INSTALL_LINGBOT_MAP="false"
-# standard | minimal | full (full = install sim without passing --sim; default profile is full)
+# standard | minimal | full | jetson (full = install sim without passing --sim; default profile is full)
 PROFILE="${EMET_INSTALL_PROFILE:-full}"
 # Set when user passes --sim, --no-sim, or --all (all implies sim)
 SIM_EXPLICIT=""
 PREV_PROFILE=""
+# Jetson Orin / Tegra: lean sync (no sim/SAM2/Molmo); set by --profile=jetson or --jetson
+JETSON_INSTALL="false"
 
 for arg in "$@"; do
     if [ "$PREV_PROFILE" = "1" ]; then
@@ -47,6 +49,9 @@ for arg in "$@"; do
         --cpu)
             CPU_ONLY="true"
             NO_SAM2="true"
+            ;;
+        --jetson)
+            PROFILE="jetson"
             ;;
         --no-sam2)
             NO_SAM2="true"
@@ -93,12 +98,28 @@ if [ -z "$SIM_EXPLICIT" ]; then
         full|legacy)
             INSTALL_SIM="true"
             ;;
+        jetson|orin|tegra)
+            PROFILE="jetson"
+            JETSON_INSTALL="true"
+            INSTALL_SIM="false"
+            NO_SAM2="true"
+            NO_MOLMOSPACES="true"
+            INSTALL_MOLMOSPACES="false"
+            CPU_ONLY="true"
+            ;;
         minimal|standard|"" )
             ;;
         *)
-            echo "WARNING: unknown EMET_INSTALL_PROFILE/--profile=$PROFILE (use minimal, standard, or full). Using standard."
+            echo "WARNING: unknown EMET_INSTALL_PROFILE/--profile=$PROFILE (use minimal, standard, full, or jetson). Using standard."
             ;;
     esac
+elif [ "$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')" = "jetson" ] \
+    || [ "$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')" = "orin" ] \
+    || [ "$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')" = "tegra" ]; then
+    # Explicit --sim with --profile=jetson is unusual; still mark jetson packaging mode.
+    PROFILE="jetson"
+    JETSON_INSTALL="true"
+    NO_SAM2="true"
 fi
 
 # With sim on, install MolmoSpaces wrapper by default (separate venv) so `emet serve mujoco
@@ -111,9 +132,10 @@ fi
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES LINGBOT_MAP=$INSTALL_LINGBOT_MAP NO_MOLMOSPACES=$NO_MOLMOSPACES"
+echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES LINGBOT_MAP=$INSTALL_LINGBOT_MAP NO_MOLMOSPACES=$NO_MOLMOSPACES JETSON=$JETSON_INSTALL"
 echo "         Defaults: profile=full enables sim when third_party/robocasa exists (use --no-sim or --profile=minimal to skip)."
 echo "         EMET_INSTALL_PROFILE=standard  or  --profile=minimal  = no sim unless you also pass --sim."
+echo "         --profile=jetson / --jetson = Orin/Tegra lean install (MuJoCo pip + dev; no SAM2/Molmo/Robocasa clone)."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or use --all"
 echo "         --all       = sim + molmospaces + dynamem bundle (same as --sim --molmospaces when wrapper package exists)"
 echo "         --sim       = uv sim extra + install_simulation.sh (Robocasa + robosuite)"
@@ -165,17 +187,37 @@ echo "Using uv: $(uv --version)"
 # Skip when DOCKER=1 (image already has deps; container often has no sudo)
 echo ""
 echo "[3/5] Checking system dependencies..."
+APT_PKGS=(libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh)
+if [ "$JETSON_INSTALL" = "true" ]; then
+    # sdist builds on aarch64: sophuspy, scikit-fmm, pyliblzfse, PyAudio, simpleaudio, etc.
+    APT_PKGS+=(libopenblas-dev libopenmpi-dev libomp-dev cmake ninja-build pkg-config python3-dev libavformat-dev libavcodec-dev libavutil-dev libavdevice-dev libavfilter-dev)
+fi
 if [ -n "${DOCKER:-}" ]; then
     echo "  -> Skipping apt (DOCKER=1); image has deps."
 elif [ "$SKIP_ASKING" = "true" ]; then
-    sudo apt-get update || true
-    sudo apt-get install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh
+    if sudo -n true 2>/dev/null; then
+        sudo apt-get update || true
+        sudo apt-get install -y "${APT_PKGS[@]}"
+    else
+        echo "  -> sudo not available non-interactively; skipping apt."
+        echo "     If builds fail, install manually: sudo apt-get install ${APT_PKGS[*]}"
+        missing=0
+        for pkg in "${APT_PKGS[@]}"; do
+            if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+                echo "     missing: $pkg"
+                missing=1
+            fi
+        done
+        if [ "$missing" -eq 1 ]; then
+            echo "  -> Continuing anyway; compile-from-sdist steps may fail without the packages above."
+        fi
+    fi
 else
-    echo "Required packages: libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh"
-    echo "Install with: sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh"
+    echo "Required packages: ${APT_PKGS[*]}"
+    echo "Install with: sudo apt-get install ${APT_PKGS[*]}"
     read -p "Install these now? (y/n) " yn
     case $yn in
-        y|Y) sudo apt-get update || true; sudo apt-get install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh ;;
+        y|Y) sudo apt-get update || true; sudo apt-get install -y "${APT_PKGS[@]}" ;;
         *) echo "Skipping. You may need to install these manually." ;;
     esac
 fi
@@ -189,7 +231,14 @@ git lfs install || { echo "Install git-lfs: sudo apt-get install git-lfs"; exit 
 echo ""
 echo "[5/5] Creating virtual environment and installing dependencies..."
 UV_SYNC=(uv sync)
-if [[ "$NO_SAM2" == "true" ]]; then
+if [ "$JETSON_INSTALL" = "true" ]; then
+    # Lean Orin install: skip SAM-2 / mediapipe / da3; keep pytest + MuJoCo (CLI imports sim paths).
+    export UV_PYTHON="${UV_PYTHON:-3.10}"
+    export EMET_ALLOW_SDPA_ATTN="${EMET_ALLOW_SDPA_ATTN:-1}"
+    UV_SYNC+=(--no-default-groups --group dev --group sim)
+    echo "  -> Jetson profile: UV_PYTHON=$UV_PYTHON  EMET_ALLOW_SDPA_ATTN=$EMET_ALLOW_SDPA_ATTN"
+    echo "  -> PyPI torch on aarch64 is CPU (or server-CUDA) — Tegra CUDA needs an NVIDIA Jetson wheel or build-from-source."
+elif [[ "$NO_SAM2" == "true" ]]; then
     UV_SYNC+=(--no-group dynamem)
 fi
 if [ ! -d "third_party/robocasa" ] || [ ! -d "third_party/robosuite" ]; then
@@ -378,6 +427,13 @@ echo "  source .venv/bin/activate"
 echo ""
 echo "Run the CLI:  emet  (if linked above) or  uv run emet"
 echo ""
+if [ "$JETSON_INSTALL" = "true" ]; then
+    echo "Jetson profile notes:"
+    echo "  - EMET_ALLOW_SDPA_ATTN=1 (no Triton/flash-attn on Tegra)"
+    echo "  - PyPI torch on aarch64 is not Tegra-CUDA; see docs/jetson.md"
+    echo "  - depth-anything-3 / pycolmap are skipped on aarch64 (use workstation DA3)"
+    echo ""
+fi
 if [ "$INSTALL_SIM" = "true" ] && [ "$INSTALL_MOLMOSPACES" != "true" ]; then
     if [ "$NO_MOLMOSPACES" = "true" ]; then
         echo "MolmoSpaces: skipped (--no-molmospaces). For \`emet serve mujoco --molmospaces-*\` run:  ./install.sh --molmospaces -y"

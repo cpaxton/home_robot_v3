@@ -57,6 +57,7 @@ harness:
     # Default profile for dynagraph method only; static_graph overrides below.
     profile: unified_eqa
     dynagraph:
+      prompt_variant: hmeqa
       memory_summary: true
       mcq_debias: false
       explore_when_uncovered: conservative
@@ -66,6 +67,7 @@ harness:
     static_graph:
       # GraphEQA-inspired static row: no merge/staleness, no Dynagraph extras.
       profile: static_graph
+      prompt_variant: hmeqa
       memory_summary: false
       mcq_debias: false
       explore_when_uncovered: "off"

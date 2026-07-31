@@ -229,6 +229,8 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
 
     tool_calls: list[dict[str, Any]] = []
     message = ""
+    current_room: str | None = None
+    in_target_area: bool | None = None
     if data is not None:
         raw_tc = data.get("tool_calls", [])
         if isinstance(raw_tc, list):
@@ -256,6 +258,19 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
                         args = {}
                     tool_calls.append({"name": item["name"], "arguments": args})
         message = _normalize_message_field(data.get("message", ""))
+        # Optional EQA router fields (CHAT ignores). Pass through when present.
+        if "current_room" in data and data.get("current_room") is not None:
+            current_room = str(data.get("current_room")).strip() or None
+        if "in_target_area" in data and data.get("in_target_area") is not None:
+            raw_ita = data.get("in_target_area")
+            if isinstance(raw_ita, bool):
+                in_target_area = raw_ita
+            else:
+                s = str(raw_ita).strip().lower()
+                if s in {"1", "true", "yes", "on"}:
+                    in_target_area = True
+                elif s in {"0", "false", "no", "off"}:
+                    in_target_area = False
 
     # Total failure: no dict — treat whole reply as natural language unless it looks like broken JSON.
     if data is None:
@@ -266,7 +281,12 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
             return {"tool_calls": [], "message": ""}
         return {"tool_calls": [], "message": response}
 
-    return {"tool_calls": tool_calls, "message": message}
+    out: dict[str, Any] = {"tool_calls": tool_calls, "message": message}
+    if current_room is not None:
+        out["current_room"] = current_room
+    if in_target_area is not None:
+        out["in_target_area"] = in_target_area
+    return out
 
 
 class AgentPromptBuilder:

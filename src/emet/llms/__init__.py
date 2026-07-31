@@ -6,23 +6,26 @@
 #
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
-from typing import Union
+"""LLM client registry.
+
+Heavy backends (Qwen / Gemma / transformers) are imported lazily inside
+``get_llm_client`` so lightweight paths (``OpenaiClient``, ``emet serve llm`` HTTP
+helpers) work on Jetson aarch64 without pulling sklearn/libgomp at import time.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, Union
 
 from .base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient, VLInferenceKind
 from .chat_wrapper import LLMChatWrapper
-from .gemma4_any_client import Gemma4AnyToAnyClient
-from .gemma4_vllm_client import Gemma4VLLMClient
-from .gemma_client import GemmaClient
-from .llama_client import LlamaClient
 from .openai_client import OpenaiClient
 from .prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
 from .prompts.ok_robot_prompt import OkRobotPromptBuilder
 from .prompts.pickup_prompt import PickupPromptBuilder
 from .prompts.simple_prompt import SimpleStretchPromptBuilder
-from .qwen_client import QWEN_VL_PRESETS, Qwen25Client, Qwen25VLClient, get_qwen35_variants, get_qwen_variants
 
-# This is a list of all the modules that are imported when you use the import * syntax.
-# The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
 __all__ = [
     "Gemma4AnyToAnyClient",
     "Gemma4VLLMClient",
@@ -44,6 +47,8 @@ __all__ = [
     "GEMMA4_PRESETS",
     "GEMMA4_VLM_PRESETS",
     "is_vl_llm_key",
+    "get_llm_client",
+    "get_llm_choices",
 ]
 
 # Gemma 4 small (E2B / E4B) on HF ``any-to-any``; keys must be matched before the generic ``"gemma" in client_type`` branch.
@@ -58,68 +63,33 @@ GEMMA4_VLM_PRESETS: dict[str, str] = {
     "gemma4-vlm-e4b": "google/gemma-4-E4B-it",
 }
 
-llms = {
-    "gemma": GemmaClient,
-    "llama": LlamaClient,
-    "openai": OpenaiClient,
-    "qwen25": Qwen25Client,
-}
+
+def __getattr__(name: str) -> Any:
+    """Lazy export of heavy client classes (and Qwen helpers) for ``from emet.llms import …``."""
+    if name == "Gemma4AnyToAnyClient":
+        from .gemma4_any_client import Gemma4AnyToAnyClient
+
+        return Gemma4AnyToAnyClient
+    if name == "Gemma4VLLMClient":
+        from .gemma4_vllm_client import Gemma4VLLMClient
+
+        return Gemma4VLLMClient
+    if name == "GemmaClient":
+        from .gemma_client import GemmaClient
+
+        return GemmaClient
+    if name == "LlamaClient":
+        from .llama_client import LlamaClient
+
+        return LlamaClient
+    if name in ("Qwen25Client", "Qwen25VLClient", "QWEN_VL_PRESETS", "get_qwen_variants", "get_qwen35_variants"):
+        from . import qwen_client as qc
+
+        return getattr(qc, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Add all the various Qwen 2.5 and Qwen 3.5 variants
-qwen_variants = get_qwen_variants()
-llms.update(dict.fromkeys(qwen_variants, Qwen25Client))
-for variant in get_qwen35_variants():
-    llms[variant] = Qwen25Client
-llms.update(dict.fromkeys(GEMMA4_PRESETS, Gemma4AnyToAnyClient))
-llms.update(dict.fromkeys(GEMMA4_VLM_PRESETS, Gemma4VLLMClient))
-llms.update(dict.fromkeys(["gemma4b", "gemma1b"], GemmaClient))
-
-
-def process_incoming_qwen_types(qwen_type: str):
-    terms = qwen_type.split("-")
-    if len(terms) == 1:
-        # default configuration
-        model_size, typing_option, finetuning_option, quantization_option = (
-            "3B",
-            None,
-            "Instruct",
-            "int4",
-        )
-    else:
-        # model type is None = using LM chat
-        if terms[1] not in ["Math", "Coder", "VL", "Deepseek"]:
-            typing_option = None
-        else:
-            typing_option = terms[1]
-            terms.remove(terms[1])
-        # the next item is model size
-        model_size = terms[1]
-        # if the quantization is None, meaning no quantization shall be applied
-        if len(terms) < 3:
-            # qwen35-9B is only two tokens; without this branch we would load full-precision 3.5 (huge VRAM / OOM).
-            # Match the one-token default (int4) for local agent use.
-            if len(terms) == 2 and terms[0].lower() == "qwen35":
-                finetuning_option, quantization_option = None, "int4"
-            else:
-                finetuning_option, quantization_option = "Instruct", None
-        # This means finetune with Instruct and using quantization "Instruct-Int4" or "Instruct-Int" (alias for Int4)
-        elif len(terms) >= 4:
-            q = terms[3].lower()
-            finetuning_option, quantization_option = terms[2], "int4" if q == "int" else q
-        # "AWQ"
-        elif "awq" in terms[2].lower():
-            finetuning_option, quantization_option = "Instruct", "awq"
-        # "Int4"
-        elif "Instruct" in terms[2]:
-            finetuning_option, quantization_option = "Instruct", None
-        else:
-            finetuning_option, quantization_option = None, terms[2].lower()
-
-    return model_size, typing_option, finetuning_option, quantization_option
-
-
-def _agent_prompt_builder() -> "AbstractPromptBuilder":
+def _agent_prompt_builder() -> AbstractPromptBuilder:
     from emet.agent.prompt import AgentPromptBuilder
 
     return AgentPromptBuilder()
@@ -135,14 +105,7 @@ prompts = {
 
 
 def get_prompt_builder(prompt_type: str) -> AbstractPromptBuilder:
-    """Return a prompt builder of the specified type.
-
-    Args:
-        prompt_type: The type of prompt builder to create.
-
-    Returns:
-        A prompt builder.
-    """
+    """Return a prompt builder of the specified type."""
     if prompt_type not in prompts:
         raise ValueError(f"Invalid prompt type: {prompt_type}")
     return prompts[prompt_type]()
@@ -155,6 +118,8 @@ def get_prompt_choices():
 
 def is_vl_llm_key(client_type: str) -> bool:
     """True when ``--llm`` selects a vision-language client (head camera on by default)."""
+    from .qwen_client import QWEN_VL_PRESETS
+
     k = (client_type or "").strip().lower()
     if k in QWEN_VL_PRESETS or k in GEMMA4_VLM_PRESETS:
         return True
@@ -167,14 +132,53 @@ def is_vl_llm_key(client_type: str) -> bool:
 
 def get_llm_choices():
     """Return a list of available LLM clients."""
+    from .qwen_client import QWEN_VL_PRESETS, get_qwen35_variants, get_qwen_variants
+
     qwen35_vlm = [f"qwen35-vlm-{s}" for s in ("0.8B", "2B", "4B", "9B", "27B")]
     return sorted(
-        set(llms.keys())
+        set(["gemma", "llama", "openai", "qwen25", "gemma4b", "gemma1b"])
+        | set(get_qwen_variants())
+        | set(get_qwen35_variants())
         | set(QWEN_VL_PRESETS.keys())
+        | set(GEMMA4_PRESETS.keys())
         | set(GEMMA4_VLM_PRESETS.keys())
         | {"qwen3-vl-eqa", "gemma4-vl-eqa"}
         | set(qwen35_vlm)
     )
+
+
+def process_incoming_qwen_types(qwen_type: str):
+    terms = qwen_type.split("-")
+    if len(terms) == 1:
+        model_size, typing_option, finetuning_option, quantization_option = (
+            "3B",
+            None,
+            "Instruct",
+            "int4",
+        )
+    else:
+        if terms[1] not in ["Math", "Coder", "VL", "Deepseek"]:
+            typing_option = None
+        else:
+            typing_option = terms[1]
+            terms.remove(terms[1])
+        model_size = terms[1]
+        if len(terms) < 3:
+            if len(terms) == 2 and terms[0].lower() == "qwen35":
+                finetuning_option, quantization_option = None, "int4"
+            else:
+                finetuning_option, quantization_option = "Instruct", None
+        elif len(terms) >= 4:
+            q = terms[3].lower()
+            finetuning_option, quantization_option = terms[2], "int4" if q == "int" else q
+        elif "awq" in terms[2].lower():
+            finetuning_option, quantization_option = "Instruct", "awq"
+        elif "Instruct" in terms[2]:
+            finetuning_option, quantization_option = "Instruct", None
+        else:
+            finetuning_option, quantization_option = None, terms[2].lower()
+
+    return model_size, typing_option, finetuning_option, quantization_option
 
 
 def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwargs) -> AbstractLLMClient:
@@ -193,9 +197,13 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
     parameters = kwargs.pop("parameters", None)
 
     if client_type.lower() in GEMMA4_PRESETS:
+        from .gemma4_any_client import Gemma4AnyToAnyClient
+
         key = client_type.lower()
         return Gemma4AnyToAnyClient(prompt, hf_model_id=GEMMA4_PRESETS[key], **kwargs)
     if client_type.lower() in GEMMA4_VLM_PRESETS:
+        from .gemma4_vllm_client import Gemma4VLLMClient
+
         key = client_type.lower()
         dev = str(kwargs.get("device", "cuda"))
         mt = int(kwargs.get("max_tokens", 4096))
@@ -230,6 +238,8 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             **eqa_vl_client_kwargs(eqa_cfg),
         )
     if client_type.lower() in ("gemma", "gemma4b", "gemma1b"):
+        from .gemma_client import GemmaClient
+
         if client_type == "gemma":
             model_size = "1b"
         else:
@@ -240,11 +250,24 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             f"Unknown Gemma client type: {client_type!r}. "
             f"Use gemma4-e2b/e4b, gemma4-vlm-e2b/e4b, gemma4-vl-eqa, or legacy gemma/gemma4b/gemma1b (Gemma 3)."
         )
-    elif client_type == "llama":
+    if client_type == "llama":
+        from .llama_client import LlamaClient
+
         return LlamaClient(prompt, **kwargs)
-    elif client_type == "openai":
-        return OpenaiClient(prompt, **kwargs)
-    elif client_type in QWEN_VL_PRESETS:
+    if client_type == "openai":
+        model = kwargs.pop("model", None) or os.environ.get("EMET_OPENAI_MODEL", "").strip() or "gpt-4o"
+        return OpenaiClient(prompt, model=model, **kwargs)
+    if client_type.startswith("openai@"):
+        rest = client_type[len("openai@") :].strip()
+        model = kwargs.pop("model", None) or os.environ.get("EMET_OPENAI_MODEL", "").strip()
+        if "#" in rest:
+            rest, model_from_url = rest.rsplit("#", 1)
+            model = model or model_from_url.strip()
+        return OpenaiClient(prompt, model=model or "emet", base_url=rest, **kwargs)
+
+    from .qwen_client import QWEN_VL_PRESETS, Qwen25Client, Qwen25VLClient
+
+    if client_type in QWEN_VL_PRESETS:
         preset = QWEN_VL_PRESETS[client_type]
         return Qwen25VLClient(
             prompt,
@@ -252,8 +275,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             hf_model_id=preset.get("hf_model_id"),
             **kwargs,
         )
-    elif (client_type or "").strip().lower() == "qwen3-vl-eqa":
-        # One Qwen3-VL load from dynav ``eqa:`` — same class as DynaMem captions so ``bind_shared_vllm_from_agent`` can dedup.
+    if (client_type or "").strip().lower() == "qwen3-vl-eqa":
         from emet.core.parameters import get_parameters
         from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 
@@ -277,8 +299,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             prompt=prompt,
             **eqa_vl_client_kwargs(eqa_cfg),
         )
-    elif client_type.lower().startswith("qwen35-vlm-"):
-        # Shared Qwen3.5-VLM checkpoint with GraphEQA / EQA VL (avoid loading text-only qwen35-* + multimodal twice).
+    if client_type.lower().startswith("qwen35-vlm-"):
         from emet.llms.eqa_qwen import Qwen35SharedVLChatClient
 
         tail = client_type[len("qwen35-vlm-") :].strip()
@@ -295,12 +316,8 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             quantization=q,
             max_tokens=1024,
         )
-    elif "qwen" in client_type:
-        # Parse model size and fine-tuning from client_type
+    if "qwen" in client_type:
         model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(client_type)
-        # Qwen3.5 HF checkpoints are ``Qwen3_5ForConditionalGeneration`` (natively multimodal).
-        # Do NOT load them with ``Qwen25Client`` / ``AutoModelForCausalLM`` + pipeline — that path
-        # pegs CPU (~minutes per turn) despite allocating some GPU memory.
         if str(client_type).lower().startswith("qwen35"):
             from emet.core.parameters import get_parameters
             from emet.llms.qwen3_5_client import Qwen35Client
@@ -312,9 +329,6 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
                 eqa_cfg = {}
             dev = str(kwargs.get("device", "cuda"))
             mt = int(kwargs.get("max_tokens", 256) or 256)
-            # Text tool-router: do not enable system-prefix KV cache. Qwen3.5's chat
-            # template rejects system-only prefills ("No user query found"), and the
-            # failed warm + full generate path is wasted work on every turn.
             return Qwen35Client(
                 prompt,
                 hf_model_id=f"Qwen/Qwen3.5-{model_size}",
@@ -332,5 +346,4 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             quantization=quantization_option,
             **kwargs,
         )
-    else:
-        raise ValueError(f"Invalid client type: {client_type}")
+    raise ValueError(f"Invalid client type: {client_type}")

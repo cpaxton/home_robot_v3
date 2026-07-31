@@ -47,14 +47,21 @@ class ConfigurationSpace(ABC):
         return float(np.linalg.norm(q0 - q1))
 
     def extend(self, q0, q1):
-        """extend towards another configuration in this space"""
-        dq = q1 - q0
-        step = dq / np.linalg.norm(dq) * self.step_size
-        if self.distance(q0, q1) > self.step_size:
-            qi = q0 + step
-            while self.distance(qi, q1) > self.step_size:
-                qi = qi + step
-                yield qi
+        """Yield intermediate configs from ``q0`` toward ``q1`` (inclusive of ``q1``).
+
+        Steps are spaced by at most ``step_size`` so RRT / Shortcut collision checks
+        cannot skip mid-configs (including the first step after ``q0``).
+        """
+        q0 = np.asarray(q0, dtype=np.float64).reshape(-1)
+        q1 = np.asarray(q1, dtype=np.float64).reshape(-1)
+        dist = float(np.linalg.norm(q1 - q0))
+        if dist < 1e-12:
+            yield q1
+            return
+        n_steps = max(1, int(np.ceil(dist / float(self.step_size))))
+        for i in range(1, n_steps):
+            t = i / float(n_steps)
+            yield q0 + t * (q1 - q0)
         yield q1
 
     def closest_node_to_state(self, state, nodes: list[Node]):

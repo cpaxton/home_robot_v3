@@ -24,7 +24,6 @@ from pathlib import Path
 
 import click
 import cv2
-import mujoco
 import numpy as np
 import zmq
 from click.core import ParameterSource
@@ -32,11 +31,30 @@ from click.core import ParameterSource
 import emet.utils.compression as compression
 from emet.app.zmq_cli_resolve import resolve_cli_host, resolve_cli_robot
 from emet.robots import get_robot_spec
-from emet.simulation.mujoco_server import _load_default_scene_with_robot
 from emet.utils.connection import get_host_from_connection
 from emet.utils.discord_bot import read_discord_token_from_env
 from emet.utils.memory import lookup_address
 from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops
+
+try:
+    import mujoco
+except ImportError:  # lean installs without the sim extra (e.g. Jetson profile)
+    mujoco = None  # type: ignore[assignment]
+
+
+def _require_mujoco() -> None:
+    if mujoco is None:
+        raise ImportError(
+            "mujoco is required for local MJCF camera preview. "
+            "Install the sim extra: uv sync --group sim  (or ./install.sh --sim)"
+        )
+
+
+# Lazy: only needed for --local MJCF paths (keeps `emet` importable without sim).
+def _load_default_scene_with_robot(*args, **kwargs):
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot as _impl
+
+    return _impl(*args, **kwargs)
 
 _PREVIEW_RW, _PREVIEW_RH = 640, 480
 
@@ -63,6 +81,7 @@ def _postprocess_preview_rgb(spec, rgb: np.ndarray) -> np.ndarray:
 
 
 def _camera_id(model: mujoco.MjModel, name: str) -> int:
+    _require_mujoco()
     cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name)
     return int(cid) if cid >= 0 else -1
 
@@ -70,6 +89,7 @@ def _camera_id(model: mujoco.MjModel, name: str) -> int:
 def _render_local_rgb(
     model: mujoco.MjModel, data: mujoco.MjData, renderer: mujoco.Renderer, spec, cam_name: str
 ) -> np.ndarray:
+    _require_mujoco()
     cam = _camera_id(model, cam_name)
     renderer.update_scene(data, camera=cam)
     rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
@@ -139,6 +159,7 @@ def _normalized_robot_key(robot_key: str) -> str:
 
 
 def _load_local_merged_preview(robot_key: str, max_cams: int):
+    _require_mujoco()
     rk = _normalized_robot_key(robot_key)
     spec = get_robot_spec(rk)
     if spec is None:
@@ -153,6 +174,7 @@ def _load_local_merged_preview(robot_key: str, max_cams: int):
 
 
 def _set_hinge_joint_qpos(model: mujoco.MjModel, data: mujoco.MjData, joint_name: str, radians: float) -> None:
+    _require_mujoco()
     jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
     if jid < 0:
         raise ValueError(f"Joint not found: {joint_name!r}")
