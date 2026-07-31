@@ -27,7 +27,13 @@ def test_parse_openai_endpoint_spec() -> None:
 
 
 def test_resolve_vl_endpoint_env_and_config(monkeypatch) -> None:
-    monkeypatch.delenv("EMET_VL_ENDPOINT", raising=False)
+    for key in (
+        "EMET_VL_ENDPOINT",
+        "EMET_OPENAI_BASE_URL",
+        "EMET_LLM_HOST",
+        "EMET_CALIBAN_HOST",
+    ):
+        monkeypatch.delenv(key, raising=False)
     assert resolve_vl_endpoint({"eqa": {}}) is None
     assert resolve_vl_endpoint({"eqa": {"vl_endpoint": "openai@http://x:8001/v1"}}) == (
         "openai@http://x:8001/v1"
@@ -96,12 +102,23 @@ def test_create_dynamem_vllm_remote_endpoint() -> None:
     assert client.model == "remote-vl"
 
 
-def test_agent_innate_mars_vl_endpoint_resolves() -> None:
+def test_agent_innate_mars_vl_endpoint_resolves(monkeypatch) -> None:
+    """Without host env, preset has no VL URL; --host / EMET_* fallthrough works."""
     from emet.core.parameters import get_parameters
     from emet.llms.openai_vllm_client import OpenaiVLLMClient
+    from emet.llms.remote_ops import apply_llm_host
     from emet.llms.vllm_factory import create_dynamem_vllm
 
+    monkeypatch.delenv("EMET_VL_ENDPOINT", raising=False)
+    monkeypatch.delenv("EMET_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("EMET_LLM_HOST", raising=False)
+    monkeypatch.delenv("EMET_CALIBAN_HOST", raising=False)
+
     p = get_parameters("configs/agent_innate_mars.yaml")
+    assert resolve_vl_endpoint(p) is None
+
+    specs = apply_llm_host("caliban")
+    assert specs is not None
     ep = resolve_vl_endpoint(p)
     assert ep == "openai@http://caliban:8000/v1"
     eqa = p.get("eqa") or {}

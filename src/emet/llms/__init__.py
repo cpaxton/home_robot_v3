@@ -95,8 +95,22 @@ def _agent_prompt_builder() -> AbstractPromptBuilder:
     return AgentPromptBuilder()
 
 
+class ConversationalChatPromptBuilder(AbstractPromptBuilder):
+    """Short multi-turn chat system prompt (LAN dogfood / ``emet run chat``)."""
+
+    def configure(self, name: str = "Assistant", **kwargs) -> str:
+        who = (name or "Assistant").strip() or "Assistant"
+        return (
+            f"You are {who}, a helpful conversational assistant. "
+            "Remember earlier turns in this chat. Be concise and friendly. "
+            "Do not claim to be named Stretch unless the user asks you to role-play. "
+            "You cannot see cameras unless the user provides an image."
+        )
+
+
 prompts = {
     "simple": SimpleStretchPromptBuilder,
+    "chat": ConversationalChatPromptBuilder,
     "object_manip_nav": ObjectManipNavPromptBuilder,
     "ok_robot": OkRobotPromptBuilder,
     "pickup": PickupPromptBuilder,
@@ -104,16 +118,37 @@ prompts = {
 }
 
 
-def get_prompt_builder(prompt_type: str) -> AbstractPromptBuilder:
+def get_prompt_builder(prompt_type: str, **kwargs) -> AbstractPromptBuilder:
     """Return a prompt builder of the specified type."""
     if prompt_type not in prompts:
         raise ValueError(f"Invalid prompt type: {prompt_type}")
-    return prompts[prompt_type]()
+    factory = prompts[prompt_type]
+    if prompt_type == "agent":
+        return factory()
+    return factory(**kwargs)
 
 
 def get_prompt_choices():
     """Return a list of available prompt builders."""
     return prompts.keys()
+
+
+def validate_llm_client_type(client_type: str) -> str:
+    """Accept registry keys, ``openai``, or ``openai@http://…`` specs."""
+    raw = (client_type or "").strip()
+    if not raw:
+        raise ValueError("llm client type is empty")
+    low = raw.lower()
+    if low == "openai" or low.startswith("openai@"):
+        return raw
+    choices = set(get_llm_choices())
+    for c in choices:
+        if c.lower() == low:
+            return c
+    raise ValueError(
+        f"Unknown LLM {client_type!r}. Use a registry key, 'openai', or "
+        f"'openai@http://host:port/v1[#model]'."
+    )
 
 
 def is_vl_llm_key(client_type: str) -> bool:

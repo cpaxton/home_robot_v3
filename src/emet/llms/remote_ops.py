@@ -2,18 +2,68 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Health / smoke helpers for remote OpenAI text + VL serve (caliban / LAN)."""
+"""Health / smoke helpers for remote OpenAI text + VL serve (LAN Jetson / workstation)."""
 
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_TEXT_BASE = "http://caliban:8000/v1"
-DEFAULT_VL_BASE = "http://caliban:8001/v1"
+# unified-7b: one multimodal model on :8000 for text + captions.
+# dual-2b: text :8000 + VL :8001 — pass --vl-port / --vl explicitly.
+DEFAULT_LLM_PORT = 8000
+DEFAULT_VL_PORT = 8000
+
+
+def resolve_llm_host(host: str | None = None) -> str | None:
+    """Host from ``--host``, else ``EMET_LLM_HOST``, else ``EMET_CALIBAN_HOST`` (compat)."""
+    for candidate in (
+        host,
+        os.environ.get("EMET_LLM_HOST"),
+        os.environ.get("EMET_CALIBAN_HOST"),
+    ):
+        s = (candidate or "").strip()
+        if s:
+            return s
+    return None
+
+
+def openai_base_for_host(host: str, port: int = DEFAULT_LLM_PORT) -> str:
+    """Return ``http://{host}:{port}/v1`` (no trailing slash)."""
+    h = (host or "").strip()
+    if not h:
+        raise ValueError("host is required")
+    if "://" in h:
+        return normalize_openai_base(h)
+    return f"http://{h}:{int(port)}/v1"
+
+
+def apply_llm_host(
+    host: str | None = None,
+    *,
+    port: int = DEFAULT_LLM_PORT,
+    vl_port: int | None = None,
+) -> tuple[str, str] | None:
+    """Resolve host and set process env for text + VL OpenAI endpoints.
+
+    Sets ``EMET_LLM_HOST``, ``EMET_OPENAI_BASE_URL``, and ``EMET_VL_ENDPOINT``.
+    Returns ``(openai@text_base, openai@vl_base)`` or ``None`` if no host.
+    """
+    resolved = resolve_llm_host(host)
+    if not resolved:
+        return None
+    text_base = openai_base_for_host(resolved, port)
+    vl_base = openai_base_for_host(
+        resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
+    )
+    os.environ["EMET_LLM_HOST"] = resolved
+    os.environ["EMET_OPENAI_BASE_URL"] = text_base
+    os.environ["EMET_VL_ENDPOINT"] = f"openai@{vl_base}"
+    return f"openai@{text_base}", f"openai@{vl_base}"
 
 
 def normalize_openai_base(url: str) -> str:

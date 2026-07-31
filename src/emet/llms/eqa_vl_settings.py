@@ -177,17 +177,30 @@ def get_eqa_vl_str(parameters: Parameters | dict | None, key: str, default: str)
 def resolve_vl_endpoint(parameters: Parameters | dict | None = None) -> str | None:
     """Return remote OpenAI VL base URL / ``openai@…`` spec, or None for local weights.
 
-    Precedence: ``EMET_VL_ENDPOINT``, then ``eqa.vl_endpoint`` / ``mapping.eqa.vl_endpoint``.
+    Precedence:
+    1. ``EMET_VL_ENDPOINT``
+    2. ``eqa.vl_endpoint`` / ``mapping.eqa.vl_endpoint``
+    3. ``EMET_OPENAI_BASE_URL`` (unified-7b same-port default)
+    4. ``EMET_LLM_HOST`` / ``EMET_CALIBAN_HOST`` → ``openai@http://HOST:8000/v1``
     """
     env = os.environ.get("EMET_VL_ENDPOINT", "").strip()
     if env:
         return env
     eqa = _eqa_cfg(parameters)
     raw = eqa.get("vl_endpoint")
-    if raw is None:
-        return None
-    s = str(raw).strip()
-    return s or None
+    if raw is not None:
+        s = str(raw).strip()
+        if s:
+            return s
+    openai_base = os.environ.get("EMET_OPENAI_BASE_URL", "").strip()
+    if openai_base:
+        return f"openai@{openai_base.rstrip('/')}"
+    from emet.llms.remote_ops import openai_base_for_host, resolve_llm_host
+
+    host = resolve_llm_host(None)
+    if host:
+        return f"openai@{openai_base_for_host(host)}"
+    return None
 
 
 def _eqa_cfg(parameters: Parameters | dict | None) -> dict[str, Any]:
