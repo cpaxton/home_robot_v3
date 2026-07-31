@@ -57,8 +57,8 @@ _logger = Logger(__name__)
 #   >= ABSENT  (0.10)  → CANDIDATE
 #   <  ABSENT  (0.10)  → ABSENT   (true-negative for *this* view — move on)
 # Do not treat ABSENT as proof the object is gone from the scene.
-# Qwen (vlm_assess / router) decides answerability and whether to explore vs submit;
-# SigLIP only appears in the state as a cheap proposal.
+# SigLIP ranks WHERE to navigate next to grow the graph; Qwen vlm_assess on
+# pixels decides answerability (detector scores are not fed into that prompt).
 SIGLIP_IMAGE_PRESENT_THRESHOLD = 0.12
 SIGLIP_IMAGE_ABSENT_THRESHOLD = 0.10
 
@@ -2226,8 +2226,9 @@ class AgenticEQAExecutor:
     ) -> dict[str, Any] | None:
         """Multimodal answerability gate. One assess per obs_id.
 
-        Qwen looks at pixels + inventory and decides whether this view is enough.
-        SigLIP/OWL stay proposals in the inventory — they do not hard-block unlock.
+        Qwen looks at pixels + neutral inventory (obs counts, graph labels).
+        SigLIP/OWL are where-next scores for navigation / which place to grow
+        the graph — logged on the verify proposal, never fed into this prompt.
         Hybrid confirm (phrase hit / two-view) gates ``_verified``.
         """
         oid = int(obs_id)
@@ -2254,10 +2255,10 @@ class AgenticEQAExecutor:
 
         from emet.eval.agentic_vlm_assess import assess_view_with_vlm, build_inventory_brief
 
+        # Do not pass SigLIP/OWL proposal into inventory — ABSENT colors answers.
         inventory = build_inventory_brief(
             n_observations=len(list(getattr(gm, "_observations", None) or [])),
             graph_labels=self._inventory_labels(),
-            proposal=proposal,
             tried_obs_ids=sorted(self._tried.keys()),
             n_rounds=self._round,
             n_nav=self._n_nav + self._n_explore,
@@ -2270,8 +2271,7 @@ class AgenticEQAExecutor:
             target_phrase=self._target_phrase or phrase,
         )
         self._vlm_assessed_obs_ids.add(oid)
-        # Trust the VLM assess. SigLIP ABSENT/CANDIDATE is router context only —
-        # do not second-guess answerable with cheap-detector gates (fix2 q65/q104).
+        # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
         ).upper()

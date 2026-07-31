@@ -51,9 +51,9 @@ Rules:
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - After a close look where VLM assess says present=false, prefer explore_frontier
   once to grow coverage, then investigate remaining Question-relevant place cards.
-- SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
-  vlm_assess for answerability (agentic verify). State verified= means VLM
-  answerable, not detector confirmation.
+- SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
+  promising place, then confirm with VLM). They are not proof of presence or
+  answer — trust Qwen vlm_assess on the image for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
@@ -64,7 +64,7 @@ State: Recent actions: r0 investigate obs=3 assess present=false; Prefer explore
 {"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Question about dining chairs; Investigate dining-table card room=kitchen available
 {"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}
-State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
+State: VLM assess answerable=true (vlm_answerable); place card corroborated
 {"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
 {"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
@@ -97,9 +97,9 @@ Rules:
   (do not explore forever).
 - in_target_area=false means leave OR look closer at a listed Investigate card that
   could answer the Question — never "explore_frontier only" while place cards exist.
-- SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
-  vlm_assess for answerability (agentic verify). State verified= means VLM
-  answerable, not detector confirmation.
+- SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
+  promising place, then confirm with VLM). They are not proof of presence or
+  answer — trust Qwen vlm_assess on the image for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
@@ -110,7 +110,7 @@ State: Question about bathroom shower; Current room: living room; no Investigate
 {"current_room": "living room", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Question about dining chairs; Current room: kitchen; in_target_area=false; Investigate obs_id=12 phrase='dining table'
 {"current_room": "kitchen", "in_target_area": false, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 12}}], "message": ""}
-State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
+State: VLM assess answerable=true (vlm_answerable); place card corroborated
 {"current_room": "open living area", "in_target_area": true, "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
 {"current_room": "unknown", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""

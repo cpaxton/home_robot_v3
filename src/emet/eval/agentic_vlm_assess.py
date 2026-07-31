@@ -1,8 +1,10 @@
 # Copyright (c) Chris Paxton 2026
 """VLM-first target extract + multimodal answerability assess for agentic EQA.
 
-Cheap OWL/SigLIP scores remain proposals. Qwen decides the verify target and whether
-the current view is enough to answer — looking at pixels plus a short inventory.
+Cheap SigLIP/OWL scores are **where-next** signals for navigation and graph
+growth (drive to a promising place, then populate with higher-confidence LLM
+views). They must **not** enter the assess inventory — ABSENT/PRESENT proposals
+color Qwen answers. Assess looks at pixels + neutral map context only.
 """
 
 from __future__ import annotations
@@ -15,13 +17,14 @@ from typing import Any
 import numpy as np
 
 _TARGET_SYSTEM = (
-    "You extract the visual target for a robot verifying a home question. "
-    "Reply with ONLY a JSON object (no markdown)."
+    "You extract the visual target for a robot verifying a home question. Reply with ONLY a JSON object (no markdown)."
 )
 
 _ASSESS_SYSTEM = (
     "You are a robot looking at a camera image to decide if you can answer a question. "
-    "Use the image and the inventory. Reply with ONLY a JSON object (no markdown)."
+    "Use the image and the inventory. Do not assume objects are absent from "
+    "detector scores — judge presence from the image. "
+    "Reply with ONLY a JSON object (no markdown)."
 )
 
 
@@ -104,7 +107,7 @@ def extract_target_from_question(
         "Question:\n"
         f"{q}\n\n"
         "Return JSON with keys:\n"
-        '  target_phrase: short noun phrase for the object to find/verify '
+        "  target_phrase: short noun phrase for the object to find/verify "
         '(e.g. "utensils", "fruit bowl", "air conditioning")\n'
         "  question_type: one of count, location, state, other\n"
         "  notes: optional short note\n"
@@ -129,11 +132,15 @@ def build_inventory_brief(
     *,
     n_observations: int = 0,
     graph_labels: list[str] | None = None,
-    proposal: dict[str, Any] | None = None,
     tried_obs_ids: list[int] | None = None,
     n_rounds: int = 0,
     n_nav: int = 0,
 ) -> str:
+    """Neutral map/status context for VLM assess — no SigLIP/OWL verdicts.
+
+    Detector scores guide *where* to navigate next (graph growth); they must not
+    appear here or they bias ``present`` / MCQ letters (e.g. ABSENT → "None").
+    """
     labels = [str(x) for x in (graph_labels or []) if str(x).strip()][:12]
     parts = [
         f"observations_seen={int(n_observations)}",
@@ -144,20 +151,6 @@ def build_inventory_brief(
         parts.append("graph_labels=" + ", ".join(labels))
     if tried_obs_ids:
         parts.append("tried_obs_ids=" + ",".join(str(i) for i in tried_obs_ids[-12:]))
-    if proposal:
-        bits = []
-        for key in (
-            "phrase",
-            "detector_score",
-            "dense_sim",
-            "full_frame_sim",
-            "decision",
-            "obs_id",
-        ):
-            if proposal.get(key) is not None:
-                bits.append(f"{key}={proposal[key]}")
-        if bits:
-            parts.append("cheap_proposal=" + " ".join(bits))
     return "\n".join(parts)
 
 
