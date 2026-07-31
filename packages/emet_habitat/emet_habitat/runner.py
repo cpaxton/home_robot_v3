@@ -82,6 +82,12 @@ def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Para
     return apply_habitat_eqa_method_parameters(parameters, method)
 
 
+def _normalize_hmeqa_method(method: str) -> str:
+    from emet.eval.memory_backends import normalize_hmeqa_method
+
+    return normalize_hmeqa_method(method)
+
+
 def _cfg_hf_id_matches_family(hf_model_id: str, family: str) -> bool:
     from emet.llms.eqa_vl_settings import _hf_id_matches_family
 
@@ -202,7 +208,9 @@ def _make_controller(
     explore_when_uncovered: str | None = None,
 ):
     from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
+    from emet.eval.memory_backends import DYNAGRAPH
 
+    method = _normalize_hmeqa_method(method)
     params = _apply_method_parameters(parameters, method)
     apply_dynagraph_harness_overrides(
         params,
@@ -224,7 +232,7 @@ def _make_controller(
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
         "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
-    if method == "dynagraph":
+    if method == DYNAGRAPH:
         agent = DynagraphController(**common)
     else:
         agent = GraphEQAController(**common)
@@ -520,7 +528,7 @@ def run_hmeqa_episode(
 def run_hmeqa_batch(
     *,
     question_ids: list[int],
-    method: str = "graph_eqa",
+    method: str = "static_graph",
     mock_llm: bool = False,
     max_planning_steps: int = 20,
     max_movement_step: int = 10,
@@ -659,7 +667,7 @@ def run_hmeqa_compare(
     device: str | None = "cuda",
     use_hm3d_semantics: bool | None = None,
 ) -> tuple[list[EpisodeMetrics], list[EpisodeMetrics]]:
-    """Run the same HM-EQA questions with graph_eqa then dynagraph."""
+    """Run the same HM-EQA questions with static_graph then dynagraph."""
     common: Any = {
         "mock_llm": mock_llm,
         "max_planning_steps": max_planning_steps,
@@ -672,7 +680,7 @@ def run_hmeqa_compare(
         "device": device,
         "use_hm3d_semantics": use_hm3d_semantics,
     }
-    graph = run_hmeqa_batch(question_ids=question_ids, method="graph_eqa", **cast(Any, common))
+    graph = run_hmeqa_batch(question_ids=question_ids, method="static_graph", **cast(Any, common))
     _release_gpu_memory()
     dyna = run_hmeqa_batch(question_ids=question_ids, method="dynagraph", **cast(Any, common))
     _release_gpu_memory()

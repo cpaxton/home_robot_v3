@@ -34,7 +34,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--episode-id", action="append", dest="episode_ids")
     parser.add_argument(
         "--backend",
-        choices=("dynamem", "graph_eqa", "dynagraph", "ground_truth"),
+        choices=("dynamem", "static_graph", "graph_eqa", "dynagraph", "ground_truth"),
         default="dynagraph",
     )
     parser.add_argument("--merge-xy-m", type=float, default=None)

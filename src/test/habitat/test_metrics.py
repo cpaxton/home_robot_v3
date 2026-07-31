@@ -208,7 +208,7 @@ def test_compare_method_results():
     graph = [
         EpisodeMetrics(
             dataset="hmeqa",
-            method="graph_eqa",
+            method="static_graph",
             question_id=0,
             scene="s",
             floor=0,
@@ -240,9 +240,9 @@ def test_compare_method_results():
         ),
     ]
     cmp = compare_method_results(graph, dyna)
-    assert cmp["graph_eqa"]["accuracy"] == 1.0
+    assert cmp["static_graph"]["accuracy"] == 1.0
     assert cmp["dynagraph"]["accuracy"] == 0.0
-    assert cmp["graph_only"] == 1
+    assert cmp["static_only"] == 1
     assert cmp["dynagraph_only"] == 0
     assert cmp["per_question"][0]["question_id"] == 0
 

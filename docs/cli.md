@@ -361,7 +361,7 @@ emet capture --robot stretch --backend dynamem --no-rerun --out-dir /tmp/cap
 |-------------|--------|
 | `dynamem` | Voxel semantic map |
 | `voxel_only` | Voxel + depth only (no SigLIP/YoloE/VLM; DA3 on hardware) |
-| `graph_eqa` | Voxel + GraphEQA graph |
+| `static_graph` | Voxel + GraphEQA graph (zero-merge baseline; alias `graph_eqa`) |
 | `dynagraph` | Voxel + merged graph + VLM |
 | `ground_truth` | Sim GT graph from `emet_session` |
 | `svm` | Instance memory |
@@ -393,7 +393,7 @@ emet stream --cameras-only
 emet stream --connection herman
 emet stream --connection herman --backend voxel_only
 emet stream --connection herman --backend dynagraph
-emet stream --connection herman --backend graph_eqa
+emet stream --connection herman --backend static_graph
 emet stream --robot stretch --backend svm
 ```
 

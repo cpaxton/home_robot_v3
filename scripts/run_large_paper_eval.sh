@@ -149,7 +149,7 @@ run_ovmm_ladder() {
     echo "=== OVMM replicates start $(date -Is) output=$OVMM_OUT ==="
     uv run python scripts/replicate_ovmm_find_phases.py \
       --backend dynamem \
-      --backend graph_eqa \
+      --backend static_graph \
       --backend dynagraph \
       --backend ground_truth \
       --replicates 5 \
@@ -175,7 +175,7 @@ run_dynamic_exploration() {
       --phase explore \
       --env all \
       --backend dynagraph \
-      --backend graph_eqa \
+      --backend static_graph \
       --mapping-mode both \
       --resume \
       --output-dir "$DYNAMIC_EXPLORE_OUT" \
@@ -184,7 +184,7 @@ run_dynamic_exploration() {
     uv run python scripts/eval_dynamic_exploration.py \
       --phase world-change \
       --backend dynagraph \
-      --backend graph_eqa \
+      --backend static_graph \
       --resume \
       --output-dir "$DYNAMIC_EXPLORE_OUT" \
       "${cpu_flag[@]}"

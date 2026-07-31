@@ -24,7 +24,7 @@ run_one() {
   fi
   rm -f "$jsonl"
   "$HAB" run-batch \
-    --method graph_eqa \
+    --method static_graph \
     --question-start "$QSTART" \
     --question-end "$QEND" \
     --paper-subset \

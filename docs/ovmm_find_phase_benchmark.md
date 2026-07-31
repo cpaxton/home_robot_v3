@@ -34,7 +34,7 @@ uv run emet test src/test/memory/test_ovmm_find_phase_metrics.py -q
 # S0 default table, all backends (~2–5 min with GPU)
 uv run python scripts/eval_ovmm_find_phases.py \
   --tier S0 \
-  --backend dynamem --backend graph_eqa --backend dynagraph \
+  --backend dynamem --backend static_graph --backend dynagraph \
   --cpu-only \
   --output-dir runs/ovmm_find_phase/s0
 ```
@@ -60,7 +60,7 @@ uv run python scripts/eval_ovmm_find_phases.py \
 | Backend | Role |
 |---------|------|
 | `dynamem` | Voxel semantic memory only (no graph) |
-| `graph_eqa` | GraphEQA with merge/staleness off |
+| `static_graph` | Object graph, merge/staleness off (alias `graph_eqa`) |
 | `dynagraph` | Instance graph + merge/staleness (`merge_xy_m=0.15` default in find-phase) |
 | `ground_truth` | Oracle upper bound (graph from sim GT) |
 
@@ -73,7 +73,7 @@ uv run python scripts/eval_ovmm_find_phases.py \
 | `use_sensor_perception` | `false` | `--sensor-perception` (full GraphEQA; ~10× slower on S0) |
 | `prefer_voxel` | `true` | `--graph-query` (graph-first localization) |
 
-Dynagraph/graph_eqa without `--sensor-perception` still build graph nodes from YOLO instance detections (same voxel frames as dynamem) but skip Qwen3-VL label extraction every `update()`. That is why older GPU runs showed ~30–40 min dynagraph vs ~6 min dynamem.
+Dynagraph/static_graph without `--sensor-perception` still build graph nodes from YOLO instance detections (same voxel frames as dynamem) but skip Qwen3-VL label extraction every `update()`. That is why older GPU runs showed ~30–40 min dynagraph vs ~6 min dynamem.
 
 ### Scaling / ablation flags
 

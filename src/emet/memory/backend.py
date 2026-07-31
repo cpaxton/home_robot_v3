@@ -112,9 +112,9 @@ def get_memory_backend(
     """Factory: return a MemoryBackend for the given name and dependencies.
 
     Args:
-        name: "dynamem" | "graph_eqa" | "svm" | "scene_graph"
-        voxel_map: For dynamem: the SparseVoxelMapDynamem. For graph_eqa: optional voxel for localize.
-        graph_memory: For graph_eqa: the GraphEQAMemory instance.
+        name: "dynamem" | "static_graph" | "graph_eqa" (alias) | "svm" | "scene_graph"
+        voxel_map: For dynamem: the SparseVoxelMapDynamem. For static_graph: optional voxel for localize.
+        graph_memory: For static_graph: the GraphEQAMemory instance.
         scene_graph: For scene_graph: the OpenVocabSceneGraph instance.
         text_encoder: For scene_graph: encoder with encode_text().
         agent: For svm: the agent with get_found_instances_by_class (InstanceMemoryController).
@@ -123,30 +123,36 @@ def get_memory_backend(
     Returns:
         MemoryBackend implementation.
     """
-    if name == "dynamem":
+    from emet.eval.memory_backends import STATIC_GRAPH, is_static_graph_backend, normalize_benchmark_backend
+
+    key = normalize_benchmark_backend(name, warn=False) if name else ""
+    if key == "dynamem":
         if voxel_map is None:
             raise ValueError("get_memory_backend(name='dynamem') requires voxel_map")
         from emet.memory.adapters import DynaMemBackend
 
         return DynaMemBackend(voxel_map, confidence_threshold=confidence_threshold)
-    if name == "graph_eqa":
+    if is_static_graph_backend(key) or key == STATIC_GRAPH:
         if graph_memory is None:
-            raise ValueError("get_memory_backend(name='graph_eqa') requires graph_memory")
+            raise ValueError(
+                f"get_memory_backend(name={name!r}) requires graph_memory "
+                f"(canonical id: {STATIC_GRAPH!r})"
+            )
         from emet.memory.adapters import GraphEQABackend
 
         return GraphEQABackend(graph_memory, voxel_map=voxel_map)
-    if name == "svm":
+    if key == "svm":
         if agent is None:
             raise ValueError("get_memory_backend(name='svm') requires agent")
         from emet.memory.adapters import SVMBackend
 
         return SVMBackend(agent)
-    if name == "scene_graph":
+    if key == "scene_graph":
         if scene_graph is None:
             raise ValueError("get_memory_backend(name='scene_graph') requires scene_graph")
         from emet.memory.adapters import SceneGraphBackend
         return SceneGraphBackend(scene_graph, text_encoder=text_encoder)
     raise ValueError(
         f"Unknown memory backend: {name!r}. "
-        "Use 'dynamem', 'graph_eqa', 'svm', or 'scene_graph'."
+        f"Use 'dynamem', '{STATIC_GRAPH}' (alias graph_eqa), 'svm', or 'scene_graph'."
     )

@@ -34,13 +34,13 @@ Defined in `src/emet/eval/memory_backends.py`:
 | Backend | OVMM sim | SQA3D | Meaning |
 |---------|----------|-------|---------|
 | `dynamem` | ✓ | ✓ | Voxel semantic map + EQA |
-| `graph_eqa` | ✓ | — | GraphEQA, merge/staleness off |
+| `static_graph` | ✓ | — | Object graph, merge/staleness off (GraphEQA-inspired baseline; legacy alias `graph_eqa`) |
 | `dynagraph` | ✓ | ✓ (default) | Voxel + graph, default merge/staleness |
 | `ground_truth` | ✓ (oracle) | — | Graph from sim GT placements |
 
-Use the **same backend names** in sweep commands and paper tables.
+Use the **same backend names** in sweep commands and paper tables. CLI Choices still accept `graph_eqa` → normalize to `static_graph` (one warning per process).
 
-**Detector vs semantics (methods):** YoloE/OWL at low `detection.confidence_threshold` supplies **high-recall instance/graph proposals**. Semantic answers come from the **VLM** and **memory backends**. You *can* raise the mapping threshold if eval shows net benefit; treat that as a recall/precision trade-off on OVMM/graph tasks. Chat-only tightening uses `describe_confidence_threshold` (separate knob). See [dynamem.md](dynamem.md), [graph_eqa.md](graph_eqa.md), [AGENT_RUN.md](AGENT_RUN.md).
+**Detector vs semantics (methods):** YoloE/OWL at low `detection.confidence_threshold` supplies **high-recall instance/graph proposals**. Semantic answers come from the **VLM** and **memory backends**. You *can* raise the mapping threshold if eval shows net benefit; treat that as a recall/precision trade-off on OVMM/graph tasks. Chat-only tightening uses `describe_confidence_threshold` (separate knob). See [dynamem.md](dynamem.md), [graph_eqa.md](graph_eqa.md) (implementation package), [AGENT_RUN.md](AGENT_RUN.md).
 
 ## Dynagraph profiles (shared config)
 
@@ -52,12 +52,12 @@ Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/
 | `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
 | `unified_eqa` | 0.45 | 256 + nav cap 48 | **HM-EQA Dynagraph default** (Habitat + shared EQA); same merge as interactive |
 | `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
-| `graph_eqa_baseline` | 0 | 0 | GraphEQA comparison row (HM-EQA / OVMM / dynamic-explore `graph_eqa`) |
+| `static_graph` | 0 | 0 | GraphEQA-inspired comparison row (HM-EQA / OVMM / dynamic-explore `static_graph`; legacy profile name `graph_eqa_baseline`) |
 | `smoke` | 0 | 0 | CI / mock-LLM only — **not** a paper method default |
 
-**Merge policy:** Dynagraph’s product and paper *method* rows use merge (0.45 m interactive/EQA, 0.15 m find-phase). True zero-merge is reserved for (1) GraphEQA baseline parity (`graph_eqa_baseline`) and (2) fast CI smoke. Do not report HM-EQA Dynagraph numbers under `smoke` / zero-merge — that disables the instance-memory behavior the system is built around.
+**Merge policy:** Dynagraph’s product and paper *method* rows use merge (0.45 m interactive/EQA, 0.15 m find-phase). True zero-merge is reserved for (1) GraphEQA-inspired baseline parity (`static_graph`) and (2) fast CI smoke. Do not report HM-EQA Dynagraph numbers under `smoke` / zero-merge — that disables the instance-memory behavior the system is built around.
 
-**HM-EQA methods:** `--method graph_eqa` → `graph_eqa_baseline` + `GraphEQAController`; `--method dynagraph` → `unified_eqa` + tuned extras + `DynagraphController`. See [experiments/README.md § HM-EQA baselines](experiments/README.md#hm-eqa-baselines).
+**HM-EQA methods:** `--method static_graph` → profile `static_graph` + `GraphEQAController`; `--method dynagraph` → `unified_eqa` + tuned extras + `DynagraphController`. Legacy `--method graph_eqa` aliases `static_graph`. See [experiments/README.md § HM-EQA baselines](experiments/README.md#hm-eqa-baselines).
 
 **Interactive agent exploration** (same Dynagraph memory as paper harnesses):
 
@@ -135,14 +135,13 @@ uv run python scripts/download_ovmm_benchmark_assets.py
 # S0 ladder (all backends)
 uv run python scripts/eval_ovmm_find_phases.py \
   --tier S0 \
-  --backend dynamem --backend graph_eqa --backend dynagraph --backend ground_truth \
-  --cpu-only \
-  --output-dir ~/runs/emet/ovmm_find_phase/s0_paper
-
-# CSV written automatically: aggregate_dynamem-graph_eqa-dynagraph-ground_truth.csv
+  --backend dynamem --backend static_graph --backend dynagraph --backend ground_truth \
+  --output-dir ~/runs/emet/ovmm_find_phase/backend_matrix
+# CSV written automatically: aggregate_dynamem-static_graph-dynagraph-ground_truth.csv
+# (legacy runs may still use graph_eqa in the CSV name)
 ```
 
-**Perception backends** (`dynamem`, `graph_eqa`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.
+**Perception backends** (`dynamem`, `static_graph`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.
 **Oracle** (`ground_truth`): may use `--not-rotate --cpu-only`.
 
 Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.
@@ -366,8 +365,8 @@ Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_mer
 
 | Comparison | Our best | Prior art | Gap |
 |------------|----------|-----------|-----|
-| Full 113 Q | 41.6% (gemma-3-4b, graph_eqa repro) | 63.5–67.0% (GraphEQA + API VLM) | ~−22 pp |
-| Matched slice | dynagraph +3 pp vs graph_eqa (bal-32 @ 3B) | — | Dynagraph helps |
+| Full 113 Q | 41.6% (gemma-3-4b, static_graph / logged as graph_eqa) | 63.5–67.0% (GraphEQA + API VLM) | ~−22 pp |
+| Matched slice | dynagraph +3 pp vs static_graph (bal-32 @ 3B) | — | Dynagraph helps |
 | Post-fix hold-out | 50% (8 Q, Qwen3-VL-8B) | 51.7% Explore-EQA (113 Q) | not comparable (small n) |
 
 **Next headline run:** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + June 2026 fix stack (`emet-habitat run-batch --paper-subset --resume`).

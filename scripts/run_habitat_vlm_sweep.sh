@@ -52,7 +52,7 @@ for entry in "${CONFIGS[@]}"; do
   fi
 
   if ! "$HAB" run-batch \
-    --method graph_eqa \
+    --method static_graph \
     --question-start "$QSTART" \
     --question-end "$QEND" \
     --paper-subset \

@@ -17,7 +17,7 @@ Primary paper goal: reproduce GraphEQA-style metrics on HM-EQA and OpenEQA subse
 
 | Method | Profile | Role |
 |--------|---------|------|
-| `graph_eqa` | `graph_eqa_baseline` (0/0 merge) | Internal GraphEQA reimplementation |
+| `static_graph` (alias `graph_eqa`) | `static_graph` (0/0 merge) | GraphEQA-inspired baseline |
 | `dynagraph` | `unified_eqa` (0.45 m) + tuned extras | Our method |
 | Published GraphEQA 63.5–67% | API VLM + full HM3D semantics | External prior art only |
 
@@ -29,7 +29,7 @@ Explore-off / MCQ-debias / agentic H2H are **ablations**, not method defaults.
 |-----|-----|---|----------|
 | GraphEQA (paper) | GPT-4o | 113 | **63.5%** |
 | GraphEQA (paper) | Gemini-2.5 Pro | 113 | **67.0%** |
-| **emet** graph_eqa repro | gemma-3-4b-it | 113 | **41.6%** |
+| **emet** static_graph (logged as graph_eqa) | gemma-3-4b-it | 113 | **41.6%** |
 | **emet** dynagraph | Qwen2.5-VL-3B | 32 | 34.4% |
 | **emet** dynagraph (post-fix) | Qwen3-VL-8B | 8 hold-out | **50.0%** |
 
@@ -45,7 +45,7 @@ MC accuracy, mean planning steps; GraphEQA vs Dynagraph vs ablations.
 ./scripts/install_habitat.sh
 uv run emet eval recover --need-mib 12000
 uv run emet habitat safe-start
-uv run emet habitat run-episode --question-id 0 --method graph_eqa --mock-llm
+uv run emet habitat run-episode --question-id 0 --method static_graph --mock-llm
 # Full 113: ./scripts/run_hmeqa_paper113_h2h.sh via emet jobs
 # Agentic H2H: uv run emet hmeqa overnight
 ```

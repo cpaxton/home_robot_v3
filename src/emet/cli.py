@@ -960,7 +960,12 @@ def habitat_serve(
 
 @habitat_cmd.command("run-episode", short_help="Run one HM-EQA episode")
 @click.option("--question-id", default=0, type=int)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option(
+    "--method",
+    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    default="dynagraph",
+    help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
+)
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=5, type=int)
 def habitat_run_episode(

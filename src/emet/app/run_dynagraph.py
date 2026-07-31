@@ -393,9 +393,12 @@ def _print_dynagraph_rerun_help(
 )
 @click.option(
     "--benchmark-method",
-    type=click.Choice(["dynagraph", "graph_eqa"], case_sensitive=False),
+    type=click.Choice(["dynagraph", "static_graph", "graph_eqa"], case_sensitive=False),
     default=None,
-    help="Harness method row (default dynagraph when --benchmark-harness is set)",
+    help=(
+        "Harness method row (default dynagraph when --benchmark-harness is set; "
+        "graph_eqa is a legacy alias for static_graph)"
+    ),
 )
 def main(
     ctx: click.Context,

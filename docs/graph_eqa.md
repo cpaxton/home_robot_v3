@@ -4,6 +4,8 @@ Stretch AI has **three memory models**: **sparse voxel map** (base voxel map in 
 
 This implementation is a **re-implementation** inspired by the [GraphEQA paper](https://arxiv.org/abs/2412.14480) (Saxena et al.). The [original repository](https://github.com/SaumyaSaxena/graph_eqa) is not open source; no code was copied from it.
 
+**Benchmark method id:** paper / Habitat / OVMM rows that use this stack with merge/staleness **off** are named **`static_graph`** (legacy CLI alias `graph_eqa`). The product command remains **`emet run graph-eqa`**, and the Python package stays `emet.memory.graph_eqa` / `GraphEQAController`. See [paper_benchmarks.md § Shared memory backends](paper_benchmarks.md#shared-memory-backends).
+
 ## The three memory models
 
 | Model | Description | Typical use |
