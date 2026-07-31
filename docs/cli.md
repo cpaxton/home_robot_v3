@@ -54,23 +54,22 @@ Backends: `mujoco` (default), `robocasa`, `molmospaces`, `habitat`, **`llm`**.
 
 ```bash
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
-emet serve llm --vl --host 0.0.0.0 --port 8001   # multimodal caption/EQA
-# workstation client (Herman: text :8000 + mapping.eqa.vl_endpoint :8001):
-#   see docs/llm_serve.md § Caliban — curl http://caliban:8000/health
+emet serve llm --vl --host 0.0.0.0 --port 8001   # dual-port caption/EQA beside text
+# Herman / LAN example (unified-7b): text + VL both on Jetson :8000 — docs/llm_serve.md
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+# or: export EMET_LLM_HOST=caliban
 
-# Remote health / smoke (text caliban:8000 + VL :8001 or local --vl serve)
-uv run emet llm health
-uv run emet llm smoke --text-only
-uv run emet llm smoke --vl-only --vl http://127.0.0.1:8001/v1
+# Remote health / smoke (pass --host; unified-7b text+VL on :8000)
+uv run emet llm health --host caliban
+uv run emet llm smoke --host caliban
+uv run emet llm smoke --host caliban --vl-only
 # Interactive / one-shot chat against LAN endpoints
-uv run emet run chat --caliban --once "Reply with exactly: pong"
-uv run emet run chat --vl --vl-endpoint openai@http://127.0.0.1:8001/v1 \
-  --image /path/to.jpg --once "What do you see?"
+uv run emet run chat --host caliban --once "Reply with exactly: pong"
+uv run emet run chat --host caliban --vl --once "What color is the flag?" --image /path/to.jpg
 emet run agent --llm openai
 ```
 
-Details: [llm_serve.md](llm_serve.md) (Caliban dual-port text+VL + Jetson container). Jetson install: [jetson.md](jetson.md).
+Details: [llm_serve.md](llm_serve.md) — **§1 Remote inference** and **§2 Testing LLMs** (Jetson unified-7b / dual-2b). Jetson install: [jetson.md](jetson.md).
 
 Start a simulation server.
 
@@ -286,11 +285,11 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 uv run emet deploy llm                         # unified-7b (Qwen2-VL-7B on :8000)
 uv run emet deploy llm --profile dual-2b       # text :8000 + VL-2B :8001
 uv run emet deploy llm --host caliban --profile unified-7b
-uv run emet llm health
-uv run emet llm smoke --vl-only --vl http://caliban:8000/v1
+uv run emet llm health --host caliban
+uv run emet llm smoke --host caliban --vl-only
 ```
 
-Details: [llm_serve.md](llm_serve.md). Shell equivalent: `./scripts/deploy_caliban_vl.sh --profile unified-7b`.
+Details: [llm_serve.md](llm_serve.md). Shell equivalent: `./scripts/deploy_caliban_vl.sh --host caliban --profile unified-7b`.
 
 ### `emet mars [start|status|stop]`
 

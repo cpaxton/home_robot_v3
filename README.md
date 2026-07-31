@@ -102,6 +102,34 @@ uv run emet run agent --robot stretch --no-discord --rerun
 # then try: explore / find the sofa / is there a remote on the coffee table?
 ```
 
+## Remote inference + try an LLM
+
+Run the **text tool-router** and **caption VLM** on a LAN Jetson (or another GPU host) so the workstation keeps VRAM for voxels / mapping. Full detail: **[docs/llm_serve.md](docs/llm_serve.md)** (remote inference · testing LLMs · Jetson deploy).
+
+```bash
+# Deploy / restart unified Qwen2-VL-7B on the Orin (:8000 = text + VL)
+uv run emet deploy llm --host ORIN_HOST --profile unified-7b
+
+# Health + smoke (replace ORIN_HOST, e.g. caliban)
+uv run emet llm health --host ORIN_HOST
+uv run emet llm smoke --host ORIN_HOST
+
+# One-shot chat (text) and VL caption
+uv run emet run chat --host ORIN_HOST --once "Reply with exactly: pong"
+uv run emet run chat --host ORIN_HOST --vl --once "Describe briefly"
+# Interactive: omit --once
+```
+
+Optional env (no hardcoded hostname in the CLI):
+
+```bash
+export EMET_LLM_HOST=ORIN_HOST
+export EMET_OPENAI_BASE_URL=http://ORIN_HOST:8000/v1
+export EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1
+```
+
+Agent / Herman Discord: point `agent.llm` and `mapping.eqa.vl_endpoint` at the same URL (see [`configs/agent_innate_mars.yaml`](configs/agent_innate_mars.yaml) and [innate_mars_hardware.md](docs/robots/innate_mars_hardware.md)).
+
 ## Quick Start (Simulation)
 
 Run DynaMem in MuJoCo simulation in a few steps:
@@ -260,6 +288,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
+| [llm_serve.md](docs/llm_serve.md) | **Remote inference** (OpenAI LAN) + **testing LLMs** (`emet llm` / `emet run chat --host`) |
 | [llm_agent.md](docs/llm_agent.md) | Historical Stretch LLM pickup walkthrough → points at modern agent docs |
 | [adding_a_new_task.md](docs/adding_a_new_task.md) | Register a new LLM-callable task |
 | [discord_bot.md](docs/discord_bot.md) | Discord bridge for the interactive agent |
@@ -309,6 +338,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | [start_with_docker_plus_virtenv.md](docs/start_with_docker_plus_virtenv.md) | Stretch GPU client + robot install |
 | [update.md](docs/update.md) | Updating code on the robot |
 | [jetson.md](docs/jetson.md) | Jetson notes |
+| [llm_serve.md](docs/llm_serve.md) | Jetson / LAN OpenAI serve, remote VL, smoke/chat |
 | [simple_api.md](docs/simple_api.md) | Lightweight wireless control API |
 
 ### Apps, LfD, install extras

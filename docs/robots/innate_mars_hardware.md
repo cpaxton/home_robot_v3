@@ -39,9 +39,10 @@ emet connect save 192.168.1.43 --user jetson1 --name herman \
   --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
   --config configs/agent_innate_mars.yaml
 
-# Text :8000 + caption/EQA VLM :8001 on caliban (see docs/llm_serve.md § Caliban).
-# Smoke text: ./scripts/smoke_caliban_llm.sh
-uv run emet run agent --connection herman
+# Unified Qwen2-VL-7B on Jetson :8000 for text + captions (see docs/llm_serve.md).
+# Smoke: uv run emet llm health --host caliban && uv run emet llm smoke --host caliban
+# Chat:  uv run emet run chat --host caliban --once "Reply with exactly: pong"
+uv run emet run agent --connection herman --host caliban
 # Optional ``--rerun`` for live 3D; Discord alone is enough for chat + maps.
 # ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies host + config.
 # Prefer ``--onboard-da3`` on the bridge so olympia VRAM stays for voxels (caption VLM is remote).
@@ -50,7 +51,7 @@ uv run emet run agent --connection herman
 
 Profile ``config`` is shared: with herman **active**, bare ``emet run dynamem`` / ``emet stream`` (no ``--config``) also load ``agent_innate_mars.yaml``. Pass an explicit ``--config`` or use a profile without ``config`` when switching to Stretch/sim on the same machine — see [cli.md](../cli.md) (`emet connect`).
 
-Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name: Herman``, ``agent.llm: openai@http://caliban:8000/v1`` (text), and ``mapping.eqa.vl_endpoint: openai@http://caliban:8001/v1`` (remote JPEG VLM). Voxels stay local. Optional: `--rerun` for Rerun; `--llm qwen35-4B` to force a local text router.
+Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name: Herman``, and ``agent.llm: openai``. Point at the Orin with ``--host caliban`` (or ``EMET_LLM_HOST``) so text + VL use unified-7b on ``:8000``. Voxels stay local. Optional: `--rerun` for Rerun; `--llm qwen35-4B` to force a local text router.
 
 | Prompt (in Discord) | Expected |
 |---------------------|----------|

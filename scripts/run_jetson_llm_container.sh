@@ -9,8 +9,11 @@
 #   ./scripts/run_jetson_llm_container.sh --vl --detach --port 8001 --name emet-jetson-vl
 #   ./scripts/run_jetson_llm_container.sh --build
 #
-# Workstation client:
-#   export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+# Workstation client (unified-7b — both on :8000):
+#   export EMET_LLM_HOST=caliban
+#   # or: export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+#   export EMET_VL_ENDPOINT=openai@http://caliban:8000/v1
+# dual-2b VL container:
 #   export EMET_VL_ENDPOINT=openai@http://caliban:8001/v1
 
 set -euo pipefail

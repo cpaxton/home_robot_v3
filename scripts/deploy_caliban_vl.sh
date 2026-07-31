@@ -3,8 +3,8 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 #
-# Prefer:  uv run emet deploy llm --profile unified-7b
-#          uv run emet deploy llm --profile dual-2b
+# Prefer:  uv run emet deploy llm --host caliban --profile unified-7b
+#          uv run emet deploy llm --host caliban --profile dual-2b
 #
 # Orin eMMC (~57G) cannot hold both Qwen2.5-7B text (~15G) and Qwen2-VL-7B (~15G)
 # plus the L4T image. AGX Orin has ~64 GiB unified memory — enough for VL-7B.
@@ -12,23 +12,23 @@
 #   dual-2b     — text CausalLM :8000 + Qwen2-VL-2B :8001
 #   unified-7b  — one Qwen2-VL-7B on :8000 for text tools + captions
 #
-#   ./scripts/deploy_caliban_vl.sh --profile unified-7b
-#   ./scripts/deploy_caliban_vl.sh --profile dual-2b
+#   ./scripts/deploy_caliban_vl.sh --host caliban --profile unified-7b
+#   ./scripts/deploy_caliban_vl.sh --host caliban --profile dual-2b
 #
-# Requires SSH to caliban and a local HF hub cache for the chosen model.
+# Requires SSH to the Jetson host and a local HF hub cache for the chosen model.
 # After unified-7b, point Herman text + VL at the same URL:
-#   agent.llm / mapping.eqa.vl_endpoint → openai@http://caliban:8000/v1
+#   agent.llm / mapping.eqa.vl_endpoint → openai@http://HOST:8000/v1
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST="${EMET_CALIBAN_HOST:-caliban}"
+HOST="${EMET_LLM_HOST:-${EMET_CALIBAN_HOST:-}}"
 REMOTE_REPO="${EMET_CALIBAN_REPO:-~/src/home_robot_v3}"
 REMOTE_HF='~/hf-cache'
 HF_HUB="${HF_HOME:-$HOME/.cache/huggingface}/hub"
 IMAGE="${EMET_JETSON_LLM_IMAGE:-emet-jetson-llm:r35.4.1}"
 
-PROFILE="dual-2b"
+PROFILE="unified-7b"
 MODEL_ID=""
 PORT=""
 NAME=""
@@ -52,6 +52,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$HOST" ]]; then
+  echo "ERROR: set --host HOST or EMET_LLM_HOST (example: --host caliban)" >&2
+  exit 1
+fi
 
 case "$PROFILE" in
   dual-2b|2b)

@@ -163,12 +163,13 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_ALLOW_SDPA_ATTN` | same | `1` — permit PyTorch SDPA when flash-attn is missing (slower; long multi-image EQA can crawl). Overrides the default require-flash policy. |
 | `EMET_FORCE_TEGRA` | `emet.utils.platform_info` | `1` — treat host as Jetson/Tegra for install hints (tests / CI). |
 | `EMET_INSTALL_PROFILE` | `install.sh` | `minimal` \| `standard` \| `full` \| `jetson`. `jetson` = lean Orin install (see [jetson.md](jetson.md)). |
-| `EMET_OPENAI_BASE_URL` | `OpenaiClient` / `--llm openai` | OpenAI-compatible API root including `/v1` (e.g. `http://caliban:8000/v1`). See [llm_serve.md](llm_serve.md). |
+| `EMET_OPENAI_BASE_URL` | `OpenaiClient` / `--llm openai` | OpenAI-compatible API root including `/v1` (e.g. `http://HOST:8000/v1`). See [llm_serve.md](llm_serve.md). |
 | `OPENAI_BASE_URL` | same | Fallback if `EMET_OPENAI_BASE_URL` unset. |
 | `EMET_OPENAI_MODEL` | `get_llm_client("openai")` | Model id sent to the remote server (default `gpt-4o` when unset). |
-| `EMET_VL_ENDPOINT` | `OpenaiVLLMClient` / `create_dynamem_vllm` | Override `eqa.vl_endpoint` (`openai@http://caliban:8001/v1`). Caption/EQA only; voxels stay local. |
-| `EMET_CALIBAN_HOST` | `emet deploy llm` / `deploy_caliban_vl.sh` | SSH/LLM host (default `caliban`). |
-| `EMET_CALIBAN_REPO` | same | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
+| `EMET_VL_ENDPOINT` | `OpenaiVLLMClient` / `create_dynamem_vllm` | Override `eqa.vl_endpoint` (unified-7b: `openai@http://HOST:8000/v1`; dual-2b uses `:8001`). Caption/EQA only; voxels stay local. |
+| `EMET_LLM_HOST` | `emet run chat --host`, `emet llm …`, `emet deploy llm` | LAN OpenAI host (no default). Example: `caliban`. |
+| `EMET_CALIBAN_HOST` | same (compat alias) | Fallback if `EMET_LLM_HOST` unset. |
+| `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
 | `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
