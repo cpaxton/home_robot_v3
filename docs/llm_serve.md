@@ -140,6 +140,11 @@ Smoke:
 
 ```bash
 ./scripts/smoke_caliban_llm.sh
+./scripts/smoke_caliban_vl.sh   # or: EMET_VL_ENDPOINT=http://127.0.0.1:8001/v1 ./scripts/smoke_caliban_vl.sh
+uv run emet llm health
+uv run emet llm smoke --text-only
+uv run emet run chat --caliban --once "Reply with exactly: pong"
+uv run emet run chat --vl --vl-endpoint openai@http://127.0.0.1:8001/v1 --once "Say hi"
 ```
 
 | Variable | Role |
@@ -154,6 +159,19 @@ Smoke:
 | `EMET_LLM_SERVE_DEVICE` | Default device for native `emet serve llm` |
 | `EMET_LLM_SERVE_PORT` | Default published port for the Jetson runner script |
 
+### Workstation VL while Orin hosts text
+
+caliban’s Jetson container is **text CausalLM** on `:8000`. When Orin disk/VRAM cannot host a second VL process, run VL on the desktop GPU and point Herman at it:
+
+```bash
+# on olympia (or any CUDA host with emet)
+uv run emet jobs run --name vl-serve-8001 --need-mib 12000 -- \
+  uv run emet serve llm --vl --host 0.0.0.0 --port 8001
+# clients:
+export EMET_VL_ENDPOINT=openai@http://127.0.0.1:8001/v1
+uv run emet llm smoke --vl-only --vl http://127.0.0.1:8001/v1
+```
+
 ## Phase 2 (not implemented): remote memory worker
 
 Future work: a ZMQ **SUB** on Mars bridge topic **4401** (or a dedicated RPC) so voxel / graph updates can run on a remote host, with a query RPC back to the agent. Phase 1 keeps **all memory on olympia** and only remotes caption/EQA images over HTTP. Do not change Mars bridge ports for Phase 1.
@@ -166,6 +184,8 @@ Future work: a ZMQ **SUB** on Mars bridge topic **4401** (or a dedicated RPC) so
 | Native HTTP server | [`src/emet/llms/openai_server.py`](../src/emet/llms/openai_server.py) |
 | Remote text client | [`src/emet/llms/openai_client.py`](../src/emet/llms/openai_client.py) |
 | Remote VL client | [`src/emet/llms/openai_vllm_client.py`](../src/emet/llms/openai_vllm_client.py) |
+| Health / smoke helpers | [`src/emet/llms/remote_ops.py`](../src/emet/llms/remote_ops.py) · `emet llm health|smoke` |
+| Chat (text / VL) | [`src/emet/app/chat.py`](../src/emet/app/chat.py) · `emet run chat --caliban|--vl` |
 | Native CLI | `emet serve llm` → [`src/emet/app/serve_llm.py`](../src/emet/app/serve_llm.py) |
 
 See also [jetson.md](jetson.md) and [environment_variables.md](environment_variables.md).

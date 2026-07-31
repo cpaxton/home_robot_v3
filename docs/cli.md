@@ -58,6 +58,15 @@ emet serve llm --vl --host 0.0.0.0 --port 8001   # multimodal caption/EQA
 # workstation client (Herman: text :8000 + mapping.eqa.vl_endpoint :8001):
 #   see docs/llm_serve.md § Caliban — curl http://caliban:8000/health
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+
+# Remote health / smoke (text caliban:8000 + VL :8001 or local --vl serve)
+uv run emet llm health
+uv run emet llm smoke --text-only
+uv run emet llm smoke --vl-only --vl http://127.0.0.1:8001/v1
+# Interactive / one-shot chat against LAN endpoints
+uv run emet run chat --caliban --once "Reply with exactly: pong"
+uv run emet run chat --vl --vl-endpoint openai@http://127.0.0.1:8001/v1 \
+  --image /path/to.jpg --once "What do you see?"
 emet run agent --llm openai
 ```
 

@@ -3029,6 +3029,122 @@ def connect_show() -> None:
     if "password" in conn:
         click.echo("password: (set)")
 
+
+@main.group("llm", short_help="Remote OpenAI text/VL health + smoke (caliban / LAN)")
+def llm_cmd() -> None:
+    """Probe and smoke OpenAI-compatible text (:8000) and VL (:8001) servers.
+
+    See docs/llm_serve.md. Typical Herman layout: text on caliban:8000, VL on
+    caliban:8001 or a workstation ``emet serve llm --vl --port 8001``.
+    """
+
+
+@llm_cmd.command("health", short_help="GET /health for text and/or VL endpoints")
+@click.option(
+    "--text",
+    "text_url",
+    default=None,
+    help="Text base URL (default http://caliban:8000/v1). Empty string skips.",
+)
+@click.option(
+    "--vl",
+    "vl_url",
+    default=None,
+    help="VL base URL (default http://caliban:8001/v1). Pass '' to skip.",
+)
+@click.option("--text-only", is_flag=True, help="Only check text endpoint.")
+@click.option("--vl-only", is_flag=True, help="Only check VL endpoint.")
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+def llm_health_cmd(
+    text_url: str | None,
+    vl_url: str | None,
+    text_only: bool,
+    vl_only: bool,
+    as_json: bool,
+) -> None:
+    """Check ``/health`` readiness for LAN LLM/VLM servers."""
+    from emet.llms.remote_ops import DEFAULT_TEXT_BASE, DEFAULT_VL_BASE, fetch_health
+
+    check_text = not vl_only
+    check_vl = not text_only
+    if text_url is not None and text_url.strip() == "":
+        check_text = False
+    if vl_url is not None and vl_url.strip() == "":
+        check_vl = False
+    text_target = (text_url if text_url is not None else DEFAULT_TEXT_BASE) if check_text else None
+    vl_target = (vl_url if vl_url is not None else DEFAULT_VL_BASE) if check_vl else None
+
+    results: dict[str, Any] = {}
+    ok_all = True
+    if text_target is not None:
+        r = fetch_health(text_target)
+        results["text"] = {"ok": r.ok, "url": r.url, "payload": r.payload, "error": r.error}
+        ok_all = ok_all and r.ok
+        if not as_json:
+            status = "ready" if r.ok else "DOWN"
+            click.echo(f"text {status}  {r.url}" + (f"  err={r.error}" if r.error else f"  {r.payload}"))
+    if vl_target is not None:
+        r = fetch_health(vl_target)
+        results["vl"] = {"ok": r.ok, "url": r.url, "payload": r.payload, "error": r.error}
+        ok_all = ok_all and r.ok
+        if not as_json:
+            status = "ready" if r.ok else "DOWN"
+            click.echo(f"vl   {status}  {r.url}" + (f"  err={r.error}" if r.error else f"  {r.payload}"))
+    if as_json:
+        click.echo(json.dumps(results, indent=2, default=str))
+    sys.exit(0 if ok_all else 1)
+
+
+@llm_cmd.command("smoke", short_help="Chat-completions smoke for text and/or VL")
+@click.option("--text", "text_url", default=None, help="Text base URL (default caliban:8000/v1).")
+@click.option("--vl", "vl_url", default=None, help="VL base URL (default caliban:8001/v1).")
+@click.option("--text-only", is_flag=True, help="Only smoke text.")
+@click.option("--vl-only", is_flag=True, help="Only smoke VL.")
+@click.option(
+    "--image",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="Optional image for VL smoke (else a tiny synthetic RGB).",
+)
+def llm_smoke_cmd(
+    text_url: str | None,
+    vl_url: str | None,
+    text_only: bool,
+    vl_only: bool,
+    image: str | None,
+) -> None:
+    """POST a short completion to text and/or VL OpenAI servers."""
+    from emet.llms.remote_ops import (
+        DEFAULT_TEXT_BASE,
+        DEFAULT_VL_BASE,
+        smoke_chat_completions,
+        smoke_vl_completions,
+    )
+
+    check_text = not vl_only
+    check_vl = not text_only
+    text_target = text_url or DEFAULT_TEXT_BASE
+    vl_target = vl_url or DEFAULT_VL_BASE
+    failed = False
+    if check_text:
+        click.echo(f"[llm smoke] text {text_target}")
+        try:
+            out = smoke_chat_completions(text_target)
+            click.echo(f"  -> {out!r}")
+        except Exception as exc:
+            click.echo(f"  FAIL: {type(exc).__name__}: {exc}", err=True)
+            failed = True
+    if check_vl:
+        click.echo(f"[llm smoke] vl {vl_target}" + (f" image={image}" if image else " (synthetic)"))
+        try:
+            out = smoke_vl_completions(vl_target, image_path=image)
+            click.echo(f"  -> {out!r}")
+        except Exception as exc:
+            click.echo(f"  FAIL: {type(exc).__name__}: {exc}", err=True)
+            failed = True
+    sys.exit(1 if failed else 0)
+
+
 @main.group("mars", short_help="Innate Mars hardware bridge (innate-os + ZMQ)")
 def mars_cmd() -> None:
     """Deploy and start the innate Mars ZMQ bridge on a Jetson running innate-os."""
