@@ -4,6 +4,8 @@
 
 Use it when you want GraphEQA-style prompts and task images, but also want a simple discrete-time lifecycle on graph nodes (similar in spirit to object aging in dense mapping stacks, without replacing the full [open-vocab scene graph](simulation.md) path used by DynaMem instance mode).
 
+**Paper contrast:** the zero-merge GraphEQA-inspired eval row is **`static_graph`** (not this product default). Shared ids: [paper_benchmarks.md § Shared memory backends](paper_benchmarks.md#shared-memory-backends).
+
 **CLI:** Run from the project root with **`uv run emet run dynagraph …`** (or activate `.venv` first). See [TESTING.md](TESTING.md#run-from-this-repo) if flags like **`--explore-loop`** are missing from `--help`.
 
 **Interactive agent:** `emet run agent` defaults to **`--memory-backend dynagraph`** (same controller stack + interactive merge/staleness). See [AGENT_RUN.md](AGENT_RUN.md).

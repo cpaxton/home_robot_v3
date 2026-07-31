@@ -119,6 +119,9 @@ class Qwen25Client(AbstractLLMClient):
 
         print(f"Loading model: {model_name}")
         model_kwargs = {"dtype": "auto"}
+        if device == "cpu":
+            # Prefer fp16 on CPU so larger Qwen checkpoints fit (Orin has ~61 GiB RAM).
+            model_kwargs["dtype"] = torch.float16
 
         quantization_config = None
         if quantization is not None:

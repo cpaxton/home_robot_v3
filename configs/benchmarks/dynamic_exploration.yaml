@@ -10,7 +10,9 @@ questions:
 
 profiles:
   dynagraph: interactive
-  graph_eqa: graph_eqa_baseline
+  static_graph: static_graph
+  # Legacy alias (normalize_benchmark_backend): graph_eqa → static_graph
+  graph_eqa: static_graph
 
 explore_budgets: [8, 15, 30]
 

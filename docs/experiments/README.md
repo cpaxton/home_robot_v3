@@ -20,7 +20,7 @@ Two **internal** methods on the same Habitat harness (`configs/benchmarks/dynagr
 
 | `--method` | Profile | Controller | Role |
 |------------|---------|------------|------|
-| `graph_eqa` | `graph_eqa_baseline` (merge=0, staleness=0; extras off) | `GraphEQAController` | GraphEQA **reimplementation** row |
+| `static_graph` (alias `graph_eqa`) | `static_graph` (merge=0, staleness=0; extras off) | `GraphEQAController` | GraphEQA-**inspired** baseline row |
 | `dynagraph` | `unified_eqa` (0.45 m / 256) + memory on, debias off, explore **conservative**, SigLIP | `DynagraphController` | **Our method** |
 
 External prior art (GraphEQA paper 63.5–67% with API VLMs + full HM3D semantics) is **citation only** — not the same stack. Ablations (`explore=off`, MCQ debias on, agentic H2H) must be labeled as such, not as method defaults.
@@ -33,7 +33,7 @@ uv run emet eval recover --need-mib 12000
 uv run emet habitat safe-start   # wait until jobs status = done
 
 # Mock smoke (no VLM)
-uv run emet habitat run-episode --question-id 0 --method graph_eqa --mock-llm
+uv run emet habitat run-episode --question-id 0 --method static_graph --mock-llm
 uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 
 # Classic vs agentic (Dynagraph H2H; explore-off ablation by script default)
@@ -46,7 +46,7 @@ uv run emet hmeqa h2h --out ~/runs/emet/hmeqa_probe --ids 15,68,105,17
 uv run emet jobs run --name hmeqa-paper113 --need-mib 12000 -- \
   ./scripts/run_hmeqa_paper113_h2h.sh
 # Or single method:
-# .venv-habitat/bin/emet-habitat run-batch --method graph_eqa --paper-subset --resume ...
+# .venv-habitat/bin/emet-habitat run-batch --method static_graph --paper-subset --resume ...
 ```
 
 Results JSONL: `~/.cache/habitat_eqa/results/`. Numbers + planned sweeps: [habitat_eqa_results.md](habitat_eqa_results.md).
@@ -70,7 +70,7 @@ Results JSONL: `~/.cache/habitat_eqa/results/`. Numbers + planned sweeps: [habit
 | **Simulation smoke (7-track)** | — | **[simulation_testing_plan.md](../simulation_testing_plan.md)** | `./scripts/run_simulation_smoke_battery.sh` | `~/runs/emet/simulation_smoke/` | paper-facing sequential battery |
 | **Large paper queue** | all tracks | [large_eval_queue.md](large_eval_queue.md) | `./scripts/run_large_paper_eval.sh` | `~/runs/emet/<track>/` | — |
 
-Shared backend names: `dynamem`, `graph_eqa`, `dynagraph`, `ground_truth` — see [paper_benchmarks.md § Shared memory backends](../paper_benchmarks.md#shared-memory-backends).
+Shared backend names: `dynamem`, `static_graph` (alias `graph_eqa`), `dynagraph`, `ground_truth` — see [paper_benchmarks.md § Shared memory backends](../paper_benchmarks.md#shared-memory-backends).
 
 ## Update from main
 
@@ -124,7 +124,7 @@ Long GPU runs: **`uv run emet jobs run --name … -- CMD`** (not bare `nohup` wh
 | [`run_overnight_cross_track_smoke.sh`](../../scripts/run_overnight_cross_track_smoke.sh) | Five-track smoke + safe no-sim pytest (`RUN_DEEP_EVAL=0` default) |
 | [`run_overnight_eval_smoke.sh`](../../scripts/run_overnight_eval_smoke.sh) | HM-EQA + OVMM + SQA3D diagnostics matrix |
 | [`run_overnight_habitat_eval.sh`](../../scripts/run_overnight_habitat_eval.sh) | Multi-phase HM-EQA subsets with `--resume` |
-| [`run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh) | Full 113 graph_eqa + dynagraph |
+| [`run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh) | Full 113 static_graph + dynagraph |
 | [`run_sqa3d_gpu_sweep.sh`](../../scripts/run_sqa3d_gpu_sweep.sh) | SQA3D slice with VRAM preflight |
 
 For backend localization, prefer `--explore-steps 0` or `--quick` (light mapping protocol) unless you need OVMM-identical rotate+explore mapping (`--full-protocol`, much slower).
@@ -161,7 +161,7 @@ Full list: [environment_variables.md](../environment_variables.md).
 
 ## Self-review notes
 
-Last checked: **2026-07-28** on `main` (HM-EQA `graph_eqa` → `graph_eqa_baseline`; Dynagraph → `unified_eqa`).
+Last checked: **2026-07-29** on `rename/static-graph-baseline` (HM-EQA `static_graph` / legacy `graph_eqa` → profile `static_graph`; Dynagraph → `unified_eqa`).
 
 - **Baselines:** HM-EQA methods must not share merge settings; see § HM-EQA baselines above.
 - **Tests:** `src/test/eval/test_benchmark_dynagraph.py`, `test_dynagraph_harness.py` — `uv run emet test src/test/eval/ -q`.

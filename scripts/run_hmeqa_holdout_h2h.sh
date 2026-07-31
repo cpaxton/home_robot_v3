@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Comparable preliminary H2H: Habitat HM-EQA holdout-8, graph_eqa (original) vs dynagraph.
+# Comparable preliminary H2H: Habitat HM-EQA holdout-8, static_graph vs dynagraph.
 # This is the slice used in prior paper/branch numbers — not Robocasa freeform answer-only.
 #
 # Usage:
@@ -59,7 +59,7 @@ run_method() {
   log "DONE method=$method"
 }
 
-run_method graph_eqa
+run_method static_graph
 run_method dynagraph
 
 uv run python - <<PY | tee -a "$OUT/orchestrator.log"
@@ -68,7 +68,7 @@ from pathlib import Path
 
 out = Path("$OUT")
 summary = {}
-for m in ("graph_eqa", "dynagraph"):
+for m in ("static_graph", "dynagraph"):
     p = out / f"{m}.jsonl"
     rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
     ok = sum(1 for r in rows if r.get("correct"))
@@ -109,7 +109,7 @@ try:
     ax[1].bar(names, walls, color=["#4C78A8", "#F58518"])
     ax[1].set_ylabel("mean wall (s)")
     ax[1].set_title("Cost")
-    fig.suptitle("Original GraphEQA vs Dynagraph")
+    fig.suptitle("static_graph vs Dynagraph")
     fig.tight_layout()
     fig.savefig(out / "figures" / "hmeqa_holdout_h2h.png", dpi=140)
     print(f"wrote {out / 'figures' / 'hmeqa_holdout_h2h.png'}")

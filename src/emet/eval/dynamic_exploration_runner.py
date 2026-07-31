@@ -309,7 +309,10 @@ def _resolve_sim_cfg(episode: DynamicExploreEpisode):
 
 
 def _profile_cli_flags(backend: str, cfg: DynamicExploreConfig) -> list[str]:
-    profile_name = cfg.profiles.get(backend, "interactive")
+    from emet.eval.memory_backends import normalize_benchmark_backend
+
+    key = normalize_benchmark_backend(backend, warn=False)
+    profile_name = cfg.profiles.get(key) or cfg.profiles.get(backend) or "interactive"
     settings = profile_settings(profile_name)
     flags: list[str] = []
     if settings.get("dynagraph_merge_xy_m") is not None:
@@ -335,6 +338,9 @@ def build_dynagraph_subprocess_cmd(
     include_explore_loop: bool = True,
     skip_eqa: bool = False,
 ) -> list[str]:
+    from emet.eval.memory_backends import normalize_benchmark_backend
+
+    method = normalize_benchmark_backend(backend)
     cmd = [
         "uv",
         "run",
@@ -371,8 +377,8 @@ def build_dynagraph_subprocess_cmd(
     if no_sensor_perception:
         cmd.append("--no-sensor-perception")
     # Paper dynamic_explore harness extras (memory_summary / mcq_debias / …) + profile.
-    cmd.extend(["--benchmark-harness", "dynamic_explore", "--benchmark-method", str(backend)])
-    cmd.extend(_profile_cli_flags(backend, cfg))
+    cmd.extend(["--benchmark-harness", "dynamic_explore", "--benchmark-method", method])
+    cmd.extend(_profile_cli_flags(method, cfg))
     if include_explore_loop and explore_iters > 0:
         cmd.extend(["--explore-loop", "--explore-max-iters", str(explore_iters)])
     return cmd

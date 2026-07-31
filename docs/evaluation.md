@@ -265,8 +265,8 @@ SKIP_SQA3D=1 ./scripts/run_overnight_eval_smoke.sh
 
 | Phase | Benchmark | Units | Methods |
 |-------|-----------|-------|---------|
-| 1 | HM-EQA | Q `3,14,17` | `graph_eqa`, `dynagraph` |
-| 2 | OVMM Habitat | 3 HM3D proxy episodes | **`dynamem`**, `graph_eqa`, `dynagraph` |
+| 1 | HM-EQA | Q `3,14,17` | `static_graph`, `dynagraph` |
+| 2 | OVMM Habitat | 3 HM3D proxy episodes | **`dynamem`**, `static_graph`, `dynagraph` |
 | 3 | SQA3D | val Q `0–2` | `dynagraph`, `dynamem` |
 
 Outputs:
@@ -344,7 +344,7 @@ uv run emet sqa3d plot-results -p ~/runs/emet/sqa3d/dynagraph_val_q0-2.jsonl -o 
 
 | Backend | HM-EQA | OVMM Habitat | SQA3D |
 |---------|--------|--------------|-------|
-| `graph_eqa` | yes | yes | — |
+| `static_graph` | yes | yes | — |
 | `dynagraph` | yes | yes | yes |
 | `dynamem` | follow-up PR | **yes** | yes |
 

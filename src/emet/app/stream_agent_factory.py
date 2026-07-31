@@ -31,10 +31,20 @@ from emet.config.loader import finalize_resolved_config, load_config, resolve_co
 from emet.config.runtime import build_parameters_from_config
 from emet.robots import DEFAULT_DYNAV_CONFIG_YAML
 
-StreamBackend = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth", "svm", "scene_graph", "voxel_only"]
+StreamBackend = Literal[
+    "dynamem",
+    "static_graph",
+    "graph_eqa",
+    "dynagraph",
+    "ground_truth",
+    "svm",
+    "scene_graph",
+    "voxel_only",
+]
 
 STREAM_BACKENDS: tuple[str, ...] = (
     "dynamem",
+    "static_graph",
     "graph_eqa",
     "dynagraph",
     "ground_truth",
@@ -457,7 +467,7 @@ def create_stream_agent(
         agent, config_path = create_dynamem_agent(**common, voxel_only=True)
     elif backend == "dynamem":
         agent, config_path = create_dynamem_agent(**common)
-    elif backend == "graph_eqa":
+    elif backend in ("static_graph", "graph_eqa"):
         agent, config_path = create_graph_eqa_agent(
             **common,
             use_sensor_perception=use_sensor_perception,
@@ -557,7 +567,7 @@ def stream_stats(agent: Any, backend: str, *, dynav_resolved: str) -> dict[str, 
     """Status dict for periodic ``emet stream`` logging."""
     stats = _map_stats(agent, dynav_resolved=dynav_resolved)
     stats["backend"] = backend
-    if backend in ("graph_eqa", "dynagraph", "ground_truth"):
+    if backend in ("static_graph", "graph_eqa", "dynagraph", "ground_truth"):
         gm = getattr(agent, "graph_memory", None)
         if gm is not None and hasattr(gm, "get_nodes"):
             stats.update(_graph_node_counts(gm))

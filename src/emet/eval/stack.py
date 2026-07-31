@@ -14,11 +14,12 @@ from emet.config.embodied_agent_config import (
     normalize_memory_backend,
 )
 from emet.eval.benchmark_dynagraph import apply_dynagraph_harness
+from emet.eval.memory_backends import DYNAGRAPH, STATIC_GRAPH
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
-MemoryBackendName = Literal["dynagraph", "graph_eqa", "dynamem", "open_vocab"]
+MemoryBackendName = Literal["dynagraph", "static_graph", "dynamem", "open_vocab"]
 HarnessName = Literal[
     "interactive",
     "habitat_eqa",
@@ -69,7 +70,7 @@ def build_memory_agent(
     embodied_agent = coerce_embodied_agent_for_memory_backend(embodied_agent, backend_key)
 
     if apply_harness_profile and backend_key in GRAPH_EQA_FAMILY_BACKENDS:
-        method = "dynagraph" if backend_key == "dynagraph" else "graph_eqa"
+        method = DYNAGRAPH if backend_key == DYNAGRAPH else STATIC_GRAPH
         if harness_key == "interactive":
             from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
 
@@ -122,7 +123,7 @@ def build_memory_agent(
         from emet.controller.controller_graph_eqa import GraphEQAController
 
         logger.info(
-            f"build_memory_agent: graph_eqa harness={harness_key} "
+            f"build_memory_agent: static_graph harness={harness_key} "
             f"instance_graph={inst} sensor={sens} eqa={eqa}"
         )
         return GraphEQAController(**common)

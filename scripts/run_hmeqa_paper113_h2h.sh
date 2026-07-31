@@ -6,7 +6,7 @@
 #   nohup ./scripts/run_hmeqa_paper113_h2h.sh >> ~/runs/emet/hmeqa_paper113/nohup.log 2>&1 &
 #
 # Env:
-#   METHODS   space-separated methods (default: "graph_eqa dynagraph")
+#   METHODS   space-separated methods (default: "static_graph dynagraph")
 #   TIMEOUT   per-batch wall timeout seconds (default 86400)
 #   NEED_MIB  VRAM gate (default 12000)
 set -euo pipefail
@@ -21,7 +21,7 @@ OUT_DIR="${OUT_DIR:-$HOME/runs/emet/hmeqa_paper113/${RUN_ID}}"
 mkdir -p "$OUT_DIR"
 TIMEOUT="${TIMEOUT:-86400}"
 NEED_MIB="${NEED_MIB:-12000}"
-METHODS="${METHODS:-graph_eqa dynagraph}"
+METHODS="${METHODS:-static_graph dynagraph}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"

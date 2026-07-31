@@ -19,14 +19,14 @@ uv run emet run graph-eqa-habitat --dataset hmeqa --question-id 0 --mock-llm
 # (``eqa.vl_family: qwen3_vl``, ``Qwen/Qwen3-VL-8B-Instruct``). Override with
 # ``--eqa-vl-family`` / ``--eqa-hf-model-id`` for ablations.
 uv run emet run graph-eqa-habitat \
-  --method graph_eqa \
+  --method static_graph \
   --question-id 0 \
   --max-planning-steps 20 \
   --device cuda
 
 # HM-EQA paper batch (113 questions, indices 0–112; budget depends on GPU)
 .venv-habitat/bin/emet-habitat run-batch \
-  --method graph_eqa \
+  --method static_graph \
   --paper-subset \
   --device cuda \
   --resume \
@@ -74,7 +74,7 @@ Useful flags:
 | Flag | Default | Notes |
 |------|---------|-------|
 | `--question-id` | `0` | Index into `questions.csv` |
-| `--method` | `dynagraph` | `graph_eqa` or `dynagraph` |
+| `--method` | `dynagraph` | `static_graph` (alias `graph_eqa`) or `dynagraph` |
 | `--mock-llm` | off | Smoke / CI without real LLM |
 | `--mock-llm-explore` | off | With `--mock-llm`: mock `confidence: false` so each planning step navigates |
 | `--max-planning-steps` | `3` (wrapper) / `5` (`emet run`) | Exploration budget |
@@ -122,7 +122,7 @@ print(grade_mcq_answer(extract_mcq_letter_from_raw_eqa(raw.read_text(), row['cho
 
 | `--method` | Profile | Controller | Paper role |
 |------------|---------|------------|------------|
-| `graph_eqa` | `graph_eqa_baseline` (merge=0, staleness=0; no Dynagraph extras) | `GraphEQAController` | Internal GraphEQA reimplementation |
+| `static_graph` (alias `graph_eqa`) | `static_graph` (merge=0, staleness=0; no Dynagraph extras) | `GraphEQAController` | GraphEQA-inspired baseline |
 | `dynagraph` | `unified_eqa` (0.45 m merge / staleness 256) + memory on, debias off, explore conservative, SigLIP | `DynagraphController` | **Our method** |
 
 Config source: [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) via `apply_habitat_eqa_method_parameters`. Do **not** report Dynagraph under zero-merge / `smoke`. Cite episode **harness fingerprints** when quoting accuracy.

@@ -6,7 +6,7 @@ We evaluate these behaviors in Emet sim on Stretch with nav teleport enabled (\t
 
 \paragraph{Environments.}
 Robocasa pick-place kitchen (S1; seeds $\{0,1,2\}$) and MolmoSpaces iTHOR train scenes (S2; indices $\{0,1,2\}$).
-Dynagraph profiles follow \texttt{configs/benchmarks/dynagraph.yaml}: \texttt{interactive} (0.45\,m merge, staleness 256) vs.\ \texttt{graph\_eqa\_baseline} (merge/staleness off).
+Dynagraph profiles follow \texttt{configs/benchmarks/dynagraph.yaml}: \texttt{interactive} (0.45\,m merge, staleness 256) vs.\ \texttt{static\_graph} (merge/staleness off).
 
 \paragraph{Phase 1: Active exploration.}
 After sim startup the agent runs either rotate-in-place mapping (\texttt{explore\_max\_iters=0}, OVMM-style baseline) or frontier \texttt{explore-loop} with budgets $K \in \{8,15,30\}$.

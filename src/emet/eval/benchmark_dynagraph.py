@@ -13,7 +13,15 @@ from typing import Any, Literal
 import yaml
 
 from emet.core.parameters import Parameters
-from emet.eval.memory_backends import OVMM_MEMORY_BACKEND, SQA3D_MEMORY_BACKEND
+from emet.eval.memory_backends import (
+    DYNAGRAPH,
+    OVMM_MEMORY_BACKEND,
+    SQA3D_MEMORY_BACKEND,
+    STATIC_GRAPH,
+    normalize_benchmark_backend,
+    normalize_dynagraph_profile,
+    normalize_hmeqa_method,
+)
 from emet.utils.config import resolve_config_yaml_path
 
 ExploreWhenUncoveredMode = Literal["off", "on", "conservative"]
@@ -23,10 +31,10 @@ DynagraphProfileName = Literal[
     "eqa",
     "unified_eqa",
     "find_phase",
-    "graph_eqa_baseline",
+    "static_graph",
 ]
-DYNAMIC_EXPLORE_BACKEND = Literal["dynagraph", "graph_eqa"]
-DYNAMIC_EXPLORE_BACKENDS: tuple[str, ...] = ("dynagraph", "graph_eqa")
+DYNAMIC_EXPLORE_BACKEND = Literal["dynagraph", "static_graph"]
+DYNAMIC_EXPLORE_BACKENDS: tuple[str, ...] = (DYNAGRAPH, STATIC_GRAPH)
 SQA3DRunProfile = Literal["smoke", "tuned"]
 BenchmarkHarnessName = Literal[
     "habitat_eqa",
@@ -64,7 +72,8 @@ def profile_settings(
     profiles = load_dynagraph_benchmark_yaml(path).get("profiles", {})
     if not isinstance(profiles, dict):
         raise KeyError(f"No profiles in {path}")
-    block = profiles.get(profile)
+    name = normalize_dynagraph_profile(profile)
+    block = profiles.get(name)
     if not isinstance(block, dict):
         raise KeyError(f"Unknown Dynagraph profile {profile!r} in {path}")
     return dict(block)
@@ -93,13 +102,15 @@ def apply_eval_graph_fusion_parameters(
         merge_xy = float(raw) if raw is not None else 0.0
     fc = load_graph_object_fusion_config()
     fusion = asdict(fc)
-    fusion["enabled"] = True
     if float(merge_xy) > 0.0:
+        # Dynagraph production/EQA profiles keep merge + fallback aligned with
+        # ``dynagraph_merge_xy_m`` (typically 0.45) for long-horizon instance memory.
+        fusion["enabled"] = True
         fusion["fallback_spatial_merge_xy_m"] = float(merge_xy)
     else:
-        # Only true zero-merge profiles (``smoke``, ``graph_eqa_baseline``) disable fallback.
-        # Dynagraph production/EQA profiles must keep merge+fallback aligned with
-        # ``dynagraph_merge_xy_m`` (typically 0.45) for long-horizon instance memory.
+        # Zero-merge profiles (``smoke``, ``static_graph``): disable fusion entirely so
+        # IoU/embedding gates cannot silently merge instances (not only XY fallback).
+        fusion["enabled"] = False
         fusion["fallback_spatial_merge_xy_m"] = 0.0
     params.set("graph_object_fusion", fusion)
     return params
@@ -115,6 +126,7 @@ def apply_dynagraph_profile(
 ) -> Parameters:
     """Apply a named Dynagraph profile to a parameter dict (in-place on ``Parameters.data``)."""
     params = _as_parameters(parameters)
+    profile = normalize_dynagraph_profile(profile)
     settings = profile_settings(profile, path=path)
     if settings.get("dynagraph_merge_xy_m") is not None:
         params["dynagraph_merge_xy_m"] = float(settings["dynagraph_merge_xy_m"])
@@ -137,9 +149,10 @@ def apply_dynagraph_profile(
 
 
 def resolve_ovmm_dynagraph_profile(backend: OVMM_MEMORY_BACKEND | str) -> DynagraphProfileName | None:
-    if backend == "graph_eqa":
-        return "graph_eqa_baseline"
-    if backend in ("dynagraph", "ground_truth"):
+    name = normalize_benchmark_backend(backend)
+    if name == STATIC_GRAPH:
+        return STATIC_GRAPH
+    if name in (DYNAGRAPH, "ground_truth"):
         return "find_phase"
     return None
 
@@ -149,15 +162,16 @@ def resolve_sqa3d_dynagraph_profile(
     *,
     profile: SQA3DRunProfile,
 ) -> DynagraphProfileName | None:
-    if method != "dynagraph":
+    if method != DYNAGRAPH:
         return None
     return "smoke" if profile == "smoke" else "eqa"
 
 
 def resolve_dynamic_explore_profile(backend: DYNAMIC_EXPLORE_BACKEND | str) -> DynagraphProfileName:
-    if backend == "graph_eqa":
-        return "graph_eqa_baseline"
-    if backend == "dynagraph":
+    name = normalize_benchmark_backend(backend)
+    if name == STATIC_GRAPH:
+        return STATIC_GRAPH
+    if name == DYNAGRAPH:
         return "interactive"
     raise KeyError(f"Unknown dynamic exploration backend {backend!r}")
 
@@ -172,6 +186,7 @@ def apply_dynamic_explore_backend(
 ) -> Parameters:
     """Configure merge/staleness and harness flags for dynamic exploration backend rows."""
     params = _as_parameters(parameters)
+    backend = normalize_benchmark_backend(backend)
     profile = resolve_dynamic_explore_profile(backend)
     apply_dynagraph_harness(
         params,
@@ -194,6 +209,7 @@ def apply_ovmm_backend_dynagraph(
 ) -> Parameters:
     """Configure dynagraph merge/staleness and harness flags for OVMM find-phase rows."""
     params = _as_parameters(parameters)
+    backend = normalize_benchmark_backend(backend)
     if backend == "dynamem":
         return params
     profile = resolve_ovmm_dynagraph_profile(backend)
@@ -298,6 +314,9 @@ def apply_dynagraph_harness(
 ) -> Parameters:
     """Apply harness profile (merge/staleness) and per-method controller flags."""
     params = _as_parameters(parameters)
+    method = normalize_benchmark_backend(method)
+    if profile_override is not None:
+        profile_override = normalize_dynagraph_profile(profile_override)
     data = load_dynagraph_benchmark_yaml(path)
     harness_root = data.get("harness", {})
     if not isinstance(harness_root, dict):
@@ -307,6 +326,8 @@ def apply_dynagraph_harness(
         harness_block = {}
 
     profile_name = _resolve_harness_profile_name(harness_block, method, profile_override=profile_override)
+    if profile_name is not None:
+        profile_name = normalize_dynagraph_profile(profile_name)
     if apply_profile and profile_name is not None:
         apply_dynagraph_profile(
             params,
@@ -315,7 +336,7 @@ def apply_dynagraph_harness(
             staleness_horizon=staleness_horizon,
             path=path,
         )
-    elif method == "dynagraph":
+    elif method == DYNAGRAPH:
         apply_eval_graph_fusion_parameters(params, merge_xy_m=merge_xy_m)
 
     method_opts = {
@@ -351,11 +372,12 @@ def apply_habitat_eqa_method_parameters(
     parameters: Parameters | dict[str, Any],
     method: str,
 ) -> Parameters:
-    """HM-EQA harness: ``graph_eqa`` → ``graph_eqa_baseline`` (merge/staleness off);
+    """HM-EQA harness: ``static_graph`` → zero merge/staleness (GraphEQA-inspired);
     ``dynagraph`` → ``unified_eqa`` (0.45 m merge) + tuned EQA extras.
+
+    Legacy ``graph_eqa`` / profile ``graph_eqa_baseline`` alias to ``static_graph``.
     """
-    if method not in ("graph_eqa", "dynagraph"):
-        raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
+    method = normalize_hmeqa_method(method)
     params = _as_parameters(parameters)
     apply_dynagraph_harness(params, "habitat_eqa", method)
     return params
@@ -369,6 +391,7 @@ def apply_habitat_ovmm_find_parameters(
     staleness_horizon: int | None = None,
 ) -> Parameters:
     params = _as_parameters(parameters)
+    backend = normalize_benchmark_backend(backend)
     apply_dynagraph_harness(
         params,
         "habitat_ovmm_find",
@@ -437,6 +460,7 @@ def harness_controller_options(
     path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML,
 ) -> dict[str, Any]:
     """Return documented controller kwargs for a benchmark harness (task-specific)."""
+    method = normalize_benchmark_backend(method)
     data = load_dynagraph_benchmark_yaml(path)
     block = data.get("harness", {})
     if not isinstance(block, dict):

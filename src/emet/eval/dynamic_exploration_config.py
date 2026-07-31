@@ -142,7 +142,11 @@ def load_dynamic_exploration_config(path: str | Path | None = None) -> DynamicEx
 
     profiles_raw = raw.get("profiles") if isinstance(raw, dict) else {}
     if not isinstance(profiles_raw, dict):
-        profiles_raw = {"dynagraph": "interactive", "graph_eqa": "graph_eqa_baseline"}
+        profiles_raw = {
+            "dynagraph": "interactive",
+            "static_graph": "static_graph",
+            "graph_eqa": "static_graph",
+        }
 
     smoke_raw = raw.get("smoke") if isinstance(raw, dict) else {}
     if not isinstance(smoke_raw, dict):

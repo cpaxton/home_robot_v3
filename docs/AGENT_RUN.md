@@ -90,7 +90,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | Value | Controller | Object graph |
 |-------|------------|--------------|
 | **`dynagraph`** (default) | `DynagraphController` | Dynagraph memory (GraphEQAMemory + merge/staleness) — Discord / paper method |
-| `graph_eqa` | `GraphEQAController` | GraphEQAMemory only (paper baseline; no Dynagraph lifecycle) |
+| `static_graph` (alias `graph_eqa`) | `GraphEQAController` | GraphEQAMemory only (zero-merge baseline; no Dynagraph lifecycle) |
 | `open_vocab` | `DynamemController` | OpenVocabSceneGraph only (`emet run scene-graph`) |
 | `dynamem` | `DynamemController` | Voxels only (no graph plug-in) |
 

@@ -32,7 +32,8 @@ REPO = Path(__file__).resolve().parents[1]
 BACKEND_COLORS: dict[str, tuple[float, float, float]] = {
     "gt": (1.0, 1.0, 1.0),
     "dynamem": (0.35, 0.65, 1.0),
-    "graph_eqa": (1.0, 0.55, 0.15),
+    "static_graph": (1.0, 0.55, 0.15),
+    "graph_eqa": (1.0, 0.55, 0.15),  # legacy alias display
     "dynagraph": (0.25, 0.85, 0.45),
     "vlm_only": (0.95, 0.35, 0.85),
 }
@@ -302,7 +303,9 @@ def run_backend_on_session(
                 wait_obs(timeout=30.0)
         robot.move_to_nav_posture()
 
-        profile_backend = "graph_eqa" if backend == "vlm_only" else backend
+        profile_backend = "static_graph" if backend == "vlm_only" else backend
+        if profile_backend == "graph_eqa":
+            profile_backend = "static_graph"
         parameters = apply_backend_parameters(get_parameters("dynav_config.yaml"), profile_backend)
         parameters["encoder"] = None
         parameters["debug_perfect_sensor_depth"] = True
@@ -338,7 +341,9 @@ def run_backend_on_session(
 
         zmq_session = robot.get_emet_session()
         placements = read_sim_object_placements(zmq_session)
-        memory = get_memory_backend_for_agent(agent, profile_backend if backend != "vlm_only" else "graph_eqa")
+        memory = get_memory_backend_for_agent(
+            agent, profile_backend if backend != "vlm_only" else "static_graph"
+        )
         vm = getattr(agent, "voxel_map", None)
 
         prefer_voxel = backend == "dynamem"
@@ -514,8 +519,8 @@ def main() -> int:
     parser.add_argument(
         "--backends",
         nargs="+",
-        default=["dynamem", "graph_eqa", "dynagraph", "vlm_only"],
-        help="Backend rows (vlm_only = rotate-only voxel-VLM baseline)",
+        default=["dynamem", "static_graph", "dynagraph", "vlm_only"],
+        help="Backend rows (vlm_only = rotate-only voxel-VLM baseline; graph_eqa aliases static_graph)",
     )
     parser.add_argument("--port-offset-base", type=int, default=800)
     parser.add_argument("--cpu-only", action="store_true")
@@ -528,7 +533,7 @@ def main() -> int:
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="Fast smoke: graph_eqa + dynagraph, explore_steps=1",
+        help="Fast smoke: static_graph + dynagraph, explore_steps=1",
     )
     parser.add_argument(
         "--full-protocol",
@@ -543,8 +548,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.quick:
-        args.backends = ["graph_eqa", "dynagraph"]
+        args.backends = ["static_graph", "dynagraph"]
         args.explore_steps = 1
+    # Normalize legacy alias so create_find_phase_agent gets canonical ids.
+    args.backends = ["static_graph" if b == "graph_eqa" else b for b in args.backends]
 
     out_dir = args.output_dir.expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)

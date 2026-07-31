@@ -17,7 +17,7 @@ Examples::
     # Full backend matrix (GPU recommended; one job at a time)
     NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
     uv run python scripts/run_ovmm_find_backend_matrix.py \\
-      --backends ground_truth,dynamem,graph_eqa,dynagraph \\
+      --backends ground_truth,dynamem,static_graph,dynagraph \\
       --output-dir ~/runs/emet/ovmm_find_phase/backend_matrix
 """
 
@@ -43,7 +43,7 @@ _PERCEPTION_MIN_EXPLORE_STEPS = {
     "robocasa_pp_s1": 8,
     "molmo_ithor_s2_idx0": 15,
 }
-_DEFAULT_BACKENDS = ("ground_truth", "dynamem", "graph_eqa", "dynagraph")
+_DEFAULT_BACKENDS = ("ground_truth", "dynamem", "static_graph", "dynagraph")
 _METRIC_KEYS = (
     "find_partial_success",
     "find_object_success",

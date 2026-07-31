@@ -26,9 +26,16 @@ from typing import Any, Literal
 import numpy as np
 import yaml
 
+from emet.eval.memory_backends import (
+    DYNAGRAPH,
+    GROUND_TRUTH,
+    OVMM_MEMORY_BACKEND,
+    STATIC_GRAPH,
+    normalize_benchmark_backend,
+)
 from emet.utils.config import resolve_config_yaml_path
 
-MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
+MemoryBackendName = OVMM_MEMORY_BACKEND
 ManipMode = Literal["skip", "oracle", "sim", "attempt"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
@@ -713,9 +720,13 @@ def create_find_phase_agent(
     from emet.eval.benchmark_dynagraph import harness_controller_kwargs
     from emet.memory.format import VOXEL_PICKLE_FILENAME
 
+    backend = normalize_benchmark_backend(backend)
     harness_kw = harness_controller_kwargs(parameters, harness="ovmm_find_phase", method=str(backend))
     use_instance_graph = bool(
-        harness_kw.get("use_instance_graph", backend in ("graph_eqa", "dynagraph", "ground_truth"))
+        harness_kw.get(
+            "use_instance_graph",
+            backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH),
+        )
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
     input_path = str(graph_memory_input_path) if graph_memory_input_path else None
@@ -736,7 +747,7 @@ def create_find_phase_agent(
             vm = getattr(agent, "voxel_map", None)
             if voxel_pickle.is_file() and vm is not None and hasattr(vm, "read_from_pickle"):
                 vm.read_from_pickle(str(voxel_pickle))
-    elif backend == "graph_eqa":
+    elif backend == STATIC_GRAPH:
         from emet.controller.controller_graph_eqa import GraphEQAController
 
         agent = GraphEQAController(
@@ -749,7 +760,7 @@ def create_find_phase_agent(
             manipulation_only=manipulation_only,
             graph_memory_input_path=input_path,
         )
-    elif backend == "dynagraph":
+    elif backend == DYNAGRAPH:
         from emet.controller.controller_dynagraph import DynagraphController
 
         agent = DynagraphController(
@@ -763,7 +774,7 @@ def create_find_phase_agent(
             visualize_ground_truth=compare_to_gt,
             graph_memory_input_path=input_path,
         )
-    elif backend == "ground_truth":
+    elif backend == GROUND_TRUTH:
         from emet.controller.controller_dynagraph import DynagraphController
 
         agent = DynagraphController(
@@ -790,7 +801,7 @@ def get_memory_backend_for_agent(agent: Any, backend: MemoryBackendName):
     if backend == "dynamem":
         return get_memory_backend("dynamem", voxel_map=agent.voxel_map)
     return get_memory_backend(
-        "graph_eqa",
+        STATIC_GRAPH,
         graph_memory=agent.graph_memory,
         voxel_map=getattr(agent, "voxel_map", None),
     )

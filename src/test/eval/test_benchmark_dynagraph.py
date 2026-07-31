@@ -29,7 +29,7 @@ def test_dynav_config_matches_interactive_profile():
 
 def test_ovmm_and_shared_module_agree():
     base = get_parameters("dynav_config.yaml")
-    for backend in ("graph_eqa", "dynagraph", "ground_truth"):
+    for backend in ("static_graph", "graph_eqa", "dynagraph", "ground_truth"):
         via_shared = apply_ovmm_backend_dynagraph(base, backend)
         via_legacy = apply_backend_parameters(get_parameters("dynav_config.yaml"), backend)  # type: ignore[arg-type]
         assert via_shared.get("dynagraph_merge_xy_m") == via_legacy.get("dynagraph_merge_xy_m")
@@ -62,16 +62,18 @@ def test_sqa3d_smoke_disables_merge():
 
 
 def test_profile_resolution():
-    assert resolve_ovmm_dynagraph_profile("graph_eqa") == "graph_eqa_baseline"
+    assert resolve_ovmm_dynagraph_profile("static_graph") == "static_graph"
+    assert resolve_ovmm_dynagraph_profile("graph_eqa") == "static_graph"  # legacy alias
     assert resolve_ovmm_dynagraph_profile("dynagraph") == "find_phase"
     assert resolve_sqa3d_dynagraph_profile("dynagraph", profile="tuned") == "eqa"
     assert resolve_sqa3d_dynagraph_profile("dynamem", profile="tuned") is None
 
 
-def test_ovmm_graph_eqa_uses_baseline_profile():
-    params = apply_ovmm_backend_dynagraph(get_parameters("dynav_config.yaml"), "graph_eqa")
-    assert params.get("dynagraph_merge_xy_m") == 0.0
-    assert params.get("dynagraph_staleness_horizon") == 0
+def test_ovmm_static_graph_uses_baseline_profile():
+    for backend in ("static_graph", "graph_eqa"):
+        params = apply_ovmm_backend_dynagraph(get_parameters("dynav_config.yaml"), backend)
+        assert params.get("dynagraph_merge_xy_m") == 0.0
+        assert params.get("dynagraph_staleness_horizon") == 0
 
 
 def test_harness_controller_docs_present():
@@ -85,13 +87,14 @@ def test_harness_controller_docs_present():
     assert habitat.get("explore_when_uncovered") == "conservative"
 
 
-def test_dynamic_explore_graph_eqa_baseline_merge():
+def test_dynamic_explore_static_graph_baseline_merge():
     from emet.eval.benchmark_dynagraph import apply_dynamic_explore_backend
 
-    params = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), "graph_eqa")
-    assert params.get("dynagraph_merge_xy_m") == 0.0
-    flags = dynagraph_harness_flags(params)
-    assert flags["explore_when_uncovered"] == "off"
+    for backend in ("static_graph", "graph_eqa"):
+        params = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), backend)
+        assert params.get("dynagraph_merge_xy_m") == 0.0
+        flags = dynagraph_harness_flags(params)
+        assert flags["explore_when_uncovered"] == "off"
 
 
 def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
@@ -108,31 +111,32 @@ def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
     assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.45
 
 
-def test_habitat_eqa_graph_eqa_uses_baseline_zero_merge():
-    """HM-EQA ``graph_eqa`` must be the GraphEQA paper row (merge/staleness off)."""
-    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "graph_eqa")
-    baseline = profile_settings("graph_eqa_baseline")
-    assert params.get("dynagraph_merge_xy_m") == baseline["dynagraph_merge_xy_m"] == 0.0
-    assert params.get("dynagraph_staleness_horizon") == baseline["dynagraph_staleness_horizon"] == 0
-    block = params.get("dynagraph_harness") or {}
-    assert block.get("profile") == "graph_eqa_baseline"
-    assert block.get("memory_summary") is False
-    assert block.get("mcq_debias") is False
-    assert block.get("explore_when_uncovered") == "off"
-    assert block.get("siglip_grounding") is False
-    flags = dynagraph_harness_flags(params)
-    assert flags["memory_summary"] is False
-    assert flags["mcq_debias"] is False
-    assert flags["explore_when_uncovered"] == "off"
-    assert flags["siglip_grounding"] is False
-    fusion = params.get("graph_object_fusion") or {}
-    assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0
+def test_habitat_eqa_static_graph_uses_baseline_zero_merge():
+    """HM-EQA ``static_graph`` (alias ``graph_eqa``) is the GraphEQA-inspired paper row."""
+    for method in ("static_graph", "graph_eqa"):
+        params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), method)
+        baseline = profile_settings("static_graph")
+        assert params.get("dynagraph_merge_xy_m") == baseline["dynagraph_merge_xy_m"] == 0.0
+        assert params.get("dynagraph_staleness_horizon") == baseline["dynagraph_staleness_horizon"] == 0
+        block = params.get("dynagraph_harness") or {}
+        assert block.get("profile") == "static_graph"
+        assert block.get("memory_summary") is False
+        assert block.get("mcq_debias") is False
+        assert block.get("explore_when_uncovered") == "off"
+        assert block.get("siglip_grounding") is False
+        flags = dynagraph_harness_flags(params)
+        assert flags["memory_summary"] is False
+        assert flags["mcq_debias"] is False
+        assert flags["explore_when_uncovered"] == "off"
+        assert flags["siglip_grounding"] is False
+        fusion = params.get("graph_object_fusion") or {}
+        assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0
 
 
 def test_zero_merge_profiles_disable_fusion_fallback():
     from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
 
-    for name in ("smoke", "graph_eqa_baseline"):
+    for name in ("smoke", "static_graph", "graph_eqa_baseline"):
         params = apply_dynagraph_profile(get_parameters("dynav_config.yaml"), name)
         assert params.get("dynagraph_merge_xy_m") == 0.0
         fusion = params.get("graph_object_fusion") or {}

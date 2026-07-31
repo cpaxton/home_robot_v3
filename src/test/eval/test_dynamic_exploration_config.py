@@ -24,6 +24,7 @@ def test_load_dynamic_exploration_config():
     assert len(cfg.episodes) >= 6
     assert cfg.explore_budgets == (8, 15, 30)
     assert "dynagraph" in cfg.profiles
+    assert "static_graph" in cfg.profiles
     smoke = resolve_smoke_run_plan(cfg)
     assert smoke.episode_id == "robocasa_seed0"
     assert smoke.backend == "dynagraph"
@@ -109,17 +110,20 @@ def test_load_lifelong_episodes():
 
 def test_dynamic_explore_profiles():
     assert resolve_dynamic_explore_profile("dynagraph") == "interactive"
-    assert resolve_dynamic_explore_profile("graph_eqa") == "graph_eqa_baseline"
-    assert DYNAMIC_EXPLORE_BACKENDS == ("dynagraph", "graph_eqa")
+    assert resolve_dynamic_explore_profile("static_graph") == "static_graph"
+    assert resolve_dynamic_explore_profile("graph_eqa") == "static_graph"  # legacy alias
+    assert DYNAMIC_EXPLORE_BACKENDS == ("dynagraph", "static_graph")
 
 
 def test_apply_dynamic_explore_backend():
     from emet.core.parameters import get_parameters
 
     params = get_parameters("dynav_config.yaml")
-    out = apply_dynamic_explore_backend(params, "graph_eqa")
+    out = apply_dynamic_explore_backend(params, "static_graph")
     assert float(out["dynagraph_merge_xy_m"]) == 0.0
     assert int(out["dynagraph_staleness_horizon"]) == 0
+    alias = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), "graph_eqa")
+    assert float(alias["dynagraph_merge_xy_m"]) == 0.0
 
 
 def test_dynagraph_subprocess_timeout_scales_with_explore_budget():
@@ -167,23 +171,24 @@ def test_build_dynagraph_subprocess_cmd_skip_eqa_omits_questions():
     assert cmd[cmd.index("--benchmark-method") + 1] == "dynagraph"
 
 
-def test_build_dynagraph_subprocess_cmd_graph_eqa_method():
+def test_build_dynagraph_subprocess_cmd_static_graph_method():
     from emet.eval.dynamic_exploration_config import load_dynamic_exploration_config
     from emet.eval.dynamic_exploration_runner import build_dynagraph_subprocess_cmd
 
     cfg = load_dynamic_exploration_config()
-    cmd = build_dynagraph_subprocess_cmd(
-        export_dir=Path("/tmp/export"),
-        port_offset=0,
-        backend="graph_eqa",
-        cfg=cfg,
-        cpu_only=True,
-        no_sensor_perception=True,
-        explore_iters=0,
-        include_explore_loop=False,
-        skip_eqa=True,
-    )
-    assert cmd[cmd.index("--benchmark-method") + 1] == "graph_eqa"
+    for backend in ("static_graph", "graph_eqa"):
+        cmd = build_dynagraph_subprocess_cmd(
+            export_dir=Path("/tmp/export"),
+            port_offset=0,
+            backend=backend,
+            cfg=cfg,
+            cpu_only=True,
+            no_sensor_perception=True,
+            explore_iters=0,
+            include_explore_loop=False,
+            skip_eqa=True,
+        )
+        assert cmd[cmd.index("--benchmark-method") + 1] == "static_graph"
 
 
 def test_sim_set_body_pose_zmq_action():

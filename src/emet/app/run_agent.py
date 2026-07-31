@@ -281,7 +281,7 @@ log = Logger(__name__)
     "--memory-backend",
     "memory_backend",
     type=click.Choice(
-        ["dynagraph", "graph_eqa", "dynamem", "open_vocab"],
+        ["dynagraph", "static_graph", "graph_eqa", "dynamem", "open_vocab"],
         case_sensitive=False,
     ),
     default="dynagraph",
@@ -289,7 +289,7 @@ log = Logger(__name__)
     help=(
         "Object-graph plug-in on the voxel map (mutually exclusive): "
         "dynagraph (default; GraphEQAMemory + merge/staleness), "
-        "graph_eqa (GraphEQA baseline, no Dynagraph lifecycle), "
+        "static_graph (zero-merge GraphEQA-inspired baseline; graph_eqa is a legacy alias), "
         "open_vocab (SAM3/OWL scene graph only), or dynamem (voxels only)."
     ),
 )
@@ -560,7 +560,9 @@ def main(
         from emet.eval.habitat_eqa_agent import run_hmeqa_via_shared_episode
 
         method = str(memory_backend or "dynagraph").strip().lower()
-        if method not in ("dynagraph", "graph_eqa"):
+        if method == "graph_eqa":
+            method = "static_graph"
+        if method not in ("dynagraph", "static_graph"):
             method = "dynagraph"
         log.info(
             f"EQA eval mode: shared HM-EQA episode (question_id={habitat_question_id}, "

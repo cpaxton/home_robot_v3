@@ -33,7 +33,11 @@ def _delegate(argv: list[str]) -> int:
 @click.pass_context
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option(
+    "--method",
+    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    default="dynagraph",
+)
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=5, type=int)
 def main(

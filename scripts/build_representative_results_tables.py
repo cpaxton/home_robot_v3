@@ -52,14 +52,14 @@ def _summarize_hmeqa_tuning(tuning_run_id: str, results_root: Path) -> dict[str,
 
 def _summarize_hmeqa_rep(run_id: str, results_root: Path) -> dict[str, Any]:
     out: dict[str, Any] = {"run_id": run_id, "methods": {}}
-    for method in ("graph_eqa", "dynagraph"):
+    for method in ("static_graph", "dynagraph"):
         for sl in ("holdout8", "canonical8"):
             p = results_root / f"subset_{run_id}_{sl}_{method}_qwen3_vl.jsonl"
             key = f"{method}_{sl}"
             out["methods"][key] = _score_hmeqa(_load_jsonl(p))
     # Also ingest postfix_nav reference if rep run missing
     ref_tag = "postfix_nav20260705_larger"
-    for method in ("graph_eqa", "dynagraph"):
+    for method in ("static_graph", "dynagraph"):
         for sl in ("holdout8",):
             key = f"{method}_{sl}_ref"
             p = results_root / f"subset_{ref_tag}_{sl}_{method}_qwen3_vl.jsonl"
@@ -358,7 +358,7 @@ def render_latex_snippet(data: dict[str, Any]) -> str:
         )
 
     s0 = data["ovmm_sim"]["tiers"].get("s0", {})
-    for backend in ("dynagraph", "graph_eqa", "dynamem", "ground_truth"):
+    for backend in ("dynagraph", "static_graph", "dynamem", "ground_truth"):
         if backend not in s0:
             continue
         st = s0[backend]

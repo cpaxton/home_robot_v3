@@ -205,7 +205,12 @@ def _diagnostics_cli_options(fn):
 @main.command("run-episode")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option(
+    "--method",
+    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    default="dynagraph",
+    help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
+)
 @click.option("--mock-llm", is_flag=True, default=False, help="Use mocked EQA responses (smoke / CI)")
 @click.option(
     "--mock-llm-explore",
@@ -319,7 +324,12 @@ def run_episode(
 
 
 @main.command("run-batch")
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="graph_eqa")
+@click.option(
+    "--method",
+    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    default="static_graph",
+    help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
+)
 @click.option("--question-start", default=0, type=int)
 @click.option(
     "--question-end",
@@ -381,7 +391,7 @@ def run_batch(
     memory_summary: bool | None,
     explore_when_uncovered: str | None,
 ) -> None:
-    """Run a slice of HM-EQA (GraphEQA paper: 113 questions, method=graph_eqa)."""
+    """Run a slice of HM-EQA (GraphEQA paper: 113 questions; default method=static_graph)."""
     from emet_habitat.runner import run_hmeqa_batch
 
     questions_path = (data_dir / "questions.csv") if data_dir else None
@@ -464,9 +474,9 @@ def compare_batch(
     eqa_hf_model_id: str | None,
     device: str,
 ) -> None:
-    """Run graph_eqa and dynagraph on the same questions; print side-by-side summary.
+    """Run static_graph and dynagraph on the same questions; print side-by-side summary.
 
-    ``graph_eqa`` uses ``graph_eqa_baseline`` (merge/staleness off); ``dynagraph`` uses
+    ``static_graph`` (legacy ``graph_eqa``) uses zero merge/staleness; ``dynagraph`` uses
     ``unified_eqa`` (0.45 m merge) plus tuned extras. Accuracy need not match.
     """
     from emet_habitat.runner import run_hmeqa_compare
@@ -476,7 +486,7 @@ def compare_batch(
     qs = load_hmeqa_questions(questions_path)
     end = len(qs) - 1 if question_end < 0 else min(question_end, len(qs) - 1)
     ids = list(range(max(0, question_start), end + 1))
-    click.echo(f"Comparing graph_eqa vs dynagraph on {len(ids)} questions (mock_llm={mock_llm})")
+    click.echo(f"Comparing static_graph vs dynagraph on {len(ids)} questions (mock_llm={mock_llm})")
 
     try:
         graph, dyna = run_hmeqa_compare(
@@ -496,16 +506,16 @@ def compare_batch(
         raise click.ClickException(str(exc)) from exc
 
     comparison = compare_method_results(graph, dyna)
-    click.echo(f"graph_eqa:  {comparison['graph_eqa']}")
-    click.echo(f"dynagraph:  {comparison['dynagraph']}")
+    click.echo(f"static_graph:  {comparison['static_graph']}")
+    click.echo(f"dynagraph:     {comparison['dynagraph']}")
     click.echo(
-        f"agreement: both={comparison['both_correct']} graph_only={comparison['graph_only']} "
+        f"agreement: both={comparison['both_correct']} static_only={comparison['static_only']} "
         f"dynagraph_only={comparison['dynagraph_only']} neither={comparison['neither']}"
     )
     for row in comparison["per_question"]:
         click.echo(
             f"  Q{row['question_id']:02d} gold={row['gold']} "
-            f"graph={row['graph_eqa_pred']}({'ok' if row['graph_eqa_correct'] else 'x'}) "
+            f"static={row['static_graph_pred']}({'ok' if row['static_graph_correct'] else 'x'}) "
             f"dyna={row['dynagraph_pred']}({'ok' if row['dynagraph_correct'] else 'x'})"
         )
 
@@ -513,7 +523,7 @@ def compare_batch(
         output.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "comparison": comparison,
-            "graph_eqa_episodes": [e.to_dict() for e in graph],
+            "static_graph_episodes": [e.to_dict() for e in graph],
             "dynagraph_episodes": [e.to_dict() for e in dyna],
         }
         output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -530,7 +540,7 @@ def compare_batch(
 @click.option("--episode-id", required=True, help="Episode id from registry")
 @click.option(
     "--backend",
-    type=click.Choice(["dynamem", "graph_eqa", "dynagraph", "ground_truth"]),
+    type=click.Choice(["dynamem", "static_graph", "graph_eqa", "dynagraph", "ground_truth"]),
     default="dynagraph",
 )
 @click.option("--merge-xy-m", type=float, default=None)
@@ -630,7 +640,7 @@ def explore_frontiers(
 @click.option("--episode-id", multiple=True, help="Subset of episode ids")
 @click.option(
     "--backend",
-    type=click.Choice(["dynamem", "graph_eqa", "dynagraph", "ground_truth"]),
+    type=click.Choice(["dynamem", "static_graph", "graph_eqa", "dynagraph", "ground_truth"]),
     default="dynagraph",
 )
 @click.option("--merge-xy-m", type=float, default=None)

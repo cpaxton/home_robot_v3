@@ -12,7 +12,7 @@ FindObj / FindRec localization on Emet sim tiers S0–S2 and Habitat HM3D proxy 
 
 ## Backends
 
-`dynamem`, `graph_eqa`, `dynagraph`, `ground_truth` (sim oracle). Perception backends use GPU and **must not** pass `--not-rotate`. Oracle may use `--not-rotate --cpu-only`.
+`dynamem`, `static_graph`, `dynagraph`, `ground_truth` (sim oracle). Perception backends use GPU and **must not** pass `--not-rotate`. Oracle may use `--not-rotate --cpu-only`.
 
 ## Config and output
 
@@ -33,7 +33,7 @@ uv run python scripts/download_ovmm_benchmark_assets.py
 
 uv run python scripts/eval_ovmm_find_phases.py \
   --tier S0 \
-  --backend dynamem --backend graph_eqa --backend dynagraph --backend ground_truth \
+  --backend dynamem --backend static_graph --backend dynagraph --backend ground_truth \
   --cpu-only \
   --output-dir ~/runs/emet/ovmm_find_phase/s0_paper
 ```

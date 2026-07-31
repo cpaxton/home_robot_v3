@@ -166,6 +166,15 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). |
 | `EMET_REQUIRE_FLASH_ATTN` | `attn_impl.resolve_attn_implementation` | `1`/`0` — require Flash-Attn 2 on CUDA VL loads. **Default on** when unset (fail loud instead of silent SDPA). |
 | `EMET_ALLOW_SDPA_ATTN` | same | `1` — permit PyTorch SDPA when flash-attn is missing (slower; long multi-image EQA can crawl). Overrides the default require-flash policy. |
+| `EMET_FORCE_TEGRA` | `emet.utils.platform_info` | `1` — treat host as Jetson/Tegra for install hints (tests / CI). |
+| `EMET_INSTALL_PROFILE` | `install.sh` | `minimal` \| `standard` \| `full` \| `jetson`. `jetson` = lean Orin install (see [jetson.md](jetson.md)). |
+| `EMET_OPENAI_BASE_URL` | `OpenaiClient` / `--llm openai` | OpenAI-compatible API root including `/v1` (e.g. `http://caliban:8000/v1`). See [llm_serve.md](llm_serve.md). |
+| `OPENAI_BASE_URL` | same | Fallback if `EMET_OPENAI_BASE_URL` unset. |
+| `EMET_OPENAI_MODEL` | `get_llm_client("openai")` | Model id sent to the remote server (default `gpt-4o` when unset). |
+| `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
+| `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
+| `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |
+| `EMET_SKIP_GOMP_PRELOAD` | `openai_server` | `1` — skip Jetson libgomp LD_PRELOAD workaround. |
 | `eqa.vl_image_max_side` | VL clients / `describe_scene` | Longest RGB edge before VL/detector (default `512`; `0` = no resize). Override: `--set eqa.vl_image_max_side=384`. |
 | `eqa.vl_image_max_pixels` | Same | Optional `H*W` cap after side resize (`0` = off). |
 | `EMET_AGENT_THINKING_STATUS` | Agent loop | `1`/`0` — emit `*Thinking…*` status lines (default on). CLI: `--thinking-status` / `--no-thinking-status`. Heartbeats every ~8s while the LLM is still running. |

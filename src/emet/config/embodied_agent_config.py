@@ -24,8 +24,9 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 # Mutually exclusive object-graph plug-ins on the voxel map (``agent.memory_backend``).
-MEMORY_BACKENDS = ("dynamem", "open_vocab", "graph_eqa", "dynagraph")
-GRAPH_EQA_FAMILY_BACKENDS = frozenset({"graph_eqa", "dynagraph"})
+# Canonical static baseline is ``static_graph`` (legacy alias: ``graph_eqa``).
+MEMORY_BACKENDS = ("dynamem", "open_vocab", "static_graph", "dynagraph")
+GRAPH_EQA_FAMILY_BACKENDS = frozenset({"static_graph", "dynagraph"})
 
 
 @dataclass
@@ -86,11 +87,18 @@ def legacy_embodied_agent_off() -> EmbodiedAgentConfig:
 
 
 def normalize_memory_backend(memory_backend: str | None) -> str:
-    """Return a canonical ``memory_backend`` value (default ``dynagraph``)."""
+    """Return a canonical ``memory_backend`` value (default ``dynagraph``).
+
+    Accepts legacy ``graph_eqa`` → ``static_graph``.
+    """
+    from emet.eval.memory_backends import normalize_benchmark_backend
+
     mb = str(memory_backend or "dynagraph").strip().lower().replace("-", "_")
+    mb = normalize_benchmark_backend(mb)
     if mb not in MEMORY_BACKENDS:
         raise ValueError(
-            f"Unknown memory_backend={memory_backend!r}; expected one of {MEMORY_BACKENDS}"
+            f"Unknown memory_backend={memory_backend!r}; expected one of {MEMORY_BACKENDS} "
+            f"(legacy alias: graph_eqa → static_graph)"
         )
     return mb
 

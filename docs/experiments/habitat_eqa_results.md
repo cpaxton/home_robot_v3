@@ -2,6 +2,8 @@
 
 Recorded numbers for the Dynagraph paper and parity appendix. **JSONL paths** live under `~/.cache/habitat_eqa/results/` unless noted.
 
+**Method id rename (2026-07-29):** the public HM-EQA / OVMM backend id is now **`static_graph`** (profile `static_graph`). Historical tables and JSONL tags below may still say `graph_eqa` — treat those as the same zero-merge baseline. CLI still accepts `--method graph_eqa` as an alias.
+
 Maintainer: update this file and `paper/sections/05_results.tex` / `paper/sections/appendix/05_habitat_eqa_parity.tex` together after each sweep.
 
 ## JSONL tagging (pre- vs post-nav-fix)
@@ -149,7 +151,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
 
-**Merge policy (2026-07-11; clarified 2026-07-28):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`graph_eqa`** uses **`graph_eqa_baseline`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA comparison row. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
+**Merge policy (2026-07-11; clarified 2026-07-29):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`static_graph`** (legacy method tag `graph_eqa`) uses profile **`static_graph`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA-inspired comparison row. Historical JSONL / table labels may still say `graph_eqa`; they map to `static_graph`. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
 
 **Memory-confirm (2026-07-13):** Dynagraph extras that used to lose GE-only wins (false `CONFIRMED_MEMORY`, dining-table Image‑1 for trash, nearest-furniture overriding a clear VLM letter) are gated in `GraphEQAMemory` + `emet_habitat.runner`: prefer boosted choice landmarks for Image‑1, never override a clear VLM A–D with nearest-furniture alone, abstain when the target is not in attached views, and require ≥2 grounded under-equipment options before geometric letters. Cite harness fingerprint + git commit (e.g. `f1478c9` memory-confirm). **Accept-vs-fix hard cases:** Q16 (pillow/sofa labeling) and exploration-limited Q18/Q31/Q57 can still flake; Dynagraph’s static HM-EQA claim is *no GE-only memory collapse*, not 100% on every search MCQ. True world-change wins stay on the Robocasa/Molmo dynamic-exploration track.
 

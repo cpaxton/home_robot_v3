@@ -203,10 +203,10 @@ def main() -> None:
         )
 
 
-@main.command(short_help="Start simulation server (mujoco, robocasa, molmospaces, or habitat)")
+@main.command(short_help="Start simulation server (mujoco, robocasa, molmospaces, habitat) or LLM HTTP API")
 @click.argument(
     "backend",
-    type=click.Choice(["mujoco", "robocasa", "molmospaces", "habitat"]),
+    type=click.Choice(["mujoco", "robocasa", "molmospaces", "habitat", "llm"]),
     default="mujoco",
 )
 @click.option(
@@ -329,6 +329,49 @@ def main() -> None:
         "Registry robots (innate_mars, rby1, galaxea_r1) use RobosuiteZmqServer on merged MJCF paths."
     ),
 )
+@click.option(
+    "--llm",
+    "llm_key",
+    default="qwen25-7B",
+    show_default=True,
+    help="For ``serve llm``: emet llm key (e.g. qwen25-14B, qwen35-9B).",
+)
+@click.option(
+    "--host",
+    "llm_host",
+    default="0.0.0.0",
+    show_default=True,
+    help="For ``serve llm``: bind address (0.0.0.0 for LAN).",
+)
+@click.option(
+    "--port",
+    "llm_port",
+    default=8000,
+    show_default=True,
+    type=int,
+    help="For ``serve llm``: HTTP port (OpenAI-compatible /v1).",
+)
+@click.option(
+    "--device",
+    "llm_device",
+    default="auto",
+    show_default=True,
+    help="For ``serve llm``: auto | cuda | cpu | mps.",
+)
+@click.option(
+    "--max-tokens",
+    "llm_max_tokens",
+    default=512,
+    show_default=True,
+    type=int,
+    help="For ``serve llm``: default max_new_tokens.",
+)
+@click.option(
+    "--api-key",
+    "llm_api_key",
+    default=None,
+    help="For ``serve llm``: optional Bearer token (or EMET_LLM_SERVE_API_KEY).",
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -352,15 +395,22 @@ def serve(
     habitat_floor: int,
     habitat_hm3d_root: Path | None,
     habitat_use_semantics: bool | None,
+    llm_key: str,
+    llm_host: str,
+    llm_port: int,
+    llm_device: str,
+    llm_max_tokens: int,
+    llm_api_key: str | None,
     extra: tuple[str, ...],
 ) -> None:
-    """Start a simulation server.
+    """Start a simulation server or OpenAI-compatible LLM HTTP API.
 
     Backends:
       mujoco       MuJoCo server (default). Use --scene robocasa or --scene ithor for other scenes.
       robocasa     Shortcut for ``--scene robocasa``.
       molmospaces  Shortcut for ``--scene ithor`` (or pass scene name positional:
                    ``emet serve molmospaces procthor-10k``).
+      llm          OpenAI-compatible text LLM on ``/v1/chat/completions`` (see docs/llm_serve.md).
 
     List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
@@ -384,9 +434,25 @@ def serve(
       DISPLAY=:1 emet serve mujoco --scene ithor   # default robot: stretch
       emet serve mujoco --scene ithor --robot rby1 --headless
       emet serve mujoco --scene ithor --robot xlerobot --headless
+      emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
       emet robots info xlerobot
       emet robots preview-cameras xlerobot --source local
     """
+    if backend == "llm":
+        from emet.llms.openai_server import resolve_serve_device, serve_openai_llm
+
+        resolved = resolve_serve_device(llm_device)
+        click.echo(f"emet serve llm: llm={llm_key} device={resolved} bind={llm_host}:{llm_port}")
+        serve_openai_llm(
+            llm=llm_key,
+            host=llm_host,
+            port=int(llm_port),
+            device=resolved,
+            max_tokens=int(llm_max_tokens),
+            api_key=llm_api_key,
+        )
+        return
+
     extra_args = list(extra)
     scene_value = scene
     if backend == "habitat":
@@ -892,7 +958,12 @@ def habitat_serve(
 
 @habitat_cmd.command("run-episode", short_help="Run one HM-EQA episode")
 @click.option("--question-id", default=0, type=int)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option(
+    "--method",
+    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    default="dynagraph",
+    help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
+)
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=5, type=int)
 def habitat_run_episode(
@@ -3882,11 +3953,12 @@ def install_menu(text_only: bool) -> None:
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts (non-interactive apt, link emet)")
 @click.option(
     "--profile",
-    type=click.Choice(["minimal", "standard", "full"], case_sensitive=False),
+    type=click.Choice(["minimal", "standard", "full", "jetson"], case_sensitive=False),
     default=None,
     help=(
         "Install profile forwarded to install.sh / EMET_INSTALL_PROFILE: "
-        "standard (default)=no sim unless --sim; full=legacy sim-on-by-default; minimal=same as standard today."
+        "standard (default)=no sim unless --sim; full=legacy sim-on-by-default; "
+        "minimal=same as standard today; jetson=Orin/Tegra lean (MuJoCo pip + dev; no SAM2/Molmo/Robocasa)."
     ),
 )
 @click.option("--sim", is_flag=True, help="Include simulation extras")
@@ -3932,6 +4004,7 @@ def install_full(
       emet install full
       emet install full -y --sim
       emet install full -y --profile full
+      emet install full -y --profile jetson
       emet install full -y --no-molmospaces
       emet install full -y --molmospaces
       emet install full -y --all
