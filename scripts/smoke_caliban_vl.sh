@@ -1,12 +1,12 @@
+#!/usr/bin/env bash
 # Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-
-"""Smoke the OpenAI-compatible VL server (caliban:8001 or local --vl serve).
-
-  ./scripts/smoke_caliban_vl.sh
-  EMET_VL_ENDPOINT=http://127.0.0.1:8001/v1 ./scripts/smoke_caliban_vl.sh
-"""
+#
+# Smoke the OpenAI-compatible VL server (caliban:8001 or local --vl serve).
+#
+#   ./scripts/smoke_caliban_vl.sh
+#   EMET_VL_ENDPOINT=http://127.0.0.1:8001/v1 ./scripts/smoke_caliban_vl.sh
 
 set -euo pipefail
 
