@@ -628,7 +628,8 @@ class MujocoZmqServer(BaseZmqServer):
         )  # This will start the simulation and open Mujoco-Viewer window
         if not self.robot_sim.is_running():
             raise RuntimeError(
-                "MuJoCo simulator did not start. See above for errors; on WSL try DISPLAY=:99 and --use-glx, or --no-cameras."
+                "MuJoCo simulator did not start. See above for errors; on WSL use --headless (and DISPLAY=:99 + --use-glx if EGL fails). "
+                "--no-cameras does not enable headless."
             )
         self._emet_session = self._build_emet_session_stretch(robocasa=robocasa)
         if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
