@@ -64,11 +64,17 @@ emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
 | Port | Role | Typical recipe |
 |------|------|----------------|
 | `:8000` | Text tool-router (7B CausalLM) | Jetson container `emet-jetson-llm` |
-| `:8001` | Caption / EQA VLM (JPEG `image_url`) | Native `emet serve llm --vl` (or a second container if Orin VRAM allows) |
+| `:8001` | Caption / EQA VLM (JPEG `image_url`) | Second Jetson container: `./scripts/run_jetson_llm_container.sh --vl --detach` (default `Qwen/Qwen2-VL-2B-Instruct`; JP5 transformers has Qwen2-VL, not Qwen2.5-VL) |
 
 **Voxels / Dynagraph memory stay on olympia** (Mars ZMQ 4401). Only caption/EQA frames go remote.
 
-The Jetson Docker script loads **CausalLM only**. Requests with images on `:8000` fail with a clear error pointing at `--vl` on `:8001`. Measure free Orin memory after 7B; if a second VL does not fit, stop the text container while serving VL, or keep text on caliban and run VL on a desktop GPU.
+The Jetson Docker text container loads **CausalLM**. Image requests on `:8000` fail with a clear error pointing at the **`--vl`** container on `:8001`. From a workstation with the weights cached:
+
+```bash
+./scripts/deploy_caliban_vl.sh   # rsync Qwen2-VL-2B + start emet-jetson-vl on :8001
+```
+
+Measure free unified memory after 7B; Qwen2-VL-2B fp16 typically fits beside it on AGX Orin 64 GB. If load OOMs, stop text while debugging, or keep VL on a desktop GPU (`EMET_VL_ENDPOINT=openai@http://127.0.0.1:8001/v1`).
 
 ### Dual-port recipe (text + VL)
 
@@ -77,10 +83,10 @@ The Jetson Docker script loads **CausalLM only**. Requests with images on `:8000
 ./scripts/run_jetson_llm_container.sh --detach --model Qwen/Qwen2.5-7B-Instruct
 # port 8000, name emet-jetson-llm
 
-# Multimodal path (native emet; Jetson CausalLM container cannot decode VL):
-emet serve llm --vl --host 0.0.0.0 --port 8001
-# Optional second text container name/port when experimenting:
-#   EMET_JETSON_LLM_NAME=emet-jetson-vl ./scripts/run_jetson_llm_container.sh --port 8001 --name emet-jetson-vl …
+# Multimodal VL (second container; same image, --vl mounts updated jetson_llm_server.py):
+./scripts/run_jetson_llm_container.sh --vl --detach --port 8001 --name emet-jetson-vl \
+  --model Qwen/Qwen2-VL-2B-Instruct
+# or from olympia: ./scripts/deploy_caliban_vl.sh
 ```
 
 Workstation Herman preset ([`configs/agent_innate_mars.yaml`](../configs/agent_innate_mars.yaml)):
