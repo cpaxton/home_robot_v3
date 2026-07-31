@@ -19,6 +19,7 @@ from multiprocessing import Lock, Manager, Process
 
 import numpy as np
 
+from emet.simulation.wsl_mujoco_gl import WSL_HEADLESS_CAMERA_GL_WARNING, enable_software_gl_for_wsl_headless_cameras
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -143,6 +144,22 @@ class StretchMujocoSimulator:
                 )
                 os.environ["MUJOCO_GL"] = "egl"
 
+        # --use-glx: GLFW + GLX against an X server (Xvfb). Override a stale MUJOCO_GL=egl from the environment.
+        if use_glx and platform.system() == "Linux":
+            os.environ["MUJOCO_GL"] = "glfw"
+            if headless and not os.environ.get("DISPLAY"):
+                logger.warning(
+                    "--use-glx needs an X display for GLFW/GLX (e.g. Xvfb). Run: "
+                    "`Xvfb :99 -screen 0 1024x768x24 &` then "
+                    "`DISPLAY=:99 emet serve mujoco --headless --use-glx`. "
+                    "`--use-glx` alone does not create a display."
+                )
+
+        if enable_software_gl_for_wsl_headless_cameras(
+            headless=headless, no_cameras=len(cameras_for_server) == 0
+        ):
+            logger.warning(WSL_HEADLESS_CAMERA_GL_WARNING)
+
         self._cameras_passed = cameras_for_server  # used so parent only waits for camera data when cameras are enabled
         self._server_process = Process(
             target=mujoco_server.launch_server,
@@ -183,7 +200,7 @@ class StretchMujocoSimulator:
                     "If you have no display (SSH, Docker), use: emet serve mujoco --headless "
                     "(or robocasa with --headless). "
                     "On WSL, try: Xvfb :99 -screen 0 1024x768x24 & then DISPLAY=:99 emet serve mujoco --headless --use-glx. "
-                    "Or use --no-cameras if you do not need camera images. "
+                    "Use --headless when DISPLAY is unset (--no-cameras only disables cameras, not the passive viewer). "
                     "Check the process output above for OpenGL/EGL/GLX errors."
                 )
 

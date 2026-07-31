@@ -25,6 +25,7 @@ model_generation_wizard = None
 _ROBOCASA_IMPORT_FAILED = True
 
 import emet.utils.logger as logger
+from emet.simulation.wsl_mujoco_gl import WSL_HEADLESS_CAMERA_GL_WARNING, enable_software_gl_for_wsl_headless_cameras
 from emet.utils.assets import get_mujoco_models_path, get_robot_mjcf_path
 from emet.utils.port_utils import kill_processes_on_port
 
@@ -310,6 +311,21 @@ def main(
         scene_source_basename = Path(str(scene_path).strip()).name
 
     use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
+
+    # Stretch without --headless uses the passive viewer (GLFW + DISPLAY). --no-cameras only
+    # skips offscreen renderers; it does not replace the viewer. On WSL/SSH with no DISPLAY,
+    # GLFW fails before the sim connects unless we run headless.
+    if use_stretch and not headless and not os.environ.get("DISPLAY"):
+        logger.warning(
+            "DISPLAY is unset: Stretch MuJoCo would use the passive viewer (requires DISPLAY). "
+            "Enabling headless mode. Pass --headless explicitly on headless hosts; "
+            "--no-cameras alone does not remove the viewer requirement."
+        )
+        headless = True
+
+    if use_stretch and headless and not no_cameras and not os.environ.get("DISPLAY"):
+        if enable_software_gl_for_wsl_headless_cameras(headless=True, no_cameras=no_cameras):
+            logger.warning(WSL_HEADLESS_CAMERA_GL_WARNING)
 
     if use_robocasa:
         # Lazy import so we only load robosuite/numba when actually using Robocasa.
