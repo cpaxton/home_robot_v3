@@ -13,7 +13,12 @@ import torch
 
 from emet.benchmarks.sqa3d.prompts import SQA3D_EQA_PROMPT
 from emet.core.parameters import Parameters
-from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int, resolve_vl_hf_model_id
+from emet.llms.eqa_vl_settings import (
+    apply_eqa_vl_runtime_settings,
+    get_eqa_vl_int,
+    resolve_vl_endpoint,
+    resolve_vl_hf_model_id,
+)
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
 from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call, eqa_vl_client_kwargs
@@ -75,11 +80,12 @@ def _get_shared_vlm(
     if fam is None:
         raise ValueError("build_graph_eqa_vlm_clients requires eqa.vl_family qwen3_vl|qwen3_5|qwen2_5_vl|gemma4")
     dev = _resolve_device(device)
+    endpoint = resolve_vl_endpoint(parameters)
     hf_id = resolve_vl_hf_model_id(fam, parameters, device=dev) or default_hf_model_id(fam)
     vl_sz = str(eqa.get("vl_model_size", "8B") or "8B")
     vl_tok = int(eqa.get("vl_max_tokens", 512) or 512)
     vl_q = eqa.get("vl_quantization", "int4")
-    key = (fam, hf_id, vl_sz, vl_tok, vl_q, dev)
+    key = (fam, hf_id, vl_sz, vl_tok, vl_q, dev, endpoint or "")
     if _SHARED_VLM is not None and _SHARED_VLM_KEY == key:
         return _SHARED_VLM
     if _SHARED_VLM is not None and _SHARED_VLM_KEY != key:
@@ -92,6 +98,7 @@ def _get_shared_vlm(
         device=dev,
         quantization=vl_q,
         prompt=None,
+        endpoint=endpoint,
         **eqa_vl_client_kwargs(eqa),
     )
     _SHARED_VLM_KEY = key

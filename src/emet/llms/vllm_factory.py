@@ -53,11 +53,32 @@ def create_dynamem_vllm(
     max_cached_prefixes: int = 1,
     image_max_side: int = 512,
     image_max_pixels: int = 0,
+    endpoint: str | None = None,
+    model: str | None = None,
 ) -> AbstractVLLMClient:
-    """Construct a single local VLLM for captions + EQA (shared instance in caller).
+    """Construct a VLLM for captions + EQA (shared instance in caller).
 
-    Default HF ids come from :data:`emet.llms.vllm_registry.SUPPORTED_VLLMS` when ``hf_model_id`` is omitted.
+    When ``endpoint`` is set (``eqa.vl_endpoint`` / ``EMET_VL_ENDPOINT``), returns
+    :class:`~emet.llms.openai_vllm_client.OpenaiVLLMClient` and skips local weights.
+    Default HF ids come from :data:`emet.llms.vllm_registry.SUPPORTED_VLLMS` when
+    ``hf_model_id`` is omitted for local loads.
     """
+    ep = (endpoint or "").strip()
+    if ep:
+        from emet.llms.openai_vllm_client import OpenaiVLLMClient, parse_openai_endpoint_spec
+
+        base_url, model_from_spec = parse_openai_endpoint_spec(ep)
+        mid = (model or model_from_spec or hf_model_id or "emet-vl").strip()
+        return OpenaiVLLMClient(
+            prompt=prompt,
+            model=mid,
+            base_url=base_url,
+            max_tokens=max_tokens,
+            image_max_side=image_max_side,
+            image_max_pixels=image_max_pixels,
+            device="remote",
+        )
+
     fam = normalize_vl_family(vl_family or "qwen3_vl")
     if fam == "qwen3_vl":
         from emet.llms.qwen3_vl_client import Qwen3VLClient

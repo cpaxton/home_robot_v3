@@ -2,7 +2,7 @@
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
 #   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
-#   # Chat router on caliban (OpenAI serve); caption VLM stays on this workstation (--eqa).
+#   # Text router :8000 + caption/EQA VLM :8001 on caliban — docs/llm_serve.md
 #   uv run emet run agent --connection herman
 extends: configs/emet/default.yaml
 
@@ -11,11 +11,10 @@ connection: herman
 
 agent:
   name: Herman
-  # Tool-router LLM on caliban (``emet serve llm`` / Jetson container). Override with
-  # ``--llm qwen35-4B`` for local, or ``EMET_OPENAI_MODEL=…`` to label the remote id.
-  # Caption/EQA VLM still loads locally when eqa: true (not served over this HTTP path yet).
+  # Tool-router LLM on caliban (``emet serve llm`` / Jetson text container :8000).
+  # Override with ``--llm qwen35-4B`` for local, or ``EMET_OPENAI_MODEL=…`` to label the remote id.
   llm: openai@http://caliban:8000/v1
-  # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
+  # Load caption/EQA path (remote VLM via mapping.eqa.vl_endpoint when set).
   eqa: true
   discord: true
   # Single Dynagraph memory plug-in on the voxel map (not open_vocab + GraphEQA).
@@ -37,6 +36,9 @@ embodied_agent:
       bounds_3d_iou_min: 0.08
 
 mapping:
-  # Dynagraph/eval VL sizing (separate from agent --eqa / mapping.eqa captioner).
+  # Caption / EQA frames → caliban VL serve (JPEG over OpenAI HTTP). Voxels stay local.
+  eqa:
+    vl_endpoint: openai@http://caliban:8001/v1
+  # Dynagraph/eval VL sizing (used when vl_endpoint is unset / local weights).
   eqa_vl:
     model_size: "4B"

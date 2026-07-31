@@ -215,6 +215,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
         )
     if (client_type or "").strip().lower() == "gemma4-vl-eqa":
         from emet.core.parameters import get_parameters
+        from emet.llms.eqa_vl_settings import resolve_vl_endpoint
         from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 
         p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
@@ -235,6 +236,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             device=dev,
             quantization=vl_q,
             prompt=prompt,
+            endpoint=resolve_vl_endpoint(p),
             **eqa_vl_client_kwargs(eqa_cfg),
         )
     if client_type.lower() in ("gemma", "gemma4b", "gemma1b"):
@@ -277,6 +279,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
         )
     if (client_type or "").strip().lower() == "qwen3-vl-eqa":
         from emet.core.parameters import get_parameters
+        from emet.llms.eqa_vl_settings import resolve_vl_endpoint
         from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 
         p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
@@ -297,6 +300,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             device=dev,
             quantization=vl_q,
             prompt=prompt,
+            endpoint=resolve_vl_endpoint(p),
             **eqa_vl_client_kwargs(eqa_cfg),
         )
     if client_type.lower().startswith("qwen35-vlm-"):

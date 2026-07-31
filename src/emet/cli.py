@@ -372,6 +372,13 @@ def main() -> None:
     default=None,
     help="For ``serve llm``: optional Bearer token (or EMET_LLM_SERVE_API_KEY).",
 )
+@click.option(
+    "--vl/--no-vl",
+    "llm_vl",
+    default=False,
+    show_default=True,
+    help="For ``serve llm``: load multimodal VLM (image_url). Default port becomes 8001.",
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -401,6 +408,7 @@ def serve(
     llm_device: str,
     llm_max_tokens: int,
     llm_api_key: str | None,
+    llm_vl: bool,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server or OpenAI-compatible LLM HTTP API.
@@ -435,21 +443,40 @@ def serve(
       emet serve mujoco --scene ithor --robot rby1 --headless
       emet serve mujoco --scene ithor --robot xlerobot --headless
       emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+      emet serve llm --vl --host 0.0.0.0 --port 8001
       emet robots info xlerobot
       emet robots preview-cameras xlerobot --source local
     """
     if backend == "llm":
-        from emet.llms.openai_server import resolve_serve_device, serve_openai_llm
+        from emet.llms.openai_server import (
+            DEFAULT_LLM_SERVE_MODEL,
+            DEFAULT_VL_SERVE_MODEL,
+            DEFAULT_VL_SERVE_PORT,
+            resolve_serve_device,
+            serve_openai_llm,
+        )
 
+        use_vl = bool(llm_vl)
+        # Click defaults --llm/--port for all serve backends; nudge VL defaults when --vl.
+        resolved_llm = llm_key
+        if use_vl and resolved_llm == DEFAULT_LLM_SERVE_MODEL:
+            resolved_llm = DEFAULT_VL_SERVE_MODEL
+        resolved_port = int(llm_port)
+        if use_vl and resolved_port == 8000:
+            resolved_port = DEFAULT_VL_SERVE_PORT
         resolved = resolve_serve_device(llm_device)
-        click.echo(f"emet serve llm: llm={llm_key} device={resolved} bind={llm_host}:{llm_port}")
+        click.echo(
+            f"emet serve llm: llm={resolved_llm} device={resolved} "
+            f"bind={llm_host}:{resolved_port} vl={use_vl}"
+        )
         serve_openai_llm(
-            llm=llm_key,
+            llm=resolved_llm,
             host=llm_host,
-            port=int(llm_port),
+            port=resolved_port,
             device=resolved,
             max_tokens=int(llm_max_tokens),
             api_key=llm_api_key,
+            multimodal=use_vl,
         )
         return
 

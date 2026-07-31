@@ -174,6 +174,22 @@ def get_eqa_vl_str(parameters: Parameters | dict | None, key: str, default: str)
     return s if s else default
 
 
+def resolve_vl_endpoint(parameters: Parameters | dict | None = None) -> str | None:
+    """Return remote OpenAI VL base URL / ``openai@…`` spec, or None for local weights.
+
+    Precedence: ``EMET_VL_ENDPOINT``, then ``eqa.vl_endpoint`` / ``mapping.eqa.vl_endpoint``.
+    """
+    env = os.environ.get("EMET_VL_ENDPOINT", "").strip()
+    if env:
+        return env
+    eqa = _eqa_cfg(parameters)
+    raw = eqa.get("vl_endpoint")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
+
+
 def _eqa_cfg(parameters: Parameters | dict | None) -> dict[str, Any]:
     raw = _pget(parameters, "eqa", {}) or {}
     return dict(raw) if isinstance(raw, dict) else {}

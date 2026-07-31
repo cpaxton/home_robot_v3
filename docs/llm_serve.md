@@ -1,6 +1,6 @@
 # OpenAI-compatible LLM serve (`emet serve llm` / Jetson container)
 
-Serve a local Hugging Face text model (typically **Qwen**) behind a minimal OpenAI Chat Completions API so another machine can call this host over the LAN.
+Serve a local Hugging Face text or vision-language model behind a minimal OpenAI Chat Completions API so another machine can call this host over the LAN.
 
 ## Jetson AGX Orin (recommended): Tegra-CUDA container
 
@@ -15,7 +15,7 @@ Host emet venv on JetPack 5 is often **CPU-only** PyTorch. Use the dustynv L4T i
 | Piece | Path |
 |-------|------|
 | Dockerfile | [`docker/Dockerfile.jetson-llm`](../docker/Dockerfile.jetson-llm) (`dustynv/l4t-pytorch:r35.4.1`) |
-| Server | [`docker/jetson_llm_server.py`](../docker/jetson_llm_server.py) (Python 3.8–friendly) |
+| Server | [`docker/jetson_llm_server.py`](../docker/jetson_llm_server.py) (Python 3.8–friendly; **text CausalLM**) |
 | Runner | [`scripts/run_jetson_llm_container.sh`](../scripts/run_jetson_llm_container.sh) |
 
 Weights cache defaults to `~/hf-cache` (`HF_HOME` / `--hf-cache`; mounted at `/data/huggingface`). Use `--detach` for background serve; `docker logs -f emet-jetson-llm` to watch load.
@@ -30,19 +30,22 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 ```
 
-## Native host (CPU fallback)
+## Native host (CPU fallback / multimodal VLM)
 
-Prefer the Docker path on JP5 for GPU speed. Native `emet serve llm` uses the host venv (often CPU-only torch on this Orin):
+Prefer the Docker path on JP5 for **text** GPU speed. Native `emet serve llm` uses the host venv (often CPU-only torch on this Orin for text; on a desktop GPU it can also serve a VLM):
 
 ```bash
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+# Multimodal (caption/EQA images):
+emet serve llm --vl --host 0.0.0.0 --port 8001
 ```
 
 | Flag | Default | Notes |
 |------|---------|--------|
-| `--llm` | `qwen25-7B` | Any `get_llm_client` text key (`qwen25-14B`, …). Prefer **no** `-Int4` on Jetson aarch64 (no bitsandbytes). |
+| `--llm` | `qwen25-7B` (text) / `qwen3-vl-eqa` with `--vl` | Text: any `get_llm_client` key. VL: loads via `create_dynamem_vllm` / `eqa:` config. Prefer **no** `-Int4` on Jetson aarch64 text path (no bitsandbytes). |
 | `--host` | `0.0.0.0` | Bind all interfaces for LAN access |
-| `--port` | `8000` | OpenAI base URL is `http://<host>:8000/v1` |
+| `--port` | `8000` text / `8001` with `--vl` | OpenAI base URL is `http://<host>:<port>/v1` |
+| `--vl` / `--multimodal` | off | Accept `image_url` data URLs; route to `generate_multimodal`. Always loads **local** weights (ignores `EMET_VL_ENDPOINT` / `eqa.vl_endpoint` so the serve host is never a proxy loop). |
 | `--device` | `auto` | `cuda` if `torch.cuda.is_available()`, else `cpu` |
 | `--max-tokens` | `512` | Default generation length |
 | `--api-key` | unset | Optional Bearer token (`EMET_LLM_SERVE_API_KEY`) |
@@ -54,9 +57,38 @@ export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
 ```
 
-## Caliban (LAN LLM host)
+## Caliban (LAN LLM + VLM host)
 
-**caliban** (`192.168.1.55`, hostname `caliban`) runs the OpenAI-compatible server for workstation clients (Herman Discord agent tool-router, etc.). Caption / EQA **VLM** still loads on the workstation when `agent.eqa: true` — this HTTP path is **text chat** today (`openai_server` strips image blocks).
+**caliban** (`192.168.1.55`, hostname `caliban`) runs OpenAI-compatible servers for workstation clients (Herman Discord agent).
+
+| Port | Role | Typical recipe |
+|------|------|----------------|
+| `:8000` | Text tool-router (7B CausalLM) | Jetson container `emet-jetson-llm` |
+| `:8001` | Caption / EQA VLM (JPEG `image_url`) | Native `emet serve llm --vl` (or a second container if Orin VRAM allows) |
+
+**Voxels / Dynagraph memory stay on olympia** (Mars ZMQ 4401). Only caption/EQA frames go remote.
+
+The Jetson Docker script loads **CausalLM only**. Requests with images on `:8000` fail with a clear error pointing at `--vl` on `:8001`. Measure free Orin memory after 7B; if a second VL does not fit, stop the text container while serving VL, or keep text on caliban and run VL on a desktop GPU.
+
+### Dual-port recipe (text + VL)
+
+```bash
+# on caliban — text (existing)
+./scripts/run_jetson_llm_container.sh --detach --model Qwen/Qwen2.5-7B-Instruct
+# port 8000, name emet-jetson-llm
+
+# Multimodal path (native emet; Jetson CausalLM container cannot decode VL):
+emet serve llm --vl --host 0.0.0.0 --port 8001
+# Optional second text container name/port when experimenting:
+#   EMET_JETSON_LLM_NAME=emet-jetson-vl ./scripts/run_jetson_llm_container.sh --port 8001 --name emet-jetson-vl …
+```
+
+Workstation Herman preset ([`configs/agent_innate_mars.yaml`](../configs/agent_innate_mars.yaml)):
+
+- `agent.llm: openai@http://caliban:8000/v1` — text tools
+- `mapping.eqa.vl_endpoint: openai@http://caliban:8001/v1` — `OpenaiVLLMClient` (JPEG at `eqa.vl_image_max_side`)
+
+Override VL with `EMET_VL_ENDPOINT=openai@http://…/v1`.
 
 ### SSH from olympia
 
@@ -77,7 +109,7 @@ ssh-copy-id -i ~/caliban_ssk_keys/id_ed25519.pub cpaxton@caliban
 # or append the .pub line to ~/.ssh/authorized_keys on caliban
 ```
 
-Then rebuild / bump the served model on the Orin:
+Then rebuild / bump the served **text** model on the Orin:
 
 ```bash
 ssh caliban 'cd ~/src/home_robot_v4 && ./scripts/run_jetson_llm_container.sh --detach --model Qwen/Qwen2.5-7B-Instruct'
@@ -90,13 +122,14 @@ ssh caliban 'cd ~/src/home_robot_v4 && ./scripts/run_jetson_llm_container.sh --d
 ```bash
 # Health (no auth)
 curl -s http://caliban:8000/health
-# expect ready=true, cuda=true
+curl -s http://caliban:8001/health
+# expect ready=true
 
-# Herman preset already sets agent.llm: openai@http://caliban:8000/v1
+# Herman preset already sets agent.llm + mapping.eqa.vl_endpoint
 export DISCORD_TOKEN=...
 uv run emet run agent --connection herman
 
-# Or any app:
+# Or any app (text only):
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
 export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct   # label only; server uses its loaded weights
 emet run agent --llm openai ...
@@ -111,12 +144,19 @@ Smoke:
 
 | Variable | Role |
 |----------|------|
-| `EMET_OPENAI_BASE_URL` | OpenAI SDK `base_url` (include `/v1`) |
+| `EMET_OPENAI_BASE_URL` | OpenAI SDK `base_url` for **text** clients (include `/v1`) |
 | `OPENAI_BASE_URL` | Fallback if `EMET_OPENAI_BASE_URL` unset |
-| `EMET_OPENAI_MODEL` | Model id sent to the remote server |
+| `EMET_OPENAI_MODEL` | Model id sent to the remote text server |
+| `EMET_VL_ENDPOINT` | Override `eqa.vl_endpoint` (`openai@http://host:8001/v1`) |
 | `EMET_JETSON_LLM_IMAGE` | Docker image tag (default `emet-jetson-llm:r35.4.1`) |
+| `EMET_JETSON_LLM_NAME` | Container name (use a second name for a second port) |
 | `EMET_LLM_SERVE_API_KEY` | Optional Bearer token (server + client) |
 | `EMET_LLM_SERVE_DEVICE` | Default device for native `emet serve llm` |
+| `EMET_LLM_SERVE_PORT` | Default published port for the Jetson runner script |
+
+## Phase 2 (not implemented): remote memory worker
+
+Future work: a ZMQ **SUB** on Mars bridge topic **4401** (or a dedicated RPC) so voxel / graph updates can run on a remote host, with a query RPC back to the agent. Phase 1 keeps **all memory on olympia** and only remotes caption/EQA images over HTTP. Do not change Mars bridge ports for Phase 1.
 
 ## Code map
 
@@ -124,7 +164,8 @@ Smoke:
 |-------|------|
 | Jetson container server | [`docker/jetson_llm_server.py`](../docker/jetson_llm_server.py) |
 | Native HTTP server | [`src/emet/llms/openai_server.py`](../src/emet/llms/openai_server.py) |
-| Remote client | [`src/emet/llms/openai_client.py`](../src/emet/llms/openai_client.py) |
+| Remote text client | [`src/emet/llms/openai_client.py`](../src/emet/llms/openai_client.py) |
+| Remote VL client | [`src/emet/llms/openai_vllm_client.py`](../src/emet/llms/openai_vllm_client.py) |
 | Native CLI | `emet serve llm` → [`src/emet/app/serve_llm.py`](../src/emet/app/serve_llm.py) |
 
 See also [jetson.md](jetson.md) and [environment_variables.md](environment_variables.md).

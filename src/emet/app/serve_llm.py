@@ -12,6 +12,8 @@ from emet.llms.openai_server import (
     DEFAULT_LLM_SERVE_HOST,
     DEFAULT_LLM_SERVE_MODEL,
     DEFAULT_LLM_SERVE_PORT,
+    DEFAULT_VL_SERVE_MODEL,
+    DEFAULT_VL_SERVE_PORT,
     resolve_serve_device,
     serve_openai_llm,
 )
@@ -25,12 +27,19 @@ from emet.llms.openai_server import (
 @click.option(
     "--llm",
     "llm_key",
-    default=DEFAULT_LLM_SERVE_MODEL,
-    show_default=True,
-    help="emet llm key (e.g. qwen25-7B, qwen25-14B, qwen35-9B). Use the largest that fits RAM.",
+    default=None,
+    help=(
+        "emet llm/vlm key. Text default: qwen25-7B. With --vl default: qwen3-vl-eqa "
+        "(loads via create_dynamem_vllm / eqa config)."
+    ),
 )
 @click.option("--host", default=DEFAULT_LLM_SERVE_HOST, show_default=True, help="Bind address (0.0.0.0 for LAN).")
-@click.option("--port", default=DEFAULT_LLM_SERVE_PORT, show_default=True, type=int, help="HTTP port.")
+@click.option(
+    "--port",
+    default=None,
+    type=int,
+    help=f"HTTP port (text default {DEFAULT_LLM_SERVE_PORT}; with --vl default {DEFAULT_VL_SERVE_PORT}).",
+)
 @click.option(
     "--device",
     default="auto",
@@ -43,28 +52,61 @@ from emet.llms.openai_server import (
     default=None,
     help="Optional Bearer token (or EMET_LLM_SERVE_API_KEY). Empty = open LAN endpoint.",
 )
-def main(llm_key: str, host: str, port: int, device: str, max_tokens: int, api_key: str | None) -> None:
+@click.option(
+    "--vl/--no-vl",
+    "multimodal",
+    default=False,
+    show_default=True,
+    help="Load a multimodal VLM (accepts image_url data URLs). Prefer --port 8001 beside text :8000.",
+)
+@click.option(
+    "--multimodal/--no-multimodal",
+    "multimodal_alias",
+    default=None,
+    hidden=True,
+    help="Alias for --vl.",
+)
+def main(
+    llm_key: str | None,
+    host: str,
+    port: int | None,
+    device: str,
+    max_tokens: int,
+    api_key: str | None,
+    multimodal: bool,
+    multimodal_alias: bool | None,
+) -> None:
     """Serve ``/v1/chat/completions`` backed by ``emet.llms.get_llm_client``.
 
-    On this host (e.g. caliban)::
+    Text on this host (e.g. caliban)::
 
-        emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+        emet serve llm --llm qwen25-7B --host 0.0.0.0 --port 8000
+
+    Multimodal VL (second process / container, port 8001)::
+
+        emet serve llm --vl --host 0.0.0.0 --port 8001
 
     On a workstation::
 
         export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
-        # optional model id must match server --llm key (or any string the server ignores)
+        # caption/EQA: mapping.eqa.vl_endpoint: openai@http://caliban:8001/v1
         emet run agent --llm openai
     """
+    use_vl = multimodal if multimodal_alias is None else bool(multimodal_alias)
+    resolved_llm = llm_key or (DEFAULT_VL_SERVE_MODEL if use_vl else DEFAULT_LLM_SERVE_MODEL)
+    resolved_port = int(port) if port is not None else (DEFAULT_VL_SERVE_PORT if use_vl else DEFAULT_LLM_SERVE_PORT)
     resolved = resolve_serve_device(device)
-    click.echo(f"emet serve llm: llm={llm_key} device={resolved} bind={host}:{port}")
+    click.echo(
+        f"emet serve llm: llm={resolved_llm} device={resolved} bind={host}:{resolved_port} vl={use_vl}"
+    )
     serve_openai_llm(
-        llm=llm_key,
+        llm=resolved_llm,
         host=host,
-        port=port,
+        port=resolved_port,
         device=resolved,
         max_tokens=max_tokens,
         api_key=api_key,
+        multimodal=use_vl,
     )
 
 

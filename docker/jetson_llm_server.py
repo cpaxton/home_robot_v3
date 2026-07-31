@@ -28,6 +28,19 @@ def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
+def _messages_have_images(messages: List[Dict[str, Any]]) -> bool:
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "image_url":
+                return True
+    return False
+
+
 def _messages_to_chat(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
     for msg in messages:
@@ -44,6 +57,9 @@ def _messages_to_chat(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
                     parts.append(str(block.get("text") or ""))
                 elif isinstance(block, str):
                     parts.append(block)
+                elif isinstance(block, dict) and block.get("type") == "image_url":
+                    # Detected for clear error in generate(); text path drops pixels.
+                    continue
             content = "\n".join(p for p in parts if p)
         else:
             content = str(content)
@@ -109,6 +125,13 @@ class ModelBundle(object):
 
         if not self.ready or self.model is None or self.tokenizer is None:
             raise RuntimeError(self.load_error or "model not loaded")
+        if _messages_have_images(messages):
+            raise ValueError(
+                "Request includes images but this Jetson container loads CausalLM only "
+                "(text chat). Serve a VLM on :8001 with native "
+                "`emet serve llm --vl --port 8001` (or a multimodal container), "
+                "and point clients at mapping.eqa.vl_endpoint."
+            )
         chat = _messages_to_chat(messages)
         if not chat:
             raise ValueError("messages must be non-empty")
