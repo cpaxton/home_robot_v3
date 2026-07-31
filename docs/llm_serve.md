@@ -63,20 +63,23 @@ emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
 
 | Port | Role | Typical recipe |
 |------|------|----------------|
-| `:8000` | Text tool-router (7B CausalLM) | Jetson container `emet-jetson-llm` |
-| `:8001` | Caption / EQA VLM (JPEG `image_url`) | Second Jetson container: `./scripts/run_jetson_llm_container.sh --vl --detach` (default `Qwen/Qwen2-VL-2B-Instruct`; JP5 transformers has Qwen2-VL, not Qwen2.5-VL) |
+| `:8000` | Text tool-router **or** unified text+VL | Jetson container `emet-jetson-llm` (CausalLM 7B, or Qwen2-VL-7B with `--profile unified-7b`) |
+| `:8001` | Caption / EQA VLM only (dual-2b) | Second container `emet-jetson-vl` (`Qwen2-VL-2B`); unused in unified-7b |
 
 **Voxels / Dynagraph memory stay on olympia** (Mars ZMQ 4401). Only caption/EQA frames go remote.
 
-The Jetson Docker text container loads **CausalLM**. Image requests on `:8000` fail with a clear error pointing at the **`--vl`** container on `:8001`. From a workstation with the weights cached:
+The Jetson Docker text container loads **CausalLM** unless started with `--vl`. Image requests on a text-only `:8000` fail with a clear error. Orin eMMC cannot hold both a 7B CausalLM and a 7B VL (~15 GiB each) plus the L4T image — pick a profile:
+
+| Profile | Command | Ports | Notes |
+|---------|---------|-------|-------|
+| `dual-2b` | `./scripts/deploy_caliban_vl.sh` | text `:8000` + VL `:8001` | Fits beside CausalLM 7B; smaller captions |
+| `unified-7b` | `./scripts/deploy_caliban_vl.sh --profile unified-7b` | one VL-7B on `:8000` | Bigger model; Herman points **both** `agent.llm` and `vl_endpoint` at `:8000` |
 
 ```bash
-./scripts/deploy_caliban_vl.sh   # rsync Qwen2-VL-2B + start emet-jetson-vl on :8001
+./scripts/deploy_caliban_vl.sh --profile unified-7b
 ```
 
-Measure free unified memory after 7B; Qwen2-VL-2B fp16 typically fits beside it on AGX Orin 64 GB. If load OOMs, stop text while debugging, or keep VL on a desktop GPU (`EMET_VL_ENDPOINT=openai@http://127.0.0.1:8001/v1`).
-
-### Dual-port recipe (text + VL)
+### Dual-port recipe (text + small VL)
 
 ```bash
 # on caliban — text (existing)
@@ -86,13 +89,22 @@ Measure free unified memory after 7B; Qwen2-VL-2B fp16 typically fits beside it 
 # Multimodal VL (second container; same image, --vl mounts updated jetson_llm_server.py):
 ./scripts/run_jetson_llm_container.sh --vl --detach --port 8001 --name emet-jetson-vl \
   --model Qwen/Qwen2-VL-2B-Instruct
-# or from olympia: ./scripts/deploy_caliban_vl.sh
+# or from olympia: ./scripts/deploy_caliban_vl.sh --profile dual-2b
+```
+
+### Unified bigger VL (recommended when you want more capacity)
+
+```bash
+# from olympia (weights must be cached locally first)
+uv run python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2-VL-7B-Instruct')"
+./scripts/deploy_caliban_vl.sh --profile unified-7b
+# Herman preset configs/agent_innate_mars.yaml uses caliban:8000 for text + VL
 ```
 
 Workstation Herman preset ([`configs/agent_innate_mars.yaml`](../configs/agent_innate_mars.yaml)):
 
-- `agent.llm: openai@http://caliban:8000/v1` — text tools
-- `mapping.eqa.vl_endpoint: openai@http://caliban:8001/v1` — `OpenaiVLLMClient` (JPEG at `eqa.vl_image_max_side`)
+- **unified-7b (default preset):** `agent.llm` and `mapping.eqa.vl_endpoint` both `openai@http://caliban:8000/v1` (Qwen2-VL-7B)
+- **dual-2b:** text `caliban:8000` + VL `caliban:8001` — set `vl_endpoint` to `:8001` or `EMET_VL_ENDPOINT`
 
 Override VL with `EMET_VL_ENDPOINT=openai@http://…/v1`.
 

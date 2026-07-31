@@ -103,7 +103,7 @@ def test_agent_innate_mars_vl_endpoint_resolves() -> None:
 
     p = get_parameters("configs/agent_innate_mars.yaml")
     ep = resolve_vl_endpoint(p)
-    assert ep == "openai@http://caliban:8001/v1"
+    assert ep == "openai@http://caliban:8000/v1"
     eqa = p.get("eqa") or {}
     client = create_dynamem_vllm(
         str(eqa.get("vl_family") or "qwen3_vl"),
@@ -116,7 +116,7 @@ def test_agent_innate_mars_vl_endpoint_resolves() -> None:
         image_max_side=int(eqa.get("vl_image_max_side") or 512),
     )
     assert isinstance(client, OpenaiVLLMClient)
-    assert client.base_url == "http://caliban:8001/v1"
+    assert client.base_url == "http://caliban:8000/v1"
 
 
 def test_serve_llm_help_lists_vl() -> None:

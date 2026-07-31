@@ -2,7 +2,9 @@
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
 #   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
-#   # Text router :8000 + caption/EQA VLM :8001 on caliban — docs/llm_serve.md
+#   # Caliban: prefer unified Qwen2-VL-7B on :8000 for text + captions
+#   #   (./scripts/deploy_caliban_vl.sh --profile unified-7b). dual-2b keeps text
+#   #   :8000 CausalLM + VL :8001 (smaller). See docs/llm_serve.md.
 #   uv run emet run agent --connection herman
 extends: configs/emet/default.yaml
 
@@ -11,7 +13,7 @@ connection: herman
 
 agent:
   name: Herman
-  # Tool-router LLM on caliban (``emet serve llm`` / Jetson text container :8000).
+  # Tool-router + (when unified-7b) caption VLM on caliban :8000.
   # Override with ``--llm qwen35-4B`` for local, or ``EMET_OPENAI_MODEL=…`` to label the remote id.
   llm: openai@http://caliban:8000/v1
   # Load caption/EQA path (remote VLM via mapping.eqa.vl_endpoint when set).
@@ -36,9 +38,10 @@ embodied_agent:
       bounds_3d_iou_min: 0.08
 
 mapping:
-  # Caption / EQA frames → caliban VL serve (JPEG over OpenAI HTTP). Voxels stay local.
+  # Caption / EQA frames → same caliban OpenAI serve as text when using unified-7b
+  # (Qwen2-VL-7B on :8000). For dual-2b, point at :8001 instead (or EMET_VL_ENDPOINT).
   eqa:
-    vl_endpoint: openai@http://caliban:8001/v1
+    vl_endpoint: openai@http://caliban:8000/v1
   # Dynagraph/eval VL sizing (used when vl_endpoint is unset / local weights).
   eqa_vl:
     model_size: "4B"
