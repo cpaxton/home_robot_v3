@@ -3280,7 +3280,11 @@ def preview_cameras(ctx: click.Context) -> None:
     sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
 
 
-@main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
+@main.group(
+    "deploy",
+    invoke_without_command=True,
+    short_help="Deploy Mars bridge to a robot, or LLM/VLM to caliban (Orin ~64 GiB)",
+)
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
 @click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
@@ -3288,7 +3292,9 @@ def preview_cameras(ctx: click.Context) -> None:
 @click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
 @click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
 @click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+@click.pass_context
 def deploy(
+    ctx: click.Context,
     host: str | None,
     user: str | None,
     password: str | None,
@@ -3297,17 +3303,21 @@ def deploy(
     emet_dir: str,
     start_bridge: bool,
 ) -> None:
-    """Deploy emet_core and innate_mars_bridge to the robot via rsync and SSH.
+    """Deploy to a robot (Mars bridge) or a Jetson LAN LLM/VLM host.
 
-    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install
-    for emet_core, and colcon build for the bridge. Use emet connect save <host> first
-    to set default host/user, or pass --host and --user.
+    Bare ``emet deploy`` (no subcommand) syncs ``emet_core`` + innate_mars_bridge
+    to the robot. Use ``emet deploy llm`` for caliban OpenAI serve (AGX Orin
+    ~60–64 GiB unified memory).
 
     Examples:
       emet connect save 192.168.1.43 --user jetson1
       emet deploy
       emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
+      emet deploy llm --profile unified-7b
+      emet deploy llm --profile dual-2b --host caliban
     """
+    if ctx.invoked_subcommand is not None:
+        return
     from emet.deploy import deploy as deploy_impl
 
     deploy_impl(
@@ -3319,6 +3329,61 @@ def deploy(
         emet_dir=emet_dir,
         start_bridge=start_bridge,
         root=_project_root(),
+    )
+
+
+@deploy.command("llm", short_help="Deploy Jetson OpenAI LLM/VLM on caliban (Orin ~64 GiB)")
+@click.option(
+    "--profile",
+    type=click.Choice(["dual-2b", "unified-7b", "2b", "7b", "big"]),
+    default="unified-7b",
+    show_default=True,
+    help=(
+        "dual-2b: CausalLM text :8000 + Qwen2-VL-2B :8001. "
+        "unified-7b: one Qwen2-VL-7B on :8000 for text+captions "
+        "(fits ~60–64 GiB Orin VRAM; frees eMMC vs dual 7B weights)."
+    ),
+)
+@click.option(
+    "--host",
+    "-H",
+    default=None,
+    help="LLM host (default: EMET_CALIBAN_HOST or caliban).",
+)
+@click.option("--model", default=None, help="Override HF model id for the VL container.")
+@click.option("--port", default=None, type=int, help="Override serve port (unified-7b→8000, dual-2b→8001).")
+@click.option("--name", "container_name", default=None, help="Docker container name override.")
+def deploy_llm_cmd(
+    profile: str,
+    host: str | None,
+    model: str | None,
+    port: int | None,
+    container_name: str | None,
+) -> None:
+    """Rsync VL weights and start the Tegra-CUDA OpenAI container on caliban.
+
+    AGX Orin has ~64 GiB unified memory — enough for Qwen2-VL-7B (unified-7b).
+    eMMC cannot hold both a 7B CausalLM and a 7B VL; use dual-2b for a small VL
+    beside text, or unified-7b for the larger single model.
+
+    Examples:
+      emet deploy llm
+      emet deploy llm --profile unified-7b
+      emet deploy llm --profile dual-2b
+      emet llm health --text-only
+      emet llm smoke --vl-only --vl http://caliban:8000/v1
+    """
+    from emet.deploy_llm import deploy_llm
+
+    sys.exit(
+        deploy_llm(
+            host=host,
+            profile=profile,
+            model=model,
+            port=port,
+            name=container_name,
+            root=_project_root(),
+        )
     )
 
 

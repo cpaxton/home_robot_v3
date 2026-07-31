@@ -72,11 +72,13 @@ The Jetson Docker text container loads **CausalLM** unless started with `--vl`. 
 
 | Profile | Command | Ports | Notes |
 |---------|---------|-------|-------|
-| `dual-2b` | `./scripts/deploy_caliban_vl.sh` | text `:8000` + VL `:8001` | Fits beside CausalLM 7B; smaller captions |
-| `unified-7b` | `./scripts/deploy_caliban_vl.sh --profile unified-7b` | one VL-7B on `:8000` | Bigger model; Herman points **both** `agent.llm` and `vl_endpoint` at `:8000` |
+| `dual-2b` | `emet deploy llm --profile dual-2b` | text `:8000` + VL `:8001` | Fits beside CausalLM 7B; smaller captions |
+| `unified-7b` | `emet deploy llm` (default) | one VL-7B on `:8000` | Uses Orin ~64 GiB unified memory; Herman points **both** endpoints at `:8000` |
 
 ```bash
 ./scripts/deploy_caliban_vl.sh --profile unified-7b
+# preferred:
+uv run emet deploy llm --profile unified-7b
 ```
 
 ### Dual-port recipe (text + small VL)
@@ -97,7 +99,7 @@ The Jetson Docker text container loads **CausalLM** unless started with `--vl`. 
 ```bash
 # from olympia (weights must be cached locally first)
 uv run python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2-VL-7B-Instruct')"
-./scripts/deploy_caliban_vl.sh --profile unified-7b
+uv run emet deploy llm --profile unified-7b
 # Herman preset configs/agent_innate_mars.yaml uses caliban:8000 for text + VL
 ```
 

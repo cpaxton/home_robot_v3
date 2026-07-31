@@ -3,18 +3,17 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 #
-# Deploy a VL (or unified text+VL) model to caliban's Jetson Docker stack.
+# Prefer:  uv run emet deploy llm --profile unified-7b
+#          uv run emet deploy llm --profile dual-2b
 #
 # Orin eMMC (~57G) cannot hold both Qwen2.5-7B text (~15G) and Qwen2-VL-7B (~15G)
-# plus the L4T image. Profiles:
+# plus the L4T image. AGX Orin has ~64 GiB unified memory — enough for VL-7B.
 #
-#   dual-2b     — text CausalLM :8000 + Qwen2-VL-2B :8001  (default; fits beside 7B text)
-#   unified-7b  — one Qwen2-VL-7B on :8000 for text tools + captions (bigger model;
-#                 removes CausalLM container + text weights to free disk/GPU)
+#   dual-2b     — text CausalLM :8000 + Qwen2-VL-2B :8001
+#   unified-7b  — one Qwen2-VL-7B on :8000 for text tools + captions
 #
-#   ./scripts/deploy_caliban_vl.sh
 #   ./scripts/deploy_caliban_vl.sh --profile unified-7b
-#   ./scripts/deploy_caliban_vl.sh --profile dual-2b --model Qwen/Qwen2-VL-2B-Instruct
+#   ./scripts/deploy_caliban_vl.sh --profile dual-2b
 #
 # Requires SSH to caliban and a local HF hub cache for the chosen model.
 # After unified-7b, point Herman text + VL at the same URL:

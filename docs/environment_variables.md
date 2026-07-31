@@ -167,8 +167,11 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `OPENAI_BASE_URL` | same | Fallback if `EMET_OPENAI_BASE_URL` unset. |
 | `EMET_OPENAI_MODEL` | `get_llm_client("openai")` | Model id sent to the remote server (default `gpt-4o` when unset). |
 | `EMET_VL_ENDPOINT` | `OpenaiVLLMClient` / `create_dynamem_vllm` | Override `eqa.vl_endpoint` (`openai@http://caliban:8001/v1`). Caption/EQA only; voxels stay local. |
+| `EMET_CALIBAN_HOST` | `emet deploy llm` / `deploy_caliban_vl.sh` | SSH/LLM host (default `caliban`). |
+| `EMET_CALIBAN_REPO` | same | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
+| `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
-| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; VL recipe uses `8001`). |
+| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |

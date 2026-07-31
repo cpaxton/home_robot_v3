@@ -276,6 +276,22 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 
 ---
 
+### `emet deploy` / `emet deploy llm`
+
+**Robot (default):** sync `emet_core` + innate_mars_bridge to the Mars Jetson (`emet deploy`, same flags as before).
+
+**LAN LLM/VLM (caliban AGX Orin, ~64 GiB unified memory):**
+
+```bash
+uv run emet deploy llm                         # unified-7b (Qwen2-VL-7B on :8000)
+uv run emet deploy llm --profile dual-2b       # text :8000 + VL-2B :8001
+uv run emet deploy llm --host caliban --profile unified-7b
+uv run emet llm health
+uv run emet llm smoke --vl-only --vl http://caliban:8000/v1
+```
+
+Details: [llm_serve.md](llm_serve.md). Shell equivalent: `./scripts/deploy_caliban_vl.sh --profile unified-7b`.
+
 ### `emet mars [start|status|stop]`
 
 Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. See [Innate Mars hardware bring-up](robots/innate_mars_hardware.md) for full recipes (`--deploy`, `--onboard-da3`, Herman connection profile).
