@@ -17,6 +17,7 @@ import signal
 import subprocess
 import time
 import uuid
+from collections import Counter
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Literal
@@ -892,8 +893,6 @@ def provenance_accuracy_breakdown(
     episodes: list[EpisodeScore],
 ) -> dict[str, dict[str, Any]]:
     """Per ``answer_provenance`` n/correct/accuracy for scored episodes."""
-    from collections import Counter
-
     counts: Counter[str] = Counter()
     correct: Counter[str] = Counter()
     for e in episodes:
@@ -1017,6 +1016,16 @@ def format_job_report(
         if prog.current_id:
             cur = f" q{prog.current_id}" if str(prog.current_id).isdigit() else f" {prog.current_id}"
         lines.append(f"now:  {prog.phase or '-'}{cur}")
+
+    by_prov = provenance_accuracy_breakdown(episodes)
+    if by_prov:
+        bits = [f"{k}={v['correct']}/{v['n']}" for k, v in by_prov.items()]
+        excl = [e for e in episodes if e.correct is not None and (e.answer_provenance or "") != "uniform_prior"]
+        excl_ok = sum(1 for e in excl if e.correct is True)
+        excl_bit = ""
+        if excl and len(excl) < n_scored:
+            excl_bit = f"  excl_uniform={excl_ok}/{len(excl)}"
+        lines.append(f"prov: {'  '.join(bits)}{excl_bit}")
 
     by_arm: dict[str, list[EpisodeScore]] = {}
     for e in episodes:

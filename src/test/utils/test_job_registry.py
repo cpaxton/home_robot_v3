@@ -224,12 +224,14 @@ def test_format_job_report_episode_table(tmp_path, monkeypatch):
     (out / "agentic_q15.jsonl").write_text(
         '{"question_id":15,"correct":true,"predicted_answer":"D",'
         '"gold_answer_letter":"D","planning_steps":62,"confident":false,'
+        '"answer_provenance":"eqa_answer",'
         f'"debug_bundle_dir":"{bundle15}"}}\n',
         encoding="utf-8",
     )
     (out / "agentic_q56.jsonl").write_text(
         '{"question_id":56,"correct":false,"predicted_answer":"A",'
-        '"gold_answer_letter":"C","planning_steps":14,"confident":true}\n',
+        '"gold_answer_letter":"C","planning_steps":14,"confident":true,'
+        '"answer_provenance":"uniform_prior"}\n',
         encoding="utf-8",
     )
     job = jr.register_job(
@@ -249,12 +251,17 @@ def test_format_job_report_episode_table(tmp_path, monkeypatch):
     assert "v=verify-gate" in text
     assert "next: 65, 68" in text
     assert "crashes: none" in text
+    assert "eqa_answer=1/1" in text
+    assert "uniform_prior=0/1" in text
+    assert "excl_uniform=1/1" in text
     payload = jr.job_report_dict(job)
     assert payload["n_correct"] == 1
     assert payload["n_incorrect"] == 1
     assert payload["remaining_ids"] == [65, 68]
     assert payload["episodes"][0]["confident"] is False
     assert payload["episodes"][0]["verified"] is True
+    assert payload["by_provenance"]["eqa_answer"]["correct"] == 1
+    assert payload["accuracy_excl_uniform_prior"] == 1.0
 
 
 def test_format_job_detail_lists_viz_paths(tmp_path, monkeypatch):
