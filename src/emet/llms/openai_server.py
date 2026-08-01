@@ -8,9 +8,11 @@ Exposes a minimal subset of the OpenAI Chat Completions API so a workstation (or
 any OpenAI SDK client) can call models loaded on this host (e.g. Jetson Orin)::
 
     emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+    emet serve llm --vl --host 0.0.0.0 --port 8001
 
     # on another machine:
     export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+    # caption/EQA (unified-7b): mapping.eqa.vl_endpoint: openai@http://caliban:8000/v1
     emet run agent --llm openai ...
 
 Endpoints:
@@ -21,14 +23,17 @@ Endpoints:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import platform
+import re
 import sys
 import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -40,6 +45,10 @@ logger = Logger(__name__)
 DEFAULT_LLM_SERVE_HOST = "0.0.0.0"
 DEFAULT_LLM_SERVE_PORT = 8000
 DEFAULT_LLM_SERVE_MODEL = "qwen25-7B"
+DEFAULT_VL_SERVE_MODEL = "qwen3-vl-eqa"
+DEFAULT_VL_SERVE_PORT = 8001
+
+_DATA_URL_RE = re.compile(r"^data:(image/[^;]+);base64,(.+)$", re.DOTALL | re.IGNORECASE)
 
 
 def ensure_aarch64_gomp_preload() -> str | None:
@@ -96,8 +105,22 @@ def resolve_serve_device(device: str | None = None) -> str:
     return raw
 
 
+def decode_data_url_image(url: str) -> Any:
+    """Decode ``data:image/...;base64,...`` to HxWx3 uint8 RGB ndarray."""
+    import numpy as np
+    from PIL import Image
+
+    raw = (url or "").strip()
+    m = _DATA_URL_RE.match(raw)
+    if not m:
+        raise ValueError("image_url must be a data:image/...;base64,... URL")
+    blob = base64.b64decode(m.group(2), validate=False)
+    img = Image.open(BytesIO(blob)).convert("RGB")
+    return np.asarray(img, dtype=np.uint8)
+
+
 def _openai_messages_to_chat(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """Normalize OpenAI chat messages to role/content string dicts (text only)."""
+    """Normalize OpenAI chat messages to role/content string dicts (text only; drops images)."""
     out: list[dict[str, str]] = []
     for msg in messages:
         if not isinstance(msg, dict):
@@ -120,13 +143,105 @@ def _openai_messages_to_chat(messages: list[dict[str, Any]]) -> list[dict[str, s
     return out
 
 
+def _openai_messages_have_images(messages: list[dict[str, Any]]) -> bool:
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "image_url":
+                return True
+    return False
+
+
+def _openai_messages_to_multimodal(
+    messages: list[dict[str, Any]],
+) -> tuple[str | None, list[Any]]:
+    """Extract system prompt and ordered user multimodal parts (str | ndarray)."""
+    system: str | None = None
+    user_parts: list[Any] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role") or "user")
+        content = msg.get("content")
+        if content is None:
+            continue
+        if role == "system":
+            if isinstance(content, list):
+                texts = [
+                    str(b.get("text") or "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                ]
+                system = "\n".join(t for t in texts if t) or system
+            else:
+                system = str(content) if not system else system
+            continue
+        if role != "user":
+            # Prior assistant turns are ignored for stateless VL serve (reset each call).
+            continue
+        if isinstance(content, str):
+            if content.strip():
+                user_parts.append(content)
+            continue
+        if not isinstance(content, list):
+            user_parts.append(str(content))
+            continue
+        for block in content:
+            if isinstance(block, str):
+                if block.strip():
+                    user_parts.append(block)
+                continue
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "text":
+                text = str(block.get("text") or "")
+                if text.strip():
+                    user_parts.append(text)
+            elif btype == "image_url":
+                image_url = block.get("image_url")
+                url = image_url.get("url") if isinstance(image_url, dict) else image_url
+                if not url:
+                    raise ValueError("image_url block missing url")
+                user_parts.append(decode_data_url_image(str(url)))
+    return system, user_parts
+
+
 def generate_chat(
     client: Any,
     messages: list[dict[str, Any]],
     *,
     max_tokens: int | None = None,
 ) -> str:
-    """Run one chat completion against an emet LLM client (Qwen pipe path preferred)."""
+    """Run one chat completion against an emet LLM or VLM client."""
+    from emet.llms.base import AbstractVLLMClient
+    from emet.llms.vllm_factory import dynamem_vllm_call
+
+    has_images = _openai_messages_have_images(messages)
+    mt = int(max_tokens or getattr(client, "max_tokens", 512) or 512)
+
+    if has_images or isinstance(client, AbstractVLLMClient) or hasattr(client, "generate_multimodal"):
+        if has_images and not (
+            isinstance(client, AbstractVLLMClient) or hasattr(client, "generate_multimodal")
+        ):
+            raise ValueError(
+                "Request includes images but the loaded server model is text-only. "
+                "Restart with ``emet serve llm --vl`` (multimodal VLM)."
+            )
+        system, user_parts = _openai_messages_to_multimodal(messages)
+        if not user_parts:
+            raise ValueError("messages must include a non-empty user turn")
+        return dynamem_vllm_call(
+            client,
+            user_parts if len(user_parts) > 1 else user_parts[0],
+            system_prompt=system,
+            max_new_tokens=mt,
+        )
+
     chat = _openai_messages_to_chat(messages)
     if not chat:
         raise ValueError("messages must be a non-empty list")
@@ -140,7 +255,6 @@ def generate_chat(
         text = tokenizer.apply_chat_template(
             chat, tokenize=False, add_generation_prompt=True, **template_kwargs
         )
-        mt = int(max_tokens or getattr(client, "max_tokens", 512) or 512)
         # Avoid importing transformers.GenerationConfig here — on Jetson aarch64 that
         # pull can load sklearn/libgomp and hit "cannot allocate memory in static TLS block".
         pipe_kwargs: dict[str, Any] = {"max_new_tokens": mt}
@@ -187,11 +301,13 @@ class LLMServeState:
         device: str,
         max_tokens: int,
         api_key: str | None = None,
+        multimodal: bool = False,
     ) -> None:
         self.llm_key = llm_key
         self.device = device
         self.max_tokens = max_tokens
         self.api_key = (api_key or os.environ.get("EMET_LLM_SERVE_API_KEY") or "").strip() or None
+        self.multimodal = bool(multimodal)
         self.model_id = llm_key
         self.client: Any = None
         self._lock = threading.Lock()
@@ -201,7 +317,10 @@ class LLMServeState:
     def load(self) -> None:
         from emet.llms import get_llm_client
 
-        logger.info(f"Loading LLM {self.llm_key!r} on device={self.device} (max_tokens={self.max_tokens})")
+        kind = "VLM" if self.multimodal else "LLM"
+        logger.info(
+            f"Loading {kind} {self.llm_key!r} on device={self.device} (max_tokens={self.max_tokens})"
+        )
         kwargs: dict[str, Any] = {
             "device": self.device,
             "max_tokens": self.max_tokens,
@@ -209,16 +328,56 @@ class LLMServeState:
         # Jetson / aarch64 often has no bitsandbytes; leave quantization to the llm key
         # (e.g. qwen25-14B → no quant). Explicit Int4 keys will fail loudly if bnb missing.
         try:
-            self.client = get_llm_client(self.llm_key, prompt="", **kwargs)
+            if self.multimodal:
+                self.client = self._load_local_vlm(**kwargs)
+            else:
+                self.client = get_llm_client(self.llm_key, prompt="", **kwargs)
             self.model_id = self.llm_key
             self.ready = True
             self.load_error = None
-            logger.alert(f"LLM ready: {self.llm_key} on {self.device}")
+            logger.alert(f"{kind} ready: {self.llm_key} on {self.device}")
         except Exception as exc:
             self.load_error = f"{type(exc).__name__}: {exc}"
             self.ready = False
-            logger.error(f"LLM load failed: {self.load_error}")
+            logger.error(f"{kind} load failed: {self.load_error}")
             raise
+
+    def _load_local_vlm(self, **kwargs: Any) -> Any:
+        """Load a VLM for ``--vl`` serve with **local** weights only.
+
+        Ignores ``EMET_VL_ENDPOINT`` / ``eqa.vl_endpoint`` so a Herman client preset on
+        the same machine cannot turn the serve process into a remote proxy loop.
+        """
+        from emet.core.parameters import get_parameters
+        from emet.llms import get_llm_client, is_vl_llm_key
+        from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
+
+        key = (self.llm_key or "").strip().lower()
+        if key in ("qwen3-vl-eqa", "gemma4-vl-eqa"):
+            p = get_parameters("dynav_config.yaml")
+            eqa_cfg = p.get("eqa", {}) or {}
+            if not isinstance(eqa_cfg, dict):
+                eqa_cfg = {}
+            default_fam = "gemma4" if key == "gemma4-vl-eqa" else "qwen3_vl"
+            vl_family = str(eqa_cfg.get("vl_family", default_fam) or default_fam).strip()
+            vl_tok = int(kwargs.get("max_tokens") or eqa_cfg.get("vl_max_tokens", 512) or 512)
+            return create_dynamem_vllm(
+                vl_family,
+                hf_model_id=eqa_cfg.get("vl_hf_model_id"),
+                vl_model_size=str(eqa_cfg.get("vl_model_size", "8B") or "8B"),
+                max_tokens=vl_tok,
+                device=str(kwargs.get("device", self.device)),
+                quantization=eqa_cfg.get("vl_quantization", "int4"),
+                prompt="",
+                endpoint=None,
+                **eqa_vl_client_kwargs(eqa_cfg),
+            )
+        if not is_vl_llm_key(self.llm_key):
+            raise ValueError(
+                f"emet serve llm --vl requires a VLM key (got {self.llm_key!r}). "
+                f"Use qwen3-vl-eqa (default) or another multimodal preset."
+            )
+        return get_llm_client(self.llm_key, prompt="", **kwargs)
 
     def complete(self, body: dict[str, Any]) -> dict[str, Any]:
         if not self.ready or self.client is None:
@@ -250,7 +409,12 @@ class LLMServeState:
                 "completion_tokens": 0,
                 "total_tokens": 0,
             },
-            "emet": {"latency_s": round(dt, 3), "device": self.device, "llm_key": self.llm_key},
+            "emet": {
+                "latency_s": round(dt, 3),
+                "device": self.device,
+                "llm_key": self.llm_key,
+                "multimodal": self.multimodal,
+            },
         }
 
 
@@ -259,7 +423,7 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt: str, *args: Any) -> None:
-            logger.info("%s - %s" % (self.address_string(), fmt % args))
+            logger.info(f"{self.address_string()} - {fmt % args}")
 
         def _check_auth(self) -> bool:
             if not state.api_key:
@@ -304,6 +468,7 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
                         "ready": state.ready,
                         "model": state.model_id,
                         "device": state.device,
+                        "multimodal": state.multimodal,
                         "error": state.load_error,
                     },
                 )
@@ -360,17 +525,39 @@ def serve_openai_llm(
     max_tokens: int = 512,
     api_key: str | None = None,
     load_model: bool = True,
+    multimodal: bool = False,
 ) -> None:
-    """Load an emet LLM and serve OpenAI-compatible HTTP until interrupted."""
+    """Load an emet LLM or VLM and serve OpenAI-compatible HTTP until interrupted.
+
+    With ``multimodal=True`` (``emet serve llm --vl``), prefer a VL key such as
+    ``qwen3-vl-eqa`` and bind ``--port 8001`` so text can stay on ``:8000``.
+    """
     maybe_reexec_with_gomp_preload()
     resolved = resolve_serve_device(device)
-    state = LLMServeState(llm_key=llm, device=resolved, max_tokens=max_tokens, api_key=api_key)
+    llm_key = llm or (DEFAULT_VL_SERVE_MODEL if multimodal else DEFAULT_LLM_SERVE_MODEL)
+    serve_port = int(port)
+    state = LLMServeState(
+        llm_key=llm_key,
+        device=resolved,
+        max_tokens=max_tokens,
+        api_key=api_key,
+        multimodal=multimodal,
+    )
     if load_model:
         state.load()
     handler = _make_handler(state)
-    httpd = ThreadingHTTPServer((host, int(port)), handler)
-    logger.alert(f"OpenAI-compatible LLM server on http://{host}:{port}/v1  model={llm} device={resolved}")
-    logger.info("Clients: export EMET_OPENAI_BASE_URL=http://<this-host>:%s/v1" % port)
+    httpd = ThreadingHTTPServer((host, serve_port), handler)
+    kind = "VLM" if multimodal else "LLM"
+    logger.alert(
+        f"OpenAI-compatible {kind} server on http://{host}:{serve_port}/v1  "
+        f"model={llm_key} device={resolved} multimodal={multimodal}"
+    )
+    if multimodal:
+        logger.info(
+            f"Remote VL clients: mapping.eqa.vl_endpoint: openai@http://<this-host>:{serve_port}/v1"
+        )
+    else:
+        logger.info(f"Clients: export EMET_OPENAI_BASE_URL=http://<this-host>:{serve_port}/v1")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

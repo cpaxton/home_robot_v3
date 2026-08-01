@@ -28,10 +28,14 @@ def test_resolve_pretrained_source_directory():
     assert kw.get("local_files_only") is True
 
 
-def test_resolve_pretrained_source_local_hit():
-    with patch("huggingface_hub.snapshot_download", return_value="/cache/models--x") as snap:
+def test_resolve_pretrained_source_local_hit(tmp_path):
+    # A "complete" cache snapshot has a processor/tokenizer/weights marker file;
+    # resolve_pretrained_source refuses to force local_files_only without one.
+    marker = tmp_path / "model.safetensors"
+    marker.write_bytes(b"x")
+    with patch("huggingface_hub.snapshot_download", return_value=str(tmp_path)) as snap:
         src, kw = resolve_pretrained_source("org/model")
-    assert src == "/cache/models--x"
+    assert src == str(tmp_path)
     assert kw == {"local_files_only": True}
     snap.assert_called_once_with("org/model", local_files_only=True)
 

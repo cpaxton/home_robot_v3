@@ -73,12 +73,15 @@ System Python 3.8 on this Orin may already have `torch 2.0.0.nv23.05` with CUDA;
 # larger if VRAM allows: Qwen/Qwen2.5-14B-Instruct
 ```
 
-Then on another PC:
+Then on another PC (e.g. olympia talking to your Orin hostname):
 
 ```bash
-export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or 192.168.1.55:8000
-export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct
+uv run emet llm health --host ORIN_HOST
+uv run emet run chat --host ORIN_HOST --once "Reply with exactly: pong"
+export EMET_OPENAI_BASE_URL=http://ORIN_HOST:8000/v1
+export EMET_OPENAI_MODEL=Qwen/Qwen2-VL-7B-Instruct   # label only when unified-7b
 emet run agent --llm openai
+# Herman: pass --host / EMET_LLM_HOST (configs/agent_innate_mars.yaml uses agent.llm: openai) — see docs/llm_serve.md
 ```
 
 Native (CPU) path without Docker: `emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000` — slower; see [llm_serve.md](llm_serve.md).

@@ -72,11 +72,11 @@ After `git pull origin main` and `uv sync`, use the **same Rerun tools** as MuJo
 | GraphEQA baseline | `emet stream --backend graph_eqa` | `emet stream --connection herman --backend graph_eqa` |
 | Full session | `emet run dynamem --robot innate_mars` | `emet run dynamem --robot innate_mars --robot-ip herman --dynav-config dynav_innate_mars.yaml` |
 | Graph export | `emet run dynagraph --export /tmp/mars` | same with `--robot-ip herman --dynav-config dynav_innate_mars.yaml` |
-| Discord chat + explore | (sim: `--robot innate_mars --start-sim`) | `emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman` (needs `DISCORD_TOKEN`; see [hardware Discord section](../robots/innate_mars_hardware.md#discord-chat--explore-herman)) |
+| Discord chat + explore | (sim: `--robot innate_mars --start-sim`) | `emet run agent --connection herman --rerun` (needs `DISCORD_TOKEN` + profile `--config configs/agent_innate_mars.yaml`; see [hardware Discord section](../robots/innate_mars_hardware.md#discord-chat--explore-herman)) |
 
 **Depth:** Sim ZMQ carries sensor depth → default `dynav_config.yaml`. Hardware has no ZMQ depth → `stream`/`capture` auto-select `dynav_innate_mars.yaml` (DA3 stereo) when the host is not localhost. Override with `--dynav-config` anytime.
 
-**Connection profile:** `emet connect save herman --user jetson1 --robot innate_mars` so `--connection herman` sets host + robot on `capture`, `stream`, and `preview-cameras`. Details: [zmq_obs.md](../zmq_obs.md).
+**Connection profile:** `emet connect save … --name herman --robot innate_mars --config configs/agent_innate_mars.yaml` so `--connection herman` sets host + robot + default YAML on `capture`, `stream`, `run agent`, etc. Profile `config` also applies to bare dynamem/stream when herman is **active** — see [cli.md](../cli.md) (`emet connect`). Details: [zmq_obs.md](../zmq_obs.md).
 
 Rerun viewer: `http://localhost:9090?url=ws://localhost:9877` (SSH tunnel ports 9090/9877 when working over VPN). See [rerun.md](../rerun.md).
 

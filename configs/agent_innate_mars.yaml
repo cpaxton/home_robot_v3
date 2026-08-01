@@ -1,13 +1,22 @@
 # Innate Mars agent preset (unified nested config).
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
-#   uv run emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman
+#   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
+#   # Remote Orin (caliban): unified Qwen2-VL-7B on :8000 for text + captions
+#   #   (./scripts/deploy_caliban_vl.sh --profile unified-7b). dual-2b: --vl-port 8001.
+#   uv run emet run agent --connection herman --host caliban
+#   # or: export EMET_LLM_HOST=caliban
 extends: configs/emet/default.yaml
 
 robot: innate_mars
+connection: herman
 
 agent:
-  # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
+  name: Herman
+  # OpenAI-compatible remote (EMET_OPENAI_BASE_URL / --host). Override with
+  # ``--llm qwen35-4B`` for local weights, or ``openai@http://HOST:PORT/v1``.
+  llm: openai
+  # Load caption/EQA path (remote VLM via EMET_VL_ENDPOINT / --host fallthrough).
   eqa: true
   discord: true
   # Single Dynagraph memory plug-in on the voxel map (not open_vocab + GraphEQA).
@@ -29,6 +38,8 @@ embodied_agent:
       bounds_3d_iou_min: 0.08
 
 mapping:
-  # Dynagraph/eval VL sizing (separate from agent --eqa / mapping.eqa captioner).
+  # Leave eqa.vl_endpoint unset so resolve_vl_endpoint uses EMET_VL_ENDPOINT /
+  # EMET_OPENAI_BASE_URL / EMET_LLM_HOST (unified-7b same-port default).
+  # For dual-2b without --host: EMET_VL_ENDPOINT=openai@http://HOST:8001/v1
   eqa_vl:
     model_size: "4B"

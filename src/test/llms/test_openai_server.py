@@ -39,7 +39,10 @@ from emet.llms.openai_client import resolve_openai_api_key, resolve_openai_base_
 from emet.llms.openai_server import (  # noqa: E402
     LLMServeState,
     _make_handler,
+    _openai_messages_have_images,
     _openai_messages_to_chat,
+    _openai_messages_to_multimodal,
+    decode_data_url_image,
     generate_chat,
     resolve_serve_device,
 )
@@ -107,6 +110,73 @@ def test_generate_chat_via_pipe() -> None:
     assert out == "ok"
 
 
+def test_decode_data_url_and_multimodal_route() -> None:
+    import base64
+    from io import BytesIO
+    from typing import Any
+
+    import numpy as np
+    from PIL import Image
+
+    from emet.llms.base import AbstractVLLMClient
+
+    img = Image.fromarray(np.zeros((4, 6, 3), dtype=np.uint8), mode="RGB")
+    buf = BytesIO()
+    img.save(buf, format="JPEG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    url = f"data:image/jpeg;base64,{b64}"
+    arr = decode_data_url_image(url)
+    assert arr.shape == (4, 6, 3)
+
+    msgs = [
+        {"role": "system", "content": "sys"},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "describe"},
+                {"type": "image_url", "image_url": {"url": url}},
+            ],
+        },
+    ]
+    assert _openai_messages_have_images(msgs) is True
+    system, parts = _openai_messages_to_multimodal(msgs)
+    assert system == "sys"
+    assert parts[0] == "describe"
+    assert isinstance(parts[1], np.ndarray)
+
+    class _FakeVL(AbstractVLLMClient):
+        def __init__(self) -> None:
+            super().__init__("", None)
+            self.max_tokens = 16
+            self.calls: list[Any] = []
+
+        def generate_multimodal(self, user_content, **kwargs):
+            self.calls.append((user_content, kwargs))
+            return "caption"
+
+    vl = _FakeVL()
+    out = generate_chat(vl, msgs, max_tokens=8)
+    assert out == "caption"
+    assert len(vl.calls) == 1
+
+
+def test_generate_chat_images_on_text_client_errors() -> None:
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "x"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/jpeg;base64,AAAA"},
+                },
+            ],
+        }
+    ]
+    with pytest.raises(ValueError, match="text-only"):
+        generate_chat(_FakePipeClient(), msgs, max_tokens=8)
+
+
 def test_http_chat_completions_roundtrip() -> None:
     state = LLMServeState(llm_key="fake", device="cpu", max_tokens=16, api_key=None)
     state.client = _FakePipeClient()
@@ -146,6 +216,25 @@ def test_serve_llm_help() -> None:
     r = CliRunner().invoke(serve_llm_main, ["--help"])
     assert r.exit_code == 0
     assert "--llm" in r.output
+    assert "--vl" in r.output
+
+
+def test_vl_serve_load_ignores_remote_endpoint(monkeypatch) -> None:
+    """``emet serve llm --vl`` must load local weights, not proxy via EMET_VL_ENDPOINT."""
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setenv("EMET_VL_ENDPOINT", "openai@http://caliban:8001/v1")
+    state = LLMServeState(
+        llm_key="qwen3-vl-eqa",
+        device="cpu",
+        max_tokens=32,
+        multimodal=True,
+    )
+    fake = MagicMock(name="local_vlm")
+    with patch("emet.llms.vllm_factory.create_dynamem_vllm", return_value=fake) as m:
+        client = state._load_local_vlm(device="cpu", max_tokens=32)
+    assert client is fake
+    assert m.call_args.kwargs.get("endpoint") is None
 
 
 def test_get_llm_client_openai_at_url() -> None:

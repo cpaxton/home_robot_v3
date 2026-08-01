@@ -26,8 +26,10 @@ def test_qwen35_4b_routes_to_qwen35_client(mock_cls):
     assert kwargs["cache_system_prefix"] is False
 
 
-@patch("emet.llms.Qwen25Client")
+@patch("emet.llms.qwen_client.Qwen25Client")
 def test_qwen25_still_uses_qwen25_client(mock_cls):
+    # get_llm_client imports Qwen25Client lazily from emet.llms.qwen_client; patching
+    # emet.llms.Qwen25Client would miss and construct a real client (HF download).
     mock_cls.return_value = MagicMock(name="qwen25")
     client = get_llm_client("qwen25-3B-Instruct-Int4", prompt="sys", device="cuda")
     assert client is mock_cls.return_value
