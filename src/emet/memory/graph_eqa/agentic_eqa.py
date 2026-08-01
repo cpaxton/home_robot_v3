@@ -42,6 +42,7 @@ from emet.memory.graph_eqa.graph_memory import (
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     question_target_rooms,
+    resolve_investigate_room_stamp,
     resolve_room_policy,
     room_leave_needed,
     room_mismatches_question,
@@ -56,8 +57,8 @@ _logger = Logger(__name__)
 #   >= ABSENT  (0.10)  → CANDIDATE
 #   <  ABSENT  (0.10)  → ABSENT   (true-negative for *this* view — move on)
 # Do not treat ABSENT as proof the object is gone from the scene.
-# Qwen (vlm_assess / router) decides answerability and whether to explore vs submit;
-# SigLIP only appears in the state as a cheap proposal.
+# SigLIP ranks WHERE to navigate next to grow the graph; Qwen vlm_assess on
+# pixels decides answerability (detector scores are not fed into that prompt).
 SIGLIP_IMAGE_PRESENT_THRESHOLD = 0.12
 SIGLIP_IMAGE_ABSENT_THRESHOLD = 0.10
 
@@ -94,6 +95,10 @@ NAV_SAME_OBS_LOOP_LIMIT = 2
 
 # Distinct planar approach samples around a place card (re-investigate = next bearing).
 PLACE_APPROACH_SAMPLES = 4
+
+# After this many successful explore_frontier calls in a row, prefer an untried
+# investigate hyp over another frontier (stops leave/ABSENT explore-only loops).
+EXPLORE_STREAK_FORCE_INVESTIGATE = 2
 
 # Hyp recall: how many evidence cards to show the router / walk in fallback.
 DEFAULT_HYP_RECALL_K = 6
@@ -264,6 +269,21 @@ def env_eqa_agentic_require_verified() -> bool | None:
     return None
 
 
+def env_eqa_room_stamp_investigate() -> bool:
+    """Stamp room clusters after investigate (default **off**).
+
+    ``EMET_EQA_ROOM_STAMP_INVESTIGATE=1`` enables close-look stamps. Default off:
+    stamps regressed HM-EQA accuracy vs explore-streak-only; keep for A/B.
+    Also ``eqa.room_stamp_investigate``.
+    """
+    v = os.environ.get("EMET_EQA_ROOM_STAMP_INVESTIGATE", "").strip().lower()
+    if v in _TRUE:
+        return True
+    if v in _FALSE:
+        return False
+    return False
+
+
 def env_eqa_answerable_confirm() -> bool:
     """Hybrid confirm before unlock (default on). ``EMET_EQA_ANSWERABLE_CONFIRM=0`` disables."""
     v = os.environ.get("EMET_EQA_ANSWERABLE_CONFIRM", "").strip().lower()
@@ -364,6 +384,8 @@ class AgenticEQAExecutor:
         # After VLM assess_present=False, prefer one explore before the next investigate.
         self._prefer_explore: bool = False
         self._prefer_explore_reason: str = ""
+        # Successful explore_frontier streak; reset on investigate (see EXPLORE_STREAK_*).
+        self._n_consecutive_explore: int = 0
         # Soft answerable waiting for phrase hit / second agreeing view.
         self._pending_answerable: dict[str, Any] | None = None
         self._answerable_confirm = env_eqa_answerable_confirm()
@@ -384,6 +406,13 @@ class AgenticEQAExecutor:
         env_policy = env_eqa_room_policy()
         cfg_policy = _eqa_cfg(agent).get("room_policy", "canonical")
         self.room_policy = resolve_room_policy(env_policy if env_policy is not None else cfg_policy)
+        cfg_stamp = _eqa_cfg(agent).get("room_stamp_investigate", None)
+        if os.environ.get("EMET_EQA_ROOM_STAMP_INVESTIGATE", "").strip():
+            self._room_stamp_investigate = env_eqa_room_stamp_investigate()
+        elif cfg_stamp is not None:
+            self._room_stamp_investigate = bool(cfg_stamp)
+        else:
+            self._room_stamp_investigate = False
         self._in_target_area: bool | None = None
         self._collect_trace = (
             bool(collect_trace)
@@ -544,6 +573,8 @@ class AgenticEQAExecutor:
             oid = args.get("obs_id", out.get("obs_id"))
             if oid is not None:
                 bits.append(f"obs={int(oid)}")
+            if out.get("ok"):
+                self._n_consecutive_explore = 0
             ap = out.get("approach_index")
             if ap is not None:
                 bits.append(f"ap={int(ap)}")
@@ -808,6 +839,7 @@ class AgenticEQAExecutor:
         if ok:
             self._prefer_explore = False
             self._prefer_explore_reason = ""
+            self._n_consecutive_explore = int(getattr(self, "_n_consecutive_explore", 0) or 0) + 1
         return {
             "ok": ok,
             "capture": cap,
@@ -924,6 +956,132 @@ class AgenticEQAExecutor:
         if rec.last_assess_present is False:
             return True
         return str(rec.last_verify).upper() in {"ABSENT", "SKIPPED_SAME_VIEW"}
+
+    def _labels_for_room_stamp(self, obs_id: int, hyp: NavHypothesis | None = None) -> list[str]:
+        """Local labels for room stamping: hyp node labels + this obs only.
+
+        Deliberately omits ``hyp.phrase`` (often question/MCQ text like
+        ``wall clock kitchen``) and ``labels_near_obs`` / station merges, which
+        leak nonlocal kitchen/bathroom words in open-plan scenes.
+        """
+        labels: list[str] = []
+        if hyp is not None:
+            for lab in list(getattr(hyp, "labels", None) or []):
+                s = str(lab).strip()
+                if s and s not in labels:
+                    labels.append(s)
+        gm = self.graph_memory
+        if gm is not None:
+            for obs in list(getattr(gm, "_observations", None) or []):
+                if int(getattr(obs, "obs_id", -1)) != int(obs_id):
+                    continue
+                for lab in list(getattr(obs, "labels", None) or []):
+                    s = str(lab).strip()
+                    if s and s not in labels:
+                        labels.append(s)
+                break
+        return labels[:48]
+
+    def _stamp_room_after_investigate(
+        self,
+        obs_id: int,
+        *,
+        hyp: NavHypothesis | None,
+        station_oid: int | None,
+    ) -> dict[str, Any]:
+        """Refresh graph room cluster from close-look evidence (deferred room-stamp)."""
+        if not bool(getattr(self, "_room_stamp_investigate", False)):
+            return {"ok": False, "reason": "disabled"}
+        gm = self.graph_memory
+        if gm is None or not hasattr(gm, "stamp_vlm_room_at_robot"):
+            return {"ok": False, "reason": "no_graph"}
+        # Station labels stay out of the bag (trace-only); they bleed open-plan kitchens.
+        labels = self._labels_for_room_stamp(int(obs_id), hyp)
+        label_source = "obs_and_hyp_labels"
+        proposed = resolve_investigate_room_stamp(
+            labels=labels,
+            current_room=self._last_room_estimate,
+            room_policy=self.room_policy,
+        )
+        if proposed == "unknown":
+            return {
+                "ok": False,
+                "reason": "no_room",
+                "labels": labels[:12],
+                "label_source": label_source,
+                "station_obs_id": int(station_oid) if station_oid is not None else None,
+            }
+        stamp_xy = None
+        if hyp is not None and getattr(hyp, "xyz", None) is not None:
+            try:
+                xyz = np.asarray(hyp.xyz, dtype=float).reshape(-1)
+                stamp_xy = (float(xyz[0]), float(xyz[1]))
+            except Exception:
+                stamp_xy = None
+        if stamp_xy is None:
+            xyt = self._robot_xyt()
+            if xyt is not None:
+                stamp_xy = (float(xyt[0]), float(xyt[1]))
+        if stamp_xy is None:
+            return {"ok": False, "reason": "no_xy", "proposed": proposed}
+        prev = "unknown"
+        if hasattr(gm, "graph_room_at_robot"):
+            try:
+                prev = coerce_room_label(gm.graph_room_at_robot(stamp_xy), room_policy=self.room_policy)
+            except Exception as e:
+                _logger.warning(f"graph_room_at_robot before investigate stamp failed: {e}")
+        try:
+            stamped = gm.stamp_vlm_room_at_robot(
+                stamp_xy,
+                proposed,
+                protect_indoor_from_outdoor=True,
+                corroborating_labels=labels,
+            )
+        except Exception as e:
+            _logger.warning(f"stamp_vlm_room_at_robot after investigate failed: {e}")
+            return {"ok": False, "reason": "stamp_failed", "error": str(e), "proposed": proposed}
+        stamped_s = coerce_room_label(stamped, room_policy=self.room_policy)
+        if stamped_s == "unknown":
+            payload = {
+                "ok": False,
+                "reason": "blocked_or_noop",
+                "proposed": proposed,
+                "prev": prev,
+                "labels": labels[:12],
+                "label_source": label_source,
+                "station_obs_id": int(station_oid) if station_oid is not None else None,
+            }
+            self._append_trace({"event": "room_stamp_investigate", **payload})
+            return payload
+        graph_room = stamped_s
+        if hasattr(gm, "graph_room_at_robot"):
+            try:
+                graph_room = coerce_room_label(gm.graph_room_at_robot(stamp_xy), room_policy=self.room_policy)
+            except Exception:
+                graph_room = stamped_s
+        self._graph_room_estimate = graph_room
+        merged = merge_room_estimates(proposed, graph_room, room_policy=self.room_policy)
+        # Prefer the stamp we just applied when merge would keep a stale VLM outdoor.
+        if normalize_current_room(merged) == "outdoor" and not (normalize_current_room(proposed) == "outdoor"):
+            merged = proposed
+        self._last_room_estimate = merged
+        self._room_estimates.append(merged)
+        if len(self._room_estimates) > 8:
+            self._room_estimates = self._room_estimates[-8:]
+        payload = {
+            "ok": True,
+            "obs_id": int(obs_id),
+            "station_obs_id": int(station_oid) if station_oid is not None else None,
+            "proposed": proposed,
+            "stamped": stamped_s,
+            "prev": prev,
+            "current_room": merged,
+            "labels": labels[:12],
+            "label_source": label_source,
+            "xy": [float(stamp_xy[0]), float(stamp_xy[1])],
+        }
+        self._append_trace({"event": "room_stamp_investigate", **payload})
+        return payload
 
     def _voxel_planner(self) -> tuple[Any | None, Any | None]:
         agent = self.agent
@@ -1319,6 +1477,7 @@ class AgenticEQAExecutor:
                 ),
             }
         )
+        room_stamp = self._stamp_room_after_investigate(oid, hyp=hyp, station_oid=station_oid)
         return {
             "ok": True,
             "target_xyz": row["target_xyz"],
@@ -1329,6 +1488,7 @@ class AgenticEQAExecutor:
             "place_inspect": rec.card_bits(),
             "coverage": rec.coverage,
             "station_obs_id": station_oid,
+            "room_stamp": room_stamp,
         }
 
     def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
@@ -2090,8 +2250,9 @@ class AgenticEQAExecutor:
     ) -> dict[str, Any] | None:
         """Multimodal answerability gate. One assess per obs_id.
 
-        Qwen looks at pixels + inventory and decides whether this view is enough.
-        SigLIP/OWL stay proposals in the inventory — they do not hard-block unlock.
+        Qwen looks at pixels + neutral inventory (obs counts, graph labels).
+        SigLIP/OWL are where-next scores for navigation / which place to grow
+        the graph — logged on the verify proposal, never fed into this prompt.
         Hybrid confirm (phrase hit / two-view) gates ``_verified``.
         """
         oid = int(obs_id)
@@ -2118,10 +2279,10 @@ class AgenticEQAExecutor:
 
         from emet.eval.agentic_vlm_assess import assess_view_with_vlm, build_inventory_brief
 
+        # Do not pass SigLIP/OWL proposal into inventory — ABSENT colors answers.
         inventory = build_inventory_brief(
             n_observations=len(list(getattr(gm, "_observations", None) or [])),
             graph_labels=self._inventory_labels(),
-            proposal=proposal,
             tried_obs_ids=sorted(self._tried.keys()),
             n_rounds=self._round,
             n_nav=self._n_nav + self._n_explore,
@@ -2134,8 +2295,7 @@ class AgenticEQAExecutor:
             target_phrase=self._target_phrase or phrase,
         )
         self._vlm_assessed_obs_ids.add(oid)
-        # Trust the VLM assess. SigLIP ABSENT/CANDIDATE is router context only —
-        # do not second-guess answerable with cheap-detector gates (fix2 q65/q104).
+        # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
         ).upper()
@@ -3120,9 +3280,22 @@ class AgenticEQAExecutor:
         frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
         if need_more and budget_left and not frontiers_gone:
             return "explore_frontier", {}
-        # After a close ABSENT look, grow coverage before the next investigate.
+        # After a close ABSENT look, grow coverage before the next investigate —
+        # but only once; if we already explored this streak and place cards remain,
+        # look closer instead of frontier-only loops.
         if budget_left and not frontiers_gone and self._prefer_explore:
+            streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
+            hyp = self._next_untried_hypothesis()
+            if streak >= 1 and hyp is not None:
+                return "investigate", {"obs_id": int(hyp.obs_id)}
             return "explore_frontier", {}
+        # Soft cap: too many explores in a row with unused place cards → investigate.
+        if budget_left:
+            streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
+            if streak >= EXPLORE_STREAK_FORCE_INVESTIGATE:
+                hyp = self._next_untried_hypothesis()
+                if hyp is not None:
+                    return "investigate", {"obs_id": int(hyp.obs_id)}
         # (2) move in to an untried hypothesis (verify is chained after nav)
         if budget_left:
             h = self._next_untried_hypothesis()
@@ -3405,6 +3578,7 @@ class AgenticEQAExecutor:
         self._station_obs_ids = set()
         self._prefer_explore = False
         self._prefer_explore_reason = ""
+        self._n_consecutive_explore = 0
         self._last_room_estimate = "unknown"
         self._graph_room_estimate = "unknown"
         self._room_estimates = []
@@ -3464,6 +3638,7 @@ class AgenticEQAExecutor:
                 and calls[0][0] in ("investigate", "navigate_to_obs")
                 and self._n_nav + self._n_explore < self.max_nav_steps
                 and self._frontier_count() > 0
+                and int(getattr(self, "_n_consecutive_explore", 0) or 0) < 1
             ):
                 self._append_trace(
                     {
@@ -3475,6 +3650,26 @@ class AgenticEQAExecutor:
                 )
                 calls = [("explore_frontier", {"toward": self.query_text})]
                 picked_by = f"{picked_by}+prefer_explore"
+            # Leave/ABSENT explore-only loops: after a streak of frontiers, force a close look.
+            if (
+                self.mode == "answer"
+                and calls
+                and calls[0][0] == "explore_frontier"
+                and int(getattr(self, "_n_consecutive_explore", 0) or 0) >= EXPLORE_STREAK_FORCE_INVESTIGATE
+                and self._n_nav + self._n_explore < self.max_nav_steps
+            ):
+                hyp = self._next_untried_hypothesis()
+                if hyp is not None:
+                    self._append_trace(
+                        {
+                            "event": "explore_streak_investigate",
+                            "streak": int(self._n_consecutive_explore),
+                            "from": "explore_frontier",
+                            "to_obs_id": int(hyp.obs_id),
+                        }
+                    )
+                    calls = [("investigate", {"obs_id": int(hyp.obs_id)})]
+                    picked_by = f"{picked_by}+explore_streak"
             self._append_trace(
                 {
                     "event": "tool_pick",

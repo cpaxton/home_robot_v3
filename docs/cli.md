@@ -50,16 +50,26 @@ Start a simulation server **or** an OpenAI-compatible LLM HTTP API.
 
 Backends: `mujoco` (default), `robocasa`, `molmospaces`, `habitat`, **`llm`**.
 
-**LLM (LAN OpenAI API)** — load Qwen (or other `get_llm_client` text keys) on this host for a workstation to call:
+**LLM (LAN OpenAI API)** — load Qwen (or other `get_llm_client` keys) on this host for a workstation to call:
 
 ```bash
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
-# workstation:
+emet serve llm --vl --host 0.0.0.0 --port 8001   # dual-port caption/EQA beside text
+# Herman / LAN example (unified-7b): text + VL both on Jetson :8000 — docs/llm_serve.md
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+# or: export EMET_LLM_HOST=caliban
+
+# Remote health / smoke (pass --host; unified-7b text+VL on :8000)
+uv run emet llm health --host caliban
+uv run emet llm smoke --host caliban
+uv run emet llm smoke --host caliban --vl-only
+# Interactive / one-shot chat against LAN endpoints
+uv run emet run chat --host caliban --once "Reply with exactly: pong"
+uv run emet run chat --host caliban --vl --once "What color is the flag?" --image /path/to.jpg
 emet run agent --llm openai
 ```
 
-Details: [llm_serve.md](llm_serve.md). Jetson notes: [jetson.md](jetson.md).
+Details: [llm_serve.md](llm_serve.md) — **§1 Remote inference** and **§2 Testing LLMs** (Jetson unified-7b / dual-2b). Jetson install: [jetson.md](jetson.md).
 
 Start a simulation server.
 
@@ -265,6 +275,22 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 
 ---
 
+### `emet deploy` / `emet deploy llm`
+
+**Robot (default):** sync `emet_core` + innate_mars_bridge to the Mars Jetson (`emet deploy`, same flags as before).
+
+**LAN LLM/VLM (caliban AGX Orin, ~64 GiB unified memory):**
+
+```bash
+uv run emet deploy llm                         # unified-7b (Qwen2-VL-7B on :8000)
+uv run emet deploy llm --profile dual-2b       # text :8000 + VL-2B :8001
+uv run emet deploy llm --host caliban --profile unified-7b
+uv run emet llm health --host caliban
+uv run emet llm smoke --host caliban --vl-only
+```
+
+Details: [llm_serve.md](llm_serve.md). Shell equivalent: `./scripts/deploy_caliban_vl.sh --host caliban --profile unified-7b`.
+
 ### `emet mars [start|status|stop]`
 
 Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. See [Innate Mars hardware bring-up](robots/innate_mars_hardware.md) for full recipes (`--deploy`, `--onboard-da3`, Herman connection profile).
@@ -297,6 +323,7 @@ SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (f
 | `--password` / `-p` | `password` | Optional; else `EMET_ROBOT_PASSWORD` or SSH keys at runtime |
 | `--name` / `-n` | profile key | Default: hostname/IP |
 | `--robot` | `robot` | Emet robot id (e.g. `innate_mars`) for CLI defaults |
+| `--config` | `config` | Default unified YAML when apps leave `--config` at Click default (e.g. `configs/agent_innate_mars.yaml`) |
 | `--workspace` | `workspace` | Remote ROS2 workspace (Mars: `~/innate-os/ros2_ws`) |
 | `--emet-dir` | `emet_dir` | Remote emet install root (default `~/emet`) |
 | `--no-active` | — | Save without setting active or updating `robot_ip.txt` |
@@ -304,12 +331,21 @@ SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (f
 **Examples:**
 ```bash
 emet connect save herman --user jetson1 --name herman \
-  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet
+  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
+  --config configs/agent_innate_mars.yaml
 emet connect list
 emet connect show
 ```
 
-Used by `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, and `emet preview-cameras` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`).
+**Host / robot:** `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, `emet run agent`, and `emet preview-cameras` use the active profile (or `--connection NAME`) when `--ip` / `--host` / `--robot-ip` is omitted.
+
+**Profile `config` (YAML path):** Not agent-only. Any app that resolves unified config through the shared CLI helper (`emet run agent`, `emet run dynamem`, `emet run dynagraph`, `emet stream`, `emet capture`, …) uses the profile’s `config` whenever **`--config` / `-C` is left at the Click default**:
+
+1. Explicit `--config` / `--agent-config` / `--dynav-config` wins.
+2. Else profile `config` for `--connection NAME`, or for the **active** profile when `--connection` is omitted.
+3. Else `EMET_CONFIG` / packaged default (`configs/emet/default.yaml`).
+
+So with herman active and `config=configs/agent_innate_mars.yaml`, a bare `emet run dynamem` (no `--config`) also loads that agent preset — usually fine on a Herman-only workstation (robot + Mars mapping defaults). For Stretch/sim on the same machine, pass an explicit `--config`, use a profile without `config`, or `--no-active` when saving the Mars profile.
 
 ---
 

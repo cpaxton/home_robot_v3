@@ -21,6 +21,7 @@ Profiles live under ``~/.stretch/`` (shared with legacy memory paths):
           "user": "root",          // SSH user (default "root" when saving)
           "password": "...",       // optional — omit to use SSH keys / EMET_ROBOT_PASSWORD
           "robot": "innate_mars",  // optional — emet robot id for ``--robot`` defaults
+          "config": "configs/agent_innate_mars.yaml",  // optional — default ``--config`` for agent/stream
           "workspace": "~/innate-os/ros2_ws",  // optional — remote ROS2 workspace (Mars deploy)
           "emet_dir": "~/emet"     // optional — remote emet_core install root
         }
@@ -92,6 +93,7 @@ def _build_connection_record(
     workspace: str | None = None,
     emet_dir: str | None = None,
     robot: str | None = None,
+    config: str | None = None,
 ) -> dict[str, Any]:
     conn: dict[str, Any] = {"host": _strip(host), "user": _strip(user)}
     for key, value in (
@@ -99,6 +101,7 @@ def _build_connection_record(
         ("workspace", workspace),
         ("emet_dir", emet_dir),
         ("robot", robot),
+        ("config", config),
     ):
         if value is not None:
             conn[key] = _strip(str(value))
@@ -144,6 +147,7 @@ def save_connection(
     workspace: str | None = None,
     emet_dir: str | None = None,
     robot: str | None = None,
+    config: str | None = None,
 ) -> str:
     """Create or update a connection profile on disk.
 
@@ -159,30 +163,48 @@ def save_connection(
             Used by :func:`emet.deploy.deploy` and :func:`emet.mars.resolve_mars_target`.
         emet_dir: Remote directory for ``emet_core`` + bridge env (default ``~/emet`` on read).
         robot: Emet robot id stored in the profile (e.g. ``innate_mars``) for CLI defaults.
+        config: Optional unified emet YAML path (e.g. ``configs/agent_innate_mars.yaml``).
+            Used as the default ``--config`` when the CLI leaves ``--config`` at its default.
 
     Returns:
         The profile name used (``name`` or stripped ``host``).
 
     Note:
         Optional fields are omitted from JSON when not provided, except ``host`` and ``user``.
-        Updating an existing ``name`` replaces that entry in place.
+        Updating an existing ``name`` merges provided fields into the prior entry (keeps
+        password / workspace / config / etc. when those kwargs are omitted).
     """
-    config = _load_config()
+    store = _load_config()
     conn_name = _strip(name or host)
-    conn = _build_connection_record(
+    existing = dict(store.get("connections", {}).get(conn_name) or {})
+    updates = _build_connection_record(
         host=host,
         user=user,
         password=password,
         workspace=workspace,
         emet_dir=emet_dir,
         robot=robot,
+        config=config,
     )
-    config.setdefault("connections", {})[conn_name] = conn
+    conn = {**existing, **updates}
+    store.setdefault("connections", {})[conn_name] = conn
     if set_active:
-        config["active"] = conn_name
+        store["active"] = conn_name
         _sync_robot_ip_file(conn["host"])
-    _save_config(config)
+    _save_config(store)
     return conn_name
+
+
+def get_config_from_connection(name: str | None = None) -> str | None:
+    """Return the ``config`` YAML path for ``name`` or the active profile."""
+    conn = get_connection(name)
+    if conn is None:
+        return None
+    cfg = conn.get("config")
+    if cfg is None:
+        return None
+    s = str(cfg).strip()
+    return s or None
 
 
 def set_active(name: str) -> bool:

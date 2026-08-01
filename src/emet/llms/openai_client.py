@@ -18,6 +18,10 @@ from PIL import Image
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
+# Virgil ChatWrapper-style bounds: keep system prefix, trim oldest middle turns.
+DEFAULT_MAX_HISTORY_LENGTH = 50
+DEFAULT_HISTORY_PRESERVE = 1  # keep leading system message
+
 
 def resolve_openai_base_url(base_url: str | None = None) -> str | None:
     """Return OpenAI-compatible API base URL, or None for the public OpenAI default.
@@ -47,12 +51,9 @@ def resolve_openai_api_key(api_key: str | None = None) -> str | None:
 class OpenaiClient(AbstractLLMClient):
     """Client for OpenAI or any OpenAI-compatible HTTP server (e.g. ``emet serve llm``).
 
-    Parameters:
-        use_specific_objects(bool): override list of objects and have the AI only return those.
-        base_url: API root including ``/v1`` (or set ``EMET_OPENAI_BASE_URL``).
-        api_key: Bearer token (or ``OPENAI_API_KEY`` / ``EMET_LLM_SERVE_API_KEY``).
-
-    TODO: add the support for audio input
+    Multi-turn history uses :meth:`AbstractLLMClient.add_history` (same pattern as
+    Qwen clients / Virgil ``ChatWrapper``). Pass ``reset_context=True`` to clear
+    before a turn (agent first message); interactive chat leaves history on.
     """
 
     model_choices = ["gpt-4o", "gpt-4o-mini", "chatgpt-4o-latest"]
@@ -64,11 +65,18 @@ class OpenaiClient(AbstractLLMClient):
         model: str = "gpt-4o",
         base_url: str | None = None,
         api_key: str | None = None,
+        keep_history: bool = True,
+        max_history_length: int = DEFAULT_MAX_HISTORY_LENGTH,
+        history_preserve: int = DEFAULT_HISTORY_PRESERVE,
+        **_kwargs: Any,
     ):
         super().__init__(prompt, prompt_kwargs)
         self.model = model
         self.base_url = resolve_openai_base_url(base_url)
         self.api_key = resolve_openai_api_key(api_key)
+        self.keep_history = bool(keep_history)
+        self.max_history_length = max(2, int(max_history_length))
+        self.history_preserve = max(0, min(int(history_preserve), self.max_history_length))
         if self.base_url is None and self.model not in self.model_choices:
             print("Your GPT model:", self.model)
             print("Below are some recommended GPT models:")
@@ -78,6 +86,14 @@ class OpenaiClient(AbstractLLMClient):
         if self.base_url:
             client_kwargs["base_url"] = self.base_url
         self._openai = OpenAI(**client_kwargs)
+
+    def _trim_history(self) -> None:
+        hist = self.conversation_history
+        if len(hist) <= self.max_history_length:
+            return
+        preserve = self.history_preserve
+        keep_tail = self.max_history_length - preserve
+        self.conversation_history = hist[:preserve] + hist[-keep_tail:]
 
     def _process_input(self, command, verbose=False):
         """
@@ -104,7 +120,7 @@ class OpenaiClient(AbstractLLMClient):
                         image = c
 
                     buffered = BytesIO()
-                    (image.save(buffered, format="PNG"),)
+                    image.save(buffered, format="PNG")
                     img_bytes = buffered.getvalue()
                     base64_encoded = base64.b64encode(img_bytes).decode("utf-8")
                     user_commands.append(
@@ -130,13 +146,39 @@ class OpenaiClient(AbstractLLMClient):
                         print(idx, ".", user_command["type"], user_command["text"])
         return user_commands
 
-    def __call__(self, command: str | list, verbose: bool = False, tools: list | None = None):
+    def __call__(
+        self,
+        command: str | list,
+        verbose: bool = False,
+        tools: list | None = None,
+        reset_context: bool = False,
+        keep_history: bool | None = None,
+        **_kwargs: Any,
+    ):
         if verbose:
             print(f"{self.system_prompt=}")
             if self.base_url:
                 print(f"base_url={self.base_url}")
 
+        use_hist = self.keep_history if keep_history is None else bool(keep_history)
+        if reset_context or not use_hist:
+            self.reset()
+
         command = self._process_input(command, verbose=verbose)  # type:ignore
+
+        if use_hist:
+            if self.is_first_message():
+                sys_txt = self.system_prompt
+                if sys_txt:
+                    self.add_history({"role": "system", "content": sys_txt})
+            self.add_history({"role": "user", "content": command})
+            self._trim_history()
+            messages = self.get_history()
+        else:
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": command},
+            ]
 
         kwargs: dict[str, Any] = {}
         if tools:
@@ -145,15 +187,13 @@ class OpenaiClient(AbstractLLMClient):
 
         completion = self._openai.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": command},
-            ],
+            messages=messages,
             **kwargs,
         )
         msg = completion.choices[0].message
 
-        # If the model made tool calls via native API, return structured data
+        # If the model made tool calls via native API, return structured data.
+        # Agent loop appends history itself after tool execution.
         if tools and msg.tool_calls:
             import json as _json
 
@@ -166,7 +206,10 @@ class OpenaiClient(AbstractLLMClient):
                 result_calls.append({"name": tc.function.name, "arguments": args})
             return _json.dumps({"tool_calls": result_calls, "message": msg.content or ""})
 
-        output_text = msg.content
+        output_text = msg.content or ""
+        if use_hist:
+            self.add_history({"role": "assistant", "content": output_text})
+            self._trim_history()
         if verbose:
             print(f"output_text={output_text}")
         return output_text

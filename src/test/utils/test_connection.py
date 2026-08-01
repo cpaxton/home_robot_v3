@@ -34,6 +34,7 @@ def test_save_connection_writes_profile_and_robot_ip(tmp_path, monkeypatch):
         workspace=" ~/innate-os/ros2_ws ",
         emet_dir=" ~/emet ",
         robot=" innate_mars ",
+        config=" configs/agent_innate_mars.yaml ",
     )
     assert name == "mars"
     data = json.loads((stretch / "connection.json").read_text())
@@ -46,8 +47,29 @@ def test_save_connection_writes_profile_and_robot_ip(tmp_path, monkeypatch):
         "workspace": "~/innate-os/ros2_ws",
         "emet_dir": "~/emet",
         "robot": "innate_mars",
+        "config": "configs/agent_innate_mars.yaml",
     }
     assert (stretch / "robot_ip.txt").read_text() == "192.168.1.9"
+    assert conn_mod.get_config_from_connection("mars") == "configs/agent_innate_mars.yaml"
+
+
+def test_save_connection_merges_config_without_wiping_password(tmp_path, monkeypatch):
+    stretch = tmp_path / "stretch"
+    monkeypatch.setattr(conn_mod, "_STRETCH_DIR", str(stretch))
+    monkeypatch.setattr(conn_mod, "_CONNECTION_FILE", str(stretch / "connection.json"))
+    monkeypatch.setattr(conn_mod, "_ROBOT_IP_FILE", str(stretch / "robot_ip.txt"))
+
+    conn_mod.save_connection(host="10.0.0.2", user="jetson1", password="secret", name="herman", robot="innate_mars")
+    conn_mod.save_connection(
+        host="10.0.0.2",
+        user="jetson1",
+        name="herman",
+        config="configs/agent_innate_mars.yaml",
+    )
+    profile = json.loads((stretch / "connection.json").read_text())["connections"]["herman"]
+    assert profile["password"] == "secret"
+    assert profile["robot"] == "innate_mars"
+    assert profile["config"] == "configs/agent_innate_mars.yaml"
 
 
 def test_save_connection_no_active_skips_robot_ip_sync(tmp_path, monkeypatch):

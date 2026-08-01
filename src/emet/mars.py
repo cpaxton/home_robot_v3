@@ -139,9 +139,14 @@ def _remote_status_cmd() -> str:
 
 
 def parse_bridge_status_output(host: str, user: str, raw: str, *, exit_code: int = 0) -> MarsBridgeStatus:
-    """Parse SSH status probe output into a structured snapshot."""
+    """Parse SSH status probe output into a structured snapshot.
+
+    Section markers must be whole lines (``---``). Do **not** use ``str.split("---")``:
+    ``pgrep -af`` often echoes the remote ``zsh -c … echo '---'; …`` command line, which
+    would corrupt port/tmux sections if we split on the substring.
+    """
     status = MarsBridgeStatus(host=host, user=user, ssh_exit_code=exit_code)
-    sections = raw.split("---")
+    sections = re.split(r"^---\s*$", raw, flags=re.MULTILINE)
     proc_blob = sections[0] if sections else raw
     port_blob = sections[1] if len(sections) > 1 else ""
     tmux_blob = sections[2] if len(sections) > 2 else ""
@@ -149,6 +154,9 @@ def parse_bridge_status_output(host: str, user: str, raw: str, *, exit_code: int
     for line in proc_blob.splitlines():
         line = line.strip()
         if not line or "pgrep" in line:
+            continue
+        # Skip the SSH shell that re-lists this probe (still matches innate_mars_zmq_server).
+        if re.search(r"\b(zsh|bash|sh)\s+-c\b", line):
             continue
         m = re.match(r"^(\d+)\s+(.+)$", line)
         if m and "innate_mars_zmq_server" in line:
@@ -158,7 +166,7 @@ def parse_bridge_status_output(host: str, user: str, raw: str, *, exit_code: int
 
     for line in port_blob.splitlines():
         for port in MARS_ZMQ_PORTS:
-            if f":{port}" in line:
+            if re.search(rf":{port}(?:\s|$)", line):
                 status.listening_ports.add(port)
 
     tmux_text = tmux_blob.strip()

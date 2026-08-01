@@ -72,6 +72,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 ## Config
 
 - **Default path**: [`configs/emet/default.yaml`](../configs/emet/default.yaml). Override with **`--config`** / **`-C`** or env **`EMET_CONFIG`**.
+- **Connection profile `config`**: when `--config` is omitted, the named (`--connection`) or **active** profile’s `config` path wins over `EMET_CONFIG` / the packaged default — for agent **and** dynamem / dynagraph / stream. See [cli.md](cli.md) (`emet connect`) and [emet_config.md](emet_config.md).
 - **Dot overrides**: **`--set mapping.depth_source=auto`** or **`-O agent.eqa=true`**. See [Unified EMET configuration](emet_config.md).
 - **Legacy alias**: **`--agent-config`** (deprecated; use `--config`).
 - **Robot**: **`--robot`** optional — resolved from CLI → config `robot:` → ZMQ discovery → connection profile → `stretch`. Must match `emet serve mujoco --robot` when both are explicit. ZMQ discovery is skipped when **`--start-sim`** spawns the sim first.
@@ -81,7 +82,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | Preset | Robot | Notes |
 |--------|-------|-------|
 | `configs/emet/default.yaml` | discover / stretch | Unified default; **`agent.memory_backend: dynagraph`** |
-| `configs/agent_innate_mars.yaml` | innate_mars | Discord + EQA captions; DA3 depth overlay; use `--connection herman` |
+| `configs/agent_innate_mars.yaml` | innate_mars | Discord + EQA captions; DA3 depth overlay; `agent.name: Herman`; `agent.llm: openai` — pass **`--host caliban`** (or `EMET_LLM_HOST`) for unified VL-7B on `:8000` text+captions (dual-2b: `--vl-port 8001`); store on profile with `emet connect save … --config configs/agent_innate_mars.yaml` then `emet run agent --connection herman --host caliban` |
 | `configs/agent_stretch_discord.yaml` | stretch | Discord + instance-graph; add **`--eqa`** for Qwen3-VL captions (recommended for intelligent “what can you see?”) |
 | `configs/agent_rby1_discord.yaml` | rby1 | Same tuning + `sim_config` for Molmo iTHOR |
 
@@ -198,11 +199,9 @@ uv run emet run agent --robot stretch --robot-ip <IP> --confirm-nav --rerun
 
 # Innate Mars (Herman) — Discord chat + explore (bridge must be up)
 export DISCORD_TOKEN=...
-uv run emet run agent \
-  --connection herman \
-  --config configs/agent_innate_mars.yaml \
-  --rerun \
-  --name Herman
+# Preset: agent.llm openai + remote Orin via --host (docs/llm_serve.md); optional --rerun
+uv run emet run agent --connection herman --host caliban
+# Profile should store --config configs/agent_innate_mars.yaml (persona name in YAML).
 # Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
 # Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
