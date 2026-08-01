@@ -248,6 +248,93 @@ def test_config_agent_section_eqa_when_cli_omitted(monkeypatch: pytest.MonkeyPat
     assert captured == [True]
 
 
+def test_config_agent_name_when_cli_omitted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """YAML agent.name applies when --name is not on the CLI."""
+    from emet.app import run_agent as ra
+
+    captured: list[str] = []
+
+    def stub(**kw: object) -> None:
+        captured.append(str(kw["agent_name"]))
+
+    monkeypatch.setattr(ra, "run_agent_with_robot", stub)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["--robot", "stretch", "--no-llm", "-c", "E", "--no-discord", "--set", "agent.name=Herman"],
+    )
+    assert r.exit_code == 0, r.output
+    assert captured == ["Herman"]
+
+
+def test_agent_innate_mars_uses_openai_remote_llm() -> None:
+    """Herman preset uses openai client; host/URL comes from --host / EMET_*."""
+    from emet.config.loader import load_config
+
+    cfg = load_config("configs/agent_innate_mars.yaml")
+    assert cfg.agent_section().llm.strip().lower() == "openai"
+    # No hardcoded caliban URLs in the preset (operator passes --host).
+    text = open("configs/agent_innate_mars.yaml", encoding="utf-8").read()
+    assert "openai@http://caliban" not in text
+
+
+def test_help_lists_host_and_accepts_openai_spec() -> None:
+    """Agent --help documents --host; openai@ specs are valid llm values."""
+    from click.testing import CliRunner
+
+    from emet.app.run_agent import main
+    from emet.llms import validate_llm_client_type
+
+    r = CliRunner().invoke(main, ["--help"])
+    assert r.exit_code == 0, r.output
+    assert "--host" in r.output
+    assert "--llm-port" in r.output
+    assert validate_llm_client_type("openai@http://orin:8000/v1") == "openai@http://orin:8000/v1"
+    assert validate_llm_client_type("openai") == "openai"
+
+
+def test_connection_profile_config_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """When --config is default, connection profile config path wins."""
+    import click
+    from click.testing import CliRunner
+
+    from emet.app import config_cli as cc
+    from emet.utils import connection as conn_mod
+
+    stretch = tmp_path / "stretch"
+    monkeypatch.setattr(conn_mod, "_STRETCH_DIR", str(stretch))
+    monkeypatch.setattr(conn_mod, "_CONNECTION_FILE", str(stretch / "connection.json"))
+    monkeypatch.setattr(conn_mod, "_ROBOT_IP_FILE", str(stretch / "robot_ip.txt"))
+    conn_mod.save_connection(
+        host="192.168.1.43",
+        user="jetson1",
+        name="herman",
+        robot="innate_mars",
+        config="configs/agent_innate_mars.yaml",
+    )
+
+    @click.command()
+    @cc.emet_config_options()
+    @click.pass_context
+    def probe(ctx, emet_config, config_sets, connection, agent_config, dynav_config):
+        path = cc.resolve_effective_config_path(
+            ctx,
+            emet_config=emet_config,
+            agent_config=agent_config,
+            dynav_config=dynav_config,
+            connection=connection,
+        )
+        click.echo(path)
+
+    runner = CliRunner()
+    r = runner.invoke(probe, ["--connection", "herman"])
+    assert r.exit_code == 0, r.output
+    assert "agent_innate_mars.yaml" in r.output
+
+
+
 def test_cli_eqa_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
     """Explicit --eqa wins over agent.eqa=false in config."""
     from emet.app import run_agent as ra
@@ -272,6 +359,9 @@ def test_cli_eqa_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_set_agent_llm_offline(monkeypatch: pytest.MonkeyPatch) -> None:
     """Offline mode honors --set agent.llm when --llm is omitted."""
     from emet.app import run_agent as ra
+
+    for key in ("EMET_LLM_HOST", "EMET_CALIBAN_HOST", "EMET_OPENAI_BASE_URL", "EMET_VL_ENDPOINT"):
+        monkeypatch.delenv(key, raising=False)
 
     seen: list[str] = []
 

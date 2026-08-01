@@ -14,7 +14,7 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
-| `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Default path to unified nested config YAML when `--config` is omitted. Default: `configs/emet/default.yaml` in the repo. See [Unified EMET configuration](emet_config.md). |
+| `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
 ## Benchmarks
 
@@ -56,7 +56,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_AGENTIC_ROUTER` | `AgenticEQAExecutor` | `1`/`0` — override `eqa.agentic_vlm_router`: let the shared Qwen3-VL pick tools via JSON tool calls (`0` = deterministic fallback only, for reproducible evals). |
 | `EMET_EQA_ROUTER_ROOM_IMAGES` | `AgenticEQAExecutor` | Nearby object RGBs attached to each router turn for `current_room` (default `3`; `0` = text-only router for speed A/B). Live robot view is always included when images &gt; 0. Trace logs `router_ms` / `n_room_images`; `emet jobs report -q ID --rooms` prints mean/max. |
 | `EMET_EQA_ROOM_POLICY` | `AgenticEQAExecutor` | `canonical` (default) or `llm` — how room identity is stored for agentic explore. Canonical buckets via `normalize_current_room` / `question_target_rooms` (metrics + leave hint). LLM keeps free-text `current_room` + router `in_target_area`. Frontier picks re-ask the real Question with graph `room=`/`near=` context — no frozen MCQ-derived place brief. Also `eqa.room_policy`. |
-| `EMET_EQA_ROOM_STAMP_INVESTIGATE` | `AgenticEQAExecutor` | Default **off**. When `1`, stamp room clusters after investigate from local obs labels. Off restores explore-streak-only behavior (HM-EQA A/B: stamps regressed accuracy). Also `eqa.room_stamp_investigate`.
+| `EMET_EQA_ROOM_STAMP_INVESTIGATE` | `AgenticEQAExecutor` | Default **off**. When `1`, stamp room clusters after investigate from local obs labels. Off restores explore-streak-only behavior (HM-EQA A/B: stamps regressed accuracy). Also `eqa.room_stamp_investigate`. |
 | `EMET_EQA_MERGED_MEMORY` | `GraphEQAMemory.query_answer` | Default **off**. When `1`, fold CONFIRMED_MEMORY into `SCENE_GRAPH` (graph-grounded `present` tags + short tail for candidates/unobserved) instead of a separate summary block. SigLIP alone never asserts present/absent. Also `eqa.merged_memory`. |
 | `EMET_EQA_HYP_RECALL_K` | `AgenticEQAExecutor` | Top-K evidence cards recalled for the agentic router / fallback (default `6`). Retrieval only — the VLM decides among listed `obs_id`s. |
 | `EMET_EQA_ROOM_LINK_RADIUS_M` | `GraphEQAMemory` room clusters | Planar radius (m) linking object nodes into room CCs with `near` edges (default `2.0`; also `eqa.room_link_radius_m`). |
@@ -172,9 +172,17 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_ALLOW_SDPA_ATTN` | same | `1` — permit PyTorch SDPA when flash-attn is missing (slower; long multi-image EQA can crawl). Overrides the default require-flash policy. |
 | `EMET_FORCE_TEGRA` | `emet.utils.platform_info` | `1` — treat host as Jetson/Tegra for install hints (tests / CI). |
 | `EMET_INSTALL_PROFILE` | `install.sh` | `minimal` \| `standard` \| `full` \| `jetson`. `jetson` = lean Orin install (see [jetson.md](jetson.md)). |
-| `EMET_OPENAI_BASE_URL` | `OpenaiClient` / `--llm openai` | OpenAI-compatible API root including `/v1` (e.g. `http://caliban:8000/v1`). See [llm_serve.md](llm_serve.md). |
+| `EMET_OPENAI_BASE_URL` | `OpenaiClient` / `--llm openai` | OpenAI-compatible API root including `/v1` (e.g. `http://HOST:8000/v1`). See [llm_serve.md](llm_serve.md). |
 | `OPENAI_BASE_URL` | same | Fallback if `EMET_OPENAI_BASE_URL` unset. |
 | `EMET_OPENAI_MODEL` | `get_llm_client("openai")` | Model id sent to the remote server (default `gpt-4o` when unset). |
+| `EMET_VL_ENDPOINT` | `OpenaiVLLMClient` / `create_dynamem_vllm` | Override `eqa.vl_endpoint` (unified-7b: `openai@http://HOST:8000/v1`; dual-2b uses `:8001`). Caption/EQA only; voxels stay local. |
+| `EMET_LLM_HOST` | `emet run chat --host`, `emet run agent --host`, `emet llm …`, `emet deploy llm` | LAN OpenAI host (no default). Example: `caliban`. Sets text+VL endpoints via `apply_llm_host`. |
+| `EMET_CALIBAN_HOST` | same (compat alias) | Fallback if `EMET_LLM_HOST` unset. |
+| `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
+| `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
+| `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
+| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
+| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` (only supported on JP5 Tegra image). `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md) § Quantization. |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |

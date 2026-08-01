@@ -42,7 +42,8 @@ RUN python3 -m pip install --upgrade pip setuptools wheel \
     "protobuf" \
     "safetensors" \
     "huggingface_hub>=0.20,<0.28" \
-    "einops"
+    "einops" \
+    "Pillow>=9.0,<11"
 
 WORKDIR /app
 COPY docker/jetson_llm_server.py /app/jetson_llm_server.py

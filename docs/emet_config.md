@@ -10,6 +10,14 @@ emet run dynamem -S
 
 Default path: [`configs/emet/default.yaml`](../configs/emet/default.yaml). Override with **`EMET_CONFIG=/path/to.yaml`** or **`--config PATH`** / **`-C`**.
 
+**Config path precedence** (shared by agent / dynamem / dynagraph / stream / capture):
+
+1. Explicit **`--config`** / **`-C`** (or deprecated `--agent-config` / `--dynav-config`)
+2. Connection-profile **`config`** field (`emet connect save … --config …`) for `--connection NAME`, or the **active** profile when `--connection` is omitted — see [cli.md](cli.md) (`emet connect`)
+3. **`EMET_CONFIG`** / packaged default
+
+Storing a chat-agent YAML (e.g. `configs/agent_innate_mars.yaml`) on the active profile therefore also becomes the default for `emet run dynamem` / `stream` until you pass `--config` or clear that field. Prefer a Mars-only workstation for that setup, or keep agent YAML off the active profile when switching robots.
+
 Legacy basenames (`dynav_config.yaml`, `--agent-config`, `--dynav-config`) still work; they map to the unified loader with deprecation warnings.
 
 ---

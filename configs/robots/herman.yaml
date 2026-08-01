@@ -1,5 +1,8 @@
-# Herman — Innate Mars connection preset (use with ``emet connect save`` or ``--connection herman``).
-extends: configs/emet/default.yaml
+# Herman — Innate Mars connection + agent preset.
+# Prefer storing this (or agent_innate_mars.yaml) on the connection profile:
+#   emet connect save 192.168.1.43 --user jetson1 --name herman \
+#     --robot innate_mars --config configs/agent_innate_mars.yaml
+extends: configs/agent_innate_mars.yaml
 
 connection: herman
 robot: innate_mars

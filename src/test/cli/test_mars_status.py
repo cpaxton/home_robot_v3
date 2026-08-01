@@ -33,6 +33,31 @@ def test_parse_bridge_status_output_not_running():
     assert not status.ready_for_stream
 
 
+def test_parse_bridge_status_ignores_pgrep_self_match_with_echo_separators():
+    """pgrep -af echoes the remote zsh -c probe, which embeds echo '---' substrings."""
+    raw = (
+        "7461 /usr/bin/python3 /home/jetson1/innate-os/ros2_ws/install/innate_mars_bridge/"
+        "lib/innate_mars_bridge/server --ros-args -r __node:=innate_mars_zmq_server\n"
+        "11541 zsh -c pgrep -af 'innate_mars_zmq_server' 2>/dev/null || true; "
+        "echo '---'; ss -tlnH 2>/dev/null | grep -E ':440[1-4] ' || true; "
+        "echo '---'; tmux has-session -t ros_nodes 2>/dev/null && "
+        "tmux capture-pane -t ros_nodes:emet-bridge -p 2>/dev/null | tail -12 "
+        "|| echo '---tmux-unavailable---'\n"
+        "---\n"
+        "LISTEN 0      100          0.0.0.0:4401  0.0.0.0:*\n"
+        "LISTEN 0      100          0.0.0.0:4402  0.0.0.0:*\n"
+        "LISTEN 0      100          0.0.0.0:4403  0.0.0.0:*\n"
+        "LISTEN 0      100          0.0.0.0:4404  0.0.0.0:*\n"
+        "---\n"
+        "[server-1] Running all...\n"
+        "[server-1] Warning: wrist camera (/mars/arm/image_raw) is all black\n"
+    )
+    status = parse_bridge_status_output("herman", "jetson1", raw)
+    assert status.pid == 7461
+    assert status.listening_ports == {4401, 4402, 4403, 4404}
+    assert status.ready_for_stream
+
+
 def test_print_bridge_status_smoke(capsys):
     status = parse_bridge_status_output(
         "herman",

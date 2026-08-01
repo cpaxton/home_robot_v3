@@ -86,6 +86,11 @@ def _ensure_uv_project() -> None:
     """If we're in the project and uv is available, re-exec under uv run so the rest uses the project env."""
     if os.environ.get("EMET_UV_RUN"):
         return
+    # Never re-exec under pytest: sys.argv there holds pytest's own args, so exec
+    # would replace the test process with `uv run emet <pytest args>` (exit 2, no
+    # traceback, kills the whole session via CliRunner.invoke on any subcommand).
+    if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+        return
     if not _has_uv():
         return
     root = _active_project_root()
@@ -372,6 +377,13 @@ def main() -> None:
     default=None,
     help="For ``serve llm``: optional Bearer token (or EMET_LLM_SERVE_API_KEY).",
 )
+@click.option(
+    "--vl/--no-vl",
+    "llm_vl",
+    default=False,
+    show_default=True,
+    help="For ``serve llm``: load multimodal VLM (image_url). Default port becomes 8001.",
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -401,6 +413,7 @@ def serve(
     llm_device: str,
     llm_max_tokens: int,
     llm_api_key: str | None,
+    llm_vl: bool,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server or OpenAI-compatible LLM HTTP API.
@@ -435,21 +448,40 @@ def serve(
       emet serve mujoco --scene ithor --robot rby1 --headless
       emet serve mujoco --scene ithor --robot xlerobot --headless
       emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+      emet serve llm --vl --host 0.0.0.0 --port 8001
       emet robots info xlerobot
       emet robots preview-cameras xlerobot --source local
     """
     if backend == "llm":
-        from emet.llms.openai_server import resolve_serve_device, serve_openai_llm
+        from emet.llms.openai_server import (
+            DEFAULT_LLM_SERVE_MODEL,
+            DEFAULT_VL_SERVE_MODEL,
+            DEFAULT_VL_SERVE_PORT,
+            resolve_serve_device,
+            serve_openai_llm,
+        )
 
+        use_vl = bool(llm_vl)
+        # Click defaults --llm/--port for all serve backends; nudge VL defaults when --vl.
+        resolved_llm = llm_key
+        if use_vl and resolved_llm == DEFAULT_LLM_SERVE_MODEL:
+            resolved_llm = DEFAULT_VL_SERVE_MODEL
+        resolved_port = int(llm_port)
+        if use_vl and resolved_port == 8000:
+            resolved_port = DEFAULT_VL_SERVE_PORT
         resolved = resolve_serve_device(llm_device)
-        click.echo(f"emet serve llm: llm={llm_key} device={resolved} bind={llm_host}:{llm_port}")
+        click.echo(
+            f"emet serve llm: llm={resolved_llm} device={resolved} "
+            f"bind={llm_host}:{resolved_port} vl={use_vl}"
+        )
         serve_openai_llm(
-            llm=llm_key,
+            llm=resolved_llm,
             host=llm_host,
-            port=int(llm_port),
+            port=resolved_port,
             device=resolved,
             max_tokens=int(llm_max_tokens),
             api_key=llm_api_key,
+            multimodal=use_vl,
         )
         return
 
@@ -3059,6 +3091,12 @@ def connect_cmd() -> None:
 @click.option("--name", "-n", default=None, help="Profile name (default: host)")
 @click.option("--robot", default=None, help="Emet robot id (e.g. innate_mars) stored in profile")
 @click.option(
+    "--config",
+    "profile_config",
+    default=None,
+    help="Default unified YAML for emet run agent / stream when --config is omitted (e.g. configs/agent_innate_mars.yaml)",
+)
+@click.option(
     "--workspace",
     default=None,
     help="Remote ROS2 workspace on robot (e.g. ~/innate-os/ros2_ws for innate-os Mars)",
@@ -3071,6 +3109,7 @@ def connect_save(
     password: str | None,
     name: str | None,
     robot: str | None,
+    profile_config: str | None,
     workspace: str | None,
     emet_dir: str | None,
     no_active: bool,
@@ -3092,8 +3131,14 @@ def connect_save(
         workspace=workspace,
         emet_dir=emet_dir,
         robot=robot,
+        config=profile_config,
     )
-    click.echo(f"Saved connection '{conn_name}' (host={host}, user={user}).")
+    bits = [f"host={host}", f"user={user}"]
+    if robot:
+        bits.append(f"robot={robot}")
+    if profile_config:
+        bits.append(f"config={profile_config}")
+    click.echo(f"Saved connection '{conn_name}' ({', '.join(bits)}).")
     if not no_active:
         click.echo("Set as active. Use: emet deploy, emet view-bridge (omit --robot-ip to use this).")
 
@@ -3101,7 +3146,7 @@ def connect_save(
 @connect_cmd.command("list", short_help="List saved connections")
 def connect_list() -> None:
     """List all saved connections and which is active."""
-    from emet.utils.connection import list_connections
+    from emet.utils.connection import get_connection, list_connections
 
     items = list_connections()
     if not items:
@@ -3109,7 +3154,10 @@ def connect_list() -> None:
         return
     for name, is_active in items:
         mark = " (active)" if is_active else ""
-        click.echo(f"  {name}{mark}")
+        conn = get_connection(name) or {}
+        cfg = conn.get("config")
+        extra = f"  config={cfg}" if cfg else ""
+        click.echo(f"  {name}{mark}{extra}")
 
 
 @connect_cmd.command("show", short_help="Show active connection")
@@ -3125,12 +3173,202 @@ def connect_show() -> None:
     click.echo(f"user: {conn.get('user', '')}")
     if conn.get("robot"):
         click.echo(f"robot: {conn.get('robot')}")
+    if conn.get("config"):
+        click.echo(f"config: {conn.get('config')}")
     if conn.get("workspace"):
         click.echo(f"workspace: {conn.get('workspace')}")
     if conn.get("emet_dir"):
         click.echo(f"emet_dir: {conn.get('emet_dir')}")
     if "password" in conn:
         click.echo("password: (set)")
+
+
+@main.group("llm", short_help="Remote OpenAI text/VL health + smoke (LAN Jetson / workstation)")
+def llm_cmd() -> None:
+    """Probe and smoke OpenAI-compatible text/VL servers.
+
+    See docs/llm_serve.md. Pass ``--host`` (or ``EMET_LLM_HOST``). unified-7b serves
+    text+VL on ``:8000``; dual-2b keeps VL on ``:8001`` (``--vl-port 8001``).
+    """
+
+
+def _llm_targets_from_host(
+    *,
+    host: str | None,
+    port: int,
+    vl_port: int | None,
+    text_url: str | None,
+    vl_url: str | None,
+    check_text: bool,
+    check_vl: bool,
+) -> tuple[str | None, str | None]:
+    from emet.llms.remote_ops import (
+        DEFAULT_VL_PORT,
+        openai_base_for_host,
+        resolve_llm_host,
+    )
+
+    resolved = resolve_llm_host(host)
+    text_target: str | None = None
+    vl_target: str | None = None
+    if check_text:
+        if text_url is not None and text_url.strip() != "":
+            text_target = text_url
+        elif resolved:
+            text_target = openai_base_for_host(resolved, port)
+        else:
+            env = (os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
+            text_target = env or None
+    if check_vl:
+        if vl_url is not None and vl_url.strip() != "":
+            vl_target = vl_url
+        elif resolved:
+            vl_target = openai_base_for_host(
+                resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
+            )
+        else:
+            env = (os.environ.get("EMET_VL_ENDPOINT") or os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
+            vl_target = env or None
+    return text_target, vl_target
+
+
+@llm_cmd.command("health", short_help="GET /health for text and/or VL endpoints")
+@click.option("--host", default=None, help="LAN host (or EMET_LLM_HOST). Builds http://HOST:PORT/v1.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Text/OpenAI port with --host.")
+@click.option("--vl-port", default=None, type=int, help="VL port with --host (default same as --port / 8000).")
+@click.option(
+    "--text",
+    "text_url",
+    default=None,
+    help="Text base URL override. Empty string skips. Else --host or EMET_OPENAI_BASE_URL.",
+)
+@click.option(
+    "--vl",
+    "vl_url",
+    default=None,
+    help="VL base URL override. Empty string skips. Else --host or EMET_VL_ENDPOINT.",
+)
+@click.option("--text-only", is_flag=True, help="Only check text endpoint.")
+@click.option("--vl-only", is_flag=True, help="Only check VL endpoint.")
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+def llm_health_cmd(
+    host: str | None,
+    port: int,
+    vl_port: int | None,
+    text_url: str | None,
+    vl_url: str | None,
+    text_only: bool,
+    vl_only: bool,
+    as_json: bool,
+) -> None:
+    """Check ``/health`` readiness for LAN LLM/VLM servers."""
+    from emet.llms.remote_ops import fetch_health
+
+    check_text = not vl_only
+    check_vl = not text_only
+    if text_url is not None and text_url.strip() == "":
+        check_text = False
+    if vl_url is not None and vl_url.strip() == "":
+        check_vl = False
+    text_target, vl_target = _llm_targets_from_host(
+        host=host,
+        port=port,
+        vl_port=vl_port,
+        text_url=text_url,
+        vl_url=vl_url,
+        check_text=check_text,
+        check_vl=check_vl,
+    )
+    if check_text and text_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --text URL, or EMET_OPENAI_BASE_URL")
+    if check_vl and vl_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --vl URL, or EMET_VL_ENDPOINT")
+
+    results: dict[str, Any] = {}
+    ok_all = True
+    if text_target is not None:
+        r = fetch_health(text_target)
+        results["text"] = {"ok": r.ok, "url": r.url, "payload": r.payload, "error": r.error}
+        ok_all = ok_all and r.ok
+        if not as_json:
+            status = "ready" if r.ok else "DOWN"
+            click.echo(f"text {status}  {r.url}" + (f"  err={r.error}" if r.error else f"  {r.payload}"))
+    if vl_target is not None:
+        r = fetch_health(vl_target)
+        results["vl"] = {"ok": r.ok, "url": r.url, "payload": r.payload, "error": r.error}
+        ok_all = ok_all and r.ok
+        if not as_json:
+            status = "ready" if r.ok else "DOWN"
+            click.echo(f"vl   {status}  {r.url}" + (f"  err={r.error}" if r.error else f"  {r.payload}"))
+    if as_json:
+        click.echo(json.dumps(results, indent=2, default=str))
+    sys.exit(0 if ok_all else 1)
+
+
+@llm_cmd.command("smoke", short_help="Chat-completions smoke for text and/or VL")
+@click.option("--host", default=None, help="LAN host (or EMET_LLM_HOST). Builds http://HOST:PORT/v1.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Text/OpenAI port with --host.")
+@click.option("--vl-port", default=None, type=int, help="VL port with --host (default 8000; dual-2b: 8001).")
+@click.option("--text", "text_url", default=None, help="Text base URL override.")
+@click.option("--vl", "vl_url", default=None, help="VL base URL override.")
+@click.option("--text-only", is_flag=True, help="Only smoke text.")
+@click.option("--vl-only", is_flag=True, help="Only smoke VL.")
+@click.option(
+    "--image",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="Optional image for VL smoke (else a tiny synthetic RGB).",
+)
+def llm_smoke_cmd(
+    host: str | None,
+    port: int,
+    vl_port: int | None,
+    text_url: str | None,
+    vl_url: str | None,
+    text_only: bool,
+    vl_only: bool,
+    image: str | None,
+) -> None:
+    """POST a short completion to text and/or VL OpenAI servers."""
+    from emet.llms.remote_ops import smoke_chat_completions, smoke_vl_completions
+
+    check_text = not vl_only
+    check_vl = not text_only
+    if text_url is not None and text_url.strip() == "":
+        check_text = False
+    if vl_url is not None and vl_url.strip() == "":
+        check_vl = False
+    text_target, vl_target = _llm_targets_from_host(
+        host=host,
+        port=port,
+        vl_port=vl_port,
+        text_url=text_url,
+        vl_url=vl_url,
+        check_text=check_text,
+        check_vl=check_vl,
+    )
+    if check_text and text_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --text URL, or EMET_OPENAI_BASE_URL")
+    if check_vl and vl_target is None:
+        raise click.UsageError("pass --host / EMET_LLM_HOST, --vl URL, or EMET_VL_ENDPOINT")
+    failed = False
+    if check_text and text_target is not None:
+        click.echo(f"[llm smoke] text {text_target}")
+        try:
+            out = smoke_chat_completions(text_target)
+            click.echo(f"  -> {out!r}")
+        except Exception as exc:
+            click.echo(f"  FAIL: {type(exc).__name__}: {exc}", err=True)
+            failed = True
+    if check_vl and vl_target is not None:
+        click.echo(f"[llm smoke] vl {vl_target}" + (f" image={image}" if image else " (synthetic)"))
+        try:
+            out = smoke_vl_completions(vl_target, image_path=image)
+            click.echo(f"  -> {out!r}")
+        except Exception as exc:
+            click.echo(f"  FAIL: {type(exc).__name__}: {exc}", err=True)
+            failed = True
+    sys.exit(1 if failed else 0)
 
 
 @main.group("mars", short_help="Innate Mars hardware bridge (innate-os + ZMQ)")
@@ -3268,7 +3506,11 @@ def preview_cameras(ctx: click.Context) -> None:
     sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
 
 
-@main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
+@main.group(
+    "deploy",
+    invoke_without_command=True,
+    short_help="Deploy Mars bridge to a robot, or LLM/VLM to a Jetson (Orin ~64 GiB)",
+)
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
 @click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
@@ -3276,7 +3518,9 @@ def preview_cameras(ctx: click.Context) -> None:
 @click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
 @click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
 @click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+@click.pass_context
 def deploy(
+    ctx: click.Context,
     host: str | None,
     user: str | None,
     password: str | None,
@@ -3285,17 +3529,21 @@ def deploy(
     emet_dir: str,
     start_bridge: bool,
 ) -> None:
-    """Deploy emet_core and innate_mars_bridge to the robot via rsync and SSH.
+    """Deploy to a robot (Mars bridge) or a Jetson LAN LLM/VLM host.
 
-    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install
-    for emet_core, and colcon build for the bridge. Use emet connect save <host> first
-    to set default host/user, or pass --host and --user.
+    Bare ``emet deploy`` (no subcommand) syncs ``emet_core`` + innate_mars_bridge
+    to the robot. Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve
+    (AGX Orin ~60–64 GiB unified memory).
 
     Examples:
       emet connect save 192.168.1.43 --user jetson1
       emet deploy
       emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
+      emet deploy llm --host caliban --profile unified-7b
+      emet deploy llm --host caliban --profile dual-2b
     """
+    if ctx.invoked_subcommand is not None:
+        return
     from emet.deploy import deploy as deploy_impl
 
     deploy_impl(
@@ -3307,6 +3555,64 @@ def deploy(
         emet_dir=emet_dir,
         start_bridge=start_bridge,
         root=_project_root(),
+    )
+
+
+@deploy.command("llm", short_help="Deploy Jetson OpenAI LLM/VLM (Orin ~64 GiB)")
+@click.option(
+    "--profile",
+    type=click.Choice(["dual-2b", "unified-7b", "2b", "7b", "big"]),
+    default="unified-7b",
+    show_default=True,
+    help=(
+        "dual-2b: CausalLM text :8000 + Qwen2-VL-2B :8001. "
+        "unified-7b: one Qwen2-VL-7B on :8000 for text+captions "
+        "(fits ~60–64 GiB Orin VRAM; frees eMMC vs dual 7B weights)."
+    ),
+)
+@click.option(
+    "--host",
+    "-H",
+    default=None,
+    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host caliban",
+)
+@click.option("--model", default=None, help="Override HF model id for the VL container.")
+@click.option("--port", default=None, type=int, help="Override serve port (unified-7b→8000, dual-2b→8001).")
+@click.option("--name", "container_name", default=None, help="Docker container name override.")
+def deploy_llm_cmd(
+    profile: str,
+    host: str | None,
+    model: str | None,
+    port: int | None,
+    container_name: str | None,
+) -> None:
+    """Rsync VL weights and start the Tegra-CUDA OpenAI container on a Jetson host.
+
+    AGX Orin has ~64 GiB unified memory — enough for Qwen2-VL-7B fp16 (unified-7b).
+    eMMC cannot hold both a 7B CausalLM and a 7B VL; use dual-2b for a small VL
+    beside text, or unified-7b for the larger single model.
+
+    Quantization (bitsandbytes / AWQ / Quanto) is **not** available on the JP5
+    Tegra-CUDA image yet — pip installs replace NVIDIA torch. Stay on fp16 or
+    use a JP6/vLLM container; see docs/llm_serve.md § Quantization on Jetson.
+
+    Examples:
+      emet deploy llm --host caliban --profile unified-7b
+      emet deploy llm --host caliban --profile dual-2b
+      emet llm health --host caliban
+      emet llm smoke --host caliban --vl-only
+    """
+    from emet.deploy_llm import deploy_llm
+
+    sys.exit(
+        deploy_llm(
+            host=host,
+            profile=profile,
+            model=model,
+            port=port,
+            name=container_name,
+            root=_project_root(),
+        )
     )
 
 

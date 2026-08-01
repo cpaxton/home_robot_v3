@@ -51,7 +51,10 @@ def emet_config_options(
             f = click.option(
                 "--connection",
                 default=None,
-                help="Named profile from ~/.stretch/connection.json (host + robot hints).",
+                help=(
+                    "Named profile from ~/.stretch/connection.json "
+                    "(host, robot, and optional default --config path)."
+                ),
             )(f)
         if include_deprecated_aliases:
             f = click.option(
@@ -93,18 +96,32 @@ def resolve_effective_config_path(
     emet_config: str,
     agent_config: str | None = None,
     dynav_config: str | None = None,
+    connection: str | None = None,
 ) -> str:
-    """Pick config path; warn when legacy aliases are used."""
+    """Pick config path; warn when legacy aliases are used.
+
+    Precedence: explicit ``--agent-config`` / ``--dynav-config`` / ``--config`` →
+    connection-profile ``config`` (when ``--config`` is still the Click default) →
+    legacy dynav alias / default nested YAML.
+    """
     if agent_config is not None and ctx.get_parameter_source("agent_config") != ParameterSource.DEFAULT:
         _warn_deprecated_alias("--agent-config")
         return agent_config
     if dynav_config is not None and ctx.get_parameter_source("dynav_config") != ParameterSource.DEFAULT:
         _warn_deprecated_alias("--dynav-config")
         return dynav_config
-    if ctx.get_parameter_source("emet_config") == ParameterSource.DEFAULT:
-        legacy_default = DEFAULT_DYNAV_CONFIG_YAML
-        if emet_config == legacy_default or emet_config.endswith(legacy_default):
-            return resolve_config_path_for_legacy_alias(legacy_default)
+    if ctx.get_parameter_source("emet_config") != ParameterSource.DEFAULT:
+        return emet_config
+
+    from emet.utils.connection import get_config_from_connection
+
+    profile_config = get_config_from_connection(connection)
+    if profile_config:
+        return profile_config
+
+    legacy_default = DEFAULT_DYNAV_CONFIG_YAML
+    if emet_config == legacy_default or emet_config.endswith(legacy_default):
+        return resolve_config_path_for_legacy_alias(legacy_default)
     return emet_config
 
 
@@ -114,6 +131,7 @@ def load_resolved_config(
     emet_config: str,
     agent_config: str | None = None,
     dynav_config: str | None = None,
+    connection: str | None = None,
 ) -> Any:
     """Load :class:`~emet.config.loader.ResolvedEmetConfig` from CLI args."""
     path = resolve_effective_config_path(
@@ -121,6 +139,7 @@ def load_resolved_config(
         emet_config=emet_config,
         agent_config=agent_config,
         dynav_config=dynav_config,
+        connection=connection,
     )
     return load_config(path)
 
@@ -132,6 +151,7 @@ def load_finalized_config_from_cli(
     config_sets: tuple[str, ...] = (),
     agent_config: str | None = None,
     dynav_config: str | None = None,
+    connection: str | None = None,
     robot_id: str | None = None,
 ) -> ResolvedEmetConfig:
     """Load unified config with robot overlay and ``--set`` overrides applied."""
@@ -140,6 +160,7 @@ def load_finalized_config_from_cli(
         emet_config=emet_config,
         agent_config=agent_config,
         dynav_config=dynav_config,
+        connection=connection,
     )
     return finalize_resolved_config(
         cfg,
@@ -160,6 +181,7 @@ class ResolvedAgentCliOptions:
     eqa: bool
     share_memory_vllm: bool
     memory_backend: str
+    name: str
 
 
 def resolve_agent_cli_options(
@@ -174,11 +196,19 @@ def resolve_agent_cli_options(
     dynamem_eqa: bool,
     share_memory_vllm: bool,
     memory_backend: str = "dynagraph",
+    agent_name: str = "",
 ) -> ResolvedAgentCliOptions:
     """Merge ``agent:`` from config with CLI; explicit flags win over YAML (``--set`` already in *section*)."""
 
     def _from_cli(param: str) -> bool:
         return ctx.get_parameter_source(param) != ParameterSource.DEFAULT
+
+    from emet.agent.prompt import DEFAULT_AGENT_NAME
+
+    if _from_cli("agent_name"):
+        name = agent_name
+    else:
+        name = (section.name or "").strip() or DEFAULT_AGENT_NAME
 
     return ResolvedAgentCliOptions(
         llm=llm if _from_cli("llm") else section.llm,
@@ -191,6 +221,7 @@ def resolve_agent_cli_options(
         memory_backend=(
             memory_backend if _from_cli("memory_backend") else getattr(section, "memory_backend", "dynagraph")
         ),
+        name=name,
     )
 
 
@@ -218,6 +249,7 @@ def load_runtime_from_cli(
         emet_config=emet_config,
         agent_config=agent_config,
         dynav_config=dynav_config,
+        connection=connection,
     )
 
     return resolve_runtime_context(
