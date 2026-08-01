@@ -136,7 +136,9 @@ class MemoryManifest:
     """Manifest for the memory directory."""
 
     version: int = MEMORY_FORMAT_VERSION
-    backend: str = "unified"  # dynamem | svm | graph_eqa | unified
+    # On-disk tag: historical checkpoints use ``graph_eqa`` for the object-graph
+    # adapter; eval/CLI method id is ``static_graph`` (alias still accepted).
+    backend: str = "unified"  # dynamem | svm | graph_eqa | static_graph | unified
     created_at: str | None = None
     description: str | None = None
     has_point_cloud: bool = True

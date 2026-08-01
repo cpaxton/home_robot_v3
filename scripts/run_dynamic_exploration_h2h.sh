@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Dynagraph vs graph_eqa_baseline on the dynamic exploration matrix
-# (world-change + lifelong). Run in a separate GPU session from Habitat 113.
+# Dynagraph vs static_graph (legacy graph_eqa_baseline) on the dynamic exploration
+# matrix (world-change + lifelong). Run in a separate GPU session from Habitat 113.
 #
 # Usage:
 #   nohup ./scripts/run_dynamic_exploration_h2h.sh >> ~/runs/emet/dynamic_exploration/h2h_nohup.log 2>&1 &

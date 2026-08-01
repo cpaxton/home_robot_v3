@@ -212,8 +212,9 @@ uv run emet run agent --input-path logs/memory_xxx --no-discord
 # Same, but estimate a small SE(2) fudge vs a live frame (imperfect spawn). On failure, keep assumed pose.
 uv run emet run agent --input-path logs/memory_xxx --refine-start --no-discord
 
-# Lifelong dirs store the **active** plug-in only: dynagraph/graph_eqa → ``graph.json`` (+ voxels);
+# Lifelong dirs store the **active** plug-in only: dynagraph/static_graph → ``graph.json`` (+ voxels);
 # ``open_vocab`` → ``open_vocab_scene_graph/``. Legacy dual dirs still load; the inactive sidecar is ignored.
+# (On-disk / CLI still accept legacy ``graph_eqa`` as an alias for ``static_graph``.)
 
 # Geometric refine smoke (no GPU): recover a known xy/yaw fudge
 uv run python scripts/smoke_lifelong_pose_refine.py
