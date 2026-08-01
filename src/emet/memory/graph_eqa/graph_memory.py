@@ -3329,14 +3329,10 @@ class GraphEQAMemory:
     def _relevant_memory_summary(self) -> str:
         """Surface question-relevant objects as 'confirmed memory' for the VLM.
 
-        Combines two grounding signals so the model does not have to rely on the attached
-        images (it otherwise reports 'none' for objects it cannot currently see):
-          * graph nodes whose caption-derived labels match the object, and
-          * a SigLIP visual match over all observed points (independent of captions) — this
-            catches objects that were seen but mislabeled (e.g. a woven basket captioned as
-            a "decorative plant").
-        For PRESENT objects, also lists nearest furniture/object neighbors so location MCQs
-        can map coordinates to options (armchair / table / etc.) instead of inventing rooms.
+        Graph label matches are PRESENT (with nearest-furniture neighbors for location MCQs).
+        SigLIP matches over observed points are CANDIDATE / weak-SigLIP hints only — they
+        catch mislabeled sightings for navigation but must not assert presence or absence
+        in the answer prompt (same where-next policy as agentic assess).
         """
         if not self._confirmed_memory_phrases():
             return ""
@@ -3358,47 +3354,47 @@ class GraphEQAMemory:
                     parts.append(f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}")
                 else:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
-            present = bool(matches) or sig_present
-            if present:
-                # Anchor for nearest-neighbor furniture (prefer graph match, else SigLIP xyz).
-                if matches:
-                    anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
-                    exclude_ids = {int(n.node_id) for n in matches}
-                    status = "PRESENT"
-                elif sig is not None and float(sig[0]) >= SIGLIP_CONFIRM_THRESHOLD:
-                    anchor_xyz = np.asarray(sig[1], dtype=np.float64)
-                    exclude_ids = set()
-                    status = "PRESENT"
-                elif sig is not None:
-                    anchor_xyz = np.asarray(sig[1], dtype=np.float64)
-                    exclude_ids = set()
-                    status = "CANDIDATE (SigLIP-only — verify in attached images before finalizing)"
-                else:
-                    anchor_xyz = None
-                    exclude_ids = set()
-                    status = "PRESENT"
-                if anchor_xyz is not None:
-                    neighbors = self._nearest_object_neighbors(
-                        anchor_xyz, exclude_node_ids=exclude_ids, max_neighbors=2, max_dist_m=3.0
-                    )
-                    if neighbors:
-                        near_bits = []
-                        for n, dist in neighbors:
-                            lab = ", ".join(n.labels) if n.labels else "object"
-                            near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
-                        parts.append("nearest: " + "; ".join(near_bits))
-                lines.append(f"- {obj}: {status} — " + "; ".join(parts))
-            elif parts:
-                lines.append(f"- {obj}: likely NOT present — " + "; ".join(parts))
+            # Graph label match is the only PRESENT path. SigLIP ranks where-next /
+            # sighting hints — never assert presence or absence in the answer prompt.
+            if matches:
+                anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
+                exclude_ids = {int(n.node_id) for n in matches}
+                status = "PRESENT"
+            elif sig_present:
+                anchor_xyz = np.asarray(sig[1], dtype=np.float64) if sig is not None else None
+                exclude_ids = set()
+                status = (
+                    "CANDIDATE (SigLIP-only — verify in attached images before finalizing; "
+                    "do not treat as confirmed present or absent)"
+                )
+            elif sig is not None:
+                lines.append(
+                    f"- {obj}: weak SigLIP only — "
+                    + "; ".join(parts)
+                    + " — not evidence of absence; trust attached images"
+                )
+                continue
             else:
                 lines.append(f"- {obj}: not observed during exploration")
+                continue
+            if anchor_xyz is not None:
+                neighbors = self._nearest_object_neighbors(
+                    anchor_xyz, exclude_node_ids=exclude_ids, max_neighbors=2, max_dist_m=3.0
+                )
+                if neighbors:
+                    near_bits = []
+                    for n, dist in neighbors:
+                        lab = ", ".join(n.labels) if n.labels else "object"
+                        near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
+                    parts.append("nearest: " + "; ".join(near_bits))
+            lines.append(f"- {obj}: {status} — " + "; ".join(parts))
         if not lines:
             return ""
         header = (
-            "CONFIRMED_MEMORY (working memory — provisional until confirmed in attached "
-            "images; if images contradict memory, trust the images and keep exploring; "
-            "do not finalize a letter from CANDIDATE / low-sim matches alone; for location "
-            "MCQs, prefer option landmarks visible in Image 1 over nearest-furniture guesses):"
+            "CONFIRMED_MEMORY (PRESENT = graph-grounded only; CANDIDATE/weak SigLIP are "
+            "navigation hints — not presence or absence; if images contradict memory, "
+            "trust the images and keep exploring; for location MCQs, prefer option "
+            "landmarks visible in Image 1 over nearest-furniture guesses):"
         )
         return header + "\n" + "\n".join(lines)
 
