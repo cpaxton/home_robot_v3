@@ -23,7 +23,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${EMET_LLM_HOST:-${EMET_CALIBAN_HOST:-}}"
-REMOTE_REPO="${EMET_CALIBAN_REPO:-~/src/home_robot_v3}"
+REMOTE_REPO="${EMET_CALIBAN_REPO:-~/src/home_robot_v4}"
 REMOTE_HF='~/hf-cache'
 HF_HUB="${HF_HOME:-$HOME/.cache/huggingface}/hub"
 IMAGE="${EMET_JETSON_LLM_IMAGE:-emet-jetson-llm:r35.4.1}"
@@ -113,14 +113,16 @@ REMOTE
 
 echo "[3/6] Free disk on $HOST (root-owned HF dirs via docker as root)"
 ssh -o BatchMode=yes "$HOST" \
-  NEED_FREE_GIB="$NEED_FREE_GIB" PROFILE="$PROFILE" IMAGE="$IMAGE" \
+  NEED_FREE_GIB="$NEED_FREE_GIB" PROFILE="$PROFILE" IMAGE="$IMAGE" REMOTE_REPO="$REMOTE_REPO" \
   bash -s <<'REMOTE'
 set -euo pipefail
 run_docker() {
   if groups | grep -q '\bdocker\b'; then docker "$@"; else sudo docker "$@"; fi
 }
 df -h / | tail -1
-rm -rf ~/src/home_robot_v3/.venv 2>/dev/null || true
+echo "Removing $REMOTE_REPO/.venv (stale remote venv; frees disk)"
+rm -rf "$REMOTE_REPO/.venv" 2>/dev/null || true
+echo "Removing ~/.cache/uv (uv tool/package cache; frees disk)"
 rm -rf ~/.cache/uv 2>/dev/null || true
 
 rm_hf() {

@@ -63,10 +63,6 @@ def test_apply_llm_host_sets_env(monkeypatch) -> None:
     # unified default: same port for VL
     apply_llm_host("orin2")
     assert os.environ["EMET_VL_ENDPOINT"] == "openai@http://orin2:8000/v1"
-    # Drop process env so other tests in this process stay isolated (monkeypatch
-    # would restore these values on teardown if we only delenv'd them).
-    for key in ("EMET_LLM_HOST", "EMET_OPENAI_BASE_URL", "EMET_VL_ENDPOINT"):
-        os.environ.pop(key, None)
 
 
 def test_normalize_openai_base() -> None:

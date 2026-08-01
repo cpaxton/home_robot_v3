@@ -86,6 +86,11 @@ def _ensure_uv_project() -> None:
     """If we're in the project and uv is available, re-exec under uv run so the rest uses the project env."""
     if os.environ.get("EMET_UV_RUN"):
         return
+    # Never re-exec under pytest: sys.argv there holds pytest's own args, so exec
+    # would replace the test process with `uv run emet <pytest args>` (exit 2, no
+    # traceback, kills the whole session via CliRunner.invoke on any subcommand).
+    if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+        return
     if not _has_uv():
         return
     root = _active_project_root()
@@ -3061,8 +3066,6 @@ def _llm_targets_from_host(
     if check_text:
         if text_url is not None and text_url.strip() != "":
             text_target = text_url
-        elif text_url is not None and text_url.strip() == "":
-            text_target = None
         elif resolved:
             text_target = openai_base_for_host(resolved, port)
         else:
@@ -3071,8 +3074,6 @@ def _llm_targets_from_host(
     if check_vl:
         if vl_url is not None and vl_url.strip() != "":
             vl_target = vl_url
-        elif vl_url is not None and vl_url.strip() == "":
-            vl_target = None
         elif resolved:
             vl_target = openai_base_for_host(
                 resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
@@ -3185,6 +3186,10 @@ def llm_smoke_cmd(
 
     check_text = not vl_only
     check_vl = not text_only
+    if text_url is not None and text_url.strip() == "":
+        check_text = False
+    if vl_url is not None and vl_url.strip() == "":
+        check_vl = False
     text_target, vl_target = _llm_targets_from_host(
         host=host,
         port=port,

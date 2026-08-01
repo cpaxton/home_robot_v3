@@ -120,7 +120,7 @@ class OpenaiClient(AbstractLLMClient):
                         image = c
 
                     buffered = BytesIO()
-                    (image.save(buffered, format="PNG"),)
+                    image.save(buffered, format="PNG")
                     img_bytes = buffered.getvalue()
                     base64_encoded = base64.b64encode(img_bytes).decode("utf-8")
                     user_commands.append(
