@@ -16,9 +16,12 @@ Deep dives:
 
 Post-explore / world-change EQA can run a bounded **tool loop** (`eqa.agentic_verify` /
 `EMET_EQA_AGENTIC_VERIFY=1`): recall place evidence → navigate / explore → SigLIP
-**proposal** → VLM assess → submit (or explore `finish`). Improve smokes enable this by
-default and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
-`EMET_EQA_TRACE=1`. Detectors do not unlock submit; answerability is VLM-first.
+**where-next** (rank places to grow the graph) → drive there → VLM assess on pixels
+→ submit (or explore `finish`). Improve smokes enable this by default and write
+`agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
+`EMET_EQA_TRACE=1`. Detectors do not unlock submit and are **not** fed into the
+assess prompt (ABSENT/PRESENT would color answers); answerability is VLM-first on
+the image + neutral inventory.
 
 **Modes (same skills library, different packs):** Discord / terminal house chat is
 ``AgentMode.CHAT`` (`emet run agent`). Scored verify/explore is ``AgentMode.EQA_EPISODE``

@@ -40,23 +40,21 @@ class _MultiClient:
 
 
 def test_extract_target_from_question_parses_json():
-    client = _TextClient(
-        {"target_phrase": "utensils", "question_type": "location", "notes": "ignore options"}
-    )
-    te = extract_target_from_question(
+    client = _TextClient({"target_phrase": "utensils", "question_type": "location", "notes": "ignore options"})
+    extracted = extract_target_from_question(
         client,
         "Where are the utensils already set? A) table B) counter",
         fallback_phrase="sets utensils already",
     )
-    assert te.target_phrase == "utensils"
-    assert te.question_type == "location"
+    assert extracted.target_phrase == "utensils"
+    assert extracted.question_type == "location"
     assert client.calls
 
 
 def test_extract_target_falls_back_on_empty():
     client = _TextClient({})
-    te = extract_target_from_question(client, "Where is the lamp?", fallback_phrase="lamp")
-    assert te.target_phrase == "lamp"
+    extracted = extract_target_from_question(client, "Where is the lamp?", fallback_phrase="lamp")
+    assert extracted.target_phrase == "lamp"
 
 
 def test_assess_view_uses_generate_multimodal():
@@ -84,15 +82,17 @@ def test_assess_view_uses_generate_multimodal():
     assert client.mm_calls
 
 
-def test_build_inventory_brief_includes_proposal():
+def test_build_inventory_brief_excludes_detector_proposal():
+    """SigLIP/OWL verdicts must not enter assess inventory (they color answers)."""
     brief = build_inventory_brief(
         n_observations=3,
         graph_labels=["sink", "towel"],
-        proposal={"phrase": "sink", "detector_score": 0.2, "obs_id": 4},
         tried_obs_ids=[1, 4],
         n_rounds=2,
         n_nav=1,
     )
     assert "observations_seen=3" in brief
     assert "sink" in brief
-    assert "detector_score=0.2" in brief
+    assert "cheap_proposal" not in brief
+    assert "decision=" not in brief
+    assert "ABSENT" not in brief

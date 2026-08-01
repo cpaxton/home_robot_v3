@@ -69,6 +69,68 @@ def test_stamp_room_at_xy_updates_nearest():
     assert near.room_name == "outdoor"
 
 
+def test_stamp_protects_indoor_from_outdoor():
+    from emet.memory.graph_eqa.room_clusters import (
+        resolve_investigate_room_stamp,
+        room_from_observation_labels,
+        should_apply_room_stamp,
+        stamp_room_at_xy,
+    )
+
+    nodes = [
+        _node(1, 0.0, 0.0, labels=["sofa", "coffee table"]),
+        _node(2, 0.3, 0.0, labels=["television"]),
+    ]
+    clusters = cluster_object_nodes(nodes, link_radius_m=2.0)
+    kitchened = stamp_room_at_xy(clusters, (0.1, 0.0), "kitchen")
+    blocked = stamp_room_at_xy(
+        kitchened,
+        (0.1, 0.0),
+        "outdoor",
+        protect_indoor_from_outdoor=True,
+    )
+    near = min(blocked, key=lambda c: abs(c.centroid_xy[0] - 0.1))
+    assert near.room_name == "kitchen"
+    # Outdoor allowed when labels corroborate.
+    allowed = stamp_room_at_xy(
+        kitchened,
+        (0.1, 0.0),
+        "outdoor",
+        protect_indoor_from_outdoor=True,
+        corroborating_labels=["brick patio", "lawn"],
+    )
+    near2 = min(allowed, key=lambda c: abs(c.centroid_xy[0] - 0.1))
+    assert near2.room_name == "outdoor"
+    # Sofa cluster with unknown name: still refuse outdoor without corroboration.
+    assert (
+        should_apply_room_stamp(
+            "unknown",
+            "outdoor",
+            cluster_labels=["sofa", "television"],
+        )
+        is False
+    )
+    assert room_from_observation_labels(["toilet", "sink"]) == "bathroom"
+    assert room_from_observation_labels(["bed", "nightstand"]) == "bedroom"
+    assert (
+        resolve_investigate_room_stamp(
+            labels=["shower curtain", "rug"],
+            current_room="outdoor",
+            room_policy="llm",
+        )
+        == "bathroom"
+    )
+    # No sticky current_room fallback when labels lack room evidence.
+    assert (
+        resolve_investigate_room_stamp(
+            labels=["console table"],
+            current_room="open living area",
+            room_policy="llm",
+        )
+        == "unknown"
+    )
+
+
 def test_near_edge_merges_far_nodes():
     nodes = [
         _node(1, 0.0, 0.0, labels=["chair"]),
