@@ -586,12 +586,12 @@ def main(
         from pathlib import Path
 
         from emet.eval.habitat_eqa_agent import run_hmeqa_via_shared_episode
+        from emet.eval.memory_backends import DYNAGRAPH, normalize_hmeqa_method
 
-        method = str(memory_backend or "dynagraph").strip().lower()
-        if method == "graph_eqa":
-            method = "static_graph"
-        if method not in ("dynagraph", "static_graph"):
-            method = "dynagraph"
+        try:
+            method = normalize_hmeqa_method(memory_backend or DYNAGRAPH)
+        except ValueError:
+            method = DYNAGRAPH
         log.info(
             f"EQA eval mode: shared HM-EQA episode (question_id={habitat_question_id}, "
             f"method={method}) — no chat tool-router."
