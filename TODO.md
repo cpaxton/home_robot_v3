@@ -3,6 +3,17 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Prompt / information flow (THIS BRANCH)
+
+- [ ] **One fact, one line — de-duplicate EQA memory blocks**: SCENE_GRAPH node lines, CONFIRMED_MEMORY (`PRESENT`/`nearest:`), and IMAGE_DESCRIPTIONS currently restate the same object 2–3× in different formats. Merge into one serialization: node line tagged with room + confirmed status + image ref (`Node 3 (kitchen): sink at (…) [Image 2] present`), and drop/trim the redundant blocks.
+- [ ] **Room context never reaches the answer VLM**: router stamps rooms on clusters (room_clusters.py), but `query_answer` (graph_memory.py:3943) builds no room line — the answer model re-derives rooms from bare XYZ. Plumb `format_rooms_line` / `current_room` and per-node `room=` tags into `to_string` so "kitchen vs bathroom" evidence is explicit.
+- [ ] **EQA answer format → JSON**: `parse_answer` (graph_memory.py:3273) regex-scrapes lowercased `Reasoning:/Answer:/Confidence:/Action:` fields — brittle to caption-runaway, case loss, mid-stream truncation. Convert to the same JSON contract as chat/router (`{"answer", "confidence", "action", …}`); keep `assistant_prefill` for decode discipline.
+- [ ] **Unified token budget for the EQA prompt**: caps are independent today (48 nodes / 4 images / 4 history / CONFIRMED_MEMORY unbounded). Add one budget (~2.5k text tokens) with a fixed truncation order (HISTORY → CONFIRMED_MEMORY → SCENE_GRAPH edges → labels) so prompt size is predictable regardless of graph size.
+- [ ] **Router prompt hygiene**: canonical/LLM format blocks in agentic_tools.py duplicate rules (investigate-vs-explore, in_target_area). Single source of truth + a unit test asserting `build_graph_eqa_system_prompt` byte-stability (prefix-KV cache depends on it).
+- [ ] **HISTORY loop risk**: replays prior model outputs back (only Caption-strip mitigates). Keep only outcomes — `Nav_result`, salvage, letter — as one-line summaries instead of raw replayed outputs.
+- [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
+- [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
+
 ## Embodied agent / Herman
 
 - [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
@@ -17,9 +28,21 @@ Strike through or move to a PR when done.
 
 ## Mapping / safety
 
-- [x] Map-clip `move_forward` (including 0.1 m); refuse when map empty/blank.
+- [x] Map-clip `move_forward` (including 0.1 m); refuse when map empty/blank.
 - [x] Empty cloud guard in `list_objects_in_an_image` (navigate crash).
 - [x] Clearance-aware A* + abort on waypoint timeout (prefer open space; do not raise `dilate_obstacle_size` as the primary fix).
+
+## Memory stack (voxel + graph) — review backlog
+
+- [ ] **Drift correction / relocalization** (long real-world runs): voxel map is robot-start-relative with a fixed `grid_origin`; only `--refine-start` applies an SE(2) fudge at checkpoint load. Plan ICP / pose-graph correction against the voxel map or re-anchor graph nodes during operation.
+- [ ] **Pin depth units per source + runtime assert**: `sensor_graph_builder.py:80` assumes meters (`scaling=1.0`) while `core/interfaces.py:196` defaults to `1e-3` (mm). Verify per source (Stretch d405, DA3, Habitat) and assert once at attach.
+- [ ] **Robot self-filter lost in DynaMem `add()`**: `voxel_dynamem.py:1109` copies base `voxel.py:403` minus the URDF mesh self-filter — the robot may see itself on real hardware. Reintroduce or document why it is off.
+- [ ] **Split `query_answer` (462 lines) + de-dup renumber/rebuild blocks**: prompt assembly → `build_eqa_prompt(…)`, execution → `run_eqa_prompt(commands)`, gates → `finalize_eqa_answer(parsed)`. The renumber+rebuild block in `maintain`/`_drop_nodes_near`/`absorb_object_node` is copy-pasted 5×.
+- [ ] **Rooms as first-class nodes**: cluster stamps are recomputed from nodes+edges every refresh; persist room id / name / bounds on nodes and in `graph.json` exports (in-flight commits already move this way).
+- [ ] **Bound voxel memory growth**: `observations` never pruned, `semantic_memory` keeps every subsampled point, pickles dump everything. Trim frames + downsample old semantic points on a schedule.
+- [ ] **Prefix-KV timeout leaves a live CUDA worker** (`qwen3_vl_client.py:549-569` raises while the generate thread keeps running): next generate can race. Serialize on a lock or hard-kill the worker.
+- [ ] **Silent exception hygiene**: ~23 `except Exception` in graph_memory.py, bare `except:` at voxel_dynamem.py:1749 — at least `_logger.debug` with node/obs context.
+- [ ] **Dead code sweep**: `Qwen3VLClient = Qwen35VLClient` alias (qwen_client.py:738); commented heuristics voxel_map_dynamem.py:178-251; `get_change_events` / `alternate_nav_target_for_failed_action` (graph_memory.py) unused.
 
 ## Docs / ops
 

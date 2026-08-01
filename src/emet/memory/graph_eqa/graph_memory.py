@@ -2180,6 +2180,24 @@ class GraphEQAMemory:
         except Exception:
             return default
 
+    def _merged_memory_enabled(self) -> bool:
+        """True when eqa.merged_memory / EMET_EQA_MERGED_MEMORY folds CONFIRMED_MEMORY into SCENE_GRAPH.
+
+        Default off (paper-parity A/B). When on, the main EQA prompt tags SCENE_GRAPH
+        nodes with status (present / candidate) and room names, and emits a short
+        CONFIRMED_MEMORY tail only for phrases with no tagged node, instead of a
+        separate summary block (one fact, one line — no duplicate object mentions).
+        """
+        env = os.environ.get("EMET_EQA_MERGED_MEMORY", "").strip().lower()
+        if env in ("1", "true", "yes", "on"):
+            return True
+        if env in ("0", "false", "no", "off"):
+            return False
+        raw = self._eqa_cfg_value("merged_memory", False)
+        if isinstance(raw, str):
+            return raw.strip().lower() in ("1", "true", "yes", "on")
+        return bool(raw)
+
     def to_string(
         self,
         *,
@@ -2187,6 +2205,7 @@ class GraphEQAMemory:
         question_keywords: list[str] | None = None,
         prefer_obs_ids: list[int] | None = None,
         record_prompt_count: bool = False,
+        merge_confirmed: bool = False,
     ) -> str:
         """Serialize the scene graph to a string for mLLM prompts.
 
@@ -2195,6 +2214,13 @@ class GraphEQAMemory:
         With ``eqa.spatial_rag`` / ``EMET_EQA_SPATIAL_RAG``, emit compact REGION blocks
         around keyword / preferred-obs neighborhoods instead of a flat node dump.
         Full untruncated serialization is the default for exports / debugging.
+
+        When ``merge_confirmed`` is set (prompt path only), fold CONFIRMED_MEMORY status
+        into the serialization instead of emitting a separate summary block: matching
+        nodes get a ``present`` / ``candidate`` tag, object nodes are tagged with their
+        room-cluster name, and a short CONFIRMED_MEMORY tail lists only phrases with no
+        tagged node (SigLIP-only sightings, weak matches, unobserved objects) plus a
+        compact ``Rooms:`` line. The spatial-RAG branch is left untouched.
         """
         lines = []
 
@@ -2272,6 +2298,91 @@ class GraphEQAMemory:
             self.last_eqa_prompt_regions = 0
             self.last_eqa_spatial_rag = None
 
+        # Merged-memory mode: fold CONFIRMED_MEMORY status into node lines so each
+        # confirmed object appears once (one fact, one line). Only in prompt path,
+        # and only when confirmed-memory is enabled at all.
+        merge_active = (
+            merge_confirmed and self.memory_summary_enabled and max_object_nodes is not None and max_object_nodes > 0
+        )
+        statuses: dict[str, tuple[str, list[int], float | None, np.ndarray | None, int | None]] = {}
+        node_rooms: dict[int, str] = {}
+        tagged: set[int] = set()
+        tail_lines: list[str] = []
+        nearest_by_phrase: dict[str, tuple[int, str]] = {}
+        if merge_active:
+            statuses = self._confirmed_phrase_statuses()
+            node_rooms = self._node_room_by_id()
+            for phrase, (status, ids, sim, xyz, obs_id) in statuses.items():
+                if status == "present" and ids:
+                    kept = [nid for nid in ids if nid in keep_ids]
+                    if kept:
+                        tagged.update(kept)
+                        # Preserve nearest-furniture context (old CONFIRMED_MEMORY).
+                        anchor = next(
+                            (n for n in self._nodes if int(n.node_id) == int(kept[0])),
+                            None,
+                        )
+                        if anchor is not None:
+                            neighbors = self._nearest_object_neighbors(
+                                np.asarray(anchor.xyz, dtype=np.float64),
+                                exclude_node_ids=set(kept),
+                                max_neighbors=2,
+                                max_dist_m=3.0,
+                            )
+                            if neighbors:
+                                near_bits = []
+                                for n, dist in neighbors:
+                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
+                                nearest_by_phrase[phrase] = (
+                                    int(kept[0]),
+                                    "nearest: " + "; ".join(near_bits),
+                                )
+                    else:
+                        # All matches fell outside the shown node budget: keep the
+                        # legacy-style facts (count, coordinates, nearest furniture)
+                        # instead of dangling "Node 9" ids the model cannot see.
+                        matches_nodes = sorted(
+                            (n for n in self._nodes if int(n.node_id) in set(ids)),
+                            key=lambda n: int(n.node_id),
+                        )[:4]
+                        positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches_nodes)
+                        parts = [f"{len(ids)} graph node(s) at {positions}"]
+                        anchor = matches_nodes[0] if matches_nodes else None
+                        if anchor is not None:
+                            neighbors = self._nearest_object_neighbors(
+                                np.asarray(anchor.xyz, dtype=np.float64),
+                                exclude_node_ids=set(ids),
+                                max_neighbors=2,
+                                max_dist_m=3.0,
+                            )
+                            if neighbors:
+                                near_bits = []
+                                for n, dist in neighbors:
+                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
+                                parts.append("nearest: " + "; ".join(near_bits))
+                        tail_lines.append(
+                            f"- {phrase}: present — " + "; ".join(parts) + " (nodes not shown in graph above)"
+                        )
+                elif status == "candidate":
+                    pos = f" near ({xyz[0]:.1f}, {xyz[1]:.1f})" if xyz is not None else ""
+                    obs_note = f", obs_id={obs_id}" if obs_id is not None else ""
+                    sim_s = f"{sim:.2f}" if sim is not None else "?"
+                    tail_lines.append(
+                        f"- {phrase}: CANDIDATE (SigLIP-only sim={sim_s}{pos}{obs_note}) "
+                        "- verify in attached images before finalizing; "
+                        "do not treat as confirmed present or absent"
+                    )
+                elif status == "weak_siglip":
+                    # Do not assert absence — detector miss ≠ not in scene.
+                    sim_s = f"{sim:.2f}" if sim is not None else "?"
+                    tail_lines.append(
+                        f"- {phrase}: weak SigLIP only (sim={sim_s}) — not evidence of absence; trust attached images"
+                    )
+                elif status == "not_observed":
+                    tail_lines.append(f"- {phrase}: not observed during exploration")
+
         for n in nodes_for_prompt:
             lbl = _prompt_labels(n.labels)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
@@ -2281,9 +2392,26 @@ class GraphEQAMemory:
                 kind = "View"
             else:
                 kind = "Node"
+            nid = int(n.node_id)
+            room_tag = f" ({node_rooms[nid]})" if nid in node_rooms else ""
+            status_tag = ""
+            nearest_tag = ""
+            if merge_active and not n.is_frontier and not n.is_viewpoint:
+                if nid in tagged:
+                    status_tag = " present"
+                    # Attach nearest on the in-budget anchor node for each phrase.
+                    for _phrase, (anchor_nid, near_txt) in nearest_by_phrase.items():
+                        if int(anchor_nid) == nid:
+                            nearest_tag = f" ({near_txt})"
+                            break
+                elif any(
+                    status == "candidate" and obs_id is not None and int(n.obs_id) == obs_id
+                    for status, _ids, _sim, _xyz, obs_id in statuses.values()
+                ):
+                    status_tag = " candidate"
             lines.append(
-                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) "
-                f"[Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}"
+                f"{kind} {n.node_id}{room_tag}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) "
+                f"[Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}{status_tag}{nearest_tag}"
             )
         for a, b, rel in self._edges:
             if int(a) not in keep_ids:
@@ -2292,6 +2420,17 @@ class GraphEQAMemory:
                 continue
             b_str = "floor" if b == -1 else str(b)
             lines.append(f"  {rel}({a}, {b_str})")
+        if tail_lines:
+            lines.append(
+                "CONFIRMED_MEMORY (present = graph-grounded only; "
+                "CANDIDATE/weak SigLIP are navigation hints — not presence or absence; "
+                "if images contradict memory, trust the images):"
+            )
+            lines.extend(tail_lines)
+        if merge_active and self._room_clusters:
+            rooms_line = self.format_rooms_line(max_chars=200)
+            if rooms_line.strip() and rooms_line.strip() != "Rooms:":
+                lines.append(rooms_line)
         return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
 
     def to_tree_string(self, indent: str = "  ") -> str:
@@ -3128,6 +3267,64 @@ class GraphEQAMemory:
                 scored.append((n, dist))
         scored.sort(key=lambda t: t[1])
         return scored[:max_neighbors]
+
+    def _confirmed_phrase_statuses(
+        self,
+    ) -> dict[str, tuple[str, list[int], float | None, np.ndarray | None, int | None]]:
+        """Map each confirmed-memory phrase -> (status, node_ids, sig_sim, sig_xyz, sig_obs_id).
+
+        status is one of:
+          * present       — graph label match (grounded in SCENE_GRAPH nodes)
+          * candidate     — SigLIP >= PRESENT threshold, no graph match (sighted only)
+          * weak_siglip   — SigLIP below PRESENT (do not treat as absence)
+          * not_observed  — no graph match and no SigLIP signal
+        Used by merged ``to_string(merge_confirmed=True)``. Stricter than the legacy
+        summary: only graph matches are ``present``; SigLIP never asserts presence/absence.
+        """
+        phrases = self._confirmed_memory_phrases()
+        if not phrases:
+            return {}
+        object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
+        out: dict[str, tuple[str, list[int], float | None, np.ndarray | None, int | None]] = {}
+        for obj in phrases:
+            matches = [
+                int(n.node_id) for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
+            ]
+            sig = self._siglip_match_for_phrase(obj)
+            sim: float | None = None
+            xyz: np.ndarray | None = None
+            obs_id: int | None = None
+            if sig is not None:
+                sim = float(sig[0])
+                xyz = np.asarray(sig[1], dtype=float)
+                if sig[2] is not None:
+                    obs_id = int(sig[2])
+            # Graph label match is the only path to "present" (grounded in SCENE_GRAPH).
+            # SigLIP-only stays candidate even above CONFIRM — never assert presence/absence
+            # from detector scores in the answer prompt (ABSENT coloring / false presents).
+            if matches:
+                status = "present"
+            elif sim is not None and sim >= SIGLIP_PRESENT_THRESHOLD:
+                status = "candidate"
+            elif sim is not None:
+                status = "weak_siglip"
+            else:
+                status = "not_observed"
+            out[obj] = (status, matches, sim, xyz, obs_id)
+        return out
+
+    def _node_room_by_id(self) -> dict[int, str]:
+        """Map node_id -> stamped room-cluster name for object nodes (unknown rooms skipped)."""
+        if not self._room_clusters:
+            self.refresh_room_clusters()
+        out: dict[int, str] = {}
+        for c in self._room_clusters:
+            name = str(getattr(c, "room_name", "") or "")
+            if not name or name == "unknown":
+                continue
+            for nid in getattr(c, "node_ids", ()) or ():
+                out[int(nid)] = name
+        return out
 
     def _relevant_memory_summary(self) -> str:
         """Surface question-relevant objects as 'confirmed memory' for the VLM.
@@ -4021,11 +4218,16 @@ class GraphEQAMemory:
                 obs_ids = selected
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
+        merged_memory = self._merged_memory_enabled()
+        merge_confirmed = (
+            merged_memory and self.memory_summary_enabled and not attribute_q and not self._spatial_rag_enabled()
+        )
         graph_str = self.to_string(
             max_object_nodes=max_graph_nodes if max_graph_nodes > 0 else None,
             question_keywords=list(self._relevant_objects or []),
             prefer_obs_ids=obs_ids,
             record_prompt_count=True,
+            merge_confirmed=merge_confirmed,
         )
         # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
@@ -4070,7 +4272,8 @@ class GraphEQAMemory:
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
             commands.append(self._visibility_location_mcq_hint(parsed_choices))
         # Attribute/state questions: answer from images; do not inject memory priors.
-        if self.memory_summary_enabled and not attribute_q:
+        # Merged-memory mode folds status into SCENE_GRAPH, so skip the separate block.
+        if self.memory_summary_enabled and not attribute_q and not merge_confirmed:
             memory_summary = self._relevant_memory_summary()
             if memory_summary:
                 commands.append(memory_summary)
