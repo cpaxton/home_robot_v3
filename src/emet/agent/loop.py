@@ -472,6 +472,34 @@ def _call_llm_body(
 # ---------------------------------------------------------------------------
 
 
+def _merge_chat_agent_manip_parameters(
+    parameters: Parameters,
+    *,
+    agent_config: str,
+    robot: str,
+    agent_section: Any | None = None,
+) -> None:
+    """Merge chat ``agent:`` manip settings into ``parameters["agent"]``.
+
+    ``DynamemTaskExecutor`` reads ``manip_mode`` / ``manip_collision`` / ``manip_planner``
+    from ``parameters["agent"]`` (the mapping-explore block), but YAML / ``--set
+    agent.manip_*`` live on the chat :class:`~emet.config.loader.AgentSectionConfig`
+    (top-level ``agent:``). Without this, operators had to use ``EMET_MANIP_*`` env vars.
+    Env vars still win: ``resolve_agent_manip_*`` check them before the config value.
+    """
+    if agent_section is None:
+        from emet.config.loader import load_config
+
+        agent_section = load_config(agent_config, robot=robot).agent_section()
+    current = parameters.get("agent")
+    agent = dict(current) if isinstance(current, dict) else {}
+    for key in ("manip_mode", "manip_collision", "manip_planner"):
+        value = str(getattr(agent_section, key, "")).strip()
+        if value:
+            agent[key] = value
+    parameters.set("agent", agent)
+
+
 def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
     robot: str = "stretch",
@@ -505,6 +533,7 @@ def run_agent_with_robot(
     allow_missing_depth: bool | None = None,
     embodied_overlay: EmbodiedAgentConfig | None = None,
     thinking_status: bool | None = None,
+    agent_section: Any | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -528,6 +557,10 @@ def run_agent_with_robot(
 
     *max_tokens* defaults to **256** (same as ``emet run agent --max-tokens`` / ``agent.max_tokens``);
     keep this low for tool-routing JSON.
+
+    *agent_section*, when given (``emet run agent`` passes the finalized chat ``agent:``
+    section), is merged into ``parameters["agent"]`` so the executor honors YAML /
+    ``--set agent.manip_mode`` (etc.) without requiring ``EMET_MANIP_*`` env vars.
     """
     _configure_agent_terminal_output()
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
@@ -596,6 +629,13 @@ def run_agent_with_robot(
             f"Unknown robot '{robot}'. Known: stretch, {list(ROBOT_REGISTRY.keys())}. "
             "Start the server with the same robot: emet serve mujoco --robot <name>"
         )
+
+    _merge_chat_agent_manip_parameters(
+        parameters,
+        agent_config=agent_config,
+        robot=robot,
+        agent_section=agent_section,
+    )
 
     executor = DynamemTaskExecutor(
         robot_client,

@@ -895,6 +895,7 @@ def main(
                 allow_missing_depth=runtime.allow_missing_depth if runtime is not None else None,
                 embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
                 thinking_status=thinking_status,
+                agent_section=agent_config_resolved.agent_section(),
             )
         finally:
             if sim_shutdown is not None:

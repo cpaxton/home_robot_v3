@@ -65,6 +65,11 @@ _DYNAV_SIGNATURE_KEYS = frozenset(
 
 _CHAT_AGENT_SUBKEYS = frozenset({"llm", "eqa", "discord", "share_memory_vllm", "prompt", "device", "max_tokens"})
 
+# Manip settings are chat-agent keys too: ``--set agent.manip_mode=kinematic`` on a flat
+# legacy config creates a top-level ``agent: {manip_mode: ...}`` block with no other chat
+# keys; treat it as the chat agent section (not the mapping-explore block).
+_MANIP_AGENT_SUBKEYS = frozenset({"manip_mode", "manip_collision", "manip_planner"})
+
 
 def default_config_path() -> str:
     """Return default config path (``EMET_CONFIG`` or packaged ``configs/emet/default.yaml``)."""
@@ -368,7 +373,7 @@ class ResolvedEmetConfig:
 
     def agent_section(self) -> AgentSectionConfig:
         a = self.raw.get("agent")
-        if isinstance(a, dict) and _is_chat_agent_section(a):
+        if isinstance(a, dict) and (_is_chat_agent_section(a) or _MANIP_AGENT_SUBKEYS.intersection(a.keys())):
             return draccus.decode(AgentSectionConfig, a)
         return AgentSectionConfig()
 
