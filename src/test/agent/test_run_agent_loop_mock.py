@@ -71,3 +71,42 @@ def test_run_agent_with_robot_quit_no_llm_no_discord():
         )
 
     assert last_robot["r"].stop.call_count == 1
+
+
+def test_merge_chat_agent_manip_parameters():
+    """Chat ``agent:`` manip settings must reach the executor's parameters block."""
+    from emet.agent.loop import _merge_chat_agent_manip_parameters
+    from emet.config.loader import AgentSectionConfig
+    from emet.core.parameters import Parameters
+
+    params = Parameters(**{"agent": {"realtime": {"matching_distance": 0.5}}})
+    section = AgentSectionConfig(
+        manip_mode="kinematic", manip_collision="aabb", manip_planner="linear"
+    )
+    _merge_chat_agent_manip_parameters(
+        params,
+        agent_config="dynav_config.yaml",
+        robot="stretch",
+        agent_section=section,
+    )
+    agent = params.get("agent")
+    assert agent["manip_mode"] == "kinematic"
+    assert agent["manip_collision"] == "aabb"
+    assert agent["manip_planner"] == "linear"
+    assert agent["realtime"]["matching_distance"] == 0.5
+
+
+def test_merge_chat_agent_manip_parameters_falls_back_to_config():
+    """Without an explicit section, the helper loads the chat ``agent:`` block from YAML."""
+    from emet.agent.loop import _merge_chat_agent_manip_parameters
+    from emet.core.parameters import Parameters
+
+    params = Parameters()
+    _merge_chat_agent_manip_parameters(
+        params,
+        agent_config="dynav_config.yaml",
+        robot="stretch",
+        agent_section=None,
+    )
+    agent = params.get("agent") or {}
+    assert agent.get("manip_mode") == "teleport"

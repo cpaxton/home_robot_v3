@@ -33,6 +33,7 @@ class TargetExtract:
     target_phrase: str
     question_type: str = "other"  # count | location | state | other
     notes: str = ""
+    requires_close_look: bool = False  # time/state/count/detail questions need a close look
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -110,6 +111,10 @@ def extract_target_from_question(
         "  target_phrase: short noun phrase for the object to find/verify "
         '(e.g. "utensils", "fruit bowl", "air conditioning")\n'
         "  question_type: one of count, location, state, other\n"
+        "  requires_close_look: bool — true when answering needs a close look at the "
+        "target (reading a clock/display/label, counting, checking on/off or open/closed "
+        "state, reading fine detail); false for location questions where seeing the "
+        "object at a distance suffices\n"
         "  notes: optional short note\n"
         "Do not include MCQ option text in target_phrase."
     )
@@ -119,12 +124,14 @@ def extract_target_from_question(
     qtype = str(data.get("question_type") or "other").strip().lower()
     if qtype not in {"count", "location", "state", "other"}:
         qtype = "other"
+    close_look = bool(data.get("requires_close_look", False))
     if not phrase:
         phrase = (fallback_phrase or q).strip()
     return TargetExtract(
         target_phrase=phrase,
         question_type=qtype,
         notes=str(data.get("notes") or "").strip(),
+        requires_close_look=close_look,
     )
 
 

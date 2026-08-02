@@ -83,3 +83,22 @@ def test_apply_dot_overrides_nested():
     base = {"mapping": {"eqa": {"vl_family": "qwen3_vl"}}}
     out = apply_dot_overrides(base, ["mapping.eqa.vl_family=gemma4"])
     assert out["mapping"]["eqa"]["vl_family"] == "gemma4"
+
+
+def test_manip_override_recognized_as_chat_agent_section():
+    """``--set agent.manip_mode=kinematic`` on a flat legacy config must land on the chat
+    agent section (manip-only top-level block, no other chat keys)."""
+    cfg = load_config("dynav_config.yaml", overrides=["agent.manip_mode=kinematic"])
+    section = cfg.agent_section()
+    assert section.manip_mode == "kinematic"
+    assert section.llm == "qwen35-4B"
+    assert section.manip_collision == "none"
+    # Mapping-explore block untouched.
+    assert cfg.mapping_dict.get("agent", {}).get("realtime") is not None
+
+
+def test_legacy_mapping_agent_block_is_not_chat_section():
+    cfg = load_config("dynav_config.yaml")
+    section = cfg.agent_section()
+    assert section.manip_mode == "teleport"
+    assert section.llm == "qwen35-4B"

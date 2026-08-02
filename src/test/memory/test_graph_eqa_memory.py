@@ -246,10 +246,7 @@ def test_select_relevant_obs_ids_attribute_prefers_lamp_over_frontier():
 def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
     """Attached fridge view wins over SigLIP-nearest dining table for trash MCQ."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    raw = (
-        "reasoning: memory says dining table\nanswer: A\nconfidence: true\n"
-        "action: none\nconfidence_reasoning: memory"
-    )
+    raw = "reasoning: memory says dining table\nanswer: A\nconfidence: true\naction: none\nconfidence_reasoning: memory"
     mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
     mem.memory_summary_enabled = True
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table"])
@@ -271,10 +268,7 @@ def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
 def test_query_answer_does_not_finalize_under_equipment_without_geometry():
     """Under-X MCQs stay non-confident until mat↔equipment distance is known."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    raw = (
-        "reasoning: bike nearby\nanswer: B\nconfidence: true\n"
-        "action: none\nconfidence_reasoning: guess bike"
-    )
+    raw = "reasoning: bike nearby\nanswer: B\nconfidence: true\naction: none\nconfidence_reasoning: guess bike"
     mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "bike")
     mem.memory_summary_enabled = True
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stationary bike", "treadmill"])
@@ -291,10 +285,7 @@ def test_query_answer_does_not_finalize_under_equipment_without_geometry():
 def test_query_answer_does_not_finalize_location_without_target_view():
     """Location MCQ must not confirm when the target object is absent from attached images."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    raw = (
-        "reasoning: guess dining table\nanswer: A\nconfidence: true\n"
-        "action: none\nconfidence_reasoning: guess"
-    )
+    raw = "reasoning: guess dining table\nanswer: A\nconfidence: true\naction: none\nconfidence_reasoning: guess"
     mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
     mem.memory_summary_enabled = True
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table", "chair"])
@@ -389,10 +380,7 @@ def test_unknown_answer_triggers_letter_salvage():
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["air conditioner"])
     mem._relevant_phrases = ["air conditioner"]
     mem._relevant_objects = ["air conditioner"]
-    q = (
-        "Is the air conditioner turned on? "
-        "A) On B) Off C) Unknown D) (Do not choose). Answer:"
-    )
+    q = "Is the air conditioner turned on? A) On B) Off C) Unknown D) (Do not choose). Answer:"
     _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
     assert calls["n"] >= 2
     assert "[salvage]" in (mem.last_eqa_raw or "")
@@ -532,10 +520,7 @@ def test_attribute_state_skips_memory_summary_block():
 
     def _client(cmds):
         captured["cmds"] = cmds
-        return (
-            "reasoning: lamp looks off\nanswer: B\nconfidence: true\n"
-            "action:\nconfidence_reasoning: image"
-        )
+        return "reasoning: lamp looks off\nanswer: B\nconfidence: true\naction:\nconfidence_reasoning: image"
 
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "lamp")
@@ -544,8 +529,7 @@ def test_attribute_state_skips_memory_summary_block():
     mem._relevant_phrases = ["lamp sofa off"]
     mem._relevant_objects = ["lamp"]
     mem.query_answer(
-        "Is the lamp next to the sofa turned on or off? "
-        "A) (Do not choose) B) Off C) On D) (Do not choose). Answer:"
+        "Is the lamp next to the sofa turned on or off? A) (Do not choose) B) Off C) On D) (Do not choose). Answer:"
     )
     assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
 
@@ -553,10 +537,7 @@ def test_attribute_state_skips_memory_summary_block():
 def test_query_answer_does_not_finalize_yes_no_when_uncovered():
     """Uncovered relevant objects: Yes/No stays non-confident so exploration continues."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    raw = (
-        "reasoning: no blanket in view\nanswer: No\nconfidence: true\n"
-        "action: none\nconfidence_reasoning: none seen"
-    )
+    raw = "reasoning: no blanket in view\nanswer: No\nconfidence: true\naction: none\nconfidence_reasoning: none seen"
     mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "sofa")
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
     mem._relevant_objects = ["blanket"]
@@ -585,7 +566,7 @@ def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
 
 
 def test_relevant_memory_summary_uses_siglip_grounder():
-    """A SigLIP visual match marks an object PRESENT even with no caption-matched node."""
+    """SigLIP-only sightings are CANDIDATE; weak scores must not assert absence."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     # Captioned as a plant, not a basket -> no graph node will match "basket".
@@ -601,12 +582,15 @@ def test_relevant_memory_summary_uses_siglip_grounder():
     mem._relevant_phrases = ["woven basket"]
     mem._relevant_objects = ["woven", "basket"]
     summary = mem._relevant_memory_summary()
-    assert "woven basket: PRESENT" in summary
+    assert "woven basket: CANDIDATE" in summary
+    assert "woven basket: PRESENT" not in summary
     assert "SigLIP phrase match" in summary
 
     mem._relevant_phrases = ["elephant"]
     weak = mem._relevant_memory_summary()
-    assert "elephant: likely NOT present" in weak
+    assert "likely NOT present" not in weak
+    assert "elephant: weak SigLIP only" in weak
+    assert "not evidence of absence" in weak
     assert "no strong SigLIP match" in weak
 
 
@@ -621,7 +605,8 @@ def test_relevant_memory_summary_uses_siglip_phrase_cache():
     mem._text_grounder = None
 
     summary = mem._relevant_memory_summary()
-    assert "woven basket: PRESENT" in summary
+    assert "woven basket: CANDIDATE" in summary
+    assert "woven basket: PRESENT" not in summary
     assert "obs_id=" in summary
     assert mem._graph_covers_relevant_objects()
 
@@ -634,17 +619,13 @@ def test_heuristic_relevant_phrases_prefers_multiword():
 
 def test_heuristic_relevant_phrases_prefers_object_over_verb_stem():
     """Holdout q104/q105: do not verify SigLIP on ``trying remember placed``."""
-    clock = heuristic_relevant_phrases(
-        "I'm trying to remember where I placed the large wall clock. Where is it?"
-    )
+    clock = heuristic_relevant_phrases("I'm trying to remember where I placed the large wall clock. Where is it?")
     assert clock[0] == "large wall clock"
     bowl = heuristic_relevant_phrases("I'm looking for the fruit bowl.")
     assert bowl[0] == "fruit bowl"
     from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects
 
-    objs = heuristic_relevant_objects(
-        "I'm trying to remember where I placed the large wall clock. Where is it?"
-    )
+    objs = heuristic_relevant_objects("I'm trying to remember where I placed the large wall clock. Where is it?")
     assert "clock" in objs
     assert "trying" not in objs
     assert "remember" not in objs
@@ -709,17 +690,13 @@ def test_hypothesize_includes_mcq_landmark_graph_cards():
     )
     hyps = mem.hypothesize_nav_targets(q, max_k=6)
     graph = [h for h in hyps if h.source == "graph"]
-    assert any(
-        "kitchen" in str(h.phrase).lower() for h in graph
-    ), [(h.phrase, h.source, h.obs_id) for h in hyps]
+    assert any("kitchen" in str(h.phrase).lower() for h in graph), [(h.phrase, h.source, h.obs_id) for h in hyps]
 
 
 def test_retract_stem_claim_drops_hyp_keeps_place_node():
     mem = GraphEQAMemory(defer_llm_clients=True)
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    oid = mem.add_observation(
-        rgb, np.array([-17.4, -1.8, 0.5]), ["large wall clock", "wall"]
-    )
+    oid = mem.add_observation(rgb, np.array([-17.4, -1.8, 0.5]), ["large wall clock", "wall"])
     mem._relevant_objects = ["large wall clock"]
     mem._relevant_phrases = ["large wall clock"]
     q = "Where is the large wall clock? A) dining B) kitchen C) sunroom D) living. Answer:"
@@ -728,9 +705,7 @@ def test_retract_stem_claim_drops_hyp_keeps_place_node():
     out = mem.retract_phrase_claim_at_obs(int(oid), "large wall clock")
     assert out["ok"] is True
     after = mem.hypothesize_nav_targets(q, max_k=6)
-    assert not any(
-        int(h.obs_id) == int(oid) and "clock" in str(h.phrase).lower() for h in after
-    )
+    assert not any(int(h.obs_id) == int(oid) and "clock" in str(h.phrase).lower() for h in after)
     # Node still exists (place geometry kept).
     assert any(int(n.obs_id) == int(oid) for n in mem._nodes)
 
@@ -1086,14 +1061,10 @@ def test_navigation_waypoint_always_approaches_object_anchor():
     pt = mem._navigation_waypoint_for_obs(1, robot)
     assert pt is not None
     # Closer to object than to the historical capture pose.
-    assert float(np.linalg.norm(pt[:2] - obj[:2])) < float(
-        np.linalg.norm(pt[:2] - viewer[:2])
-    )
+    assert float(np.linalg.norm(pt[:2] - obj[:2])) < float(np.linalg.norm(pt[:2] - viewer[:2]))
     # Even when object ≈ viewer, still approach the object, not teleport to viewer.
     mem2 = GraphEQAMemory(defer_llm_clients=True)
-    mem2.add_observation(
-        rgb, np.array([1.2, 2.1, 0.5]), ["lamp"], viewer_xyz=np.array([1.0, 2.0, 0.0])
-    )
+    mem2.add_observation(rgb, np.array([1.2, 2.1, 0.5]), ["lamp"], viewer_xyz=np.array([1.0, 2.0, 0.0]))
     pt2 = mem2._navigation_waypoint_for_obs(1, np.array([9.0, 9.0, 0.0]))
     assert pt2 is not None
     assert float(pt2[0]) != 1.0 or float(pt2[1]) != 2.0
@@ -1548,4 +1519,3 @@ def test_alternate_nav_target_skips_failed_frontier_obs():
     assert alt is not None
     assert abs(float(alt[0]) - 4.0) < 1e-6
     assert abs(float(alt[1]) - 5.0) < 1e-6
-

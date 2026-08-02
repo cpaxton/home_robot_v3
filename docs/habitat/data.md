@@ -230,7 +230,7 @@ On a machine with full train + semantics downloads, expect roughly:
 
 | Slice | How | n | Use |
 |-------|-----|---|-----|
-| Overnight triad | `run_overnight_habitat_eval.sh` | 8 / 32 / 20 | Fast dynagraph vs graph_eqa iteration |
+| Overnight triad | `run_overnight_habitat_eval.sh` | 8 / 32 / 20 | Fast dynagraph vs static_graph iteration (alias: `graph_eqa`) |
 | Annotated semantics | `IDS="$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated_question_ids as f; print(",".join(map(str,f())))')"` or overnight `annotated37_*` phases | ~37 | Fairer perception vs GraphEQA GT path |
 | Paper HM-EQA | `emet-habitat run-batch --paper-subset` | **113** | GraphEQA Table 1 *n* |
 | Explore-EQA full | `emet-habitat run-batch --all-questions` | up to ~500 | Beyond GraphEQA paper (stretch) |

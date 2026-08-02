@@ -48,6 +48,8 @@ def _executor(question: str, *, query_answer: str = "", raw: str = "", **kwargs)
     gm.last_eqa_raw = raw
     gm.query_answer.return_value = ("", query_answer, False, "", None, [])
     gm.select_obs_ids_for_verified_answer = MagicMock(return_value=[1])
+    gm.vote_mcq_letter = MagicMock(return_value="")
+    gm.last_mcq_debias = {}
     ex = AgenticEQAExecutor(agent, question, router=False, collect_trace=True, **kwargs)
     return ex, gm
 
