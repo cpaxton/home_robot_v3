@@ -54,6 +54,12 @@ Rules:
 - SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
   promising place, then confirm with VLM). They are not proof of presence or
   answer — trust Qwen vlm_assess on the image for answerability.
+- Never submit_answer while unverified (vlm_answerable=false) if rounds or nav
+  budget remain — keep gathering evidence; the harness forces a final answer at
+  budget exhaustion.
+- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,
+  on/off or open/closed state, fine detail) prefer investigate(obs_id) or
+  look_around over explore_frontier.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
@@ -100,6 +106,12 @@ Rules:
 - SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
   promising place, then confirm with VLM). They are not proof of presence or
   answer — trust Qwen vlm_assess on the image for answerability.
+- Never submit_answer while unverified (vlm_answerable=false) if rounds or nav
+  budget remain — keep gathering evidence; the harness forces a final answer at
+  budget exhaustion.
+- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,
+  on/off or open/closed state, fine detail) prefer investigate(obs_id) or
+  look_around over explore_frontier.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
@@ -388,6 +400,22 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append(
             f"pending_answer={letter} (need confirm — re-investigate another view or "
             "wait for phrase corroboration; do not submit yet)"
+        )
+    if getattr(executor, "_close_look_required", False):
+        source = str(getattr(executor, "_close_look_source", "") or "")
+        lines.append(
+            "Question needs a CLOSE LOOK (reading a clock/display/label, counting, "
+            "state, fine detail) — prefer investigate(obs_id) or look_around over "
+            "explore_frontier" + (f" [{source}]" if source else "")
+        )
+    if (
+        not getattr(executor, "_verified", False)
+        and bool(getattr(executor, "_no_early_unverified", True))
+        and int(getattr(executor, "_round", 0) or 0) < int(getattr(executor, "max_rounds", 8) or 8) - 1
+    ):
+        lines.append(
+            "Unverified: do NOT submit_answer while rounds/nav budget remain — keep "
+            "investigating/exploring; the harness forces a final answer at budget exhaustion."
         )
     recent_actions = list(getattr(executor, "_recent_actions", None) or [])
     if recent_actions:

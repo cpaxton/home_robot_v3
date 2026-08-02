@@ -100,6 +100,44 @@ PLACE_APPROACH_SAMPLES = 4
 # investigate hyp over another frontier (stops leave/ABSENT explore-only loops).
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
 
+# Question cues that force a close-look preference (time/state/count/detail).
+_CLOSE_LOOK_CUES = (
+    "what time",
+    "time is it",
+    "o'clock",
+    "time of day",
+    "what hour",
+    "clock",
+    "how many",
+    "how much",
+    "number of",
+    " on or off",
+    " open or closed",
+    "is the ",
+    "turned on",
+    "turned off",
+    "set to",
+    "what color",
+    "what colour",
+    "what brand",
+    "what does it say",
+    "what is written",
+    "read the ",
+)
+
+
+def question_requires_close_look_keywords(question: str) -> bool:
+    """Cheap heuristic: does answering need a close look (clock/count/state/detail)?
+
+    Used as the pre-VLM shortcut and the no-VLM fallback for the close-look flag;
+    the VLM classifier (``extract_target_from_question``) is the authoritative path.
+    """
+    q = str(question or "").strip().lower()
+    if not q:
+        return False
+    return any(cue in q for cue in _CLOSE_LOOK_CUES)
+
+
 # Hyp recall: how many evidence cards to show the router / walk in fallback.
 DEFAULT_HYP_RECALL_K = 6
 
@@ -294,6 +332,48 @@ def env_eqa_answerable_confirm() -> bool:
     return True
 
 
+def env_eqa_agentic_mcq_debias() -> bool | None:
+    """Debias unverified forced answers (default on).
+
+    ``EMET_EQA_AGENTIC_MCQ_DEBIAS=0`` restores the raw EQA letter for forced
+    budget-exhaustion answers (letter-position bias returns).
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_MCQ_DEBIAS", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
+def env_eqa_agentic_close_look() -> bool | None:
+    """Ask whether the question needs a close look before the loop (default on).
+
+    ``EMET_EQA_AGENTIC_CLOSE_LOOK=0`` disables the keyword/VLM classifier and the
+    close-look redirect (time/state/count questions may explore forever again).
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_CLOSE_LOOK", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
+def env_eqa_agentic_no_early_unverified() -> bool | None:
+    """Hold unverified auto-submits while budget remains (default on).
+
+    ``EMET_EQA_AGENTIC_NO_EARLY_UNVERIFIED=0`` restores early auto-submit on a
+    bare ``answerable`` state even when the evidence was never corroborated.
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_NO_EARLY_UNVERIFIED", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
 def _eqa_cfg(agent: Any) -> dict[str, Any]:
     params = getattr(agent, "parameters", None) or {}
     if hasattr(params, "get"):
@@ -355,6 +435,9 @@ class AgenticEQAExecutor:
         collect_trace: bool | None = None,
         router: bool | None = None,
         require_verified: bool | None = None,
+        mcq_debias: bool | None = None,
+        close_look: bool | None = None,
+        no_early_unverified: bool | None = None,
     ):
         self.agent = agent
         self.mode = "answer" if question else "explore"
@@ -451,6 +534,25 @@ class AgenticEQAExecutor:
         self._require_verified = bool(
             require_verified if require_verified is not None else (env_req if env_req is not None else cfg_req)
         )
+        env_debias = env_eqa_agentic_mcq_debias()
+        cfg_debias = _eqa_cfg(agent).get("agentic_mcq_debias", True)
+        self._mcq_debias = bool(
+            mcq_debias if mcq_debias is not None else (env_debias if env_debias is not None else cfg_debias)
+        )
+        env_close_look = env_eqa_agentic_close_look()
+        cfg_close_look = _eqa_cfg(agent).get("agentic_close_look", True)
+        self._close_look = bool(
+            close_look if close_look is not None else (env_close_look if env_close_look is not None else cfg_close_look)
+        )
+        env_no_early = env_eqa_agentic_no_early_unverified()
+        cfg_no_early = _eqa_cfg(agent).get("agentic_no_early_unverified", True)
+        self._no_early_unverified = bool(
+            no_early_unverified
+            if no_early_unverified is not None
+            else (env_no_early if env_no_early is not None else cfg_no_early)
+        )
+        self._close_look_required = False
+        self._close_look_source = "disabled"
         self._tools: list[Any] | None = None
         self._tool_names: set[str] = set()
         self._system_prompt: str = ""
@@ -2018,7 +2120,10 @@ class AgenticEQAExecutor:
         return labels
 
     def _extract_vlm_target(self) -> None:
-        """Text-only VLM: pick the seek/verify phrase once per episode."""
+        """Text-only VLM: pick the seek/verify phrase + close-look flag once per episode."""
+        if not self._close_look:
+            self._close_look_required = False
+            self._close_look_source = "disabled"
         if self.mode != "answer" or not self.question:
             return
         gm = self.graph_memory
@@ -2030,11 +2135,14 @@ class AgenticEQAExecutor:
         if client is None:
             self._target_phrase = (fallback or self.question).strip()
             self._question_type = "other"
+            self._apply_close_look_fallback()
             self._append_trace(
                 {
                     "event": "vlm_target_extract",
                     "target_phrase": self._target_phrase,
                     "question_type": self._question_type,
+                    "requires_close_look": self._close_look_required,
+                    "close_look_source": self._close_look_source,
                     "source": "heuristic",
                 }
             )
@@ -2044,7 +2152,22 @@ class AgenticEQAExecutor:
         extracted = extract_target_from_question(client, self.question, fallback_phrase=str(fallback or ""))
         self._target_phrase = extracted.target_phrase
         self._question_type = extracted.question_type
+        self._close_look_required = bool(extracted.requires_close_look)
+        self._close_look_source = "vlm"
         self._append_trace({"event": "vlm_target_extract", "source": "vlm", **extracted.to_dict()})
+
+    def _apply_close_look_fallback(self) -> None:
+        """Keyword heuristic when no VLM is available (or the classifier is off)."""
+        if not self._close_look:
+            self._close_look_required = False
+            self._close_look_source = "disabled"
+            return
+        if question_requires_close_look_keywords(self.question):
+            self._close_look_required = True
+            self._close_look_source = "keyword"
+        else:
+            self._close_look_required = False
+            self._close_look_source = "none"
 
     def _escape_min_travel_m(self) -> float:
         """Distance the next frontier must clear once the target keeps not showing up."""
@@ -2794,7 +2917,29 @@ class AgenticEQAExecutor:
         answer = str(out.get("answer") or "")
         provenance = str(out.get("answer_source") or "query")
         choices = parse_mcq_choices_from_question(self.question)
-        if choices and (self._answer_unknownish(answer) or not self._mcq_letter_from_text(answer)):
+        raw_eqa_letter = self._mcq_letter_from_text(answer) if choices else ""
+        # Unverified forced answers show a letter-position bias (the 2026-08 bal-32
+        # audit: wrong forced letters were overwhelmingly the last option). Run the
+        # letter-free debias (freeform + capped rotation vote) before the ladder so
+        # the final letter is position-bias-free; the raw EQA letter stays diagnostic.
+        debias_letter = ""
+        debias_detail: dict[str, Any] = {}
+        if self._mcq_debias and choices and len(choices) >= 2:
+            gm = self.graph_memory
+            vote_fn = getattr(gm, "vote_mcq_letter", None) if gm is not None else None
+            if callable(vote_fn):
+                try:
+                    debias_letter = str(vote_fn(self.question, choices, max_votes=2) or "").strip().upper()
+                except Exception as e:
+                    _logger.warning(f"forced-answer mcq debias failed ({e})")
+                    debias_letter = ""
+                if debias_letter and not self._mcq_letter_from_text(debias_letter):
+                    debias_letter = ""
+                if gm is not None:
+                    debias_detail = dict(getattr(gm, "last_mcq_debias", None) or {})
+        if debias_letter:
+            answer, provenance = debias_letter, "mcq_debias"
+        elif choices and (self._answer_unknownish(answer) or not raw_eqa_letter):
             # Keep channel tags distinct so calibration / H2H summaries can separate a
             # view that saw the target from a deferred assess letter from a coin-flip prior.
             trusted = self._trusted_vlm_letter()
@@ -2815,6 +2960,8 @@ class AgenticEQAExecutor:
                 "answer": answer,
                 "answer_provenance": provenance,
                 "answer_confidence": confidence_score,
+                "raw_eqa_letter": raw_eqa_letter or None,
+                "mcq_debias": debias_detail or None,
                 "verified": bool(self._verified),
                 "n_nav": self._n_nav,
                 "n_explore": self._n_explore,
@@ -3548,6 +3695,17 @@ class AgenticEQAExecutor:
         )
         return calls, "vlm", meta
 
+    def _auto_submit_allowed(self, *, round_idx: int) -> bool:
+        """May the ANSWER state auto-submit at this round?
+
+        Verified answers (corroborated) submit anytime. Unverified answers submit
+        only at the last round (or when the no-early-unverified guard is off) —
+        budget-exhausted episodes still get a forced best guess from the ladder.
+        """
+        if self._verified or not self._no_early_unverified:
+            return True
+        return round_idx >= self.max_rounds - 1
+
     def _finalize_at_budget(self) -> dict[str, Any]:
         """Produce the scored answer once rounds / nav budget are spent.
 
@@ -3560,6 +3718,10 @@ class AgenticEQAExecutor:
             final = self._forced_answer_fallback(reason="budget exhausted without VLM answerable")
         elif self._require_verified and not self._verified:
             final = self._forced_answer_fallback()
+        elif self._mcq_debias and not self._verified:
+            # Unverified ANSWER at exhaustion: still run the ladder so the letter is
+            # debiased (the raw EQA letter alone showed a last-option bias).
+            final = self._forced_answer_fallback(reason="budget exhausted unverified (ANSWER state)")
         else:
             final = self._do_submit_answer()
         if self._evidence_policy.state == AgenticState.ANSWER and self._maybe_follow_eqa_explore_action(final):
@@ -3617,11 +3779,24 @@ class AgenticEQAExecutor:
             self._round = r
             # Only VLM-assessed ANSWER may auto-submit.
             if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER and r > 0:
-                out = self._do_submit_answer()
-                if self._maybe_follow_eqa_explore_action(out):
-                    continue
-                final = out
-                break
+                # Corroborated (verified) ANSWER may submit early. An unverified
+                # ANSWER with budget remaining must keep gathering evidence — early
+                # unverified submits were the 2026-08 forced-letter wrongs; the
+                # ladder commits a best guess at exhaustion instead.
+                if self._auto_submit_allowed(round_idx=r):
+                    out = self._do_submit_answer()
+                    if self._maybe_follow_eqa_explore_action(out):
+                        continue
+                    final = out
+                    break
+                self._append_trace(
+                    {
+                        "event": "hold_submit_unverified",
+                        "round": r,
+                        "reason": "no_early_unverified",
+                        "state": "ANSWER",
+                    }
+                )
             # Reserve the last round for answering. Otherwise the router could spend it
             # on an explore call and the loop fell through to the exhaustion branch
             # without submit_answer ever being offered.
@@ -3670,6 +3845,20 @@ class AgenticEQAExecutor:
                     )
                     calls = [("investigate", {"obs_id": int(hyp.obs_id)})]
                     picked_by = f"{picked_by}+explore_streak"
+                elif self._close_look_required:
+                    # Close-look question (clock/state/count) and no place card left:
+                    # do a close look at the current station instead of another frontier.
+                    self._append_trace(
+                        {
+                            "event": "close_look_station_look_around",
+                            "streak": int(self._n_consecutive_explore),
+                            "from": "explore_frontier",
+                            "to": "look_around",
+                            "source": self._close_look_source,
+                        }
+                    )
+                    calls = [("look_around", {})]
+                    picked_by = f"{picked_by}+close_look"
             self._append_trace(
                 {
                     "event": "tool_pick",
@@ -3719,11 +3908,20 @@ class AgenticEQAExecutor:
             if final is not None:
                 break
             if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER:
-                out = self._do_submit_answer()
-                if self._maybe_follow_eqa_explore_action(out):
-                    continue
-                final = out
-                break
+                if self._auto_submit_allowed(round_idx=self._round):
+                    out = self._do_submit_answer()
+                    if self._maybe_follow_eqa_explore_action(out):
+                        continue
+                    final = out
+                    break
+                self._append_trace(
+                    {
+                        "event": "hold_submit_unverified",
+                        "round": self._round,
+                        "reason": "no_early_unverified",
+                        "state": "ANSWER",
+                    }
+                )
         else:
             budget_hit = True
             final = self._finalize_at_budget()

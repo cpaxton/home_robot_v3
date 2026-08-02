@@ -3773,7 +3773,13 @@ class GraphEQAMemory:
         m = re.search(r"\b([A-D])\b", text)
         return m.group(1) if m else ""
 
-    def vote_mcq_letter(self, question: str, choices: list[str]) -> str:
+    def vote_mcq_letter(
+        self,
+        question: str,
+        choices: list[str],
+        *,
+        max_votes: int = -1,
+    ) -> str:
         """Debiased final MCQ letter (see mcq_debias.py).
 
         Two stages, both letter-token-free at the selection step:
@@ -3781,6 +3787,9 @@ class GraphEQAMemory:
              closest choice by token overlap — immune to MCQ position bias.
           2. Fallback: choice-rotation voting — re-ask with cyclically rotated choice
              orders, map each reply back to the original choice index, majority-vote.
+
+        ``max_votes`` caps stage 2 when the caller is latency-sensitive (e.g. the
+        agentic forced-answer ladder at budget exhaustion); ``-1`` = unlimited.
         Returns the winning original letter, or ``""`` when neither stage finds a
         clear signal (caller keeps its main answer). Details in ``self.last_mcq_debias``.
         """
@@ -3829,7 +3838,8 @@ class GraphEQAMemory:
         )
         votes: list[int | None] = []
         replies: list[str] = []
-        for r in range(n):
+        n_votes = int(max_votes) if int(max_votes) >= 0 else n
+        for r in range(min(n, n_votes)):
             formatted = format_rotated_question(question, choices[:n], r)
             directive = (
                 "Answer the multiple-choice question with ONLY a single letter "
