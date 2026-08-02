@@ -387,8 +387,8 @@ def _print_dynagraph_rerun_help(
     default=None,
     help=(
         "Apply configs/benchmarks/dynagraph.yaml harness profile + EQA flags "
-        "(memory_summary, mcq_debias, explore_when_uncovered, siglip_grounding) "
-        "before starting the agent. Use with --benchmark-method for paper rows."
+        "(memory_summary, mcq_debias, explore_when_uncovered, siglip_grounding, "
+        "merged_memory) before starting the agent. Use with --benchmark-method for paper rows."
     ),
 )
 @click.option(

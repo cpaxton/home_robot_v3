@@ -361,6 +361,11 @@ def apply_dynagraph_harness(
         eqa = dict(params.get("eqa", {}) or {})
         eqa["sqa3d_allow_partial_graph"] = bool(method_opts["sqa3d_allow_partial_graph"])
         params.set("eqa", eqa)
+    if "merged_memory" in method_opts:
+        # Paper rows pin the standalone CONFIRMED_MEMORY block (default is now folded).
+        eqa = dict(params.get("eqa", {}) or {})
+        eqa["merged_memory"] = bool(method_opts["merged_memory"])
+        params.set("eqa", eqa)
     return params
 
 

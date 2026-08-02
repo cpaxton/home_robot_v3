@@ -789,7 +789,7 @@ def test_query_answer_caps_history_in_prompt():
 
 
 def test_query_answer_memory_summary_gated_by_flag():
-    """CONFIRMED_MEMORY is only sent to the VLM when memory_summary_enabled (Dynagraph)."""
+    """Memory tags only reach the VLM when memory_summary_enabled (folded by default)."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     captured = {"cmds": None}
 
@@ -800,16 +800,18 @@ def test_query_answer_memory_summary_gated_by_flag():
     mem = GraphEQAMemory(eqa_client=fake_eqa, image_description_client=lambda _x: "sofa")
     mem.add_observation(rgb, np.array([4.0, -2.5, 0.5]), ["sofa"])
     mem._relevant_objects = ["sofa"]
+    mem._relevant_phrases = ["sofa"]
 
-    # Baseline GraphEQA: flag off -> no CONFIRMED_MEMORY block.
+    # Baseline GraphEQA: flag off -> plain graph, no memory tags/block.
     mem.query_answer("Where is the sofa? A) x B) y")
+    assert not any(isinstance(c, str) and " present" in c for c in captured["cmds"])
     assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
 
-    # Dynagraph: flag on -> CONFIRMED_MEMORY block is included.
+    # Dynagraph: flag on -> folded present tags on node lines (merged-memory default).
     mem.memory_summary_enabled = True
     mem._relevant_objects = ["sofa"]
     mem.query_answer("Where is the sofa? A) x B) y")
-    assert any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
+    assert any(isinstance(c, str) and " present" in c for c in captured["cmds"])
 
 
 def test_query_answer_records_pregate_confidence_when_gated():

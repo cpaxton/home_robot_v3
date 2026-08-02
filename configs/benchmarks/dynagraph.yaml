@@ -59,6 +59,9 @@ harness:
     dynagraph:
       prompt_variant: hmeqa
       memory_summary: true
+      # Paper parity: keep the standalone CONFIRMED_MEMORY block on the published row
+      # (merged-memory folding is now the code default for every other path).
+      merged_memory: false
       mcq_debias: false
       explore_when_uncovered: conservative
       siglip_grounding: true
