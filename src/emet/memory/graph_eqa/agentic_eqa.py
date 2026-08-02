@@ -374,6 +374,34 @@ def env_eqa_agentic_no_early_unverified() -> bool | None:
     return None
 
 
+def env_eqa_agentic_single_view_confirm() -> bool | None:
+    """Confirm on one present+answerable view (default on).
+
+    ``EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM=0`` restores the phrase-token / two-view
+    corroboration gate (verification rate drops, so more forced guesses).
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
+def env_eqa_agentic_evidence_image() -> bool | None:
+    """Pin the best VLM-assessed view as EQA Image 1 (default on).
+
+    ``EMET_EQA_AGENTIC_EVIDENCE_IMAGE=0`` restores pure diversified image
+    selection for unverified final answers.
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_EVIDENCE_IMAGE", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
 def _eqa_cfg(agent: Any) -> dict[str, Any]:
     params = getattr(agent, "parameters", None) or {}
     if hasattr(params, "get"):
@@ -438,6 +466,8 @@ class AgenticEQAExecutor:
         mcq_debias: bool | None = None,
         close_look: bool | None = None,
         no_early_unverified: bool | None = None,
+        single_view_confirm: bool | None = None,
+        evidence_image: bool | None = None,
     ):
         self.agent = agent
         self.mode = "answer" if question else "explore"
@@ -551,6 +581,17 @@ class AgenticEQAExecutor:
             if no_early_unverified is not None
             else (env_no_early if env_no_early is not None else cfg_no_early)
         )
+        env_svc = env_eqa_agentic_single_view_confirm()
+        cfg_svc = _eqa_cfg(agent).get("agentic_single_view_confirm", True)
+        self._single_view_confirm = bool(
+            single_view_confirm if single_view_confirm is not None else (env_svc if env_svc is not None else cfg_svc)
+        )
+        env_ev = env_eqa_agentic_evidence_image()
+        cfg_ev = _eqa_cfg(agent).get("agentic_evidence_image", True)
+        self._evidence_image = bool(
+            evidence_image if evidence_image is not None else (env_ev if env_ev is not None else cfg_ev)
+        )
+        self._assess_history: dict[int, dict[str, Any]] = {}
         self._close_look_required = False
         self._close_look_source = "disabled"
         self._tools: list[Any] | None = None
@@ -2334,6 +2375,13 @@ class AgenticEQAExecutor:
             }
             return False, "need_more_views"
         letter = self._mcq_letter_from_suggested(suggested_answer)
+        # Single-view present-confirm: a view that saw the target and offered a
+        # letter is enough (keeps the present guard that fixed q28/q39 absence
+        # answers). This raised verification from ~1-4/30 to ~5-6x in the field
+        # data; verified answers score ~86% vs ~35% forced guesses.
+        if self._single_view_confirm and bool(present) and bool(letter):
+            self._pending_answerable = None
+            return True, "single_view_present"
         phrase_hit = bool(present) and bool(letter) and self._answerable_phrase_hit(obs_id=int(obs_id), phrase=phrase)
         pending = self._pending_answerable
         # Two views that both failed to see the target are not corroboration. Without
@@ -2418,6 +2466,15 @@ class AgenticEQAExecutor:
             target_phrase=self._target_phrase or phrase,
         )
         self._vlm_assessed_obs_ids.add(oid)
+        # Per-view evidence ledger: the final EQA pins the best assessed view as
+        # Image 1 when nothing was corroborated (see _best_evidence_obs_id).
+        self._assess_history[oid] = {
+            "present": bool(assessment.present),
+            "answerable": bool(assessment.answerable),
+            "need_more_views": bool(assessment.need_more_views),
+            "suggested_answer": assessment.suggested_answer,
+            "phrase": str(phrase or self._target_phrase or ""),
+        }
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
@@ -3147,6 +3204,27 @@ class AgenticEQAExecutor:
             return qa, "query"
         return "Unknown", "query"
 
+    def _best_evidence_obs_id(self) -> int | None:
+        """Highest-signal VLM-assessed view for the final EQA Image 1.
+
+        Rank: answerable+present (no more views needed) > present or answerable.
+        Views where the VLM saw nothing are never used.
+        """
+        if not self._assess_history:
+            return None
+        best_oid: int | None = None
+        best_rank = (-1, -1)
+        for oid, h in self._assess_history.items():
+            present = bool(h.get("present"))
+            answerable = bool(h.get("answerable"))
+            need_more = bool(h.get("need_more_views"))
+            rank = (int(present and answerable and not need_more), int(present or answerable))
+            if rank > best_rank:
+                best_rank, best_oid = rank, int(oid)
+        if best_rank == (0, 0):
+            return None
+        return best_oid
+
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         from emet.eval.dynagraph_vram import release_siglip_for_vlm
 
@@ -3166,6 +3244,13 @@ class AgenticEQAExecutor:
             if self._verified_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
                 force_obs_ids = gm.select_obs_ids_for_verified_answer(self._verified_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(force_obs_ids)
+            elif self._evidence_image and hasattr(gm, "select_obs_ids_for_verified_answer"):
+                # Unverified: pin the best VLM-assessed view instead of a pure
+                # diversified pick — the assess already said where the evidence is.
+                evidence_obs_id = self._best_evidence_obs_id()
+                if evidence_obs_id is not None:
+                    force_obs_ids = gm.select_obs_ids_for_verified_answer(evidence_obs_id, max_images=1)
+                    gm.last_eqa_obs_ids = list(force_obs_ids)
             # Do not clamp EMET_EQA_ANSWER_MAX_NEW_TOKENS here. A prior setdefault("64")
             # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
             # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
@@ -3738,6 +3823,7 @@ class AgenticEQAExecutor:
         self.agent._explore_min_travel_m = 0.0
         self._recent_actions = []
         self._station_obs_ids = set()
+        self._assess_history = {}
         self._prefer_explore = False
         self._prefer_explore_reason = ""
         self._n_consecutive_explore = 0
