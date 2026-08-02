@@ -108,7 +108,7 @@ def test_q39_two_absent_views_do_not_confirm_answerable():
 
 def test_two_present_views_still_confirm_answerable():
     """The two-view unlock must keep working when both frames saw the target."""
-    ex, _gm = _executor(Q39)
+    ex, _gm = _executor(Q39, single_view_confirm=False)
     ex._answerable_phrase_hit = MagicMock(return_value=False)
 
     ex._maybe_confirm_answerable(

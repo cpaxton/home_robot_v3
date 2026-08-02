@@ -1506,7 +1506,7 @@ def test_answerable_deferred_without_phrase_hit(monkeypatch):
         lambda **k: "brief",
     )
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True, single_view_confirm=False)
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1571,7 +1571,7 @@ def test_answerable_two_view_agree_unlocks(monkeypatch):
 
     gm.verify_phrase_at_obs.side_effect = lambda phrase, obs_id, **k: _verify_ret(int(obs_id))
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True, single_view_confirm=False)
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)

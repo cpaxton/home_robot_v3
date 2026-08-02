@@ -35,13 +35,9 @@ def test_resolve_vl_endpoint_env_and_config(monkeypatch) -> None:
     ):
         monkeypatch.delenv(key, raising=False)
     assert resolve_vl_endpoint({"eqa": {}}) is None
-    assert resolve_vl_endpoint({"eqa": {"vl_endpoint": "openai@http://x:8001/v1"}}) == (
-        "openai@http://x:8001/v1"
-    )
+    assert resolve_vl_endpoint({"eqa": {"vl_endpoint": "openai@http://x:8001/v1"}}) == ("openai@http://x:8001/v1")
     monkeypatch.setenv("EMET_VL_ENDPOINT", "openai@http://env:8001/v1")
-    assert resolve_vl_endpoint({"eqa": {"vl_endpoint": "openai@http://cfg:8001/v1"}}) == (
-        "openai@http://env:8001/v1"
-    )
+    assert resolve_vl_endpoint({"eqa": {"vl_endpoint": "openai@http://cfg:8001/v1"}}) == ("openai@http://env:8001/v1")
 
 
 def test_openai_vllm_client_jpeg_payload(monkeypatch) -> None:
@@ -84,6 +80,46 @@ def test_openai_vllm_client_jpeg_payload(monkeypatch) -> None:
     assert url.startswith("data:image/jpeg;base64,")
     blob = base64.b64decode(url.split(",", 1)[1])
     assert blob[:2] == b"\xff\xd8"  # JPEG SOI
+
+
+def test_openai_vllm_client_assistant_prefill(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Completion:
+        choices = [_Choice()]
+
+    def _create(**kwargs):
+        captured.update(kwargs)
+        return _Completion()
+
+    client = OpenaiVLLMClient(
+        model="emet-vl",
+        base_url="http://caliban:8001/v1",
+        max_tokens=32,
+        image_max_side=8,
+    )
+    client._openai = MagicMock()
+    client._openai.chat.completions.create = _create
+
+    out = client.generate_multimodal(
+        "caption this",
+        system_prompt="sys",
+        max_new_tokens=16,
+        assistant_prefill="Reasoning:",
+    )
+    assert out == "ok"
+    messages = captured["messages"]
+    assert messages[-1] == {"role": "assistant", "content": "Reasoning:"}
+
+    captured.clear()
+    client.generate_multimodal("caption this", system_prompt="sys", max_new_tokens=16)
+    assert all(m["role"] != "assistant" for m in captured["messages"])
 
 
 def test_create_dynamem_vllm_remote_endpoint() -> None:

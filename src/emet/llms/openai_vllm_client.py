@@ -128,6 +128,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         reset_context: bool = True,
         verbose: bool = False,
         image: Any | None = None,
+        assistant_prefill: str | None = None,
     ) -> str:
         if reset_context:
             self.reset()
@@ -136,13 +137,15 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         if sys_text:
             messages.append({"role": "system", "content": sys_text})
         messages.append({"role": "user", "content": self._content_blocks(user_content, image)})
+        prefill = (assistant_prefill or "").strip()
+        if prefill:
+            # Remote OpenAI servers continue from a trailing assistant message when they
+            # support it; servers that render it as a closed turn still emit the prefill
+            # as the first field, which is what the local prefill shims also achieve.
+            messages.append({"role": "assistant", "content": prefill})
         mt = int(max_new_tokens if max_new_tokens is not None else self.max_tokens)
         if verbose:
-            n_img = sum(
-                1
-                for b in messages[-1]["content"]
-                if isinstance(b, dict) and b.get("type") == "image_url"
-            )
+            n_img = sum(1 for b in messages[-1]["content"] if isinstance(b, dict) and b.get("type") == "image_url")
             print(f"OpenaiVLLMClient model={self.model} base_url={self.base_url} images={n_img} max_tokens={mt}")
         completion = self._openai.chat.completions.create(
             model=self.model,
