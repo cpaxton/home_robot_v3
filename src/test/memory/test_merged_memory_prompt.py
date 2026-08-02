@@ -29,8 +29,8 @@ def _default_mem(**kwargs):
     return mem
 
 
-def test_merged_memory_default_off():
-    """Without the flag, to_string keeps today's flat SCENE_GRAPH (no tags, no tail)."""
+def test_to_string_flat_without_merge_flag():
+    """Without ``merge_confirmed``, to_string stays flat even though the default is now on."""
     mem = _default_mem()
     s = mem.to_string(max_object_nodes=48)
     assert "CONFIRMED_MEMORY" not in s
@@ -38,9 +38,9 @@ def test_merged_memory_default_off():
     assert "Rooms:" not in s
 
 
-def test_merged_memory_enabled_flag():
-    """Config flag on; env vars override it both ways."""
-    assert GraphEQAMemory(defer_llm_clients=True)._merged_memory_enabled() is False
+def test_merged_memory_default_on():
+    """The folded format is the default; config true/false still overrides it."""
+    assert GraphEQAMemory(defer_llm_clients=True)._merged_memory_enabled() is True
     mem = GraphEQAMemory(defer_llm_clients=True, parameters={"eqa": {"merged_memory": True}})
     assert mem._merged_memory_enabled() is True
     mem2 = GraphEQAMemory(defer_llm_clients=True, parameters={"eqa": {"merged_memory": "yes"}})

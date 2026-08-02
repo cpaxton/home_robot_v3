@@ -31,6 +31,18 @@ def test_habitat_eqa_harness_profile_and_flags():
     assert flags["siglip_grounding"] is True
 
 
+def test_habitat_eqa_dynagraph_pins_unmerged_memory():
+    """Paper row keeps the standalone CONFIRMED_MEMORY block while the code default is on."""
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    assert (params.get("eqa") or {}).get("merged_memory") is False
+
+
+def test_dynamic_explore_adopts_merged_default():
+    """Non-paper harness rows leave merged_memory unset (folded format by default)."""
+    params = apply_dynagraph_harness(get_parameters("dynav_config.yaml"), "dynamic_explore", "dynagraph")
+    assert "merged_memory" not in (params.get("eqa") or {})
+
+
 def test_habitat_eqa_static_graph_baseline_flags():
     for method in ("static_graph", "graph_eqa"):
         params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), method)

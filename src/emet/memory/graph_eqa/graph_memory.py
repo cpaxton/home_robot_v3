@@ -2183,17 +2183,20 @@ class GraphEQAMemory:
     def _merged_memory_enabled(self) -> bool:
         """True when eqa.merged_memory / EMET_EQA_MERGED_MEMORY folds CONFIRMED_MEMORY into SCENE_GRAPH.
 
-        Default off (paper-parity A/B). When on, the main EQA prompt tags SCENE_GRAPH
-        nodes with status (present / candidate) and room names, and emits a short
-        CONFIRMED_MEMORY tail only for phrases with no tagged node, instead of a
-        separate summary block (one fact, one line — no duplicate object mentions).
+        Default on. The HM-EQA paper row pins ``merged_memory: false`` via
+        ``configs/benchmarks/dynagraph.yaml`` (harness ``habitat_eqa.dynagraph``) so its
+        numbers stay on the standalone summary block; every other path gets the folded
+        format. When on, the main EQA prompt tags SCENE_GRAPH nodes with status
+        (present / candidate) and room names, and emits a short CONFIRMED_MEMORY tail
+        only for phrases with no tagged node, instead of a separate summary block
+        (one fact, one line — no duplicate object mentions).
         """
         env = os.environ.get("EMET_EQA_MERGED_MEMORY", "").strip().lower()
         if env in ("1", "true", "yes", "on"):
             return True
         if env in ("0", "false", "no", "off"):
             return False
-        raw = self._eqa_cfg_value("merged_memory", False)
+        raw = self._eqa_cfg_value("merged_memory", True)
         if isinstance(raw, str):
             return raw.strip().lower() in ("1", "true", "yes", "on")
         return bool(raw)
