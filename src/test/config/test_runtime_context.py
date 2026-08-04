@@ -183,3 +183,28 @@ def test_resolve_host_explicit_cli_beats_connection():
         )
     assert host == "10.0.0.9"
     assert source == "cli"
+
+
+def test_load_runtime_force_localhost_ignores_herman_host():
+    """``--start-sim`` must not dial the active Herman connection host."""
+    from unittest.mock import MagicMock
+
+    from click.core import ParameterSource
+
+    from emet.app.config_cli import load_runtime_from_cli
+
+    ctx = MagicMock()
+    ctx.get_parameter_source.return_value = ParameterSource.DEFAULT
+    with patch("emet.app.config_cli.load_resolved_config") as lr:
+        lr.return_value = load_config(default_config_path())
+        with patch("emet.config.runtime.get_host_from_connection", return_value="192.168.1.43"):
+            rt = load_runtime_from_cli(
+                ctx,
+                emet_config=default_config_path(),
+                robot="stretch",
+                robot_ip="127.0.0.1",
+                force_localhost=True,
+                zmq_discover=False,
+            )
+    assert rt.host == "127.0.0.1"
+    assert rt.robot_id == "stretch"
