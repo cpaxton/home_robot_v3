@@ -1786,6 +1786,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             if self._teleport_planar_base_world_xyt(wx, wy, wt):
                 # Align arm/wheel ``ctrl`` with ``qpos`` after snapping planar joints (no extra mj_forward).
                 self._sync_actuator_ctrl_from_joint_positions()
+                # Held freejoints must move with the EE immediately; do not wait for the next mj_step
+                # (Molmo place approach was leaving the object near the pre-teleport pose).
+                self._snap_kinematic_attachments()
                 return True
             addrs = self._base_freejoint_addrs()
             if addrs is None:
@@ -1801,6 +1804,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             nv = 6
             self._mjdata.qvel[vadr : vadr + nv] = 0.0
             mujoco.mj_forward(self._mjmodel, self._mjdata)
+            self._snap_kinematic_attachments()
         return True
 
     def _zero_base_free_joint_velocity(self) -> None:

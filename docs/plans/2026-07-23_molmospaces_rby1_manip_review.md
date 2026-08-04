@@ -39,7 +39,7 @@ Logs: `~/runs/emet/manip_smoke/20260726/`.
 | Table teleport `scripted_sim_pick_place` | PASS | `displacement_m≈0.10` (`table_teleport_p190.log`) |
 | Table kinematic IK+RRT+attach | PASS | `success=True`, `displacement_m≈0.14`, grasp_err≈0.033, place_err≈0.05 (`table_kinematic_atomic_p223.log`) |
 | Agent tool-calls path (kinematic) | PASS | same script + `--tool-calls-json`; unit test green |
-| Molmo iTHOR bowl→microwave kinematic | FAIL | `pregrasp_ik_failed` grasp_err≈0.60; approach goal vs `base_after` disagree (`molmo_kinematic_bowl_microwave_p230.log`) |
+| Molmo iTHOR bowl→microwave kinematic | PASS (2026-08-03) | base-frame + place verify-before-retract; grasp_err≈0.027 place_err=0 (`molmo_kinematic_bowl_microwave_ok.log` / bowl6) |
 
 ### Fixes that unblocked table kinematic
 
@@ -51,7 +51,15 @@ Logs: `~/runs/emet/manip_smoke/20260726/`.
 ### Next
 
 - Fix Molmo approach / nav-world vs MuJoCo base frame so pregrasp IK is in reach.
-- Keep Molmo/OVMM full eval for a follow-up night.
+  **Root cause (2026-08-03):** `KinematicPickPlaceExecutor._sync_base_freejoint` wrote
+  episode-relative `get_base_pose()` into the offline MJCF freejoint while GT object
+  positions are MuJoCo world. Log evidence (`molmo_kinematic_bowl_microwave_p230.log`):
+  approach teleported to world `[0.273, -0.203]` but `base_after_approach` GPS was
+  `[-1.188, -1.770]` → `pregrasp_ik_failed` grasp_err≈0.60. Fix: compose with
+  `navigation_origin_xyt` / prefer session `base_xyz` via `_world_base_xyt()`.
+  Pregrasp IK green (grasp_err≈0.027). Place: snap attachments after nav teleport;
+  detach → `sim_set_body_pose` → verify **before** EE retract (bowl6 place_err=0).
+- Optional night: Robocasa Stretch `--visual-servo` A/B; CI gate under `RUN_MOLMOSPACES_TESTS`.
 
 ## Multi-option TAMP + frontier + Dynamem (2026-07-26 evening)
 

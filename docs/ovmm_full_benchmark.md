@@ -26,6 +26,17 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 
 **Servers:** Stretch MuJoCo and robosuite (e.g. **rby1** / MolmoSpaces merges) advertise `capabilities.sim_set_body_pose`. Molmo iTHOR objects are freejoint roots (`…_1_0_0`) with mesh children (`…_1_1_0`); teleport resolves the freejoint ancestor when the GT body is the child.
 
+### OVMM `--manip-mode` ≠ chat `agent.manip_mode`
+
+These are **separate namespaces**. OVMM full scoring does **not** read chat-agent YAML or `EMET_MANIP_*`.
+
+| Surface | Knob | Values | Who executes pick/place |
+|---------|------|--------|-------------------------|
+| OVMM full (`eval_ovmm_full.py`) | `--manip-mode` / `FindPhaseRunConfig.manip_mode` | `skip` \| `oracle` \| `sim` \| `attempt` | Harness teleports GT bodies (`sim` / sim-`attempt`), or `agent.manipulate`/`place` on the find-phase **controller** (nonsim `attempt`) |
+| Chat agent (`emet run agent`) | `agent.manip_mode` / `EMET_MANIP_MODE` | `teleport` \| `kinematic` | [`DynamemTaskExecutor`](../src/emet/controller/task/dynamem/dynamem_task.py) (env vars still override YAML) |
+
+Wiring chat `agent.manip_*` into the executor (so operators need not set `EMET_MANIP_*`) does **not** change OVMM `--manip-mode sim` behavior. Chat **kinematic** IK/RRT is a different path; see [motion_planning.md](motion_planning.md#two-manip_mode-namespaces).
+
 ## Quick start
 
 ```bash

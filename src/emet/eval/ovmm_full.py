@@ -90,8 +90,14 @@ def score_place_success(
     goal_recep: str,
     radius_m: float,
     placements_before: dict[str, dict[str, Any]] | None = None,
+    goal_gt_body: str | None = None,
 ) -> dict[str, Any]:
-    """Place success: object GT body within ``radius_m`` of any goal-recep GT body."""
+    """Place success: object GT body within ``radius_m`` of a goal-recep GT body.
+
+    When ``goal_gt_body`` is set (sim teleport target), score only against that body so
+    other category matches (e.g. many ``cab_*`` fixtures) cannot vacuous-fail the
+    ``improved`` check.
+    """
     if not placements_after or not object_gt_body or object_gt_body not in placements_after:
         return {
             "place_success": False,
@@ -99,7 +105,10 @@ def score_place_success(
             "gt_object_body": object_gt_body,
             "gt_recep_bodies": [],
         }
-    recep_bodies = bodies_matching_category(placements_after, goal_recep)
+    if goal_gt_body and goal_gt_body in placements_after:
+        recep_bodies = [goal_gt_body]
+    else:
+        recep_bodies = bodies_matching_category(placements_after, goal_recep)
     if not recep_bodies:
         return {
             "place_success": False,
@@ -178,15 +187,39 @@ def _robot_set_body_pose(robot: Any, body: str, pos: np.ndarray) -> None:
     from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
     robot_zmq_set_body_pose(robot, body, pos)
+    # Stretch/Robocasa ZMQ may need a physics tick before placements refresh.
+    time.sleep(0.15)
 
 
-def _goal_place_xyz(placements: dict[str, dict[str, Any]], goal_recep: str) -> np.ndarray | None:
+def _goal_place_xyz(
+    placements: dict[str, dict[str, Any]],
+    goal_recep: str,
+    *,
+    object_gt_body: str | None = None,
+) -> tuple[np.ndarray | None, str | None]:
+    """Pick a goal-recep GT body for sim place teleport.
+
+    Prefer a body far from the held object so scoring ``improved`` is meaningful when many
+    fixtures share a category (Robocasa ``cab_1``…``cab_main``).
+    """
     recep_bodies = bodies_matching_category(placements, goal_recep)
     if not recep_bodies:
-        return None
-    anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()
+        return None, None
+    body = recep_bodies[0]
+    if object_gt_body and object_gt_body in placements:
+        obj_xy = np.asarray(placements[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
+        best_d = -1.0
+        for cand in recep_bodies:
+            # Prefer explicit ``*_main`` when distances tie within a few cm.
+            d = float(np.linalg.norm(obj_xy - np.asarray(placements[cand]["pos"], dtype=np.float64).reshape(3)[:2]))
+            prefer = 0.05 if str(cand).endswith("_main") or str(cand) == "cab_main" else 0.0
+            score = d + prefer
+            if score > best_d:
+                best_d = score
+                body = cand
+    anchor = np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3).copy()
     anchor[2] += 0.02
-    return anchor
+    return anchor, body
 
 
 def _run_sim_manip_phases(
@@ -219,6 +252,18 @@ def _run_sim_manip_phases(
     pick_pos[2] += 0.12
     _robot_set_body_pose(robot, gt_body, pick_pos)
     after_pick = _read_placements(robot) or before_pick
+    # Retry once if the freejoint did not move (Stretch/Robocasa timing flake).
+    if gt_body in after_pick:
+        moved = float(
+            np.linalg.norm(
+                np.asarray(after_pick[gt_body]["pos"], dtype=np.float64).reshape(3)
+                - np.asarray(before_pick[gt_body]["pos"], dtype=np.float64).reshape(3)
+            )
+        )
+        if moved < 1e-3:
+            time.sleep(0.25)
+            _robot_set_body_pose(robot, gt_body, pick_pos)
+            after_pick = _read_placements(robot) or after_pick
     pick_scores = score_pick_success(
         before_pick,
         after_pick,
@@ -229,7 +274,7 @@ def _run_sim_manip_phases(
     pick_wall_s = time.monotonic() - t_pick0
 
     t_place0 = time.monotonic()
-    place_pos = _goal_place_xyz(after_pick, episode.goal_recep)
+    place_pos, goal_body = _goal_place_xyz(after_pick, episode.goal_recep, object_gt_body=gt_body)
     if place_pos is None:
         place_scores = {
             "place_success": False,
@@ -246,6 +291,7 @@ def _run_sim_manip_phases(
             goal_recep=episode.goal_recep,
             radius_m=radius_m,
             placements_before=before_pick,
+            goal_gt_body=goal_body,
         )
     place_wall_s = time.monotonic() - t_place0
     manip_wall_s = time.monotonic() - t_manip0

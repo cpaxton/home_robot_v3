@@ -2522,16 +2522,18 @@ class DynamemController(BaseController):
         else:
             gripper_width = 1
 
-        if skip_confirmation or input("Do you want to do this manipulation? Y or N ") != "N":
-            pickup(
-                self.manip_wrapper,
-                rotation,
-                translation,
-                base_node,
-                self.transform_node,
-                gripper_depth=depth,
-                gripper_width=gripper_width,
-            )
+        if not skip_confirmation and input("Do you want to do this manipulation? Y or N ") == "N":
+            return False
+
+        pickup(
+            self.manip_wrapper,
+            rotation,
+            translation,
+            base_node,
+            self.transform_node,
+            gripper_depth=depth,
+            gripper_width=gripper_width,
+        )
 
         # Shift the base back to the original point as we are certain that original point is navigable in navigation obstacle map
         self.manip_wrapper.move_to_position(base_trans=-self.manip_wrapper.robot.get_six_joints()[0])

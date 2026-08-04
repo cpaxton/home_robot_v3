@@ -229,9 +229,17 @@ uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
 # MolmoSpaces one-liner
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
 
-# MolmoSpaces + rby1 mobile manip (sim teleport pick/place when server advertises sim_set_body_pose)
+# MolmoSpaces + rby1 mobile manip (default agent.manip_mode=teleport when server
+# advertises sim_set_body_pose; override with --set agent.manip_mode=kinematic)
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless --no-discord \
   -c "pick up the bowl and place it on the microwave"
+
+# Stretch MuJoCo: without -V, pick/place uses GT teleport when sim_set_body_pose
+# is advertised. Pass --visual-servo / -V to keep AnyGrasp visual-servo.
+uv run emet run agent --robot stretch --start-sim --scene robocasa --headless --no-discord \
+  -c "pick up the object and place it in the cabinet"
+uv run emet run agent --robot stretch --start-sim --scene robocasa --visual-servo --headless --no-discord \
+  -c "pick up the object and place it in the cabinet"
 
 # No LLM / no models: scripted agent tool_calls + teleport only
 uv run python scripts/scripted_sim_pick_place.py --start-sim
@@ -239,6 +247,8 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
   --sim configs/sim/molmospaces_ithor_train_0.yaml \
   --object bowl --receptacle microwave
 ```
+
+**OVMM full** (`scripts/eval_ovmm_full.py --manip-mode sim|oracle|…`) is a **different** knob from chat `agent.manip_mode` — see [ovmm_full_benchmark.md](ovmm_full_benchmark.md#ovmm---manip-mode--chat-agentmanip_mode) and [motion_planning.md](motion_planning.md#two-manip_mode-namespaces).
 
 ## Testing
 
