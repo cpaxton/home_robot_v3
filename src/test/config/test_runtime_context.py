@@ -74,6 +74,24 @@ def test_robot_zmq_discovery_when_unset():
     assert source == "zmq"
 
 
+def test_localhost_zmq_wins_over_profile_config_robot():
+    """Active Herman config YAML must not force innate_mars against local Stretch sim."""
+    cfg = load_config("configs/agent_innate_mars.yaml")
+    assert cfg.robot == "innate_mars"
+    with patch("emet.config.runtime.discover_zmq_server_robot_id", return_value="stretch"):
+        rid, source = resolve_robot_id(
+            None,
+            robot_from_default=True,
+            config=cfg,
+            connection_name=None,
+            host="127.0.0.1",
+            port_offset=0,
+            zmq_discover=True,
+        )
+    assert rid == "stretch"
+    assert source == "zmq"
+
+
 def test_localhost_skips_connection_robot_without_zmq():
     cfg = load_config(default_config_path())
     with patch("emet.config.runtime.get_connection", return_value={"robot": "innate_mars", "host": "herman"}):
