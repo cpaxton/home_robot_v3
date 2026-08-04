@@ -169,30 +169,16 @@ def build_agent_system_prompt(
 
 def _fence_inner_json(text: str) -> str | None:
     """Return inner JSON string from first ```json ... ``` or ``` ... ``` fence, or None."""
-    m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
-    return m.group(1).strip() if m else None
+    from emet.utils.json_parse import fence_inner_json
+
+    return fence_inner_json(text)
 
 
 def _first_json_dict(text: str) -> dict[str, Any] | None:
-    """Parse the first balanced JSON object from *text* using :meth:`json.JSONDecoder.raw_decode`.
+    """Parse the first balanced JSON object from *text*."""
+    from emet.utils.json_parse import first_json_dict
 
-    Avoids greedy ``\\{[\\s\\S]*\\}`` bugs when there is trailing prose or multiple ``{`` tokens.
-    """
-    dec = json.JSONDecoder()
-    i = 0
-    n = len(text)
-    while i < n:
-        j = text.find("{", i)
-        if j < 0:
-            break
-        try:
-            obj, end = dec.raw_decode(text, j)
-            if isinstance(obj, dict):
-                return obj
-        except json.JSONDecodeError:
-            pass
-        i = j + 1
-    return None
+    return first_json_dict(text)
 
 
 def _normalize_message_field(raw: Any) -> str:

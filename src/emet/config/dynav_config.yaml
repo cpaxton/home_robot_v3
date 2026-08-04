@@ -231,6 +231,10 @@ eqa_vl:
   # ``answer:`` and only a salvage re-ask saves the episode. Env: EMET_EQA_ANSWER_MAX_NEW_TOKENS.
   answer_max_new_tokens: 384
   eqa_max_images: 4
+  # Unified approximate text-token budget for HISTORY + memory + SCENE_GRAPH in the
+  # EQA user prompt (char/4 estimator). Truncation order: HISTORY → CONFIRMED_MEMORY →
+  # edges → node labels. Env: EMET_EQA_PROMPT_MAX_TOKENS (0 disables).
+  eqa_prompt_max_tokens: 2500
   # Legacy text block listing labels/coords for the same obs already attached as RGB.
   # Default off: SCENE_GRAPH + pixels are enough; the dump invited Caption: loops.
   # Env: EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1 to restore for A/B.

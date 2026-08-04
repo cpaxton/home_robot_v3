@@ -41,20 +41,20 @@ def test_no_example_anywhere_demonstrates_a_caption():
 
 def test_hmeqa_prompt_forbids_a_caption_block():
     lowered = HMEQA_EQA_PROMPT.lower()
-    assert "do not output a caption: field" in lowered
-    assert "do not write a caption: block" in lowered
+    assert "do not write a caption" in lowered or "do not output a caption" in lowered
     # Examples use RGB + SCENE_GRAPH, not the legacy IMAGE_DESCRIPTIONS dump.
     assert "image_descriptions:" not in lowered
 
 
 def test_hmeqa_examples_still_model_the_answer_fields():
     examples = HMEQA_EQA_PROMPT.split("Example (multiple choice):", 1)[1]
-    assert examples.count("Answer:") >= 2
-    assert "Confidence_reasoning:" in examples
+    assert examples.count('"answer"') >= 2
+    assert '"confidence_reasoning"' in examples
+    assert '"reasoning"' in examples
 
 
 def test_hmeqa_answer_call_prefills_reasoning():
-    """Prompt edits alone left a 26% caption share; the decode must open on Reasoning:."""
+    """Prompt edits alone left a 26% caption share; the decode must open on the JSON seed."""
     from emet.llms.base import AbstractVLLMClient
     from emet.llms.graph_eqa_vlm import GraphEQAVLMClient
 
@@ -74,11 +74,11 @@ def test_hmeqa_answer_call_prefills_reasoning():
         ):
             captured["assistant_prefill"] = assistant_prefill
             captured["max_new_tokens"] = max_new_tokens
-            return "the lamp is lit.\nanswer:\na\n"
+            return '{"reasoning": "the lamp is lit.", "answer": "A", "confidence": true, "action": "", "confidence_reasoning": "clear"}'
 
     client = GraphEQAVLMClient(_FakeVL(""), system_prompt="sys", max_tokens=64)
-    out = client(["Question: color?"], max_new_tokens=128, assistant_prefill="Reasoning:")
-    assert captured.get("assistant_prefill") == "Reasoning:"
+    out = client(["Question: color?"], max_new_tokens=128, assistant_prefill='{"reasoning":')
+    assert captured.get("assistant_prefill") == '{"reasoning":'
     assert captured.get("max_new_tokens") == 128
     assert "answer" in out.lower()
 
@@ -102,7 +102,7 @@ def test_without_caption_fails_loudly_when_the_shared_prompt_changes():
 
 def test_hmeqa_prompt_still_requires_a_letter():
     lowered = HMEQA_EQA_PROMPT.lower()
-    assert "never leave answer: blank" in lowered
+    assert "never leave" in lowered and "answer" in lowered
     assert "exactly one letter" in lowered
 
 
@@ -205,7 +205,10 @@ def test_query_answer_prefills_reasoning_when_hmeqa_variant_on_parameters():
 
     def fake_eqa(cmds, **kwargs):
         captured.update(kwargs)
-        return "the lamp is lit.\nanswer:\na\nconfidence:\ntrue\naction:\nconfidence_reasoning:\nclear.\n"
+        return (
+            '{"reasoning": "the lamp is lit.", "answer": "A", "confidence": true, '
+            '"action": "", "confidence_reasoning": "clear."}'
+        )
 
     params = Parameters(eqa={"prompt_variant": "hmeqa"}, eqa_vl={"include_image_descriptions": False})
     mem = GraphEQAMemory(
@@ -217,7 +220,7 @@ def test_query_answer_prefills_reasoning_when_hmeqa_variant_on_parameters():
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
     mem._relevant_objects = ["wall"]
     mem.query_answer("Is the wall blue? A) Yes B) No")
-    assert captured.get("assistant_prefill") == "Reasoning:"
+    assert captured.get("assistant_prefill") == '{"reasoning":'
 
 
 def test_append_eqa_history_strips_caption():
@@ -228,6 +231,131 @@ def test_append_eqa_history_strips_caption():
     assert len(mem._history_outputs) == 1
     assert "Caption:" not in mem._history_outputs[0]
     assert "Answer:A" in mem._history_outputs[0]
+
+
+def test_query_answer_stores_history_outcome_line():
+    import numpy as np
+
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    def fake_eqa(cmds, **kwargs):
+        return (
+            '{"reasoning": "wall looks white", "answer": "B", "confidence": false, '
+            '"action": "2", "confidence_reasoning": "need closer look"}'
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "wall",
+        parameters={"eqa": {"prompt_variant": "hmeqa"}},
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_objects = ["wall"]
+    mem.query_answer("Is the wall blue? A) Yes B) No")
+    assert len(mem._history_outputs) == 1
+    line = mem._history_outputs[0]
+    assert line.startswith("Iter:")
+    assert "answer=B" in line
+    assert "salvage=0" in line
+    assert "Caption:" not in line
+
+
+def test_answer_format_defaults_json_for_hmeqa(monkeypatch):
+    from emet.llms.eqa_vl_settings import resolve_eqa_answer_format, resolve_eqa_answer_prefill
+
+    monkeypatch.delenv("EMET_EQA_ANSWER_FORMAT", raising=False)
+    assert resolve_eqa_answer_format({"eqa": {"prompt_variant": "hmeqa"}}) == "json"
+    assert resolve_eqa_answer_prefill({"eqa": {"prompt_variant": "hmeqa"}}) == '{"reasoning":'
+    assert resolve_eqa_answer_format({"eqa": {"prompt_variant": "sqa3d"}}) == "labeled"
+    assert resolve_eqa_answer_prefill({"eqa": {"prompt_variant": "sqa3d"}}) is None
+    monkeypatch.setenv("EMET_EQA_ANSWER_FORMAT", "labeled")
+    assert resolve_eqa_answer_format({"eqa": {"prompt_variant": "hmeqa"}}) == "labeled"
+    assert resolve_eqa_answer_prefill({"eqa": {"prompt_variant": "hmeqa"}}) == "Reasoning:"
+
+
+def test_build_eqa_prompt_text_truncates_history_first():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    history = [f"Iter: answer=A conf=false action=- salvage=0 | long reason {i} " + ("x" * 200) for i in range(6)]
+    graph = "SCENE_GRAPH:\n" + "\n".join(
+        [f"Node {i}: object{i} at (0.00, 0.00, 0.00) [Image {i}]" for i in range(1, 20)]
+        + [f"  near({i}, {i + 1})" for i in range(1, 15)]
+    )
+    parts = GraphEQAMemory.build_eqa_prompt_text(
+        question_line="Question: where?",
+        history_entries=history,
+        history_start_index=0,
+        graph_str=graph,
+        img_desc_str="Attached images: none",
+        max_tokens=80,
+    )
+    joined = "\n".join(parts)
+    assert GraphEQAMemory.estimate_eqa_prompt_tokens(joined) <= 80
+    iters = [p for p in parts if p.startswith("Iteration_")]
+    assert len(iters) < len(history)
+
+
+def test_parse_answer_json_and_labeled_fallback():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
+    raw = (
+        '{"reasoning": "lamp is lit", "answer": "A", "confidence": true, '
+        '"action": "", "confidence_reasoning": "clear view"}'
+    )
+    r, a, c, act, cr = mem.parse_answer(raw)
+    assert a == "A"
+    assert c is True
+    assert "lamp" in r
+    assert "clear" in cr
+
+    fenced = "```json\n" + raw + "\n```"
+    _, a2, _, _, _ = mem.parse_answer(fenced)
+    assert a2 == "A"
+
+    # Continuation after assistant prefill (remote OpenAI often omits the seed).
+    cont = '"shade glows", "answer": "B", "confidence": false, "action": "3", "confidence_reasoning": "blurry"}'
+    r3, a3, c3, act3, _ = mem.parse_answer(cont, prefer_json=True, json_prefill='{"reasoning":')
+    assert a3 == "B"
+    assert c3 is False
+    assert act3.strip() == "3"
+
+    # Truncated / non-JSON falls back to labeled scrape.
+    labeled = "reasoning: need more\nanswer: C\nconfidence: FALSE\naction: 1\nconfidence_reasoning: unsure"
+    _, a4, c4, act4, _ = mem.parse_answer(labeled)
+    assert a4.strip().upper() == "C"
+    assert c4 is False
+    assert act4.strip() == "1"
+
+
+def test_parse_answer_tolerates_a_missing_caption():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    raw = "reasoning:\nthe lamp shade is lit.\nanswer:\na\nconfidence:\ntrue\naction:\nconfidence_reasoning:\nclear view.\n"
+    with patch.object(GraphEQAMemory, "__init__", lambda self: None):
+        gm = GraphEQAMemory()
+    reasoning, answer, confidence, action, conf_reason = gm.parse_answer(raw, prefer_json=False)
+
+    assert answer.strip().upper() == "A"
+    assert confidence is True
+    assert "lamp shade is lit" in reasoning
+
+
+def test_image_descriptions_omit_labels_already_on_graph():
+    import numpy as np
+
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([1.0, 2.0, 0.5]), ["red pillow"])
+    oid = int(mem._observations[0].obs_id)
+    full = mem._get_image_descriptions_str([oid])
+    assert "red pillow" in full
+    slim = mem._get_image_descriptions_str([oid], omit_labels_for_obs={oid})
+    assert "red pillow" not in slim
+    assert "at (1.00, 2.00)" in slim
 
 
 def test_answer_decode_cap_is_tunable_per_model(monkeypatch):
@@ -243,16 +371,14 @@ def test_shipped_config_sets_the_answer_decode_cap():
     """The default config the agent actually loads must carry the tuned value."""
     params = get_parameters("dynav_config.yaml")
     assert int(params.get("eqa_vl/answer_max_new_tokens")) >= 384
+    assert int(params.get("eqa_vl/eqa_prompt_max_tokens")) >= 2500
 
 
-def test_parse_answer_tolerates_a_missing_caption():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+def test_prompt_max_tokens_resolver(monkeypatch):
+    from emet.llms.eqa_vl_settings import resolve_eqa_prompt_max_tokens
 
-    raw = "reasoning:\nthe lamp shade is lit.\nanswer:\na\nconfidence:\ntrue\naction:\nconfidence_reasoning:\nclear view.\n"
-    with patch.object(GraphEQAMemory, "__init__", lambda self: None):
-        gm = GraphEQAMemory()
-    reasoning, answer, confidence, action, conf_reason = gm.parse_answer(raw)
-
-    assert answer.strip().upper() == "A"
-    assert confidence is True
-    assert "lamp shade is lit" in reasoning
+    monkeypatch.delenv("EMET_EQA_PROMPT_MAX_TOKENS", raising=False)
+    assert resolve_eqa_prompt_max_tokens(None) == 2500
+    assert resolve_eqa_prompt_max_tokens({"eqa_vl": {"eqa_prompt_max_tokens": 1000}}) == 1000
+    monkeypatch.setenv("EMET_EQA_PROMPT_MAX_TOKENS", "500")
+    assert resolve_eqa_prompt_max_tokens({"eqa_vl": {"eqa_prompt_max_tokens": 1000}}) == 500

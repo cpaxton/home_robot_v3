@@ -98,7 +98,7 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
-| Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
+| Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` (or merged into graph lines) + HISTORY as one-line outcomes (not raw VLM replay); text trimmed by ``eqa_vl.eqa_prompt_max_tokens`` (~2500) |
 | Agentic router ``build_state_message`` | live + nearby room crops (default ``EMET_EQA_ROUTER_ROOM_IMAGES=3``; ``0`` = text-only) | counts + **evidence cards** with ``room=``; **Current room (graph/router)** + ``Rooms:``; **Recent actions**; after VLM ``present=false``, soft **Prefer explore_frontier**; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
 | Agentic ``vlm_assess`` (verify gate) | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH); sets ``vlm_answerable`` / ANSWER |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
