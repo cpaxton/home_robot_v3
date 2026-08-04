@@ -857,6 +857,7 @@ def run_episode_find_phase(
     import socket
     import subprocess
     import sys
+    import tempfile
     from dataclasses import replace
 
     from emet.app.robot_cli import create_robot_client_from_cli
@@ -896,9 +897,11 @@ def run_episode_find_phase(
     server_argv = prepare_mujoco_server_argv(sim_cfg)
     server_cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", *server_argv]
 
-    def wait_port(port: int, timeout: float) -> bool:
+    def wait_port(port: int, timeout: float, *, proc: subprocess.Popen | None = None) -> bool:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            if proc is not None and proc.poll() is not None:
+                return False
             try:
                 with socket.create_connection(("127.0.0.1", port), timeout=2):
                     return True
@@ -909,26 +912,40 @@ def run_episode_find_phase(
     robot = None
     agent = None
     server = None
+    server_log: Path | None = None
+    server_log_fh = None
     t0 = time.monotonic()
     init_wall_s = 0.0
     mapping_wall_s = 0.0
     query_wall_s = 0.0
     try:
+        # Capture server stderr so bind failures include the real crash reason
+        # (DEVNULL hid layout/asset errors on Robocasa multi-env sweeps).
+        log_dir = Path(tempfile.mkdtemp(prefix="emet_ovmm_sim_"))
+        server_log = log_dir / "mujoco_server.stderr"
+        server_log_fh = server_log.open("w", encoding="utf-8")
         server = popen_session(
             server_cmd,
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=server_log_fh,
         )
         bind_timeout = 180.0 if sim_kind in ("molmospaces", "robocasa") else 120.0
-        if not wait_port(recv_port, bind_timeout):
+        if not wait_port(recv_port, bind_timeout, proc=server):
+            try:
+                server_log_fh.flush()
+            except Exception:
+                pass
             err_tail = ""
-            if server.stderr and server.poll() is not None:
-                err_tail = server.stderr.read() if hasattr(server.stderr, "read") else ""
-            elif server.stdout and server.poll() is not None:
-                err_tail = server.stdout.read() if hasattr(server.stdout, "read") else ""
+            try:
+                err_tail = server_log.read_text(encoding="utf-8", errors="replace")[-2000:]
+            except Exception:
+                err_tail = ""
+            rc = server.poll()
             raise RuntimeError(
-                f"sim server did not bind port {recv_port}" + (f": {err_tail[-500:]}" if err_tail else "")
+                f"sim server did not bind port {recv_port} (port_offset={port_offset}, "
+                f"exit={rc}, sim={episode.sim})"
+                + (f":\n{err_tail}" if err_tail.strip() else "")
             )
         settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
         if run_cfg.cpu_only:
@@ -1167,7 +1184,14 @@ def run_episode_find_phase(
                 pass
         if server is not None:
             terminate_process_tree(server, grace_s=10.0)
+        if server_log_fh is not None:
+            try:
+                server_log_fh.close()
+            except Exception:
+                pass
         from emet.utils.port_utils import get_ports, kill_processes_on_port
 
         for p in get_ports(port_offset):
             kill_processes_on_port(p)
+        # Brief settle so the next episode's bind is not racing a dying listener.
+        time.sleep(0.5)

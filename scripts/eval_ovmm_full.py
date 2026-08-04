@@ -67,7 +67,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--graph-query", action="store_true")
     parser.add_argument("--not-rotate", action="store_true")
     parser.add_argument("--no-perfect-depth", action="store_true")
-    parser.add_argument("--port-offset", type=int, default=int(os.getpid() % 400 + 140))
+    parser.add_argument("--port-offset", type=int, default=int(os.getpid() % 400 + 140),
+                        help="Base ZMQ port offset; each episode uses base + index * --port-stride")
+    parser.add_argument(
+        "--port-stride",
+        type=int,
+        default=2,
+        help="Add index * stride to --port-offset per episode (avoids bind clashes)",
+    )
     parser.add_argument("--benchmark", type=str, default="configs/ovmm/benchmark.yaml")
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -125,15 +132,17 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict] = []
 
+    stride = max(1, int(args.port_stride))
     for backend in backends:
-        for ep in episodes:
+        for ep_i, ep in enumerate(episodes):
+            port_offset = int(args.port_offset) + ep_i * stride
             run_cfg = FindPhaseRunConfig(
                 backend=backend,
                 merge_xy_m=args.merge_xy_m,
                 staleness_horizon=args.staleness_horizon,
                 compare_to_gt=args.compare_to_gt,
                 cpu_only=args.cpu_only,
-                port_offset=args.port_offset,
+                port_offset=port_offset,
                 not_rotate=args.not_rotate,
                 perfect_depth=not args.no_perfect_depth,
                 use_sensor_perception=args.sensor_perception,
