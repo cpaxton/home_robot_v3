@@ -3140,13 +3140,16 @@ class AgenticEQAExecutor:
         if not raw.strip():
             return ""
         head = re.split(r"\n\s*\[(?:salvage|memory-location|agentic_submit)\]", raw, maxsplit=1)[0]
+        choices = parse_mcq_choices_from_question(self.question)
         m = re.search(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", head, flags=re.IGNORECASE)
         if not m:
-            return ""
+            # Terse ``A}`` / ``A) <choice text>`` reply: no labeled fields at all.
+            from emet.habitat.metrics import extract_mcq_letter as _extract_mcq_letter
+
+            return _extract_mcq_letter(head, choices or None)
         field = m.group(1).strip()
         if not field:
             return ""
-        choices = parse_mcq_choices_from_question(self.question)
         # The EQA explicitly declining ("answer: No, I did not see it") is a real
         # signal — let the ladder move on rather than forcing this text to a letter.
         if should_abstain_location_mcq(head, choices or None):

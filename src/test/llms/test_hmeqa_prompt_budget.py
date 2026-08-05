@@ -329,6 +329,23 @@ def test_parse_answer_json_and_labeled_fallback():
     assert act4.strip() == "1"
 
 
+def test_parse_answer_terse_letter_under_answer_cue():
+    """Remote Qwen2-VL collapses under trailing ``Answer:`` cue → bare letter + terminator."""
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
+
+    # Prefill arm: emits ``A}``; JSON repair fails (unquoted letter) → terse fallback.
+    r, a, c, act, cr = mem.parse_answer("A}", prefer_json=True, json_prefill='{"reasoning":')
+    assert a == "A"
+    assert c is False
+    assert act == ""
+
+    # No-prefill arm: emits ``A) Living room`` → terse fallback.
+    _, a2, _, _, _ = mem.parse_answer("A) Living room")
+    assert a2 == "A"
+
+
 def test_parse_answer_tolerates_a_missing_caption():
     from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 

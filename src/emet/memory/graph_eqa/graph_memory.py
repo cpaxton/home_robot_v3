@@ -3591,6 +3591,15 @@ class GraphEQAMemory:
             m = re.search(r"(?:^|\n)\s*([a-d])\s*(?:\n|$)", lowered)
             if m:
                 answer = m.group(1).upper()
+        # Terse letter-only replies (``A}``, ``A) <choice text>``, ``A.``) that skip
+        # both the JSON contract and the labeled scrape — common under a trailing
+        # ``Answer:`` cue with remote/weaker VLMs.
+        if not answer.strip():
+            from emet.habitat.metrics import extract_mcq_letter
+
+            terse = extract_mcq_letter(text)
+            if terse:
+                answer = terse
         answer = self._normalize_eqa_answer_field(answer) if answer.strip() else answer
         return reasoning, answer, confidence, action, confidence_reasoning
 
