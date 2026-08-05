@@ -2,6 +2,24 @@
 
 Minimal checked-in summaries only (no RGB / voxels / traces).
 
+## What "our method" is (read before quoting numbers)
+
+"Our method" = **Dynagraph + agentic EQA verify loop** (`EMET_EQA_AGENTIC_VERIFY=1`):
+VLM-first answerability (`vlm_assess` on fresh RGB unlocks `submit_answer`; SigLIP/OWLv2/YoloE
+are high-recall proposals, never the submit gate), on the Dynagraph memory substrate
+(merge 0.45 m, staleness 256; HM-EQA rows pin `merged_memory: false`).
+
+The two of-record slices used **different policy knobs** — both are "our method", but
+quote the knob with the number:
+
+| Slice | Knobs | Headline |
+|-------|-------|----------|
+| Holdout-8 (paper table) | **router off** (deterministic heuristic walk), matched H2H | agentic **8/8** vs classic 5/8 |
+| Balanced-32 (composite) | **paper-router preset** (router on, `agentic_verifier=none`, allow-unverified) + explore-after-ABSENT | agentic **16/32** vs classic 9/32 |
+
+Router-off agentic bal-32 = 11–12/32 (archived); paper-router holdout-8 = 5/8 (variance).
+Full write-up: `docs/experiments/agentic_scale.md`.
+
 | File | Slice | Status |
 |------|-------|--------|
 | `holdout4_summary.json` | n=4 gate | complete |

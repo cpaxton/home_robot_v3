@@ -92,7 +92,7 @@ Each iteration is a monolithic VLM call that jointly decides whether to answer o
 Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}), \texttt{run\_eqa} switches to a bounded tool-calling loop (\texttt{AgenticEQAExecutor}).
 A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and a compact state message summarizes remaining budget plus \emph{evidence cards} for candidate places so the agent does not re-pick failed locations.
 Cheap open-vocab detectors (SigLIP / OWLv2 / YoloE) act only as \textbf{high-recall proposals} in state; answerability and the final letter are \textbf{VLM-first} (\texttt{vlm\_assess} on a fresh RGB, then \texttt{submit\_answer}).
-An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list (used in our Habitat H2H of record for speed and stability).
+An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list. Both instantiations are \emph{our method} --- the knob changes the tool proposer, not the memory substrate or the VLM-first verify gate: the holdout-8 headline used the router off (deterministic walk) for speed and stability, while the balanced-32 of-record composite used the router on (Section~\ref{sec:agentic_results}).
 Full tool schemas and response format live in Appendix~\ref{app:agentic_tools}.
 
 \paragraph{Hypothesis recall (not a second policy).}
