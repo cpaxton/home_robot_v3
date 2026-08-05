@@ -521,6 +521,9 @@ def run_hmeqa_episode(
                 metrics.answer_confidence = float(summary.get("answer_confidence") or 0.0)
             except (TypeError, ValueError):
                 metrics.answer_confidence = 0.0
+        from emet.llms.eqa_vl_settings import resolve_vl_endpoint
+
+        vl_ep = resolve_vl_endpoint(parameters) or str(eqa_cfg.get("vl_endpoint") or "").strip()
         enrich_episode_metrics(
             metrics,
             agent=agent,
@@ -530,6 +533,7 @@ def run_hmeqa_episode(
             eqa_confidence_reasoning=str(eqa_confidence_reasoning or ""),
             vl_family=str(eqa_cfg.get("vl_family") or eqa_vl_family or ""),
             vl_hf_model_id=str(eqa_cfg.get("vl_hf_model_id") or eqa_hf_model_id or ""),
+            vl_endpoint=vl_ep or "",
         )
         if save_debug_bundle and debug_run_tag:
             try:

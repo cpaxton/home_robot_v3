@@ -71,6 +71,8 @@ class EpisodeMetrics:
     graph_health: dict = field(default_factory=dict)
     vl_family: str = ""
     vl_hf_model_id: str = ""
+    # Remote answer VL fingerprint (``EMET_VL_ENDPOINT`` / ``eqa.vl_endpoint``); empty = local HF.
+    vl_endpoint: str = ""
     debug_bundle_dir: str = ""
     topdown_map_path: str = ""
     diagnostics_manifest_path: str = ""
