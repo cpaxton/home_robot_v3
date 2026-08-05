@@ -198,6 +198,7 @@ def enrich_episode_metrics(
     eqa_confidence_reasoning: str = "",
     vl_family: str | None = None,
     vl_hf_model_id: str | None = None,
+    vl_endpoint: str | None = None,
     error: str = "",
     debug_bundle_dir: str = "",
 ) -> EpisodeMetrics:
@@ -209,6 +210,7 @@ def enrich_episode_metrics(
     metrics.eqa_confidence_reasoning = eqa_confidence_reasoning
     metrics.vl_family = vl_family or ""
     metrics.vl_hf_model_id = vl_hf_model_id or ""
+    metrics.vl_endpoint = vl_endpoint or ""
     metrics.error = error
     metrics.debug_bundle_dir = debug_bundle_dir
     if gm is not None:
@@ -232,6 +234,8 @@ def enrich_episode_metrics(
         fp["vl_family"] = str(vl_family)
     if vl_hf_model_id:
         fp["vl_hf_model_id"] = str(vl_hf_model_id)
+    if vl_endpoint:
+        fp["vl_endpoint"] = str(vl_endpoint)
     metrics.harness = fp
     return metrics
 

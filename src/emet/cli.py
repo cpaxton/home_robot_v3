@@ -2385,33 +2385,36 @@ def _hmeqa_launch(
     eqa_vl_family: str | None = None,
     eqa_answer_max_new_tokens: int | None = None,
     description: str | None = None,
+    host: str | None = None,
+    vl_endpoint: str | None = None,
+    vl_port: int | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
     import shlex
 
+    from emet.eval.hmeqa_launch import hmeqa_h2h_env_parts, hmeqa_h2h_vl_endpoint_from_env_parts
+
     root = _project_root()
     script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
-    env_parts = [
-        "EMET_ALLOW_SDPA_ATTN=1",
-        "EMET_EQA_TRACE=1",
-        f"ARMS={arms}",
-        f"HOLDOUT_IDS={ids}",
-        f"COVERAGE_QIDS={coverage_qids}",
-        f"EPISODE_COOLDOWN_SEC={int(cooldown)}",
-        f"NATIVE_CRASH_POLICY={crash_policy}",
-        f"NATIVE_CRASH_STREAK_ABORT={int(streak_abort)}",
-        f"EMET_EQA_AGENTIC_VERIFIER={agentic_verifier}",
-        f"EMET_EQA_AGENTIC_REQUIRE_VERIFIED={int(require_verified)}",
-        f"EMET_EQA_AGENTIC_ROUTER={int(agentic_router)}",
-    ]
-    if eqa_hf_model_id:
-        env_parts.append(f"EQA_HF_MODEL_ID={shlex.quote(eqa_hf_model_id)}")
-    if eqa_vl_family:
-        env_parts.append(f"EQA_VL_FAMILY={shlex.quote(eqa_vl_family)}")
-    if eqa_answer_max_new_tokens is not None:
-        env_parts.append(f"EMET_EQA_ANSWER_MAX_NEW_TOKENS={int(eqa_answer_max_new_tokens)}")
-    if resume:
-        env_parts.append("RESUME=1")
+    env_parts = hmeqa_h2h_env_parts(
+        arms=arms,
+        ids=ids,
+        coverage_qids=coverage_qids,
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        resume=resume,
+        eqa_hf_model_id=eqa_hf_model_id,
+        eqa_vl_family=eqa_vl_family,
+        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
+        host=host,
+        vl_endpoint=vl_endpoint,
+        vl_port=vl_port,
+    )
+    vl_ep = hmeqa_h2h_vl_endpoint_from_env_parts(env_parts)
     inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
     # Re-enter CLI so jobs run applies mutex/affinity wrapper.
     cmd = [
@@ -2433,6 +2436,10 @@ def _hmeqa_launch(
         cmd.append("--foreground")
     cmd.extend(["--", "bash", "-lc", inner])
     click.echo(f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms}", err=True)
+    if vl_ep:
+        click.echo(f"EQA VL endpoint (injected into job env): {vl_ep}", err=True)
+    elif host or vl_endpoint:
+        click.echo("warning: host/vl-endpoint set but EMET_VL_ENDPOINT missing from env parts", err=True)
     rc = subprocess.call(cmd, cwd=str(root))
     sys.exit(rc)
 
@@ -2505,6 +2512,29 @@ def _hmeqa_launch(
     help="Override eqa_vl.answer_max_new_tokens for this run (answer decode cap). "
     "Raise it when swapping in a more verbose VLM.",
 )
+@click.option(
+    "--host",
+    default=None,
+    help=(
+        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
+        "and EMET_VL_ENDPOINT (unified-7b on :8000) into the jobs-wrapped env. "
+        "Parent-shell exports alone are not enough — they are not in the Habitat child env."
+    ),
+)
+@click.option(
+    "--vl-endpoint",
+    default=None,
+    help=(
+        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://caliban:8000/v1). "
+        "Wins over --host's default VL URL. Dual-2b: use :8001 or --host + --vl-port 8001."
+    ),
+)
+@click.option(
+    "--vl-port",
+    type=int,
+    default=None,
+    help="With --host: VL OpenAI port (default 8000 unified-7b; dual-2b uses 8001).",
+)
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option(
     "--description",
@@ -2532,6 +2562,9 @@ def hmeqa_h2h(
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
     eqa_answer_max_new_tokens: int | None,
+    host: str | None,
+    vl_endpoint: str | None,
+    vl_port: int | None,
     job_name: str,
     description: str | None,
     need_mib: int,
@@ -2572,6 +2605,9 @@ def hmeqa_h2h(
         eqa_vl_family=eqa_vl_family,
         eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
         description=description,
+        host=host,
+        vl_endpoint=vl_endpoint,
+        vl_port=vl_port,
     )
 
 
@@ -2607,6 +2643,25 @@ def hmeqa_h2h(
     default=None,
     help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
 )
+@click.option(
+    "--host",
+    default=None,
+    help=(
+        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
+        "EMET_VL_ENDPOINT into the jobs-wrapped env."
+    ),
+)
+@click.option(
+    "--vl-endpoint",
+    default=None,
+    help="Override EMET_VL_ENDPOINT (wins over --host default).",
+)
+@click.option(
+    "--vl-port",
+    type=int,
+    default=None,
+    help="With --host: VL OpenAI port (default 8000; dual-2b: 8001).",
+)
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
 @click.option(
     "--description",
@@ -2632,6 +2687,9 @@ def hmeqa_resume(
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
+    host: str | None,
+    vl_endpoint: str | None,
+    vl_port: int | None,
     job_name: str,
     description: str | None,
     need_mib: int,
@@ -2684,6 +2742,9 @@ def hmeqa_resume(
         eqa_hf_model_id=eqa_hf_model_id,
         eqa_vl_family=eqa_vl_family,
         description=description,
+        host=host,
+        vl_endpoint=vl_endpoint,
+        vl_port=vl_port,
     )
 
 

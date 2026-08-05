@@ -123,6 +123,9 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "eqa-hf-model-id" in result.stdout
     assert "eqa-vl-family" in result.stdout
     assert "--description" in result.stdout
+    assert "--host" in result.stdout
+    assert "--vl-endpoint" in result.stdout
+    assert "--vl-port" in result.stdout
     # Paper-router / Click default is Qwen-first (none), OWL opt-in only.
     assert "none" in result.stdout
     assert "owlv2" in result.stdout

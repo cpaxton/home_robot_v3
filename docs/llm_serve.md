@@ -38,6 +38,7 @@ uv run emet serve llm --vl --host 0.0.0.0 --port 8001   # caption beside text
 | One-shot / interactive chat | `emet run chat --host ORIN_HOST` (text) · add `--vl` for multimodal |
 | Agent text router | `--llm openai@http://ORIN_HOST:8000/v1` or `EMET_OPENAI_BASE_URL=http://ORIN_HOST:8000/v1` |
 | Caption / EQA VLM | `mapping.eqa.vl_endpoint: openai@http://ORIN_HOST:8000/v1` (unified-7b) or `:8001` (dual-2b); override with `EMET_VL_ENDPOINT` |
+| HM-EQA H2H answer VL | `emet hmeqa h2h --host ORIN_HOST` (or `--vl-endpoint openai@http://ORIN_HOST:8000/v1`) — injects into the jobs-wrapped env; bare shell export is ignored |
 | Herman Discord preset | [`configs/agent_innate_mars.yaml`](../configs/agent_innate_mars.yaml) — `agent.llm: openai`; pass `--host ORIN` (or `EMET_LLM_HOST`) |
 
 ```bash
@@ -217,6 +218,13 @@ uv run emet run chat --host caliban --vl --once "Describe briefly"
 
 export DISCORD_TOKEN=...
 uv run emet run agent --connection herman --host caliban
+
+# HM-EQA answer VL on Caliban (Habitat still local). Must use --host / --vl-endpoint
+# on emet hmeqa h2h — shell export EMET_VL_ENDPOINT alone is not in the jobs env.
+uv run emet llm health --host caliban && uv run emet llm smoke --host caliban --vl-only
+uv run emet hmeqa h2h --arms classic --ids 15,56,65,68 --host caliban \
+  --job-name hmeqa-json-caliban --need-mib 12000 \
+  -d "JSON answers; VL on caliban; Habitat local"
 ```
 
 ### SSH (lab keys)
