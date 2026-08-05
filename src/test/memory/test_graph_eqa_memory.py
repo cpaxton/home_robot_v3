@@ -74,6 +74,19 @@ def test_parse_answer():
         image_description_client=lambda x: "",
     )
     raw = "reasoning: I see a table.\nanswer: Yes\nconfidence: True\naction: \nconfidence_reasoning: I am sure."
+    r, a, c, act, cr = mem.parse_answer(raw, prefer_json=False)
+    assert "table" in r
+    assert a.strip().lower() == "yes"
+    assert c is True
+    assert "sure" in cr.lower()
+
+
+def test_parse_answer_json_contract():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    raw = (
+        '{"reasoning": "I see a table.", "answer": "Yes", "confidence": true, '
+        '"action": "", "confidence_reasoning": "I am sure."}'
+    )
     r, a, c, act, cr = mem.parse_answer(raw)
     assert "table" in r
     assert a.strip().lower() == "yes"
@@ -94,7 +107,7 @@ def test_parse_answer_not_confident():
         "action: 3\n"
         "confidence_reasoning: Not seen yet."
     )
-    r, a, c, act, cr = mem.parse_answer(raw)
+    r, a, c, act, cr = mem.parse_answer(raw, prefer_json=False)
     assert c is False
     assert act.strip() == "3"
 

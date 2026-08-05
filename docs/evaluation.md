@@ -314,6 +314,24 @@ OVMM find-phase episodes are **pick/place localization** tasks: move `{object}` 
 
 If HM-EQA, OVMM, **and** SQA3D (when present) metrics are all zero, `build_eval_figure_pack.py` sets `"status": "INVESTIGATE"` in `summary.json`.
 
+## HM-EQA answer prompt (JSON + budget)
+
+Classic Dynagraph / GraphEQA `query_answer` (and agentic final submit) share one answer VLM path:
+
+- **Format:** when `eqa.prompt_variant` is `hmeqa` or `mcq`, the answer contract is JSON
+  `{"reasoning","answer","confidence","action","confidence_reasoning"}` with assistant prefill
+  `{"reasoning":` (anti-`Caption:`). Labeled `Reasoning:/Answer:/…` scrape remains as fallback.
+  Override with `eqa.answer_format` / `EMET_EQA_ANSWER_FORMAT` (`json`\|`labeled`).
+- **HISTORY:** stores one-line outcomes (`Iter: answer=… conf=… action=… salvage=… | …`) plus
+  optional `Nav_result`, not full model replays (reduces caption/action loops).
+- **Input budget:** `eqa_vl.eqa_prompt_max_tokens` (default 2500; `EMET_EQA_PROMPT_MAX_TOKENS`)
+  truncates HISTORY → CONFIRMED_MEMORY / merged tail → SCENE_GRAPH edges → node labels.
+- **Paper row:** HM-EQA `dynagraph` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml)
+  still pins `merged_memory: false` (standalone CONFIRMED_MEMORY block) while the code default is folded-on.
+
+Env table: [environment_variables.md](environment_variables.md) (`EMET_EQA_ANSWER_FORMAT`,
+`EMET_EQA_PROMPT_MAX_TOKENS`, `EMET_EQA_MERGED_MEMORY`). Config: [emet_config.md](emet_config.md#eqa-answer-prompt-eqa--eqa_vl).
+
 ## Per-track quick commands
 
 ### HM-EQA (interactive QA)
