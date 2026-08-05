@@ -68,9 +68,23 @@ mapping:
     habitat_perfect_nav: true
     habitat_explore_frontiers: true
     image_nav_min_approach_m: 0.35
+    # Answer VLM contract (also top-level eqa: in dynav_config.yaml):
+    # answer_format: json   # default when prompt_variant is hmeqa/mcq; else labeled
+    # merged_memory: true   # default on; paper HM-EQA dynagraph row pins false
 ```
 
-The Habitat wrapper loads [`src/emet/config/dynav_config.yaml`](../src/emet/config/dynav_config.yaml) today; equivalent flat `eqa:` keys there override runner defaults. See [habitat/usage.md](habitat/usage.md#navigation-habitat-only). Robocasa / ZMQ GraphEQA ignores these unless you set them explicitly.
+### EQA answer prompt (`eqa` + `eqa_vl`)
+
+| Key | Default | Notes |
+|-----|---------|--------|
+| `eqa.prompt_variant` | (unset) / harness `hmeqa` | `hmeqa` / `mcq` → JSON answers + prefill `{"reasoning":` |
+| `eqa.answer_format` | `json` if hmeqa/mcq else `labeled` | Override with `EMET_EQA_ANSWER_FORMAT`. JSON object keys: `reasoning`, `answer`, `confidence`, `action`, `confidence_reasoning`; labeled `Reasoning:/Answer:/…` scrape remains as fallback. |
+| `eqa.merged_memory` | **on** | Fold CONFIRMED_MEMORY into `SCENE_GRAPH` lines. HM-EQA paper row pins `false` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). Env: `EMET_EQA_MERGED_MEMORY`. |
+| `eqa_vl.eqa_prompt_max_tokens` | `2500` | Approximate text-token budget (char/4) for HISTORY + memory + SCENE_GRAPH. Truncation: oldest HISTORY → memory tail → edges → lowest-ranked node labels. `0` disables. Env: `EMET_EQA_PROMPT_MAX_TOKENS`. |
+| `eqa_vl.eqa_max_history` | `4` | Cap on prior iterations; each entry is a one-line **outcome** (`Iter: answer=… conf=… action=… salvage=… \| …`), not a raw VLM replay. |
+| `eqa_vl.include_image_descriptions` | `false` | Legacy label dump; when on, labels already on SCENE_GRAPH Image tags are omitted. |
+
+The Habitat wrapper loads [`src/emet/config/dynav_config.yaml`](../src/emet/config/dynav_config.yaml) today; equivalent flat `eqa:` keys there override runner defaults. See [habitat/usage.md](habitat/usage.md#navigation-habitat-only) and [evaluation.md](evaluation.md#hm-eqa-answer-prompt-json--budget). Robocasa / ZMQ GraphEQA ignores Habitat-only keys unless you set them explicitly.
 
 User presets use `extends:`:
 

@@ -208,6 +208,84 @@ def resolve_eqa_include_image_descriptions(parameters: Parameters | dict | None)
     return str(v).strip().lower() in ("1", "true", "yes", "on")
 
 
+_DEFAULT_PROMPT_MAX_TOKENS = 2500
+_JSON_ANSWER_VARIANTS = frozenset({"hmeqa", "mcq"})
+
+
+def resolve_eqa_prompt_variant(parameters: Parameters | dict | None) -> str:
+    """Return ``eqa.prompt_variant`` / ``eqa/prompt_variant`` lowercased, or empty."""
+    if parameters is None:
+        return ""
+    if hasattr(parameters, "get"):
+        slash = parameters.get("eqa/prompt_variant", None)
+        if slash is not None and str(slash).strip():
+            return str(slash).strip().lower()
+        eqa_cfg = parameters.get("eqa", {}) or {}
+        if isinstance(eqa_cfg, dict):
+            return str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
+    if isinstance(parameters, dict):
+        slash = parameters.get("eqa/prompt_variant")
+        if slash is not None and str(slash).strip():
+            return str(slash).strip().lower()
+        eqa = parameters.get("eqa") or {}
+        if isinstance(eqa, dict):
+            return str(eqa.get("prompt_variant", "") or "").strip().lower()
+    return ""
+
+
+def resolve_eqa_answer_format(parameters: Parameters | dict | None) -> str:
+    """Return ``json`` or ``labeled`` for the EQA answer VLM contract.
+
+    Precedence: ``EMET_EQA_ANSWER_FORMAT`` → ``eqa.answer_format`` → default ``json`` when
+    ``prompt_variant`` is ``hmeqa``/``mcq``, else ``labeled`` (classic DualMem / SQA3D).
+    """
+    env = os.environ.get("EMET_EQA_ANSWER_FORMAT", "").strip().lower()
+    if env in ("json", "labeled"):
+        return env
+    eqa = _eqa_cfg(parameters)
+    raw = eqa.get("answer_format")
+    if raw is not None and str(raw).strip():
+        s = str(raw).strip().lower()
+        if s in ("json", "labeled"):
+            return s
+    variant = resolve_eqa_prompt_variant(parameters)
+    if variant in _JSON_ANSWER_VARIANTS:
+        return "json"
+    return "labeled"
+
+
+def resolve_eqa_answer_prefill(parameters: Parameters | dict | None) -> str | None:
+    """Assistant decode seed for HM-EQA / MCQ so the model cannot open with ``Caption:``."""
+    variant = resolve_eqa_prompt_variant(parameters)
+    if variant not in _JSON_ANSWER_VARIANTS:
+        return None
+    if resolve_eqa_answer_format(parameters) == "json":
+        return '{"reasoning":'
+    return "Reasoning:"
+
+
+def resolve_eqa_prompt_max_tokens(parameters: Parameters | dict | None) -> int:
+    """Unified text-token budget for the EQA user prompt (HISTORY + memory + SCENE_GRAPH).
+
+    Env ``EMET_EQA_PROMPT_MAX_TOKENS`` overrides ``eqa_vl/eqa_prompt_max_tokens`` (default 2500).
+    ``0`` disables input-side truncation.
+    """
+    env = os.environ.get("EMET_EQA_PROMPT_MAX_TOKENS", "").strip()
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            logger.warning(f"Invalid EMET_EQA_PROMPT_MAX_TOKENS={env!r}; falling back to config")
+    return get_eqa_vl_int(parameters, "eqa_prompt_max_tokens", _DEFAULT_PROMPT_MAX_TOKENS)
+
+
+def estimate_eqa_prompt_tokens(text: str) -> int:
+    """Cheap char/4 estimator — no tokenizer dependency in unit tests."""
+    if not text:
+        return 0
+    return max(1, len(text) // 4)
+
+
 def get_eqa_vl_str(parameters: Parameters | dict | None, key: str, default: str) -> str:
     """Read ``eqa_vl/<key>`` from parameters (dynav_config) with fallback."""
     v = _pget(parameters, f"eqa_vl/{key}", default)

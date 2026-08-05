@@ -14,19 +14,20 @@ Instructing the model not to caption does not work. The 2026-07-30 q2 probe appe
 an override after the examples and still got a full caption block using 48% of the
 output, because the shared :data:`EQA_PROMPT` asks for a caption once and demonstrates
 one five times. So the caption is removed at the source with
-:func:`without_caption`, and the override below only tightens what remains.
+:func:`without_caption`, and HM-EQA answers use a JSON contract (same shape as the
+chat/router tool JSON) so field scrape cannot lose the letter to mid-stream truncation.
 """
 
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT, without_caption
 
 _HMEQA_HEADER = """
         HM-EQA questions are multiple-choice. The question text includes options A, B, C, and D.
-        Your final Answer must be exactly one letter: A, B, C, or D (not yes/no prose).
-        Always output these fields in order with lowercase labels on their own lines:
-        reasoning:, answer:, confidence:, action:, confidence_reasoning:
-        Do NOT output a caption: field.
-        The answer: line must contain only a single letter (A, B, C, or D). Never leave answer: blank.
-        If uncertain, still output your best-guess letter on answer: and set confidence: FALSE.
+        Your final answer must be exactly one letter: A, B, C, or D (not yes/no prose).
+        Reply with ONLY a single JSON object (no markdown fences, no caption field) with keys:
+        reasoning (string), answer (one letter A–D), confidence (boolean), action (image id string or ""),
+        confidence_reasoning (string).
+        Never leave "answer" blank. If uncertain, still output your best-guess letter and set
+        "confidence" to false.
 """
 
 _HMEQA_MCQ_EXAMPLE = """
@@ -40,15 +41,7 @@ _HMEQA_MCQ_EXAMPLE = """
                 SCENE_GRAPH: Node 3: floor lamp at (1.2, -0.4) [Image 1]
                 IMAGE: <2 RGB frames>
             Output:
-                Reasoning:
-                    Image 1 shows the floor lamp with a glowing shade, so the lamp is on.
-                Answer:
-                    A
-                Confidence:
-                    TRUE
-                Action:
-                Confidence_reasoning:
-                    The lit lamp is clearly visible in Image 1.
+                {"reasoning": "Image 1 shows the floor lamp with a glowing shade, so the lamp is on.", "answer": "A", "confidence": true, "action": "", "confidence_reasoning": "The lit lamp is clearly visible in Image 1."}
 
         Example (visibility + location — pick WHERE, not yes/no):
             Input:
@@ -61,28 +54,20 @@ _HMEQA_MCQ_EXAMPLE = """
                 SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
                 IMAGE: <2 RGB frames>
             Output:
-                Reasoning:
-                    CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.
-                Answer:
-                    D
-                Confidence:
-                    TRUE
-                Action:
-                Confidence_reasoning:
-                    Graph memory confirms the basket; option D matches that area.
+                {"reasoning": "CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.", "answer": "D", "confidence": true, "action": "", "confidence_reasoning": "Graph memory confirms the basket; option D matches that area."}
 """
 
 _HMEQA_FORMAT_OVERRIDE = """
         OUTPUT FORMAT — this governs every example above:
 
-        1. Do NOT write a caption: block. Your first line is reasoning:.
-        2. reasoning: at most three sentences. Do not re-list objects from the attached RGB
+        1. Do NOT write a caption field or Caption: block. Your first token continues a JSON object.
+        2. "reasoning" is at most three sentences. Do not re-list objects from the attached RGB
            frames, and do not copy scene-graph coordinates unless they decide the answer.
            Cite an Image N or SCENE_GRAPH node only when it decides the letter.
-        3. answer: exactly one letter, A, B, C, or D, on its own line. Emit this before you
-           elaborate on anything else. Never leave it blank.
-        4. confidence: TRUE or FALSE. action: image id or empty. confidence_reasoning: one
-           short sentence.
+        3. "answer" is exactly one letter, A, B, C, or D. Emit it before elaborating further.
+           Never leave it blank.
+        4. "confidence" is true or false. "action" is an image id or "". "confidence_reasoning"
+           is one short sentence.
 
         You have a limited output budget. Spending it describing images instead of answering
         counts as a wrong answer.

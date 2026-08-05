@@ -365,9 +365,13 @@ prompt*, not the model's considered answer, so any per-episode analysis that tre
    caption once and demonstrates one five times, so `hmeqa_eqa_prompt.py` now builds
    `without_caption(EQA_PROMPT)` — instruction rewritten, every `Caption:` demonstration
    removed — before the HM-EQA examples and format override.
-2. **Force-start decode with `assistant_prefill="Reasoning:"`.** Even after the source strip,
-   Qwen3-VL-8B still opened with Caption: (26% of output) as model habit with empty history.
-   HM-EQA answer calls now seed the assistant turn so Caption: is not a legal first token.
+2. **Force-start decode with a JSON seed (`assistant_prefill='{"reasoning":'`).** Even after the
+   source strip, Qwen3-VL-8B still opened with Caption: (26% of output) as model habit with empty
+   history. HM-EQA / MCQ answer calls now use a JSON contract
+   (`reasoning` / `answer` / `confidence` / `action` / `confidence_reasoning`) and seed the
+   assistant turn so Caption: is not a legal first token. `parse_answer` prefers JSON (with
+   labeled `Reasoning:/Answer:/…` scrape as fallback). Override with `eqa.answer_format` /
+   `EMET_EQA_ANSWER_FORMAT=labeled` if needed.
 3. **Make the answer decode cap a config value and raise it 256 → 384.** It now resolves via
    `eqa_vl.answer_max_new_tokens` (`resolve_eqa_answer_max_new_tokens`), with
    `EMET_EQA_ANSWER_MAX_NEW_TOKENS` as an operator override. The right budget is a property of
@@ -405,10 +409,11 @@ Do not conflate these when reading traces or designing A/Bs:
 | **RGB frames** | user message (PIL, up to `eqa_max_images`) | Yes — real pixels |
 | **SCENE_GRAPH** | user message text | Yes — structured object/frontier memory |
 | **IMAGE_DESCRIPTIONS** | user message text | **No (default off)** — labels+coords for the *same* attached obs; duplicated the graph and invited re-captioning |
-| **Model `Caption:` output** | `raw_eqa_output` | Never wanted — decode waste; stripped from HISTORY so it cannot reinforce itself |
+| **Model `Caption:` output** | `raw_eqa_output` | Never wanted — decode waste; HISTORY stores outcome one-liners (not raw replay) so captions cannot reinforce themselves |
 
 `eqa_vl.include_image_descriptions` defaults to `false`; restore with
-`EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1` for legacy A/B only.
+`EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS=1` for legacy A/B only. When on, labels already tagged on
+SCENE_GRAPH Image-N lines are omitted from the dump.
 
 ### Experiment hygiene
 
@@ -425,4 +430,5 @@ shared cache path after multi-probe days. Answer calls log
 - [agentic_scale.md](agentic_scale.md) — SigLIP role and scale ladder
 - [habitat_eqa_results.md](habitat_eqa_results.md) — scored HM-EQA result tables
 - [../known_issues.md](../known_issues.md) — Mode A / Mode B segfault taxonomy
-- [../environment_variables.md](../environment_variables.md) — `EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS`
+- [../environment_variables.md](../environment_variables.md) — `EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS`, `EMET_EQA_ANSWER_FORMAT`, `EMET_EQA_PROMPT_MAX_TOKENS`
+- [../evaluation.md](../evaluation.md#hm-eqa-answer-prompt-json--budget) — JSON answer contract + prompt budget

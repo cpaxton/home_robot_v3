@@ -3444,18 +3444,31 @@ class GraphEQAMemory:
             return True
         return False
 
-    def _get_image_descriptions_str(self, obs_ids: list[int]) -> str:
-        """Build IMAGE_DESCRIPTIONS for attached EQA images only (Image 1..N)."""
+    def _get_image_descriptions_str(
+        self,
+        obs_ids: list[int],
+        *,
+        omit_labels_for_obs: set[int] | None = None,
+    ) -> str:
+        """Build IMAGE_DESCRIPTIONS for attached EQA images only (Image 1..N).
+
+        When ``omit_labels_for_obs`` contains an obs id (already tagged on SCENE_GRAPH
+        Image-N lines), emit coords/nav suffix only so labels are not restated.
+        """
         if not obs_ids:
             return "IMAGE_DESCRIPTIONS: (none)"
+        skip_labels = {int(x) for x in (omit_labels_for_obs or set())}
         id_to_obs = {int(o.obs_id): o for o in self._observations}
         options: list[str] = []
         for img_idx, oid in enumerate(obs_ids, start=1):
             obs = id_to_obs.get(int(oid))
             if obs is None:
                 continue
-            lbl = ", ".join(obs.labels) if obs.labels else "object"
-            line = f"Image {img_idx}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
+            if int(obs.obs_id) in skip_labels and self._obs_is_object_place(int(obs.obs_id)):
+                line = f"Image {img_idx}. at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
+            else:
+                lbl = ", ".join(obs.labels) if obs.labels else "object"
+                line = f"Image {img_idx}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
             node = next((n for n in self._nodes if int(n.obs_id) == int(obs.obs_id)), None)
             if node is not None:
                 line += self._node_nav_status_suffix(node)
@@ -3466,10 +3479,86 @@ class GraphEQAMemory:
             options.append(line)
         return "IMAGE_DESCRIPTIONS: " + "\n".join(options) if options else "IMAGE_DESCRIPTIONS: (none)"
 
-    def parse_answer(self, answer_outputs: str) -> tuple[str, str, bool, str, str]:
-        """Parse mLLM output into reasoning, answer, confidence, action, confidence_reasoning."""
+    @staticmethod
+    def _coerce_eqa_confidence(raw: Any) -> bool:
+        if isinstance(raw, bool):
+            return raw
+        if raw is None:
+            return False
+        s = str(raw).strip().lower().replace(" ", "")
+        if s in ("true", "1", "yes", "on"):
+            return True
+        if s in ("false", "0", "no", "off", ""):
+            return False
+        return "true" in s
+
+    @staticmethod
+    def _normalize_eqa_answer_field(raw: Any) -> str:
+        if raw is None:
+            return ""
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            s = str(int(raw)) if float(raw) == int(raw) else str(raw)
+        else:
+            s = str(raw).strip()
+        # JSON / labeled MCQ often wraps the letter in quotes or trailing punctuation.
+        m = re.search(r"\b([A-Da-d])\b", s)
+        if m and len(s) <= 4:
+            return m.group(1).upper()
+        return s.replace("\n", " ").replace("\t", " ").strip()
+
+    @classmethod
+    def _parse_answer_from_json_dict(cls, data: dict[str, Any]) -> tuple[str, str, bool, str, str] | None:
+        """Map a JSON answer object onto the labeled-field tuple, or None if unusable."""
+        if not isinstance(data, dict):
+            return None
+        # Accept common key aliases from chatty VLMs.
+        key_map = {str(k).strip().lower(): k for k in data}
+        def _get(*names: str) -> Any:
+            for n in names:
+                k = key_map.get(n)
+                if k is not None:
+                    return data[k]
+            return None
+
+        if _get("answer", "ans") is None and _get("reasoning", "reason") is None:
+            return None
+        reasoning = str(_get("reasoning", "reason") or "").strip().replace("\n", " ").replace("\t", " ")
+        answer = cls._normalize_eqa_answer_field(_get("answer", "ans"))
+        confidence = cls._coerce_eqa_confidence(_get("confidence", "confident"))
+        action_raw = _get("action", "next_action")
+        if action_raw is None:
+            action = ""
+        else:
+            action = str(action_raw).strip().replace("\n", " ").replace("\t", " ")
+        confidence_reasoning = str(
+            _get("confidence_reasoning", "confidence_reason", "conf_reasoning") or ""
+        ).strip().replace("\n", " ").replace("\t", " ")
+        return reasoning, answer, confidence, action, confidence_reasoning
+
+    def parse_answer(
+        self,
+        answer_outputs: str,
+        *,
+        prefer_json: bool = True,
+        json_prefill: str | None = None,
+    ) -> tuple[str, str, bool, str, str]:
+        """Parse mLLM output into reasoning, answer, confidence, action, confidence_reasoning.
+
+        Tries a JSON object first (HM-EQA / chat-style contract), then the legacy labeled
+        ``Reasoning:/Answer:/…`` scrape so old HISTORY / DualMem traces still work.
+        """
         text = answer_outputs or ""
-        lowered = text.lower()
+        if prefer_json:
+            from emet.utils.json_parse import first_json_dict_lenient
+
+            data = first_json_dict_lenient(text, prefill=json_prefill)
+            if data is not None:
+                parsed = self._parse_answer_from_json_dict(data)
+                if parsed is not None:
+                    return parsed
+
+        # Labeled scrape is case-insensitive; strip light markdown noise.
+        lowered = text.replace("*", "").replace("#", "").lower()
 
         def extract_between(src: str, start: str, end: str) -> str:
             pattern = re.compile(
@@ -3502,7 +3591,171 @@ class GraphEQAMemory:
             m = re.search(r"(?:^|\n)\s*([a-d])\s*(?:\n|$)", lowered)
             if m:
                 answer = m.group(1).upper()
+        answer = self._normalize_eqa_answer_field(answer) if answer.strip() else answer
         return reasoning, answer, confidence, action, confidence_reasoning
+
+    @staticmethod
+    def format_eqa_history_outcome(
+        *,
+        answer: str,
+        confidence: bool,
+        action: str,
+        reasoning: str,
+        salvage: bool = False,
+    ) -> str:
+        """One-line HISTORY entry — letter/outcome only, not a raw model replay."""
+        ans = (answer or "").strip().replace("\n", " ")[:40] or "?"
+        act = (action or "").strip().replace("\n", " ")
+        act_bit = ""
+        if act:
+            m = re.search(r"\d+", act)
+            act_bit = m.group(0) if m else act[:16]
+        reason = (reasoning or "").replace("\n", " ").strip()[:80]
+        return (
+            f"Iter: answer={ans} conf={str(bool(confidence)).lower()} "
+            f"action={act_bit or '-'} salvage={1 if salvage else 0} | {reason}"
+        )
+
+    @staticmethod
+    def estimate_eqa_prompt_tokens(text: str) -> int:
+        from emet.llms.eqa_vl_settings import estimate_eqa_prompt_tokens
+
+        return estimate_eqa_prompt_tokens(text)
+
+    @classmethod
+    def _truncate_scene_graph_text(cls, graph_str: str, *, drop_edges: bool, max_node_lines: int | None) -> str:
+        """Trim SCENE_GRAPH edges and/or lowest-ranked (trailing) node lines for budget."""
+        if not graph_str.startswith("SCENE_GRAPH"):
+            return graph_str
+        prefix, _, body = graph_str.partition("\n")
+        if not body.strip():
+            return graph_str
+        lines = body.split("\n")
+        node_lines: list[str] = []
+        edge_lines: list[str] = []
+        tail_lines: list[str] = []
+        in_tail = False
+        for line in lines:
+            if in_tail or line.startswith("CONFIRMED_MEMORY") or line.startswith("Rooms:"):
+                in_tail = True
+                tail_lines.append(line)
+                continue
+            if line.startswith("  ") and "(" in line:
+                edge_lines.append(line)
+            else:
+                node_lines.append(line)
+        if max_node_lines is not None and max_node_lines >= 0:
+            # Keep highest-ranked nodes (to_string emits best-first).
+            node_lines = node_lines[:max_node_lines]
+        if drop_edges:
+            edge_lines = []
+        kept = node_lines + edge_lines + tail_lines
+        return prefix + ("\n" + "\n".join(kept) if kept else "")
+
+    @classmethod
+    def _trim_confirmed_memory_block(cls, block: str, *, max_lines: int) -> str:
+        if max_lines < 0 or not block:
+            return block
+        lines = block.split("\n")
+        if len(lines) <= 1:
+            return block
+        head, rest = lines[0], lines[1:]
+        return "\n".join([head] + rest[:max_lines])
+
+    @classmethod
+    def build_eqa_prompt_text(
+        cls,
+        *,
+        question_line: str,
+        extra_hints: list[str] | None = None,
+        memory_summary: str | None = None,
+        history_entries: list[str] | None = None,
+        history_start_index: int = 0,
+        graph_str: str,
+        img_desc_str: str,
+        max_tokens: int = 2500,
+    ) -> list[str]:
+        """Assemble EQA text blocks under an approximate token budget.
+
+        Truncation order: oldest HISTORY → CONFIRMED_MEMORY / merged tail lines →
+        SCENE_GRAPH edges → lowest-ranked SCENE_GRAPH node labels.
+        """
+        hints = list(extra_hints or [])
+        history = list(history_entries or [])
+        mem = memory_summary or ""
+        graph = graph_str
+        img = img_desc_str
+        max_tok = int(max_tokens)
+
+        def _parts(hist: list[str], mem_block: str, graph_block: str) -> list[str]:
+            out: list[str] = [question_line]
+            out.extend(hints)
+            if mem_block:
+                out.append(mem_block)
+            out.append("HISTORY: ")
+            for i, h in enumerate(hist):
+                out.append("Iteration_" + str(history_start_index + i) + ":" + h)
+            out.append(graph_block)
+            out.append(img)
+            return out
+
+        def _tok(parts: list[str]) -> int:
+            return cls.estimate_eqa_prompt_tokens("\n".join(parts))
+
+        parts = _parts(history, mem, graph)
+        if max_tok <= 0 or _tok(parts) <= max_tok:
+            return parts
+
+        # 1) Drop oldest HISTORY entries.
+        while history and _tok(_parts(history, mem, graph)) > max_tok:
+            history = history[1:]
+            history_start_index += 1
+        parts = _parts(history, mem, graph)
+        if _tok(parts) <= max_tok:
+            return parts
+
+        # 2) Trim CONFIRMED_MEMORY / merged tail lines.
+        if mem:
+            for n in (8, 4, 2, 1, 0):
+                mem = cls._trim_confirmed_memory_block(mem, max_lines=n) if n else ""
+                if _tok(_parts(history, mem, graph)) <= max_tok:
+                    return _parts(history, mem, graph)
+        # Also trim merged-memory tail inside SCENE_GRAPH.
+        if "CONFIRMED_MEMORY" in graph:
+            g_lines = graph.split("\n")
+            try:
+                idx = next(i for i, ln in enumerate(g_lines) if ln.startswith("CONFIRMED_MEMORY"))
+            except StopIteration:
+                idx = -1
+            if idx >= 0:
+                for n_tail in (4, 2, 0):
+                    head = g_lines[: idx + (0 if n_tail == 0 else 1)]
+                    tail = [] if n_tail == 0 else g_lines[idx + 1 : idx + 1 + n_tail]
+                    # Keep Rooms: line if present after the tail.
+                    rooms = [ln for ln in g_lines[idx + 1 :] if ln.startswith("Rooms:")]
+                    graph_try = "\n".join(head + tail + rooms)
+                    if _tok(_parts(history, mem, graph_try)) <= max_tok:
+                        graph = graph_try
+                        return _parts(history, mem, graph)
+
+        # 3) Drop SCENE_GRAPH edges.
+        graph = cls._truncate_scene_graph_text(graph, drop_edges=True, max_node_lines=None)
+        parts = _parts(history, mem, graph)
+        if _tok(parts) <= max_tok:
+            return parts
+
+        # 4) Drop lowest-ranked node labels (trailing lines after rank order).
+        body_lines = graph.split("\n")[1:] if "\n" in graph else []
+        n_nodes = sum(
+            1
+            for ln in body_lines
+            if ln and not ln.startswith("  ") and not ln.startswith("CONFIRMED_MEMORY") and not ln.startswith("Rooms:")
+        )
+        for keep in list(range(max(0, n_nodes - 1), -1, -1)):
+            graph_try = cls._truncate_scene_graph_text(graph, drop_edges=True, max_node_lines=keep)
+            if _tok(_parts(history, mem, graph_try)) <= max_tok:
+                return _parts(history, mem, graph_try)
+        return _parts(history, mem, cls._truncate_scene_graph_text(graph, drop_edges=True, max_node_lines=0))
 
     def _any_confirmed_phrase_present(self) -> bool:
         for phrase in self._confirmed_memory_phrases():
@@ -4179,8 +4432,12 @@ class GraphEQAMemory:
         )
         from emet.llms.eqa_vl_settings import (
             get_eqa_vl_int,
+            resolve_eqa_answer_format,
             resolve_eqa_answer_max_new_tokens,
+            resolve_eqa_answer_prefill,
             resolve_eqa_include_image_descriptions,
+            resolve_eqa_prompt_max_tokens,
+            resolve_eqa_prompt_variant,
         )
 
         _t0 = _time.monotonic()
@@ -4241,9 +4498,15 @@ class GraphEQAMemory:
         # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
+        graph_obs_ids = {
+            int(n.obs_id) for n in self._nodes if not n.is_frontier and not n.is_viewpoint
+        }
         if obs_ids:
             if include_image_descriptions:
-                img_desc_str = self._get_image_descriptions_str(obs_ids)
+                img_desc_str = self._get_image_descriptions_str(
+                    obs_ids,
+                    omit_labels_for_obs=graph_obs_ids,
+                )
             else:
                 n = len(obs_ids)
                 img_desc_str = (
@@ -4277,25 +4540,30 @@ class GraphEQAMemory:
                 else "Attached images: (none — explore for a real camera view before answering)"
             )
 
-        commands: list[Any] = ["Question: " + question]
+        extra_hints: list[str] = []
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
-            commands.append(self._visibility_location_mcq_hint(parsed_choices))
+            extra_hints.append(self._visibility_location_mcq_hint(parsed_choices))
         # Attribute/state questions: answer from images; do not inject memory priors.
         # Merged-memory mode folds status into SCENE_GRAPH, so skip the separate block.
+        memory_summary = ""
         if self.memory_summary_enabled and not attribute_q and not merge_confirmed:
-            memory_summary = self._relevant_memory_summary()
-            if memory_summary:
-                commands.append(memory_summary)
-        commands.append("HISTORY: ")
-        # Only include the most recent iterations: unbounded history bloats the prompt
-        # and feeds the model its own repeated outputs, which drives caption/action loops.
+            memory_summary = self._relevant_memory_summary() or ""
         max_history = get_eqa_vl_int(self.parameters, "eqa_max_history", 4)
         history = self._history_outputs
         start = max(0, len(history) - max_history) if max_history > 0 else 0
-        for i, h in enumerate(history[start:], start=start):
-            commands.append("Iteration_" + str(i) + ":" + h)
-        commands.append(graph_str)
-        commands.append(img_desc_str)
+        history_slice = list(history[start:])
+        prompt_max_tokens = resolve_eqa_prompt_max_tokens(self.parameters)
+        text_blocks = self.build_eqa_prompt_text(
+            question_line="Question: " + question,
+            extra_hints=extra_hints,
+            memory_summary=memory_summary or None,
+            history_entries=history_slice,
+            history_start_index=start,
+            graph_str=graph_str,
+            img_desc_str=img_desc_str,
+            max_tokens=prompt_max_tokens,
+        )
+        commands: list[Any] = list(text_blocks)
 
         relevant_images: list[Image.Image] = []
         id_to_obs = {int(o.obs_id): o for o in self._observations}
@@ -4322,6 +4590,8 @@ class GraphEQAMemory:
             f"history_n={len(self._history_outputs)})…"
         )
         assistant_prefill: str | None = None
+        answer_format = resolve_eqa_answer_format(self.parameters)
+        _variant = resolve_eqa_prompt_variant(self.parameters)
         try:
             t_vl = _time.monotonic()
             ans_cap = resolve_eqa_answer_max_new_tokens(self.parameters)
@@ -4330,21 +4600,13 @@ class GraphEQAMemory:
                 eqa_kw["max_new_tokens"] = ans_cap
             # Force the first output field so Qwen cannot open with Caption: — prompt edits
             # alone still left a 26% caption share on the 2026-07-30 q2 probe.
-            _variant = ""
-            if hasattr(self.parameters, "get"):
-                slash = self.parameters.get("eqa/prompt_variant", None)
-                if slash is not None and str(slash).strip():
-                    _variant = str(slash).strip().lower()
-                else:
-                    eqa_cfg = self.parameters.get("eqa", {}) or {}
-                    if isinstance(eqa_cfg, dict):
-                        _variant = str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
-            if _variant in ("hmeqa", "mcq"):
-                assistant_prefill = "Reasoning:"
+            assistant_prefill = resolve_eqa_answer_prefill(self.parameters)
+            if assistant_prefill:
                 eqa_kw["assistant_prefill"] = assistant_prefill
             _logger.info(
                 f"query_answer: eqa_kw max_new_tokens={eqa_kw.get('max_new_tokens')} "
-                f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r}"
+                f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r} "
+                f"answer_format={answer_format!r}"
             )
             try:
                 raw = self.eqa_client(commands, **eqa_kw)
@@ -4359,10 +4621,13 @@ class GraphEQAMemory:
             self.last_eqa_raw = raw
             self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
             self._append_eqa_history(
-                "Answer:Unknown\nReasoning:"
-                + str(exc)
-                + "\nConfidence:False\nAction:\nConfidence_reasoning:"
-                + str(exc)
+                self.format_eqa_history_outcome(
+                    answer="Unknown",
+                    confidence=False,
+                    action="",
+                    reasoning=str(exc),
+                    salvage=False,
+                )
             )
             return (
                 str(exc),
@@ -4373,9 +4638,19 @@ class GraphEQAMemory:
                 relevant_images,
             )
         self.last_eqa_raw = raw
-        answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
-
-        reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
+        prefer_json = answer_format == "json"
+        reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(
+            raw or "",
+            prefer_json=prefer_json,
+            json_prefill=assistant_prefill if prefer_json else None,
+        )
+        # Also accept labeled scrape when JSON was preferred but incomplete.
+        if prefer_json and not (answer or "").strip():
+            reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(
+                raw or "",
+                prefer_json=False,
+            )
+        answer_outputs = (raw or "").replace("*", "").replace("#", "").lower()
         # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
         # Re-ask tersely for just the choice letter.
         # - Empty answer → always salvage (64-token truncation / runaway caption).
@@ -4386,11 +4661,12 @@ class GraphEQAMemory:
         _ans_unknown = _ans_stripped.lower() in {"unknown", "none", "n/a", "na"}
         _ans_unknownish = _ans_unknown or not _ans_stripped
         _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
-        # A stream that never reached ``answer:`` was cut off mid-caption (the 256-token
-        # decode budget is spent on multi-image Caption/Reasoning). Re-asking the same VLM
-        # with the same images recovers the letter it never got to emit; that is different
-        # from inventing one out of nearest-furniture memory, which q104/q105 banned.
-        _answer_field_emitted = bool(re.search(r"answer\s*:", answer_outputs))
+        # A stream that never reached ``answer:`` / ``"answer"`` was cut off mid-caption.
+        _answer_field_emitted = bool(
+            re.search(r"answer\s*:", answer_outputs)
+            or re.search(r'["\']answer["\']\s*:', answer_outputs)
+            or (prefer_json and not _ans_unknownish)
+        )
         _truncated_before_answer = _ans_unknownish and not _answer_field_emitted
         # Surfaced per episode so a decode-budget regression is visible in the results
         # table instead of only showing up as a mysterious accuracy drop.
@@ -4570,6 +4846,7 @@ class GraphEQAMemory:
 
         target_point = None
         self.last_eqa_action_obs_id = None
+        hist_action = ""
         if not confidence and action.strip():
             match = re.search(r"\d+", action.strip())
             if match:
@@ -4581,29 +4858,16 @@ class GraphEQAMemory:
                     nav_fallback_tail=nav_fallback_tail,
                     robot_xyt=xyt,
                 )
-            self._append_eqa_history(
-                "Answer:"
-                + raw_answer
-                + "\nReasoning:"
-                + reasoning
-                + "\nConfidence:"
-                + str(confidence)
-                + "\nAction: Navigate to Image "
-                + action.strip()
-                + "\nConfidence_reasoning:"
-                + confidence_reasoning
+            hist_action = action.strip()
+        self._append_eqa_history(
+            self.format_eqa_history_outcome(
+                answer=raw_answer,
+                confidence=confidence,
+                action=hist_action,
+                reasoning=reasoning,
+                salvage=bool(self.last_eqa_salvage_used),
             )
-        else:
-            self._append_eqa_history(
-                "Answer:"
-                + raw_answer
-                + "\nReasoning:"
-                + reasoning
-                + "\nConfidence:"
-                + str(confidence)
-                + "\nAction:\nConfidence_reasoning: "
-                + confidence_reasoning
-            )
+        )
 
         return (
             reasoning,
