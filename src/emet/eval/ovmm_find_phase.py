@@ -171,7 +171,6 @@ def resolve_object_query(
     (``obj`` / ``object``), so full-OVMM episodes that store the manipulable as
     ``object: obj`` + ``object_gt_body`` still get a searchable name.
     """
-    _ = placements  # reserved; GT body cat used only as stub fallback below
     raw = str(episode.object or "").strip()
     cleaned = semantic_label_from_instance(raw)
     if cleaned.lower() not in {"", "obj", "object", "body"}:
@@ -333,14 +332,13 @@ def set_find_phase_run_seed(seed: int) -> None:
         pass
 
 
-def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = None) -> list[str]:
+def _query_variants(query: str) -> list[str]:
     """Expand a text query with cleaned labels and substring tokens (language-side only).
 
-    ``placements`` is ignored: injecting sim GT category strings into open-vocab
-    ``localize_text`` leaked long fixture paths (e.g. ``cab … door handle``) into the
-    search query. Call sites may still pass ``placements`` for API compatibility.
+    Sim GT category strings are never injected here: adding fixture paths (e.g.
+    ``cab … door handle``) to open-vocab ``localize_text`` leaked long descriptive
+    strings into the search query.
     """
-    _ = placements
     base = str(query or "").strip()
     variants: list[str] = []
     if base:
@@ -485,11 +483,10 @@ def _voxel_localize(
     voxel_map: Any,
     query: str,
     *,
-    placements: dict[str, dict[str, Any]] | None,
     session: dict[str, Any] | None,
 ) -> tuple[np.ndarray | None, str]:
     """Voxel-map localization only (preferred for find-phase; avoids merged-graph centroid drift)."""
-    for q in _query_variants(query, placements):
+    for q in _query_variants(query):
         result = voxel_map.localize_text(q, debug=False, return_debug=True)
         target = result[0] if isinstance(result, (list, tuple)) else result
         if target is not None:
@@ -531,7 +528,7 @@ def query_find_phase_localization(
     sess = session if convert_nav_to_world else None
 
     if prefer_voxel and voxel_map is not None and hasattr(voxel_map, "localize_text"):
-        xyz, q_used = _voxel_localize(voxel_map, query, placements=placements, session=sess)
+        xyz, q_used = _voxel_localize(voxel_map, query, session=sess)
         if xyz is not None:
             return xyz, True, q_used, "voxel"
 
@@ -547,7 +544,7 @@ def query_find_phase_localization(
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
             return xyz, True, query, "graph_near_anchor"
-    for q in _query_variants(query, placements):
+    for q in _query_variants(query):
         if planar_frame == "habitat_xz":
             nodes = _graph_nodes_matching(memory, q)
             if nodes:

@@ -565,7 +565,7 @@ OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). D
 | `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
 | `status` | Per-episode outcomes + bind-fail counts |
 
-**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find uses the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions); preset `agentic_find: true`. Ablation only: `emet ovmm find --oneshot-localize` (no silent oneshot rescue on agentic miss). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find uses the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions); preset `agentic_find: true`. Ablation only: `emet ovmm find --oneshot-localize` / `emet ovmm full --oneshot-localize` (no silent oneshot rescue on agentic miss). Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
 
 **Examples:**
 ```bash

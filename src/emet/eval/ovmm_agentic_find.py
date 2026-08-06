@@ -80,6 +80,19 @@ class OvmmAgenticLocalizeResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def _count_retracted_claims(gm: Any) -> int:
+    """Size of the graph memory's retracted-nav-claim set (0 when absent)."""
+    if gm is None:
+        return 0
+    claims = getattr(gm, "_retracted_nav_claims", None)
+    if claims is None:
+        return 0
+    try:
+        return len(claims)
+    except TypeError:
+        return 0
+
+
 def run_ovmm_agentic_localize(
     agent: Any,
     question: str,
@@ -103,6 +116,8 @@ def run_ovmm_agentic_localize(
             xyz=None,
             error="empty question",
         )
+    gm = getattr(agent, "graph_memory", None)
+    retracted_before = _count_retracted_claims(gm)
     goal_text = goal or f"Find and verify: {q}"
     try:
         result = run_agentic_eqa_result(
@@ -124,12 +139,7 @@ def run_ovmm_agentic_localize(
             error=str(exc),
         )
 
-    gm = getattr(agent, "graph_memory", None)
-    n_retracted = 0
-    if gm is not None:
-        claims = getattr(gm, "_retracted_nav_claims", None)
-        if claims is not None:
-            n_retracted = len(claims)
+    n_retracted = max(0, _count_retracted_claims(gm) - retracted_before)
 
     oid = result.verified_obs_id if result.verified else None
     xyz = xyz_from_verified_obs(agent, oid) if oid is not None else None

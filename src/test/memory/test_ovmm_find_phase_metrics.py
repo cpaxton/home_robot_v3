@@ -195,13 +195,7 @@ def test_pick_find_object_respects_gt_body():
 
 
 def test_query_variants_language_only_no_gt_cats():
-    variants = _query_variants(
-        "cab",
-        {
-            "cab_main": {"cat": "cab"},
-            "handle": {"cat": "cab left group left door handle"},
-        },
-    )
+    variants = _query_variants("cab")
     assert variants[0] == "cab"
     assert "cab left group left door handle" not in variants
     assert all("handle" not in v.lower() for v in variants)

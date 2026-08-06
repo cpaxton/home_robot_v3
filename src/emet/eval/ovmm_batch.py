@@ -47,6 +47,8 @@ class OvmmBatchOptions:
     agentic_find: bool | None = None
     # Ablation: force one-shot localize (sets agentic_find=False).
     oneshot_localize: bool = False
+    agentic_max_rounds: int | None = None
+    agentic_max_nav_steps: int | None = None
     manip_mode: str = "skip"
     full: bool = False
 
@@ -130,6 +132,8 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 use_sensor_perception=opts.sensor_perception,
                 prefer_voxel=not opts.graph_query,
                 agentic_find=agentic,
+                agentic_max_rounds=opts.agentic_max_rounds,
+                agentic_max_nav_steps=opts.agentic_max_nav_steps,
                 explore_steps_override=opts.explore_steps,
                 use_scene_cache=not opts.no_scene_cache,
                 manip_mode=manip,

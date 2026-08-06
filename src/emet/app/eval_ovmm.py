@@ -66,6 +66,8 @@ def _batch_options_from_click(
     no_scene_cache: bool = False,
     manip_mode: str = "skip",
     oneshot_localize: bool = False,
+    agentic_max_rounds: int | None = None,
+    agentic_max_nav_steps: int | None = None,
     full: bool = False,
 ) -> OvmmBatchOptions:
     return OvmmBatchOptions(
@@ -90,6 +92,8 @@ def _batch_options_from_click(
         no_scene_cache=no_scene_cache,
         manip_mode=manip_mode,
         oneshot_localize=oneshot_localize,
+        agentic_max_rounds=agentic_max_rounds,
+        agentic_max_nav_steps=agentic_max_nav_steps,
         full=full,
     )
 
@@ -202,6 +206,18 @@ def ovmm_group(ctx: click.Context) -> None:
     default=False,
     help="Ablation: skip AgenticEQA find; one-shot voxel/graph localize only",
 )
+@click.option(
+    "--agentic-max-rounds",
+    type=int,
+    default=None,
+    help="Agentic find: cap VLM router rounds per question (default: eqa.agentic_max_rounds)",
+)
+@click.option(
+    "--agentic-max-nav-steps",
+    type=int,
+    default=None,
+    help="Agentic find: cap nav steps per question (default: eqa.agentic_max_nav_steps)",
+)
 def ovmm_find(
     episodes: str,
     backends: tuple[str, ...],
@@ -223,6 +239,8 @@ def ovmm_find(
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,
+    agentic_max_rounds: int | None,
+    agentic_max_nav_steps: int | None,
 ) -> None:
     """Run find-phase episodes (same path as scripts/eval_ovmm_find_phases.py).
 
@@ -250,6 +268,8 @@ def ovmm_find(
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         oneshot_localize=oneshot_localize,
+        agentic_max_rounds=agentic_max_rounds,
+        agentic_max_nav_steps=agentic_max_nav_steps,
         full=False,
     )
     raise SystemExit(run_ovmm_batch(opts, repo_root=_project_root()))
@@ -262,6 +282,26 @@ def ovmm_find(
     type=click.Choice(list(MANIP_MODES)),
     default="oracle",
     show_default=True,
+)
+@click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
+@click.option("--no-scene-cache", is_flag=True, default=False)
+@click.option(
+    "--oneshot-localize",
+    is_flag=True,
+    default=False,
+    help="Ablation: skip AgenticEQA find; one-shot voxel/graph localize only",
+)
+@click.option(
+    "--agentic-max-rounds",
+    type=int,
+    default=None,
+    help="Agentic find: cap VLM router rounds per question (default: eqa.agentic_max_rounds)",
+)
+@click.option(
+    "--agentic-max-nav-steps",
+    type=int,
+    default=None,
+    help="Agentic find: cap nav steps per question (default: eqa.agentic_max_nav_steps)",
 )
 def ovmm_full(
     episodes: str,
@@ -282,6 +322,11 @@ def ovmm_full(
     output_dir: Path | None,
     dry_run: bool,
     manip_mode: str,
+    explore_steps: int | None,
+    no_scene_cache: bool,
+    oneshot_localize: bool,
+    agentic_max_rounds: int | None,
+    agentic_max_nav_steps: int | None,
 ) -> None:
     """Run full OVMM episodes (same path as scripts/eval_ovmm_full.py)."""
     po = int(port_offset) if port_offset is not None else int(os.getpid() % 400 + 140)
@@ -304,6 +349,11 @@ def ovmm_full(
         output_dir=output_dir,
         dry_run=dry_run,
         manip_mode=manip_mode,
+        explore_steps=explore_steps,
+        no_scene_cache=no_scene_cache,
+        oneshot_localize=oneshot_localize,
+        agentic_max_rounds=agentic_max_rounds,
+        agentic_max_nav_steps=agentic_max_nav_steps,
         full=True,
     )
     raise SystemExit(run_ovmm_batch(opts, repo_root=_project_root()))
@@ -486,6 +536,8 @@ def ovmm_sweep(
     agentic_find = defaults.get("agentic_find")
     if agentic_find is not None:
         agentic_find = bool(agentic_find)
+    agentic_max_rounds = defaults.get("agentic_max_rounds")
+    agentic_max_nav_steps = defaults.get("agentic_max_nav_steps")
 
     out = Path(episodes_dir or out_dir or _default_out_dir(preset)).expanduser().resolve()
 
@@ -558,6 +610,8 @@ def ovmm_sweep(
             dry_run=dry_run,
             no_scene_cache=force_live,
             agentic_find=agentic_find,
+            agentic_max_rounds=agentic_max_rounds,
+            agentic_max_nav_steps=agentic_max_nav_steps,
             full=False,
         )
         rc = run_ovmm_batch(opts, repo_root=_project_root())
@@ -577,6 +631,8 @@ def ovmm_sweep(
             manip_mode=mm,
             no_scene_cache=force_live,
             agentic_find=agentic_find,
+            agentic_max_rounds=agentic_max_rounds,
+            agentic_max_nav_steps=agentic_max_nav_steps,
             full=True,
         )
         rc = run_ovmm_batch(opts, repo_root=_project_root())
