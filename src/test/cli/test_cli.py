@@ -438,6 +438,23 @@ def test_install_completion_help():
     assert "bash" in result.stdout or "zsh" in result.stdout
 
 
+def test_ovmm_help():
+    """emet ovmm --help lists find/full/prepare/sweep/rates/status."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "find" in out
+    assert "full" in out
+    assert "prepare" in out
+    assert "sweep" in out
+    assert "rates" in out
+    assert "status" in out
+
+
 def test_sqa3d_help():
     """emet sqa3d --help lists embodied subcommands."""
     result = subprocess.run(

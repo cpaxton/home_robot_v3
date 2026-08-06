@@ -44,6 +44,21 @@ def test_resolve_attn_cuda_sdpa_when_allowed(monkeypatch):
     assert resolve_attn_implementation(prefer_flash=False, device="cuda") == "sdpa"
 
 
+def test_resolve_attn_allow_sdpa_overrides_installed_flash(monkeypatch):
+    """Escape hatch must force SDPA even when flash-attn is importable (stuck-FA2)."""
+    monkeypatch.setattr(m, "flash_attn_2_available", lambda: True)
+    monkeypatch.setenv("EMET_ALLOW_SDPA_ATTN", "1")
+    monkeypatch.delenv("EMET_REQUIRE_FLASH_ATTN", raising=False)
+    assert resolve_attn_implementation(prefer_flash=True, device="cuda") == "sdpa"
+
+
+def test_resolve_attn_flash_when_available_by_default(monkeypatch):
+    monkeypatch.setattr(m, "flash_attn_2_available", lambda: True)
+    monkeypatch.delenv("EMET_ALLOW_SDPA_ATTN", raising=False)
+    monkeypatch.delenv("EMET_REQUIRE_FLASH_ATTN", raising=False)
+    assert resolve_attn_implementation(prefer_flash=True, device="cuda") == "flash_attention_2"
+
+
 def test_resolve_attn_require_flash_false(monkeypatch):
     _block_flash(monkeypatch)
     monkeypatch.delenv("EMET_ALLOW_SDPA_ATTN", raising=False)

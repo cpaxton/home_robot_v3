@@ -4531,10 +4531,12 @@ main.add_command(_eval_dynagraph_app)
 
 from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
 from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
+from emet.app.eval_ovmm import ovmm_group as _ovmm_group  # noqa: E402
 
 _eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
 main.add_command(_eval_sqa3d_app)
 main.add_command(_sqa3d_group)
+main.add_command(_ovmm_group)
 
 from emet.app.eval_robovista import robovista_group as _robovista_group  # noqa: E402
 

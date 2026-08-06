@@ -49,6 +49,7 @@ LocalizeSource = Literal[
     "memory_check_voxel",
     "memory_list_objects",
     "gt_placement",
+    "agentic_verify",
 ]
 
 _HEX_TOKEN_RE = re.compile(r"^[0-9a-f]{8,}$", re.IGNORECASE)
@@ -104,10 +105,14 @@ class FindPhaseRunConfig:
     seed: int | None = None
     use_sensor_perception: bool = False
     prefer_voxel: bool = True
+    # None → on for dynagraph/static_graph (shared AgenticEQA loop); off for dynamem/GT.
+    agentic_find: bool | None = None
     manip_mode: ManipMode = "skip"
     nav_step_timeout_s: float | None = None
     explore_steps_override: int | None = None
     use_scene_cache: bool = True
+    agentic_max_rounds: int | None = None
+    agentic_max_nav_steps: int | None = None
 
 
 def resolve_find_phase_nav_step_timeout(
@@ -158,23 +163,30 @@ def resolve_object_query(
     episode: FindPhaseEpisode,
     placements: dict[str, dict[str, Any]] | None,
 ) -> str:
-    """Resolve memory/GT object query; optional ``object_gt_body`` overrides from sim GT.
+    """Resolve the **agent** object query from episode language (open-vocab).
 
-    Returns a *semantic* label suitable for voxel/graph text localization (instance hashes
-    from Molmo/iTHOR body names are stripped).
+    Uses ``episode.object`` (cleaned of instance hashes). Does **not** replace a
+    usable task string with sim GT ``cat`` from ``object_gt_body`` — that body is for
+    *scoring* only. GT cat is consulted only when the episode label is a useless stub
+    (``obj`` / ``object``), so full-OVMM episodes that store the manipulable as
+    ``object: obj`` + ``object_gt_body`` still get a searchable name.
     """
-    raw = episode.object
-    if episode.object_gt_body and placements and episode.object_gt_body in placements:
-        raw = str(placements[episode.object_gt_body].get("cat") or episode.object)
+    _ = placements  # reserved; GT body cat used only as stub fallback below
+    raw = str(episode.object or "").strip()
     cleaned = semantic_label_from_instance(raw)
-    # Prefer the episode's human label when cleaning collapses to a useless stub like "obj".
-    if cleaned.lower() in {"", "obj", "object", "body"} and episode.object:
-        alt = semantic_label_from_instance(episode.object)
-        if alt.lower() not in {"", "obj", "object", "body"}:
-            return alt
-        if episode.object.lower() not in {"obj", "object"}:
-            return episode.object
-    return cleaned or str(raw)
+    if cleaned.lower() not in {"", "obj", "object", "body"}:
+        return cleaned
+    if raw.lower() not in {"", "obj", "object", "body"}:
+        return raw
+    # Stub episode label: fall back to cleaned GT cat for the designated body only.
+    if episode.object_gt_body and placements and episode.object_gt_body in placements:
+        gt_raw = str(placements[episode.object_gt_body].get("cat") or "")
+        gt_clean = semantic_label_from_instance(gt_raw)
+        if gt_clean.lower() not in {"", "obj", "object", "body"}:
+            return gt_clean
+        if gt_raw:
+            return gt_raw
+    return cleaned or raw or "object"
 
 
 def category_matches(query: str, cat: str | None) -> bool:
@@ -322,7 +334,13 @@ def set_find_phase_run_seed(seed: int) -> None:
 
 
 def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = None) -> list[str]:
-    """Expand a text query with substring tokens and matching GT category strings."""
+    """Expand a text query with cleaned labels and substring tokens (language-side only).
+
+    ``placements`` is ignored: injecting sim GT category strings into open-vocab
+    ``localize_text`` leaked long fixture paths (e.g. ``cab … door handle``) into the
+    search query. Call sites may still pass ``placements`` for API compatibility.
+    """
+    _ = placements
     base = str(query or "").strip()
     variants: list[str] = []
     if base:
@@ -336,15 +354,6 @@ def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = N
             if _HEX_TOKEN_RE.match(token) or _NUMERIC_TOKEN_RE.match(token):
                 continue
             variants.append(token)
-    if placements:
-        for info in placements.values():
-            cat = str(info.get("cat") or "").strip()
-            if not cat:
-                continue
-            cat_low = cat.lower()
-            cat_clean = semantic_label_from_instance(cat)
-            if low and (low in cat_low or cat_low in low or low in cat_clean.lower()):
-                variants.append(cat_clean or cat)
     seen: set[str] = set()
     out: list[str] = []
     for v in variants:
@@ -353,6 +362,41 @@ def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = N
             seen.add(key)
             out.append(v)
     return out
+
+
+def _category_match_rank(query: str, cat: str) -> tuple[int, int, int]:
+    """Rank GT category quality for scoring (lower is better).
+
+    Prefer exact label matches and shorter category strings over long descriptive
+    fixture paths that only substring-match the episode query.
+    """
+    q = str(query or "").strip().lower()
+    c = str(cat or "").strip().lower()
+    c_clean = semantic_label_from_instance(cat).strip().lower()
+    exact = 0 if q and (c == q or c_clean == q) else 1
+    label = c_clean or c
+    words = len(label.replace("_", " ").split()) if label else 999
+    return (exact, words, len(label))
+
+
+def pick_find_recep_gt_body(
+    placements: dict[str, dict[str, Any]],
+    goal_recep: str,
+) -> str | None:
+    """Choose a single GT body for FindRec scoring (analogous to FindObj disambiguation).
+
+    Among category matches, prefer exact / short labels so long articulated-part
+    descriptions that merely contain the query token are not the scoring target.
+    """
+    bodies = bodies_matching_category(placements, goal_recep)
+    if not bodies:
+        return None
+
+    def _key(body: str) -> tuple:
+        cat = str(placements[body].get("cat") or body)
+        return (*_category_match_rank(goal_recep, cat), body)
+
+    return min(bodies, key=_key)
 
 
 def localize_point_to_world_xy(
@@ -544,10 +588,16 @@ def score_find_object(
     object_gt_body: str | None = None,
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
-    """Score FindObj: predicted XYZ within ``radius_m`` of chosen GT object body."""
+    """Score FindObj: predicted XYZ within ``radius_m`` of chosen GT object body.
+
+    When no GT body can be resolved, the phase is **unscored** (not a localization miss):
+    ``find_object_scored=False`` and ``find_object_unscored_reason`` explain why.
+    """
     if not placements:
         return {
             "find_object_success": False,
+            "find_object_scored": False,
+            "find_object_unscored_reason": "no_placements",
             "localization_err_obj_m": None,
             "gt_object_body": None,
         }
@@ -558,15 +608,28 @@ def score_find_object(
         object_gt_body=object_gt_body,
     )
     pred = _pred_xyz_array(pred_xyz)
-    if gt_body is None or pred is None:
+    if gt_body is None:
         return {
             "find_object_success": False,
+            "find_object_scored": False,
+            "find_object_unscored_reason": "no_gt_match",
+            "localization_err_obj_m": None,
+            "gt_object_body": None,
+            "obj_pred_present": pred is not None,
+        }
+    if pred is None:
+        return {
+            "find_object_success": False,
+            "find_object_scored": True,
+            "find_object_unscored_reason": None,
             "localization_err_obj_m": None,
             "gt_object_body": gt_body,
         }
     err_xy = distance_to_placement_xy(pred, placements[gt_body], frame=frame)
     return {
         "find_object_success": err_xy <= float(radius_m),
+        "find_object_scored": True,
+        "find_object_unscored_reason": None,
         "localization_err_obj_m": err_xy,
         "gt_object_body": gt_body,
     }
@@ -580,26 +643,49 @@ def score_find_recep(
     radius_m: float,
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
-    """Score FindRec: predicted XYZ within ``radius_m`` of any GT body matching ``goal_recep``."""
+    """Score FindRec against one disambiguated GT body matching ``goal_recep``.
+
+    Candidate matches are retained in ``gt_recep_bodies`` for debugging; scoring uses
+    :func:`pick_find_recep_gt_body` so long substring matches are not vacuous hits.
+    """
     if not placements:
         return {
             "find_recep_success": False,
+            "find_recep_scored": False,
+            "find_recep_unscored_reason": "no_placements",
             "localization_err_recep_m": None,
+            "gt_recep_body": None,
             "gt_recep_bodies": [],
         }
     recep_bodies = bodies_matching_category(placements, goal_recep)
+    gt_body = pick_find_recep_gt_body(placements, goal_recep)
     pred = _pred_xyz_array(pred_xyz)
-    if not recep_bodies or pred is None:
+    if gt_body is None:
         return {
             "find_recep_success": False,
+            "find_recep_scored": False,
+            "find_recep_unscored_reason": "no_gt_match",
             "localization_err_recep_m": None,
+            "gt_recep_body": None,
+            "gt_recep_bodies": recep_bodies,
+            "recep_pred_present": pred is not None,
+        }
+    if pred is None:
+        return {
+            "find_recep_success": False,
+            "find_recep_scored": True,
+            "find_recep_unscored_reason": None,
+            "localization_err_recep_m": None,
+            "gt_recep_body": gt_body,
             "gt_recep_bodies": recep_bodies,
         }
-    errors = [distance_to_placement_xy(pred, placements[body], frame=frame) for body in recep_bodies]
-    best_err = min(errors)
+    err_xy = distance_to_placement_xy(pred, placements[gt_body], frame=frame)
     return {
-        "find_recep_success": best_err <= float(radius_m),
-        "localization_err_recep_m": best_err,
+        "find_recep_success": err_xy <= float(radius_m),
+        "find_recep_scored": True,
+        "find_recep_unscored_reason": None,
+        "localization_err_recep_m": err_xy,
+        "gt_recep_body": gt_body,
         "gt_recep_bodies": recep_bodies,
     }
 
@@ -616,7 +702,11 @@ def compute_find_phase_metrics(
     object_gt_body: str | None = None,
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
-    """Combine FindObj / FindRec scores and OVMM-style partial success (mean of two phases)."""
+    """Combine FindObj / FindRec scores and OVMM-style partial success.
+
+    Partial success averages **scored** phases only. Unscored phases (no GT match)
+    do not count as localization failures in the mean.
+    """
     obj = score_find_object(
         obj_pred_xyz,
         placements,
@@ -627,11 +717,17 @@ def compute_find_phase_metrics(
         frame=frame,
     )
     rec = score_find_recep(recep_pred_xyz, placements, goal_recep, radius_m=radius_m, frame=frame)
-    partial = 0.5 * (float(obj["find_object_success"]) + float(rec["find_recep_success"]))
+    scored_vals: list[float] = []
+    if obj.get("find_object_scored"):
+        scored_vals.append(float(obj["find_object_success"]))
+    if rec.get("find_recep_scored"):
+        scored_vals.append(float(rec["find_recep_success"]))
+    partial = float(sum(scored_vals) / len(scored_vals)) if scored_vals else 0.0
     return {
         **obj,
         **rec,
         "find_partial_success": partial,
+        "find_phases_scored": len(scored_vals),
         "success_radius_m": float(radius_m),
     }
 
@@ -1029,14 +1125,34 @@ def run_episode_find_phase(
 
         object_query = resolve_object_query(episode, placements)
 
+        from emet.eval.ovmm_agentic_find import (
+            ovmm_find_object_question,
+            ovmm_find_recep_question,
+            run_ovmm_agentic_localize,
+            should_use_agentic_find,
+        )
+
+        use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
+        agentic_meta: dict[str, Any] = {
+            "agentic_find": bool(use_agentic),
+            "obj_agentic_question": None,
+            "recep_agentic_question": None,
+            "obj_n_retracted_claims": 0,
+            "recep_n_retracted_claims": 0,
+        }
+        obj_xyz = None
+        obj_ok = False
+        obj_q_used = object_query
+        obj_source: LocalizeSource | None = None
+        recep_xyz = None
+        recep_ok = False
+        recep_q_used = episode.goal_recep
+        recep_source: LocalizeSource | None = None
+
         if run_cfg.backend == "ground_truth":
             # Oracle: localize directly from sim placements (upper bound for FindObj/FindRec).
-            obj_xyz = None
-            obj_ok = False
-            obj_q_used = object_query
-            obj_source: LocalizeSource | None = None
             body = episode.object_gt_body
             if body and body in placements:
                 obj_xyz = np.asarray(placements[body]["pos"][:3], dtype=np.float64)
@@ -1054,11 +1170,6 @@ def run_episode_find_phase(
                     convert_nav_to_world=nav_world,
                     prefer_voxel=False,
                 )
-            recep_xyz = None
-            recep_ok = False
-            recep_q_used = episode.goal_recep
-            recep_source = None
-            # Prefer a GT body whose category matches the goal receptacle.
             for bname, meta in placements.items():
                 cat = str(meta.get("cat") or meta.get("label") or bname).lower()
                 if episode.goal_recep.lower() in cat or cat in episode.goal_recep.lower():
@@ -1078,7 +1189,50 @@ def run_episode_find_phase(
                     convert_nav_to_world=nav_world,
                     prefer_voxel=False,
                 )
+        elif use_agentic:
+            # Same AgenticEQAExecutor loop as HM-EQA: phrase OVMM as questions.
+            obj_q = ovmm_find_object_question(object_query, episode.start_recep)
+            recep_q = ovmm_find_recep_question(episode.goal_recep)
+            agentic_meta["obj_agentic_question"] = obj_q
+            agentic_meta["recep_agentic_question"] = recep_q
+            obj_res = run_ovmm_agentic_localize(
+                agent,
+                obj_q,
+                max_rounds=run_cfg.agentic_max_rounds,
+                max_nav_steps=run_cfg.agentic_max_nav_steps,
+                require_verified=True,
+                trace_meta={"ovmm_phase": "find_object", "episode_id": episode.id},
+            )
+            # No oneshot rescue: agentic miss/timeout scores as FindObj fail (ablation: --oneshot-localize).
+            if obj_res.error:
+                agentic_meta["agentic_find_error"] = obj_res.error
+            obj_xyz = obj_res.xyz
+            obj_ok = bool(obj_res.verified and obj_res.xyz is not None)
+            obj_q_used = object_query
+            obj_source = "agentic_verify" if obj_ok else None
+            agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
+            agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
+            agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
+
+            recep_res = run_ovmm_agentic_localize(
+                agent,
+                recep_q,
+                max_rounds=run_cfg.agentic_max_rounds,
+                max_nav_steps=run_cfg.agentic_max_nav_steps,
+                require_verified=True,
+                trace_meta={"ovmm_phase": "find_recep", "episode_id": episode.id},
+            )
+            if recep_res.error:
+                agentic_meta["agentic_find_error_recep"] = recep_res.error
+            recep_xyz = recep_res.xyz
+            recep_ok = bool(recep_res.verified and recep_res.xyz is not None)
+            recep_q_used = episode.goal_recep
+            recep_source = "agentic_verify" if recep_ok else None
+            agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
+            agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
+            agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
         else:
+            # Ablation: one-shot memory localize (voxel-first when prefer_voxel).
             obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
                 memory,
                 object_query,
@@ -1142,6 +1296,7 @@ def run_episode_find_phase(
             "perfect_depth": bool(run_cfg.perfect_depth),
             "use_sensor_perception": bool(run_cfg.use_sensor_perception),
             "prefer_voxel": bool(prefer_voxel),
+            **agentic_meta,
             "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),

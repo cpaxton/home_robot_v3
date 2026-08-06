@@ -552,6 +552,40 @@ emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
 
 ---
 
+### `emet ovmm <subcommand>`
+
+OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). Deep dives: [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [paper_benchmarks.md](paper_benchmarks.md).
+
+| Subcommand | Description |
+|------------|-------------|
+| `find` | Batch find-phase (FindObj / FindRec) across memory backends |
+| `full` | Batch full OVMM (find + pick/place; `--manip-mode`) |
+| `prepare` | Write `sim/` + `find_episodes.yaml` / `full_episodes.yaml` from a preset |
+| `sweep` | `prepare` → find → full → `rates` (paper multi-env path) |
+| `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
+| `status` | Per-episode outcomes + bind-fail counts |
+
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find uses the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions); preset `agentic_find: true`. Ablation only: `emet ovmm find --oneshot-localize` (no silent oneshot rescue on agentic miss). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
+
+**Examples:**
+```bash
+# Multi-env dynagraph sweep (prefer --via-jobs on a shared GPU workstation)
+uv run emet ovmm sweep --preset molmo-robocasa --backend dynagraph --via-jobs
+
+# Stepwise
+uv run emet ovmm prepare --preset molmo-robocasa --out ~/runs/emet/ovmm_molmo_robocasa/DATE
+uv run emet ovmm find --episodes OUT/find_episodes.yaml --backend dynagraph --port-stride 4 \
+  --output-dir OUT/find --no-scene-cache
+uv run emet ovmm full --episodes OUT/full_episodes.yaml --backend dynagraph --manip-mode sim \
+  --port-stride 4 --output-dir OUT/full
+uv run emet ovmm rates --out OUT
+uv run emet ovmm status --out OUT
+```
+
+Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.
+
+---
+
 ### `emet sqa3d <subcommand>`
 
 Situated 3D QA on ScanNet replay (mesh or posed `.sens` RGB-D). Full guide: [sqa3d.md](sqa3d.md). GPU layout: [sqa3d_compute.md](sqa3d_compute.md).

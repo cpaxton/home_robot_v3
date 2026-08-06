@@ -4169,6 +4169,84 @@ class AgenticEQAExecutor:
             self._trace_path = default
 
 
+def build_agentic_eqa_executor(
+    agent: Any,
+    question: str | None,
+    *,
+    goal: str = "",
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    verify_min_sim: float | None = None,
+    trace_path: Path | str | None = None,
+    trace_meta: dict[str, Any] | None = None,
+    router: bool | None = None,
+    require_verified: bool | None = None,
+) -> AgenticEQAExecutor:
+    """Construct the shared agentic executor (EQA episode and OVMM find use this)."""
+    from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
+
+    cfg = _eqa_cfg(agent)
+    warm_siglip_confirmed_memory(agent)
+    agent._habitat_blocked_goals = getattr(agent, "_habitat_blocked_goals", set()) or set()
+    agent._habitat_recent_goals = getattr(agent, "_habitat_recent_goals", []) or []
+    return AgenticEQAExecutor(
+        agent,
+        question,
+        goal=goal,
+        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
+        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 8) or 8),
+        verify_min_sim=float(
+            verify_min_sim
+            if verify_min_sim is not None
+            else cfg.get("agentic_verify_min_sim", SIGLIP_IMAGE_PRESENT_THRESHOLD) or SIGLIP_IMAGE_PRESENT_THRESHOLD
+        ),
+        trace_path=trace_path,
+        trace_meta=trace_meta,
+        router=router,
+        require_verified=require_verified,  # None → env/config inside executor
+    )
+
+
+def run_agentic_eqa_result(
+    agent: Any,
+    question: str | None,
+    *,
+    goal: str = "",
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    verify_min_sim: float | None = None,
+    trace_path: Path | str | None = None,
+    trace_meta: dict[str, Any] | None = None,
+    router: bool | None = None,
+    require_verified: bool | None = None,
+) -> AgenticEQAResult:
+    """Run the unified agentic loop; return the full :class:`AgenticEQAResult`.
+
+    OVMM find phrases the episode as a question and reads ``verified_obs_id`` / pose
+    from this result — same executor as HM-EQA, not a parallel find loop.
+    """
+    ex = build_agentic_eqa_executor(
+        agent,
+        question,
+        goal=goal,
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        verify_min_sim=verify_min_sim,
+        trace_path=trace_path,
+        trace_meta=trace_meta,
+        router=router,
+        require_verified=require_verified,
+    )
+    result = ex.run()
+    print(
+        f"\n--- Agentic GraphEQA ({ex.mode}) ---\n{result.discord_text.strip()}\n"
+        f"(rounds={result.n_rounds} nav={result.n_nav} explore={result.n_explore} "
+        f"verified={result.verified} wall_s={result.wall_s:.1f})\n---\n",
+        flush=True,
+    )
+    return result
+
+
 def run_agentic_eqa(
     agent: Any,
     question: str | None,
@@ -4187,33 +4265,15 @@ def run_agentic_eqa(
     ``explore_frontier`` / ``look_around`` until frontiers or the nav budget are
     exhausted, then ``finish`` returns a coverage summary instead of an answer.
     """
-    from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
-
-    cfg = _eqa_cfg(agent)
-    warm_siglip_confirmed_memory(agent)
-    agent._habitat_blocked_goals = getattr(agent, "_habitat_blocked_goals", set()) or set()
-    agent._habitat_recent_goals = getattr(agent, "_habitat_recent_goals", []) or []
-    ex = AgenticEQAExecutor(
+    result = run_agentic_eqa_result(
         agent,
         question,
         goal=goal,
-        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
-        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 8) or 8),
-        verify_min_sim=float(
-            verify_min_sim
-            if verify_min_sim is not None
-            else cfg.get("agentic_verify_min_sim", SIGLIP_IMAGE_PRESENT_THRESHOLD) or SIGLIP_IMAGE_PRESENT_THRESHOLD
-        ),
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        verify_min_sim=verify_min_sim,
         trace_path=trace_path,
         trace_meta=trace_meta,
         router=router,
-        require_verified=None,  # resolved from env/config inside executor
-    )
-    result = ex.run()
-    print(
-        f"\n--- Agentic GraphEQA ({ex.mode}) ---\n{result.discord_text.strip()}\n"
-        f"(rounds={result.n_rounds} nav={result.n_nav} explore={result.n_explore} "
-        f"verified={result.verified} wall_s={result.wall_s:.1f})\n---\n",
-        flush=True,
     )
     return result.discord_text, result.relevant_images

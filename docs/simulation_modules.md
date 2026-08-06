@@ -14,7 +14,7 @@ Related user docs: [simulation.md](simulation.md), [molmospaces.md](molmospaces.
 | [`robosuite_load_utils`](../src/emet/simulation/robosuite_load_utils.py) | Post-load helpers for `RobosuiteZmqServer`: home keyframe, free-joint addrs, diagnostics. |
 | [`mujoco_home_tune`](../src/emet/simulation/mujoco_home_tune.py) | Interactive GUI to tune robot **home** pose and print MJCF `<key ctrl="..."/>` snippets. |
 | [`robocasa_assets_check`](../src/emet/simulation/robocasa_assets_check.py) | Preflight: basic fixtures, LightWheel registry, objaverse `reg_bbox` before `emet serve robocasa`. |
-| [`robocasa_registry_sync`](../src/emet/simulation/robocasa_registry_sync.py) | Sync LightWheel mesh folders into `fixture_registry/*.yaml`. |
+| [`robocasa_registry_sync`](../src/emet/simulation/robocasa_registry_sync.py) | Sync LightWheel meshes into `fixture_registry/*.yaml` (`fixtures/` + `objects/lightwheel/` accessories + cabinet door/handle mesh ids). |
 | [`robocasa_objaverse_bbox`](../src/emet/simulation/robocasa_objaverse_bbox.py) | Post-process objaverse MJCFs to add `reg_bbox` geoms (wraps Robocasa `calc_object_bb_reg`). |
 | [`molmospaces_spawn_metadata`](../src/emet/simulation/molmospaces_spawn_metadata.py) | Runtime load of per-robot `molmospaces_spawn.json`. |
 | [`write_molmospaces_spawn_metadata`](../src/emet/app/write_molmospaces_spawn_metadata.py) | Offline measure + write spawn JSON (see [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md)). |

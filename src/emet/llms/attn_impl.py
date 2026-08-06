@@ -65,10 +65,18 @@ def resolve_attn_implementation(
     ``EMET_REQUIRE_FLASH_ATTN=0``. Silent SDPA fallback hid multi-minute vision decode
     regressions; fail loud instead.
 
+    ``EMET_ALLOW_SDPA_ATTN=1`` is an explicit escape hatch: return ``sdpa`` even when
+    Flash-Attn 2 is installed (HM-EQA / stuck-FA2 recovery). Without that env, flash
+    wins when available.
+
     Order when flash is not required: ``flash_attention_2`` → ``sdpa`` → ``eager`` (CPU).
     """
     if not str(device).startswith("cuda"):
         return "eager"
+
+    # Explicit escape: force SDPA even if flash is installed (do not early-return FA2).
+    if env_allow_sdpa_attn():
+        return "sdpa"
 
     has_flash = flash_attn_2_available() if prefer_flash else False
     if prefer_flash and has_flash:
