@@ -436,6 +436,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         clr = format_base_clearance_hint(agent)
         if clr:
             parts.append(clr)
+        # Action-outcome ledger summary (opt-in; empty when ledger off).
+        gm = getattr(agent, "graph_memory", None) if agent is not None else None
+        if gm is None:
+            gm = context.get("graph_memory")
+        if gm is not None and hasattr(gm, "get_attempt_records"):
+            try:
+                recent = gm.get_attempt_records(limit=5)
+            except Exception:
+                recent = []
+            if recent:
+                bits = "; ".join(r.summary_bit() for r in recent)
+                parts.append(f"Recent attempts: {bits}.")
         return " ".join(parts)
 
     def send_map_snapshot() -> str:
@@ -977,12 +989,22 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- arm aim (stub / TODO) ------------------------------------------------
-    def aim_arm_at(object_label: str) -> str:
-        # See TODO.md — Arm IK “closer look”.
-        return (
+    def aim_arm_at(object_label: str):
+        # See TODO.md / docs/plans/2026-08-08_embodied_agent_planning.md Phase 3.
+        # Return ToolOutcome so the chat loop records a closer_look ledger row.
+        from emet.agent.tool_outcome import ToolOutcome
+
+        note = (
             f"aim_arm_at({object_label!r}) is not implemented yet (needs arm IK + wrist aim; "
             "tracked in TODO.md). I will not call take_ee_picture without aiming. "
             "Use describe_scene / send_image with the head camera for now."
+        )
+        return ToolOutcome(
+            ok=False,
+            status="not_implemented",
+            note=note,
+            tool="aim_arm_at",
+            payload={"phrase": str(object_label or ""), "action_kind": "closer_look"},
         )
 
     tools.append(

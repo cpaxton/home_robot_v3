@@ -2,7 +2,7 @@
 
 **Branch:** `feature/agent-world-model`
 **Date:** 2026-08-08
-**Status:** Phase 1 design — nothing implemented yet.
+**Status:** Phase 1a in progress — nav ledger landed (config default off).
 
 ## Goal
 
@@ -50,55 +50,77 @@ reachability and manipulability, not just presence.
 **Objective:** one structured, queryable record of attempts and outcomes,
 living next to the scene graph, replacing today's scattered counters.
 
-- Add an `AttemptRecord` store to `GraphEQAMemory`
-  (`src/emet/memory/graph_eqa/graph_memory.py`):
+Split into landable PRs. Do **not** bundle Stretch manip success or prompt
+enrichment into the first ledger PR.
+
+### Phase 1a — nav ledger store (this slice)
+
+- `AttemptRecord` in `src/emet/memory/graph_eqa/attempt_ledger.py`, store on
+  `GraphEQAMemory`:
 
   ```python
   @dataclass(frozen=True)
   class AttemptRecord:
-      action_kind: str   # navigate | investigate | verify | closer_look | pick | place
-      target_node_id: int | None
-      obs_id: int | None
-      xyz: np.ndarray | None
-      outcome: str       # ok | failed | aborted | absent | unreachable
-      status_code: str   # e.g. no_path, timeout, rejected_low_clearance, pregrasp_ik_failed
+      action_kind: AttemptActionKind  # navigate | investigate | verify | closer_look | pick | place
+      outcome: AttemptOutcome         # ok | failed | aborted | absent | unreachable
+      status_code: str                # controlled nav codes + short free-form fallback
       note: str
       step: int
+      target_node_id: int | None
+      obs_id: int | None
+      xyz: tuple[float, float, float] | None  # JSON-friendly; not ndarray
+      source: AttemptSource           # chat | eqa | unknown
+      question_id: str | None
+      schema_version: int
   ```
 
-- Generalizes: per-node `nav_attempts`/`nav_failures` become derived views over
-  the ledger (keep the fields for compatibility; write both during migration).
-- Persist verify-ABSENT evidence beyond the per-question
-  `_retracted_nav_claims` reset (config-gated, default off for EQA paper arms).
-  Preserve the semantics: ABSENT is a per-view true negative, **not** proof the
+- Config: `eqa.attempt_ledger` (bool or `{enabled: bool}`), default **off**.
+  Env: `EMET_EQA_ATTEMPT_LEDGER`. Documented in `docs/emet_config.md` /
+  `docs/environment_variables.md`. Pinned `configs/benchmarks/dynagraph.yaml`
+  unchanged (implicit off).
+- `record_nav_attempt` dual-writes: always updates `GraphNode` counters; when
+  ledger on, also appends a `navigate` row. `derive_nav_counters_from_ledger`
+  can recompute counters from rows (migration helper; node fields remain
+  authoritative until a later dual-write exit).
+- Serialize: `export_attempt_ledger` / `import_attempt_ledger`.
+- Tests: `src/test/memory/test_attempt_ledger.py`.
+
+**Dual-write exit (later):** once planners read the ledger,
+`_tried` / `_place_inspect` / `_nav_loop_flags` become views or are deleted —
+do not leave permanent dual writers without an exit criterion.
+
+### Phase 1b — ABSENT persistence (separate PR)
+
+- Config-gated persistence of verify-ABSENT evidence past the per-question
+  `_retracted_nav_claims` reset (default off for EQA paper arms).
+- Preserve semantics: ABSENT is a per-view true negative, **not** proof the
   object is gone from the scene.
-- Record manipulation outcomes: propagate real success from Stretch/AnyGrasp
-  `_pickup`/`_place` and the kinematic IK+RRT path into the ledger (extends the
-  existing TODO item "Stretch / AnyGrasp `_pickup` / `_place` always return
-  True").
-- Surface the ledger to planners:
-  - agentic state-message place cards — enrich the existing `[tried: …]` bit
-    with outcome + status;
-  - CONFIRMED_MEMORY block (attempt summary per phrase/place);
-  - CHAT `query_memory` / `navigation_diagnostics` returns.
-- Guardrails: additive fields with defaults; `configs/benchmarks/dynagraph.yaml`
-  pins unchanged; new config keys under `agent.attempt_ledger.*` (documented in
-  `docs/environment_variables.md` if env-toggled).
-- Tests: unit tests for ledger write/query/serialization; smoke via
-  `uv run emet test src/test/memory/test_memory_backends_smoke.py`.
+
+### Phase 1c — manip outcomes (separate PR; blocked)
+
+- Depends on fixing "Stretch / AnyGrasp `_pickup` / `_place` always return True".
+- Propagate real success into ledger rows (`pick` / `place`).
+
+### Phase 1d — surface to planners (separate PR)
+
+- Enrich agentic `[tried: …]` place cards with outcome + status.
+- CONFIRMED_MEMORY attempt summary (respect `eqa_vl.eqa_prompt_max_tokens`:
+  top-K failures per place; truncate with HISTORY).
+- CHAT `query_memory` / `navigation_diagnostics` returns.
 
 ## Phase 2 — Tool-calling contract cleanup (shared outcome schema)
 
 **Objective:** CHAT and EQA loops report tool outcomes the same way, and both
 feed the Phase-1 ledger.
 
-- One `ToolOutcome` shape (`ok`, `status`, `note`, structured payload) shared by
-  CHAT `_dispatch_tool_calls` (`src/emet/agent/loop.py`) and EQA
-  `handle_tool` (`src/emet/memory/graph_eqa/agentic_eqa.py`). EQA already
-  returns dicts with `ok`/`status`; CHAT returns free-form strings — converge on
-  the dict shape, render to text at the prompt boundary.
-- Both orchestrators write nav / verify / manip / closer-look outcomes to the
-  ledger through one recording helper.
+Can land **before** or after 1b–1d: start by converging CHAT string results onto
+a dict shape (`ok`, `status`, `note`, payload) at the prompt boundary; wire
+ledger writers once 1a exists.
+
+- Normalize EQA `handle_tool` keys (`error` vs `reason` vs `status`) onto the
+  shared shape.
+- Both orchestrators write nav / verify / manip / closer-look outcomes through
+  `GraphEQAMemory.record_attempt`.
 - Keep packs disjoint and EQA tool **names** frozen
   (`src/test/agent/test_skill_packs.py` stays green).
 - Fold in the router-prompt-hygiene TODO: single source of truth for the two
@@ -119,7 +141,8 @@ structured results; plan failures become ledger entries with reasons.
 - Implement `aim_arm_at` / EE "closer look" using existing IK
   (`pinocchio_ik_solver`, `mujoco_arm_ik`) + `arm_rrt`; a failed closer-look is
   a first-class ledger entry (kind `closer_look`, status e.g. `ik_unreachable`).
-  Then `take_ee_picture` only after successful aim (existing TODO).
+  Then `take_ee_picture` only after successful aim (existing TODO). Large
+  enough for its own PR after the nav interface extraction.
 - Mobile-manip readiness: reuse the OVMM-full pick/place path
   (`src/emet/eval/ovmm_full.py`) with ledger recording for pick/place attempts.
   Orientation IK and collision-checker defaults remain separate TODO follow-ups.
@@ -131,10 +154,11 @@ structured results; plan failures become ledger entries with reasons.
 - Regression gates each phase: `uv run emet test agent-regression`, skill-pack
   tests, memory-backend smoke. GPU tracks (HM-EQA smoke, OVMM find) launched
   via `uv run emet jobs run …` per the GPU workflow rules — never inline.
-- New measurement: does failure memory reduce repeated failed attempts?
-  Metrics: repeat-nav-failure count per episode, wasted rounds
-  (post-failure re-attempts on the same target), episode steps. Report as
-  deltas against pinned baselines on the HM-EQA agentic arm and OVMM find —
+- **Repeat-failure key (define before GPU runs):** same `target_node_id` when
+  set, else same `obs_id`, else `xyz` within 0.25 m planar; same `action_kind`;
+  prior row `outcome != ok`. Metrics: repeat-nav-failure count per episode,
+  wasted rounds (post-failure re-attempts on that key), episode steps. Report
+  as deltas against pinned baselines on the HM-EQA agentic arm and OVMM find —
   **never** by changing pinned configs.
 - Sketch (future): mobile manipulation eval = OVMM full + ledger metrics
   (pick attempts per success, re-grasp count) once orientation IK lands.
@@ -161,7 +185,10 @@ structured results; plan failures become ledger entries with reasons.
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1 — attempt ledger | not started | design above |
-| 2 — tool outcome schema | not started | depends on 1 |
-| 3 — motion interface + closer look | not started | can start interface extraction in parallel |
-| 4 — eval | not started | gates each phase |
+| 1a — nav ledger store | done (default off) | `attempt_ledger.py` + `record_nav_attempt` dual-write |
+| 1b — ABSENT persistence | done | `persist_absent_claims` + verify:absent ledger row on retract |
+| 1c — manip outcomes | partial | CHAT pickup/place → ledger; Stretch false-success still open |
+| 1d — surface to planners | partial | place-card `[attempts:]` + `navigation_diagnostics`; CONFIRMED_MEMORY top-K open |
+| 2 — tool outcome schema | done | `emet.agent.tool_outcome.ToolOutcome`; CHAT + EQA write to ledger |
+| 3 — motion interface + closer look | partial | `aim_arm_at` stub → `closer_look` ledger; nav extract + real IK open |
+| 4 — eval | not started | gates each phase; repeat key defined above |

@@ -9,19 +9,25 @@ Plan: [docs/plans/2026-08-08_embodied_agent_planning.md](docs/plans/2026-08-08_e
 (branch `feature/agent-world-model`). One checkbox per landable change; add new
 items under the matching phase. Do not touch pinned HM-EQA/OVMM configs.
 
-### Phase 1 — action-outcome ledger in graph memory
-- [ ] `AttemptRecord` store in `GraphEQAMemory` (navigate / investigate / verify / closer_look / pick / place outcomes); derive `nav_attempts`/`nav_failures` from it.
-- [ ] Config-gated persistence of verify-ABSENT evidence past the per-question `_retracted_nav_claims` reset (keep per-view semantics).
-- [ ] Record manipulation outcomes in the ledger — depends on "Stretch / AnyGrasp `_pickup` / `_place` always return True" below.
-- [ ] Surface ledger to planners: enriched `[tried: …]` place cards, CONFIRMED_MEMORY attempt summaries, CHAT `query_memory` / `navigation_diagnostics`.
+### Phase 1a — nav ledger store
+- [x] `AttemptRecord` store on `GraphEQAMemory` (`attempt_ledger.py`); `record_nav_attempt` dual-writes when `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` on (default **off**); export/import + derive helpers; tests in `src/test/memory/test_attempt_ledger.py`.
+
+### Phase 1b — ABSENT persistence
+- [x] Config-gated persistence of verify-ABSENT evidence past the per-question `_retracted_nav_claims` reset (`persist_absent_claims` / `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT`; retract also writes a `verify:absent` ledger row).
+
+### Phase 1c — manip outcomes (blocked)
+- [x] CHAT executor pickup/place failures write to the ledger via `ToolOutcome` (real Stretch success propagation still open below).
+
+### Phase 1d — surface to planners
+- [x] Enriched `[attempts: …]` place cards + CHAT `navigation_diagnostics` recent attempts. (CONFIRMED_MEMORY top-K attempt summary still open.)
 
 ### Phase 2 — shared tool-outcome schema
-- [ ] `ToolOutcome` dict shape shared by CHAT `_dispatch_tool_calls` and EQA `handle_tool`; both write to the ledger.
+- [x] `ToolOutcome` shape shared by CHAT `_dispatch_tool_calls` and EQA `handle_tool` (`emet.agent.tool_outcome`); both write to the ledger.
 - [ ] Router prompt hygiene (moved from "Prompt / information flow": single source for `_EQA_FORMAT_BLOCK_*` + byte-stability test).
 
 ### Phase 3 — motion planning behind a narrow interface
 - [ ] Extract nav planner boundary from `controller_dynamem.py::navigate_to_target_pose`; structured plan-failure reasons feed the ledger.
-- [ ] `aim_arm_at` / EE closer look via IK + arm RRT — implements the "Arm IK closer look" item under Embodied agent / Herman; failed aim = ledger entry.
+- [ ] `aim_arm_at` / EE closer look via IK + arm RRT — stub now returns `ToolOutcome(not_implemented)` and records `closer_look`; real IK still open under Embodied agent / Herman.
 - [ ] OVMM-full pick/place path records attempts to the ledger.
 
 ### Phase 4 — eval (no regressions)

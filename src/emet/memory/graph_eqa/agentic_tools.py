@@ -488,6 +488,12 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             tried = executor._tried.get(oid)
             if tried:
                 bits += f" [tried: {tried}]"
+            # Enrich with graph-memory attempt ledger when present (opt-in).
+            gm = executor.graph_memory
+            if gm is not None and hasattr(gm, "attempt_summary_for_obs"):
+                ledger_bits = gm.attempt_summary_for_obs(oid)
+                if ledger_bits:
+                    bits += f" [attempts: {ledger_bits}]"
             lines.append(
                 f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"

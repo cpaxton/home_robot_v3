@@ -31,6 +31,15 @@ from PIL import Image
 
 from emet.core.parameters import Parameters
 from emet.habitat.metrics import extract_mcq_letter
+from emet.memory.graph_eqa.attempt_ledger import (
+    AttemptRecord,
+    AttemptSource,
+    infer_nav_outcome,
+    infer_nav_status_code,
+    records_from_dicts,
+    records_to_dicts,
+    summary_bits_for_obs,
+)
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 from emet.memory.graph_eqa.mcq_debias import (
     LETTERS,
@@ -699,9 +708,18 @@ class GraphEQAMemory:
         # (obs_id, normalized_phrase) claims retracted after close+ABSENT verify —
         # keep the place node, but stop offering that stem-object hyp card.
         self._retracted_nav_claims: set[tuple[int, str]] = set()
+        # Action-outcome ledger (opt-in via eqa.attempt_ledger / EMET_EQA_ATTEMPT_LEDGER).
+        # When off, record_nav_attempt keeps updating GraphNode counters only.
+        self._attempt_records: list[AttemptRecord] = []
+        self._attempt_ledger_max: int = 512
+        self._attempt_ledger_question_id: str | None = None
+        # When True, clear_retracted_nav_claims keeps ABSENT blacklists across questions.
+        # Default off so HM-EQA paper arms stay unchanged.
+        self.persist_absent_claims: bool = False
         self._load_navigation_settings()
         self._load_dynagraph_settings()
         self._load_frontier_settings()
+        self._load_attempt_ledger_settings()
 
         if not defer_llm_clients and (self.eqa_client is None or self.image_description_client is None):
             self._init_clients()
@@ -756,6 +774,36 @@ class GraphEQAMemory:
             self._frontier_min_cluster_cells = max(1, int(blk["min_cluster_cells"]))
         if blk.get("keyword_score_weight") is not None:
             self._frontier_keyword_score_weight = max(0.0, float(blk["keyword_score_weight"]))
+
+    def _load_attempt_ledger_settings(self) -> None:
+        """Load ``eqa.attempt_ledger`` dict knobs (max_records, persist_absent_claims)."""
+        d = self._parameters_dict()
+        blk: dict[str, Any] = {}
+        eqa = d.get("eqa")
+        if isinstance(eqa, dict) and isinstance(eqa.get("attempt_ledger"), dict):
+            blk = dict(eqa["attempt_ledger"])
+        agent = d.get("agent")
+        if isinstance(agent, dict) and isinstance(agent.get("attempt_ledger"), dict):
+            blk = {**blk, **agent["attempt_ledger"]}
+        if blk.get("max_records") is not None:
+            self._attempt_ledger_max = max(32, int(blk["max_records"]))
+        if blk.get("persist_absent_claims") is not None:
+            self.persist_absent_claims = bool(blk["persist_absent_claims"])
+        env_persist = os.environ.get("EMET_ATTEMPT_LEDGER_PERSIST_ABSENT", "").strip().lower()
+        if env_persist in ("1", "true", "yes", "on"):
+            self.persist_absent_claims = True
+        elif env_persist in ("0", "false", "no", "off"):
+            self.persist_absent_claims = False
+        env_max = os.environ.get("EMET_ATTEMPT_LEDGER_MAX", "").strip()
+        if env_max:
+            try:
+                self._attempt_ledger_max = max(32, int(env_max))
+            except ValueError:
+                pass
+
+    def attempt_summary_for_obs(self, obs_id: int, *, max_bits: int = 4) -> str:
+        """Newest-first compact attempt tags for place cards / diagnostics."""
+        return summary_bits_for_obs(self._attempt_records, int(obs_id), max_bits=max_bits)
 
     def set_graph_timestep(self, step: int) -> None:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
@@ -2043,6 +2091,128 @@ class GraphEQAMemory:
         tail = f", last: {note}" if note else ""
         return f"; unreachable ({failures} nav failure(s){tail})"
 
+    def _attempt_ledger_enabled(self) -> bool:
+        """True when ``eqa.attempt_ledger`` / ``EMET_EQA_ATTEMPT_LEDGER`` is on (default off)."""
+        env = os.environ.get("EMET_EQA_ATTEMPT_LEDGER", "").strip().lower()
+        if env in ("1", "true", "yes", "on"):
+            return True
+        if env in ("0", "false", "no", "off"):
+            return False
+        raw = self._eqa_cfg_value("attempt_ledger", False)
+        if isinstance(raw, dict):
+            raw = raw.get("enabled", False)
+        if isinstance(raw, str):
+            return raw.strip().lower() in ("1", "true", "yes", "on")
+        return bool(raw)
+
+    def set_attempt_ledger_question_id(self, question_id: str | None) -> None:
+        """Tag subsequent ledger rows with a question/episode id (does not clear the store)."""
+        self._attempt_ledger_question_id = str(question_id) if question_id else None
+
+    def record_attempt(
+        self,
+        *,
+        action_kind: str,
+        outcome: str,
+        status_code: str,
+        note: str = "",
+        step: int | None = None,
+        target_node_id: int | None = None,
+        obs_id: int | None = None,
+        xyz: tuple[float, float, float] | None = None,
+        source: AttemptSource | str = "unknown",
+        question_id: str | None = None,
+        phrase: str = "",
+        force: bool = False,
+    ) -> AttemptRecord | None:
+        """Append one :class:`AttemptRecord` when the ledger is enabled (or ``force``).
+
+        Returns the stored record, or ``None`` when the ledger is off.
+        """
+        if not force and not self._attempt_ledger_enabled():
+            return None
+        st = int(step if step is not None else self._effective_timestep())
+        qid = question_id if question_id is not None else self._attempt_ledger_question_id
+        src = str(source or "unknown")
+        if src not in ("chat", "eqa", "unknown"):
+            src = "unknown"
+        rec = AttemptRecord.from_dict(
+            {
+                "action_kind": action_kind,
+                "outcome": outcome,
+                "status_code": status_code,
+                "note": note,
+                "step": st,
+                "target_node_id": target_node_id,
+                "obs_id": obs_id,
+                "xyz": list(xyz) if xyz is not None else None,
+                "source": src,
+                "question_id": qid,
+                "phrase": phrase,
+            }
+        )
+        self._attempt_records.append(rec)
+        max_n = max(1, int(self._attempt_ledger_max))
+        if len(self._attempt_records) > max_n:
+            self._attempt_records = self._attempt_records[-max_n:]
+        return rec
+
+    def get_attempt_records(
+        self,
+        *,
+        obs_id: int | None = None,
+        action_kind: str | None = None,
+        target_node_id: int | None = None,
+        question_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[AttemptRecord]:
+        """Return ledger rows matching optional filters (oldest first)."""
+        rows = list(self._attempt_records)
+        if obs_id is not None:
+            oid = int(obs_id)
+            rows = [r for r in rows if r.obs_id is not None and int(r.obs_id) == oid]
+        if action_kind is not None:
+            kind = str(action_kind)
+            rows = [r for r in rows if r.action_kind == kind]
+        if target_node_id is not None:
+            nid = int(target_node_id)
+            rows = [r for r in rows if r.target_node_id is not None and int(r.target_node_id) == nid]
+        if question_id is not None:
+            qid = str(question_id)
+            rows = [r for r in rows if r.question_id == qid]
+        if limit is not None and int(limit) >= 0:
+            rows = rows[-int(limit) :]
+        return rows
+
+    def export_attempt_ledger(self) -> list[dict[str, Any]]:
+        """JSON-serializable snapshot of the attempt ledger."""
+        return records_to_dicts(self._attempt_records)
+
+    def import_attempt_ledger(self, items: list[Any], *, replace: bool = True) -> int:
+        """Load ledger rows from dicts (or :class:`AttemptRecord`). Returns count loaded."""
+        loaded = records_from_dicts(list(items or []))
+        if replace:
+            self._attempt_records = loaded
+        else:
+            self._attempt_records.extend(loaded)
+        max_n = max(1, int(self._attempt_ledger_max))
+        if len(self._attempt_records) > max_n:
+            self._attempt_records = self._attempt_records[-max_n:]
+        return len(loaded)
+
+    def clear_attempt_ledger(self) -> None:
+        self._attempt_records.clear()
+
+    def derive_nav_counters_from_ledger(self, obs_id: int) -> tuple[int, int, str | None, int]:
+        """Compute ``(attempts, failures, last_note, last_step)`` for ``obs_id`` from the ledger."""
+        rows = self.get_attempt_records(obs_id=obs_id, action_kind="navigate")
+        if not rows:
+            return 0, 0, None, 0
+        failures = sum(1 for r in rows if r.outcome != "ok")
+        last = rows[-1]
+        note = (last.note or last.status_code or "").strip() or None
+        return len(rows), failures, note, int(last.step)
+
     def record_nav_attempt(
         self,
         obs_id: int | None,
@@ -2051,8 +2221,17 @@ class GraphEQAMemory:
         note: str,
         dist_m: float = 0.0,
         step: int | None = None,
+        status_code: str | None = None,
+        source: AttemptSource | str = "eqa",
+        question_id: str | None = None,
+        target_node_id: int | None = None,
     ) -> None:
-        """Update graph node(s) tied to ``obs_id`` after an EQA navigation attempt."""
+        """Update graph node(s) tied to ``obs_id`` after an EQA navigation attempt.
+
+        When the attempt ledger is enabled, also append a ``navigate``
+        :class:`AttemptRecord`. Node ``nav_attempts`` / ``nav_failures`` counters
+        remain dual-written for compatibility.
+        """
         if obs_id is None:
             self.last_nav_result_note = note
             return
@@ -2060,9 +2239,20 @@ class GraphEQAMemory:
         st = int(step if step is not None else self._effective_timestep())
         moved = float(dist_m) >= 0.12
         ok = bool(success) and moved
+        matched_node_id = target_node_id
+        xyz_t: tuple[float, float, float] | None = None
         for idx, node in enumerate(self._nodes):
             if int(node.obs_id) != oid:
                 continue
+            if matched_node_id is None:
+                matched_node_id = int(node.node_id)
+            if xyz_t is None:
+                try:
+                    arr = np.asarray(node.xyz, dtype=float).reshape(-1)
+                    if arr.size >= 3:
+                        xyz_t = (float(arr[0]), float(arr[1]), float(arr[2]))
+                except Exception:
+                    xyz_t = None
             failures = int(getattr(node, "nav_failures", 0)) + (0 if ok else 1)
             self._nodes[idx] = replace(
                 node,
@@ -2071,6 +2261,20 @@ class GraphEQAMemory:
                 last_nav_note=str(note or "")[:120] or None,
                 last_nav_at_step=st,
             )
+        code = status_code or infer_nav_status_code(success=ok, note=str(note or ""))
+        outcome = infer_nav_outcome(success=ok, status_code=code)
+        self.record_attempt(
+            action_kind="navigate",
+            outcome=outcome,
+            status_code=code,
+            note=str(note or "")[:240],
+            step=st,
+            target_node_id=matched_node_id,
+            obs_id=oid,
+            xyz=xyz_t,
+            source=source,
+            question_id=question_id,
+        )
         self.last_nav_result_note = note
 
     @staticmethod
@@ -2867,6 +3071,17 @@ class GraphEQAMemory:
                         labels=kept if kept else ["object"],
                     )
                     stripped_nodes += 1
+        # Persist ABSENT as a verify attempt when the ledger is on (does not change
+        # per-view semantics — ABSENT is not scene-wide proof of absence).
+        self.record_attempt(
+            action_kind="verify",
+            outcome="absent",
+            status_code="vlm_absent",
+            note=f"retract claim {key_phrase!r} at obs {oid}",
+            obs_id=oid,
+            phrase=key_phrase,
+            source="eqa",
+        )
         return {
             "ok": True,
             "obs_id": oid,
@@ -2877,7 +3092,14 @@ class GraphEQAMemory:
         }
 
     def clear_retracted_nav_claims(self) -> None:
-        """Drop claim blacklist (e.g. new question)."""
+        """Drop claim blacklist (e.g. new question).
+
+        When ``persist_absent_claims`` is on (``eqa.attempt_ledger.persist_absent_claims``
+        / ``EMET_ATTEMPT_LEDGER_PERSIST_ABSENT``), keep the blacklist across questions.
+        Ledger rows always persist for the graph lifetime regardless.
+        """
+        if self.persist_absent_claims:
+            return
         self._retracted_nav_claims = set()
 
     def retire_frontier_near_xy(
