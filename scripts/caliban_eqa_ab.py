@@ -16,17 +16,25 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
 
 from emet.habitat.metrics import parse_mcq_choices_from_question
-from emet.llms.openai_vllm_client import OpenaiVLLMClient
+from emet.llms.openai_vllm_client import OpenaiVLLMClient, parse_openai_endpoint_spec
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 QUESTION = "Did I leave the fruit bowl next to the microwave?"
-CHOICES = ["Yes, I left the fruit bowl there", "No, it is not there", "I am not sure", "(Do not choose this option)"]
+CHOICES = [
+    "Yes, I left the fruit bowl there",
+    "No, it is not there",
+    "I am not sure",
+    "(Do not choose this option)",
+]
 
 PREFILL = '{"reasoning":'
+OUT_PATH = Path("/tmp/caliban_ab_results.json")
 
 
 def build_question_line(question: str, choices: list[str]) -> str:
@@ -35,10 +43,6 @@ def build_question_line(question: str, choices: list[str]) -> str:
 
 
 def main() -> int:
-    import os
-
-    from emet.llms.openai_vllm_client import parse_openai_endpoint_spec
-
     endpoint = os.environ.get("EMET_VL_ENDPOINT", "")
     if not endpoint:
         print("ERROR: set EMET_VL_ENDPOINT=openai@http://caliban:8000/v1", file=sys.stderr)
@@ -65,13 +69,13 @@ def main() -> int:
         )
         # parse twice exactly like query_answer: JSON-first (with prefill repair),
         # then labeled scrape if the answer came back empty.
-        reasoning, answer, confidence, action, cr = mem.parse_answer(
+        _, answer, confidence, action, _ = mem.parse_answer(
             raw or "",
             prefer_json=True,
             json_prefill=prefill,
         )
         if not (answer or "").strip():
-            _, answer, confidence, action, cr = mem.parse_answer(raw or "", prefer_json=False)
+            _, answer, confidence, action, _ = mem.parse_answer(raw or "", prefer_json=False)
         results[name] = {"raw": raw, "answer": answer, "confidence": confidence, "action": action}
         print(f"=== {name} (prefill={prefill!r}) ===")
         print(f"raw: {raw!r}")
@@ -80,11 +84,14 @@ def main() -> int:
     print("--- summary ---")
     for name, r in results.items():
         ok = r["answer"].upper() in {"A", "B", "C", "D"}
-        print(f"{name}: raw={r['raw']!r} -> answer={r['answer']!r} confidence={r['confidence']} recoverable={ok}")
+        print(
+            f"{name}: raw={r['raw']!r} -> answer={r['answer']!r} "
+            f"confidence={r['confidence']} recoverable={ok}"
+        )
     print("--- round-trip check: choices parse ---")
     print(parse_mcq_choices_from_question(qline))
-    with open("/tmp/opencode/caliban_ab_results.json", "w") as f:
-        json.dump(results, f, indent=2)
+    OUT_PATH.write_text(json.dumps(results, indent=2) + "\n")
+    print(f"wrote {OUT_PATH}")
     return 0
 
 

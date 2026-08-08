@@ -19,6 +19,11 @@ from typing import Any
 import numpy as np
 
 from emet.agent.prompt import parse_tool_calls_response
+from emet.habitat.metrics import (
+    extract_mcq_letter,
+    parse_mcq_choices_from_question,
+    should_abstain_location_mcq,
+)
 from emet.memory.graph_eqa.agentic_policy import (
     AgenticState,
     EvidencePolicy,
@@ -39,6 +44,7 @@ from emet.memory.graph_eqa.graph_memory import (
     label_matches_relevant_object,
     question_stem_for_keywords,
 )
+from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     question_target_rooms,
@@ -3128,13 +3134,6 @@ class AgenticEQAExecutor:
         override marker. Falls back to free-form choice matching so a prose answer
         (``The time is 2:30 PM``) still scores instead of going blank.
         """
-        from emet.habitat.metrics import (
-            extract_mcq_letter,
-            parse_mcq_choices_from_question,
-            should_abstain_location_mcq,
-        )
-        from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
-
         gm = self.graph_memory
         raw = str(getattr(gm, "last_eqa_raw", "") or "") if gm is not None else ""
         if not raw.strip():
@@ -3144,9 +3143,7 @@ class AgenticEQAExecutor:
         m = re.search(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", head, flags=re.IGNORECASE)
         if not m:
             # Terse ``A}`` / ``A) <choice text>`` reply: no labeled fields at all.
-            from emet.habitat.metrics import extract_mcq_letter as _extract_mcq_letter
-
-            return _extract_mcq_letter(head, choices or None)
+            return extract_mcq_letter(head, choices or None)
         field = m.group(1).strip()
         if not field:
             return ""

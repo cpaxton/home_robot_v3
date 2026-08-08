@@ -30,6 +30,7 @@ import numpy as np
 from PIL import Image
 
 from emet.core.parameters import Parameters
+from emet.habitat.metrics import extract_mcq_letter
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 from emet.memory.graph_eqa.mcq_debias import (
     LETTERS,
@@ -3595,8 +3596,6 @@ class GraphEQAMemory:
         # both the JSON contract and the labeled scrape — common under a trailing
         # ``Answer:`` cue with remote/weaker VLMs.
         if not answer.strip():
-            from emet.habitat.metrics import extract_mcq_letter
-
             terse = extract_mcq_letter(text)
             if terse:
                 answer = terse
@@ -4710,8 +4709,6 @@ class GraphEQAMemory:
             # Image landmarks may correct memory-steered letters. Nearest-furniture memory
             # alone must NOT override a clear VLM A–D (Q6: VLM B correct, memory A) **or**
             # free-text that uniquely matches a choice ("the room with the blue curtains").
-            from emet.habitat.metrics import extract_mcq_letter
-
             img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)
             equip_letter = self._equipment_letter_from_target_distances(parsed_choices)
             memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
