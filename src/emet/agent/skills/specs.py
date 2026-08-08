@@ -460,7 +460,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="aim_arm_at",
         modes=frozenset({AgentMode.CHAT}),
-        description="STUB: Point the arm / wrist camera at a named object using IK, then the user can inspect it. Not implemented yet — do not pretend it moved the arm. For 'closer look' / 'inspect X' prefer describe_scene (head camera) until IK lands.",
+        description="Point the arm / wrist camera at a named object (localize + kinematic EE aim when available). On success you may call take_ee_picture. If aim fails or is unavailable, prefer face_toward + describe_scene (head camera) instead of claiming a closer look.",
         parameters={
             "type": "object",
             "properties": {

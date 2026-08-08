@@ -19,15 +19,15 @@ items under the matching phase. Do not touch pinned HM-EQA/OVMM configs.
 - [x] CHAT executor pickup/place failures write to the ledger via `ToolOutcome` (real Stretch success propagation still open below).
 
 ### Phase 1d — surface to planners
-- [x] Enriched `[attempts: …]` place cards + CHAT `navigation_diagnostics` recent attempts. (CONFIRMED_MEMORY top-K attempt summary still open.)
+- [x] Enriched `[attempts: …]` place cards + CHAT `navigation_diagnostics` recent attempts + CONFIRMED_MEMORY `attempts:` tags.
 
 ### Phase 2 — shared tool-outcome schema
 - [x] `ToolOutcome` shape shared by CHAT `_dispatch_tool_calls` and EQA `handle_tool` (`emet.agent.tool_outcome`); both write to the ledger.
 - [ ] Router prompt hygiene (moved from "Prompt / information flow": single source for `_EQA_FORMAT_BLOCK_*` + byte-stability test).
 
 ### Phase 3 — motion planning behind a narrow interface
-- [ ] Extract nav planner boundary from `controller_dynamem.py::navigate_to_target_pose`; structured plan-failure reasons feed the ledger.
-- [ ] `aim_arm_at` / EE closer look via IK + arm RRT — stub now returns `ToolOutcome(not_implemented)` and records `closer_look`; real IK still open under Embodied agent / Herman.
+- [x] Structured `NavAttemptResult.status_code` + `emet.controller.nav_attempt.sync_nav_attempt_to_ledger` from `_log_nav_attempt` (feeds ledger + `_last_nav_plan`).
+- [x] `aim_arm_at` → `closer_look.aim_wrist_at_phrase` (localize + kinematic EE aim when available; structured failure codes otherwise).
 - [ ] OVMM-full pick/place path records attempts to the ledger.
 
 ### Phase 4 — eval (no regressions)

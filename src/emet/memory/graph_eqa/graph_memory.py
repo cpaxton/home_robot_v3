@@ -3613,6 +3613,18 @@ class GraphEQAMemory:
                         lab = ", ".join(n.labels) if n.labels else "object"
                         near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                     parts.append("nearest: " + "; ".join(near_bits))
+            # Compact attempt-ledger tags for matched obs ids (opt-in; empty when off).
+            attempt_bits: list[str] = []
+            for n in matches[:3]:
+                bit = self.attempt_summary_for_obs(int(n.obs_id), max_bits=2)
+                if bit:
+                    attempt_bits.append(bit)
+            if sig is not None and sig[2] is not None:
+                bit = self.attempt_summary_for_obs(int(sig[2]), max_bits=2)
+                if bit and bit not in attempt_bits:
+                    attempt_bits.append(bit)
+            if attempt_bits:
+                parts.append("attempts: " + " | ".join(attempt_bits[:2]))
             lines.append(f"- {obj}: {status} — " + "; ".join(parts))
         if not lines:
             return ""

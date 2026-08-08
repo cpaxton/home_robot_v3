@@ -188,7 +188,7 @@ structured results; plan failures become ledger entries with reasons.
 | 1a — nav ledger store | done (default off) | `attempt_ledger.py` + `record_nav_attempt` dual-write |
 | 1b — ABSENT persistence | done | `persist_absent_claims` + verify:absent ledger row on retract |
 | 1c — manip outcomes | partial | CHAT pickup/place → ledger; Stretch false-success still open |
-| 1d — surface to planners | partial | place-card `[attempts:]` + `navigation_diagnostics`; CONFIRMED_MEMORY top-K open |
+| 1d — surface to planners | done | place cards, `navigation_diagnostics`, CONFIRMED_MEMORY `attempts:` tags |
 | 2 — tool outcome schema | done | `emet.agent.tool_outcome.ToolOutcome`; CHAT + EQA write to ledger |
-| 3 — motion interface + closer look | partial | `aim_arm_at` stub → `closer_look` ledger; nav extract + real IK open |
+| 3 — motion interface + closer look | done (v1) | `nav_attempt.sync_*` + `closer_look.aim_wrist_at_phrase`; OVMM-full ledger still open |
 | 4 — eval | not started | gates each phase; repeat key defined above |
