@@ -2,6 +2,24 @@
 
 Minimal checked-in summaries only (no RGB / voxels / traces).
 
+## What "our method" is (read before quoting numbers)
+
+"Our method" = **Dynagraph + agentic EQA verify loop** (`EMET_EQA_AGENTIC_VERIFY=1`):
+VLM-first answerability (`vlm_assess` on fresh RGB unlocks `submit_answer`; SigLIP/OWLv2/YoloE
+are high-recall proposals, never the submit gate), on the Dynagraph memory substrate
+(merge 0.45 m, staleness 256; HM-EQA rows pin `merged_memory: false`).
+
+The two of-record slices used **different policy knobs** — both are "our method", but
+quote the knob with the number:
+
+| Slice | Knobs | Headline |
+|-------|-------|----------|
+| Holdout-8 (paper table) | **router off** (deterministic heuristic walk), matched H2H | agentic **8/8** vs classic 5/8 |
+| Balanced-32 (composite) | **paper-router preset** (router on, `agentic_verifier=none`, allow-unverified) + explore-after-ABSENT | agentic **16/32** vs classic 9/32 |
+
+Router-off agentic bal-32 = 11–12/32 (archived); paper-router holdout-8 = 5/8 (variance).
+Full write-up: `docs/experiments/agentic_scale.md`.
+
 | File | Slice | Status |
 |------|-------|--------|
 | `holdout4_summary.json` | n=4 gate | complete |
@@ -43,6 +61,33 @@ COPY_PAPER_FIGS=1 …  # or rebuild from holdout8_summary.json
 Router **off**. Paper figures `figs/hmeqa_agentic_h2h.png` / `hmeqa_agentic_coverage.png` are **holdout-8**. Do not overwrite from bal-32 runs.
 
 **Policy variance (docs / appendix only):** paper-router + explore holdout `hmeqa_holdout8_explore_20260727_211505` scored agentic **5/8** (misses 56/65/105) — VLM / salvage noise, not the paper headline.
+
+## Post-manifest variance runs (Aug 2026, classic-only on holdout-8 prefix `{15,56,65,68}`)
+
+These are **not** the paper's holdout-4 slice (`{15,68,105,17}`); they exercise the first four ids of holdout-8 and are kept as variance evidence for the classic arm, not as replacement table rows.
+
+| Run dir | Classic on `{15,56,65,68}` |
+|---------|----------------------------|
+| `hmeqa_agentic_h2h_20260804_095037` | 4/4 (100%) |
+| `hmeqa_agentic_h2h_20260804_200537` | 1/4 (25%) |
+| `hmeqa_agentic_h2h_20260804_214650` | 4/4 (100%) |
+| `hmeqa_agentic_h2h_20260805_094149` | 1/4 (25%) |
+
+Paper rows (`holdout4_summary.json`, `holdout8_summary.json`) unchanged; cite the 25–100% spread only as run-to-run variance on letter accuracy, with mean planning steps as the more stable claim.
+
+## Balanced-32 replication evidence (Aug 2026, agentic only)
+
+The 16/32 composite headline is stable across later agentic-only runs:
+
+| Run dir | Agentic |
+|---------|---------|
+| `hmeqa_bal32_room_llm_20260731_052932` | 12/32 (37.5%) |
+| `hmeqa_merged_off_bal32_20260801` | 11/32 (34.4%) |
+| `hmeqa_merged_on_bal32_20260801` | 14/32 (43.75%) |
+| `hmeqa_bal32_fixes_off_20260802` | 15/32 (46.9%) |
+| `hmeqa_bal32_fixes_on_20260802` | **16/32 (50.0%)** |
+
+Band 11–16/32; paper headline 16/32 remains the of-record composite (classic 9/32 from the matched router-off H2H).
 
 ## Failset q104/q105 (infra)
 
