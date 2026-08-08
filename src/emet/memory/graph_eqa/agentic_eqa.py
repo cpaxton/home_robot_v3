@@ -829,10 +829,15 @@ class AgenticEQAExecutor:
         frontier_xyz = None
         pick_source = "pick_uncovered"
         frontier_room = "unknown"
+        escape_m = self._escape_min_travel_m()
+        escape_source = "none"
+        if self.room_policy == "canonical" and room_mismatches_question(self._last_room_estimate, self.question):
+            escape_source = "coverage_mismatch"
+        elif escape_m > 0.0:
+            escape_source = "frame_streak"
         try:
             from emet.controller.habitat_nav import pick_uncovered_explore_target
 
-            escape_m = self._escape_min_travel_m()
             candidates: list[np.ndarray | None] = []
             # GraphEQA-style: VLM ranks a small pool of reachable frontier RGBs.
             # Agentic always tries this; classic coverage path still uses EMET_VLM_FRONTIER_SCORING.
@@ -982,6 +987,8 @@ class AgenticEQAExecutor:
             "toward": toward or None,
             "room_aligned": room_aligned,
             "in_target_area": self._in_target_area,
+            "escape_min_travel_m": float(escape_m),
+            "escape_source": escape_source,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
@@ -2217,10 +2224,20 @@ class AgenticEQAExecutor:
             self._close_look_source = "none"
 
     def _escape_min_travel_m(self) -> float:
-        """Distance the next frontier must clear once the target keeps not showing up."""
-        if self._not_present_streak < NOT_PRESENT_ESCAPE_STREAK:
-            return 0.0
-        return ESCAPE_MIN_TRAVEL_M
+        """Distance the next frontier must clear to keep making progress.
+
+        Two signals feed the floor:
+          * frame-level: consecutive not-present VLM views (existing behavior); and
+          * room-level: the robot is demonstrably in a room the question's target
+            rooms exclude (canonical policy). This does **not** reset on a
+            spurious ``present`` frame, so explore keeps being pushed away from an
+            already-rejected room instead of spinning inside it (q2/q76/q29-type
+            budget burns).
+        """
+        floor = ESCAPE_MIN_TRAVEL_M if self._not_present_streak >= NOT_PRESENT_ESCAPE_STREAK else 0.0
+        if self.room_policy == "canonical" and room_mismatches_question(self._last_room_estimate, self.question):
+            floor = max(floor, ESCAPE_MIN_TRAVEL_M)
+        return floor
 
     def _update_escape_streak(self, *, present: bool) -> None:
         """Track consecutive not-visible views and publish the escape floor to the picker."""
