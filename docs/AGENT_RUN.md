@@ -233,6 +233,11 @@ uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "desc
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless --no-discord \
   -c "pick up the bowl and place it on the microwave"
 
+# Stretch MuJoCo pick/place default: with visual-servo OFF, any sim that advertises
+# sim_set_body_pose uses GT teleport (`prefer_sim_teleport_manip`), not AnyGrasp.
+# Pass -V / --visual-servo when comparing to the old Stretch grasp path.
+# Mode table: docs/molmospaces.md (Mobile manipulation).
+
 # No LLM / no models: scripted agent tool_calls + teleport only
 uv run python scripts/scripted_sim_pick_place.py --start-sim
 uv run python scripts/scripted_sim_pick_place.py --start-sim \
