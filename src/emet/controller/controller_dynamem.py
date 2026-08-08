@@ -2522,7 +2522,8 @@ class DynamemController(BaseController):
         else:
             gripper_width = 1
 
-        if skip_confirmation or input("Do you want to do this manipulation? Y or N ") != "N":
+        confirmed = skip_confirmation or input("Do you want to do this manipulation? Y or N ") != "N"
+        if confirmed:
             pickup(
                 self.manip_wrapper,
                 rotation,
@@ -2536,7 +2537,7 @@ class DynamemController(BaseController):
         # Shift the base back to the original point as we are certain that original point is navigable in navigation obstacle map
         self.manip_wrapper.move_to_position(base_trans=-self.manip_wrapper.robot.get_six_joints()[0])
 
-        return True
+        return bool(confirmed)
 
     def _patch_images(self, images: list[Image.Image], patch_size=(480, 640), gap=5):
         """

@@ -2,7 +2,7 @@
 
 **Branch:** `feature/agent-world-model`
 **Date:** 2026-08-08
-**Status:** Phase 1a in progress — nav ledger landed (config default off).
+**Status:** Phases 1–3 landed (ledger default off); Phase 4 helpers done, GPU deltas pending.
 
 ## Goal
 
@@ -187,8 +187,8 @@ structured results; plan failures become ledger entries with reasons.
 |-------|--------|-------|
 | 1a — nav ledger store | done (default off) | `attempt_ledger.py` + `record_nav_attempt` dual-write |
 | 1b — ABSENT persistence | done | `persist_absent_claims` + verify:absent ledger row on retract |
-| 1c — manip outcomes | partial | CHAT pickup/place → ledger; Stretch false-success still open |
+| 1c — manip outcomes | done | CHAT + Stretch success propagation; OVMM-full `record_manip_attempt` |
 | 1d — surface to planners | done | place cards, `navigation_diagnostics`, CONFIRMED_MEMORY `attempts:` tags |
-| 2 — tool outcome schema | done | `emet.agent.tool_outcome.ToolOutcome`; CHAT + EQA write to ledger |
-| 3 — motion interface + closer look | done (v1) | `nav_attempt.sync_*` + `closer_look.aim_wrist_at_phrase`; OVMM-full ledger still open |
-| 4 — eval | not started | gates each phase; repeat key defined above |
+| 2 — tool outcome schema | done | `ToolOutcome` + shared `_EQA_RULE_*` format atoms + byte-stability test |
+| 3 — motion interface + closer look | done (v1) | `nav_attempt.sync_*` + `closer_look.aim_wrist_at_phrase` |
+| 4 — eval | helpers done | `attempt_metrics.summarize_repeat_failures`; GPU deltas via `emet jobs` still open |

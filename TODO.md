@@ -15,23 +15,25 @@ items under the matching phase. Do not touch pinned HM-EQA/OVMM configs.
 ### Phase 1b — ABSENT persistence
 - [x] Config-gated persistence of verify-ABSENT evidence past the per-question `_retracted_nav_claims` reset (`persist_absent_claims` / `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT`; retract also writes a `verify:absent` ledger row).
 
-### Phase 1c — manip outcomes (blocked)
-- [x] CHAT executor pickup/place failures write to the ledger via `ToolOutcome` (real Stretch success propagation still open below).
+### Phase 1c — manip outcomes
+- [x] CHAT executor pickup/place failures write to the ledger via `ToolOutcome`.
+- [x] Stretch / AnyGrasp `_pickup` / `_place` propagate real success (`agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful`).
 
 ### Phase 1d — surface to planners
 - [x] Enriched `[attempts: …]` place cards + CHAT `navigation_diagnostics` recent attempts + CONFIRMED_MEMORY `attempts:` tags.
 
 ### Phase 2 — shared tool-outcome schema
 - [x] `ToolOutcome` shape shared by CHAT `_dispatch_tool_calls` and EQA `handle_tool` (`emet.agent.tool_outcome`); both write to the ledger.
-- [ ] Router prompt hygiene (moved from "Prompt / information flow": single source for `_EQA_FORMAT_BLOCK_*` + byte-stability test).
+- [x] Router prompt hygiene: shared `_EQA_RULE_*` atoms compose `_EQA_FORMAT_BLOCK_*` + byte-stability test in `test_room_policy.py`.
 
 ### Phase 3 — motion planning behind a narrow interface
 - [x] Structured `NavAttemptResult.status_code` + `emet.controller.nav_attempt.sync_nav_attempt_to_ledger` from `_log_nav_attempt` (feeds ledger + `_last_nav_plan`).
 - [x] `aim_arm_at` → `closer_look.aim_wrist_at_phrase` (localize + kinematic EE aim when available; structured failure codes otherwise).
-- [ ] OVMM-full pick/place path records attempts to the ledger.
+- [x] OVMM-full pick/place path records attempts to the ledger (`record_manip_attempt` in `ovmm_full.py`).
 
 ### Phase 4 — eval (no regressions)
-- [ ] Repeat-failed-attempt metrics on HM-EQA agentic arm + OVMM find, as deltas vs pinned baselines (via `emet jobs`).
+- [x] Repeat-failure metrics helpers (`attempt_metrics.summarize_repeat_failures`) + unit tests.
+- [ ] GPU deltas vs pinned baselines on HM-EQA agentic arm + OVMM find (via `emet jobs`; ledger opt-in).
 
 ## Prompt / information flow (THIS BRANCH)
 
@@ -39,7 +41,7 @@ items under the matching phase. Do not touch pinned HM-EQA/OVMM configs.
 - [x] **Room context never reaches the answer VLM**: done — `to_string` emits `Rooms:` + per-node `(room)` tags and `query_answer` passes them to the answer model.
 - [x] **EQA answer format → JSON**: HM-EQA/MCQ use `{"reasoning","answer","confidence","action","confidence_reasoning"}` (`eqa.answer_format` / `EMET_EQA_ANSWER_FORMAT`; default json for hmeqa/mcq). `parse_answer` prefers JSON with labeled-field fallback; prefill is `{"reasoning":`.
 - [x] **Unified token budget for the EQA prompt**: `eqa_vl.eqa_prompt_max_tokens` default 2500 (`EMET_EQA_PROMPT_MAX_TOKENS`); truncation order HISTORY → CONFIRMED_MEMORY → edges → labels via `build_eqa_prompt_text`.
-- [ ] **Router prompt hygiene**: canonical/LLM format blocks in agentic_tools.py duplicate rules (investigate-vs-explore, in_target_area). Single source of truth + a unit test asserting `build_graph_eqa_system_prompt` byte-stability (prefix-KV cache depends on it). *Tracked under Embodied agent planning Phase 2 above.*
+- [x] **Router prompt hygiene**: shared `_EQA_RULE_*` atoms in `agentic_tools.py`; byte-stability test pins format-block SHA256 + identity across calls.
 - [x] **HISTORY loop risk**: HISTORY stores one-line outcomes (`Iter: answer=… conf=… action=… salvage=… | reason`) plus `Nav_result`, not raw model replays.
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
@@ -85,7 +87,7 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 ### Config / agent path
 - [x] **Wire `agent.manip_mode` / `manip_collision` / `manip_planner` into `DynamemTaskExecutor`**: `emet run agent` merges the finalized chat `agent:` section (YAML / `--set agent.manip_*`) into `parameters["agent"]` before executor init; `EMET_MANIP_*` env vars still win. (Manip-only top-level `agent:` blocks are now recognized as chat-agent sections by the loader.)
 - [ ] **Stretch MuJoCo pick/place default**: with visual-servo off, any sim advertising `sim_set_body_pose` takes **GT teleport** instead of AnyGrasp / agent grasp. Confirm paper/OVMM Stretch numbers still intend `-V` when comparing to old path; document the default loudly in AGENT_RUN / molmospaces.
-- [ ] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: `DynamemTaskExecutor` only sets `_last_exec_ok=False` on sim teleport/kinematic failures. The Stretch visual-servo / `agent.manipulate` / `agent.place` path still returns success unconditionally, so agent `pick_place` tool summaries and scripted `_last_exec_ok` checks never see Stretch grasp/place failures. Propagate real success from the Stretch manip stack (or at least catch known failure signals). *Prerequisite for the Embodied agent planning Phase 1 manip ledger.*
+- [x] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: fixed — Stretch path propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (and declines confirmation → False).
 
 ### Real tests (not yet green on every machine)
 - [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
