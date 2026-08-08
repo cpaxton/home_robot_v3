@@ -734,10 +734,6 @@ class Qwen35VLClient:
         return output_text
 
 
-# Back-compat: older code imported ``Qwen3VLClient`` (Qwen3-VL weights); EQA now uses Qwen3.5 multimodal.
-Qwen3VLClient = Qwen35VLClient
-
-
 if __name__ == "__main__":
     # from emet.llms.prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
     from emet.llms.prompts.pickup_prompt import PickupPromptBuilder

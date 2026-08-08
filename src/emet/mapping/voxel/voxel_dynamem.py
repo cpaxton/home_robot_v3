@@ -615,11 +615,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if not isinstance(depth, torch.Tensor):
             depth = torch.as_tensor(depth, dtype=torch.float32)
         depth = depth.float()
-        valid = (
-            torch.isfinite(depth)
-            & (depth > float(self.min_depth))
-            & (depth < float(self.max_depth))
-        )
+        valid = torch.isfinite(depth) & (depth > float(self.min_depth)) & (depth < float(self.max_depth))
         if self.use_derivative_filter:
             edges = get_edges(depth, threshold=self.derivative_filter_threshold)
             valid = valid & ~edges
@@ -1604,9 +1600,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             max_new_tokens=self._eqa_max_tokens,
         )
         self._last_eqa_raw = raw_answer_outputs
-        answer_outputs = (
-            raw_answer_outputs.replace("*", "").replace("/", "").replace("#", "").lower()
-        )
+        answer_outputs = raw_answer_outputs.replace("*", "").replace("/", "").replace("#", "").lower()
 
         print(commands)
         print(answer_outputs)
@@ -1749,7 +1743,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         # self.obs_count inherited from voxel_dynamem
         objects = []
-        for _ in range(max_tries):
+        for attempt in range(max_tries):
             try:
                 object_names = dynamem_vllm_call(
                     self.image_description_client,
@@ -1758,8 +1752,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     max_new_tokens=32,
                 )
                 objects = object_names.split(",")[:5]
-            except:
+            except Exception as e:
                 objects = []
+                logger.debug(
+                    "list_objects_in_an_image VL call failed (attempt %s/%s): %s",
+                    attempt + 1,
+                    max_tries,
+                    e,
+                )
                 continue
             else:
                 break

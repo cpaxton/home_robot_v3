@@ -102,6 +102,20 @@ def test_extract_mcq_letter_does_not_match_article_a_in_prose():
     assert extract_mcq_letter_from_raw_eqa(caption, choices) == ""
 
 
+def test_extract_mcq_letter_terse_continuations():
+    """Trailing ``Answer:`` cue / assistant prefill: letter + terminator, no JSON."""
+    assert extract_mcq_letter("A}") == "A"
+    assert extract_mcq_letter("a}") == "A"
+    assert extract_mcq_letter("A) Living room") == "A"
+    assert extract_mcq_letter("B. The lamp is on.") == "B"
+    assert extract_mcq_letter("C: in the kitchen") == "C"
+    assert extract_mcq_letter("D,") == "D"
+    choices = ["In the bedroom", "On the table", "Next to the sofa", "Next to the armchair"]
+    assert extract_mcq_letter_from_raw_eqa("A}") == "A"
+    assert extract_mcq_letter_from_raw_eqa("A) In the bedroom", choices) == "A"
+    assert extract_mcq_letter_from_raw_eqa("A}", choices) == "A"
+
+
 def test_extract_mcq_letter_from_raw_eqa_blank_answer_field():
     raw = "reasoning:\nNeed more exploration.\nanswer:\nconfidence:\nFALSE\naction:\n3\n"
     assert extract_mcq_letter_from_raw_eqa(raw) == ""

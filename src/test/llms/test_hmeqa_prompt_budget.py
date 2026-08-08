@@ -21,6 +21,7 @@ from emet.core.parameters import get_parameters
 from emet.llms.eqa_vl_settings import resolve_eqa_answer_max_new_tokens
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT, without_caption
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
+from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 # A demonstrated output field, i.e. "Caption:" alone on its line. Prose that merely
 # names the field (as the override does) is not a demonstration.
@@ -132,8 +133,6 @@ def test_shipped_config_disables_image_descriptions():
 
 
 def test_strip_caption_block_from_history():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     raw = "Caption:\nImage 1 shows a sofa.\nImage 2 shows a rug.\nReasoning:\nthe lamp is lit.\nAnswer:\nA\n"
     stripped = GraphEQAMemory.strip_caption_block_from_history(raw)
     assert "Caption:" not in stripped
@@ -146,8 +145,6 @@ def test_strip_caption_block_from_history():
 
 def test_query_answer_omits_image_descriptions_by_default():
     import numpy as np
-
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
     captured: dict = {}
 
@@ -171,8 +168,6 @@ def test_query_answer_omits_image_descriptions_by_default():
 
 def test_query_answer_can_restore_image_descriptions(monkeypatch):
     import numpy as np
-
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
     monkeypatch.setenv("EMET_EQA_INCLUDE_IMAGE_DESCRIPTIONS", "1")
     captured: dict = {}
@@ -199,8 +194,6 @@ def test_query_answer_prefills_reasoning_when_hmeqa_variant_on_parameters():
     import numpy as np
 
     from emet.core.parameters import Parameters
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     captured: dict = {}
 
     def fake_eqa(cmds, **kwargs):
@@ -224,8 +217,6 @@ def test_query_answer_prefills_reasoning_when_hmeqa_variant_on_parameters():
 
 
 def test_append_eqa_history_strips_caption():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     mem = GraphEQAMemory(eqa_client=lambda _c: "", image_description_client=lambda _x: "")
     mem._append_eqa_history("Caption:\nImage 1 is a chair.\nAnswer:A\nReasoning:seen\n")
     assert len(mem._history_outputs) == 1
@@ -235,8 +226,6 @@ def test_append_eqa_history_strips_caption():
 
 def test_query_answer_stores_history_outcome_line():
     import numpy as np
-
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
     def fake_eqa(cmds, **kwargs):
         return (
@@ -275,8 +264,6 @@ def test_answer_format_defaults_json_for_hmeqa(monkeypatch):
 
 
 def test_build_eqa_prompt_text_truncates_history_first():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     history = [f"Iter: answer=A conf=false action=- salvage=0 | long reason {i} " + ("x" * 200) for i in range(6)]
     graph = "SCENE_GRAPH:\n" + "\n".join(
         [f"Node {i}: object{i} at (0.00, 0.00, 0.00) [Image {i}]" for i in range(1, 20)]
@@ -297,8 +284,6 @@ def test_build_eqa_prompt_text_truncates_history_first():
 
 
 def test_parse_answer_json_and_labeled_fallback():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
     raw = (
         '{"reasoning": "lamp is lit", "answer": "A", "confidence": true, '
@@ -329,9 +314,22 @@ def test_parse_answer_json_and_labeled_fallback():
     assert act4.strip() == "1"
 
 
-def test_parse_answer_tolerates_a_missing_caption():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+def test_parse_answer_terse_letter_under_answer_cue():
+    """Remote Qwen2-VL collapses under trailing ``Answer:`` cue → bare letter + terminator."""
+    mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
 
+    # Prefill arm: emits ``A}``; JSON repair fails (unquoted letter) → terse fallback.
+    _, a, c, act, _ = mem.parse_answer("A}", prefer_json=True, json_prefill='{"reasoning":')
+    assert a == "A"
+    assert c is False
+    assert act == ""
+
+    # No-prefill arm: emits ``A) Living room`` → terse fallback.
+    _, a2, _, _, _ = mem.parse_answer("A) Living room")
+    assert a2 == "A"
+
+
+def test_parse_answer_tolerates_a_missing_caption():
     raw = "reasoning:\nthe lamp shade is lit.\nanswer:\na\nconfidence:\ntrue\naction:\nconfidence_reasoning:\nclear view.\n"
     with patch.object(GraphEQAMemory, "__init__", lambda self: None):
         gm = GraphEQAMemory()
@@ -344,8 +342,6 @@ def test_parse_answer_tolerates_a_missing_caption():
 
 def test_image_descriptions_omit_labels_already_on_graph():
     import numpy as np
-
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
     mem = GraphEQAMemory(defer_llm_clients=True)
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
