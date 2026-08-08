@@ -3,13 +3,37 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Embodied agent planning (world model + tool calling + motion)
+
+Plan: [docs/plans/2026-08-08_embodied_agent_planning.md](docs/plans/2026-08-08_embodied_agent_planning.md)
+(branch `feature/agent-world-model`). One checkbox per landable change; add new
+items under the matching phase. Do not touch pinned HM-EQA/OVMM configs.
+
+### Phase 1 — action-outcome ledger in graph memory
+- [ ] `AttemptRecord` store in `GraphEQAMemory` (navigate / investigate / verify / closer_look / pick / place outcomes); derive `nav_attempts`/`nav_failures` from it.
+- [ ] Config-gated persistence of verify-ABSENT evidence past the per-question `_retracted_nav_claims` reset (keep per-view semantics).
+- [ ] Record manipulation outcomes in the ledger — depends on "Stretch / AnyGrasp `_pickup` / `_place` always return True" below.
+- [ ] Surface ledger to planners: enriched `[tried: …]` place cards, CONFIRMED_MEMORY attempt summaries, CHAT `query_memory` / `navigation_diagnostics`.
+
+### Phase 2 — shared tool-outcome schema
+- [ ] `ToolOutcome` dict shape shared by CHAT `_dispatch_tool_calls` and EQA `handle_tool`; both write to the ledger.
+- [ ] Router prompt hygiene (moved from "Prompt / information flow": single source for `_EQA_FORMAT_BLOCK_*` + byte-stability test).
+
+### Phase 3 — motion planning behind a narrow interface
+- [ ] Extract nav planner boundary from `controller_dynamem.py::navigate_to_target_pose`; structured plan-failure reasons feed the ledger.
+- [ ] `aim_arm_at` / EE closer look via IK + arm RRT — implements the "Arm IK closer look" item under Embodied agent / Herman; failed aim = ledger entry.
+- [ ] OVMM-full pick/place path records attempts to the ledger.
+
+### Phase 4 — eval (no regressions)
+- [ ] Repeat-failed-attempt metrics on HM-EQA agentic arm + OVMM find, as deltas vs pinned baselines (via `emet jobs`).
+
 ## Prompt / information flow (THIS BRANCH)
 
 - [x] **One fact, one line — de-duplicate EQA memory blocks**: folded CONFIRMED_MEMORY → SCENE_GRAPH is now the **default** (`eqa.merged_memory` on; env can flip). HM-EQA paper row pins `merged_memory: false` in `configs/benchmarks/dynagraph.yaml` to keep published numbers on the standalone block. IMAGE_DESCRIPTIONS (when enabled) omit labels already tagged on SCENE_GRAPH Image-N lines.
 - [x] **Room context never reaches the answer VLM**: done — `to_string` emits `Rooms:` + per-node `(room)` tags and `query_answer` passes them to the answer model.
 - [x] **EQA answer format → JSON**: HM-EQA/MCQ use `{"reasoning","answer","confidence","action","confidence_reasoning"}` (`eqa.answer_format` / `EMET_EQA_ANSWER_FORMAT`; default json for hmeqa/mcq). `parse_answer` prefers JSON with labeled-field fallback; prefill is `{"reasoning":`.
 - [x] **Unified token budget for the EQA prompt**: `eqa_vl.eqa_prompt_max_tokens` default 2500 (`EMET_EQA_PROMPT_MAX_TOKENS`); truncation order HISTORY → CONFIRMED_MEMORY → edges → labels via `build_eqa_prompt_text`.
-- [ ] **Router prompt hygiene**: canonical/LLM format blocks in agentic_tools.py duplicate rules (investigate-vs-explore, in_target_area). Single source of truth + a unit test asserting `build_graph_eqa_system_prompt` byte-stability (prefix-KV cache depends on it).
+- [ ] **Router prompt hygiene**: canonical/LLM format blocks in agentic_tools.py duplicate rules (investigate-vs-explore, in_target_area). Single source of truth + a unit test asserting `build_graph_eqa_system_prompt` byte-stability (prefix-KV cache depends on it). *Tracked under Embodied agent planning Phase 2 above.*
 - [x] **HISTORY loop risk**: HISTORY stores one-line outcomes (`Iter: answer=… conf=… action=… salvage=… | reason`) plus `Nav_result`, not raw model replays.
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
@@ -17,7 +41,7 @@ Strike through or move to a PR when done.
 ## Embodied agent / Herman
 
 - [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
-- [ ] **Arm IK “closer look”**: point the wrist / EE camera at a named object (or image region), then capture.
+- [ ] **Arm IK “closer look”**: point the wrist / EE camera at a named object (or image region), then capture. *Tracked under Embodied agent planning Phase 3 above.*
   - Stub tool today: `aim_arm_at` in chat pack (returns not-implemented + suggests `describe_scene`).
   - Needs: Mars/Stretch IK + wrist frame + safety (collision, joint limits); then `take_ee_picture` only *after* aim.
   - Until then: “closer look / inspect X” → **change viewpoint** (rotate / small drive) then `describe_scene` / `send_image` (head), never raw `take_ee_picture`.
@@ -55,7 +79,7 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 ### Config / agent path
 - [x] **Wire `agent.manip_mode` / `manip_collision` / `manip_planner` into `DynamemTaskExecutor`**: `emet run agent` merges the finalized chat `agent:` section (YAML / `--set agent.manip_*`) into `parameters["agent"]` before executor init; `EMET_MANIP_*` env vars still win. (Manip-only top-level `agent:` blocks are now recognized as chat-agent sections by the loader.)
 - [ ] **Stretch MuJoCo pick/place default**: with visual-servo off, any sim advertising `sim_set_body_pose` takes **GT teleport** instead of AnyGrasp / agent grasp. Confirm paper/OVMM Stretch numbers still intend `-V` when comparing to old path; document the default loudly in AGENT_RUN / molmospaces.
-- [ ] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: `DynamemTaskExecutor` only sets `_last_exec_ok=False` on sim teleport/kinematic failures. The Stretch visual-servo / `agent.manipulate` / `agent.place` path still returns success unconditionally, so agent `pick_place` tool summaries and scripted `_last_exec_ok` checks never see Stretch grasp/place failures. Propagate real success from the Stretch manip stack (or at least catch known failure signals).
+- [ ] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: `DynamemTaskExecutor` only sets `_last_exec_ok=False` on sim teleport/kinematic failures. The Stretch visual-servo / `agent.manipulate` / `agent.place` path still returns success unconditionally, so agent `pick_place` tool summaries and scripted `_last_exec_ok` checks never see Stretch grasp/place failures. Propagate real success from the Stretch manip stack (or at least catch known failure signals). *Prerequisite for the Embodied agent planning Phase 1 manip ledger.*
 
 ### Real tests (not yet green on every machine)
 - [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
