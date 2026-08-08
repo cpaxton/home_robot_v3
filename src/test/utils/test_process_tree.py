@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from emet.utils.process_tree import kill_process_tree, popen_session, terminate_process_tree
 
@@ -48,3 +50,19 @@ def test_terminate_noop_when_already_exited() -> None:
     proc.wait(timeout=5)
     terminate_process_tree(proc, grace_s=1.0)
     kill_process_tree(proc)
+
+
+def test_process_tree_refuses_unsafe_mock_pid() -> None:
+    proc = MagicMock()
+    proc.poll.return_value = None
+    proc.pid = 1
+
+    with patch("emet.utils.process_tree.os.killpg") as mock_killpg:
+        with patch("emet.utils.process_tree.os.kill") as mock_kill:
+            with pytest.raises(ValueError, match="unsafe process PID/PGID 1"):
+                terminate_process_tree(proc)
+            with pytest.raises(ValueError, match="unsafe process PID/PGID 1"):
+                kill_process_tree(proc)
+
+    mock_killpg.assert_not_called()
+    mock_kill.assert_not_called()

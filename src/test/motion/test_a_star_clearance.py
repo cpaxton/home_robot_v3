@@ -120,6 +120,45 @@ def test_hard_min_clearance_rejects_wall_hug_cells():
     assert not planner.point_is_occupied(10, mid_y)
 
 
+def test_multi_goal_uses_clearance_safe_snapped_endpoint():
+    obs, exp = _corridor_map(nx=40, ny=30, wall_clearance_cells=2)
+    space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))
+    planner = AStar(space, min_clearance_m=0.25, clearance_cost_weight=0.0, grid_resolution_m=0.1)
+    start = (0.55, 1.55, 0.0)
+    requested_goal = (3.05, 0.25, 1.0)
+
+    planner.reset()
+    assert planner.clearance_at_xy(requested_goal[:2]) < planner.min_clearance_m
+    result = planner.plan(start, requested_goal, goals=[requested_goal], verbose=False)
+
+    assert result.success, result.reason
+    assert result.goal_index == 0
+    endpoint = np.asarray(result.trajectory[-1].state, dtype=np.float64).reshape(-1)
+    assert not np.allclose(endpoint[:2], requested_goal[:2])
+    for node in result.trajectory[1:]:
+        xy = np.asarray(node.state, dtype=np.float64).reshape(-1)[:2]
+        assert planner.clearance_at_xy(xy) + 1e-6 >= planner.min_clearance_m
+
+
+def test_multi_goal_preserves_tight_start_and_safe_escape_cell():
+    obs, exp = _corridor_map(nx=40, ny=30, wall_clearance_cells=2)
+    space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))
+    planner = AStar(space, min_clearance_m=0.25, clearance_cost_weight=0.0, grid_resolution_m=0.1)
+    start = (0.57, 0.27, 0.0)
+    goal = (3.05, 1.55, 1.0)
+
+    result = planner.plan(start, goal, goals=[goal], verbose=False)
+
+    assert result.success, result.reason
+    states = [np.asarray(node.state, dtype=np.float64).reshape(-1) for node in result.trajectory]
+    assert np.allclose(states[0][:2], start[:2])
+    assert planner.clearance_at_xy(states[0][:2]) < planner.min_clearance_m
+    assert planner.clearance_at_xy(states[1][:2]) + 1e-6 >= planner.min_clearance_m
+
+    cleaned = planner.clean_path_for_xy(states, start_yaw=start[2])
+    assert np.allclose(np.asarray(cleaned[0])[:2], start[:2])
+
+
 def _l_obstacle_map(nx: int = 40, ny: int = 40) -> tuple[np.ndarray, np.ndarray]:
     """Open room with an L-shaped obstacle that invites corner-cutting chords."""
     obs = np.zeros((nx, ny), dtype=bool)

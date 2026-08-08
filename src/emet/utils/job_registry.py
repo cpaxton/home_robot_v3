@@ -50,7 +50,8 @@ def _now() -> float:
     return time.time()
 
 
-def _new_id() -> str:
+def new_job_id() -> str:
+    """Allocate a job id before a detached supervisor registers itself."""
     stamp = time.strftime("%Y%m%d_%H%M%S")
     return f"{stamp}_{uuid.uuid4().hex[:6]}"
 
@@ -203,7 +204,7 @@ def register_job(
     if desc and "description" not in meta_dict:
         meta_dict.setdefault("note", desc)
     job = JobRecord(
-        id=job_id or _new_id(),
+        id=job_id or new_job_id(),
         name=str(name),
         status=status,
         pid=int(pid) if pid is not None else None,

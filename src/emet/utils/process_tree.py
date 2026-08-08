@@ -8,11 +8,39 @@ direct child is ``kill()``-ed. Prefer :func:`popen_session` + :func:`terminate_p
 
 from __future__ import annotations
 
+import atexit
 import os
 import signal
 import subprocess
 import time
 from typing import Any
+
+_ACTIVE_PROCESSES: list[subprocess.Popen[Any]] = []
+_CLEANUP_HOOKS_INSTALLED = False
+
+
+def _cleanup_active_processes() -> None:
+    for proc in reversed(list(_ACTIVE_PROCESSES)):
+        terminate_process_tree(proc, grace_s=5.0)
+
+
+def _install_cleanup_hooks() -> None:
+    global _CLEANUP_HOOKS_INSTALLED
+    if _CLEANUP_HOOKS_INSTALLED:
+        return
+    _CLEANUP_HOOKS_INSTALLED = True
+    atexit.register(_cleanup_active_processes)
+
+    def _handler(signum: int, frame: Any) -> None:
+        _cleanup_active_processes()
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _handler)
+        except (ValueError, OSError):
+            pass
 
 
 def popen_session(
@@ -21,10 +49,15 @@ def popen_session(
 ) -> subprocess.Popen[Any]:
     """``subprocess.Popen`` in a new session so the whole tree can be signaled."""
     kwargs.setdefault("start_new_session", True)
-    return subprocess.Popen(cmd, **kwargs)
+    proc = subprocess.Popen(cmd, **kwargs)
+    _ACTIVE_PROCESSES.append(proc)
+    _install_cleanup_hooks()
+    return proc
 
 
 def _signal_group(pid: int, sig: int) -> None:
+    if pid <= 1:
+        raise ValueError(f"refusing to signal unsafe process PID/PGID {pid}")
     try:
         os.killpg(pid, sig)
     except (ProcessLookupError, PermissionError, OSError):
@@ -41,30 +74,42 @@ def terminate_process_tree(
 ) -> None:
     """SIGTERM the process group, then SIGKILL if still alive after ``grace_s``."""
     if proc is None or proc.poll() is not None:
+        if proc in _ACTIVE_PROCESSES:
+            _ACTIVE_PROCESSES.remove(proc)
         return
-    pid = int(proc.pid)
-    _signal_group(pid, signal.SIGTERM)
     try:
-        proc.wait(timeout=float(grace_s))
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    _signal_group(pid, signal.SIGKILL)
-    try:
-        proc.wait(timeout=30.0)
-    except subprocess.TimeoutExpired:
-        pass
+        pid = int(proc.pid)
+        _signal_group(pid, signal.SIGTERM)
+        try:
+            proc.wait(timeout=float(grace_s))
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        _signal_group(pid, signal.SIGKILL)
+        try:
+            proc.wait(timeout=30.0)
+        except subprocess.TimeoutExpired:
+            pass
+    finally:
+        if proc in _ACTIVE_PROCESSES:
+            _ACTIVE_PROCESSES.remove(proc)
 
 
 def kill_process_tree(proc: subprocess.Popen[Any] | None) -> None:
     """Immediate SIGKILL of the process group (timeouts / hard abort)."""
     if proc is None or proc.poll() is not None:
+        if proc in _ACTIVE_PROCESSES:
+            _ACTIVE_PROCESSES.remove(proc)
         return
-    _signal_group(int(proc.pid), signal.SIGKILL)
     try:
-        proc.wait(timeout=30.0)
-    except subprocess.TimeoutExpired:
-        pass
+        _signal_group(int(proc.pid), signal.SIGKILL)
+        try:
+            proc.wait(timeout=30.0)
+        except subprocess.TimeoutExpired:
+            pass
+    finally:
+        if proc in _ACTIVE_PROCESSES:
+            _ACTIVE_PROCESSES.remove(proc)
 
 
 def wait_briefly(seconds: float = 0.25) -> None:

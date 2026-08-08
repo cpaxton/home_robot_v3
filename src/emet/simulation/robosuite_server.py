@@ -322,7 +322,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         """Base free-joint orientation (deg), twist, COM height — for tipping / fall-over diagnosis.
 
         Call only with ``_mj_lock`` held. Uses ``base_link`` free-joint quaternion and qvel layout
-        (angular wx,wy,wz then linear vx,vy,vz in world frame).
+        (world-frame linear vx,vy,vz then body-local angular wx,wy,wz).
         """
         if self._mjmodel is None or self._mjdata is None:
             return "base: (no model)"
@@ -346,8 +346,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         yaw = math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
         r_deg, p_deg, y_deg = math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
         v0 = int(vadr)
-        wv = np.asarray(d.qvel[v0 : v0 + 3], dtype=np.float64).ravel()
-        lv = np.asarray(d.qvel[v0 + 3 : v0 + 6], dtype=np.float64).ravel()
+        lv = np.asarray(d.qvel[v0 : v0 + 3], dtype=np.float64).ravel()
+        wv = np.asarray(d.qvel[v0 + 3 : v0 + 6], dtype=np.float64).ravel()
         wn = float(np.linalg.norm(wv))
         ln = float(np.linalg.norm(lv))
         bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
@@ -1919,6 +1919,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[v0 : v0 + 6] = 0.0
             elif planar_aids is not None:
                 self._zero_base_free_joint_velocity()
+            # Refresh both idle snaps. Free-joint hold otherwise reverts to the spawn
+            # pose on the next tick after velocity-drive arrival.
+            self._snapshot_stationary_base_freejoint_pose()
             self._snapshot_stationary_planar_base_qpos()
             return
 
@@ -1929,15 +1932,19 @@ class RobosuiteZmqServer(BaseZmqServer):
             s = self._nav_v_max / sp
             vx *= s
             vy *= s
-        if dist < self._nav_tol_xy * 2.0:
-            vx = vy = 0.0
+        # Keep translating until within tol_xy. Zeroing XY in a "near goal" band while
+        # yaw is already satisfied leaves the controller commanding nothing forever
+        # (dist≈2*tol, eth≈0 → never reaches at_goal).
         wz = float(np.clip(self._nav_kp_theta * eth, -self._nav_w_max, self._nav_w_max))
 
         if free_addrs is not None:
             _, vadr = free_addrs
             v0 = int(vadr)
-            self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
-            self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+            self._mjdata.qvel[v0 : v0 + 3] = (vx, vy, 0.0)
+            bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+            rotation_world_from_body = np.asarray(self._mjdata.xmat[bid], dtype=np.float64).reshape(3, 3)
+            angular_velocity_body = rotation_world_from_body.T @ np.array([0.0, 0.0, wz], dtype=np.float64)
+            self._mjdata.qvel[v0 + 3 : v0 + 6] = angular_velocity_body
         else:
             ax, ay, aw = planar_aids
             names = getattr(self._spec, "planar_base_joint_names", None)
@@ -1964,6 +1971,19 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._mjdata.ctrl[ax] = qxd
             self._mjdata.ctrl[ay] = qyd
             self._mjdata.ctrl[aw] = qdot_yaw
+
+    def _step_controlled_physics_once(self) -> None:
+        """Apply stationary holds, then navigation control, then one MuJoCo step.
+
+        Stationary control deliberately zeros velocity actuators. Navigation
+        must therefore run afterward or planar XY commands are erased before
+        physics can consume them.
+        """
+        self._hold_stationary_base_if_idle()
+        self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
+        if self._nav_yaw_slew is None:
+            self._step_base_navigation_drive()
+        self._mj_step_once()
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -2386,12 +2406,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         while self._running:
             with self._mj_lock:
                 self._step_planar_yaw_slew()
-                if self._nav_yaw_slew is None:
-                    self._step_base_navigation_drive()
                 for _ in range(self._mj_substeps_per_tick):
-                    self._hold_stationary_base_if_idle()
-                    self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
-                    self._mj_step_once()
+                    self._step_controlled_physics_once()
                     self._physics_steps_executed += 1
                     self._maybe_report_fall_over()
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
@@ -2430,12 +2446,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     # and must not overlap Renderer / mj_forward on other ZMQ threads.
                     with self._mj_lock:
                         self._step_planar_yaw_slew()
-                        if self._nav_yaw_slew is None:
-                            self._step_base_navigation_drive()
                         for _ in range(self._mj_substeps_per_tick):
-                            self._hold_stationary_base_if_idle()
-                            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
-                            self._mj_step_once()
+                            self._step_controlled_physics_once()
                             self._physics_steps_executed += 1
                             self._maybe_report_fall_over()
                             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:

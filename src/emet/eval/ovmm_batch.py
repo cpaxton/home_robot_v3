@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -82,6 +83,21 @@ def write_metrics_csv(rows: list[dict], path: Path) -> None:
             writer.writerow({k: row.get(k) for k in keys})
 
 
+def _configured_vl_endpoint() -> str | None:
+    """Resolve an explicit endpoint without starting a local worker."""
+    from emet.core.parameters import get_parameters
+    from emet.llms.eqa_vl_settings import resolve_vl_endpoint
+
+    if os.environ.get("EMET_VL_ENDPOINT", "").strip():
+        return os.environ["EMET_VL_ENDPOINT"].strip()
+    if os.environ.get("EMET_OPENAI_BASE_URL", "").strip():
+        return f"openai@{os.environ['EMET_OPENAI_BASE_URL'].strip().rstrip('/')}"
+    try:
+        return resolve_vl_endpoint(get_parameters("dynav_config.yaml"))
+    except Exception:
+        return None
+
+
 def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> int:
     """Run find or full OVMM episodes; write per-run JSON + aggregate CSV."""
     from emet.eval.ovmm_benchmark_config import load_ovmm_benchmark_config
@@ -116,6 +132,15 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
 
     stride = max(1, int(opts.port_stride))
     manip = str(opts.manip_mode) if opts.full else "skip"
+    agentic_requested = not opts.oneshot_localize and any(
+        opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"}
+        for backend in backends
+    )
+    worker = None
+    if agentic_requested and _configured_vl_endpoint() is None:
+        from emet.eval.ovmm_vl_worker import ManagedVLWorker
+
+        worker = ManagedVLWorker(log_path=str(output_dir / "vl_worker.log"))
     for backend in backends:
         for ep_i, ep in enumerate(episodes):
             port_offset = int(opts.port_offset) + ep_i * stride
@@ -142,7 +167,12 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
             label = f"Running {tag}" + (f" manip_mode={manip}" if opts.full else "") + " …"
             print(label, file=sys.stderr)
             try:
-                metrics = run_episode_find_phase(ep, run_cfg, repo_root=root)
+                metrics = run_episode_find_phase(
+                    ep,
+                    run_cfg,
+                    repo_root=root,
+                    vl_worker=worker,
+                )
             except Exception as exc:
                 print(f"FAIL {tag}: {exc}", file=sys.stderr)
                 metrics = {

@@ -546,6 +546,9 @@ emet test agent-regression            # Discord / Herman / agent pack (no sim)
 emet test src/test/cli/test_cli.py
 emet test -k test_serve
 emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
+# VLM-free multi-env nav/explore (Robocasa + OVMM kitchen + MolmoSpaces):
+emet test -v src/test/simulation/test_multi_env_nav_explore_smoke.py
+emet test -k robocasa_l1 src/test/simulation/test_multi_env_nav_explore_smoke.py
 ```
 
 `emet test agent-regression` expands to the fixed no-sim pack used as the Discord/Herman gate (see `.cursor/rules/agent-discord-regression.mdc`).
@@ -748,9 +751,9 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] -- CMD…` | Register + nohup wrapper (sets `EMET_JOB_ID`). With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. |
 
-`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). Prefer this over bare `nohup` for multi-hour GPU evals.
+`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
 ```bash
 uv run emet jobs

@@ -940,6 +940,7 @@ def run_episode_find_phase(
     run_cfg: FindPhaseRunConfig,
     *,
     repo_root: Path | None = None,
+    vl_worker: Any | None = None,
 ) -> dict[str, Any]:
     """
     Run one find-phase episode: sim subprocess, mapping, memory queries, GT scoring.
@@ -976,6 +977,11 @@ def run_episode_find_phase(
     env["PYTHONPATH"] = str(repo / "src") + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("MUJOCO_GL", "egl")
     env["PYTHONUNBUFFERED"] = "1"
+    # Image encoding/rendering must not run in unbounded busy loops while the
+    # simulator is also executing navigation. These rates are ample for mapping.
+    env.setdefault("EMET_ZMQ_FULL_HZ", "5")
+    env.setdefault("EMET_ZMQ_STATE_HZ", "30")
+    env.setdefault("EMET_ZMQ_SERVO_HZ", "10")
     if run_cfg.cpu_only:
         env["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -1011,7 +1017,39 @@ def run_episode_find_phase(
     init_wall_s = 0.0
     mapping_wall_s = 0.0
     query_wall_s = 0.0
+    previous_vl_endpoint = os.environ.get("EMET_VL_ENDPOINT")
+    vl_endpoint_used = previous_vl_endpoint
+    worker_started = False
     try:
+        parameters = apply_backend_parameters(
+            get_parameters("dynav_config.yaml"),
+            run_cfg.backend,
+            merge_xy_m=run_cfg.merge_xy_m,
+            staleness_horizon=run_cfg.staleness_horizon,
+        )
+        parameters["encoder"] = None
+        if run_cfg.perfect_depth:
+            parameters["debug_perfect_sensor_depth"] = True
+        parameters["find_phase_nav_step_timeout_s"] = nav_timeout
+        parameters["enable_tts"] = False
+        det_conf = float((parameters.get("detection", {}) or {}).get("confidence_threshold", 0.05))
+
+        # Load SigLIP/YoloE before MuJoCo EGL is up. Concurrent Robocasa EGL + VL worker
+        # + YoloE get_text_pe has wedged find-phase init (no progress after SigLIP weights,
+        # mujoco cancelled_write_bytes thrash). Agent construction reuses shared instances.
+        if not run_cfg.cpu_only:
+            print("OVMM find: preloading SigLIP + YoloE before sim…", flush=True)
+            from emet.perception.detection.yoloe import get_shared_yoloe_perception
+            from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+            get_shared_mask_siglip_encoder(
+                version="so400m", device="cuda", feature_matching_threshold=0.14
+            )
+            get_shared_yoloe_perception(
+                confidence_threshold=det_conf, device="cuda", size="l"
+            )
+            print("OVMM find: perception preload done", flush=True)
+
         # Capture server stderr so bind failures include the real crash reason
         # (DEVNULL hid layout/asset errors on Robocasa multi-env sweeps).
         log_dir = Path(tempfile.mkdtemp(prefix="emet_ovmm_sim_"))
@@ -1046,27 +1084,15 @@ def run_episode_find_phase(
         time.sleep(settle)
 
         robot_kind = str(getattr(sim_cfg, "robot", "stretch"))
+        # Defer ZMQ start until DynamemController is ready (same as run_dynagraph/run_agent).
         robot = create_robot_client_from_cli(
             robot_kind,
             "127.0.0.1",
             port_offset=port_offset,
             enable_rerun_server=False,
-            start_immediately=True,
+            start_immediately=False,
             allow_missing_depth=True,
         )
-        robot.move_to_nav_posture()
-        robot.set_velocity(v=30.0, w=15.0)
-
-        parameters = apply_backend_parameters(
-            get_parameters("dynav_config.yaml"),
-            run_cfg.backend,
-            merge_xy_m=run_cfg.merge_xy_m,
-            staleness_horizon=run_cfg.staleness_horizon,
-        )
-        parameters["encoder"] = None
-        if run_cfg.perfect_depth:
-            parameters["debug_perfect_sensor_depth"] = True
-        parameters["find_phase_nav_step_timeout_s"] = nav_timeout
 
         cache_dir = None
         map_source = "live"
@@ -1088,6 +1114,8 @@ def run_episode_find_phase(
             use_sensor_perception=run_cfg.use_sensor_perception,
             graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
         )
+        # Controller already started ZMQ + nav posture; apply eval velocity after.
+        robot.set_velocity(v=30.0, w=15.0)
         init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
@@ -1187,6 +1215,15 @@ def run_episode_find_phase(
                     prefer_voxel=False,
                 )
         elif use_agentic:
+            # Keep the VLM unloaded while MuJoCo and the mapping stack initialize.
+            # Loading it before robot.start() oversubscribes CPU/CUDA resources and can
+            # starve the Robocasa ZMQ image streams. The controller defers its VLM client,
+            # so the endpoint only needs to exist when the agentic query begins.
+            if vl_worker is not None:
+                vl_endpoint_used = vl_worker.start()
+                os.environ["EMET_VL_ENDPOINT"] = vl_endpoint_used
+                worker_started = True
+                print(f"Managed OVMM VL worker ready for query: {vl_endpoint_used}", flush=True)
             # Same AgenticEQAExecutor loop as HM-EQA: phrase OVMM as questions.
             obj_q = ovmm_find_object_question(object_query, episode.start_recep)
             recep_q = ovmm_find_recep_question(episode.goal_recep)
@@ -1304,6 +1341,7 @@ def run_episode_find_phase(
             "recep_query_used": recep_q_used,
             "obj_localize_source": obj_source,
             "recep_localize_source": recep_source,
+            "vl_endpoint": vl_endpoint_used,
             "seed": run_cfg.seed,
             **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
@@ -1324,6 +1362,12 @@ def run_episode_find_phase(
             )
         return metrics
     finally:
+        if worker_started:
+            vl_worker.stop()
+            if previous_vl_endpoint is None:
+                os.environ.pop("EMET_VL_ENDPOINT", None)
+            else:
+                os.environ["EMET_VL_ENDPOINT"] = previous_vl_endpoint
         if agent is not None:
             try:
                 agent.stop()

@@ -1573,6 +1573,7 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 
 @jobs_group.command("register", short_help="Register a job (for scripts)")
 @click.option("--name", required=True, help="Short job name.")
+@click.option("--job-id", default=None, hidden=True)
 @click.option(
     "--description",
     "-d",
@@ -1592,6 +1593,7 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 )
 def jobs_register(
     name: str,
+    job_id: str | None,
     description: str | None,
     cmd: str,
     out_dir: str | None,
@@ -1614,6 +1616,7 @@ def jobs_register(
         pid=pid,
         status=status,  # type: ignore[arg-type]
         description=description,
+        job_id=job_id,
     )
     click.echo(job.id)
 
@@ -1695,7 +1698,7 @@ def jobs_update(
 @jobs_group.command(
     "run",
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    short_help="Register + nohup a command as a managed job",
+    short_help="Start a self-registering detached job supervisor",
 )
 @click.option("--name", required=True, help="Short job name.")
 @click.option(
@@ -1740,7 +1743,7 @@ def jobs_run(
     gpu_exclusive: bool | None,
     foreground: bool,
 ) -> None:
-    """Register + nohup a command as a managed job.
+    """Start a detached supervisor that registers and runs a managed job.
 
     \b
     Example:
@@ -1749,7 +1752,7 @@ def jobs_run(
     """
     import shlex
 
-    from emet.utils.job_registry import active_gpu_job_pids, register_job, update_job
+    from emet.utils.job_registry import active_gpu_job_pids, load_job, new_job_id
 
     cmd_args = list(ctx.args)
     if cmd_args and cmd_args[0] == "--":
@@ -1774,17 +1777,8 @@ def jobs_run(
                 wait_pids.append(extra)
                 click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
 
-    job = register_job(
-        name=name,
-        cmd=cmd_str,
-        out_dir=out,
-        log_path=log_path,
-        repo=str(root),
-        wait_pids=wait_pids,
-        status="queued",
-        description=description,
-    )
-    click.echo(f"registered  {job.id}", err=True)
+    job_id = new_job_id()
+    click.echo(f"prepared    {job_id}", err=True)
     click.echo(f"name        {name}", err=True)
     if description and str(description).strip():
         click.echo(f"why         {str(description).strip()}", err=True)
@@ -1792,6 +1786,29 @@ def jobs_run(
     click.echo(f"log         {log_path}", err=True)
 
     wrapper = out / "job_wrapper.sh"
+    register_args = [
+        "jobs",
+        "register",
+        "--job-id",
+        job_id,
+        "--name",
+        name,
+        "--cmd",
+        cmd_str,
+        "--out-dir",
+        str(out),
+        "--log-path",
+        str(log_path),
+        "--repo",
+        str(root),
+        "--status",
+        "waiting",
+    ]
+    if description and str(description).strip():
+        register_args.extend(["--description", str(description).strip()])
+    for wpid in wait_pids:
+        register_args.extend(["--wait-pid", str(int(wpid))])
+    register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
     wait_lines = ""
     for wpid in wait_pids:
         wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
@@ -1813,11 +1830,11 @@ def jobs_run(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
         f'cd "{root}"\n'
-        f'export EMET_JOB_ID="{job.id}"\n'
-        f'JOB_ID="{job.id}"\n'
+        f'export EMET_JOB_ID="{job_id}"\n'
+        f'JOB_ID="{job_id}"\n'
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
-        f'"$EMET_BIN" jobs update "$JOB_ID" --status waiting --pid $$\n'
+        f"{register_line}"
         f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"
@@ -1837,7 +1854,6 @@ def jobs_run(
     wrapper.chmod(0o755)
 
     if foreground:
-        update_job(job.id, status="running", pid=os.getpid())
         rc = subprocess.call(["bash", str(wrapper)])
         sys.exit(rc)
 
@@ -1850,9 +1866,29 @@ def jobs_run(
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-    update_job(job.id, status="queued", pid=proc.pid)
+    deadline = time.monotonic() + 10.0
+    job = None
+    while time.monotonic() < deadline:
+        job = load_job(job_id)
+        if job is not None:
+            break
+        if proc.poll() is not None:
+            break
+        time.sleep(0.05)
+    if job is None:
+        from emet.utils.process_tree import terminate_process_tree
+
+        terminate_process_tree(proc, grace_s=1.0)
+        raise click.ClickException(
+            f"detached supervisor failed to register job {job_id}; see {log_path}"
+        )
+    if job.pid != proc.pid:
+        raise click.ClickException(
+            f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})"
+        )
+    click.echo(f"registered  {job_id}", err=True)
     click.echo(f"pid         {proc.pid}", err=True)
-    click.echo(job.id)
+    click.echo(job_id)
 
 
 @main.group("status", short_help="Per-checkout STATUS.log helpers (after agent death)")
@@ -4529,9 +4565,9 @@ from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
 _eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
 main.add_command(_eval_dynagraph_app)
 
+from emet.app.eval_ovmm import ovmm_group as _ovmm_group  # noqa: E402
 from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
 from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
-from emet.app.eval_ovmm import ovmm_group as _ovmm_group  # noqa: E402
 
 _eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
 main.add_command(_eval_sqa3d_app)

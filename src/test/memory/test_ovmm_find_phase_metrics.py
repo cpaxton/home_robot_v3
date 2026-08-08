@@ -484,7 +484,13 @@ def test_run_episode_find_phase_includes_timing_fields(
                             return_value=MagicMock(),
                         ):
                             with patch("emet.utils.port_utils.kill_processes_on_port"):
-                                result = run_episode_find_phase(episode, run_cfg)
+                                with patch(
+                                    "emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder"
+                                ):
+                                    with patch(
+                                        "emet.perception.detection.yoloe.get_shared_yoloe_perception"
+                                    ):
+                                        result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):
         assert key in result
@@ -492,3 +498,6 @@ def test_run_episode_find_phase_includes_timing_fields(
     assert result["use_sensor_perception"] is False
     assert result["prefer_voxel"] is True
     assert result["seed"] == 7
+    # ZMQ must stay idle during SigLIP/YoloE load (Robocasa HWM wedge otherwise).
+    assert mock_robot_client.call_args.kwargs.get("start_immediately") is False
+    mock_robot.set_velocity.assert_called_once()

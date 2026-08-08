@@ -99,11 +99,18 @@ def test_find_robocasa_freejoint_with_hint_stretch():
     x, y, z = placed
     assert z > 0.0
     d_hint = float(np.hypot(x - hint[0], y - hint[1]))
-    assert d_hint < 0.35, f"stretch spawn moved {d_hint:.3f}m from robosuite hint"
     worst = scene_base_spawn.worst_robot_nonfloor_contact_dist(
         model, data, base_body_name=find_kw["base_body_name"], floor_geom_name="floor"
     )
-    assert worst >= -0.01, f"expected non-penetrating spawn, worst contact dist={worst:.5f}"
+    # Prefer open-floor clearance over hugging the pick-place counter hint.
+    assert worst >= 0.05, (
+        f"expected Stretch Robocasa spawn clearance >= 0.05 m, got worst={worst:.5f} "
+        f"xy=({x:.3f},{y:.3f}) d_hint={d_hint:.3f}m"
+    )
+    assert d_hint >= 0.35, (
+        f"expected open-floor move away from counter hint (>=0.35 m), got d_hint={d_hint:.3f}m "
+        f"xy=({x:.3f},{y:.3f})"
+    )
 
 
 @pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")

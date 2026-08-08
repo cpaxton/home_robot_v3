@@ -425,7 +425,6 @@ def test_get_robot_spec_and_runtime_notes_innate_mars():
 def test_innate_mars_planar_base_navigation_moves_toward_xyt_goal():
     """Innate Mars has slide/slide/yaw base joints (no free joint); nav must drive them, not no-op."""
     pytest.importorskip("mujoco")
-    import mujoco
     import numpy as np
 
     from emet.robots.innate_mars import InnateMarsBackend
@@ -455,8 +454,7 @@ def test_innate_mars_planar_base_navigation_moves_toward_xyt_goal():
 
     for _ in range(900):
         with server._mj_lock:
-            server._step_base_navigation_drive()
-            mujoco.mj_step(server._mjmodel, server._mjdata)
+            server._step_controlled_physics_once()
         if server._at_goal:
             break
 

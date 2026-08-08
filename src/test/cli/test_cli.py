@@ -15,8 +15,10 @@
 
 """Tests for the emet CLI."""
 
+import json
 import subprocess
 import sys
+import time
 
 
 def test_cli_help():
@@ -220,6 +222,87 @@ def test_jobs_run_help_lists_safety_flags():
     assert "cpu-safe" in result.stdout
     assert "gpu-exclusive" in result.stdout
     assert "--description" in result.stdout
+
+
+def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "out"
+    marker = out_dir / "child-ran"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "self-register-test",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            f"import time; from pathlib import Path; time.sleep(0.5); Path({str(marker)!r}).write_text('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    job_id = result.stdout.strip().splitlines()[-1]
+    record_path = jobs_dir / f"{job_id}.json"
+
+    deadline = time.monotonic() + 10.0
+    record = {}
+    while time.monotonic() < deadline:
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            if record.get("status") in {"done", "failed"}:
+                break
+        time.sleep(0.05)
+
+    assert record.get("status") == "done", record
+    assert isinstance(record.get("pid"), int)
+    assert marker.read_text(encoding="utf-8") == "ok"
+    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "jobs register --job-id" in wrapper
+    assert wrapper.index("jobs register --job-id") < wrapper.index("jobs update \"$JOB_ID\" --status running")
+
+
+def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    jobs_dir = tmp_path / "jobs"
+    monkeypatch.setenv("EMET_JOBS_DIR", str(jobs_dir))
+
+    def fail_spawn(*args, **kwargs):
+        raise OSError("synthetic spawn failure")
+
+    monkeypatch.setattr(subprocess, "Popen", fail_spawn)
+    result = CliRunner().invoke(
+        main,
+        [
+            "jobs",
+            "run",
+            "--name",
+            "must-not-register",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--",
+            sys.executable,
+            "-c",
+            "print('never runs')",
+        ],
+    )
+    assert result.exit_code != 0
+    assert not jobs_dir.exists() or not list(jobs_dir.glob("*.json"))
 
 
 def test_jobs_update_help_lists_description():

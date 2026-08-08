@@ -303,8 +303,15 @@ class DynamemController(BaseController):
             self.log = os.path.join(logs_dir, log) if not os.path.isabs(log) else log
 
         self.create_obstacle_map(parameters)
+        logger.info("Agent init: obstacle map ready (encoder/detector loaded)")
 
-        self.tts = PiperTextToSpeech()
+        if bool(parameters.get("enable_tts", True)):
+            logger.info("Agent init: loading Piper TTS")
+            self.tts = PiperTextToSpeech()
+        else:
+            self.tts = None
+            logger.info("Agent init: TTS disabled")
+        logger.info("Agent init: starting robot ZMQ streams")
 
         context = zmq.Context()
         self.manip_socket = context.socket(zmq.REQ)
@@ -330,6 +337,7 @@ class DynamemController(BaseController):
                     "If the sim is already running, check server logs: missing camera/GL errors can make "
                     "observations None so nothing is published on the observation socket."
                 )
+        logger.info("Agent init: robot ZMQ streams ready")
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         logger.info(
             "Agent init: nav posture + look_front "
@@ -512,9 +520,11 @@ class DynamemController(BaseController):
             # batch runs (Habitat) do not reload the weights every controller construction.
             from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
 
+            print("Dynamem create_obstacle_map: loading SigLIP…", flush=True)
             self.encoder = get_shared_mask_siglip_encoder(
                 version="so400m", device=self.device, feature_matching_threshold=0.14
             )
+            print("Dynamem create_obstacle_map: SigLIP ready", flush=True)
 
         # You can see a clear difference in hyperparameter selection in different querying strategies
         # Running gpt4o is time consuming, so we don't want to waste more time on object detection or Siglip or voxelization
@@ -536,11 +546,15 @@ class DynamemController(BaseController):
         elif self._use_instance_memory or self.cpu_only:
             # YoloE returns instance segmentation so instance memory and UI icons work (sim + real).
             # Lower confidence (e.g. from config) helps detect small default-sim objects (red cylinder, blue cube).
-            self.detection_model = YoloEPerception(
+            print("Dynamem create_obstacle_map: loading YoloE…", flush=True)
+            from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+            self.detection_model = get_shared_yoloe_perception(
                 confidence_threshold=det_conf,
                 device=self.device,
                 size="l",
             )
+            print("Dynamem create_obstacle_map: YoloE ready", flush=True)
             semantic_memory_resolution = 0.05
             image_shape = (360, 270)
         else:
@@ -551,6 +565,7 @@ class DynamemController(BaseController):
             image_shape = (480, 360)
 
         _eqa = parameters.get("eqa", {}) or {}
+        print("Dynamem create_obstacle_map: building SparseVoxelMap…", flush=True)
         self.voxel_map = SparseVoxelMap(
             resolution=parameters["voxel_size"],
             semantic_memory_resolution=semantic_memory_resolution,
@@ -590,13 +605,16 @@ class DynamemController(BaseController):
             parameters=parameters,
             defer_eqa_vllm=self.defer_eqa_vllm,
         )
+        print("Dynamem create_obstacle_map: SparseVoxelMap ready", flush=True)
         print_vram_snapshot("after_create_obstacle_map_sparse_voxel_map")
+        print("Dynamem create_obstacle_map: building NavigationSpace…", flush=True)
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,
             rotation_step_size=parameters.get("motion_planner/rotation_step_size", 0.2),
             dilate_frontier_size=parameters.get("motion_planner/frontier/dilate_frontier_size", 2),
             dilate_obstacle_size=parameters.get("motion_planner/frontier/dilate_obstacle_size", 0),
         )
+        print("Dynamem create_obstacle_map: NavigationSpace ready", flush=True)
         _min_c = parameters.get("motion_planner/min_clearance_m", None)
         if _min_c is None:
             _fp = getattr(self.space, "_footprint", None) or getattr(self.voxel_map, "_footprint", None)
@@ -604,12 +622,15 @@ class DynamemController(BaseController):
             _min_c = default_min_clearance_m(_width)
         self._min_clearance_m = float(_min_c)
         self._clearance_cost_weight = float(parameters.get("motion_planner/clearance_cost_weight", 1.0))
+        print("Dynamem create_obstacle_map: building AStar…", flush=True)
         self.planner = AStar(
             self.space,
             min_clearance_m=self._min_clearance_m,
             clearance_cost_weight=self._clearance_cost_weight,
             start_escape_max_ring=int(parameters.get("motion_planner/start_escape_max_ring", 8)),
         )
+        print("Dynamem create_obstacle_map: AStar ready", flush=True)
+        print("Dynamem create_obstacle_map: configuring graph memory…", flush=True)
         # Frontier / explore memory: mark goals blocked after waypoint timeout so
         # multi-goal A* skips stuck frontiers instead of re-picking them.
         self._habitat_blocked_goals: set[tuple[float, float]] = set()
@@ -617,6 +638,7 @@ class DynamemController(BaseController):
 
         cfg = self.embodied_agent
         if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
+            print("Dynamem create_obstacle_map: building open-vocabulary scene graph…", flush=True)
             from emet.mapping.scene_graph.processor import SceneGraphProcessor
 
             sg_name = cfg.open_vocab_scene_graph.config_name
@@ -627,8 +649,10 @@ class DynamemController(BaseController):
                 dev = "cpu" if self.cpu_only else None
             self._open_vocab_sg_processor = SceneGraphProcessor(config_name=sg_name, device=dev)
             self.voxel_map.set_scene_graph_processor(self._open_vocab_sg_processor)
+            print("Dynamem create_obstacle_map: open-vocabulary scene graph ready", flush=True)
 
         if cfg.graph_eqa_memory.enabled and not self.manipulation_only:
+            print("Dynamem create_obstacle_map: building GraphEQA memory…", flush=True)
             self.graph_memory = GraphEQAMemory(
                 parameters=parameters,
                 log_dir=os.path.join(self.log, "graph_eqa_log"),
@@ -663,6 +687,8 @@ class DynamemController(BaseController):
                 cpu_only=self.cpu_only,
                 parameters=parameters,
             )
+            print("Dynamem create_obstacle_map: GraphEQA memory ready", flush=True)
+        print("Dynamem create_obstacle_map: complete", flush=True)
 
     def setup_custom_blueprint(self):
         """
@@ -1828,6 +1854,7 @@ class DynamemController(BaseController):
         reject: str | None = None
         clearances: list[float] = []
         prev_xy: tuple[float, float] | None = None
+        prev_is_start = False
         for raw in body:
             arr = np.asarray(raw, dtype=np.float64).reshape(-1)
             if arr.size < 2 or not np.isfinite(arr[:2]).all():
@@ -1845,7 +1872,9 @@ class DynamemController(BaseController):
                 break
             # Mid-segment samples: reject chords that scrape low-clearance cells
             # between two individually-safe waypoints (post-simplify hazard).
-            if prev_xy is not None and not is_start and hasattr(planner, "to_pt"):
+            # The first segment may leave a tight start cell for the planner's
+            # nearest clearance-safe escape cell.
+            if prev_xy is not None and not is_start and not prev_is_start and hasattr(planner, "to_pt"):
                 try:
                     if not planner.is_in_line_of_sight(planner.to_pt(prev_xy), planner.to_pt(xy)):
                         reject = "rejected_low_clearance_segment"
@@ -1854,6 +1883,7 @@ class DynamemController(BaseController):
                     pass
             kept.append(raw if isinstance(raw, list) else arr.tolist())
             prev_xy = xy
+            prev_is_start = is_start
 
         min_along = float(min(clearances)) if clearances else None
         if not kept:
@@ -1981,6 +2011,8 @@ class DynamemController(BaseController):
                         res[:-2],
                         pos_err_threshold=self.pos_err_threshold,
                         rot_err_threshold=self.rot_err_threshold,
+                        per_waypoint_timeout=nav_timeout,
+                        final_timeout=max(nav_timeout, 30.0),
                         blocking=True,
                         world_frame=True,
                     )
@@ -2000,6 +2032,8 @@ class DynamemController(BaseController):
                     res,
                     pos_err_threshold=self.pos_err_threshold,
                     rot_err_threshold=self.rot_err_threshold,
+                    per_waypoint_timeout=nav_timeout,
+                    final_timeout=max(nav_timeout, 30.0),
                     blocking=True,
                     world_frame=True,
                 )
@@ -2984,10 +3018,13 @@ class DynamemController(BaseController):
                 self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
                 return False
 
+            nav_timeout = self._find_phase_nav_timeout()
             exec_ok = self.robot.execute_trajectory(
                 traj,
                 pos_err_threshold=self.pos_err_threshold,
                 rot_err_threshold=self.rot_err_threshold,
+                per_waypoint_timeout=nav_timeout,
+                final_timeout=max(nav_timeout, 30.0),
                 blocking=True,
                 world_frame=True,
             )

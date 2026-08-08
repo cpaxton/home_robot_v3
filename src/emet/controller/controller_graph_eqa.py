@@ -113,11 +113,13 @@ class GraphEQAController(DynamemController):
             eqa=voxel_eqa,
             defer_eqa_vllm=bool(defer_eqa_vllm) if voxel_eqa else True,
         )
+        logger.info("Agent init: building GraphEQA memory")
         self.graph_memory = GraphEQAMemory(
             parameters=parameters,
             log_dir="graph_eqa_log",
             defer_llm_clients=True,
         )
+        logger.info("Agent init: GraphEQA memory ready")
         if graph_memory_input_path:
             from pathlib import Path
 
