@@ -326,9 +326,10 @@ class MujocoServer:
         model = self.change_start_pose(model, start_translation, start_rotation_quat)
 
         # Sim-only base speed boost: the wheel velocity actuators clamp commanded wheel speed
-        # (ctrlrange ±6 rad/s ≈ 0.10 m/s). Real Stretch is capped there too, but evals that only
-        # need navigation/explore run much faster when we relax the clamp and scale the command.
-        # Env: EMET_SIM_BASE_SPEED_SCALE (default 1.0) multiplies effective base speed.
+        # (ctrlrange ±6 rad/s ≈ 0.10 m/s) and the wheel joints carry high ``frictionloss`` (35)
+        # that drags effective speed down to ~0.13 m/s. Real Stretch is capped there too, but
+        # evals that only need navigation/explore run much faster when we relax both and scale
+        # the command. Env: EMET_SIM_BASE_SPEED_SCALE (default 1.0) multiplies effective speed.
         _base_scale = float(os.environ.get("EMET_SIM_BASE_SPEED_SCALE", "1.0"))
         self._base_speed_scale = max(1.0, _base_scale)
         if self._base_speed_scale > 1.0:
@@ -337,6 +338,15 @@ class MujocoServer:
                 if _aid >= 0:
                     _max = max(6.0, self._base_speed_scale * 6.0)
                     model.actuator_ctrlrange[_aid] = [-_max, _max]
+                    # Terminal wheel speed = gear*ctrl / kv. Stock kv=20 caps ctrl=6 -> 0.9 rad/s
+                    # (~0.05 m/s). Raise kv so the wheels actually reach commanded speed.
+                    model.actuator_biasprm[_aid] = np.array([0.0, 0.0, -2.0], dtype=np.float64)
+                _jname = f"joint_{_name.replace('_vel', '')}"
+                _jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, _jname)
+                if _jid >= 0:
+                    # Drop rolling friction so the wheels actually reach the commanded speed.
+                    model.dof_frictionloss[int(model.jnt_dofadr[_jid])] = 0.5
+                    model.dof_damping[int(model.jnt_dofadr[_jid])] = 0.05
 
         self.mjmodel = model
 
