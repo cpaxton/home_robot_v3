@@ -338,9 +338,6 @@ class MujocoServer:
                 if _aid >= 0:
                     _max = max(6.0, self._base_speed_scale * 6.0)
                     model.actuator_ctrlrange[_aid] = [-_max, _max]
-                    # Terminal wheel speed = gear*ctrl / kv. Stock kv=20 caps ctrl=6 -> 0.9 rad/s
-                    # (~0.05 m/s). Raise kv so the wheels actually reach commanded speed.
-                    model.actuator_biasprm[_aid] = np.array([0.0, 0.0, -2.0], dtype=np.float64)
                 _jname = f"joint_{_name.replace('_vel', '')}"
                 _jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, _jname)
                 if _jid >= 0:
