@@ -199,7 +199,8 @@ class BaseController:
             v_linear: float, linear velocity
             omega: float, angular velocity
         """
-        w_left, w_right = utils.diff_drive_inv_kinematics(v_linear, omega)
+        scale = float(getattr(self, "_base_speed_scale", 1.0))
+        w_left, w_right = utils.diff_drive_inv_kinematics(v_linear * scale, omega * scale)
         self.mujoco_server.mjdata.actuator(Actuators.left_wheel_vel.name).ctrl = w_left
         self.mujoco_server.mjdata.actuator(Actuators.right_wheel_vel.name).ctrl = w_right
 
@@ -323,6 +324,19 @@ class MujocoServer:
                     )
 
         model = self.change_start_pose(model, start_translation, start_rotation_quat)
+
+        # Sim-only base speed boost: the wheel velocity actuators clamp commanded wheel speed
+        # (ctrlrange ±6 rad/s ≈ 0.10 m/s). Real Stretch is capped there too, but evals that only
+        # need navigation/explore run much faster when we relax the clamp and scale the command.
+        # Env: EMET_SIM_BASE_SPEED_SCALE (default 1.0) multiplies effective base speed.
+        _base_scale = float(os.environ.get("EMET_SIM_BASE_SPEED_SCALE", "1.0"))
+        self._base_speed_scale = max(1.0, _base_scale)
+        if self._base_speed_scale > 1.0:
+            for _name in (Actuators.left_wheel_vel.name, Actuators.right_wheel_vel.name):
+                _aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, _name)
+                if _aid >= 0:
+                    _max = max(6.0, self._base_speed_scale * 6.0)
+                    model.actuator_ctrlrange[_aid] = [-_max, _max]
 
         self.mjmodel = model
 
