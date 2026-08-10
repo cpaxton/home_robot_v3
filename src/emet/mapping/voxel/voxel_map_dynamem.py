@@ -88,6 +88,26 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 theta = theta + 2 * np.pi
         return theta
 
+    def _line_of_sight_clear(self, obstacles, i0: int, j0: int, i1: int, j1: int) -> bool:
+        """True if the straight grid ray from (i0, j0) to (i1, j1) avoids observed obstacles.
+
+        Unexplored cells are unknown (free for planning), so only confirmed obstacle
+        cells block the line of sight. Out-of-map samples are treated as clear.
+        """
+        h, w = int(obstacles.shape[0]), int(obstacles.shape[1])
+        di, dj = int(i1) - int(i0), int(j1) - int(j0)
+        steps = max(abs(di), abs(dj))
+        if steps <= 1:
+            return True
+        for k in range(1, steps):
+            i = int(round(int(i0) + k * di / steps))
+            j = int(round(int(j0) + k * dj / steps))
+            if not (0 <= i < h and 0 <= j < w):
+                continue
+            if bool(obstacles[i, j]):
+                return False
+        return True
+
     def sample_target_point(
         self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False
     ) -> np.ndarray | None:
@@ -154,10 +174,35 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     if 0 <= ni < obs_h and 0 <= nj < obs_w and bool(obstacles[ni, nj]):
                         ok = False
 
+                # The goal theta already faces the predicted position; make sure the
+                # predicted position is actually visible from the reachable pose.
+                if ok and not self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y):
+                    ok = False
+
                 if ok:
                     return np.array([selected_x, selected_y, theta])
 
-        return None
+        # Projection fallback: no standoff pose passed the validity/LOS gates, but the
+        # anchor itself may sit in unexplored / walled-off space (a hypothesized object
+        # glimpsed through a doorway). Snap to the nearest reachable navigable cell that
+        # can see it, theta facing the predicted position, so navigation never fails to
+        # sample when any reachable cell exists. Best-effort last resort: nearest reachable
+        # cell regardless of visibility.
+        best = None
+        last_resort = None
+        for selected_target in selected_targets:
+            sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
+            selected_x, selected_y = planner.to_xy([sx_i, sy_i])
+            dist_xy = float(np.hypot(selected_x - px, selected_y - py))
+            if dist_xy <= 0.08:
+                continue
+            theta = self.compute_theta(selected_x, selected_y, px, py)
+            if last_resort is None:
+                last_resort = np.array([selected_x, selected_y, theta])
+            if self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y):
+                best = np.array([selected_x, selected_y, theta])
+                break
+        return best if best is not None else last_resort
 
     def sample_exploration(self, xyt, planner, text=None, debug=False):
         """

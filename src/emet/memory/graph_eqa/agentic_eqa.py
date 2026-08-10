@@ -102,6 +102,11 @@ NAV_SAME_OBS_LOOP_LIMIT = 2
 # Distinct planar approach samples around a place card (re-investigate = next bearing).
 PLACE_APPROACH_SAMPLES = 4
 
+# Consecutive planner misses on investigate navigation → treat every remaining
+# candidate as unreachable and stop retrying them (forces candidate switch /
+# answer-from-graph instead of a sample_nav_failed loop).
+NAV_CONSECUTIVE_FAIL_LIMIT = 2
+
 # After this many successful explore_frontier calls in a row, prefer an untried
 # investigate hyp over another frontier (stops leave/ABSENT explore-only loops).
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
@@ -489,6 +494,10 @@ class AgenticEQAExecutor:
         self._hyp_i = 0
         self._n_nav = 0
         self._n_explore = 0
+        # Consecutive investigate nav misses; >= NAV_CONSECUTIVE_FAIL_LIMIT blocks
+        # every remaining candidate (prevents sample_nav_failed loops).
+        self._consecutive_nav_fail = 0
+        self._unreachable_obs_ids: set[int] = set()
         self._tool_log: list[str] = []
         # Compact per-turn outcomes for the router state message (loops / stuck).
         self._recent_actions: list[str] = []
@@ -922,10 +931,13 @@ class AgenticEQAExecutor:
                 ok = bool(agent.navigate_to_target_pose(frontier_xyz, start))
             self._n_explore += 1
             if ok:
+                self._consecutive_nav_fail = 0
                 self._retire_visited_frontier(frontier_xyz=frontier_xyz)
         elif hasattr(agent, "run_exploration"):
             ok = bool(agent.run_exploration())
             self._n_explore += 1
+            if ok:
+                self._consecutive_nav_fail = 0
             pick_source = "run_exploration_fallback"
             # Recover a goal for viz/trace when the uncovered picker returned None.
             if frontier_xyz is None:
@@ -1530,7 +1542,28 @@ class AgenticEQAExecutor:
         if hasattr(gm, "record_nav_attempt"):
             gm.record_nav_attempt(oid, success=finished, note=note or "agentic", dist_m=dist_m)
         if not finished:
+            self._consecutive_nav_fail += 1
             self._tried.setdefault(oid, "nav failed")
+            if self._consecutive_nav_fail >= NAV_CONSECUTIVE_FAIL_LIMIT:
+                # Stop retrying unreachable candidates: block every remaining
+                # investigate obs so the router must switch or fall back to the graph.
+                block = sorted({int(h.obs_id) for h in inv if not self._hypothesis_nav_blocked(int(h.obs_id))})
+                self._unreachable_obs_ids.update(block)
+                self._append_trace(
+                    {
+                        "event": "nav_fallback",
+                        "reason": f"{self._consecutive_nav_fail} consecutive nav failures",
+                        "blocked_obs_ids": block,
+                        "obs_id": oid,
+                    }
+                )
+                _logger.info(
+                    "agentic: %d consecutive nav failures — blocking unreachable obs %s",
+                    self._consecutive_nav_fail,
+                    block,
+                )
+        else:
+            self._consecutive_nav_fail = 0
         row = {
             "tool": trace_tool,
             "obs_id": oid,
@@ -1961,6 +1994,9 @@ class AgenticEQAExecutor:
             return True
         tried = str(self._tried.get(oid) or "")
         if tried.startswith("STALLED_NAV_LOOP"):
+            return True
+        # Consecutive planner misses marked this candidate unreachable.
+        if oid in self._unreachable_obs_ids:
             return True
         # Hard cap so planner thrashing cannot consume the whole nav budget.
         max_attempts = PLACE_APPROACH_SAMPLES + NAV_SAME_OBS_LOOP_LIMIT
@@ -3824,6 +3860,8 @@ class AgenticEQAExecutor:
         self._recent_actions = []
         self._station_obs_ids = set()
         self._assess_history = {}
+        self._consecutive_nav_fail = 0
+        self._unreachable_obs_ids = set()
         self._prefer_explore = False
         self._prefer_explore_reason = ""
         self._n_consecutive_explore = 0
