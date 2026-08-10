@@ -3114,11 +3114,6 @@ def find_robocasa_freejoint_xyz(
                     )
                 )
                 nav_area, nav_ok = _nav_lookup(float(x), float(y))
-                if x > 2.0:
-                    spawn_dbg(
-                        f"robocasa_freejoint_find: FARDEBUG xy=({x:.3f},{y:.3f}) "
-                        f"nav_area={nav_area:.2f} nav_ok={nav_ok} pass={tag!r}"
-                    )
                 if nav_ok != 1 or nav_area < min_nav_area_m2:
                     spawn_dbg(
                         f"robocasa_freejoint_find: skip pass={tag!r} xy=({x:.3f},{y:.3f}) "
