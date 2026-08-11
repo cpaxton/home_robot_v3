@@ -1758,6 +1758,46 @@ def test_not_present_streak_sets_escape_floor():
     assert agent._explore_min_travel_m == 0.0
 
 
+def test_canonical_room_mismatch_sets_sticky_escape_floor():
+    """Wrong-room explore must keep ESCAPE_MIN_TRAVEL_M even after a present frame."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import ESCAPE_MIN_TRAVEL_M, AgenticEQAExecutor
+
+    q = "Where are the towels in the bathroom?"
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"room_policy": "canonical"}}
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, q, router=False, collect_trace=False)
+    assert ex.room_policy == "canonical"
+    assert ex._not_present_streak == 0
+
+    ex._last_room_estimate = "kitchen"
+    assert ex._escape_min_travel_m() == ESCAPE_MIN_TRAVEL_M
+
+    # Spurious present clears the streak but must not drop the room-mismatch floor.
+    ex._update_escape_streak(present=True)
+    assert ex._not_present_streak == 0
+    assert ex._escape_min_travel_m() == ESCAPE_MIN_TRAVEL_M
+    assert agent._explore_min_travel_m == ESCAPE_MIN_TRAVEL_M
+
+    # Matching / unknown rooms do not raise the floor on their own.
+    ex._last_room_estimate = "bathroom"
+    assert ex._escape_min_travel_m() == 0.0
+    ex._last_room_estimate = "unknown"
+    assert ex._escape_min_travel_m() == 0.0
+
+    # LLM policy does not use the canonical mismatch floor.
+    agent_llm = MagicMock()
+    agent_llm.parameters = {"eqa": {"room_policy": "llm"}}
+    agent_llm.graph_memory = MagicMock()
+    agent_llm.voxel_map = None
+    ex_llm = AgenticEQAExecutor(agent_llm, q, router=False, collect_trace=False)
+    ex_llm._last_room_estimate = "kitchen"
+    assert ex_llm.room_policy == "llm"
+    assert ex_llm._escape_min_travel_m() == 0.0
+
+
 def test_capture_rejects_non_advancing_obs():
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
