@@ -47,14 +47,14 @@
                             <joint name="gripper" type="hinge" axis="0 5.3713225e-32 1" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
                             <body name="Gripper-Gear-ASSEMBLY-TEST-v1" pos="0.05345127 -0.0355 0.01222118" quat="0.5 0.5 0.5 -0.5">
                               <inertial pos="-8.7980191e-10 -1.9171391e-09 0.0045" mass="0.017319033" fullinertia="1.3682036e-06 1.3682036e-06 2.5026003e-06 -3.6591823e-21 -3.4538315e-35 3.512815e-19"/>
-                              <geom type="mesh" mesh="gripper_finger" pos="-8.798019e-10 -1.91714e-09 1.7053026e-15" quat="1 -9.3293279e-14 -1.3133014e-15 -5.0295174e-15" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                              <geom type="mesh" mesh="gripper_finger" pos="-8.798019e-10 -1.91714e-09 1.7053026e-15" quat="1 -9.3293279e-14 -1.3133014e-15 -5.0295174e-15" class="arm_collision"/>
+                              <geom type="mesh" mesh="gripper_finger" pos="0 0 0" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="gripper_finger" pos="0 0 0" quat="1 0 0 0" class="arm_collision"/>
                             </body>
                           </body>
                           <body name="Gripper-Base-Front-Angled-Camera-v1" pos="-0.01777882 -0.02420127 0.0345" quat="0.5 0.5 0.5 0.5">
                             <inertial pos="0.02563504 0.0067884341 0.024303861" mass="0.10988867" fullinertia="0.00010761 0.00016384193 6.3082551e-05 6.1357336e-07 1.0280785e-06 -5.7204598e-06"/>
-                            <geom type="mesh" mesh="gripper_front" pos="-0.029249997 0.0165 0.069999998" quat="3.5398257e-14 -0.70710678 0.70710678 2.7775218e-14" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                            <geom type="mesh" mesh="gripper_front" pos="-0.029249997 0.0165 0.069999998" quat="3.5398257e-14 -0.70710678 0.70710678 2.7775218e-14" class="arm_collision"/>
+                            <geom type="mesh" mesh="gripper_front" pos="0 0 0" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                            <geom type="mesh" mesh="gripper_front" pos="0 0 0" quat="1 0 0 0" class="arm_collision"/>
                           </body>
                         </body>
                       </body>

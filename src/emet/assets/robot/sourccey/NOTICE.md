@@ -23,11 +23,11 @@ asset tooling; the mesh-map and STEP paths are recorded in
 /path/to/cadquery-venv/bin/python scripts/robot_assets/step_to_stl.py \
     --manifest /tmp/opencode/convert_all.py.json --out-dir /tmp/raw_meshes_mm --scale 1
 
-# Align arm-link meshes to the URDF joint chain (links otherwise look disconnected)
+# Align arm-link meshes to the URDF joint chain (links otherwise look disconnected).
+# Sign = whether each link body's +y points toward (+1) or away (-1) from the next joint.
 uv run python scripts/robot_assets/align_urdf_meshes.py \
-    --urdf /path/to/Arm.urdf --in-dir /tmp/raw_meshes_mm --out-dir src/emet/assets/robot/sourccey/meshes \
-    --links arm_shoulder=+1,arm_bicep_l=-1,arm_forearm=+1,arm_wrist=+1 \
-    --exit-joints arm_shoulder=shoulder_lift,arm_bicep_l=elbow_flex,arm_forearm=wrist_flex,arm_wrist=wrist_roll
+    --in-dir /tmp/raw_meshes_mm --out-dir src/emet/assets/robot/sourccey/meshes \
+    --links arm_shoulder=+1,arm_bicep_l=-1,arm_forearm=+1,arm_wrist=+1
 
 # URDF arm -> MJCF fragment (main emet venv is fine)
 uv run python scripts/robot_assets/urdf_to_mjcf.py \

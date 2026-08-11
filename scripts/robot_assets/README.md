@@ -52,9 +52,8 @@ $ROBOT_ASSETS_PY scripts/robot_assets/urdf_to_mjcf.py \
 # 3b. If the STEP mesh frames don't match the URDF visual origins (links look
 #     disconnected), bake the URDF-joint alignment into the meshes first:
 uv run python scripts/robot_assets/align_urdf_meshes.py \
-    --urdf /path/to/Arm.urdf --in-dir /tmp/raw_meshes_mm --out-dir /tmp/aligned_meshes \
-    --links arm_shoulder=+1,arm_bicep_l=-1,arm_forearm=+1,arm_wrist=+1 \
-    --exit-joints arm_shoulder=shoulder_lift,arm_bicep_l=elbow_flex,arm_forearm=wrist_flex,arm_wrist=wrist_roll
+    --in-dir /tmp/raw_meshes_mm --out-dir /tmp/aligned_meshes \
+    --links arm_shoulder=+1,arm_bicep_l=-1,arm_forearm=+1,arm_wrist=+1
 
 # 4. Assemble the full robot MJCF (edit the per-robot assembler).
 uv run python scripts/robot_assets/assemble_sourccey.py
