@@ -177,6 +177,20 @@ class UrdfToMjcf:
                     f'group="2" contype="0" conaffinity="0"/>'
                 )
             elif "stl" in entry:
+                if entry.get("aligned"):
+                    # Pre-aligned mesh (long axis along link +y, entry joint at origin):
+                    # place at the body origin with identity rotation.
+                    pos = "0 0 0"
+                    quat = "1 0 0 0"
+                    lines.append(
+                        f'{indent}  <geom type="mesh" mesh="{entry["stl"]}" pos="{pos}" quat="{quat}" '
+                        f'material="plastic_white" group="2" contype="0" conaffinity="0"/>'
+                    )
+                    lines.append(
+                        f'{indent}  <geom type="mesh" mesh="{entry["stl"]}" pos="{pos}" quat="{quat}" '
+                        f'class="arm_collision"/>'
+                    )
+                    return lines
                 vis = link.find("visual")
                 ori = vis.find("origin") if vis is not None else None
                 xyz = [float(x) for x in ori.get("xyz").split()] if ori is not None else [0.0, 0.0, 0.0]
@@ -186,7 +200,11 @@ class UrdfToMjcf:
                     else [0.0, 0.0, 0.0]
                 )
                 offset = entry.get("offset_mm", [0.0, 0.0, 0.0])
-                pos = np.array(xyz) - np.array(offset) / 1000.0
+                # The URDF visual origin places the *mesh origin* (the lerobot-vulcan STL frame)
+                # at ``xyz``/``rpy``. Our STEP-derived mesh was recentered on its bbox centroid,
+                # so the centroid offset must be applied in the *mesh frame* (rotated by the visual
+                # orientation), not the link frame. pos = xyz + R * (centroid_m)
+                pos = np.array(xyz) + euler_to_rot(rpy) @ (np.array(offset) / 1000.0)
                 q = rot_to_quat(euler_to_rot(rpy))
                 stl = entry["stl"]
                 lines.append(

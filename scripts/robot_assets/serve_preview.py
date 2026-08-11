@@ -38,7 +38,7 @@ def render_preview(mjcf: Path, out: Path) -> None:
     mujoco.mj_forward(model, data)
 
     renderer = mujoco.Renderer(model, 1024, 1024)
-    views = ["preview_front", "preview_top", "preview_side"]
+    views = ["preview_front", "preview_34", "preview_top", "preview_side"]
     for name in views:
         if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name) < 0:
             continue

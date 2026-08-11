@@ -77,6 +77,13 @@ def render_cameras(mjcf: Path, out_dir: Path, width: int = 640, height: int = 48
     for i in range(model.ncam):
         cam = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_CAMERA, i) or f"cam{i}"
         if cam.startswith("preview_"):
+            # third-person orbit shots of the whole robot
+            renderer.update_scene(data, camera=cam)
+            rgb = np.asarray(renderer.render())
+            p = out_dir / f"{cam}.png"
+            Image.fromarray(rgb).save(p)
+            saved.append(p)
+            print(f"{cam:14s} rgb={p}")
             continue
         renderer.update_scene(data, camera=cam)
         rgb = np.asarray(renderer.render())

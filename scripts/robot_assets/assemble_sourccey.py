@@ -242,6 +242,7 @@ def build() -> str:
     a('    <light directional="true" diffuse="0.9 0.9 0.9" dir="-1 -1 -1.2" pos="0 0 1.2"/>')
     a('    <camera name="preview_front" pos="1.2 -2.2 1.0" xyaxes="1 0 0 0 0.64 0.77" fovy="50"/>')
     a('    <camera name="preview_top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0" fovy="50"/>')
+    a('    <camera name="preview_34" pos="1.5 -1.4 1.0" xyaxes="1 0 0 0 0.62 0.78" fovy="50"/>')
     a('    <geom type="plane" size="4 4 0.02" material="plastic_dark"/>')
     # ---- base_root: planar base joints (slide x, slide y, hinge yaw) ----
     a('    <body name="base_root" pos="0 0 0">')

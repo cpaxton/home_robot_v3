@@ -11,12 +11,20 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
    Used when the vendor already ships a URDF (e.g. `lerobot-vulcan`'s
    `Arm.urdf` for Sourccey). `--mass-scale` scales link masses/inertias (CAD
    inertials are often too heavy; tune so the full robot matches the datasheet).
+   Meshes marked `"aligned": true` in the mesh-map are placed at the body origin
+   with identity rotation (see `align_urdf_meshes.py`).
 3. **`assemble_sourccey.py`** — full-robot example: base/lift/dome/arms/cameras
    assembled into one `sourccey.xml` with planar base joints + actuators.
-4. **`render_cameras.py`** — render every camera's RGB + depth with a table and
+4. **`align_urdf_meshes.py`** — bake URDF-joint alignment into arm-link STL meshes
+   so consecutive links connect. A vendor URDF's visual origins are tuned for its
+   own STL frames; STEP-derived meshes have different frames, which leaves gaps
+   between links. This rotates each mesh's long axis to the link's entry→exit joint
+   direction and centers it on the joint midpoint. Run it when links look
+   disconnected and you cannot obtain the vendor's original meshes.
+5. **`render_cameras.py`** — render every camera's RGB + depth with a table and
    objects in front, so you can eyeball camera extrinsics/intrinsics before
    trusting perception. Writes PNGs + raw depth `.npy`.
-5. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
+6. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
    generated MJCF so you can eyeball the assembly before committing.
 
 ## One-time env (cadquery is only needed for the STEP step)
@@ -40,6 +48,13 @@ $ROBOT_ASSETS_PY scripts/robot_assets/step_to_stl.py \
 $ROBOT_ASSETS_PY scripts/robot_assets/urdf_to_mjcf.py \
     /path/to/Arm.urdf --mesh-map /tmp/mesh_map.json \
     --mass-scale 0.27 --out /tmp/arm_frag.xml
+
+# 3b. If the STEP mesh frames don't match the URDF visual origins (links look
+#     disconnected), bake the URDF-joint alignment into the meshes first:
+uv run python scripts/robot_assets/align_urdf_meshes.py \
+    --urdf /path/to/Arm.urdf --in-dir /tmp/raw_meshes_mm --out-dir /tmp/aligned_meshes \
+    --links arm_shoulder=+1,arm_bicep_l=-1,arm_forearm=+1,arm_wrist=+1 \
+    --exit-joints arm_shoulder=shoulder_lift,arm_bicep_l=elbow_flex,arm_forearm=wrist_flex,arm_wrist=wrist_roll
 
 # 4. Assemble the full robot MJCF (edit the per-robot assembler).
 uv run python scripts/robot_assets/assemble_sourccey.py

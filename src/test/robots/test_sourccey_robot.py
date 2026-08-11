@@ -103,6 +103,44 @@ def test_sourccey_left_right_mirror_symmetry():
         assert abs(float(l[2]) - float(r[2])) < 1e-3, f"{link} not mirror-symmetric in z"
 
 
+def test_sourccey_arm_links_connected():
+    """Consecutive arm link meshes must overlap (no visible gaps at the joints)."""
+    from scipy.spatial import cKDTree
+
+    spec, model = _load()
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+
+    def mesh_verts(body):
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
+        out = []
+        for g in range(model.ngeom):
+            if model.geom_bodyid[g] != bid or model.geom_type[g] != mujoco.mjtGeom.mjGEOM_MESH:
+                continue
+            mid = int(model.geom_dataid[g])
+            nv = model.mesh_vertnum[mid]
+            vs = model.mesh_vert.reshape(-1, 3)[model.mesh_vertadr[mid] : model.mesh_vertadr[mid] + nv]
+            out.append(vs @ data.geom_xmat[g].reshape(3, 3).T + data.geom_xpos[g])
+        return np.concatenate(out) if out else np.zeros((0, 3))
+
+    chain = [
+        "right_Shoulder-With-Gearbox-V3-v1",
+        "right_Arm-Bicep-v1",
+        "right_Arm-Forearm-v1",
+        "right_Arm-Wrist-v1",
+        "right_Gripper-Base-Back-v1",
+    ]
+    for a, b in zip(chain, chain[1:], strict=False):
+        va, vb = mesh_verts(a), mesh_verts(b)
+        assert len(va) > 0 and len(vb) > 0
+        tree = cKDTree(va)
+        dist, _ = tree.query(vb)
+        assert float(dist.min()) < 0.01, (
+            f"arm links {a} and {b} separated by {dist.min():.3f} m — check align_urdf_meshes"
+        )
+
+
 def test_sourccey_gripper_mappings():
     spec, model = _load()
     for side in ("left", "right"):
