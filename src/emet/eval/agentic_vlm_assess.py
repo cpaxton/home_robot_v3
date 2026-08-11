@@ -168,23 +168,42 @@ def assess_view_with_vlm(
     rgb: np.ndarray | None,
     inventory: str = "",
     target_phrase: str = "",
+    is_mcq: bool = True,
 ) -> ViewAssessment:
     """Multimodal VLM: is this image enough to answer the question?"""
     q = (question or "").strip()
     target = (target_phrase or "").strip()
-    user = (
-        f"Question:\n{q}\n\n"
-        f"Target phrase (hint): {target or '(none)'}\n\n"
-        f"Inventory:\n{inventory or '(none)'}\n\n"
-        "Look at the image. Return JSON with keys:\n"
-        "  target: string\n"
-        "  present: bool — is the target / relevant evidence visible?\n"
-        "  answerable: bool — can you confidently pick the MCQ answer from THIS view "
-        "(and inventory)? For location/state questions, presence alone is not enough.\n"
-        "  need_more_views: bool\n"
-        "  suggested_answer: MCQ letter A-D or null if not answerable\n"
-        "  reason: short explanation\n"
-    )
+    if is_mcq:
+        user = (
+            f"Question:\n{q}\n\n"
+            f"Target phrase (hint): {target or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n\n"
+            "Look at the image. Return JSON with keys:\n"
+            "  target: string\n"
+            "  present: bool — is the target / relevant evidence visible?\n"
+            "  answerable: bool — can you confidently pick the MCQ answer from THIS view "
+            "(and inventory)? For location/state questions, presence alone is not enough.\n"
+            "  need_more_views: bool\n"
+            "  suggested_answer: MCQ letter A-D or null if not answerable\n"
+            "  reason: short explanation\n"
+        )
+    else:
+        # Open-ended find / localize questions (OVMM find: "Where is the table?").
+        # There is no MCQ letter set, so answerable means the target is actually in
+        # view and localizable — not "can I pick A-D".
+        user = (
+            f"Question:\n{q}\n\n"
+            f"Target phrase (hint): {target or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n\n"
+            "Look at the image. Return JSON with keys:\n"
+            "  target: string\n"
+            "  present: bool — is the target / relevant evidence visible in this view?\n"
+            "  answerable: bool — is the target clearly visible so its location can be "
+            "determined from THIS view (and inventory)? Presence alone is enough.\n"
+            "  need_more_views: bool\n"
+            "  suggested_answer: short answer text or null if not answerable\n"
+            "  reason: short explanation\n"
+        )
     if rgb is None:
         return ViewAssessment(
             target=target,

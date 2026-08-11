@@ -2379,6 +2379,14 @@ class AgenticEQAExecutor:
         m = re.search(r"\b([A-E])\b", s)
         return m.group(1) if m else ""
 
+    def _question_is_mcq(self) -> bool:
+        """True for HM-EQA-style A–D questions; False for open find/localize questions."""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        if parse_mcq_choices_from_question(self.question):
+            return True
+        return bool(getattr(self, "_mcq_choices", None))
+
     def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
         """True when target/stem tokens appear in inventory or labels near obs."""
         needle = str(phrase or self._target_phrase or "").strip().lower()
@@ -2430,6 +2438,22 @@ class AgenticEQAExecutor:
         if not self._answerable_confirm:
             # Legacy: raw answerable unlocks (ignore need_more_views for parity).
             return True, "confirm_disabled"
+        if not self._question_is_mcq():
+            # Open-ended find / localize (OVMM "Where is the table?"): no MCQ letter
+            # set exists, so a fresh view that actually shows the target is enough.
+            # The assess prompt is open-aware, so answerable means "visible/localizable".
+            if bool(present) and not need_more_views:
+                self._pending_answerable = None
+                return True, "open_view_present"
+            if bool(present) and need_more_views:
+                self._pending_answerable = {
+                    "letter": "",
+                    "obs_id": int(obs_id),
+                    "phrase": str(phrase or self._target_phrase or ""),
+                    "present": bool(present),
+                }
+                return False, "open_need_more_views"
+            return False, "open_not_present"
         if need_more_views:
             letter = self._mcq_letter_from_suggested(suggested_answer)
             self._pending_answerable = {
@@ -2529,6 +2553,7 @@ class AgenticEQAExecutor:
             rgb=rgb,
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
+            is_mcq=self._question_is_mcq(),
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
