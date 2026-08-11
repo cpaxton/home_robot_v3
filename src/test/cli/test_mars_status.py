@@ -1,7 +1,12 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 
-from emet.mars import parse_bridge_status_output, print_bridge_status
+from emet.mars import (
+    MarsCameraHealth,
+    parse_bridge_status_output,
+    parse_camera_health_output,
+    print_bridge_status,
+)
 
 
 def test_parse_bridge_status_output_running():
@@ -69,3 +74,36 @@ def test_print_bridge_status_smoke(capsys):
     assert "herman" in out
     assert "1/4" in out
     assert "pid 9999" in out
+
+
+def test_parse_camera_health_missing_arducam():
+    health = parse_camera_health_output(
+        "arducam=0\narm_pubs=0\nhead_pubs=1\nby_id=usb-3D_USB_Camera_…-video-index0,\n"
+    )
+    assert health.arducam_symlink is False
+    assert health.arm_publishers == 0
+    assert health.head_left_publishers == 1
+    assert health.head_ok
+    assert not health.wrist_ok
+    assert "Arducam" in health.note
+
+
+def test_print_bridge_status_includes_camera_line(capsys):
+    status = parse_bridge_status_output(
+        "herman",
+        "jetson1",
+        "9999 python3 innate_mars_zmq_server\n---\n"
+        "LISTEN 0 100 0.0.0.0:4401 0.0.0.0:*\n"
+        "LISTEN 0 100 0.0.0.0:4403 0.0.0.0:*\n---\n",
+    )
+    status.camera = MarsCameraHealth(
+        arm_publishers=0,
+        head_left_publishers=1,
+        arducam_symlink=False,
+        note="wrist down: no Arducam V4L symlink under /dev/v4l/by-id/",
+    )
+    print_bridge_status(status, profile="herman", show_next_steps=False)
+    out = capsys.readouterr().out
+    assert "cameras:" in out
+    assert "wrist down" in out
+    assert "Arducam" in out

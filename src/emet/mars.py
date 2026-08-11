@@ -37,6 +37,25 @@ MARS_ZMQ_PORTS: dict[int, str] = {
 
 
 @dataclass
+class MarsCameraHealth:
+    """Best-effort ROS/V4L wrist+head camera probe (from ``emet mars status``)."""
+
+    arm_publishers: int | None = None
+    head_left_publishers: int | None = None
+    arducam_symlink: bool | None = None
+    v4l_by_id: list[str] = field(default_factory=list)
+    note: str = ""
+
+    @property
+    def wrist_ok(self) -> bool:
+        return bool(self.arm_publishers and self.arm_publishers > 0)
+
+    @property
+    def head_ok(self) -> bool:
+        return bool(self.head_left_publishers and self.head_left_publishers > 0)
+
+
+@dataclass
 class MarsBridgeStatus:
     host: str
     user: str
@@ -46,6 +65,7 @@ class MarsBridgeStatus:
     tmux_available: bool = False
     ros_log_lines: list[str] = field(default_factory=list)
     ssh_exit_code: int = 0
+    camera: MarsCameraHealth | None = None
 
     @property
     def process_running(self) -> bool:
@@ -185,11 +205,93 @@ def parse_bridge_status_output(host: str, user: str, raw: str, *, exit_code: int
     return status
 
 
-def fetch_bridge_status(host: str, user: str, password: str | None) -> MarsBridgeStatus:
+def _remote_camera_health_cmd(workspace: str = DEFAULT_INNATE_WORKSPACE) -> str:
+    """Probe head/wrist publishers + Arducam V4L symlink (arm driver looks for 'Arducam')."""
+    ws = workspace.rstrip("/")
+    return (
+        "bash -lc '"
+        "source /opt/ros/humble/setup.bash 2>/dev/null || true; "
+        f"source {ws}/install/setup.bash 2>/dev/null || true; "
+        "BYID=$(ls /dev/v4l/by-id 2>/dev/null | tr \"\\n\" \",\"); "
+        "ARDU=0; echo \"$BYID\" | grep -qi Arducam && ARDU=1 || true; "
+        "ARM=$(timeout 5 ros2 topic info /mars/arm/image_raw 2>/dev/null "
+        "| awk \"/Publisher count:/{print \\$3; exit}\"); "
+        "HEAD=$(timeout 5 ros2 topic info /mars/main_camera/left/image_raw 2>/dev/null "
+        "| awk \"/Publisher count:/{print \\$3; exit}\"); "
+        "echo \"arducam=$ARDU\"; "
+        "echo \"arm_pubs=${ARM:--1}\"; "
+        "echo \"head_pubs=${HEAD:--1}\"; "
+        "echo \"by_id=$BYID\""
+        "'"
+    )
+
+
+def parse_camera_health_output(raw: str) -> MarsCameraHealth:
+    health = MarsCameraHealth()
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if line.startswith("arducam="):
+            health.arducam_symlink = line.split("=", 1)[1].strip() == "1"
+        elif line.startswith("arm_pubs="):
+            try:
+                health.arm_publishers = int(line.split("=", 1)[1].strip())
+            except ValueError:
+                health.arm_publishers = None
+        elif line.startswith("head_pubs="):
+            try:
+                health.head_left_publishers = int(line.split("=", 1)[1].strip())
+            except ValueError:
+                health.head_left_publishers = None
+        elif line.startswith("by_id="):
+            blob = line.split("=", 1)[1].strip().strip(",")
+            health.v4l_by_id = [p for p in blob.split(",") if p]
+    if health.arm_publishers == -1:
+        health.arm_publishers = None
+    if health.head_left_publishers == -1:
+        health.head_left_publishers = None
+    if health.arducam_symlink is False and not health.wrist_ok:
+        health.note = (
+            "wrist down: no Arducam V4L symlink under /dev/v4l/by-id/ "
+            "(maurice_cam ArmCameraDriver will not publish /mars/arm/image_raw)"
+        )
+    elif health.arm_publishers == 0:
+        health.note = "wrist down: /mars/arm/image_raw Publisher count=0 (bridge fills black EE frames)"
+    elif health.wrist_ok:
+        health.note = "wrist ok"
+    return health
+
+
+def fetch_camera_health(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
+) -> MarsCameraHealth:
+    code, out, err = _ssh_capture(host, user, password, _remote_camera_health_cmd(workspace))
+    raw = out if not err.strip() else out + "\n" + err
+    health = parse_camera_health_output(raw)
+    if code != 0 and not health.note:
+        health.note = f"camera probe ssh exit={code}"
+    return health
+
+
+def fetch_bridge_status(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
+) -> MarsBridgeStatus:
     code, out, err = _ssh_capture(host, user, password, _remote_status_cmd())
     if err.strip():
         out = out + "\n" + err
-    return parse_bridge_status_output(host, user, out, exit_code=code)
+    status = parse_bridge_status_output(host, user, out, exit_code=code)
+    try:
+        status.camera = fetch_camera_health(host, user, password, workspace=workspace)
+    except Exception as exc:  # noqa: BLE001 — status should still print
+        status.camera = MarsCameraHealth(note=f"camera probe failed: {exc}")
+    return status
 
 
 def _short_ros_message(line: str) -> str:
@@ -260,6 +362,38 @@ def print_bridge_status(
 
     print(" · ".join(parts))
 
+    cam = status.camera
+    if cam is not None:
+        head = (
+            style("head ok", fg="green")
+            if cam.head_ok
+            else style("head ?", fg="yellow")
+            if cam.head_left_publishers is None
+            else style("head down", fg="red")
+        )
+        wrist = (
+            style("wrist ok", fg="green")
+            if cam.wrist_ok
+            else style("wrist ?", fg="yellow")
+            if cam.arm_publishers is None and cam.arducam_symlink is None
+            else style("wrist down", fg="red")
+        )
+        ardu = ""
+        if cam.arducam_symlink is True:
+            ardu = " · " + style("Arducam symlink", fg="green")
+        elif cam.arducam_symlink is False:
+            ardu = " · " + style("no Arducam symlink", fg="red")
+        print(f"  cameras: {head} · {wrist}{ardu}")
+        if cam.note and not cam.wrist_ok:
+            print(style(f"  → {cam.note}", fg="yellow"))
+            print(
+                style(
+                    "  → reseat/plug Arducam wrist USB, then restart maurice_cam "
+                    "(see docs/deploy.md § Wrist camera)",
+                    dim=True,
+                )
+            )
+
     if show_next_steps and status.ready_for_stream:
         print(style(f"  → emet stream --connection {conn_ref}", dim=True))
     elif show_next_steps and status.process_running:
@@ -312,8 +446,9 @@ def bridge_status_on_robot(
     profile: str | None = None,
     onboard_da3: bool = False,
     show_next_steps: bool = True,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
 ) -> MarsBridgeStatus:
-    status = fetch_bridge_status(host, user, password)
+    status = fetch_bridge_status(host, user, password, workspace=workspace)
     print_bridge_status(
         status,
         profile=profile,
@@ -369,6 +504,7 @@ def mars_start(
             emet_dir=emet_dir,
             start_bridge=False,
             with_da3=onboard_da3,
+            robot="innate_mars",
             root=_project_root(),
         )
 
@@ -385,6 +521,7 @@ def mars_start(
         profile=profile_name or connection_name or host,
         onboard_da3=onboard_da3,
         show_next_steps=not preview,
+        workspace=workspace,
     )
 
     if preview:

@@ -2556,23 +2556,22 @@ class DynamemController(BaseController):
         else:
             gripper_width = 1
 
-        if not skip_confirmation and input("Do you want to do this manipulation? Y or N ") == "N":
-            return False
-
-        pickup(
-            self.manip_wrapper,
-            rotation,
-            translation,
-            base_node,
-            self.transform_node,
-            gripper_depth=depth,
-            gripper_width=gripper_width,
-        )
+        confirmed = skip_confirmation or input("Do you want to do this manipulation? Y or N ") != "N"
+        if confirmed:
+            pickup(
+                self.manip_wrapper,
+                rotation,
+                translation,
+                base_node,
+                self.transform_node,
+                gripper_depth=depth,
+                gripper_width=gripper_width,
+            )
 
         # Shift the base back to the original point as we are certain that original point is navigable in navigation obstacle map
         self.manip_wrapper.move_to_position(base_trans=-self.manip_wrapper.robot.get_six_joints()[0])
 
-        return True
+        return bool(confirmed)
 
     def _patch_images(self, images: list[Image.Image], patch_size=(480, 640), gap=5):
         """
@@ -2782,6 +2781,14 @@ class DynamemController(BaseController):
         target_obs_id: int | None,
         goal_xy: np.ndarray,
     ) -> None:
+        if target_obs_id is not None:
+            nav_res.target_obs_id = target_obs_id
+        if getattr(nav_res, "goal_xy", None) is None:
+            nav_res.goal_xy = (float(goal_xy[0]), float(goal_xy[1]))
+        # Structured status_code → _last_nav_plan + optional attempt ledger.
+        from emet.controller.nav_attempt import sync_nav_attempt_to_ledger
+
+        sync_nav_attempt_to_ledger(self, nav_res, source="eqa")
         recorder = getattr(self, "_episode_diagnostics_recorder", None)
         if recorder is not None and hasattr(recorder, "append_nav_attempt"):
             row = {
@@ -2797,6 +2804,7 @@ class DynamemController(BaseController):
                 "finished": nav_res.finished,
                 "dist_m": nav_res.dist_m,
                 "note": nav_res.note,
+                "status_code": getattr(nav_res, "status_code", None),
             }
             if getattr(nav_res, "path_xy", None):
                 row["path_xy"] = nav_res.path_xy

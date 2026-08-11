@@ -17,6 +17,7 @@
 # GraphEQA (Saxena et al., https://arxiv.org/abs/2412.14480). No code copied
 # from the closed-source graph_eqa repository.
 
+from .attempt_ledger import AttemptRecord
 from .graph_memory import (
     GraphEQAMemory,
     NavHypothesis,
@@ -54,6 +55,7 @@ from .sim_ground_truth_graph import (
 )
 
 __all__ = [
+    "AttemptRecord",
     "DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M",
     "GraphEQAMemory",
     "NavHypothesis",

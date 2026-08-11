@@ -125,11 +125,11 @@ CLI without editing files:
 
 ```bash
 # stronger prune
-emet stream --connection herman --backend dynagraph \
+emet stream --connection mars --backend dynagraph \
   --set mapping.filters.voxel_pcd_dbscan_min_samples=8
 
 # disable filters
-emet stream --connection herman --backend dynagraph \
+emet stream --connection mars --backend dynagraph \
   --set mapping.filters.depth_speckle_open_kernel=0 \
   --set mapping.filters.voxel_pcd_dbscan_min_samples=0
 ```
