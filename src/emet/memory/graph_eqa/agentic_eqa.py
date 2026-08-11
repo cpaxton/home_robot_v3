@@ -926,9 +926,10 @@ class AgenticEQAExecutor:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
             try:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start, None))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
             except TypeError:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
+            ok = bool(nav_outcome)
             self._n_explore += 1
             if ok:
                 self._consecutive_nav_fail = 0
@@ -1528,9 +1529,11 @@ class AgenticEQAExecutor:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
         try:
-            finished = bool(agent.navigate_to_target_pose(target, start, None, target_obs_id=oid))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
         except TypeError:
-            finished = bool(agent.navigate_to_target_pose(target, start, None))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None)
+        finished = bool(nav_outcome.finished)
+        nav_outcome_str = str(nav_outcome)
         self._n_nav += 1
         self._nav_to_obs_counts[oid] = prior_visits + 1
         # Consume this sample even on planner miss so the next call draws a new XY.
@@ -1544,11 +1547,9 @@ class AgenticEQAExecutor:
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
         # ``finished`` is False for chunked (path >8 waypoints) plans even when the
         # robot made real progress toward the obs — in teleport mode that is the
-        # common case and must not be treated as a failure. Use nav_res.success
-        # (dist >= 0.12m OR finished) as the "reached / progressing" signal.
-        nav_progress = bool(
-            getattr(nav_res, "success", False) if nav_res is not None else finished
-        )
+        # common case and must not be treated as a failure. Use the NavOutcome
+        # (reached/progress) as the "reached / progressing" signal.
+        nav_progress = bool(nav_outcome.ok)
         if hasattr(gm, "record_nav_attempt"):
             gm.record_nav_attempt(oid, success=nav_progress, note=note or "agentic", dist_m=dist_m)
         if not nav_progress:
@@ -1579,6 +1580,7 @@ class AgenticEQAExecutor:
             "obs_id": oid,
             "approach_index": int(next_ap),
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
+            "nav_outcome": nav_outcome_str,
             "nav_success": bool(finished),
             "nav_progress": bool(nav_progress),
             "nav_dist_m": dist_m,

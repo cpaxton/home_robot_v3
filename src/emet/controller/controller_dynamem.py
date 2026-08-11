@@ -34,6 +34,7 @@ from emet.controller.base_controller import BaseController
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.habitat_nav import (
     NavAttemptResult,
+    NavOutcome,
     goal_key_xy,
     habitat_navmesh_navigate,
     habitat_perfect_nav_enabled,
@@ -2770,7 +2771,7 @@ class DynamemController(BaseController):
             movement_step += 1
             self.update()
             finished = self.navigate_to_target_pose(target_point, start_pose, target_theta)
-            if finished:
+            if finished.finished:
                 break
 
         return answer, discord_text, relevant_images, confidence
@@ -2849,7 +2850,7 @@ class DynamemController(BaseController):
                 target_obs_id=target_obs_id,
             )
             self._last_nav_attempt = nav_res
-            return False
+            return NavOutcome.NO_TARGET
 
         res = None
         original_target_pose = target_pose
@@ -2886,7 +2887,11 @@ class DynamemController(BaseController):
             )
             if stuck:
                 self._mark_nav_goal_blocked(reason=f"habitat_navmesh_{nav_res.note or 'stuck'}")
-            return nav_res.finished
+            if nav_res.finished:
+                return NavOutcome.REACHED
+            if nav_res.success or float(getattr(nav_res, "dist_m", 0.0) or 0.0) >= 0.12:
+                return NavOutcome.PROGRESS
+            return NavOutcome.STUCK
 
         target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
 
@@ -2956,7 +2961,7 @@ class DynamemController(BaseController):
                 )
                 self._last_nav_attempt = nav_res
                 self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-                return False
+                return NavOutcome.SAFETY_REJECTED
             logger.info(
                 "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
                 len(traj),
@@ -3016,7 +3021,7 @@ class DynamemController(BaseController):
                 )
                 self._last_nav_attempt = nav_res
                 self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-                return False
+                return NavOutcome.USER_CANCELLED
 
             nav_timeout = self._find_phase_nav_timeout()
             exec_ok = self.robot.execute_trajectory(
@@ -3041,7 +3046,7 @@ class DynamemController(BaseController):
                 )
                 self._last_nav_attempt = nav_res
                 self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-                return False
+                return NavOutcome.ABORTED_TIMEOUT
             after_xy = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:2]
             dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
             note = "ok" if finished else f"moved_{dist_m:.2f}m"
@@ -3075,7 +3080,15 @@ class DynamemController(BaseController):
 
         self._last_nav_attempt = nav_res
         self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-        return finished
+        if finished:
+            return NavOutcome.REACHED
+        if nav_res.success or float(getattr(nav_res, "dist_m", 0.0) or 0.0) >= 0.12:
+            return NavOutcome.PROGRESS
+        if nav_res.note == "sample_nav_failed" or str(nav_res.note or "").startswith("no_target"):
+            return NavOutcome.NO_TARGET
+        if nav_res.note and str(nav_res.note).startswith("plan"):
+            return NavOutcome.PLAN_FAILED
+        return NavOutcome.STUCK
 
 
 # Backward compatibility alias

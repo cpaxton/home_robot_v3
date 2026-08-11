@@ -764,16 +764,16 @@ class GraphEQAController(DynamemController):
                 if self.graph_memory is not None:
                     self.graph_memory.record_nav_attempt(
                         action_obs_id,
-                        success=bool(nav_res.success) if nav_res else False,
+                        success=bool(getattr(nav_res, "success", False) if nav_res else False),
                         note=(nav_res.note if nav_res else "no_nav"),
                         dist_m=float(nav_res.dist_m) if nav_res else 0.0,
                     )
                     self.graph_memory.append_nav_outcome_to_last_history(
                         dist_m=float(nav_res.dist_m) if nav_res else 0.0,
-                        success=bool(nav_res.success) if nav_res else False,
+                        success=bool(getattr(nav_res, "success", False) if nav_res else False),
                         note=(nav_res.note if nav_res else "no_nav"),
                     )
-                if finished:
+                if finished.finished:
                     break
                 if nav_res is not None and (
                     nav_res.note.startswith("already_at_goal")
