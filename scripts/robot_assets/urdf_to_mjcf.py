@@ -114,7 +114,7 @@ def mesh_map_entry(mesh_map: dict, basename: str) -> dict:
 
 
 class UrdfToMjcf:
-    def __init__(self, urdf: Path, mesh_map: dict | None = None, root_body: str | None = None):
+    def __init__(self, urdf: Path, mesh_map: dict | None = None, root_body: str | None = None, mass_scale: float = 1.0):
         tree = ET.parse(urdf)
         self.root = tree.getroot()
         self.links = {l.get("name"): l for l in self.root.findall("link")}
@@ -124,6 +124,7 @@ class UrdfToMjcf:
             self.children.setdefault(parent, []).append(j)
         self.mesh_map = mesh_map or {}
         self.root_body = root_body or self._find_root()
+        self.mass_scale = float(mass_scale)
 
     def _find_root(self) -> str:
         children_links = {j.find("child").get("link") for j in self.root.findall("joint")}
@@ -156,13 +157,13 @@ class UrdfToMjcf:
 
         inert = link.find("inertial")
         if inert is not None:
-            mass = float(inert.find("mass").get("value"))
+            mass = float(inert.find("mass").get("value")) * self.mass_scale
             ori = inert.find("origin")
             com = [0.0, 0.0, 0.0]
             if ori is not None:
                 com = [float(x) for x in ori.get("xyz").split()]
             inr = inert.find("inertia")
-            full = [float(inr.get(k)) for k in ("ixx", "iyy", "izz", "ixy", "ixz", "iyz")]
+            full = [float(inr.get(k)) * self.mass_scale for k in ("ixx", "iyy", "izz", "ixy", "ixz", "iyz")]
             lines.append(f'{indent}  <inertial pos="{vstr(com)}" mass="{mass:.8g}" fullinertia="{vstr(full)}"/>')
 
         meshfile = self._link_visual_mesh(link)
@@ -232,11 +233,12 @@ def main() -> None:
     ap.add_argument("urdf", type=Path, help="Input URDF file.")
     ap.add_argument("--mesh-map", type=Path, help="JSON mesh map (see docstring).")
     ap.add_argument("--root-body", type=str, help="URDF link to start emission from.")
+    ap.add_argument("--mass-scale", type=float, default=1.0, help="Scale all link masses/inertias (e.g. 0.25).")
     ap.add_argument("--out", type=Path, required=True, help="Output XML fragment path.")
     args = ap.parse_args()
 
     mesh_map = json.loads(args.mesh_map.read_text()) if args.mesh_map else {}
-    conv = UrdfToMjcf(args.urdf, mesh_map=mesh_map, root_body=args.root_body)
+    conv = UrdfToMjcf(args.urdf, mesh_map=mesh_map, root_body=args.root_body, mass_scale=args.mass_scale)
     args.out.write_text(conv.build() + "\n")
     print(f"Wrote {args.out}")
 

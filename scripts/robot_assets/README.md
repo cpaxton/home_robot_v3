@@ -9,7 +9,8 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
 2. **`urdf_to_mjcf.py`** — turn an arm URDF into an MJCF body fragment, carrying
    over the kinematic chain (joint frames/axes/limits), inertials, and visuals.
    Used when the vendor already ships a URDF (e.g. `lerobot-vulcan`'s
-   `Arm.urdf` for Sourccey).
+   `Arm.urdf` for Sourccey). `--mass-scale` scales link masses/inertias (CAD
+   inertials are often too heavy; tune so the full robot matches the datasheet).
 3. **`assemble_sourccey.py`** — full-robot example: base/lift/dome/arms/cameras
    assembled into one `sourccey.xml` with planar base joints + actuators.
 4. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
@@ -35,7 +36,7 @@ $ROBOT_ASSETS_PY scripts/robot_assets/step_to_stl.py \
 # 3. If a URDF exists, build the arm fragment + preview.
 $ROBOT_ASSETS_PY scripts/robot_assets/urdf_to_mjcf.py \
     /path/to/Arm.urdf --mesh-map /tmp/mesh_map.json \
-    --out /tmp/arm_frag.xml
+    --mass-scale 0.27 --out /tmp/arm_frag.xml
 
 # 4. Assemble the full robot MJCF (edit the per-robot assembler).
 uv run python scripts/robot_assets/assemble_sourccey.py
@@ -60,6 +61,18 @@ JSON mapping URDF mesh basename → final STL path (or name), plus an optional
 
 Entries with `box_mm` render as a `box` geom instead of a mesh (e.g. an
 off-the-shelf servo body with no STEP export).
+
+## Collision & spawn (important for Robocasa/MolmoSpaces)
+
+Robots that must be spawn-placed in Robocasa kitchens should ship **visual-only**
+geoms (`contype="0" conaffinity="0"` on every robot geom), matching `innate_mars`.
+The planar autoplace probes each candidate (x, y, yaw) with `mj_collision` over the
+whole scene; a robot with dense mesh collision geoms makes that search slow
+(hundreds of candidates × 900 geoms). With visual-only geoms the hint is accepted
+instantly and spawn is O(1). Spawn safety is enforced by `planar_spawn_clip_guard_body_names`
++ footprint margin; motion-planning collision is delegated to external planners.
+Sourccey initially shipped mesh collision geoms and Robocasa autoplace took >90 s —
+converting to visual-only made it 0.0 s like innate_mars / xlerobot.
 
 ## License
 

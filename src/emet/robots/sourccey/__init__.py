@@ -114,7 +114,7 @@ class SourcceyBackend(RobotBackend):
             footprint=Footprint(width=0.42, length=0.42, width_offset=0.0, length_offset=0.0),
             planar_base_joint_names=("base_x", "base_y", "base_yaw"),
             # arm meshes are visual-only in the MJCF; inflate clip erosion + require EE XY inside floor.
-            planar_spawn_xy_extra_margin_m=0.35,
+            planar_spawn_xy_extra_margin_m=0.25,
             planar_spawn_clip_guard_body_names=(
                 "left_Gripper-Base-Back-v1",
                 "right_Gripper-Base-Back-v1",
@@ -122,6 +122,7 @@ class SourcceyBackend(RobotBackend):
                 "right_Arm-Wrist-v1",
             ),
             planar_spawn_clip_guard_pad_m=0.25,
+            planar_spawn_robocasa_first_clearance_m=0.068,
             robosuite_rgb_depth_ops=("flipud",),
         )
 

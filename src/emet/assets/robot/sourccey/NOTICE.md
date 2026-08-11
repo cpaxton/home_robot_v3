@@ -26,7 +26,7 @@ asset tooling; the mesh-map and STEP paths are recorded in
 # URDF arm -> MJCF fragment (main emet venv is fine)
 uv run python scripts/robot_assets/urdf_to_mjcf.py \
     /path/to/Arm.urdf --mesh-map /path/to/mesh_map.json \
-    --out src/emet/assets/robot/sourccey/arm_frag.xml
+    --mass-scale 0.27 --out src/emet/assets/robot/sourccey/arm_frag.xml
 
 # full robot MJCF
 uv run python scripts/robot_assets/assemble_sourccey.py

@@ -193,11 +193,15 @@ def build() -> str:
     a("  </asset>")
     a("")
     a("  <default>")
+    # All robot geoms are visual-only (contype=0/conaffinity=0), matching innate_mars and the
+    # codebase spawn pattern: Robocasa planar autoplace probes stay O(1) (the first-candidate
+    # hint is accepted instantly). Spawn safety comes from the planar clip guards + footprint;
+    # motion-planning collision is delegated to external planners (RobotModel / pinocchio).
     a('    <default class="robot_collision">')
-    a('      <geom type="mesh" density="300" friction="0.9" group="1"/>')
+    a('      <geom type="mesh" density="80" friction="0.9" group="1" contype="0" conaffinity="0"/>')
     a("    </default>")
     a('    <default class="arm_collision">')
-    a('      <geom type="mesh" density="100" friction="0.9" group="1"/>')
+    a('      <geom type="mesh" density="100" friction="0.9" group="1" contype="0" conaffinity="0"/>')
     a("    </default>")
     a('    <default class="robot_visual">')
     a('      <geom type="mesh" material="plastic_white" group="2" contype="0" conaffinity="0" density="0"/>')
@@ -211,15 +215,14 @@ def build() -> str:
     a('    <geom type="plane" size="4 4 0.02" material="plastic_dark"/>')
     # ---- base_root: planar base joints (slide x, slide y, hinge yaw) ----
     a('    <body name="base_root" pos="0 0 0">')
-    a(
-        '      <joint name="base_x" type="slide" axis="1 0 0" pos="0 0 0" damping="10" frictionloss="0.5" armature="0.05"/>'
-    )
-    a(
-        '      <joint name="base_y" type="slide" axis="0 1 0" pos="0 0 0" damping="10" frictionloss="0.5" armature="0.05"/>'
-    )
-    a(
-        '      <joint name="base_yaw" type="hinge" axis="0 0 1" pos="0 0 0" damping="10" frictionloss="0.5" armature="0.05"/>'
-    )
+    # chassis inertial: battery + electronics + base structure (real robot 15.88 kg total;
+    # arms ~3.5 kg, so the mobile base carries ~11 kg).
+    a('      <inertial pos="0 0 0.05" mass="8.5" diaginertia="0.2 0.2 0.3"/>')
+    # armature on the planar base joints keeps the heavy chassis numerically stable under
+    # velocity actuators (matches how the nav P-controller drives them).
+    a('      <joint name="base_x" type="slide" axis="1 0 0" pos="0 0 0" damping="5" armature="0.5"/>')
+    a('      <joint name="base_y" type="slide" axis="0 1 0" pos="0 0 0" damping="5" armature="0.5"/>')
+    a('      <joint name="base_yaw" type="hinge" axis="0 0 1" pos="0 0 0" damping="5" armature="0.5"/>')
     a("")
     # ---- wheels (visual; planar base carries motion) ----
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
@@ -230,6 +233,11 @@ def build() -> str:
         a("      </body>")
     a("")
     # ---- lower body (fixed plates + walls) ----
+    # Plates and walls are visual-only (dense meshes would make Robocasa spawn contact
+    # probes slow); a single box collider around the body provides the spawn footprint.
+    a('      <body name="body_collider" pos="0 0 0.33">')
+    a('        <geom type="box" size="0.125 0.125 0.28" class="robot_collision" friction="0.9"/>')
+    a("      </body>")
     for i, (_half, z, name) in enumerate(
         [
             (L1_HALF, L1_Z, "base_plate_l1"),
@@ -237,7 +245,6 @@ def build() -> str:
         ]
     ):
         a(f'      <body name="plate_{i}" pos="0 0 {z}">')
-        a(f'        <geom type="mesh" mesh="{name}" class="robot_collision" pos="0 0 0"/>')
         a(f'        <geom type="mesh" mesh="{name}" class="robot_visual" pos="0 0 0"/>')
         a("      </body>")
     # level-1 walls (front/back), level-2 walls (front/left/right), level-3 walls
@@ -253,13 +260,11 @@ def build() -> str:
     ]
     for name, dx, dy, z in wall_layout:
         a(f'      <body name="{name}" pos="{dx} {dy} {z}">')
-        a(f'        <geom type="mesh" mesh="{name}" class="robot_collision"/>')
         a(f'        <geom type="mesh" mesh="{name}" class="robot_visual"/>')
         a("      </body>")
     a("")
     # ---- linear actuator column (fixed to base) ----
     a('      <body name="lift_column" pos="0 0 0">')
-    a(f'        <geom type="mesh" mesh="lift_motor" class="robot_collision" pos="0 0 {L1_Z - 0.02}"/>')
     a(f'        <geom type="mesh" mesh="lift_motor" class="robot_visual" pos="0 0 {L1_Z - 0.02}"/>')
     a("      </body>")
     # ---- lift carriage (prismatic z) rides on the column ----
@@ -277,33 +282,36 @@ def build() -> str:
         ("base_plate_dome_rear", 0, -DOME_HALF),
     ):
         a(f'        <body name="dome_plate_{name}" pos="{dx} {dy} {DOME_BASE_Z}">')
-        a(f'          <geom type="mesh" mesh="{name}" class="robot_collision"/>')
         a(f'          <geom type="mesh" mesh="{name}" class="robot_visual"/>')
         a("        </body>")
     # ---- head / dome ----
     a(f'        <body name="head" pos="0 0 {DOME_BASE_Z}">')
     a('          <inertial pos="0 0 0.10" mass="1.2" diaginertia="0.01 0.01 0.015"/>')
+    # The four dome panels are curved quarter-shells (~207 mm). Recentered on bbox centroid,
+    # so stacking them at the head center forms the rounded head. The dome_top cap sits on top.
     for name, dx, dy in (
-        ("dome_front", 0, DOME_HALF),
-        ("dome_back", 0, -DOME_HALF),
-        ("dome_left", -DOME_HALF, 0),
-        ("dome_right", DOME_HALF, 0),
+        ("dome_front", 0, 0.0),
+        ("dome_back", 0, 0.0),
+        ("dome_left", 0, 0.0),
+        ("dome_right", 0, 0.0),
     ):
-        a(f'          <geom type="mesh" mesh="{name}" class="robot_visual" pos="{dx} {dy} 0.10"/>')
-    a(f'          <geom type="mesh" mesh="dome_top" class="robot_visual" pos="0 0 {DOME_TOP - DOME_BASE_Z - 0.04}"/>')
-    a('          <geom type="mesh" mesh="eye_platform" class="robot_visual" pos="0 0.04 0.08"/>')
-    a('          <geom type="mesh" mesh="camera_holder" class="robot_visual" pos="0 0.06 0.10"/>')
-    # cameras (front eyes, 20 deg down)
-    a('          <camera name="front_left" pos="-0.04 0.09 0.12" xyaxes="1 0 0 0 0.94 -0.34" fovy="70"/>')
-    a('          <camera name="front_right" pos="0.04 0.09 0.12" xyaxes="1 0 0 0 0.94 -0.34" fovy="70"/>')
+        a(f'          <geom type="mesh" mesh="{name}" class="robot_visual" pos="{dx} {dy} 0.02"/>')
+    a(f'          <geom type="mesh" mesh="dome_top" class="robot_visual" pos="0 0 {DOME_TOP - DOME_BASE_Z - 0.02}"/>')
+    a('          <geom type="mesh" mesh="eye_platform" class="robot_visual" pos="0 0.06 0.08"/>')
+    a('          <geom type="mesh" mesh="camera_holder" class="robot_visual" pos="0 0.09 0.10"/>')
+    # cameras (front eyes, 20 deg down — MuJoCo camera looks along -z of its frame).
+    # Placed proud of the dome outer surface (y≈0.104) so they see the scene, not the dome interior.
+    a('          <camera name="front_left" pos="-0.04 0.12 0.10" xyaxes="1 0 0 0 0.342 0.940" fovy="70"/>')
+    a('          <camera name="front_right" pos="0.04 0.12 0.10" xyaxes="1 0 0 0 0.342 0.940" fovy="70"/>')
     a("        </body>")
     a("")
     # ---- arms (left / right) ----
     for side, arm_sx in (("left", -1.0), ("right", 1.0)):
         a(f'      <body name="arm_mount_{side}" pos="{arm_sx * ARM_MOUNT_X} 0 {ARM_MOUNT_Y + DOME_BASE_Z}">')
         a(f'        <geom type="mesh" mesh="arm_base" class="robot_visual" pos="{arm_sx * 0.03} 0 -0.05"/>')
-        # wrist camera (looks along the arm outward direction)
-        a(f'        <camera name="wrist_{side}" pos="0 0.10 0" xyaxes="1 0 0 0 1 0" fovy="70"/>')
+        # wrist camera looks outward along the arm (left -X, right +X), level (world up = +Z)
+        cam_xy = "0 1 0 0 0 1" if side == "left" else "0 -1 0 0 0 1"
+        a(f'        <camera name="wrist_{side}" pos="0 0.10 0" xyaxes="{cam_xy}" fovy="70"/>')
         a(f'        <body name="arm_{side}" pos="{arm_sx * 0.03} 0 -0.05" quat="{ARM_MOUNT_QUAT[side]}">')
         a(prefix_arm_fragment(indent_arm, side))
         a("        </body>")
@@ -314,8 +322,11 @@ def build() -> str:
     a("  </worldbody>")
     a("")
     a("  <actuator>")
+    # planar base uses velocity transmissions (nav stack drives base via velocity ctrl,
+    # like innate_mars / xlerobot); arms/gripper/lift are position actuators.
+    # kv tuned with base-joint armature so a nav P-controller goal converges (~6 s to 1.8 m).
     for base in ("base_x", "base_y", "base_yaw"):
-        a(f'    <position name="{base}_act" joint="{base}" kp="50" ctrlrange="-2 2"/>')
+        a(f'    <velocity name="{base}_act" joint="{base}" kv="300"/>')
     a('    <position name="lift_act" joint="lift" kp="200" ctrlrange="0 0.20"/>')
     for side in ("left", "right"):
         for jname in (

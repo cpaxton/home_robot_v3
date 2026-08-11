@@ -44,13 +44,22 @@ uv run emet serve mujoco --config configs/sim/molmospaces_ithor_train_sourccey_0
 ## Model notes
 
 - **Arm kinematics / inertials** are the exact `Arm.urdf` chain from `lerobot-vulcan`
-  (joint frames, axes, limits, and mass/inertia tensors). The left arm is the X-mirror
+  (joint frames, axes, limits, and mass/inertia tensors, scaled to a realistic dual-arm
+  mass so the full robot lands near the real 15.88 kg). The left arm is the X-mirror
   of the right (sagittal reflection), so left/right joint targets are opposite sign.
 - **Base / dome / wheels / lift** are simplified pragmatic geometry assembled from the
-  STEP CAD parts (see `scripts/robot_assets/`). Cosmetic detail is trimmed; collision
-  geoms are the structural meshes.
-- **Planar base**: `base_x` / `base_y` / `base_yaw` slides + yaw on `base_root` (matches
-  RoboCasa planar autoplace and MolmoSpaces nav, like innate_mars / xlerobot).
+  STEP CAD parts (see `scripts/robot_assets/`). Cosmetic detail is trimmed; the base
+  carries a single box collider.
+- **All geoms are visual-only** (contype=0), matching innate_mars: Robocasa planar
+  autoplace stays O(1) (the first-candidate hint is accepted instantly). Spawn safety
+  comes from the planar clip guards + footprint; motion-planning collision is delegated
+  to external planners. Self-collision at the `sourccey_home` keyframe is clean.
+- **Planar base**: `base_x` / `base_y` / `base_yaw` slides + yaw on `base_root` driven by
+  velocity actuators (like innate_mars / xlerobot); a nav P-controller converges to a
+  world goal in a few seconds.
+- **Cameras**: `front_left`/`front_right` are a stereo pair on the dome (forward, 20°
+  down), `wrist_left`/`wrist_right` look outward along the arms. FOV 70°. Rendered RGB +
+  depth are verified consistent (`assert_zmq_observation_frames_consistent`).
 - **Home keyframe** `sourccey_home` tucks the arms for navigation and is collision-free.
 
 ## Regeneration
