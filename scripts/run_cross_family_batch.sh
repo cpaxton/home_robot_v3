@@ -88,10 +88,14 @@ run_ovmm() {
     local ep="$1"
     local dir="$OUT/ovmm_${ep}"
     mkdir -p "$dir"
+    # Live-agent eval: explore + build the map in-sim. A stale GT scene cache can
+    # place the robot's A* start in unexplored/obstacle cells (spawn pose vs cached
+    # map frame mismatch) → "robot might stand on a non navigable point".
     uv run emet ovmm find \
         --episodes configs/ovmm/find_phase_episodes.yaml \
         --episode-id "$ep" \
         --backend dynagraph \
+        --no-scene-cache \
         --output-dir "$dir"
 }
 
