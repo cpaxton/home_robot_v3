@@ -631,6 +631,27 @@ class AgenticEQAExecutor:
         except Exception:
             return None
 
+    def _robot_xyt_world(self) -> np.ndarray | None:
+        """Robot base ``(x, y, θ)`` in the voxel-map / world frame for A* planning.
+
+        ``get_base_pose`` is episode-relative (ZMQ gps/compass), but the voxel map
+        and ``navigate_to_target_pose`` plan in the world frame anchored at
+        ``navigation_origin_xyt``. For sims whose spawn is not at world (0,0)
+        (robocasa origin ≈ (2.9,-1.7)) planning from the raw episode pose puts the
+        A* start at grid center / an unexplored cell → "non navigable point".
+        """
+        local = self._robot_xyt()
+        if local is None:
+            return None
+        agent = self.agent
+        convert = getattr(agent, "_planning_base_xyt", None)
+        if callable(convert):
+            try:
+                return np.asarray(convert(local), dtype=float).reshape(-1)
+            except Exception:
+                pass
+        return local
+
     def _append_trace(self, row: dict[str, Any]) -> None:
         if not self._collect_trace:
             return
@@ -937,7 +958,7 @@ class AgenticEQAExecutor:
             bias,
         )
         ok = False
-        start = self._robot_xyt()
+        start = self._robot_xyt_world()
         if start is None:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
@@ -1543,7 +1564,7 @@ class AgenticEQAExecutor:
         target = self._investigate_target_xyz(oid, next_ap)
         if target is None:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
-        start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
+        start = self._robot_xyt_world() if xyt is not None else np.array([0.0, 0.0, 0.0])
         try:
             nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
         except TypeError:

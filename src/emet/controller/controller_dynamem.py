@@ -630,6 +630,7 @@ class DynamemController(BaseController):
             clearance_cost_weight=self._clearance_cost_weight,
             start_escape_max_ring=int(parameters.get("motion_planner/start_escape_max_ring", 8)),
         )
+        self.planner.debug_start_escape = True
         print("Dynamem create_obstacle_map: AStar ready", flush=True)
         print("Dynamem create_obstacle_map: configuring graph memory…", flush=True)
         # Frontier / explore memory: mark goals blocked after waypoint timeout so
