@@ -162,6 +162,7 @@ def _uses_strip_placeholder_robot(robot_name: str) -> bool:
         "innate_mars",
         "xlerobot",
         "xlerobot_dual",
+        "sourccey",
         *_GALAXEA_R1_ROBOT_KEYS,
     )
 
@@ -172,7 +173,7 @@ def _robosuite_robot_for(robot_name: str) -> str:
     For Stretch and innate_mars we use PandaMobile as a placeholder (then strip-and-replace).
     For robosuite-native robots we use the robot directly.
     """
-    if robot_name in ("stretch", None):
+    if robot_name in ("stretch", None, "sourccey"):
         return "PandaMobile"
     mapping = {r.lower(): r for r in ROBOSUITE_ROBOTS}
     mapping["pandaomron"] = "PandaOmron"
@@ -312,6 +313,8 @@ def model_generation_wizard(
             xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
         elif use_galaxea_robot:
             xml = add_galaxea_r1_to_kitchen(xml, robot_base_fixture_pose, robot_key=robot_key)
+        elif robot_key == "sourccey":
+            xml = add_sourccey_to_kitchen(xml, robot_base_fixture_pose)
         else:
             xml = add_innate_mars_to_kitchen(xml, robot_base_fixture_pose)
     else:
@@ -449,6 +452,56 @@ def add_innate_mars_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         tmp_path = fh.name
     abs_path = Path(tmp_path).resolve().as_posix()
     print(f"Adding innate_mars to kitchen via temp MJCF: {abs_path}")
+    return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')
+
+
+def add_sourccey_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
+    """Add Sourccey MJCF to kitchen XML (strip-and-replace after PandaMobile placeholder)."""
+    from emet.utils.assets import get_robot_mjcf_path
+
+    mjcf = get_robot_mjcf_path("sourccey")
+    if mjcf is None or not mjcf.is_file():
+        raise FileNotFoundError(
+            "Sourccey MJCF not found (emet package data). Cannot build Robocasa scene for sourccey."
+        )
+    root_dir = mjcf.parent.resolve()
+    meshes_abs = (root_dir / "meshes").resolve()
+    if not meshes_abs.is_dir():
+        raise FileNotFoundError(f"Sourccey meshes directory missing: {meshes_abs}")
+
+    text = mjcf.read_text(encoding="utf-8")
+    text = text.replace('meshdir="./meshes/"', f'meshdir="{meshes_abs.as_posix()}"')
+    text = text.replace('meshdir="meshes"', f'meshdir="{meshes_abs.as_posix()}"')
+
+    def _abs_mesh_file_attr(m: re.Match) -> str:
+        fname = m.group(1)
+        if fname.startswith("/") or "/" in fname:
+            return m.group(0)
+        return f'file="{(meshes_abs / fname).resolve().as_posix()}"'
+
+    text = re.sub(r'file="([^"]+\.(?:STL|stl|obj))"', _abs_mesh_file_attr, text)
+    if robot_pose_attrib is not None:
+        pos = robot_pose_attrib["pos"]
+        quat = robot_pose_attrib["quat"]
+        text = re.sub(
+            r'<body\s+name="base_root"[^>]*>',
+            f'<body name="base_root" pos="{pos}" quat="{quat}">',
+            text,
+            count=1,
+        )
+    text = ensure_mesh_inertia(text)
+    text = _strip_geom_shellinertia(text)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix="_sourccey_kitchen.xml",
+        delete=False,
+        encoding="utf-8",
+    ) as fh:
+        fh.write(text)
+        tmp_path = fh.name
+    abs_path = Path(tmp_path).resolve().as_posix()
+    print(f"Adding sourccey to kitchen via temp MJCF: {abs_path}")
     return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')
 
 

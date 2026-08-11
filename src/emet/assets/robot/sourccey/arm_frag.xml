@@ -1,0 +1,64 @@
+    <body name="Arm-Base-V3-v1" pos="0 0 0" quat="1 0 0 0">
+      <inertial pos="-0.024836923 -0.0045730761 -0.035741082" mass="0.23415805" fullinertia="6.9377576e-05 0.00010626754 6.3767039e-05 2.0265805e-07 2.1274268e-08 -1.2581862e-06"/>
+      <geom type="mesh" mesh="arm_base" pos="0 0.005996067 -2.2257e-05" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+      <geom type="mesh" mesh="arm_base" pos="0 0.005996067 -2.2257e-05" quat="1 0 0 0" class="arm_collision"/>
+      <body name="Feetech-Servo-Motor-v1" pos="0.05233622 6.8598019e-19 -0.024715041" quat="6.123234e-17 -7.1216436e-15 -1.3877788e-17 1">
+        <inertial pos="0.077051263 0.021700909 -0.011009537" mass="0.26466731" fullinertia="6.5428523e-05 3.4338661e-05 5.70951e-05 -4.8246301e-22 -6.9100582e-18 1.3943026e-07"/>
+        <joint name="shoulder_pan" type="hinge" axis="-2.702155e-16 3.4450928e-16 1" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
+        <body name="Shoulder-With-Gearbox-V3-v1" pos="0.07705126 0.035 -0.01087118" quat="1 1.7225464e-16 -1.5950153e-15 3.240526e-31">
+          <inertial pos="-0.0047842152 0.03856791 3.6672627e-08" mass="0.84413939" fullinertia="0.00075145933 0.00067622159 0.00045972127 6.4335243e-05 -1.6959039e-10 2.1809407e-10"/>
+          <geom type="mesh" mesh="arm_shoulder" pos="-0.042766084 0.018712636 0.010877235" quat="0.5 0.5 0.5 0.5" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+          <geom type="mesh" mesh="arm_shoulder" pos="-0.042766084 0.018712636 0.010877235" quat="0.5 0.5 0.5 0.5" class="arm_collision"/>
+          <body name="Feetech-Servo-Motor-v1-1" pos="-0.06305126 0.041 0.02829618" quat="0.5 -0.5 -0.5 -0.5">
+            <inertial pos="-0.028296181 0.059487907 0.021700909" mass="0.26466731" fullinertia="6.5428523e-05 5.70951e-05 3.4338661e-05 6.3967928e-18 8.2728436e-19 1.3943026e-07"/>
+            <joint name="shoulder_lift" type="hinge" axis="-1 -7.9844899e-16 -8.5563952e-16" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
+            <body name="Arm-Bicep-v1" pos="-0.02829618 0.05962626 0.035" quat="-0.5 0.5 0.5 -0.5">
+              <inertial pos="0.0072483615 -0.065917045 -9.3488995e-05" mass="1.2428968" fullinertia="0.0022030845 0.0014550434 0.0035105849 0.00040028422 2.8160951e-06 1.848597e-06"/>
+              <geom type="mesh" mesh="arm_bicep_l" pos="-0.062906613 0.00275 -0.050018635" quat="0.5 0.5 -0.5 -0.5" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+              <geom type="mesh" mesh="arm_bicep_l" pos="-0.062906613 0.00275 -0.050018635" quat="0.5 0.5 -0.5 -0.5" class="arm_collision"/>
+              <body name="Feetech-Servo-Motor-v1-2" pos="-0.04024056 -0.11975 -0.02729618" quat="0.5 0.5 0.5 -0.5">
+                <inertial pos="-0.027296181 0.054987912 0.021700909" mass="0.26466731" fullinertia="6.5428523e-05 5.70951e-05 3.4338661e-05 8.0846624e-18 7.6552014e-19 1.3943026e-07"/>
+                <joint name="elbow_flex" type="hinge" axis="1 -1.1021771e-15 -1.211608e-15" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
+                <body name="Arm-Forearm-v1" pos="-0.02729618 0.05512627 0.035" quat="0.5 0.5 0.5 0.5">
+                  <inertial pos="-2.3646245e-05 0.067746772 -8.954208e-06" mass="1.1540812" fullinertia="0.0019372258 0.00081283586 0.0026179416 1.2980201e-06 -4.1609419e-11 4.4399186e-07"/>
+                  <geom type="mesh" mesh="arm_forearm" pos="-0.052282108 -0.00275 -0.011141731" quat="-0.5 0.5 0.5 -0.5" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                  <geom type="mesh" mesh="arm_forearm" pos="-0.052282108 -0.00275 -0.011141731" quat="-0.5 0.5 0.5 -0.5" class="arm_collision"/>
+                  <body name="Feetech-Servo-Motor-v1-3" pos="-0.07117575 -0.26575 -0.02441378" quat="4.3297803e-17 0.70710678 -4.3297803e-17 0.70710678">
+                    <inertial pos="0.024413779 -0.40720091 0.070362392" mass="0.26466731" fullinertia="6.5428523e-05 3.4338661e-05 5.70951e-05 -4.3368087e-19 7.1557343e-18 -1.3943026e-07"/>
+                    <joint name="wrist_flex" type="hinge" axis="1 -1.3047062e-15 1.2127765e-15" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
+                    <body name="Arm-Wrist-v1" pos="0.02441378 -0.4205 0.07050075" quat="-2.0030705e-16 0.70710678 2.0030705e-16 0.70710678">
+                      <inertial pos="0.0015547193 0.03107814 -3.2002086e-09" mass="0.49175094" fullinertia="0.00019393182 0.00038490077 0.00046306237 -3.4392217e-05 -1.872288e-11 8.860219e-11"/>
+                      <geom type="mesh" mesh="arm_wrist" pos="-0.081966437 -0.002887021 0.011215891" quat="0.5 0.5 0.5 0.5" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_wrist" pos="-0.081966437 -0.002887021 0.011215891" quat="0.5 0.5 0.5 0.5" class="arm_collision"/>
+                      <body name="Feetech-Servo-Motor-v1-4" pos="-0.07050075 -0.4205 -0.02441378" quat="4.3297803e-17 0.70710678 -4.3297803e-17 0.70710678">
+                        <inertial pos="0.024413779 -0.46863836 0.082799839" mass="0.26466731" fullinertia="6.5428523e-05 5.70951e-05 3.4338661e-05 -9.1072982e-18 -1.0842022e-19 -1.3943026e-07"/>
+                        <joint name="wrist_roll" type="hinge" axis="0 8.978648e-14 1" range="-3.14159 3.14159" damping="0.1" frictionloss="0.05"/>
+                        <body name="Gripper-Base-Back-v1" pos="0.02441378 -0.48625 0.06950075" quat="0.70710678 0.70710678 -5.578089e-31 5.578089e-31">
+                          <inertial pos="-1.7547323e-07 -0.0042328214 0.023047641" mass="0.48634788" fullinertia="0.00025775523 0.00020378472 0.00038155793 -2.6050384e-09 -1.6939542e-09 -1.6908621e-05"/>
+                          <geom type="mesh" mesh="gripper_base" pos="0.062221178 -0.047874826 0.040620968" quat="-3.9685289e-15 0.70710678 -3.9685289e-15 -0.70710678" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                          <geom type="mesh" mesh="gripper_base" pos="0.062221178 -0.047874826 0.040620968" quat="-3.9685289e-15 0.70710678 -3.9685289e-15 -0.70710678" class="arm_collision"/>
+                          <body name="Feetech-Servo-Motor-v1-5" pos="0.01222118 -0.05345127 0.002" quat="-0.5 0.5 0.5 -0.5">
+                            <inertial pos="0.040152177 -0.017888356 0.012221181" mass="0.26466731" fullinertia="3.4338661e-05 5.70951e-05 6.5428523e-05 1.3943026e-07 3.9835445e-18 -7.2495093e-18"/>
+                            <joint name="gripper" type="hinge" axis="0 5.3713225e-32 1" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
+                            <body name="Gripper-Gear-ASSEMBLY-TEST-v1" pos="0.05345127 -0.0355 0.01222118" quat="0.5 0.5 0.5 -0.5">
+                              <inertial pos="-8.7980191e-10 -1.9171391e-09 0.0045" mass="0.064144568" fullinertia="5.0674208e-06 5.0674208e-06 9.26889e-06 -1.3552527e-20 -1.2791969e-34 1.3010426e-18"/>
+                              <geom type="mesh" mesh="gripper_finger" pos="-0.00011380788 -0.033608157 0.01847733" quat="1 -9.3293279e-14 -1.3133014e-15 -5.0295174e-15" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="gripper_finger" pos="-0.00011380788 -0.033608157 0.01847733" quat="1 -9.3293279e-14 -1.3133014e-15 -5.0295174e-15" class="arm_collision"/>
+                            </body>
+                          </body>
+                          <body name="Gripper-Base-Front-Angled-Camera-v1" pos="-0.01777882 -0.02420127 0.0345" quat="0.5 0.5 0.5 0.5">
+                            <inertial pos="0.02563504 0.0067884341 0.024303861" mass="0.40699506" fullinertia="0.00039855556 0.00060682196 0.00023363908 2.2724939e-06 3.807698e-06 -2.1186888e-05"/>
+                            <geom type="mesh" mesh="gripper_front" pos="-0.029249997 0.016496991 0.068624624" quat="3.5398257e-14 -0.70710678 0.70710678 2.7775218e-14" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                            <geom type="mesh" mesh="gripper_front" pos="-0.029249997 0.016496991 0.068624624" quat="3.5398257e-14 -0.70710678 0.70710678 2.7775218e-14" class="arm_collision"/>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>

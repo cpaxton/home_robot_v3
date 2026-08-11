@@ -43,7 +43,7 @@ def _spawn_json_path(robot_key: str) -> Path | None:
 
 _GALAXEA_KEYS = frozenset({"rby1", "rby1m", "galaxea_r1", "galaxear1", "rb_y1", "rby_1"})
 _STRIP_PLACEHOLDER = frozenset(
-    {"stretch", "hello_stretch", "hellostretch", "innate_mars", "xlerobot", "xlerobot_dual", *_GALAXEA_KEYS}
+    {"stretch", "hello_stretch", "hellostretch", "innate_mars", "xlerobot", "xlerobot_dual", "sourccey", *_GALAXEA_KEYS}
 )
 
 

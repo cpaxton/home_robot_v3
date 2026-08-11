@@ -33,6 +33,7 @@ MOLMOSPACES_ROBOT_IDS = [
     "floating_rum",
     "floating_robotiq",
     "franka_fr3",
+    "sourccey",
 ]
 
 DEFAULT_MOLMOSPACES_ROBOT = "stretch"
@@ -47,6 +48,7 @@ MOLMOSPACES_SCENE_NAMES = [
 ]
 
 MOLMOSPACES_SPLITS = ("train", "val", "test")
+
 
 def normalize_molmospaces_robot_key(robot: str) -> str:
     return str(robot).strip().lower().replace("-", "_")
