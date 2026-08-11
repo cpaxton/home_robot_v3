@@ -942,9 +942,10 @@ class AgenticEQAExecutor:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
             try:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start, None))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
             except TypeError:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
+            ok = bool(nav_outcome)
             self._n_explore += 1
             if ok:
                 self._consecutive_nav_fail = 0
@@ -1544,9 +1545,11 @@ class AgenticEQAExecutor:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
         try:
-            finished = bool(agent.navigate_to_target_pose(target, start, None, target_obs_id=oid))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
         except TypeError:
-            finished = bool(agent.navigate_to_target_pose(target, start, None))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None)
+        finished = bool(nav_outcome.finished)
+        nav_outcome_str = str(nav_outcome)
         self._n_nav += 1
         self._nav_to_obs_counts[oid] = prior_visits + 1
         # Consume this sample even on planner miss so the next call draws a new XY.
@@ -1560,11 +1563,9 @@ class AgenticEQAExecutor:
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
         # ``finished`` is False for chunked (path >8 waypoints) plans even when the
         # robot made real progress toward the obs — in teleport mode that is the
-        # common case and must not be treated as a failure. Use nav_res.success
-        # (dist >= 0.12m OR finished) as the "reached / progressing" signal.
-        nav_progress = bool(
-            getattr(nav_res, "success", False) if nav_res is not None else finished
-        )
+        # common case and must not be treated as a failure. Use the NavOutcome
+        # (reached/progress) as the "reached / progressing" signal.
+        nav_progress = bool(nav_outcome.ok)
         from emet.controller.nav_attempt import nav_status_code
 
         # Ledger dual-write is owned by DynamemController._log_nav_attempt
@@ -1602,6 +1603,7 @@ class AgenticEQAExecutor:
             "obs_id": oid,
             "approach_index": int(next_ap),
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
+            "nav_outcome": nav_outcome_str,
             "nav_success": bool(finished),
             "nav_progress": bool(nav_progress),
             "nav_dist_m": dist_m,
@@ -2401,6 +2403,14 @@ class AgenticEQAExecutor:
         m = re.search(r"\b([A-E])\b", s)
         return m.group(1) if m else ""
 
+    def _question_is_mcq(self) -> bool:
+        """True for HM-EQA-style A–D questions; False for open find/localize questions."""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        if parse_mcq_choices_from_question(self.question):
+            return True
+        return bool(getattr(self, "_mcq_choices", None))
+
     def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
         """True when target/stem tokens appear in inventory or labels near obs."""
         needle = str(phrase or self._target_phrase or "").strip().lower()
@@ -2452,6 +2462,16 @@ class AgenticEQAExecutor:
         if not self._answerable_confirm:
             # Legacy: raw answerable unlocks (ignore need_more_views for parity).
             return True, "confirm_disabled"
+        if not self._question_is_mcq():
+            # Open-ended find / localize (OVMM "Where is the table?"): no MCQ letter
+            # set exists, so a fresh view that actually shows the target is enough.
+            # The assess prompt is open-aware, so answerable means "visible/localizable".
+            # For location questions the VLM conservatively sets need_more_views=True
+            # even when the target is clearly in view — presence alone confirms here.
+            if bool(present):
+                self._pending_answerable = None
+                return True, "open_view_present"
+            return False, "open_not_present"
         if need_more_views:
             letter = self._mcq_letter_from_suggested(suggested_answer)
             self._pending_answerable = {
@@ -2551,6 +2571,7 @@ class AgenticEQAExecutor:
             rgb=rgb,
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
+            is_mcq=self._question_is_mcq(),
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
@@ -2562,6 +2583,17 @@ class AgenticEQAExecutor:
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
         }
+        _logger.info(
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
+            oid,
+            bool(assessment.present),
+            bool(assessment.answerable),
+            bool(assessment.need_more_views),
+            self._question_is_mcq(),
+            str(phrase or self._target_phrase or "")[:60],
+            str(assessment.suggested_answer or "")[:60],
+            str(assessment.reason or "")[:80],
+        )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
