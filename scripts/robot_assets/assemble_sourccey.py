@@ -57,20 +57,24 @@ WALL_3_Z = L3_Z + 0.11  # level-3 walls center
 LIFT_MIN = 0.0
 LIFT_MAX = 0.20
 
-# Arm shoulder mount, relative to the lift carriage (which sits above the dome level).
+# Arm shoulder mount. On the real Sourccey the arms attach at the upper-body
+# shoulders (below the dome head), hanging down beside the body. The arm mount is
+# expressed as an absolute height (carriage frame) so the shoulder sits at the
+# level-3 / dome-base height, NOT above the dome.
 # Mount quat rotates the URDF arm frame so its ``-Y`` extension points outward
 # (world -X for left, +X for right) while keeping the shoulder-pan axis world-vertical.
-# Mount sits above the dome top so tucked arms don't clip the dome plates.
-ARM_MOUNT_Y = 0.22  # shoulder base above the carriage top (dome top ~0.20)
+ARM_MOUNT_Z = 0.70  # shoulder height above the carriage floor (upper body)
 ARM_MOUNT_X = DOME_HALF + 0.02
 # R_z(±90deg) in MJCF quat (w x y z): left -> -90 (cos -1/2? no): use exact values below.
 ARM_MOUNT_QUAT = {"left": "0.7071068 0 0 -0.7071068", "right": "0.7071068 0 0 0.7071068"}
 
-# Default "home" pose for navigation: arms tucked so they don't self-collide / clip.
-# Matches the arm joint order in the MJCF: shoulder_pan, shoulder_lift, elbow_flex,
+# Default "home" pose for navigation: arms tucked at their own sides (uncrossed),
+# collision-free. Matches the arm joint order: shoulder_pan, shoulder_lift, elbow_flex,
 # wrist_flex, wrist_roll, gripper. The left fragment is X-mirrored (sagittal), so the
 # left/right joint values must be OPPOSITE sign for the poses to be mirror images.
-ARM_HOME = (1.2, -0.6, 0.8, 0.0, 0.0, 0.8)
+# shoulder_pan > ~0.8 makes the arms CROSS in front of the body; 0.6 keeps them at
+# their own sides (verified: left gripper at -x, right at +x, no self-collision).
+ARM_HOME = (0.6, -0.6, 1.0, 0.0, 0.0, 0.8)
 LIFT_HOME = 0.05
 
 
@@ -240,9 +244,9 @@ def build() -> str:
     a("")
     a("  <worldbody>")
     a('    <light directional="true" diffuse="0.9 0.9 0.9" dir="-1 -1 -1.2" pos="0 0 1.2"/>')
-    a('    <camera name="preview_front" pos="0 -2.6 0.8" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>')
+    a('    <camera name="preview_front" pos="0 -2.4 0.6" xyaxes="1 0 0 0 0.0624 0.9981" fovy="50"/>')
     a('    <camera name="preview_top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0" fovy="50"/>')
-    a('    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>')
+    a('    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="0.7071 0.7071 0 -0.1379 0.1379 0.9808" fovy="50"/>')
     a('    <geom type="plane" size="4 4 0.02" material="plastic_dark"/>')
     # ---- base_root: planar base joints (slide x, slide y, hinge yaw) ----
     a('    <body name="base_root" pos="0 0 0">')
@@ -359,7 +363,7 @@ def build() -> str:
     a("")
     # ---- arms (left / right) ----
     for side, arm_sx in (("left", -1.0), ("right", 1.0)):
-        a(f'      <body name="arm_mount_{side}" pos="{arm_sx * ARM_MOUNT_X} 0 {ARM_MOUNT_Y + DOME_BASE_Z}">')
+        a(f'      <body name="arm_mount_{side}" pos="{arm_sx * ARM_MOUNT_X} 0 {ARM_MOUNT_Z}">')
         a(f'        <geom type="mesh" mesh="arm_base" class="robot_visual" pos="{arm_sx * 0.03} 0 -0.05"/>')
         a(f'        <body name="arm_{side}" pos="{arm_sx * 0.03} 0 -0.05" quat="{ARM_MOUNT_QUAT[side]}">')
         a(inject_wrist_cameras(prefix_arm_fragment(indent_arm, side)))

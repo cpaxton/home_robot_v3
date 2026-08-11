@@ -64,9 +64,9 @@
 
   <worldbody>
     <light directional="true" diffuse="0.9 0.9 0.9" dir="-1 -1 -1.2" pos="0 0 1.2"/>
-    <camera name="preview_front" pos="0 -2.6 0.8" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>
+    <camera name="preview_front" pos="0 -2.4 0.6" xyaxes="1 0 0 0 0.0624 0.9981" fovy="50"/>
     <camera name="preview_top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0" fovy="50"/>
-    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>
+    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="0.7071 0.7071 0 -0.1379 0.1379 0.9808" fovy="50"/>
     <geom type="plane" size="4 4 0.02" material="plastic_dark"/>
     <body name="base_root" pos="0 0 0">
       <inertial pos="0 0 0.05" mass="8.5" diaginertia="0.2 0.2 0.3"/>
@@ -174,7 +174,7 @@
           <camera name="front_right" pos="0.04 0.12 0.10" xyaxes="1 0 0 0 0.342 0.940" fovy="70"/>
         </body>
 
-      <body name="arm_mount_left" pos="-0.124 0 1.0150000000000001">
+      <body name="arm_mount_left" pos="-0.124 0 0.7">
         <geom type="mesh" mesh="arm_base" class="robot_visual" pos="-0.03 0 -0.05"/>
         <body name="arm_left" pos="-0.03 0 -0.05" quat="0.7071068 0 0 -0.7071068">
             <body name="left_Arm-Base-V3-v1" pos="-0 0 0" quat="-1 -0 0 0">
@@ -248,7 +248,7 @@
             </body>
         </body>
       </body>
-      <body name="arm_mount_right" pos="0.124 0 1.0150000000000001">
+      <body name="arm_mount_right" pos="0.124 0 0.7">
         <geom type="mesh" mesh="arm_base" class="robot_visual" pos="0.03 0 -0.05"/>
         <body name="arm_right" pos="0.03 0 -0.05" quat="0.7071068 0 0 0.7071068">
             <body name="right_Arm-Base-V3-v1" pos="0 0 0" quat="1 0 0 0">
@@ -347,6 +347,6 @@
   </actuator>
 
   <keyframe>
-    <key name="sourccey_home" qpos="0 0 0 0.05 1.2 -0.6 0.8 0 0 0.8 -1.2 0.6 -0.8 -0 -0 -0.8" ctrl="0 0 0 0.05 1.2 -0.6 0.8 0 0 0.8 -1.2 0.6 -0.8 -0 -0 -0.8"/>
+    <key name="sourccey_home" qpos="0 0 0 0.05 0.6 -0.6 1 0 0 0.8 -0.6 0.6 -1 -0 -0 -0.8" ctrl="0 0 0 0.05 0.6 -0.6 1 0 0 0.8 -0.6 0.6 -1 -0 -0 -0.8"/>
   </keyframe>
 </mujoco>
