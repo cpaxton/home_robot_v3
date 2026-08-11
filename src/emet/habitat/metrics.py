@@ -361,6 +361,15 @@ def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
     )
     if m:
         return m.group(1).upper()
+    # Terse replies under a trailing ``Answer:`` cue / assistant prefill often emit
+    # only ``A}``, ``A) <choice text>``, ``A.``, or ``A:`` instead of a JSON object.
+    m = re.search(
+        rf"(?:^|\n)\s*([{MCQ_LETTER_CLASS}])\s*[}}):.,]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).upper()
     if choices:
         letter = _match_choice_text_to_letter(text, choices)
         if letter:
@@ -384,7 +393,9 @@ def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) 
         return ""
     fields = _answer_field_lines(text)
     if not fields:
-        return ""
+        # Terse replies under a trailing ``Answer:`` cue emit only ``A}`` /
+        # ``A) <choice text>`` with no labeled fields at all.
+        return extract_mcq_letter(text, choices)
     answer_field = fields[-1]
     if not answer_field:
         return ""

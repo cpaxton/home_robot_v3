@@ -63,6 +63,15 @@ Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name:
 
 **Plugged in / tethered (no drive):** set ``EMET_BASE_ROTATE_ONLY=1`` so the agent may only yaw in place (`rotate_base`, `scan_environment`) plus perceive (`describe_scene`, send_*). Absolute XY nav and `explore` are refused.
 
+**Local VL / attn (house chat):** prefer Flash-Attn 2 in the main `.venv`. If flash-attn is missing (or you are on a path that only has PyTorch SDPA), set ``EMET_ALLOW_SDPA_ATTN=1`` so CUDA VL loads do not hard-fail. Details: [environment_variables.md](../environment_variables.md) (`EMET_ALLOW_SDPA_ATTN`, `EMET_BASE_ROTATE_ONLY`).
+
+```bash
+# Tethered Discord house chat on the workstation (yaw-only + SDPA escape hatch):
+export EMET_BASE_ROTATE_ONLY=1
+export EMET_ALLOW_SDPA_ATTN=1   # only when flash-attn is unavailable
+emet run agent --connection herman --host caliban
+```
+
 **ZMQ nav wait:** `GenericZmqClient.move_base_to` always sends `nav_blocking=false` so the robot recv thread is not stuck in Nav2/Spin (that made Discord look hung). When the agent requests `blocking=True`, the **client** waits on `at_goal` / `nav_timeout_s` instead.
 
 **Not this path:** Habitat/eval **EQA_EPISODE** agentic GraphEQA (`eqa.agentic_verify`) is a different orchestrator mode from Discord **CHAT** — see [AGENT_RUN.md modes](../AGENT_RUN.md#skill-library-vs-orchestrator-modes) and [evaluation.md](../evaluation.md#agentic-grapheqa-verify--offline-tuning). Canonical agent docs: [AGENT_RUN.md](../AGENT_RUN.md). Bot setup: [discord_bot.md](../discord_bot.md).

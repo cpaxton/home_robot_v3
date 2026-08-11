@@ -2,7 +2,7 @@
 \label{sec:method}
 
 Dynagraph is implemented as \texttt{DynagraphController}, a thin extension of \texttt{GraphEQAController}, which itself subclasses the DynaMem navigation agent.
-The design principle is \textbf{one perception update, two memory writes}: first the voxel map (unchanged DynaMem rules), then graph unification (GraphEQA), then Dynagraph-specific graph maintenance.
+The design principle is \textbf{one perception step, two memory writes, one maintenance pass}: first the voxel map (unchanged DynaMem rules), then graph unification (GraphEQA), then Dynagraph-specific graph maintenance.
 
 \subsection{System overview}
 
@@ -10,6 +10,14 @@ At each control step the robot receives RGB-D observations and pose from a MuJoC
 The controller calls the inherited DynaMem \texttt{update()}, which appends the frame and fuses it into \texttt{SparseVoxelMap} using the same add/remove and exploration logic as manipulation-oriented DynaMem runs.
 Immediately afterward, \texttt{update\_graph\_memory\_from\_dynamem\_observation} reads the freshly updated map and observation log to add or reinforce graph nodes.
 \texttt{DynagraphController} then calls \texttt{maintain(obs\_count)} for staleness pruning.
+
+Per control step the pipeline is:
+\begin{enumerate}
+  \item \textbf{Voxel write (DynaMem, unchanged).} Fuse the new RGB-D frame into \texttt{SparseVoxelMap}; append the frame to the observation log; refresh per-voxel provenance (\texttt{last\_seen}, supporting \texttt{obs\_id}).
+  \item \textbf{Graph write (GraphEQA).} The shared hook lifts object hypotheses from the updated map and current frame (instance masks, voxel semantics, or sensor VLM) into \texttt{GraphEQAMemory}, tagging each node with its supporting \texttt{obs\_id} and the current controller step.
+  \item \textbf{Graph maintenance (Dynagraph).} Apply spatial merge (Section~\ref{sec:spatial_merge}) and staleness pruning (Section~\ref{sec:staleness_pruning}) so the graph stays compact and aligned with the voxel substrate.
+\end{enumerate}
+All three stages run on the same observation log, so navigation, exploration, and EQA read from one evidence trail.
 
 \subsection{Stage 1: DynaMem voxel update (unchanged)}
 
@@ -32,7 +40,8 @@ Edges encode spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
 When a new detection reinforces an existing object, merge rules update the node's position, labels, and \texttt{last\_seen}; the supporting \texttt{obs\_id} tracks the freshest evidence.
 
 \textbf{Disappearance.} An object is considered gone when its voxel support stops being refreshed and no new observation reinforces it within the staleness horizon.
-Pruning then removes the node and its linked observations from the graph presented to the VLM, so EQA is not misled by hypotheses the map no longer supports.
+Concretely, voxel fusion writes to a voxel only while the sensor observes it; when a voxel stops being refreshed, the map can remove its geometry, and the graph node that depended on that support ceases to be reinforced ($t_n$ is not updated).
+The staleness rule of Section~\ref{sec:staleness_pruning} then retires the node (with its linked observations) from the graph presented to the VLM, so EQA is not misled by hypotheses the map no longer supports.
 
 An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
 
@@ -43,14 +52,31 @@ Labels in Stage~2 come from instance segmentation (optional YOLO-E) and/or VLM s
 Each new detection creates a graph node and observation unless \textbf{spatial merge} applies.
 
 \subsection{Spatial merge}
+\label{sec:spatial_merge}
 
 If \texttt{dynagraph\_merge\_xy\_m} $> 0$ (default 0.45\,m), a new detection whose primary label matches an existing node and whose XY distance is within the threshold \emph{updates} that node: running-mean XYZ, increased support count, refreshed \texttt{last\_seen}, and merged label set.
 This reduces duplicate nodes when the robot revisits the same object from a new viewpoint.
 
+Formally, for a candidate node $c$ with primary label $\ell(c)$, XY position $\mathbf{p}_c$, and a stored node $n$ with $\ell(n)=\ell(c)$, the merge fires when $\lVert \mathbf{p}_c - \mathbf{p}_n \rVert_2 \le \rho$ (merge radius, default $0.45$\,m) and replaces $n$ by
+\begin{equation}
+  \mathbf{p}_n \leftarrow \tfrac{w_n}{w_n+1}\,\mathbf{p}_n + \tfrac{1}{w_n+1}\,\mathbf{p}_c, \qquad
+  w_n \leftarrow w_n + 1, \qquad
+  t_n \leftarrow t_c,
+\end{equation}
+where $w_n$ is the support count and $t_n$ is the node's \texttt{last\_seen} step.
+Otherwise the candidate spawns a new node and observation.
+
 \subsection{Staleness pruning}
+\label{sec:staleness_pruning}
 
 If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), \texttt{maintain(current\_step)} removes nodes whose \texttt{last\_seen} is older than the horizon, deletes their observations, renumbers nodes, and rebuilds edges.
 This discards objects that are no longer visible or relevant---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
+
+Formally, at step $t$ every node $n$ with
+\begin{equation}
+  t - t_n > \tau \quad (\tau = \text{staleness horizon, default } 256)
+\end{equation}
+is pruned together with its linked observations; the surviving nodes are renumbered and edges rebuilt so the serialized graph the VLM sees contains only hypotheses the voxel map still supports.
 
 \subsection{Exploration and EQA loop}
 \label{sec:eqa_loops}
@@ -66,7 +92,7 @@ Each iteration is a monolithic VLM call that jointly decides whether to answer o
 Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}), \texttt{run\_eqa} switches to a bounded tool-calling loop (\texttt{AgenticEQAExecutor}).
 A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and a compact state message summarizes remaining budget plus \emph{evidence cards} for candidate places so the agent does not re-pick failed locations.
 Cheap open-vocab detectors (SigLIP / OWLv2 / YoloE) act only as \textbf{high-recall proposals} in state; answerability and the final letter are \textbf{VLM-first} (\texttt{vlm\_assess} on a fresh RGB, then \texttt{submit\_answer}).
-An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list (used in our Habitat H2H of record for speed and stability).
+An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list. Both instantiations are \emph{our method} --- the knob changes the tool proposer, not the memory substrate or the VLM-first verify gate: the holdout-8 headline used the router off (deterministic walk) for speed and stability, while the balanced-32 of-record composite used the router on (Section~\ref{sec:agentic_results}).
 Full tool schemas and response format live in Appendix~\ref{app:agentic_tools}.
 
 \paragraph{Hypothesis recall (not a second policy).}
@@ -85,6 +111,7 @@ On the Habitat harness we add three inference-time mechanisms on top of either l
 (1)~\textbf{navmesh navigation} with Habitat compass/yaw conventions and frontier re-picking when goals stall;
 (2)~\textbf{phrase-level CONFIRMED\_MEMORY}---multi-word question phrases (e.g.\ ``woven basket'') drive SigLIP alignment and coverage gates instead of fragmented stopword tokens, with the SigLIP encoder retained through voxel VRAM release before EQA;
 (3)~\textbf{location multiple-choice prompts} for visibility+where questions (``Did you see \ldots\ anywhere?'') that instruct the VLM to pick a place letter (A--D) using graph memory even when the object is absent from attached images, plus a letter-only salvage pass when the model answers yes/no instead.
+The HM-EQA paper rows pin the \emph{standalone} confirmed-memory block (\texttt{merged\_memory: false}); the product default merges it into the scene-graph serialization, and the image-description lines omit labels already tagged on graph nodes.
 MCQ choice-rotation debiasing runs at episode end for Dynagraph only (classic path; typically off in tuned HM-EQA profiles).
 
 \subsection{Simulation ground-truth supervision}

@@ -27,6 +27,30 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 | 2026-07-27 | paper-router + explore | holdout-8 | **5/8** | — | Docs/appendix variance (VLM/salvage); not headline |
 | 2026-07-27 | paper-router + explore | bal-32 agentic-only | **16/32** | 9/32 (kept) | Composite of-record |
 
+## What "our method" is (canonical definition)
+
+"Our method" is **Dynagraph + the agentic EQA verify loop** — not one fixed flag set.
+Two things are essential:
+
+1. **Memory substrate:** Dynagraph (merge 0.45 m, staleness horizon 256; HM-EQA rows pin
+   `merged_memory: false` — CONFIRMED_MEMORY as a standalone block).
+2. **Agentic tool loop:** `EMET_EQA_AGENTIC_VERIFY=1` (`AgenticEQAExecutor`), VLM-first
+   answerability — `vlm_assess` on fresh RGB unlocks `submit_answer`; SigLIP/OWLv2/YoloE
+   are high-recall proposals only, never the submit gate.
+
+Everything else is a policy knob, and the two of-record numbers use **different** knob
+settings — do not mix them when quoting:
+
+| Slice | Knobs | Headline |
+|-------|-------|----------|
+| Holdout-8 (paper table) | **router off** (deterministic heuristic walk), matched H2H | agentic **8/8** vs classic 5/8 |
+| Balanced-32 (composite) | **paper-router preset** (router on, `agentic_verifier=none`, allow-unverified) + explore-after-ABSENT | agentic **16/32** vs classic 9/32 |
+
+A router-off agentic bal-32 scores 11–12/32 (archived) and paper-router holdout-8 scored
+5/8 (variance, not headline) — i.e. the knob changes the number but not the method.
+When a run must match a specific paper row, state the preset:
+`--preset paper-router` (bal-32 composite) vs router off (holdout-8 headline).
+
 ## Harness (all Habitat H2Hs)
 
 - Method: `dynagraph`

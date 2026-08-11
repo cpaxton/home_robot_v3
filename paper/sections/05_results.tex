@@ -1,20 +1,88 @@
 \section{Results}
 \label{sec:results}
 
-Habitat HM-EQA numbers are in Section~\ref{sec:hmeqa_results}; other tracks remain placeholders until sweeps complete (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
+Our primary result compares the classic and agentic controllers on a fixed Dynagraph memory profile (Section~\ref{sec:agentic_results}); Section~\ref{sec:hmeqa_results} situates both arms against GraphEQA prior art. Other tracks remain placeholders until sweeps complete (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
 
-\subsection{Habitat HM-EQA (preliminary)}
+\subsection{Classic vs.\ agentic verify}
+\label{sec:agentic_results}
+
+We compare the classic Dynagraph planning loop to the agentic tool loop on the same Dynagraph H2H profile (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off} ablation; Section~\ref{sec:agentic_h2h}).
+On the anti-overfit holdout-8 ($\{15,56,65,68,79,88,104,105\}$; agentic \textbf{router off}), agentic reaches \textbf{8/8} vs.\ classic \textbf{5/8}, with mean planning steps cut from 60.3 to 18.3 (Table~\ref{tab:agentic_h2h}; Figure~\ref{fig:hmeqa_agentic_h2h}).
+Agentic recovers all three classic misses (Q56, Q65, Q104).
+An earlier holdout-4 gate showed the same pattern (3/4$\rightarrow$4/4; 60$\rightarrow$19 steps).
+\begin{table}[t]
+  \centering
+  \caption{Classic vs.\ agentic-verify Dynagraph on HM-EQA (Qwen3-VL-8B; explore-off H2H ablation).
+  Holdout rows use matched router-off H2H; balanced-32 agentic is paper-router on (composite; see text).}
+  \label{tab:agentic_h2h}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    Slice & Controller & Correct / $n$ & Accuracy & Mean planning steps \\
+    \midrule
+    Holdout-4 & Classic planning & 3/4 & 75\% & 60.0 \\
+    Holdout-4 & Agentic verify & \textbf{4/4} & \textbf{100\%} & \textbf{19.3} \\
+    \midrule
+    Holdout-8 & Classic planning & 5/8 & 62.5\% & 60.3 \\
+    Holdout-8 & Agentic verify & \textbf{8/8} & \textbf{100\%} & \textbf{18.3} \\
+    \midrule
+    Balanced-32 & Classic planning & 9/32 & 28.1\% & 48.7 \\
+    Balanced-32 & Agentic verify & \textbf{16/32} & \textbf{50.0\%} & \textbf{32.7} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figs/hmeqa_agentic_h2h.png}
+  \caption{Holdout-8 classic vs.\ agentic-verify Dynagraph: accuracy (left) and mean planning steps (right).}
+  \label{fig:hmeqa_agentic_h2h}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/hmeqa_agentic_coverage.png}
+  \caption{Top-down coverage for matched HM-EQA questions: classic planning (left) vs.\ agentic verify (right).
+  Overlay shows Habitat navmesh, explored voxels, and trajectory; captions report letter accuracy, planning steps, and explored cell count.
+  Rows: Q15 (both correct; efficiency), Q104 (classic miss $\rightarrow$ agentic correct), Q68 (both correct).}
+  \label{fig:hmeqa_agentic_coverage}
+\end{figure}
+
+\noindent\textbf{Coverage maps.}
+Figure~\ref{fig:hmeqa_agentic_coverage} renders side-by-side episode overlays from per-arm debug bundles (\texttt{scripts/render\_hmeqa\_agentic\_coverage\_figure.py}).
+Distinct \texttt{--debug-run-tag}s (or \texttt{OUT/bundles/\{arm\}\_qN} snapshots) are required so H2H arms do not overwrite \texttt{\textasciitilde/.cache/habitat\_eqa/episodes/}.
+
+\noindent\textbf{Scale.}
+On the letter-balanced 32, paper-router agentic reaches 16/32 (50\%) vs.\ classic 9/32 (28\%) with mean planning steps cut from 48.7 to 32.7 (Figure~\ref{fig:hmeqa_agentic_h2h_bal32}; cross-policy McNemar $p{\approx}0.09$).
+The 16/32 agentic headline is stable across later agentic-only replications (11--16/32 over five July--August runs; the post-fix stack again reaches 16/32).
+A prior matched router-off H2H was 11/32 vs.\ 9/32 (archived); an overnight replicate under that policy was 12/32 vs.\ 10/32.
+Checked-in summaries: \texttt{paper/data/hmeqa\_agentic\_h2h/balanced32\_summary.json} (composite) and \texttt{balanced32\_overnight\_replicate.json}.
+Appendix~\ref{app:agentic_verify_gate} documents the high-recall SigLIP role and the policy timeline.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figs/hmeqa_agentic_h2h_bal32.png}
+  \caption{Balanced-32 classic vs.\ agentic-verify Dynagraph (composite): accuracy (left) and mean planning steps (right). Cross-policy letter gap $p{\approx}0.09$; steps win remains significant.}
+  \label{fig:hmeqa_agentic_h2h_bal32}
+\end{figure}
+
+\noindent\textbf{Robustness of the letter claims.}
+Run-to-run variance on small slices is real: classic on the holdout-8 prefix $\{15,56,65,68\}$ scored between 25\% and 100\% across four independent August runs, and agentic under paper-router scored 5/8 on holdout-8 (Appendix~\ref{app:agentic_verify_gate}).
+We therefore treat the \emph{mean planning step} reduction as the primary, statistically robust claim (Wilcoxon $p{\approx}2{\times}10^{-5}$ on balanced-32) and the letter gains on holdout-8 as the matched same-policy headline, rather than overfitting to any single draw.
+
+\subsection{Habitat HM-EQA vs.\ prior art (preliminary)}
 \label{sec:hmeqa_results}
 
 We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), and graph frontier nodes.
 Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}) sets HM-EQA \texttt{dynagraph} to \texttt{unified\_eqa} (0.45\,m merge), MCQ debias off, and \texttt{explore\_when\_uncovered=conservative}; HM-EQA \texttt{static\_graph} uses profile \texttt{static\_graph} (merge/staleness off).
 Tuned full-113 numbers are \textbf{pending}.
-Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper baselines and our own full-benchmark reproduction; all \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
+Table~\ref{tab:hmeqa_vs_prior} reproduces GraphEQA paper baselines alongside our own full-benchmark reproduction; Table~\ref{tab:hmeqa_slices} lists our held-out slices and ablations.
+All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
 
 \begin{table}[t]
   \centering
-  \caption{HM-EQA accuracy: prior art vs.\ \texttt{emet} harness (113-question benchmark unless noted).
-  Method rows use documented harness defaults; ablation rows are labeled as such.}
+  \caption{HM-EQA accuracy on the full 113-question benchmark: prior art vs.\ \texttt{emet} harness.
+  Published rows use full HM3D semantics and API VLMs; \texttt{emet} rows use local VLMs and partial semantics.}
   \label{tab:hmeqa_vs_prior}
   \small
   \begin{tabular}{@{}llcc@{}}
@@ -28,15 +96,32 @@ Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper basel
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} harness (local VLMs; partial semantics)}} \\
     static\_graph & gemma-3-4b-it & 113 & 41.6\% \\
-    dynagraph & Qwen2.5-VL-3B & 32 & 34.4\% \\
-    static\_graph & Qwen2.5-VL-3B & 32 & 31.2\% \\
-    dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
-    static\_graph (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
-    dynagraph (July nav, pre-tune) & Qwen3-VL-8B & 8 & 37.5\% \\
     \midrule
-    \multicolumn{4}{@{}l@{}}{\textit{Ablations (not method defaults)}} \\
-    dynagraph + debias & Qwen2.5-VL-3B & 8 & 62.5\% \\
-    dynagraph (explore off) & Qwen3-VL-8B & 8 & 100.0\% \\
+    \multicolumn{4}{@{}l@{}}{\textit{Held-out slices and ablations: see Table~\ref{tab:hmeqa_slices}}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Held-out HM-EQA slices and ablations (\texttt{emet} harness; Qwen3-VL-8B unless noted).
+  Not comparable to Table~\ref{tab:hmeqa_vs_prior} until semantics coverage and/or VLM tier align with the reference.}
+  \label{tab:hmeqa_slices}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    Slice & Method / run & VLM & $n$ & Accuracy \\
+    \midrule
+    Balanced-32 & dynagraph & Qwen2.5-VL-3B & 32 & 34.4\% \\
+    Balanced-32 & static\_graph & Qwen2.5-VL-3B & 32 & 31.2\% \\
+    \midrule
+    Held-out random-8 & dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
+    Held-out random-8 & static\_graph (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
+    Held-out random-8 & dynagraph (July nav, pre-tune) & Qwen3-VL-8B & 8 & 37.5\% \\
+    \midrule
+    \multicolumn{5}{@{}l@{}}{\textit{Ablations (not method defaults)}} \\
+    Canonical-8 + debias & dynagraph & Qwen2.5-VL-3B & 8 & 62.5\% \\
+    Held-out random-8 & dynagraph (explore off) & Qwen3-VL-8B & 8 & 100.0\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -93,71 +178,6 @@ Tuned defaults: \texttt{mcq\_debias=false}, \texttt{explore\_when\_uncovered=con
 \noindent\textbf{Next experiments.}
 Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched static\_graph baseline on the same VLM; (3)~classic vs.\ agentic verify on holdout-8 / larger slices (Section~\ref{sec:agentic_results}); (4)~semantics download + ablation; (5)~frontier-policy ablation (fluid vs.\ graph nodes); (6)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
 Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
-
-\subsection{Classic vs.\ agentic verify (preliminary)}
-\label{sec:agentic_results}
-
-We compare the classic Dynagraph planning loop to the agentic tool loop on the same Dynagraph H2H profile (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off} ablation; Section~\ref{sec:agentic_h2h}).
-On the anti-overfit holdout-8 ($\{15,56,65,68,79,88,104,105\}$; agentic \textbf{router off}), agentic reaches \textbf{8/8} vs.\ classic \textbf{5/8}, with mean planning steps cut from 60.3 to 18.3 (Table~\ref{tab:agentic_h2h}; Figure~\ref{fig:hmeqa_agentic_h2h}).
-Agentic recovers all three classic misses (Q56, Q65, Q104).
-A earlier holdout-4 gate showed the same pattern (3/4$\rightarrow$4/4; 60$\rightarrow$19 steps).
-
-On balanced-32 we report a \textbf{composite}: classic from the matched router-off H2H, agentic from a later paper-router + explore stack (Appendix~\ref{app:agentic_verify_gate}).
-Agentic reaches \textbf{16/32} vs.\ classic \textbf{9/32} with mean steps $48.7\rightarrow 32.7$ (Wilcoxon $p{\approx}2{\times}10^{-5}$); cross-policy McNemar on letters is $p{\approx}0.09$ (not significant at $\alpha{=}0.05$).
-\begin{table}[t]
-  \centering
-  \caption{Classic vs.\ agentic-verify Dynagraph on HM-EQA (Qwen3-VL-8B; explore-off H2H ablation).
-  Holdout rows use matched router-off H2H; balanced-32 agentic is paper-router on (composite; see text).}
-  \label{tab:agentic_h2h}
-  \small
-  \begin{tabular}{@{}llccc@{}}
-    \toprule
-    Slice & Controller & Correct / $n$ & Accuracy & Mean planning steps \\
-    \midrule
-    Holdout-4 & Classic planning & 3/4 & 75\% & 60.0 \\
-    Holdout-4 & Agentic verify & \textbf{4/4} & \textbf{100\%} & \textbf{19.3} \\
-    \midrule
-    Holdout-8 & Classic planning & 5/8 & 62.5\% & 60.3 \\
-    Holdout-8 & Agentic verify & \textbf{8/8} & \textbf{100\%} & \textbf{18.3} \\
-    \midrule
-    Balanced-32 & Classic planning & 9/32 & 28.1\% & 48.7 \\
-    Balanced-32 & Agentic verify & \textbf{16/32} & \textbf{50.0\%} & \textbf{32.7} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.85\linewidth]{figs/hmeqa_agentic_h2h.png}
-  \caption{Holdout-8 classic vs.\ agentic-verify Dynagraph: accuracy (left) and mean planning steps (right).}
-  \label{fig:hmeqa_agentic_h2h}
-\end{figure}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figs/hmeqa_agentic_coverage.png}
-  \caption{Top-down coverage for matched HM-EQA questions: classic planning (left) vs.\ agentic verify (right).
-  Overlay shows Habitat navmesh, explored voxels, and trajectory; captions report letter accuracy, planning steps, and explored cell count.
-  Rows: Q15 (both correct; efficiency), Q104 (classic miss $\rightarrow$ agentic correct), Q68 (both correct).}
-  \label{fig:hmeqa_agentic_coverage}
-\end{figure}
-
-\noindent\textbf{Coverage maps.}
-Figure~\ref{fig:hmeqa_agentic_coverage} renders side-by-side episode overlays from per-arm debug bundles (\texttt{scripts/render\_hmeqa\_agentic\_coverage\_figure.py}).
-Distinct \texttt{--debug-run-tag}s (or \texttt{OUT/bundles/\{arm\}\_qN} snapshots) are required so H2H arms do not overwrite \texttt{\textasciitilde/.cache/habitat\_eqa/episodes/}.
-
-\noindent\textbf{Scale.}
-On the letter-balanced 32, paper-router agentic reaches 16/32 (50\%) vs.\ classic 9/32 (28\%) with mean planning steps cut from 48.7 to 32.7 (Figure~\ref{fig:hmeqa_agentic_h2h_bal32}; cross-policy McNemar $p{\approx}0.09$).
-A prior matched router-off H2H was 11/32 vs.\ 9/32 (archived); an overnight replicate under that policy was 12/32 vs.\ 10/32.
-Checked-in summaries: \texttt{paper/data/hmeqa\_agentic\_h2h/balanced32\_summary.json} (composite) and \texttt{balanced32\_overnight\_replicate.json}.
-Appendix~\ref{app:agentic_verify_gate} documents the high-recall SigLIP role and the policy timeline.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.85\linewidth]{figs/hmeqa_agentic_h2h_bal32.png}
-  \caption{Balanced-32 classic vs.\ agentic-verify Dynagraph (composite): accuracy (left) and mean planning steps (right). Cross-policy letter gap $p{\approx}0.09$; steps win remains significant.}
-  \label{fig:hmeqa_agentic_h2h_bal32}
-\end{figure}
 
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}

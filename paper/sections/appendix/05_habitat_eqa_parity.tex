@@ -143,7 +143,7 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
 
 \noindent\textbf{Takeaway.}
 Official GraphEQA on HM-EQA is \textbf{63.5\%} (GPT-4o) to \textbf{67.0\%} (Gemini-2.5Pro) on all 113 questions with full GT semantics.
-Our harness reaches \textbf{41.6\%} on the full set with gemma-3-4b-it ($\sim$22\,pp below GPT-4o) and \textbf{34--50\%} on smaller slices with 3--8B local VLMs---above 25\% chance, with dynagraph consistently ahead of static\_graph on matched runs.
+Our harness reaches \textbf{41.6\%} on the full set with gemma-3-4b-it ($\sim$22\,pp below GPT-4o) and \textbf{34--50\%} on smaller slices with 3--8B local VLMs---above 25\% chance; dynagraph beats static\_graph on the matched 3B slices (+3\,pp balanced-32, +12.5\,pp canonical-8), while the July-nav held-out-8 favored static\_graph until harness tuning (Section~\ref{sec:hmeqa_results}).
 The June 2026 grounding fixes (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, nav) lift search-style questions (e.g.\ Q17) without obvious overfit on an eight-question held-out draw (50\%).
 \textbf{More experiments are required} before claiming parity with Explore-EQA or GraphEQA: at minimum a full 113-question Qwen3-VL-8B sweep and semantics-coverage ablation (see \texttt{docs/experiments/habitat\_eqa\_results.md}).
 Mock GraphEQA vs.\ Dynagraph match at 100\% on Q0--5 (grading sanity).
