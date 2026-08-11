@@ -883,6 +883,11 @@ def create_find_phase_agent(
         )
     else:
         raise ValueError(f"unknown backend {backend!r}")
+    # OVMM find is exploration-heavy (frontier sweeps after every investigate);
+    # the full 4-pan look-around dominated wall time (>=90% of an episode in
+    # teleport mode). Halve the pan count like run_dynagraph's explore loop.
+    if hasattr(agent, "_fast_explore_lookaround"):
+        agent._fast_explore_lookaround = True
     agent.start()
     return agent
 

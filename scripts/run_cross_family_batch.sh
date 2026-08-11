@@ -85,7 +85,8 @@ run_hmeqa() {
 }
 
 run_ovmm() {
-    local ep="$1" dir="$OUT/ovmm_${ep}"
+    local ep="$1"
+    local dir="$OUT/ovmm_${ep}"
     mkdir -p "$dir"
     uv run emet ovmm find \
         --episodes configs/ovmm/find_phase_episodes.yaml \
