@@ -125,11 +125,23 @@ def resolve_deploy_robot(
     host: str | None = None,
     workspace: str | None = None,
 ) -> str:
-    """Resolve deploy target robot id from flag, connection profile, or workspace hint."""
+    """Resolve deploy target robot id from flag, connection profile, or workspace hint.
+
+    Never guess Stretch for a saved connection that lacks ``robot:`` (legacy Mars
+    profiles). When ``--host`` differs from the active profile host, ``--robot``
+    is required so we do not push the wrong bridge package.
+    """
     explicit = normalize_deploy_robot(robot)
     if explicit:
         return explicit
     conn = get_connection(connection_name) if connection_name else get_active_connection()
+    if host and conn and not connection_name:
+        conn_host = str(conn.get("host") or "").strip()
+        if conn_host and str(host).strip() != conn_host:
+            raise SystemExit(
+                f"--host {host!r} differs from active connection host {conn_host!r}; "
+                "pass --robot stretch|innate_mars or --connection NAME."
+            )
     if conn:
         from_conn = normalize_deploy_robot(conn.get("robot"))
         if from_conn:
@@ -139,10 +151,15 @@ def resolve_deploy_robot(
             return "innate_mars"
         if "ament" in ws.lower():
             return "stretch"
+        raise SystemExit(
+            "Connection profile has no robot: field. "
+            "Pass --robot stretch|innate_mars or re-save with "
+            "`emet connect save HOST --user USER --robot stretch|innate_mars`."
+        )
     ws_hint = workspace or ""
     if "innate" in ws_hint.lower():
         return "innate_mars"
-    # Default matches Stretch ament_ws layout (CLI --workspace default).
+    # No connection: default matches Stretch ament_ws layout (CLI --workspace default).
     return "stretch"
 
 
@@ -246,7 +263,7 @@ def build_remote_bridge_import_verify_cmd(
     *,
     remote_emet: str,
     remote_ws: str,
-    robot: str = "innate_mars",
+    robot: str,
 ) -> str:
     """Return an SSH remote command that smoke-tests bridge + emet_core imports."""
     spec = get_deploy_spec(robot)
@@ -255,6 +272,38 @@ def build_remote_bridge_import_verify_cmd(
     py_snippet = "; ".join(spec.verify_imports)
     # Outer bash -lc uses single quotes; pass -c argument in double quotes (no nested '…').
     return f"bash -lc '{ros_setup} && export PYTHONPATH={py_paths}:$PYTHONPATH && python3 -c \"{py_snippet}\"'"
+
+
+def build_stretch_bridge_start_remote_cmd(
+    *,
+    workspace: str = DEFAULT_STRETCH_WORKSPACE,
+    emet_dir: str = DEFAULT_EMET_DIR,
+    launch_file: str = "server.launch.py",
+) -> str:
+    """Remote shell to free ZMQ ports and nohup-start stretch_ros2_bridge.
+
+    Uses ``fuser`` on ports (not ``pkill -f``) so the SSH command line cannot
+    match itself — same pattern as Mars ``_kill_bridge_remote``.
+    """
+    remote_ws = workspace.rstrip("/")
+    remote_emet = emet_dir.rstrip("/")
+    py_paths = f"{remote_emet}/emet_core:{remote_emet}/src"
+    launch = (
+        f"source {remote_emet}/bridge_env.sh 2>/dev/null || "
+        f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
+        f"cd {remote_ws} && source /opt/ros/humble/setup.bash && source install/setup.bash && "
+        f"export PYTHONPATH={py_paths}:$PYTHONPATH && "
+        f"ros2 launch stretch_ros2_bridge {launch_file}"
+    )
+    kill = "fuser -k 4401/tcp 4402/tcp 4403/tcp 4404/tcp 2>/dev/null || true"
+    return (
+        f"{kill}; "
+        "sleep 1; "
+        f"nohup bash -lc {launch!r} > /tmp/emet-stretch-bridge.log 2>&1 & "
+        "echo stretch bridge started; "
+        "sleep 1; "
+        "pgrep -af 'stretch_ros2_bridge' || true"
+    )
 
 
 def start_stretch_bridge_on_robot(
@@ -267,23 +316,10 @@ def start_stretch_bridge_on_robot(
     launch_file: str = "server.launch.py",
 ) -> None:
     """Start stretch_ros2_bridge via nohup (native ament_ws path; not Docker)."""
-    remote_ws = workspace.rstrip("/")
-    remote_emet = emet_dir.rstrip("/")
-    py_paths = f"{remote_emet}/emet_core:{remote_emet}/src"
-    launch = (
-        f"source {remote_emet}/bridge_env.sh 2>/dev/null || "
-        f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
-        f"cd {remote_ws} && source /opt/ros/humble/setup.bash && source install/setup.bash && "
-        f"export PYTHONPATH={py_paths}:$PYTHONPATH && "
-        f"ros2 launch stretch_ros2_bridge {launch_file}"
-    )
-    remote = (
-        "pkill -f 'ros2 launch stretch_ros2_bridge' 2>/dev/null || true; "
-        "sleep 1; "
-        f"nohup bash -lc {launch!r} > /tmp/emet-stretch-bridge.log 2>&1 & "
-        "echo stretch bridge started; "
-        "sleep 1; "
-        "pgrep -af 'stretch_ros2_bridge' || true"
+    remote = build_stretch_bridge_start_remote_cmd(
+        workspace=workspace,
+        emet_dir=emet_dir,
+        launch_file=launch_file,
     )
     print(f"Starting stretch_ros2_bridge on {user}@{host} (nohup → /tmp/emet-stretch-bridge.log)…")
     _ssh_run(host, user, password, remote, check=True)

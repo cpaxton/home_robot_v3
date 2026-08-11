@@ -3545,20 +3545,28 @@ def mars_status_cmd(
     """Print bridge process, ZMQ ports, and recent tmux log on the robot."""
     from emet.mars import bridge_status_on_robot, resolve_mars_target
 
-    host, user, password, _, _ = resolve_mars_target(
+    host, user, password, workspace, _ = resolve_mars_target(
         host=host,
         user=user,
         password=password,
         connection_name=connection_name,
     )
-    bridge_status_on_robot(host, user, password, profile=connection_name or host)
+    bridge_status_on_robot(
+        host,
+        user,
+        password,
+        profile=connection_name or host,
+        workspace=workspace,
+    )
 
 
 @main.command("view-bridge", short_help="View images and state from robot bridge")
 @click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (default: active connection)")
 def view_bridge(robot_ip: str) -> None:
     """Connect to the robot's ZMQ bridge and display head/EE camera images and state.
-    Use after starting the bridge on the robot (e.g. ros2 launch innate_mars_bridge server.launch.py).
+    Use after starting the bridge on the robot
+    (``ros2 launch stretch_ros2_bridge server.launch.py`` or
+    ``ros2 launch innate_mars_bridge server.launch.py`` / ``emet mars start``).
     """
     sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
 

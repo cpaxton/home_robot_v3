@@ -21,6 +21,8 @@ import numpy as np
 
 # Shared key on agent + chat tool context after a successful ``aim_arm_at``.
 LAST_CLOSER_LOOK_AIM_KEY = "_last_closer_look_aim"
+# Last aim attempt (success or failure) — used to soft-allow EE when aim is not_implemented.
+LAST_CLOSER_LOOK_ATTEMPT_KEY = "_last_closer_look_attempt"
 
 
 @dataclass
@@ -47,15 +49,24 @@ class CloserLookResult:
         )
 
 
+def _clear_attr(agent: Any, context: dict[str, Any] | None, key: str) -> None:
+    if agent is not None and hasattr(agent, key):
+        try:
+            delattr(agent, key)
+        except Exception:
+            setattr(agent, key, None)
+    if context is not None:
+        context.pop(key, None)
+
+
 def clear_closer_look_aim(agent: Any = None, context: dict[str, Any] | None = None) -> None:
     """Drop any outstanding aim grant (failed aim or after EE capture)."""
-    if agent is not None and hasattr(agent, LAST_CLOSER_LOOK_AIM_KEY):
-        try:
-            delattr(agent, LAST_CLOSER_LOOK_AIM_KEY)
-        except Exception:
-            setattr(agent, LAST_CLOSER_LOOK_AIM_KEY, None)
-    if context is not None:
-        context.pop(LAST_CLOSER_LOOK_AIM_KEY, None)
+    _clear_attr(agent, context, LAST_CLOSER_LOOK_AIM_KEY)
+
+
+def clear_closer_look_attempt(agent: Any = None, context: dict[str, Any] | None = None) -> None:
+    """Drop the last aim attempt marker."""
+    _clear_attr(agent, context, LAST_CLOSER_LOOK_ATTEMPT_KEY)
 
 
 def record_closer_look_aim(
@@ -64,7 +75,22 @@ def record_closer_look_aim(
     agent: Any = None,
     context: dict[str, Any] | None = None,
 ) -> None:
-    """Store a successful aim so ``take_ee_picture`` is allowed once; clear on failure."""
+    """Record the aim attempt; grant one EE capture only on success.
+
+    Failed aims clear the grant. ``not_implemented`` is remembered so
+    ``take_ee_picture`` can soft-allow once on stacks without kinematic aim.
+    """
+    attempt = {
+        "ok": bool(result.ok),
+        "phrase": str(result.phrase or ""),
+        "status_code": str(result.status_code or ""),
+        "xyz": list(result.xyz) if result.xyz is not None else None,
+    }
+    if agent is not None:
+        setattr(agent, LAST_CLOSER_LOOK_ATTEMPT_KEY, attempt)
+    if context is not None:
+        context[LAST_CLOSER_LOOK_ATTEMPT_KEY] = attempt
+
     if not result.ok:
         clear_closer_look_aim(agent, context)
         return
@@ -91,6 +117,21 @@ def get_closer_look_aim(agent: Any = None, context: dict[str, Any] | None = None
     return None
 
 
+def get_closer_look_attempt(agent: Any = None, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Return the last aim attempt payload, if any."""
+    for src in (agent, context):
+        if src is None:
+            continue
+        raw = (
+            getattr(src, LAST_CLOSER_LOOK_ATTEMPT_KEY, None)
+            if not isinstance(src, dict)
+            else src.get(LAST_CLOSER_LOOK_ATTEMPT_KEY)
+        )
+        if isinstance(raw, dict) and raw.get("status_code"):
+            return raw
+    return None
+
+
 def consume_closer_look_aim_for_ee_picture(
     *,
     agent: Any = None,
@@ -98,23 +139,42 @@ def consume_closer_look_aim_for_ee_picture(
 ) -> tuple[bool, str, dict[str, Any] | None]:
     """Allow one wrist capture after a successful aim; consume the grant.
 
+    Soft-allows once when the last ``aim_arm_at`` returned ``not_implemented``
+    (real Mars / stacks without kinematic aim) so wrist dogfood is not bricked.
+
     Returns ``(allowed, note, aim_payload)``.
     """
     aim = get_closer_look_aim(agent, context)
-    if aim is None:
-        return (
-            False,
-            (
-                "take_ee_picture requires a successful aim_arm_at first "
-                "(wrist capture alone is not a closer look). "
-                "Prefer face_toward + describe_scene (head camera) when aim is unavailable."
-            ),
-            None,
+    if aim is not None:
+        clear_closer_look_aim(agent, context)
+        clear_closer_look_attempt(agent, context)
+        phrase = str(aim.get("phrase") or "").strip()
+        note = (
+            f"Capturing wrist camera after aim at {phrase!r}."
+            if phrase
+            else "Capturing wrist camera after aim_arm_at."
         )
-    clear_closer_look_aim(agent, context)
-    phrase = str(aim.get("phrase") or "").strip()
-    note = f"Capturing wrist camera after aim at {phrase!r}." if phrase else "Capturing wrist camera after aim_arm_at."
-    return True, note, aim
+        return True, note, aim
+
+    attempt = get_closer_look_attempt(agent, context)
+    if attempt is not None and str(attempt.get("status_code") or "") == "not_implemented":
+        clear_closer_look_attempt(agent, context)
+        phrase = str(attempt.get("phrase") or "").strip()
+        note = "Capturing wrist camera (aim not available on this stack"
+        if phrase:
+            note += f"; localized {phrase!r}"
+        note += ")."
+        return True, note, attempt
+
+    return (
+        False,
+        (
+            "take_ee_picture requires aim_arm_at first "
+            "(successful aim grants one capture; not_implemented aim soft-allows once). "
+            "Prefer face_toward + describe_scene (head camera) when the wrist stream is dark."
+        ),
+        None,
+    )
 
 
 def _localize_xyz(agent: Any, phrase: str) -> np.ndarray | None:

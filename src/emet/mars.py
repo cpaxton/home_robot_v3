@@ -205,12 +205,13 @@ def parse_bridge_status_output(host: str, user: str, raw: str, *, exit_code: int
     return status
 
 
-def _remote_camera_health_cmd() -> str:
+def _remote_camera_health_cmd(workspace: str = DEFAULT_INNATE_WORKSPACE) -> str:
     """Probe head/wrist publishers + Arducam V4L symlink (arm driver looks for 'Arducam')."""
+    ws = workspace.rstrip("/")
     return (
         "bash -lc '"
         "source /opt/ros/humble/setup.bash 2>/dev/null || true; "
-        "source ~/innate-os/ros2_ws/install/setup.bash 2>/dev/null || true; "
+        f"source {ws}/install/setup.bash 2>/dev/null || true; "
         "BYID=$(ls /dev/v4l/by-id 2>/dev/null | tr \"\\n\" \",\"); "
         "ARDU=0; echo \"$BYID\" | grep -qi Arducam && ARDU=1 || true; "
         "ARM=$(timeout 5 ros2 topic info /mars/arm/image_raw 2>/dev/null "
@@ -260,8 +261,14 @@ def parse_camera_health_output(raw: str) -> MarsCameraHealth:
     return health
 
 
-def fetch_camera_health(host: str, user: str, password: str | None) -> MarsCameraHealth:
-    code, out, err = _ssh_capture(host, user, password, _remote_camera_health_cmd())
+def fetch_camera_health(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
+) -> MarsCameraHealth:
+    code, out, err = _ssh_capture(host, user, password, _remote_camera_health_cmd(workspace))
     raw = out if not err.strip() else out + "\n" + err
     health = parse_camera_health_output(raw)
     if code != 0 and not health.note:
@@ -269,13 +276,19 @@ def fetch_camera_health(host: str, user: str, password: str | None) -> MarsCamer
     return health
 
 
-def fetch_bridge_status(host: str, user: str, password: str | None) -> MarsBridgeStatus:
+def fetch_bridge_status(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
+) -> MarsBridgeStatus:
     code, out, err = _ssh_capture(host, user, password, _remote_status_cmd())
     if err.strip():
         out = out + "\n" + err
     status = parse_bridge_status_output(host, user, out, exit_code=code)
     try:
-        status.camera = fetch_camera_health(host, user, password)
+        status.camera = fetch_camera_health(host, user, password, workspace=workspace)
     except Exception as exc:  # noqa: BLE001 — status should still print
         status.camera = MarsCameraHealth(note=f"camera probe failed: {exc}")
     return status
@@ -433,8 +446,9 @@ def bridge_status_on_robot(
     profile: str | None = None,
     onboard_da3: bool = False,
     show_next_steps: bool = True,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
 ) -> MarsBridgeStatus:
-    status = fetch_bridge_status(host, user, password)
+    status = fetch_bridge_status(host, user, password, workspace=workspace)
     print_bridge_status(
         status,
         profile=profile,
@@ -507,6 +521,7 @@ def mars_start(
         profile=profile_name or connection_name or host,
         onboard_da3=onboard_da3,
         show_next_steps=not preview,
+        workspace=workspace,
     )
 
     if preview:

@@ -69,9 +69,13 @@ def sync_nav_attempt_to_ledger(
     *,
     source: str = "unknown",
 ) -> None:
-    """Dual-write a nav attempt into ``agent.graph_memory`` when the ledger is on.
+    """Sync a nav attempt into ``agent.graph_memory`` (node counters + optional ledger).
 
-    Safe no-op when there is no graph memory or the ledger is disabled.
+    Always updates graph node ``nav_attempts`` / ``nav_failures`` via
+    ``record_nav_attempt`` when graph memory is present. Ledger *rows* are
+    appended only when ``eqa.attempt_ledger`` / ``EMET_EQA_ATTEMPT_LEDGER`` is on
+    (gated inside ``GraphEQAMemory.record_attempt``). Safe no-op when there is
+    no graph memory.
     """
     if agent is None or nav_res is None:
         return

@@ -9,10 +9,12 @@
 
 """Unit tests for robot deploy helpers and ``emet deploy llm`` CLI."""
 
+import pytest
 from click.testing import CliRunner
 
 from emet.deploy import (
     build_remote_bridge_import_verify_cmd,
+    build_stretch_bridge_start_remote_cmd,
     get_deploy_spec,
     normalize_deploy_robot,
     resolve_deploy_robot,
@@ -94,6 +96,47 @@ def test_resolve_deploy_robot_from_connection(tmp_path, monkeypatch):
     )
     assert resolve_deploy_robot(None) == "innate_mars"
     assert resolve_deploy_robot(None, connection_name="stretch") == "stretch"
+
+
+def test_resolve_deploy_robot_errors_without_robot_field(tmp_path, monkeypatch):
+    from emet.utils import connection as conn_mod
+
+    stretch = tmp_path / "stretch"
+    monkeypatch.setattr(conn_mod, "_STRETCH_DIR", str(stretch))
+    monkeypatch.setattr(conn_mod, "_CONNECTION_FILE", str(stretch / "connection.json"))
+    monkeypatch.setattr(conn_mod, "_ROBOT_IP_FILE", str(stretch / "robot_ip.txt"))
+
+    conn_mod.save_connection(host="10.0.0.7", user="jetson1", name="legacy", set_active=True)
+    with pytest.raises(SystemExit, match="no robot"):
+        resolve_deploy_robot(None)
+
+
+def test_resolve_deploy_robot_host_override_requires_robot(tmp_path, monkeypatch):
+    from emet.utils import connection as conn_mod
+
+    stretch = tmp_path / "stretch"
+    monkeypatch.setattr(conn_mod, "_STRETCH_DIR", str(stretch))
+    monkeypatch.setattr(conn_mod, "_CONNECTION_FILE", str(stretch / "connection.json"))
+    monkeypatch.setattr(conn_mod, "_ROBOT_IP_FILE", str(stretch / "robot_ip.txt"))
+
+    conn_mod.save_connection(
+        host="10.0.0.9",
+        user="hello-robot",
+        name="stretch",
+        robot="stretch",
+        set_active=True,
+    )
+    with pytest.raises(SystemExit, match="differs from active"):
+        resolve_deploy_robot(None, host="10.0.0.8")
+    assert resolve_deploy_robot("innate_mars", host="10.0.0.8") == "innate_mars"
+
+
+def test_stretch_bridge_start_uses_fuser_not_pkill():
+    cmd = build_stretch_bridge_start_remote_cmd()
+    assert "fuser -k 4401/tcp" in cmd
+    assert "pkill" not in cmd
+    assert "stretch_ros2_bridge" in cmd
+    assert "/tmp/emet-stretch-bridge.log" in cmd
 
 
 def test_caliban_orin_vram_constant() -> None:

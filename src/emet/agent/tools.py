@@ -1003,10 +1003,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="take_ee_picture",
             description=(
-                "Capture the wrist/end-effector camera AFTER a successful aim_arm_at in this session "
-                "(no further arm motion). Refuses without a prior successful aim — bare wrist capture "
-                "is not a closer look. Prefer face_toward + describe_scene (head camera) when aim is "
-                "unavailable. On Innate Mars the wrist stream is often missing."
+                "Capture the wrist/end-effector camera after aim_arm_at in this session "
+                "(no further arm motion). Requires a prior aim: successful aim grants one capture; "
+                "if aim returns not_implemented (no kinematic stack), one soft-allow capture is ok. "
+                "Prefer face_toward + describe_scene (head camera) when the wrist stream is dark."
             ),
             parameters=_NO_PARAMS,
             func=take_ee_picture,

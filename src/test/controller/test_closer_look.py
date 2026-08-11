@@ -63,6 +63,29 @@ def test_ee_picture_requires_successful_aim():
     assert out.status == "aim_required"
 
 
+def test_ee_picture_soft_allows_after_not_implemented_aim():
+    agent = SimpleNamespace()
+    ctx: dict = {"agent": agent}
+    record_closer_look_aim(
+        CloserLookResult(
+            False,
+            "not_implemented",
+            "no kinematic aim",
+            xyz=(1.0, 0.0, 0.5),
+            phrase="mug",
+        ),
+        agent=agent,
+        context=ctx,
+    )
+    allowed, note, payload = consume_closer_look_aim_for_ee_picture(agent=agent, context=ctx)
+    assert allowed is True
+    assert payload is not None
+    assert "not available" in note.lower() or "aim not" in note.lower()
+    # Soft-allow is one-shot.
+    allowed2, _, _ = consume_closer_look_aim_for_ee_picture(agent=agent, context=ctx)
+    assert allowed2 is False
+
+
 def test_ee_picture_allowed_once_after_aim():
     agent = SimpleNamespace()
     ctx: dict = {"agent": agent}

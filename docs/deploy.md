@@ -163,10 +163,12 @@ Then chat / agent can use `--host ORIN_HOST` (see [AGENT_RUN.md](AGENT_RUN.md) /
 | Step | Stretch | Mars |
 |------|---------|------|
 | Profile | `robot: stretch`, `~/ament_ws` | `robot: innate_mars`, innate-os ws |
-| Deploy | `emet deploy --robot stretch` | `emet deploy` / `emet mars start --deploy` |
+| Deploy | `emet deploy --robot stretch` | `emet deploy --robot innate_mars` / `--connection mars` / `emet mars start --deploy` |
 | Start | `--start-bridge` or `ros2 launch stretch_ros2_bridge …` | `emet mars start` (tmux) |
 | Smoke | `emet capture --robot stretch` | `emet mars status` + `emet capture` |
 | LLM (optional) | `emet deploy llm --host ORIN_HOST` → `emet llm health` green | same |
+
+Profiles without `robot:` must pass `--robot` explicitly — bare `emet deploy` will not guess Stretch for a Mars connection.
 
 ---
 
