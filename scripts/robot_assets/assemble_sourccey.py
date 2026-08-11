@@ -36,8 +36,8 @@ OUT_XML = SRC_ASSETS / "sourccey.xml"
 
 # Base / body geometry (meters). Sourccey: 414 mm footprint, 1030 mm tall.
 WHEEL_R = 0.048  # 96 mm mecanum wheels
-WHEEL_Y = 0.17  # wheel lateral offset from body centerline
-WHEEL_X = 0.17  # wheel longitudinal offset
+WHEEL_Y = 0.185  # wheel lateral offset (outer edge ~0.233, ~414mm footprint)
+WHEEL_X = 0.185  # wheel longitudinal offset
 L1_HALF = 0.125  # level-1 plate ~250 mm square
 L1_Z = 0.10
 L2_HALF = 0.104
@@ -240,9 +240,9 @@ def build() -> str:
     a("")
     a("  <worldbody>")
     a('    <light directional="true" diffuse="0.9 0.9 0.9" dir="-1 -1 -1.2" pos="0 0 1.2"/>')
-    a('    <camera name="preview_front" pos="1.2 -2.2 1.0" xyaxes="1 0 0 0 0.64 0.77" fovy="50"/>')
+    a('    <camera name="preview_front" pos="0 -2.6 0.8" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>')
     a('    <camera name="preview_top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0" fovy="50"/>')
-    a('    <camera name="preview_34" pos="1.5 -1.4 1.0" xyaxes="1 0 0 0 0.62 0.78" fovy="50"/>')
+    a('    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>')
     a('    <geom type="plane" size="4 4 0.02" material="plastic_dark"/>')
     # ---- base_root: planar base joints (slide x, slide y, hinge yaw) ----
     a('    <body name="base_root" pos="0 0 0">')
@@ -256,10 +256,18 @@ def build() -> str:
     a('      <joint name="base_yaw" type="hinge" axis="0 0 1" pos="0 0 0" damping="5" armature="0.5"/>')
     a("")
     # ---- wheels (visual; planar base carries motion) ----
+    # Each wheel is a cylinder at a corner; a small wheel-holder bracket (reused mesh)
+    # connects it to the body so wheels don't float.
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
         a(f'      <body name="wheel_{sx}_{sy}" pos="{sx * WHEEL_X} {sy * WHEEL_Y} {WHEEL_R}">')
         a(
             f'        <geom type="cylinder" size="{WHEEL_R} {WHEEL_R * 0.35}" fromto="0 0 {-WHEEL_R} 0 0 {WHEEL_R}" material="wheel_rubber" group="1" class="robot_collision"/>'
+        )
+        a("      </body>")
+        # wheel holder bracket: orient to face outward from the corner (rotate 45deg about z)
+        a(f'      <body name="wheel_holder_{sx}_{sy}" pos="{sx * WHEEL_X * 0.9} {sy * WHEEL_Y * 0.9} {0.09}">')
+        a(
+            f'        <geom type="mesh" mesh="wheel_holder_fl" class="robot_visual" pos="0 0 0" quat="0.9238795 0 0 {0.3826834 * sx}"/>'
         )
         a("      </body>")
     a("")
@@ -269,6 +277,7 @@ def build() -> str:
     a('      <body name="body_collider" pos="0 0 0.33">')
     a('        <geom type="box" size="0.125 0.125 0.28" class="robot_collision" friction="0.9"/>')
     a("      </body>")
+    # Floor plates: level-1 (250mm) at the bottom, level-2 (207mm) above level-1 walls.
     for i, (_half, z, name) in enumerate(
         [
             (L1_HALF, L1_Z, "base_plate_l1"),
@@ -278,19 +287,31 @@ def build() -> str:
         a(f'      <body name="plate_{i}" pos="0 0 {z}">')
         a(f'        <geom type="mesh" mesh="{name}" class="robot_visual" pos="0 0 0"/>')
         a("      </body>")
-    # level-1 walls (front/back), level-2 walls (front/left/right), level-3 walls
+    # Walls: each level is a shell of square panels. The STEP wall pieces are hollow
+    # panels (their mesh bounds are square, recentered at bbox center), so place each
+    # at the level's face and rotate to face outward. Panel half-size matches the plate.
+    # (front/back at +-y, left/right at +-x; rotate 90deg about z for side walls)
     wall_layout = [
-        ("wall_l1_front", 0, L1_HALF + 0.07, WALL_1_Z),
-        ("wall_l1_back", 0, -(L1_HALF + 0.07), WALL_1_Z),
-        ("wall_l2_front", 0, L2_HALF + 0.07, WALL_2_Z),
-        ("wall_l2_left", -(L2_HALF + 0.07), 0, WALL_2_Z),
-        ("wall_l2_right", L2_HALF + 0.07, 0, WALL_2_Z),
-        ("wall_l3_front", 0, L3_HALF + 0.07, WALL_3_Z),
-        ("wall_l3_left", -(L3_HALF + 0.07), 0, WALL_3_Z),
-        ("wall_l3_right", L3_HALF + 0.07, 0, WALL_3_Z),
+        # (mesh, dx, dy, z, rotz_deg)
+        # Level 1: front/back/left/right (reuse front for sides; rotate for left/right)
+        ("wall_l1_front", 0, L1_HALF, WALL_1_Z, 0),
+        ("wall_l1_back", 0, -(L1_HALF), WALL_1_Z, 0),
+        ("wall_l1_front", L1_HALF, 0, WALL_1_Z, 90),
+        ("wall_l1_front", -(L1_HALF), 0, WALL_1_Z, 90),
+        # Level 2
+        ("wall_l2_front", 0, L2_HALF, WALL_2_Z, 0),
+        ("wall_l2_front", 0, -(L2_HALF), WALL_2_Z, 0),
+        ("wall_l2_left", -(L2_HALF), 0, WALL_2_Z, 90),
+        ("wall_l2_right", L2_HALF, 0, WALL_2_Z, 90),
+        # Level 3
+        ("wall_l3_front", 0, L3_HALF, WALL_3_Z, 0),
+        ("wall_l3_front", 0, -(L3_HALF), WALL_3_Z, 0),
+        ("wall_l3_left", -(L3_HALF), 0, WALL_3_Z, 90),
+        ("wall_l3_right", L3_HALF, 0, WALL_3_Z, 90),
     ]
-    for name, dx, dy, z in wall_layout:
-        a(f'      <body name="{name}" pos="{dx} {dy} {z}">')
+    for name, dx, dy, z, rotz in wall_layout:
+        quat = "1 0 0 0" if rotz == 0 else "0.7071068 0 0 0.7071068"
+        a(f'      <body name="wall_{dx}_{dy}_{z:.0f}" pos="{dx} {dy} {z}" quat="{quat}">')
         a(f'        <geom type="mesh" mesh="{name}" class="robot_visual"/>')
         a("      </body>")
     a("")

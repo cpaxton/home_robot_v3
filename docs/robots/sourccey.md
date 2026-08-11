@@ -48,8 +48,10 @@ uv run emet serve mujoco --config configs/sim/molmospaces_ithor_train_sourccey_0
   mass so the full robot lands near the real 15.88 kg). The left arm is the X-mirror
   of the right (sagittal reflection), so left/right joint targets are opposite sign.
 - **Base / dome / wheels / lift** are simplified pragmatic geometry assembled from the
-  STEP CAD parts (see `scripts/robot_assets/`). Cosmetic detail is trimmed; the base
-  carries a single box collider.
+  STEP CAD parts (see `scripts/robot_assets/`). The body is a 3-level pyramidal shell
+  (250 → 207 → 183 mm plates/walls), 4 mecanum wheels with holder brackets at the
+  corners, a vertical linear lift, and a rounded dome head with stereo cameras. Cosmetic
+  detail is trimmed; the base carries a single box collider.
 - **All geoms are visual-only** (contype=0), matching innate_mars: Robocasa planar
   autoplace stays O(1) (the first-candidate hint is accepted instantly). Spawn safety
   comes from the planar clip guards + footprint; motion-planning collision is delegated

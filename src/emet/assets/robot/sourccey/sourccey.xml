@@ -64,9 +64,9 @@
 
   <worldbody>
     <light directional="true" diffuse="0.9 0.9 0.9" dir="-1 -1 -1.2" pos="0 0 1.2"/>
-    <camera name="preview_front" pos="1.2 -2.2 1.0" xyaxes="1 0 0 0 0.64 0.77" fovy="50"/>
+    <camera name="preview_front" pos="0 -2.6 0.8" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>
     <camera name="preview_top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0" fovy="50"/>
-    <camera name="preview_34" pos="1.5 -1.4 1.0" xyaxes="1 0 0 0 0.62 0.78" fovy="50"/>
+    <camera name="preview_34" pos="1.6 -1.6 0.9" xyaxes="1 0 0 0 0.08 0.997" fovy="50"/>
     <geom type="plane" size="4 4 0.02" material="plastic_dark"/>
     <body name="base_root" pos="0 0 0">
       <inertial pos="0 0 0.05" mass="8.5" diaginertia="0.2 0.2 0.3"/>
@@ -74,17 +74,29 @@
       <joint name="base_y" type="slide" axis="0 1 0" pos="0 0 0" damping="5" armature="0.5"/>
       <joint name="base_yaw" type="hinge" axis="0 0 1" pos="0 0 0" damping="5" armature="0.5"/>
 
-      <body name="wheel_-1_-1" pos="-0.17 -0.17 0.048">
+      <body name="wheel_-1_-1" pos="-0.185 -0.185 0.048">
         <geom type="cylinder" size="0.048 0.0168" fromto="0 0 -0.048 0 0 0.048" material="wheel_rubber" group="1" class="robot_collision"/>
       </body>
-      <body name="wheel_1_-1" pos="0.17 -0.17 0.048">
+      <body name="wheel_holder_-1_-1" pos="-0.1665 -0.1665 0.09">
+        <geom type="mesh" mesh="wheel_holder_fl" class="robot_visual" pos="0 0 0" quat="0.9238795 0 0 -0.3826834"/>
+      </body>
+      <body name="wheel_1_-1" pos="0.185 -0.185 0.048">
         <geom type="cylinder" size="0.048 0.0168" fromto="0 0 -0.048 0 0 0.048" material="wheel_rubber" group="1" class="robot_collision"/>
       </body>
-      <body name="wheel_-1_1" pos="-0.17 0.17 0.048">
+      <body name="wheel_holder_1_-1" pos="0.1665 -0.1665 0.09">
+        <geom type="mesh" mesh="wheel_holder_fl" class="robot_visual" pos="0 0 0" quat="0.9238795 0 0 0.3826834"/>
+      </body>
+      <body name="wheel_-1_1" pos="-0.185 0.185 0.048">
         <geom type="cylinder" size="0.048 0.0168" fromto="0 0 -0.048 0 0 0.048" material="wheel_rubber" group="1" class="robot_collision"/>
       </body>
-      <body name="wheel_1_1" pos="0.17 0.17 0.048">
+      <body name="wheel_holder_-1_1" pos="-0.1665 0.1665 0.09">
+        <geom type="mesh" mesh="wheel_holder_fl" class="robot_visual" pos="0 0 0" quat="0.9238795 0 0 -0.3826834"/>
+      </body>
+      <body name="wheel_1_1" pos="0.185 0.185 0.048">
         <geom type="cylinder" size="0.048 0.0168" fromto="0 0 -0.048 0 0 0.048" material="wheel_rubber" group="1" class="robot_collision"/>
+      </body>
+      <body name="wheel_holder_1_1" pos="0.1665 0.1665 0.09">
+        <geom type="mesh" mesh="wheel_holder_fl" class="robot_visual" pos="0 0 0" quat="0.9238795 0 0 0.3826834"/>
       </body>
 
       <body name="body_collider" pos="0 0 0.33">
@@ -96,28 +108,40 @@
       <body name="plate_1" pos="0 0 0.335">
         <geom type="mesh" mesh="base_plate_l2" class="robot_visual" pos="0 0 0"/>
       </body>
-      <body name="wall_l1_front" pos="0 0.195 0.21000000000000002">
+      <body name="wall_0_0.125_0" pos="0 0.125 0.21000000000000002" quat="1 0 0 0">
         <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
       </body>
-      <body name="wall_l1_back" pos="0 -0.195 0.21000000000000002">
+      <body name="wall_0_-0.125_0" pos="0 -0.125 0.21000000000000002" quat="1 0 0 0">
         <geom type="mesh" mesh="wall_l1_back" class="robot_visual"/>
       </body>
-      <body name="wall_l2_front" pos="0 0.174 0.445">
+      <body name="wall_0.125_0_0" pos="0.125 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068">
+        <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
+      </body>
+      <body name="wall_-0.125_0_0" pos="-0.125 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068">
+        <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
+      </body>
+      <body name="wall_0_0.104_0" pos="0 0.104 0.445" quat="1 0 0 0">
         <geom type="mesh" mesh="wall_l2_front" class="robot_visual"/>
       </body>
-      <body name="wall_l2_left" pos="-0.174 0 0.445">
+      <body name="wall_0_-0.104_0" pos="0 -0.104 0.445" quat="1 0 0 0">
+        <geom type="mesh" mesh="wall_l2_front" class="robot_visual"/>
+      </body>
+      <body name="wall_-0.104_0_0" pos="-0.104 0 0.445" quat="0.7071068 0 0 0.7071068">
         <geom type="mesh" mesh="wall_l2_left" class="robot_visual"/>
       </body>
-      <body name="wall_l2_right" pos="0.174 0 0.445">
+      <body name="wall_0.104_0_0" pos="0.104 0 0.445" quat="0.7071068 0 0 0.7071068">
         <geom type="mesh" mesh="wall_l2_right" class="robot_visual"/>
       </body>
-      <body name="wall_l3_front" pos="0 0.162 0.6799999999999999">
+      <body name="wall_0_0.092_1" pos="0 0.092 0.6799999999999999" quat="1 0 0 0">
         <geom type="mesh" mesh="wall_l3_front" class="robot_visual"/>
       </body>
-      <body name="wall_l3_left" pos="-0.162 0 0.6799999999999999">
+      <body name="wall_0_-0.092_1" pos="0 -0.092 0.6799999999999999" quat="1 0 0 0">
+        <geom type="mesh" mesh="wall_l3_front" class="robot_visual"/>
+      </body>
+      <body name="wall_-0.092_0_1" pos="-0.092 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068">
         <geom type="mesh" mesh="wall_l3_left" class="robot_visual"/>
       </body>
-      <body name="wall_l3_right" pos="0.162 0 0.6799999999999999">
+      <body name="wall_0.092_0_1" pos="0.092 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068">
         <geom type="mesh" mesh="wall_l3_right" class="robot_visual"/>
       </body>
 
