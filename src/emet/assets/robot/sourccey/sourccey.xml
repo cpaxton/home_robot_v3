@@ -151,7 +151,6 @@
 
       <body name="arm_mount_left" pos="-0.124 0 1.0150000000000001">
         <geom type="mesh" mesh="arm_base" class="robot_visual" pos="-0.03 0 -0.05"/>
-        <camera name="wrist_left" pos="0 0.10 0" xyaxes="0 1 0 0 0 1" fovy="70"/>
         <body name="arm_left" pos="-0.03 0 -0.05" quat="0.7071068 0 0 -0.7071068">
             <body name="left_Arm-Base-V3-v1" pos="-0 0 0" quat="-1 -0 0 0">
               <inertial pos="0.024836923 -0.0045730761 -0.035741082" mass="0.063222674" fullinertia="1.8731945e-05 2.8692237e-05 1.72171e-05 5.4717674e-08 5.7440524e-09 -3.3971026e-07"/>
@@ -189,7 +188,7 @@
                                 <inertial pos="-0.024413779 -0.46863836 0.082799839" mass="0.071460174" fullinertia="1.7665701e-05 1.5415677e-05 9.2714384e-06 -2.4589705e-18 -2.9273459e-20 -3.764617e-08"/>
                                 <joint name="left_wrist_roll" type="hinge" axis="-0 8.978648e-14 1" range="-3.14159 3.14159" damping="0.1" frictionloss="0.05"/>
                                 <body name="left_Gripper-Base-Back-v1" pos="-0.02441378 -0.48625 0.06950075" quat="-0.70710678 -0.70710678 -5.578089e-31 5.578089e-31">
-                                  <inertial pos="1.7547323e-07 -0.0042328214 0.023047641" mass="0.13131393" fullinertia="6.9593913e-05 5.5021873e-05 0.00010302064 -7.0336036e-10 -4.5736763e-10 -4.5653277e-06"/>
+                                    <camera name="wrist_left" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="1.7547323e-07 -0.0042328214 0.023047641" mass="0.13131393" fullinertia="6.9593913e-05 5.5021873e-05 0.00010302064 -7.0336036e-10 -4.5736763e-10 -4.5653277e-06"/>
                                   <geom type="mesh" mesh="gripper_base" pos="-0.062221178 -0.047874826 0.040620968" quat="3.9685289e-15 -0.70710678 -3.9685289e-15 -0.70710678" material="plastic_white" group="2" contype="0" conaffinity="0"/>
                                   <geom type="mesh" mesh="gripper_base" pos="-0.062221178 -0.047874826 0.040620968" quat="3.9685289e-15 -0.70710678 -3.9685289e-15 -0.70710678" class="arm_collision"/>
                                   <body name="left_Feetech-Servo-Motor-v1-5" pos="-0.01222118 -0.05345127 0.002" quat="0.5 -0.5 0.5 -0.5">
@@ -221,7 +220,6 @@
       </body>
       <body name="arm_mount_right" pos="0.124 0 1.0150000000000001">
         <geom type="mesh" mesh="arm_base" class="robot_visual" pos="0.03 0 -0.05"/>
-        <camera name="wrist_right" pos="0 0.10 0" xyaxes="0 -1 0 0 0 1" fovy="70"/>
         <body name="arm_right" pos="0.03 0 -0.05" quat="0.7071068 0 0 0.7071068">
             <body name="right_Arm-Base-V3-v1" pos="0 0 0" quat="1 0 0 0">
               <inertial pos="-0.024836923 -0.0045730761 -0.035741082" mass="0.063222674" fullinertia="1.8731945e-05 2.8692237e-05 1.72171e-05 5.4717674e-08 5.7440524e-09 -3.3971026e-07"/>
@@ -259,7 +257,7 @@
                                 <inertial pos="0.024413779 -0.46863836 0.082799839" mass="0.071460174" fullinertia="1.7665701e-05 1.5415677e-05 9.2714384e-06 -2.4589705e-18 -2.9273459e-20 -3.764617e-08"/>
                                 <joint name="right_wrist_roll" type="hinge" axis="0 8.978648e-14 1" range="-3.14159 3.14159" damping="0.1" frictionloss="0.05"/>
                                 <body name="right_Gripper-Base-Back-v1" pos="0.02441378 -0.48625 0.06950075" quat="0.70710678 0.70710678 -5.578089e-31 5.578089e-31">
-                                  <inertial pos="-1.7547323e-07 -0.0042328214 0.023047641" mass="0.13131393" fullinertia="6.9593913e-05 5.5021873e-05 0.00010302064 -7.0336036e-10 -4.5736763e-10 -4.5653277e-06"/>
+                                    <camera name="wrist_right" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="-1.7547323e-07 -0.0042328214 0.023047641" mass="0.13131393" fullinertia="6.9593913e-05 5.5021873e-05 0.00010302064 -7.0336036e-10 -4.5736763e-10 -4.5653277e-06"/>
                                   <geom type="mesh" mesh="gripper_base" pos="0.062221178 -0.047874826 0.040620968" quat="-3.9685289e-15 0.70710678 -3.9685289e-15 -0.70710678" material="plastic_white" group="2" contype="0" conaffinity="0"/>
                                   <geom type="mesh" mesh="gripper_base" pos="0.062221178 -0.047874826 0.040620968" quat="-3.9685289e-15 0.70710678 -3.9685289e-15 -0.70710678" class="arm_collision"/>
                                   <body name="right_Feetech-Servo-Motor-v1-5" pos="0.01222118 -0.05345127 0.002" quat="-0.5 0.5 0.5 -0.5">

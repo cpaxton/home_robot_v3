@@ -13,7 +13,10 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
    inertials are often too heavy; tune so the full robot matches the datasheet).
 3. **`assemble_sourccey.py`** — full-robot example: base/lift/dome/arms/cameras
    assembled into one `sourccey.xml` with planar base joints + actuators.
-4. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
+4. **`render_cameras.py`** — render every camera's RGB + depth with a table and
+   objects in front, so you can eyeball camera extrinsics/intrinsics before
+   trusting perception. Writes PNGs + raw depth `.npy`.
+5. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
    generated MJCF so you can eyeball the assembly before committing.
 
 ## One-time env (cadquery is only needed for the STEP step)
@@ -45,6 +48,11 @@ uv run python scripts/robot_assets/assemble_sourccey.py
 uv run python scripts/robot_assets/serve_preview.py \
     --mjcf src/emet/assets/robot/sourccey/sourccey.xml \
     --out /tmp/sourccey_preview.png
+
+# 6. Verify cameras: RGB + depth with a table + objects in front.
+uv run python scripts/robot_assets/render_cameras.py \
+    --mjcf src/emet/assets/robot/sourccey/sourccey.xml \
+    --out-dir /tmp/sourccey_cams
 ```
 
 ## Mesh-map file (`--mesh-map`)

@@ -103,6 +103,7 @@ def _mirror_x_attrs(line: str) -> str:
 
     line = sub_attr(vec_pat, lambda m: negate_first_three(m), line, "pos")
     line = sub_attr(vec_pat, lambda m: negate_first_three(m), line, "axis")
+    line = sub_attr(vec_pat, lambda m: negate_first_three(m), line, "xyaxes")
     line = sub_attr(quat_pat, lambda m: flip_quat_mirror(m), line, "quat")
     return line
 
@@ -124,6 +125,35 @@ def prefix_arm_fragment(fragment: str, side: str) -> str:
             line = _mirror_x_attrs(line)
         out.append(line)
     return "\n".join(out)
+
+
+def inject_wrist_cameras(fragment: str) -> str:
+    """Add a wrist camera on each gripper-base body in the arm fragment.
+
+    The real Sourccey wrist camera mounts on the gripper base
+    (``Gripper-Base-Front-Angled-Camera-v1`` mesh), looking along the gripper.
+    The arm fragment is generated from the URDF; we inject a ``<camera>`` element
+    right after each ``<body name="{side}_Gripper-Base-Back-v1">`` open tag so the
+    camera tracks the gripper during manipulation. Left arm X-mirroring already
+    flips the camera position/axes consistently.
+    """
+    import re
+
+    def _add_camera(m: re.Match) -> str:
+        side = m.group(2)
+        body_open = m.group(1)
+        # Camera on the gripper base, looking along the gripper's -Y (toward the fingers).
+        # MuJoCo camera looks along -z; forward = -Y so z = +Y; x = +X, y = z x x = -Z.
+        cam = (
+            f"{body_open}\n"
+            f'{m.group(4)}  <camera name="wrist_{side}" pos="0 0.03 0.02" '
+            f'xyaxes="1 0 0 0 0 -1" fovy="70"/>'
+        )
+        return cam
+
+    # match body open tags for gripper bases (both sides after prefixing)
+    pat = re.compile(r'(<body name="(left|right)_Gripper-Base-Back-v1"[^>]*>)(\n)(\s*)')
+    return pat.sub(_add_camera, fragment)
 
 
 def build() -> str:
@@ -309,11 +339,8 @@ def build() -> str:
     for side, arm_sx in (("left", -1.0), ("right", 1.0)):
         a(f'      <body name="arm_mount_{side}" pos="{arm_sx * ARM_MOUNT_X} 0 {ARM_MOUNT_Y + DOME_BASE_Z}">')
         a(f'        <geom type="mesh" mesh="arm_base" class="robot_visual" pos="{arm_sx * 0.03} 0 -0.05"/>')
-        # wrist camera looks outward along the arm (left -X, right +X), level (world up = +Z)
-        cam_xy = "0 1 0 0 0 1" if side == "left" else "0 -1 0 0 0 1"
-        a(f'        <camera name="wrist_{side}" pos="0 0.10 0" xyaxes="{cam_xy}" fovy="70"/>')
         a(f'        <body name="arm_{side}" pos="{arm_sx * 0.03} 0 -0.05" quat="{ARM_MOUNT_QUAT[side]}">')
-        a(prefix_arm_fragment(indent_arm, side))
+        a(inject_wrist_cameras(prefix_arm_fragment(indent_arm, side)))
         a("        </body>")
         a("      </body>")
     a("")
