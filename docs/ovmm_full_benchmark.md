@@ -24,6 +24,8 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 
 `attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp).
 
+**Action-outcome ledger:** when `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is on and the agent has `graph_memory`, scored pick/place phases in `emet.eval.ovmm_full` call `record_manip_attempt` (`pick` / `place` rows). Default **off**. See [attempt_ledger.md](attempt_ledger.md).
+
 **Servers:** Stretch MuJoCo and robosuite (e.g. **rby1** / MolmoSpaces merges) advertise `capabilities.sim_set_body_pose`. Molmo iTHOR objects are freejoint roots (`…_1_0_0`) with mesh children (`…_1_1_0`); teleport resolves the freejoint ancestor when the GT body is the child.
 
 ## Quick start

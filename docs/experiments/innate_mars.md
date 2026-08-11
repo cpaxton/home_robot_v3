@@ -62,21 +62,21 @@ See [hardware bring-up checklist](../robots/innate_mars_hardware.md).
 
 After `git pull origin main` and `uv sync`, use the **same Rerun tools** as MuJoCo sim. Only the ZMQ host and depth preset differ:
 
-| Tool | Sim (localhost) | Hardware (`herman`) |
+| Tool | Sim (localhost) | Hardware (`mars` profile) |
 |------|-----------------|---------------------|
-| Cameras montage | `emet preview-cameras --source local` | `emet preview-cameras --source zmq --connection herman` |
-| One-shot map | `emet capture --backend voxel_only` | `emet capture --connection herman --backend voxel_only` |
-| Live Rerun (cameras + MJCF mesh) | `emet stream --cameras-only` | `emet stream --cameras-only --connection herman` |
-| Live voxel map (DynaMem) | `emet stream --backend dynamem` | `emet stream --connection herman` (remote default) |
-| Live graph (Dynagraph) | `emet stream --backend dynagraph` | `emet stream --connection herman --backend dynagraph` |
-| Static-graph baseline | `emet stream --backend static_graph` | `emet stream --connection herman --backend static_graph` (alias: `graph_eqa`) |
-| Full session | `emet run dynamem --robot innate_mars` | `emet run dynamem --robot innate_mars --robot-ip herman --dynav-config dynav_innate_mars.yaml` |
-| Graph export | `emet run dynagraph --export /tmp/mars` | same with `--robot-ip herman --dynav-config dynav_innate_mars.yaml` |
-| Discord chat + explore | (sim: `--robot innate_mars --start-sim`) | `emet run agent --connection herman --rerun` (needs `DISCORD_TOKEN` + profile `--config configs/agent_innate_mars.yaml`; see [hardware Discord section](../robots/innate_mars_hardware.md#discord-chat--explore-herman)) |
+| Cameras montage | `emet preview-cameras --source local` | `emet preview-cameras --source zmq --connection mars` |
+| One-shot map | `emet capture --backend voxel_only` | `emet capture --connection mars --backend voxel_only` |
+| Live Rerun (cameras + MJCF mesh) | `emet stream --cameras-only` | `emet stream --cameras-only --connection mars` |
+| Live voxel map (DynaMem) | `emet stream --backend dynamem` | `emet stream --connection mars` (remote default) |
+| Live graph (Dynagraph) | `emet stream --backend dynagraph` | `emet stream --connection mars --backend dynagraph` |
+| Static-graph baseline | `emet stream --backend static_graph` | `emet stream --connection mars --backend static_graph` (alias: `graph_eqa`) |
+| Full session | `emet run dynamem --robot innate_mars` | `emet run dynamem --robot innate_mars --robot-ip MARS_IP --dynav-config dynav_innate_mars.yaml` |
+| Graph export | `emet run dynagraph --export /tmp/mars` | same with `--robot-ip MARS_IP --dynav-config dynav_innate_mars.yaml` |
+| Discord chat + explore | (sim: `--robot innate_mars --start-sim`) | `emet run agent --connection mars --rerun` (needs `DISCORD_TOKEN` + profile `--config configs/agent_innate_mars.yaml`; see [hardware Discord section](../robots/innate_mars_hardware.md#discord-chat--explore)) |
 
 **Depth:** Sim ZMQ carries sensor depth → default `dynav_config.yaml`. Hardware has no ZMQ depth → `stream`/`capture` auto-select `dynav_innate_mars.yaml` (DA3 stereo) when the host is not localhost. Override with `--dynav-config` anytime.
 
-**Connection profile:** `emet connect save … --name herman --robot innate_mars --config configs/agent_innate_mars.yaml` so `--connection herman` sets host + robot + default YAML on `capture`, `stream`, `run agent`, etc. Profile `config` also applies to bare dynamem/stream when herman is **active** — see [cli.md](../cli.md) (`emet connect`). Details: [zmq_obs.md](../zmq_obs.md).
+**Connection profile:** `emet connect save … --name mars --robot innate_mars --config configs/agent_innate_mars.yaml` so `--connection mars` sets host + robot + default YAML on `capture`, `stream`, `run agent`, etc. Profile `config` also applies to bare dynamem/stream when mars is **active** — see [cli.md](../cli.md) (`emet connect`). Details: [zmq_obs.md](../zmq_obs.md).
 
 Rerun viewer: `http://localhost:9090?url=ws://localhost:9877` (SSH tunnel ports 9090/9877 when working over VPN). See [rerun.md](../rerun.md).
 
@@ -86,18 +86,18 @@ Use these when the robot should stay put (mapping from current pose only):
 
 ```bash
 # Bridge (if not already up)
-emet mars start --connection herman
+emet mars start --connection mars
 
 # Cameras only
-uv run emet preview-cameras --source zmq --connection herman
+uv run emet preview-cameras --source zmq --connection mars
 
 # One ZMQ frame + single voxel-only update (no nav commands)
-uv run emet capture --connection herman --backend voxel_only --no-rerun
+uv run emet capture --connection mars --backend voxel_only --no-rerun
 
 # Repeated stationary updates (no rotate, no explore, no xyt)
-uv run emet stream --connection herman --backend voxel_only --max-steps 3 --headless
+uv run emet stream --connection mars --backend voxel_only --max-steps 3 --headless
 
-uv run emet stream --connection herman --backend dynagraph --max-steps 1 --headless
+uv run emet stream --connection mars --backend dynagraph --max-steps 1 --headless
 ```
 
 **Known issue:** stationary `dynagraph` stream can inflate graph node count (dedup fails with DA3 depth / label noise). See [known_issues.md](../known_issues.md#dynagraph-graph-node-explosion-on-stationary-hardware-stream). Prefer `--backend voxel_only` for voxel-only hardware smoke until fixed.

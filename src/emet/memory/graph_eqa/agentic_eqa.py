@@ -699,7 +699,23 @@ class AgenticEQAExecutor:
             out = self._tool_finish(str(args.get("summary") or ""))
         else:
             out = {"ok": False, "error": f"unknown tool {name!r}"}
-        self._record_recent_action(name, args, out if isinstance(out, dict) else {})
+        if not isinstance(out, dict):
+            out = {"ok": False, "error": f"non-dict tool result for {name!r}"}
+        self._record_recent_action(name, args, out)
+        # Shared ToolOutcome → attempt ledger (no-op when ledger off / tool not mapped).
+        try:
+            from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
+
+            # navigate/investigate already dual-write via record_nav_attempt; skip
+            # duplicate navigate rows. Still record verify / explore / closer_look.
+            if name not in ("investigate", "navigate_to_obs"):
+                maybe_record_tool_attempt(
+                    self.graph_memory,
+                    ToolOutcome.from_eqa_dict(name, out),
+                    source="eqa",
+                )
+        except Exception:
+            pass
         return out
 
     def _record_recent_action(
@@ -1527,10 +1543,17 @@ class AgenticEQAExecutor:
         nav_res = getattr(agent, "_last_nav_attempt", None)
         dist_m = float(getattr(nav_res, "dist_m", 0.0) or 0.0) if nav_res else 0.0
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
-        if hasattr(gm, "record_nav_attempt"):
+        from emet.controller.nav_attempt import nav_status_code
+
+        # Ledger dual-write is owned by DynamemController._log_nav_attempt
+        # (sync_nav_attempt_to_ledger). Fallback only when no result was published.
+        if nav_res is None and hasattr(gm, "record_nav_attempt"):
             gm.record_nav_attempt(oid, success=finished, note=note or "agentic", dist_m=dist_m)
+            status = "ok" if finished else "failed"
+        else:
+            status = nav_status_code(nav_res) if nav_res is not None else ("ok" if finished else "failed")
         if not finished:
-            self._tried.setdefault(oid, "nav failed")
+            self._tried.setdefault(oid, f"nav failed ({status})")
         row = {
             "tool": trace_tool,
             "obs_id": oid,
@@ -1539,6 +1562,7 @@ class AgenticEQAExecutor:
             "nav_success": bool(finished),
             "nav_dist_m": dist_m,
             "nav_note": note,
+            "nav_status_code": status,
             "nav_visit_n": self._nav_to_obs_counts[oid],
         }
         self._attach_gt(row, target)

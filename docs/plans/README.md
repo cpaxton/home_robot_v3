@@ -27,3 +27,4 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 - **[2026-06-03_habitat_eqa_exploration_improvements.md](2026-06-03_habitat_eqa_exploration_improvements.md)** – HM-EQA exploration/prompting improvements (frontier map vs nodes, navigation fix, ablation plan).
 - **[2026-07-15_dynagraph_graph_quality_dynamic_eqa.md](2026-07-15_dynagraph_graph_quality_dynamic_eqa.md)** – Graph-health metrics, prompt top-K, label dedup; dynamic EQA deferred until quality gates pass.
 - **[fable5-dynagraph-habitat.md](fable5-dynagraph-habitat.md)** – Dynagraph HM-EQA results, MCQ debiasing, VLM bake-off findings (links to [vlm_bakeoff.md](../habitat/vlm_bakeoff.md)).
+- **[2026-08-08_embodied_agent_planning.md](2026-08-08_embodied_agent_planning.md)** – World model + tool calling + motion (design + phase checklist; branch `feature/agent-world-model`). **Shipped reference:** [../attempt_ledger.md](../attempt_ledger.md).

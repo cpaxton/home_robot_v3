@@ -248,10 +248,11 @@ class DynamemTaskExecutor:
         point: np.ndarray | None = None,
         skip_confirmations: bool = False,
     ) -> bool:
-        """Pick up an object. Returns True on success (Stretch path always True).
+        """Pick up an object. Returns True on success.
 
-        Stretch visual-servo / AnyGrasp still returns True unconditionally — see TODO.md
-        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
+        Stretch visual-servo uses ``GraspObjectOperation.was_successful``; AnyGrasp /
+        OK-Robot path propagates ``agent.manipulate`` (False when grasp detection fails
+        or the operator declines confirmation).
         """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
@@ -306,6 +307,7 @@ class DynamemTaskExecutor:
             theta = -0.6
 
         # Grasp the object using operation if it's available
+        ok = False
         if self.grasp_object is not None:
             self.robot.say("Grasping the " + str(target_object) + ".")
             print("Using operation to grasp object:", target_object)
@@ -324,19 +326,26 @@ class DynamemTaskExecutor:
             )
             # This retracts the arm
             self.robot.move_to_nav_posture()
+            was_ok = getattr(self.grasp_object, "was_successful", None)
+            ok = bool(was_ok()) if callable(was_ok) else bool(getattr(self.grasp_object, "_success", False))
         else:
             # Otherwise, use the self.agent's manipulation method
             # This is from OK Robot
             print("Using self.agent to grasp object:", target_object)
-            self.agent.manipulate(target_object, theta, skip_confirmation=skip_confirmations)
+            manip = getattr(self.agent, "manipulate", None)
+            if callable(manip):
+                ok = bool(manip(target_object, theta, skip_confirmation=skip_confirmations))
+            else:
+                ok = False
         self.robot.look_front()
-        return True
+        if not ok:
+            self.robot.say("I could not pick up the " + str(target_object) + ".")
+        return ok
 
     def _place(self, target_receptacle: str, point: np.ndarray | None) -> bool:
-        """Place an object. Returns True on success (Stretch path always True).
+        """Place an object. Returns True on success.
 
-        Stretch ``agent.place`` still returns True unconditionally — see TODO.md
-        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
+        Stretch path propagates ``agent.place`` (False when receptacle detection fails).
         """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
@@ -397,9 +406,12 @@ class DynamemTaskExecutor:
 
         self.robot.say("Placing object on the " + str(target_receptacle) + ".")
         # If you run this stack with visual servo, run it locally
-        self.agent.place(target_receptacle, init_tilt=theta, local=self.visual_servo)
+        place_fn = getattr(self.agent, "place", None)
+        ok = bool(place_fn(target_receptacle, init_tilt=theta, local=self.visual_servo)) if callable(place_fn) else False
         self.robot.move_to_nav_posture()
-        return True
+        if not ok:
+            self.robot.say("I could not place the object on the " + str(target_receptacle) + ".")
+        return ok
 
     def _take_picture(self, channel=None) -> None:
         """Take a picture with the head camera. Optionally send it to Discord."""

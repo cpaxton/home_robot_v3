@@ -92,6 +92,9 @@ def format_last_nav_plan_summary(agent: Any | None) -> str:
     outcome = meta.get("outcome")
     if outcome:
         parts.append(f"outcome={outcome}")
+    status_code = meta.get("status_code")
+    if status_code and status_code != outcome:
+        parts.append(f"status={status_code}")
     if meta.get("confirmed") is True:
         parts.append("confirmed=yes")
     elif meta.get("confirmed") is False or outcome == "user_cancelled":
@@ -436,6 +439,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         clr = format_base_clearance_hint(agent)
         if clr:
             parts.append(clr)
+        # Action-outcome ledger summary (opt-in; empty when ledger off).
+        gm = getattr(agent, "graph_memory", None) if agent is not None else None
+        if gm is None:
+            gm = context.get("graph_memory")
+        if gm is not None and hasattr(gm, "get_attempt_records"):
+            try:
+                recent = gm.get_attempt_records(limit=5)
+            except Exception:
+                recent = []
+            if recent:
+                bits = "; ".join(r.summary_bit() for r in recent)
+                parts.append(f"Recent attempts: {bits}.")
         return " ".join(parts)
 
     def send_map_snapshot() -> str:
@@ -939,7 +954,21 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def take_ee_picture() -> str:
+    def take_ee_picture():
+        from emet.agent.tool_outcome import ToolOutcome
+        from emet.controller.manipulation.closer_look import consume_closer_look_aim_for_ee_picture
+
+        agent = _agent_from_context(context)
+        allowed, gate_note, aim = consume_closer_look_aim_for_ee_picture(agent=agent, context=context)
+        if not allowed:
+            return ToolOutcome(
+                ok=False,
+                status="aim_required",
+                note=gate_note,
+                tool="take_ee_picture",
+                payload={"action_kind": "closer_look"},
+            )
+
         robot = context.get("robot")
         image = None
         if robot is not None and hasattr(robot, "get_servo_observation"):
@@ -950,25 +979,34 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                     image = np.asarray(ee).copy()
             except Exception as e:
                 _logger.warning(f"take_ee_picture: servo obs failed ({e})")
+        phrase = str((aim or {}).get("phrase") or "")
         if stash_discord_image(context, image):
-            return (
-                "Wrist-camera photo queued (arm was not moved — no IK aim). "
-                "For 'take a closer look' use describe_scene with the head camera instead."
+            return ToolOutcome(
+                ok=True,
+                status="ok",
+                note=f"{gate_note} Wrist-camera photo queued for Discord.",
+                tool="take_ee_picture",
+                payload={"action_kind": "closer_look", "phrase": phrase, "queued": True},
             )
-        return (
-            "Wrist / EE camera frame not available, and aiming the arm at an object "
-            "(IK) is not supported in this agent. Use describe_scene or send_image "
-            "(head camera) to look closer."
+        return ToolOutcome(
+            ok=False,
+            status="ee_frame_missing",
+            note=(
+                f"{gate_note} Wrist / EE camera frame not available "
+                "(common on Innate Mars). Use describe_scene or send_image (head camera)."
+            ),
+            tool="take_ee_picture",
+            payload={"action_kind": "closer_look", "phrase": phrase, "queued": False},
         )
 
     tools.append(
         Tool(
             name="take_ee_picture",
             description=(
-                "Capture the wrist/end-effector camera only (no arm motion). "
-                "Do NOT use for 'closer look' / 'inspect X' — that would require pointing the arm "
-                "at the object with IK, which is not supported here. Use describe_scene (head camera "
-                "+ caption) or send_image instead. On Innate Mars the wrist stream is often missing."
+                "Capture the wrist/end-effector camera after aim_arm_at in this session "
+                "(no further arm motion). Requires a prior aim: successful aim grants one capture; "
+                "if aim returns not_implemented (no kinematic stack), one soft-allow capture is ok. "
+                "Prefer face_toward + describe_scene (head camera) when the wrist stream is dark."
             ),
             parameters=_NO_PARAMS,
             func=take_ee_picture,
@@ -976,22 +1014,38 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    # -- arm aim (stub / TODO) ------------------------------------------------
-    def aim_arm_at(object_label: str) -> str:
-        # See TODO.md — Arm IK “closer look”.
-        return (
-            f"aim_arm_at({object_label!r}) is not implemented yet (needs arm IK + wrist aim; "
-            "tracked in TODO.md). I will not call take_ee_picture without aiming. "
-            "Use describe_scene / send_image with the head camera for now."
+    # -- arm aim / closer look -----------------------------------------------
+    def aim_arm_at(object_label: str):
+        # See docs/attempt_ledger.md and plans/2026-08-08_embodied_agent_planning.md Phase 3.
+        from emet.controller.manipulation.closer_look import aim_wrist_at_phrase, record_closer_look_aim
+
+        agent = _agent_from_context(context)
+        robot = context.get("robot")
+        executor = context.get("executor")
+        manip_mode = str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "teleport")
+        visual_servo = bool(getattr(executor, "visual_servo", False))
+        manip_collision = str(getattr(executor, "_manip_collision", None) or "none")
+        manip_planner = str(getattr(executor, "_manip_planner", None) or "rrt_connect")
+        result = aim_wrist_at_phrase(
+            agent=agent,
+            robot=robot,
+            phrase=str(object_label or ""),
+            manip_mode=manip_mode,
+            visual_servo=visual_servo,
+            manip_collision=manip_collision,
+            manip_planner=manip_planner,
         )
+        record_closer_look_aim(result, agent=agent, context=context)
+        return result.to_tool_outcome()
 
     tools.append(
         Tool(
             name="aim_arm_at",
             description=(
-                "STUB: Point the arm / wrist camera at a named object using IK, then the user "
-                "can inspect it. Not implemented yet — do not pretend it moved the arm. "
-                "For 'closer look' / 'inspect X' prefer describe_scene (head camera) until IK lands."
+                "Point the arm / wrist camera at a named object (localize + kinematic EE aim when "
+                "available). On success you may call take_ee_picture once. If aim fails or is "
+                "unavailable, prefer face_toward + describe_scene (head camera) instead of claiming "
+                "a closer look."
             ),
             parameters={
                 "type": "object",

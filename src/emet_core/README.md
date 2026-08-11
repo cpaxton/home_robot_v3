@@ -6,3 +6,5 @@ Core runtime for Emet: ZMQ server (BaseZmqServer), motion (kinematics, control, 
 - **Simulator bridges** subclass `emet.core.server.BaseZmqServer` and implement the same message contract; depend only on emet-core + the sim SDK.
 
 Install: `pip install emet-core`
+
+**Deploy to a robot** (rsync + colcon from the workstation): `emet deploy --robot stretch|innate_mars` — see [`docs/deploy.md`](../../docs/deploy.md).

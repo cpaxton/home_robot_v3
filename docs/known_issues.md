@@ -31,8 +31,8 @@ step 17: … 518 graph nodes
 ### Repro (hardware smoke)
 
 ```bash
-emet mars start --connection herman
-emet stream --connection herman --backend dynagraph --headless
+emet mars start --connection mars
+emet stream --connection mars --backend dynagraph --headless
 # Robot stationary; watch graph node count in periodic status lines
 ```
 
