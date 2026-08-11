@@ -247,7 +247,14 @@ def resolve_room_policy(raw: Any) -> str:
 
 
 def question_target_rooms(question: str) -> set[str]:
-    """Canonical rooms the question is about (MCQ landmarks + room words in stem)."""
+    """Canonical rooms the question is about (MCQ landmarks + room words in stem).
+
+    NOTE (OVMM find interpretation): room targets are a strong cue for **receptacle**
+    localization (receptacles are room-typical fixtures: table/counter/cab), but a
+    weak cue for **object** localization — a target object (``jar``, ``red cylinder``)
+    can sit on any receptacle in any room. Consumers that gate explore/escape on room
+    mismatch should treat a room signal as receptacle evidence, not object evidence.
+    """
     targets: set[str] = set()
     q = str(question or "")
     try:
