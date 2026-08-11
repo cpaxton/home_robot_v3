@@ -59,6 +59,8 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 
 `--eqa-eval` still bypasses the chat tool-router and uses the Habitat harness episode path (not CHAT). Do not expect Discord chat turns to score Habitat MCQ. See [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning) and [agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current) (evidence-card recall, frontier retirement).
 
+**Action-outcome ledger (opt-in):** both packs can write structured attempt rows (`navigate` / `verify` / `pick` / `place` / `closer_look`, …) into `GraphEQAMemory` when `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is on (default **off** — paper paths unchanged). Shared result shape: `emet.agent.tool_outcome.ToolOutcome`. Operator reference: [attempt_ledger.md](attempt_ledger.md).
+
 ### Lifelong reload
 
 CHAT can resume a prior dynagraph export (same layout as `emet run dynagraph --export`, which writes `voxel_map.pkl` by default):

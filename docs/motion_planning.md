@@ -7,7 +7,11 @@ How EMET plans **base** and **arm** motion. Both share the same planners under [
 | **Base nav** | XYT on `SparseVoxelMapNavigationSpace` | `a_star` or `rrt_connect` (config) | Footprint vs `get_2d_map()` obstacles |
 | **Arm (kinematic manip)** | Joint space (torso + arm) | `rrt_connect` | Link XY vs same 2D obstacle grid (`VoxelMapArmCollisionChecker`) |
 
-Related: [dynamem.md](dynamem.md) (voxel maps), [molmospaces.md](molmospaces.md#mobile-manipulation-sim-teleport--kinematic) (sim pick/place modes), [llm_agent.md](llm_agent.md) (tuning `motion_planner` on real Stretch), [TESTING.md](TESTING.md).
+Related: [dynamem.md](dynamem.md) (voxel maps), [molmospaces.md](molmospaces.md#mobile-manipulation-sim-teleport--kinematic) (sim pick/place modes), [llm_agent.md](llm_agent.md) (tuning `motion_planner` on real Stretch), [TESTING.md](TESTING.md), [attempt_ledger.md](attempt_ledger.md) (structured nav / closer-look outcomes).
+
+**Closer look (CHAT `aim_arm_at`):** [`emet.controller.manipulation.closer_look.aim_wrist_at_phrase`](../src/emet/controller/manipulation/closer_look.py) localizes a phrase and aims the wrist/EE when kinematic aim is available; structured failure codes feed the opt-in action-outcome ledger. `take_ee_picture` is gated on a successful aim grant (one capture per aim).
+
+**Nav attempt status:** [`emet.controller.nav_attempt`](../src/emet/controller/nav_attempt.py) maps `NavAttemptResult` → stable `status_code` / ledger fields used by CHAT diagnostics and agentic place cards.
 
 ---
 

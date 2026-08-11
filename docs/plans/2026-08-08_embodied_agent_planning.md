@@ -4,6 +4,10 @@
 **Date:** 2026-08-08
 **Status:** Phases 1–3 landed (ledger default off); Phase 4 helpers done, GPU deltas pending.
 
+**Shipped operator/developer reference:** [../attempt_ledger.md](../attempt_ledger.md)
+(enable knobs, schema, writers/readers, tests). Keep this plan as design history +
+phase checklist; put how-to and API details in that page.
+
 ## Goal
 
 An embodied agent that explores with the voxel map + scene graph, builds a durable

@@ -105,6 +105,7 @@ def maybe_record_tool_attempt(
         "explore_frontier": "explore",
         "verify_siglip": "verify",
         "aim_arm_at": "closer_look",
+        "take_ee_picture": "closer_look",
         "pick_place": "pick",
         "pickup": "pick",
         "place": "place",

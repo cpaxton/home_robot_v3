@@ -7,6 +7,9 @@
 Tries kinematic EE motion toward a localized object when the robot/manip stack
 supports it; otherwise returns a structured ``not_implemented`` / ``localize_failed``
 result for the attempt ledger. Does not claim success without moving the arm.
+
+Successful aims are recorded on the agent/context so ``take_ee_picture`` may capture
+the wrist camera only after a real aim (one capture consumes the aim grant).
 """
 
 from __future__ import annotations
@@ -15,6 +18,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+# Shared key on agent + chat tool context after a successful ``aim_arm_at``.
+LAST_CLOSER_LOOK_AIM_KEY = "_last_closer_look_aim"
 
 
 @dataclass
@@ -39,6 +45,76 @@ class CloserLookResult:
                 "xyz": list(self.xyz) if self.xyz is not None else None,
             },
         )
+
+
+def clear_closer_look_aim(agent: Any = None, context: dict[str, Any] | None = None) -> None:
+    """Drop any outstanding aim grant (failed aim or after EE capture)."""
+    if agent is not None and hasattr(agent, LAST_CLOSER_LOOK_AIM_KEY):
+        try:
+            delattr(agent, LAST_CLOSER_LOOK_AIM_KEY)
+        except Exception:
+            setattr(agent, LAST_CLOSER_LOOK_AIM_KEY, None)
+    if context is not None:
+        context.pop(LAST_CLOSER_LOOK_AIM_KEY, None)
+
+
+def record_closer_look_aim(
+    result: CloserLookResult,
+    *,
+    agent: Any = None,
+    context: dict[str, Any] | None = None,
+) -> None:
+    """Store a successful aim so ``take_ee_picture`` is allowed once; clear on failure."""
+    if not result.ok:
+        clear_closer_look_aim(agent, context)
+        return
+    payload = {
+        "ok": True,
+        "phrase": str(result.phrase or ""),
+        "status_code": str(result.status_code or "ok"),
+        "xyz": list(result.xyz) if result.xyz is not None else None,
+    }
+    if agent is not None:
+        setattr(agent, LAST_CLOSER_LOOK_AIM_KEY, payload)
+    if context is not None:
+        context[LAST_CLOSER_LOOK_AIM_KEY] = payload
+
+
+def get_closer_look_aim(agent: Any = None, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Return the outstanding successful aim grant, if any."""
+    for src in (agent, context):
+        if src is None:
+            continue
+        raw = getattr(src, LAST_CLOSER_LOOK_AIM_KEY, None) if not isinstance(src, dict) else src.get(LAST_CLOSER_LOOK_AIM_KEY)
+        if isinstance(raw, dict) and raw.get("ok"):
+            return raw
+    return None
+
+
+def consume_closer_look_aim_for_ee_picture(
+    *,
+    agent: Any = None,
+    context: dict[str, Any] | None = None,
+) -> tuple[bool, str, dict[str, Any] | None]:
+    """Allow one wrist capture after a successful aim; consume the grant.
+
+    Returns ``(allowed, note, aim_payload)``.
+    """
+    aim = get_closer_look_aim(agent, context)
+    if aim is None:
+        return (
+            False,
+            (
+                "take_ee_picture requires a successful aim_arm_at first "
+                "(wrist capture alone is not a closer look). "
+                "Prefer face_toward + describe_scene (head camera) when aim is unavailable."
+            ),
+            None,
+        )
+    clear_closer_look_aim(agent, context)
+    phrase = str(aim.get("phrase") or "").strip()
+    note = f"Capturing wrist camera after aim at {phrase!r}." if phrase else "Capturing wrist camera after aim_arm_at."
+    return True, note, aim
 
 
 def _localize_xyz(agent: Any, phrase: str) -> np.ndarray | None:

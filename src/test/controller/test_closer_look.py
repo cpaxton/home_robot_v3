@@ -7,10 +7,17 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 
-from emet.controller.manipulation.closer_look import aim_wrist_at_phrase
+from emet.agent.tools import get_tools
+from emet.controller.manipulation.closer_look import (
+    CloserLookResult,
+    aim_wrist_at_phrase,
+    consume_closer_look_aim_for_ee_picture,
+    record_closer_look_aim,
+)
 
 
 def test_aim_empty_phrase():
@@ -45,3 +52,49 @@ def test_aim_localized_but_no_kinematic():
     outcome = out.to_tool_outcome()
     assert outcome.tool == "aim_arm_at"
     assert outcome.ok is False
+
+
+def test_ee_picture_requires_successful_aim():
+    agent = SimpleNamespace()
+    ctx: dict = {"agent": agent, "robot": None}
+    tools = {t.name: t for t in get_tools(ctx)}
+    out = tools["take_ee_picture"].func()
+    assert out.ok is False
+    assert out.status == "aim_required"
+
+
+def test_ee_picture_allowed_once_after_aim():
+    agent = SimpleNamespace()
+    ctx: dict = {"agent": agent}
+    record_closer_look_aim(
+        CloserLookResult(True, "ok", "aimed", xyz=(1.0, 0.0, 0.5), phrase="mug"),
+        agent=agent,
+        context=ctx,
+    )
+    allowed, note, aim = consume_closer_look_aim_for_ee_picture(agent=agent, context=ctx)
+    assert allowed is True
+    assert aim is not None and aim["phrase"] == "mug"
+    assert "mug" in note
+    # Second consume refuses (grant spent).
+    allowed2, _, _ = consume_closer_look_aim_for_ee_picture(agent=agent, context=ctx)
+    assert allowed2 is False
+
+
+def test_take_ee_picture_tool_queues_after_aim():
+    robot = MagicMock()
+    robot.get_servo_observation.return_value = SimpleNamespace(ee_rgb=np.zeros((8, 8, 3), dtype=np.uint8))
+    agent = SimpleNamespace()
+    ctx: dict = {"agent": agent, "robot": robot}
+    record_closer_look_aim(
+        CloserLookResult(True, "ok", "aimed", phrase="cup"),
+        agent=agent,
+        context=ctx,
+    )
+    tools = {t.name: t for t in get_tools(ctx)}
+    out = tools["take_ee_picture"].func()
+    assert out.ok is True
+    assert ctx.get("pending_discord_image") is not None
+    # Grant consumed — second call refuses.
+    out2 = tools["take_ee_picture"].func()
+    assert out2.ok is False
+    assert out2.status == "aim_required"

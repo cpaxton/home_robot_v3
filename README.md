@@ -286,6 +286,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [dynamem.md](docs/dynamem.md) | Voxel map / open-vocab manipulation (`emet run dynamem`) |
 | [graph_eqa.md](docs/graph_eqa.md) | GraphEQA memory + classic planning loop |
 | [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
+| [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
 | [llm_serve.md](docs/llm_serve.md) | **Remote inference** (OpenAI LAN) + **testing LLMs** (`emet llm` / `emet run chat --host`) |

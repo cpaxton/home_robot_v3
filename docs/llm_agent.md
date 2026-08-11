@@ -2,7 +2,8 @@
 
 > **Canonical agent docs for emet today:** [AGENT_RUN.md](AGENT_RUN.md) (Discord / CHAT vs
 > Habitat `EQA_EPISODE`), [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning)
-> (agentic GraphEQA tool loop), and
+> (agentic GraphEQA tool loop), [attempt_ledger.md](attempt_ledger.md) (opt-in action-outcome
+> ledger / world-model attempts), and
 > [experiments/agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current)
 > (evidence-card recall, VLM-first assess, frontier retirement). This page is the historical
 > Stretch AI pickup/chat walkthrough; prefer those links for the current Dynagraph agentic

@@ -1372,9 +1372,8 @@ def run_agent_with_robot(
                         names = [str(n) for n in tool_names if n]
                         if names == ["take_ee_picture"] or set(names) == {"take_ee_picture"}:
                             fallback = (
-                                "Wrist camera alone isn't a closer look (I'd need to aim the arm "
-                                "with IK, which I can't do here). Want me to describe_scene with "
-                                "the head camera instead?"
+                                "Wrist capture needs a successful aim_arm_at first (or use "
+                                "face_toward + describe_scene with the head camera)."
                             )
                         elif names == ["take_picture"] or set(names) == {"take_picture"}:
                             fallback = (

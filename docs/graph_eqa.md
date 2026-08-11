@@ -15,6 +15,8 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 | **Graph EQA** | Scene graph (nodes + edges) + task-relevant images. | `emet run graph-eqa`; EQA with graph-based memory. |
 | **Dynagraph** | Graph EQA + optional merge/staleness on graph nodes (same voxel nav). | `emet run dynagraph`; see [dynagraph.md](dynagraph.md). Stationary hardware stream dedup: [known_issues.md](known_issues.md). |
 
+**Action-outcome ledger (opt-in):** `GraphEQAMemory` can store structured attempt rows (failed nav, verify ABSENT, pick/place, closer look) next to the scene graph. Default **off** for paper HM-EQA / OVMM. See [attempt_ledger.md](attempt_ledger.md).
+
 ## When to use GraphEQA vs DynaMem EQA
 
 | | **EQA (DynaMem)** | **Graph EQA** |
@@ -179,6 +181,7 @@ Other components:
 |-----------|----------|
 | GraphEQA agent | `src/emet/controller/controller_graph_eqa.py` (`GraphEQAController`) |
 | Dynagraph agent | `src/emet/controller/controller_dynagraph.py` — merge/staleness on `GraphEQAMemory`; see [dynagraph.md](dynagraph.md) |
+| Attempt ledger | `attempt_ledger.py` / `attempt_metrics.py` on `GraphEQAMemory` — [attempt_ledger.md](attempt_ledger.md) |
 | App entry point | `src/emet/app/run_graph_eqa.py` |
 | Dynagraph app | `src/emet/app/run_dynagraph.py` |
 | Plan (design) | [docs/plans/GRAPH_EQA_PLAN.md](plans/GRAPH_EQA_PLAN.md) |

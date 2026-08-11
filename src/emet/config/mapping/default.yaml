@@ -67,7 +67,7 @@ eqa:
   agentic_verify_min_sim: 0.28
   # Action-outcome ledger (navigate/verify/manip attempts). Default off so HM-EQA /
   # OVMM paper paths are unchanged. Enable with true / {enabled: true, ...} or
-  # EMET_EQA_ATTEMPT_LEDGER=1. See docs/plans/2026-08-08_embodied_agent_planning.md.
+  # EMET_EQA_ATTEMPT_LEDGER=1. Docs: docs/attempt_ledger.md
   # attempt_ledger: false
   # attempt_ledger:
   #   enabled: true
