@@ -477,7 +477,7 @@ class DynamemController(BaseController):
         keywords = exploration_keywords_from_text(text)
         robot = getattr(self, "robot", None)
         if robot is not None and hasattr(robot, "get_base_pose"):
-            pose = robot.get_base_pose()
+            pose = self._planning_base_xyt(robot.get_base_pose())
             rx, ry = float(pose[0]), float(pose[1])
         else:
             rx, ry = 0.0, 0.0
@@ -1650,7 +1650,11 @@ class DynamemController(BaseController):
         if vm is None or not hasattr(vm, "_update_visited"):
             return False
         try:
-            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            # Use world-frame base (planning frame) so the visited disk lands on the
+            # robot's actual map cell. Raw get_base_pose is episode-relative; for sims
+            # with a non-zero nav origin (robocasa) that maps the disk to grid center
+            # (0,0), leaving the real spawn cell unexplored → nav 'non navigable'.
+            xyt = self._planning_base_xyt(self.robot.get_base_pose())
         except Exception:
             return False
         if xyt.size < 2:
@@ -1728,7 +1732,7 @@ class DynamemController(BaseController):
             return 0.0 if require_map else requested
 
         try:
-            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            xyt = self._planning_base_xyt(self.robot.get_base_pose())
         except Exception:
             return 0.0 if require_map else requested
         if xyt.size < 3:

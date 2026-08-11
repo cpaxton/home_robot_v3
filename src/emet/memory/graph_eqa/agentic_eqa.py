@@ -647,7 +647,13 @@ class AgenticEQAExecutor:
         convert = getattr(agent, "_planning_base_xyt", None)
         if callable(convert):
             try:
-                return np.asarray(convert(local), dtype=float).reshape(-1)
+                world = np.asarray(convert(local), dtype=float).reshape(-1)
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(
+                        f"[navstart] local={local.round(3).tolist()} world={world.round(3).tolist()}",
+                        flush=True,
+                    )
+                return world
             except Exception:
                 pass
         return local
