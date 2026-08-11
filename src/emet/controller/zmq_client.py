@@ -1611,7 +1611,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 ok = self.wait_for_waypoint(
                     pt,
                     pos_err_threshold=pos_err_threshold,
-                    rot_err_threshold=rot_err_threshold,
+                    # Intermediate headings point along the next path segment. Requiring
+                    # them here can strand a holonomic sim base at an otherwise reached
+                    # waypoint while it fights contact friction to rotate in place.
+                    # The final blocking move still enforces its requested yaw.
+                    rot_err_threshold=np.inf,
                     rate=spin_rate,
                     verbose=verbose,
                     timeout=per_waypoint_timeout,
@@ -2130,9 +2134,24 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
         t0 = timeit.default_timer()
         startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
+        next_progress_log = t0 + 5.0
         while self._obs is None or self._state is None or self._servo is None:
             time.sleep(0.1)
             t1 = timeit.default_timer()
+            if t1 >= next_progress_log:
+                missing = [
+                    name
+                    for name, value in (
+                        ("observations", self._obs),
+                        ("state", self._state),
+                        ("servo", self._servo),
+                    )
+                    if value is None
+                ]
+                logger.info(
+                    f"Waiting for ZMQ startup streams ({t1 - t0:.1f}s): missing {', '.join(missing)}"
+                )
+                next_progress_log = t1 + 5.0
             if t1 - t0 > startup_timeout:
                 logger.error(
                     colored(

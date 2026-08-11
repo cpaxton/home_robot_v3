@@ -634,6 +634,8 @@ def main(
             connection=connection,
             port_offset=port_offset,
             zmq_discover=not (start_sim or start_habitat),
+            force_localhost=bool(start_sim or start_habitat)
+            and ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT,
         )
         resolved_robot = runtime.robot_id
         robot_ip = runtime.host

@@ -767,6 +767,14 @@ class MujocoZmqServer(BaseZmqServer):
             rel = raw
         return xyt_base_to_global(rel, init)
 
+    def _world_to_base_xyt(self, world: np.ndarray) -> np.ndarray:
+        """Map a MuJoCo **world** xyt to the episode-relative frame the velocity controller uses."""
+        raw = np.asarray(world, dtype=np.float64).reshape(-1)[:3]
+        init = self._initial_xyt
+        if init is None:
+            init = np.zeros(3, dtype=np.float64)
+        return xyt_global_to_base(raw, init)
+
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
@@ -906,6 +914,14 @@ class MujocoZmqServer(BaseZmqServer):
                 world = raw
             else:
                 world = self._xyt_action_to_world(raw, relative=relative_motion)
+            # The velocity controller tracks pose in **episode-relative** frame (get_base_pose is
+            # xyt_global_to_base(_initial_xyt)). nav_world goals arrive in MuJoCo world frame, so
+            # convert back to episode-relative before set_goal_pose, or the goal is offset by the
+            # spawn position and the base circles forever. Non-world xyt is already episode-relative.
+            if nav_world and not relative_motion:
+                goal_episode = self._world_to_base_xyt(world)
+            else:
+                goal_episode = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)[:3]
             if nav_teleport:
                 if self._teleport_base_world(world):
                     self.active = False
@@ -916,9 +932,9 @@ class MujocoZmqServer(BaseZmqServer):
                         f"MolmoSpaces teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
                     )
                 else:
-                    self.set_goal_pose(action["xyt"], relative=relative_motion)
+                    self.set_goal_pose(goal_episode, relative=False)
             else:
-                self.set_goal_pose(action["xyt"], relative=relative_motion)
+                self.set_goal_pose(goal_episode, relative=False)
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

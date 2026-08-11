@@ -113,23 +113,23 @@ emet stream --backend voxel_only --max-steps 10 --headless
 ### Hardware (saved profile)
 
 ```bash
-emet connect save herman --user jetson1 --robot innate_mars --name herman
-emet mars start --connection herman
+emet connect save MARS_IP --user jetson1 --robot innate_mars --name mars
+emet mars start --connection mars
 
 # Smoke: images + metadata, no GPU map
-emet capture --connection herman
+emet capture --connection mars
 
 # One voxel step, no viewer
-emet capture --connection herman --backend voxel_only --no-rerun
+emet capture --connection mars --backend voxel_only --no-rerun
 
 # Live map (remote defaults to dynamem if --backend omitted)
-emet stream --connection herman --backend voxel_only --max-steps 3 --headless
+emet stream --connection mars --backend voxel_only --max-steps 3 --headless
 ```
 
 ### Rerun remote viewing
 
 ```bash
-emet stream --connection herman --backend dynamem --rerun-bind
+emet stream --connection mars --backend dynamem --rerun-bind
 # Viewer on workstation: http://<host>:9090?url=ws://<host>:9877
 ```
 

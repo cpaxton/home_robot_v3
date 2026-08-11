@@ -72,6 +72,30 @@ def test_llm_system_prompt_asks_in_target_area():
     assert "living_room" in can
 
 
+def test_graph_eqa_system_prompt_byte_stable_for_prefix_kv():
+    """Router system prompt must be byte-identical across calls (Qwen3-VL prefix KV)."""
+    import hashlib
+
+    from emet.memory.graph_eqa import agentic_tools as at
+
+    # Pinned hashes of the format blocks (shared rule atoms must compose identically).
+    assert (
+        hashlib.sha256(at._EQA_FORMAT_BLOCK_CANONICAL.encode()).hexdigest()
+        == "f0c0bf654f830425085209dbfe7e25115529caa108c3a4eb56fc2732de5e82c1"
+    )
+    assert (
+        hashlib.sha256(at._EQA_FORMAT_BLOCK_LLM.encode()).hexdigest()
+        == "c0d18a0ef425003e5da57bb93be5a942e6c1a2092cdac60f0d27797a59f35f40"
+    )
+    tools: list = []
+    for policy in ("canonical", "llm"):
+        a = build_graph_eqa_system_prompt(tools, room_policy=policy)
+        b = build_graph_eqa_system_prompt(tools, room_policy=policy)
+        assert a == b
+        assert at._EQA_RULE_INVESTIGATE in a
+        assert at._EQA_RULES_ANSWERABILITY in a
+
+
 def test_resolve_room_policy():
     assert resolve_room_policy("LLM") == "llm"
     assert resolve_room_policy("nope") == "canonical"

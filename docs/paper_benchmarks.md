@@ -13,8 +13,9 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 
 | Track | Task | Primary metric | Config | Batch command | Aggregate → paper |
 |-------|------|----------------|--------|---------------|-------------------|
-| **OVMM find-phase (sim)** | Localize object + receptacle | Find partial success @ $r$ | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_find_phases.py` | `aggregate_<backends>.csv` in output dir |
-| **OVMM full (sim)** | Find + pick + place | `ovmm_full_success` / four phase rates | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_full.py` | `~/runs/emet/ovmm_full` |
+| **OVMM find-phase (sim)** | Localize object + receptacle | Find partial success @ $r$ | `configs/ovmm/benchmark.yaml` | `emet ovmm find` | `aggregate_<backends>.csv` in output dir |
+| **OVMM full (sim)** | Find + pick + place | `ovmm_full_success` / four phase rates | `configs/ovmm/benchmark.yaml` | `emet ovmm full` | `~/runs/emet/ovmm_full` |
+| **OVMM multi-env sweep** | Robocasa + Molmo find/full | FindObj/FindRec + full rates | `configs/ovmm/sweeps/molmo_robocasa.yaml` | `emet ovmm sweep --preset molmo-robocasa` | `OUT/rates.json` |
 | **OVMM find-phase (Habitat)** | Same, HM3D proxy | Same | `configs/ovmm/benchmark.yaml` | `scripts/eval_habitat_ovmm_find_phases.py` | per-run JSON under `~/runs/emet/ovmm_habitat` |
 | **SQA3D** | Situated open QA | EM@1 | `configs/sqa3d/benchmark.yaml` | `emet sqa3d run-real-sweep`, `run_sqa3d_sharded_sweep.sh` | `scripts/aggregate_sqa3d_sweep.py` → `aggregate_sqa3d.csv` |
 | **Large paper queue** | All tracks above | per-track | — | `scripts/run_large_paper_eval.sh` | per-track CSV under `~/runs/emet/…` |
@@ -98,7 +99,7 @@ CLI overrides: OVMM `--merge-xy-m` / `--staleness-horizon`; Habitat `emet-habita
 
 | Variable | Default | Used by |
 |----------|---------|---------|
-| `EMET_OVMM_OUTPUT_SIM` | `~/runs/emet/ovmm_find_phase` | `eval_ovmm_find_phases.py` |
+| `EMET_OVMM_OUTPUT_SIM` | `~/runs/emet/ovmm_find_phase` | `emet ovmm find` / `eval_ovmm_find_phases.py` |
 | `EMET_OVMM_OUTPUT_HABITAT` | `~/runs/emet/ovmm_habitat` | `eval_habitat_ovmm_find_phases.py` |
 | `EMET_SQA3D_OUTPUT` | `~/runs/emet/sqa3d` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `~/runs/emet/dynamic_exploration` | `scripts/eval_dynamic_exploration.py` |
@@ -127,13 +128,15 @@ uv run emet sqa3d run-episode --mock-llm --question-id 220602000000
 ## OVMM find-phase (Emet sim)
 
 **Paper:** `sec:ovmm_find_phase`, Table `tab:ovmm_find_backend_tier`.
+**CLI:** `emet ovmm find` (compat: `scripts/eval_ovmm_find_phases.py`).
 
 ```bash
 # Assets + dirs
 uv run python scripts/download_ovmm_benchmark_assets.py
 
 # S0 ladder (all backends)
-uv run python scripts/eval_ovmm_find_phases.py \
+uv run emet ovmm find \
+  --episodes configs/ovmm/find_phase_episodes.yaml \
   --tier S0 \
   --backend dynamem --backend static_graph --backend dynagraph --backend ground_truth \
   --output-dir ~/runs/emet/ovmm_find_phase/backend_matrix
@@ -146,30 +149,44 @@ uv run python scripts/eval_ovmm_find_phases.py \
 
 Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.
 
+### Multi-env sweep (Robocasa + MolmoSpaces)
+
+Paper path for real kitchen / iTHOR rates (no `default_table`). Preset: `configs/ovmm/sweeps/molmo_robocasa.yaml`.
+
+```bash
+uv run emet ovmm sweep --preset molmo-robocasa --backend dynagraph --via-jobs
+uv run emet ovmm rates --out ~/runs/emet/ovmm_molmo_robocasa/<DATE>
+uv run emet ovmm status --out ~/runs/emet/ovmm_molmo_robocasa/<DATE>
+```
+
 ---
 
 ## OVMM full (find + pick + place)
 
 **Paper:** four-phase extension of find-phase (not yet a dedicated results table).
 **Doc:** [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
+**CLI:** `emet ovmm full` (compat: `scripts/eval_ovmm_full.py`).
 
 ```bash
 uv run emet test src/test/memory/test_ovmm_full_metrics.py -q
 
 # Oracle manip smoke (fast)
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id default_table_s0_distinct_recep \
   --backend ground_truth --not-rotate --cpu-only \
   --manip-mode oracle \
   --output-dir ~/runs/emet/ovmm_full/smoke
 
 # Sim E2E (uses ZMQ sim_set_body_pose for pick/place)
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id robocasa_pp_s1 \
   --backend dynagraph --manip-mode sim --cpu-only
 
 # MolmoSpaces + rby1
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id molmo_ithor_rby1_s2_bowl_pp \
   --backend ground_truth --manip-mode sim --not-rotate --cpu-only
 ```

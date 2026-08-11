@@ -69,6 +69,45 @@ def draw_masks(masks, height, width):
     return panoptic_masks
 
 
+_SHARED_YOLOE: dict[tuple[str, str, str, float], "YoloEPerception"] = {}
+_TEXT_PE_CACHE: dict[tuple[str, ...], object] = {}
+
+
+def _text_pe_for_classes(model, class_list: list[str]):
+    """Cache YOLOE text prompt embeddings (ScanNet-200 PE is expensive under GPU contention)."""
+    key = tuple(class_list)
+    cached = _TEXT_PE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    pe = model.get_text_pe(class_list)
+    _TEXT_PE_CACHE[key] = pe
+    return pe
+
+
+def get_shared_yoloe_perception(
+    *,
+    size: str = "l",
+    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    confidence_threshold: float | None = None,
+    class_list: list[str] | tuple[str] | None = None,
+) -> "YoloEPerception":
+    """Process-wide YoloE for the default mapping vocab (load-once across episodes)."""
+    conf = float(confidence_threshold) if confidence_threshold is not None else 0.1
+    vocab_key = "scannet200" if class_list is None else ",".join(class_list)
+    key = (str(size), str(device), vocab_key, conf)
+    existing = _SHARED_YOLOE.get(key)
+    if existing is not None:
+        return existing
+    inst = YoloEPerception(
+        class_list=list(class_list) if class_list is not None else None,
+        size=size,
+        confidence_threshold=conf,
+        device=device,
+    )
+    _SHARED_YOLOE[key] = inst
+    return inst
+
+
 class YoloEPerception(PerceptionModule):
     def __init__(
         self,
@@ -109,7 +148,7 @@ class YoloEPerception(PerceptionModule):
         self.model = YOLOE(checkpoint_file)
         self.model.to(self.device)
 
-        self.model.set_classes(self.class_list, self.model.get_text_pe(self.class_list))
+        self.model.set_classes(self.class_list, _text_pe_for_classes(self.model, self.class_list))
         self._current_vocabulary = {i: self.class_list[i] for i in range(len(self.class_list))}
 
         if self.verbose:
@@ -141,7 +180,7 @@ class YoloEPerception(PerceptionModule):
              image of shape (H, W, 3)
         """
 
-        self.model.set_classes(self.class_list, self.model.get_text_pe(self.class_list))
+        self.model.set_classes(self.class_list, _text_pe_for_classes(self.model, self.class_list))
 
         if isinstance(rgb, np.ndarray):
             # This is expected

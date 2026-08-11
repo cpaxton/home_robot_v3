@@ -1573,6 +1573,7 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 
 @jobs_group.command("register", short_help="Register a job (for scripts)")
 @click.option("--name", required=True, help="Short job name.")
+@click.option("--job-id", default=None, hidden=True)
 @click.option(
     "--description",
     "-d",
@@ -1592,6 +1593,7 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 )
 def jobs_register(
     name: str,
+    job_id: str | None,
     description: str | None,
     cmd: str,
     out_dir: str | None,
@@ -1614,6 +1616,7 @@ def jobs_register(
         pid=pid,
         status=status,  # type: ignore[arg-type]
         description=description,
+        job_id=job_id,
     )
     click.echo(job.id)
 
@@ -1695,7 +1698,7 @@ def jobs_update(
 @jobs_group.command(
     "run",
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    short_help="Register + nohup a command as a managed job",
+    short_help="Start a self-registering detached job supervisor",
 )
 @click.option("--name", required=True, help="Short job name.")
 @click.option(
@@ -1740,7 +1743,7 @@ def jobs_run(
     gpu_exclusive: bool | None,
     foreground: bool,
 ) -> None:
-    """Register + nohup a command as a managed job.
+    """Start a detached supervisor that registers and runs a managed job.
 
     \b
     Example:
@@ -1749,7 +1752,7 @@ def jobs_run(
     """
     import shlex
 
-    from emet.utils.job_registry import active_gpu_job_pids, register_job, update_job
+    from emet.utils.job_registry import active_gpu_job_pids, load_job, new_job_id
 
     cmd_args = list(ctx.args)
     if cmd_args and cmd_args[0] == "--":
@@ -1774,17 +1777,8 @@ def jobs_run(
                 wait_pids.append(extra)
                 click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
 
-    job = register_job(
-        name=name,
-        cmd=cmd_str,
-        out_dir=out,
-        log_path=log_path,
-        repo=str(root),
-        wait_pids=wait_pids,
-        status="queued",
-        description=description,
-    )
-    click.echo(f"registered  {job.id}", err=True)
+    job_id = new_job_id()
+    click.echo(f"prepared    {job_id}", err=True)
     click.echo(f"name        {name}", err=True)
     if description and str(description).strip():
         click.echo(f"why         {str(description).strip()}", err=True)
@@ -1792,6 +1786,29 @@ def jobs_run(
     click.echo(f"log         {log_path}", err=True)
 
     wrapper = out / "job_wrapper.sh"
+    register_args = [
+        "jobs",
+        "register",
+        "--job-id",
+        job_id,
+        "--name",
+        name,
+        "--cmd",
+        cmd_str,
+        "--out-dir",
+        str(out),
+        "--log-path",
+        str(log_path),
+        "--repo",
+        str(root),
+        "--status",
+        "waiting",
+    ]
+    if description and str(description).strip():
+        register_args.extend(["--description", str(description).strip()])
+    for wpid in wait_pids:
+        register_args.extend(["--wait-pid", str(int(wpid))])
+    register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
     wait_lines = ""
     for wpid in wait_pids:
         wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
@@ -1813,11 +1830,11 @@ def jobs_run(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
         f'cd "{root}"\n'
-        f'export EMET_JOB_ID="{job.id}"\n'
-        f'JOB_ID="{job.id}"\n'
+        f'export EMET_JOB_ID="{job_id}"\n'
+        f'JOB_ID="{job_id}"\n'
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
-        f'"$EMET_BIN" jobs update "$JOB_ID" --status waiting --pid $$\n'
+        f"{register_line}"
         f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"
@@ -1837,7 +1854,6 @@ def jobs_run(
     wrapper.chmod(0o755)
 
     if foreground:
-        update_job(job.id, status="running", pid=os.getpid())
         rc = subprocess.call(["bash", str(wrapper)])
         sys.exit(rc)
 
@@ -1850,9 +1866,29 @@ def jobs_run(
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-    update_job(job.id, status="queued", pid=proc.pid)
+    deadline = time.monotonic() + 10.0
+    job = None
+    while time.monotonic() < deadline:
+        job = load_job(job_id)
+        if job is not None:
+            break
+        if proc.poll() is not None:
+            break
+        time.sleep(0.05)
+    if job is None:
+        from emet.utils.process_tree import terminate_process_tree
+
+        terminate_process_tree(proc, grace_s=1.0)
+        raise click.ClickException(
+            f"detached supervisor failed to register job {job_id}; see {log_path}"
+        )
+    if job.pid != proc.pid:
+        raise click.ClickException(
+            f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})"
+        )
+    click.echo(f"registered  {job_id}", err=True)
     click.echo(f"pid         {proc.pid}", err=True)
-    click.echo(job.id)
+    click.echo(job_id)
 
 
 @main.group("status", short_help="Per-checkout STATUS.log helpers (after agent death)")
@@ -2516,7 +2552,7 @@ def _hmeqa_launch(
     "--host",
     default=None,
     help=(
-        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
+        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
         "and EMET_VL_ENDPOINT (unified-7b on :8000) into the jobs-wrapped env. "
         "Parent-shell exports alone are not enough — they are not in the Habitat child env."
     ),
@@ -2525,7 +2561,7 @@ def _hmeqa_launch(
     "--vl-endpoint",
     default=None,
     help=(
-        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://caliban:8000/v1). "
+        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://ORIN_HOST:8000/v1). "
         "Wins over --host's default VL URL. Dual-2b: use :8001 or --host + --vl-port 8001."
     ),
 )
@@ -2647,7 +2683,7 @@ def hmeqa_h2h(
     "--host",
     default=None,
     help=(
-        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
+        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
         "EMET_VL_ENDPOINT into the jobs-wrapped env."
     ),
 )
@@ -3150,7 +3186,11 @@ def connect_cmd() -> None:
 @click.option("--user", "-u", default="root", help="SSH user")
 @click.option("--password", "-p", default=None, help="Password (or set EMET_ROBOT_PASSWORD); omit to use SSH key")
 @click.option("--name", "-n", default=None, help="Profile name (default: host)")
-@click.option("--robot", default=None, help="Emet robot id (e.g. innate_mars) stored in profile")
+@click.option(
+    "--robot",
+    default=None,
+    help="Emet robot id (stretch | innate_mars) — used by emet deploy when --robot is omitted",
+)
 @click.option(
     "--config",
     "profile_config",
@@ -3160,7 +3200,7 @@ def connect_cmd() -> None:
 @click.option(
     "--workspace",
     default=None,
-    help="Remote ROS2 workspace on robot (e.g. ~/innate-os/ros2_ws for innate-os Mars)",
+    help="Remote ROS2 workspace (Stretch: ~/ament_ws; Mars: ~/innate-os/ros2_ws)",
 )
 @click.option("--emet-dir", default=None, help="Remote emet_core install dir (default ~/emet)")
 @click.option("--no-active", is_flag=True, help="Do not set as active connection")
@@ -3242,6 +3282,20 @@ def connect_show() -> None:
         click.echo(f"emet_dir: {conn.get('emet_dir')}")
     if "password" in conn:
         click.echo("password: (set)")
+
+
+@connect_cmd.command("use", short_help="Set active connection by name")
+@click.argument("name")
+def connect_use(name: str) -> None:
+    """Mark a saved profile active so deploy / capture / mars omit --host."""
+    from emet.utils.connection import get_connection, set_active
+
+    if not set_active(name):
+        click.echo(f"Unknown connection {name!r}. Use: emet connect list", err=True)
+        sys.exit(1)
+    conn = get_connection(name) or {}
+    robot = conn.get("robot") or "?"
+    click.echo(f"Active connection: {name} ({conn.get('user')}@{conn.get('host')}, robot={robot})")
 
 
 @main.group("llm", short_help="Remote OpenAI text/VL health + smoke (LAN Jetson / workstation)")
@@ -3468,9 +3522,9 @@ def mars_start_cmd(
     Requires innate-os running on the robot (``innate service start``).
 
     Examples:
-      emet mars start --ip herman --username jetson1
-      emet mars start --ip herman --username jetson1 --deploy --preview
-      emet mars start --connection herman --onboard-da3 --deploy
+      emet mars start --ip MARS_IP --username jetson1
+      emet mars start --ip MARS_IP --username jetson1 --deploy --preview
+      emet mars start --connection mars --onboard-da3 --deploy
     """
     from emet.mars import mars_start
 
@@ -3527,20 +3581,28 @@ def mars_status_cmd(
     """Print bridge process, ZMQ ports, and recent tmux log on the robot."""
     from emet.mars import bridge_status_on_robot, resolve_mars_target
 
-    host, user, password, _, _ = resolve_mars_target(
+    host, user, password, workspace, _ = resolve_mars_target(
         host=host,
         user=user,
         password=password,
         connection_name=connection_name,
     )
-    bridge_status_on_robot(host, user, password, profile=connection_name or host)
+    bridge_status_on_robot(
+        host,
+        user,
+        password,
+        profile=connection_name or host,
+        workspace=workspace,
+    )
 
 
 @main.command("view-bridge", short_help="View images and state from robot bridge")
 @click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (default: active connection)")
 def view_bridge(robot_ip: str) -> None:
     """Connect to the robot's ZMQ bridge and display head/EE camera images and state.
-    Use after starting the bridge on the robot (e.g. ros2 launch innate_mars_bridge server.launch.py).
+    Use after starting the bridge on the robot
+    (``ros2 launch stretch_ros2_bridge server.launch.py`` or
+    ``ros2 launch innate_mars_bridge server.launch.py`` / ``emet mars start``).
     """
     sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
 
@@ -3570,15 +3632,34 @@ def preview_cameras(ctx: click.Context) -> None:
 @main.group(
     "deploy",
     invoke_without_command=True,
-    short_help="Deploy Mars bridge to a robot, or LLM/VLM to a Jetson (Orin ~64 GiB)",
+    short_help="Deploy Stretch/Mars bridge to a robot, or LLM/VLM to a Jetson",
 )
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
-@click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
+@click.option(
+    "--user",
+    "-u",
+    default=None,
+    help="SSH user (default: from connection, else hello-robot / jetson1 by robot)",
+)
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
 @click.option("--connection", "-c", "connection_name", default=None, help="Use saved connection by name")
-@click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
+@click.option(
+    "--robot",
+    default=None,
+    help="Bridge target: stretch | innate_mars (default: connection profile robot, else stretch)",
+)
+@click.option(
+    "--workspace",
+    "-w",
+    default="~/ament_ws",
+    help="Remote ROS2 workspace (Stretch default ~/ament_ws; Mars uses profile or ~/innate-os/ros2_ws)",
+)
 @click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
-@click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+@click.option(
+    "--start-bridge",
+    is_flag=True,
+    help="Start bridge after deploy (Stretch: nohup; Mars: innate-os tmux)",
+)
 @click.pass_context
 def deploy(
     ctx: click.Context,
@@ -3586,22 +3667,28 @@ def deploy(
     user: str | None,
     password: str | None,
     connection_name: str | None,
+    robot: str | None,
     workspace: str,
     emet_dir: str,
     start_bridge: bool,
 ) -> None:
-    """Deploy to a robot (Mars bridge) or a Jetson LAN LLM/VLM host.
+    """Deploy robot bridge code or a Jetson LAN LLM/VLM host.
 
-    Bare ``emet deploy`` (no subcommand) syncs ``emet_core`` + innate_mars_bridge
-    to the robot. Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve
-    (AGX Orin ~60–64 GiB unified memory).
+    Bare ``emet deploy`` syncs ``emet_core`` + the robot bridge package:
+
+    - ``--robot stretch`` → ``stretch_ros2_bridge`` into ``~/ament_ws``
+    - ``--robot innate_mars`` → ``innate_mars_bridge`` into ``~/innate-os/ros2_ws``
+
+    Robot defaults from the active ``emet connect`` profile when ``--robot`` is omitted.
+    Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve (AGX Orin ~60–64 GiB).
 
     Examples:
-      emet connect save 192.168.1.43 --user jetson1
-      emet deploy
-      emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
-      emet deploy llm --host caliban --profile unified-7b
-      emet deploy llm --host caliban --profile dual-2b
+      emet connect save STRETCH_IP --user hello-robot --robot stretch --name stretch
+      emet deploy --robot stretch --start-bridge
+      emet connect save MARS_IP --user jetson1 --robot innate_mars --name mars
+      emet deploy --connection mars
+      emet mars start --connection mars --deploy
+      emet deploy llm --host ORIN_HOST --profile unified-7b
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -3615,6 +3702,7 @@ def deploy(
         workspace=workspace,
         emet_dir=emet_dir,
         start_bridge=start_bridge,
+        robot=robot,
         root=_project_root(),
     )
 
@@ -3635,7 +3723,7 @@ def deploy(
     "--host",
     "-H",
     default=None,
-    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host caliban",
+    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host ORIN_HOST",
 )
 @click.option("--model", default=None, help="Override HF model id for the VL container.")
 @click.option("--port", default=None, type=int, help="Override serve port (unified-7b→8000, dual-2b→8001).")
@@ -3658,10 +3746,10 @@ def deploy_llm_cmd(
     use a JP6/vLLM container; see docs/llm_serve.md § Quantization on Jetson.
 
     Examples:
-      emet deploy llm --host caliban --profile unified-7b
-      emet deploy llm --host caliban --profile dual-2b
-      emet llm health --host caliban
-      emet llm smoke --host caliban --vl-only
+      emet deploy llm --host ORIN_HOST --profile unified-7b
+      emet deploy llm --host ORIN_HOST --profile dual-2b
+      emet llm health --host ORIN_HOST
+      emet llm smoke --host ORIN_HOST --vl-only
     """
     from emet.deploy_llm import deploy_llm
 
@@ -4529,12 +4617,14 @@ from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
 _eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
 main.add_command(_eval_dynagraph_app)
 
+from emet.app.eval_ovmm import ovmm_group as _ovmm_group  # noqa: E402
 from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
 from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
 
 _eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
 main.add_command(_eval_sqa3d_app)
 main.add_command(_sqa3d_group)
+main.add_command(_ovmm_group)
 
 from emet.app.eval_robovista import robovista_group as _robovista_group  # noqa: E402
 

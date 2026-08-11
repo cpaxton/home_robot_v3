@@ -238,11 +238,16 @@ def load_runtime_from_cli(
     port_offset: int = 0,
     zmq_timeout: float = 60.0,
     zmq_discover: bool = True,
+    force_localhost: bool = False,
     extra_mapping: dict[str, Any] | None = None,
 ) -> RuntimeContext:
     """Load config and resolve robot/host/parameters."""
     robot_from_default = robot is None or ctx.get_parameter_source("robot") == ParameterSource.DEFAULT
     host_from_default = ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT
+    if force_localhost:
+        # ``--start-sim`` / local Habitat: do not inherit Herman connection host.
+        host_from_default = False
+        robot_ip = "127.0.0.1"
 
     cfg = load_resolved_config(
         ctx,

@@ -180,7 +180,9 @@ For agentic pick/place on MolmoSpaces benches, prefer **`--robot rby1`** (MolmoS
 | **voxel collision** (optional) | `agent.manip_collision: voxel` or `EMET_MANIP_COLLISION=voxel` | Reject / avoid IK waypoints whose link XY hit the agent **2D obstacle map** (same world model as A* nav — not CuRobo / not Molmo MJCF). |
 | **path planner** | `agent.manip_planner: rrt_connect` (default) or `EMET_MANIP_PLANNER` | After IK, plan `q_start→q_goal` with **RRT-Connect** (reuse of `emet.motion.algo`); `linear` falls back to joint interpolation. |
 
-Stretch visual-servo remains separate when enabled on Stretch.
+Stretch visual-servo remains separate when enabled on Stretch (`--visual-servo` / `-V`). Without `-V`, Stretch MuJoCo also takes **GT teleport** when `sim_set_body_pose` is advertised (same as rby1 teleport).
+
+OVMM full `--manip-mode sim|oracle|attempt` is a **different** flag from chat `agent.manip_mode` — see [ovmm_full_benchmark.md](ovmm_full_benchmark.md#ovmm---manip-mode--chat-agentmanip_mode).
 
 **Arm IK + RRT:** [`emet.motion.mujoco_arm_ik`](../src/emet/motion/mujoco_arm_ik.py), [`emet.motion.arm_rrt`](../src/emet/motion/arm_rrt.py); executor: [`kinematic_pick_place.py`](../src/emet/controller/manipulation/kinematic_pick_place.py). Full motion-planning overview: [motion_planning.md](motion_planning.md). Unit smoke: `uv run emet test src/test/motion/test_rby1_mujoco_arm_ik.py src/test/motion/test_kinematic_tamp_helpers.py src/test/motion/test_arm_rrt.py src/test/motion/test_voxel_obstacle_planning.py`.
 

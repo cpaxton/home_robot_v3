@@ -74,7 +74,7 @@ class Logger:
         return text
 
     def _out(self, text: str, color: str, stream: TextIO) -> None:
-        print(colored(text, color), file=stream)
+        print(colored(text, color), file=stream, flush=True)
 
     def error(self, *args) -> None:
         text = self._flatten(args)

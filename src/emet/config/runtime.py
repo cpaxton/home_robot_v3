@@ -66,17 +66,15 @@ def resolve_robot_id(
 ) -> tuple[str, str]:
     """Return ``(robot_id, source)``.
 
-    Precedence: CLI → config ``robot:`` → ZMQ (localhost sim) → connection profile → ZMQ → ``stretch``.
+    Precedence: CLI → ZMQ on localhost → config ``robot:`` → connection profile → ZMQ → ``stretch``.
 
-    On localhost, the running ZMQ server's ``emet_robot_id`` wins over a saved hardware
-    connection profile (e.g. ``innate_mars`` on Herman) so ``emet run dynagraph`` works
+    On localhost, the running ZMQ server's ``emet_robot_id`` wins over both a saved hardware
+    connection profile and that profile's agent YAML ``robot:`` (e.g. active Herman →
+    ``configs/agent_innate_mars.yaml``) so ``emet run agent --robot-ip 127.0.0.1`` works
     against a local ``emet serve mujoco`` without ``--robot``.
     """
     if cli_robot and not robot_from_default:
         return cli_robot.lower().replace("-", "_"), "cli"
-
-    if config.robot:
-        return config.robot.lower().replace("-", "_"), "config"
 
     host_norm = host.strip().lower()
     is_local = host_norm in _LOCALHOST_HOSTS
@@ -93,11 +91,16 @@ def resolve_robot_id(
         return rid.lower().replace("-", "_") if rid else None
 
     if is_local:
-        # Prefer sim truth; short timeout so a dead port fails fast to stretch.
+        # Prefer sim truth; short timeout so a dead port fails fast to config/stretch.
         discovered = _discover(min(zmq_timeout, 8.0))
         if discovered:
             return discovered, "zmq"
+        if config.robot:
+            return config.robot.lower().replace("-", "_"), "config"
         return "stretch", "default"
+
+    if config.robot:
+        return config.robot.lower().replace("-", "_"), "config"
 
     conn_name = connection_name or config.connection
     conn = get_connection(conn_name) if conn_name else get_connection()

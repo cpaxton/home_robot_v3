@@ -64,7 +64,7 @@ export EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1   # unified-7b
 
 ## 2. Testing LLMs (health, smoke, chat)
 
-Use these from the **workstation** once a serve is up on `ORIN_HOST` (replace with your hostname, e.g. `caliban`).
+Use these from the **workstation** once a serve is up on `ORIN_HOST` (replace with your LAN hostname or IP).
 
 ### Health
 
@@ -199,9 +199,9 @@ uv run emet llm smoke --vl-only --vl http://127.0.0.1:8001/v1
 
 ---
 
-## Lab example: Herman + Jetson host `caliban`
+## End-to-end example (Mars agent + LAN Orin)
 
-This lab’s Orin hostname is **`caliban`** (`192.168.1.55`). Substitute your own host everywhere else.
+Replace `ORIN_HOST` and the Mars connection name with your hosts. Port roles:
 
 | Port | Role | Typical recipe |
 |------|------|----------------|
@@ -209,39 +209,38 @@ This lab’s Orin hostname is **`caliban`** (`192.168.1.55`). Substitute your ow
 | `:8001` | Caption / EQA VLM only (dual-2b) | `emet-jetson-vl` (`Qwen2-VL-2B`); unused in unified-7b |
 
 ```bash
-uv run emet deploy llm --host caliban --profile unified-7b
-uv run emet llm health --host caliban
-uv run emet llm smoke --host caliban
-uv run emet run chat --host caliban --once "Reply with exactly: pong"
-uv run emet run chat --host caliban --vl --once "Describe briefly"
+uv run emet deploy llm --host ORIN_HOST --profile unified-7b
+uv run emet llm health --host ORIN_HOST
+uv run emet llm smoke --host ORIN_HOST
+uv run emet run chat --host ORIN_HOST --once "Reply with exactly: pong"
+uv run emet run chat --host ORIN_HOST --vl --once "Describe briefly"
 # Multi-turn REPL keeps history (conversational prompt, not Stretch pick/place).
 
 export DISCORD_TOKEN=...
-uv run emet run agent --connection herman --host caliban
+uv run emet run agent --connection mars --host ORIN_HOST
 
-# HM-EQA answer VL on Caliban (Habitat still local). Must use --host / --vl-endpoint
+# HM-EQA answer VL on the Orin (Habitat still local). Must use --host / --vl-endpoint
 # on emet hmeqa h2h — shell export EMET_VL_ENDPOINT alone is not in the jobs env.
-uv run emet llm health --host caliban && uv run emet llm smoke --host caliban --vl-only
-uv run emet hmeqa h2h --arms classic --ids 15,56,65,68 --host caliban \
-  --job-name hmeqa-json-caliban --need-mib 12000 \
-  -d "JSON answers; VL on caliban; Habitat local"
+uv run emet llm health --host ORIN_HOST && uv run emet llm smoke --host ORIN_HOST --vl-only
+uv run emet hmeqa h2h --arms classic --ids 15,56,65,68 --host ORIN_HOST \
+  --job-name hmeqa-json-orin --need-mib 12000 \
+  -d "JSON answers; VL on ORIN_HOST; Habitat local"
 ```
 
-### SSH (lab keys)
+### SSH (optional)
 
-Keys live under `~/caliban_ssk_keys/` (symlink `~/caliban_ssh_keys` → same). Example `~/.ssh/config`:
+Use your normal SSH config / keys for the Orin. Example:
 
 ```
-Host caliban
+Host ORIN_HOST
   HostName 192.168.1.55
-  User cpaxton
-  IdentityFile ~/caliban_ssk_keys/id_ed25519
+  User YOUR_USER
+  IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
 ```
 
 ```bash
-ssh-copy-id -i ~/caliban_ssk_keys/id_ed25519.pub cpaxton@caliban
-ssh caliban 'cd ~/src/home_robot_v4 && ./scripts/run_jetson_llm_container.sh --vl --detach --port 8000 --model Qwen/Qwen2-VL-7B-Instruct'
+ssh ORIN_HOST 'cd ~/src/home_robot_v4 && ./scripts/run_jetson_llm_container.sh --vl --detach --port 8000 --model Qwen/Qwen2-VL-7B-Instruct'
 ```
 
 ---

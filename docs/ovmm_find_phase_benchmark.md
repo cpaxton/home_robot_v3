@@ -27,12 +27,15 @@ Override output location: `EMET_OVMM_OUTPUT_SIM=~/runs/emet/ovmm_find_phase` (or
 
 ## Quick start (S0)
 
+Prefer the first-class CLI: **`emet ovmm find`** (scripts remain thin wrappers).
+
 ```bash
 # Unit tests (no sim)
 uv run emet test src/test/memory/test_ovmm_find_phase_metrics.py -q
 
 # S0 default table, all backends (~2–5 min with GPU)
-uv run python scripts/eval_ovmm_find_phases.py \
+uv run emet ovmm find \
+  --episodes configs/ovmm/find_phase_episodes.yaml \
   --tier S0 \
   --backend dynamem --backend static_graph --backend dynagraph \
   --cpu-only \
@@ -48,12 +51,25 @@ RUN_OVMM_FIND_TESTS=1 uv run emet test src/test/memory/test_ovmm_find_phase_inte
 ## Batch runner
 
 ```bash
-uv run python scripts/eval_ovmm_find_phases.py \
+uv run emet ovmm find \
   --episodes configs/ovmm/find_phase_episodes.yaml \
   --backend dynagraph \
   --tier S1 \
   --output-dir runs/ovmm_find_phase/s1_dynagraph
 ```
+
+### Multi-env paper sweep (Robocasa + MolmoSpaces)
+
+No `default_table`. Preset: `configs/ovmm/sweeps/molmo_robocasa.yaml`.
+
+```bash
+uv run emet ovmm sweep --preset molmo-robocasa --backend dynagraph --via-jobs
+# or stepwise: prepare → find → full → rates / status
+uv run emet ovmm prepare --preset molmo-robocasa --out ~/runs/emet/ovmm_molmo_robocasa/DATE
+uv run emet ovmm rates --out ~/runs/emet/ovmm_molmo_robocasa/DATE
+```
+
+See [cli.md](cli.md#emet-ovmm-subcommand) and [paper_benchmarks.md](paper_benchmarks.md).
 
 ### Memory backends
 
@@ -133,6 +149,17 @@ Fair-default GPU replicate (`default_table_s0`, 5 seeds, no VLM, voxel-first que
 Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perception` mapping ≈ **2261 s** (~10× fair default).
 
 Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
+
+**Default find path (dynagraph): same agentic loop as HM-EQA.**  
+Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py) — navigate → close look → VLM verify → retract claim on ABSENT → explore. Verified obs XYZ is scored against GT. One-shot voxel localize (`prefer_voxel` / `oneshot_localize`) is an **ablation**, not the product path. Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`.
+
+**Query / scoring notes (agent language, no GT query leakage):**
+- The agent localizes with **episode task language** (`object` / `goal_recep`), not sim GT fixture paths.
+- `_query_variants` is language-side only (does not inject placement `cat` strings into `localize_text`).
+- `resolve_object_query` keeps usable episode labels (e.g. `jar`); GT `cat` is only a fallback when the label is a stub (`obj`).
+- `object_gt_body` remains for **scoring** FindObj against the intended body.
+- FindRec scores one disambiguated GT body (prefer exact / short labels), not min-distance over every substring match.
+- Phases with no resolvable GT body are **unscored** (`find_*_scored=false`) and do not count as localization misses in partial success.
 
 Fair-default verification (GPU, one job at a time):
 

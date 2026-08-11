@@ -102,6 +102,11 @@ NAV_SAME_OBS_LOOP_LIMIT = 2
 # Distinct planar approach samples around a place card (re-investigate = next bearing).
 PLACE_APPROACH_SAMPLES = 4
 
+# Consecutive planner misses on investigate navigation → treat every remaining
+# candidate as unreachable and stop retrying them (forces candidate switch /
+# answer-from-graph instead of a sample_nav_failed loop).
+NAV_CONSECUTIVE_FAIL_LIMIT = 2
+
 # After this many successful explore_frontier calls in a row, prefer an untried
 # investigate hyp over another frontier (stops leave/ABSENT explore-only loops).
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
@@ -489,6 +494,10 @@ class AgenticEQAExecutor:
         self._hyp_i = 0
         self._n_nav = 0
         self._n_explore = 0
+        # Consecutive investigate nav misses; >= NAV_CONSECUTIVE_FAIL_LIMIT blocks
+        # every remaining candidate (prevents sample_nav_failed loops).
+        self._consecutive_nav_fail = 0
+        self._unreachable_obs_ids: set[int] = set()
         self._tool_log: list[str] = []
         # Compact per-turn outcomes for the router state message (loops / stuck).
         self._recent_actions: list[str] = []
@@ -699,7 +708,23 @@ class AgenticEQAExecutor:
             out = self._tool_finish(str(args.get("summary") or ""))
         else:
             out = {"ok": False, "error": f"unknown tool {name!r}"}
-        self._record_recent_action(name, args, out if isinstance(out, dict) else {})
+        if not isinstance(out, dict):
+            out = {"ok": False, "error": f"non-dict tool result for {name!r}"}
+        self._record_recent_action(name, args, out)
+        # Shared ToolOutcome → attempt ledger (no-op when ledger off / tool not mapped).
+        try:
+            from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
+
+            # navigate/investigate already dual-write via record_nav_attempt; skip
+            # duplicate navigate rows. Still record verify / explore / closer_look.
+            if name not in ("investigate", "navigate_to_obs"):
+                maybe_record_tool_attempt(
+                    self.graph_memory,
+                    ToolOutcome.from_eqa_dict(name, out),
+                    source="eqa",
+                )
+        except Exception:
+            pass
         return out
 
     def _record_recent_action(
@@ -922,15 +947,22 @@ class AgenticEQAExecutor:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
             try:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start, None))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
             except TypeError:
-                ok = bool(agent.navigate_to_target_pose(frontier_xyz, start))
+                nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
+            ok = bool(nav_outcome)
             self._n_explore += 1
             if ok:
+                self._consecutive_nav_fail = 0
                 self._retire_visited_frontier(frontier_xyz=frontier_xyz)
+            elif self._explore_nav_progressed():
+                # Chunked path: robot moved toward the frontier even if not finished.
+                self._consecutive_nav_fail = 0
         elif hasattr(agent, "run_exploration"):
             ok = bool(agent.run_exploration())
             self._n_explore += 1
+            if ok:
+                self._consecutive_nav_fail = 0
             pick_source = "run_exploration_fallback"
             # Recover a goal for viz/trace when the uncovered picker returned None.
             if frontier_xyz is None:
@@ -1520,9 +1552,11 @@ class AgenticEQAExecutor:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
         try:
-            finished = bool(agent.navigate_to_target_pose(target, start, None, target_obs_id=oid))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
         except TypeError:
-            finished = bool(agent.navigate_to_target_pose(target, start, None))
+            nav_outcome = agent.navigate_to_target_pose(target, start, None)
+        finished = bool(nav_outcome.finished)
+        nav_outcome_str = str(nav_outcome)
         self._n_nav += 1
         self._nav_to_obs_counts[oid] = prior_visits + 1
         # Consume this sample even on planner miss so the next call draws a new XY.
@@ -1534,23 +1568,59 @@ class AgenticEQAExecutor:
         nav_res = getattr(agent, "_last_nav_attempt", None)
         dist_m = float(getattr(nav_res, "dist_m", 0.0) or 0.0) if nav_res else 0.0
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
-        if hasattr(gm, "record_nav_attempt"):
-            gm.record_nav_attempt(oid, success=finished, note=note or "agentic", dist_m=dist_m)
-        if not finished:
-            self._tried.setdefault(oid, "nav failed")
+        # ``finished`` is False for chunked (path >8 waypoints) plans even when the
+        # robot made real progress toward the obs — in teleport mode that is the
+        # common case and must not be treated as a failure. Use the NavOutcome
+        # (reached/progress) as the "reached / progressing" signal.
+        nav_progress = bool(nav_outcome.ok)
+        from emet.controller.nav_attempt import nav_status_code
+
+        # Ledger dual-write is owned by DynamemController._log_nav_attempt
+        # (sync_nav_attempt_to_ledger). Fallback only when no result was published.
+        if nav_res is None and hasattr(gm, "record_nav_attempt"):
+            gm.record_nav_attempt(oid, success=nav_progress, note=note or "agentic", dist_m=dist_m)
+            status = "ok" if nav_progress else "failed"
+        else:
+            status = nav_status_code(nav_res) if nav_res is not None else ("ok" if nav_progress else "failed")
+        if not nav_progress:
+            self._consecutive_nav_fail += 1
+            self._tried.setdefault(oid, f"nav failed ({status})")
+            if self._consecutive_nav_fail >= NAV_CONSECUTIVE_FAIL_LIMIT:
+                # Stop retrying unreachable candidates: block every remaining
+                # investigate obs so the router must switch or fall back to the graph.
+                block = sorted({int(h.obs_id) for h in inv if not self._hypothesis_nav_blocked(int(h.obs_id))})
+                self._unreachable_obs_ids.update(block)
+                self._append_trace(
+                    {
+                        "event": "nav_fallback",
+                        "reason": f"{self._consecutive_nav_fail} consecutive nav failures",
+                        "blocked_obs_ids": block,
+                        "obs_id": oid,
+                    }
+                )
+                _logger.info(
+                    "agentic: %d consecutive nav failures — blocking unreachable obs %s",
+                    self._consecutive_nav_fail,
+                    block,
+                )
+        else:
+            self._consecutive_nav_fail = 0
         row = {
             "tool": trace_tool,
             "obs_id": oid,
             "approach_index": int(next_ap),
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
+            "nav_outcome": nav_outcome_str,
             "nav_success": bool(finished),
+            "nav_progress": bool(nav_progress),
             "nav_dist_m": dist_m,
             "nav_note": note,
+            "nav_status_code": status,
             "nav_visit_n": self._nav_to_obs_counts[oid],
         }
         self._attach_gt(row, target)
         self._append_trace(row)
-        if not finished:
+        if not nav_progress:
             return {
                 "ok": False,
                 "target_xyz": row["target_xyz"],
@@ -1969,11 +2039,24 @@ class AgenticEQAExecutor:
         tried = str(self._tried.get(oid) or "")
         if tried.startswith("STALLED_NAV_LOOP"):
             return True
+        # Consecutive planner misses marked this candidate unreachable.
+        if oid in self._unreachable_obs_ids:
+            return True
         # Hard cap so planner thrashing cannot consume the whole nav budget.
         max_attempts = PLACE_APPROACH_SAMPLES + NAV_SAME_OBS_LOOP_LIMIT
         if int(self._nav_to_obs_counts.get(oid, 0)) >= max_attempts:
             return True
         return False
+
+    def _explore_nav_progressed(self) -> bool:
+        """True if the last nav attempt made real progress (chunked path is not a miss)."""
+        agent = self.agent
+        if agent is None:
+            return False
+        nav_res = getattr(agent, "_last_nav_attempt", None)
+        if nav_res is None:
+            return False
+        return bool(getattr(nav_res, "success", False))
 
     def _retire_visited_frontier(
         self,
@@ -2337,6 +2420,14 @@ class AgenticEQAExecutor:
         m = re.search(r"\b([A-E])\b", s)
         return m.group(1) if m else ""
 
+    def _question_is_mcq(self) -> bool:
+        """True for HM-EQA-style A–D questions; False for open find/localize questions."""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        if parse_mcq_choices_from_question(self.question):
+            return True
+        return bool(getattr(self, "_mcq_choices", None))
+
     def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
         """True when target/stem tokens appear in inventory or labels near obs."""
         needle = str(phrase or self._target_phrase or "").strip().lower()
@@ -2388,6 +2479,16 @@ class AgenticEQAExecutor:
         if not self._answerable_confirm:
             # Legacy: raw answerable unlocks (ignore need_more_views for parity).
             return True, "confirm_disabled"
+        if not self._question_is_mcq():
+            # Open-ended find / localize (OVMM "Where is the table?"): no MCQ letter
+            # set exists, so a fresh view that actually shows the target is enough.
+            # The assess prompt is open-aware, so answerable means "visible/localizable".
+            # For location questions the VLM conservatively sets need_more_views=True
+            # even when the target is clearly in view — presence alone confirms here.
+            if bool(present):
+                self._pending_answerable = None
+                return True, "open_view_present"
+            return False, "open_not_present"
         if need_more_views:
             letter = self._mcq_letter_from_suggested(suggested_answer)
             self._pending_answerable = {
@@ -2487,6 +2588,7 @@ class AgenticEQAExecutor:
             rgb=rgb,
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
+            is_mcq=self._question_is_mcq(),
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
@@ -2498,6 +2600,17 @@ class AgenticEQAExecutor:
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
         }
+        _logger.info(
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
+            oid,
+            bool(assessment.present),
+            bool(assessment.answerable),
+            bool(assessment.need_more_views),
+            self._question_is_mcq(),
+            str(phrase or self._target_phrase or "")[:60],
+            str(assessment.suggested_answer or "")[:60],
+            str(assessment.reason or "")[:80],
+        )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
@@ -3841,6 +3954,8 @@ class AgenticEQAExecutor:
         self._recent_actions = []
         self._station_obs_ids = set()
         self._assess_history = {}
+        self._consecutive_nav_fail = 0
+        self._unreachable_obs_ids = set()
         self._prefer_explore = False
         self._prefer_explore_reason = ""
         self._n_consecutive_explore = 0
@@ -4186,6 +4301,84 @@ class AgenticEQAExecutor:
             self._trace_path = default
 
 
+def build_agentic_eqa_executor(
+    agent: Any,
+    question: str | None,
+    *,
+    goal: str = "",
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    verify_min_sim: float | None = None,
+    trace_path: Path | str | None = None,
+    trace_meta: dict[str, Any] | None = None,
+    router: bool | None = None,
+    require_verified: bool | None = None,
+) -> AgenticEQAExecutor:
+    """Construct the shared agentic executor (EQA episode and OVMM find use this)."""
+    from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
+
+    cfg = _eqa_cfg(agent)
+    warm_siglip_confirmed_memory(agent)
+    agent._habitat_blocked_goals = getattr(agent, "_habitat_blocked_goals", set()) or set()
+    agent._habitat_recent_goals = getattr(agent, "_habitat_recent_goals", []) or []
+    return AgenticEQAExecutor(
+        agent,
+        question,
+        goal=goal,
+        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
+        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 8) or 8),
+        verify_min_sim=float(
+            verify_min_sim
+            if verify_min_sim is not None
+            else cfg.get("agentic_verify_min_sim", SIGLIP_IMAGE_PRESENT_THRESHOLD) or SIGLIP_IMAGE_PRESENT_THRESHOLD
+        ),
+        trace_path=trace_path,
+        trace_meta=trace_meta,
+        router=router,
+        require_verified=require_verified,  # None → env/config inside executor
+    )
+
+
+def run_agentic_eqa_result(
+    agent: Any,
+    question: str | None,
+    *,
+    goal: str = "",
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    verify_min_sim: float | None = None,
+    trace_path: Path | str | None = None,
+    trace_meta: dict[str, Any] | None = None,
+    router: bool | None = None,
+    require_verified: bool | None = None,
+) -> AgenticEQAResult:
+    """Run the unified agentic loop; return the full :class:`AgenticEQAResult`.
+
+    OVMM find phrases the episode as a question and reads ``verified_obs_id`` / pose
+    from this result — same executor as HM-EQA, not a parallel find loop.
+    """
+    ex = build_agentic_eqa_executor(
+        agent,
+        question,
+        goal=goal,
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        verify_min_sim=verify_min_sim,
+        trace_path=trace_path,
+        trace_meta=trace_meta,
+        router=router,
+        require_verified=require_verified,
+    )
+    result = ex.run()
+    print(
+        f"\n--- Agentic GraphEQA ({ex.mode}) ---\n{result.discord_text.strip()}\n"
+        f"(rounds={result.n_rounds} nav={result.n_nav} explore={result.n_explore} "
+        f"verified={result.verified} wall_s={result.wall_s:.1f})\n---\n",
+        flush=True,
+    )
+    return result
+
+
 def run_agentic_eqa(
     agent: Any,
     question: str | None,
@@ -4204,33 +4397,15 @@ def run_agentic_eqa(
     ``explore_frontier`` / ``look_around`` until frontiers or the nav budget are
     exhausted, then ``finish`` returns a coverage summary instead of an answer.
     """
-    from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
-
-    cfg = _eqa_cfg(agent)
-    warm_siglip_confirmed_memory(agent)
-    agent._habitat_blocked_goals = getattr(agent, "_habitat_blocked_goals", set()) or set()
-    agent._habitat_recent_goals = getattr(agent, "_habitat_recent_goals", []) or []
-    ex = AgenticEQAExecutor(
+    result = run_agentic_eqa_result(
         agent,
         question,
         goal=goal,
-        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
-        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 8) or 8),
-        verify_min_sim=float(
-            verify_min_sim
-            if verify_min_sim is not None
-            else cfg.get("agentic_verify_min_sim", SIGLIP_IMAGE_PRESENT_THRESHOLD) or SIGLIP_IMAGE_PRESENT_THRESHOLD
-        ),
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        verify_min_sim=verify_min_sim,
         trace_path=trace_path,
         trace_meta=trace_meta,
         router=router,
-        require_verified=None,  # resolved from env/config inside executor
-    )
-    result = ex.run()
-    print(
-        f"\n--- Agentic GraphEQA ({ex.mode}) ---\n{result.discord_text.strip()}\n"
-        f"(rounds={result.n_rounds} nav={result.n_nav} explore={result.n_explore} "
-        f"verified={result.verified} wall_s={result.wall_s:.1f})\n---\n",
-        flush=True,
     )
     return result.discord_text, result.relevant_images
