@@ -50,10 +50,9 @@ message based only on those results (do not invent objects from this prompt).
 
 Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
 go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
-For photos the user should *see*, use send_image or describe_scene (not take_picture /
-take_ee_picture alone — those only capture locally and produce no Discord reply).
-Never use take_ee_picture for "closer look" / "inspect X": aiming the wrist at an object
-needs arm IK / pointing (stub: aim_arm_at — see TODO.md). Prefer moving/reorienting the
+For photos the user should *see*, use send_image or describe_scene (not take_picture alone —
+those only capture locally and produce no Discord reply). Never call take_ee_picture without a
+prior successful aim_arm_at in this session (it will refuse). Prefer moving/reorienting the
 *base* for a new view, then describe_scene (head camera).
 
 Routing hints:
@@ -78,7 +77,10 @@ Routing hints:
        reoriented in place (could not drive closer while tethered). Do NOT default to +45° left
        unless that direction is meaningful.
     4) Optional: send_object_image if the object is already in the scene graph.
-  Do NOT call take_ee_picture / take_picture / aim_arm_at as a substitute for motion.
+    5) Optional wrist path when kinematic aim is available: aim_arm_at(object_label=X) then
+       take_ee_picture once on success — never take_ee_picture alone; if aim fails, fall back
+       to (1)–(3) with the head camera.
+  Do NOT call take_picture alone as a substitute for motion.
 - "turn around" → rotate_base with degrees=180
 - "rotate back" / "turn back" / "undo that turn" → rotate_base with the NEGATIVE of the last
   yaw you commanded (after +45 use -45; after -90 use +90). Do NOT use 180 for "back".

@@ -29,6 +29,11 @@ the image + neutral inventory.
 [`src/emet/agent/skills/`](../src/emet/agent/skills/). Habitat MCQ scoring never routes through
 Discord chat turns; use `run_eqa` / `emet-habitat` / `--eqa-eval`. See [AGENT_RUN.md](AGENT_RUN.md#skill-library-vs-orchestrator-modes).
 
+**Action-outcome ledger (opt-in, default off):** tool and nav outcomes can append
+`AttemptRecord` rows on `GraphEQAMemory` (`EMET_EQA_ATTEMPT_LEDGER=1`) without changing
+pinned paper configs. Place cards / diagnostics surface recent failures when enabled.
+Reference: [attempt_ledger.md](attempt_ledger.md).
+
 Tool picks come from the shared Qwen3-VL via text-only JSON tool-calling turns (same
 `{"tool_calls": ...}` contract as the Discord agent; the fixed system prompt gets prefix
 KV-cache hits). Each round the router sees a small set of **evidence cards** recalled from

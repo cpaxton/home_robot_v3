@@ -2552,7 +2552,7 @@ def _hmeqa_launch(
     "--host",
     default=None,
     help=(
-        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
+        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
         "and EMET_VL_ENDPOINT (unified-7b on :8000) into the jobs-wrapped env. "
         "Parent-shell exports alone are not enough — they are not in the Habitat child env."
     ),
@@ -2561,7 +2561,7 @@ def _hmeqa_launch(
     "--vl-endpoint",
     default=None,
     help=(
-        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://caliban:8000/v1). "
+        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://ORIN_HOST:8000/v1). "
         "Wins over --host's default VL URL. Dual-2b: use :8001 or --host + --vl-port 8001."
     ),
 )
@@ -2683,7 +2683,7 @@ def hmeqa_h2h(
     "--host",
     default=None,
     help=(
-        "LAN LLM host (e.g. caliban). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
+        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
         "EMET_VL_ENDPOINT into the jobs-wrapped env."
     ),
 )
@@ -3186,7 +3186,11 @@ def connect_cmd() -> None:
 @click.option("--user", "-u", default="root", help="SSH user")
 @click.option("--password", "-p", default=None, help="Password (or set EMET_ROBOT_PASSWORD); omit to use SSH key")
 @click.option("--name", "-n", default=None, help="Profile name (default: host)")
-@click.option("--robot", default=None, help="Emet robot id (e.g. innate_mars) stored in profile")
+@click.option(
+    "--robot",
+    default=None,
+    help="Emet robot id (stretch | innate_mars) — used by emet deploy when --robot is omitted",
+)
 @click.option(
     "--config",
     "profile_config",
@@ -3196,7 +3200,7 @@ def connect_cmd() -> None:
 @click.option(
     "--workspace",
     default=None,
-    help="Remote ROS2 workspace on robot (e.g. ~/innate-os/ros2_ws for innate-os Mars)",
+    help="Remote ROS2 workspace (Stretch: ~/ament_ws; Mars: ~/innate-os/ros2_ws)",
 )
 @click.option("--emet-dir", default=None, help="Remote emet_core install dir (default ~/emet)")
 @click.option("--no-active", is_flag=True, help="Do not set as active connection")
@@ -3278,6 +3282,20 @@ def connect_show() -> None:
         click.echo(f"emet_dir: {conn.get('emet_dir')}")
     if "password" in conn:
         click.echo("password: (set)")
+
+
+@connect_cmd.command("use", short_help="Set active connection by name")
+@click.argument("name")
+def connect_use(name: str) -> None:
+    """Mark a saved profile active so deploy / capture / mars omit --host."""
+    from emet.utils.connection import get_connection, set_active
+
+    if not set_active(name):
+        click.echo(f"Unknown connection {name!r}. Use: emet connect list", err=True)
+        sys.exit(1)
+    conn = get_connection(name) or {}
+    robot = conn.get("robot") or "?"
+    click.echo(f"Active connection: {name} ({conn.get('user')}@{conn.get('host')}, robot={robot})")
 
 
 @main.group("llm", short_help="Remote OpenAI text/VL health + smoke (LAN Jetson / workstation)")
@@ -3504,9 +3522,9 @@ def mars_start_cmd(
     Requires innate-os running on the robot (``innate service start``).
 
     Examples:
-      emet mars start --ip herman --username jetson1
-      emet mars start --ip herman --username jetson1 --deploy --preview
-      emet mars start --connection herman --onboard-da3 --deploy
+      emet mars start --ip MARS_IP --username jetson1
+      emet mars start --ip MARS_IP --username jetson1 --deploy --preview
+      emet mars start --connection mars --onboard-da3 --deploy
     """
     from emet.mars import mars_start
 
@@ -3563,20 +3581,28 @@ def mars_status_cmd(
     """Print bridge process, ZMQ ports, and recent tmux log on the robot."""
     from emet.mars import bridge_status_on_robot, resolve_mars_target
 
-    host, user, password, _, _ = resolve_mars_target(
+    host, user, password, workspace, _ = resolve_mars_target(
         host=host,
         user=user,
         password=password,
         connection_name=connection_name,
     )
-    bridge_status_on_robot(host, user, password, profile=connection_name or host)
+    bridge_status_on_robot(
+        host,
+        user,
+        password,
+        profile=connection_name or host,
+        workspace=workspace,
+    )
 
 
 @main.command("view-bridge", short_help="View images and state from robot bridge")
 @click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (default: active connection)")
 def view_bridge(robot_ip: str) -> None:
     """Connect to the robot's ZMQ bridge and display head/EE camera images and state.
-    Use after starting the bridge on the robot (e.g. ros2 launch innate_mars_bridge server.launch.py).
+    Use after starting the bridge on the robot
+    (``ros2 launch stretch_ros2_bridge server.launch.py`` or
+    ``ros2 launch innate_mars_bridge server.launch.py`` / ``emet mars start``).
     """
     sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
 
@@ -3606,15 +3632,34 @@ def preview_cameras(ctx: click.Context) -> None:
 @main.group(
     "deploy",
     invoke_without_command=True,
-    short_help="Deploy Mars bridge to a robot, or LLM/VLM to a Jetson (Orin ~64 GiB)",
+    short_help="Deploy Stretch/Mars bridge to a robot, or LLM/VLM to a Jetson",
 )
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
-@click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
+@click.option(
+    "--user",
+    "-u",
+    default=None,
+    help="SSH user (default: from connection, else hello-robot / jetson1 by robot)",
+)
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
 @click.option("--connection", "-c", "connection_name", default=None, help="Use saved connection by name")
-@click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
+@click.option(
+    "--robot",
+    default=None,
+    help="Bridge target: stretch | innate_mars (default: connection profile robot, else stretch)",
+)
+@click.option(
+    "--workspace",
+    "-w",
+    default="~/ament_ws",
+    help="Remote ROS2 workspace (Stretch default ~/ament_ws; Mars uses profile or ~/innate-os/ros2_ws)",
+)
 @click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
-@click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+@click.option(
+    "--start-bridge",
+    is_flag=True,
+    help="Start bridge after deploy (Stretch: nohup; Mars: innate-os tmux)",
+)
 @click.pass_context
 def deploy(
     ctx: click.Context,
@@ -3622,22 +3667,28 @@ def deploy(
     user: str | None,
     password: str | None,
     connection_name: str | None,
+    robot: str | None,
     workspace: str,
     emet_dir: str,
     start_bridge: bool,
 ) -> None:
-    """Deploy to a robot (Mars bridge) or a Jetson LAN LLM/VLM host.
+    """Deploy robot bridge code or a Jetson LAN LLM/VLM host.
 
-    Bare ``emet deploy`` (no subcommand) syncs ``emet_core`` + innate_mars_bridge
-    to the robot. Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve
-    (AGX Orin ~60–64 GiB unified memory).
+    Bare ``emet deploy`` syncs ``emet_core`` + the robot bridge package:
+
+    - ``--robot stretch`` → ``stretch_ros2_bridge`` into ``~/ament_ws``
+    - ``--robot innate_mars`` → ``innate_mars_bridge`` into ``~/innate-os/ros2_ws``
+
+    Robot defaults from the active ``emet connect`` profile when ``--robot`` is omitted.
+    Use ``emet deploy llm --host HOST`` for OpenAI Jetson serve (AGX Orin ~60–64 GiB).
 
     Examples:
-      emet connect save 192.168.1.43 --user jetson1
-      emet deploy
-      emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
-      emet deploy llm --host caliban --profile unified-7b
-      emet deploy llm --host caliban --profile dual-2b
+      emet connect save STRETCH_IP --user hello-robot --robot stretch --name stretch
+      emet deploy --robot stretch --start-bridge
+      emet connect save MARS_IP --user jetson1 --robot innate_mars --name mars
+      emet deploy --connection mars
+      emet mars start --connection mars --deploy
+      emet deploy llm --host ORIN_HOST --profile unified-7b
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -3651,6 +3702,7 @@ def deploy(
         workspace=workspace,
         emet_dir=emet_dir,
         start_bridge=start_bridge,
+        robot=robot,
         root=_project_root(),
     )
 
@@ -3671,7 +3723,7 @@ def deploy(
     "--host",
     "-H",
     default=None,
-    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host caliban",
+    help="LLM host (required unless EMET_LLM_HOST / EMET_CALIBAN_HOST). Example: --host ORIN_HOST",
 )
 @click.option("--model", default=None, help="Override HF model id for the VL container.")
 @click.option("--port", default=None, type=int, help="Override serve port (unified-7b→8000, dual-2b→8001).")
@@ -3694,10 +3746,10 @@ def deploy_llm_cmd(
     use a JP6/vLLM container; see docs/llm_serve.md § Quantization on Jetson.
 
     Examples:
-      emet deploy llm --host caliban --profile unified-7b
-      emet deploy llm --host caliban --profile dual-2b
-      emet llm health --host caliban
-      emet llm smoke --host caliban --vl-only
+      emet deploy llm --host ORIN_HOST --profile unified-7b
+      emet deploy llm --host ORIN_HOST --profile dual-2b
+      emet llm health --host ORIN_HOST
+      emet llm smoke --host ORIN_HOST --vl-only
     """
     from emet.deploy_llm import deploy_llm
 

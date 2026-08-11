@@ -762,12 +762,16 @@ class GraphEQAController(DynamemController):
                 )
                 nav_res = getattr(self, "_last_nav_attempt", None)
                 if self.graph_memory is not None:
-                    self.graph_memory.record_nav_attempt(
-                        action_obs_id,
-                        success=bool(getattr(nav_res, "success", False) if nav_res else False),
-                        note=(nav_res.note if nav_res else "no_nav"),
-                        dist_m=float(nav_res.dist_m) if nav_res else 0.0,
-                    )
+                    # Nav counters / ledger dual-write are owned by
+                    # DynamemController._log_nav_attempt → sync_nav_attempt_to_ledger.
+                    # Fallback only when navigate_to_target_pose published no result.
+                    if nav_res is None:
+                        self.graph_memory.record_nav_attempt(
+                            action_obs_id,
+                            success=False,
+                            note="no_nav",
+                            dist_m=0.0,
+                        )
                     self.graph_memory.append_nav_outcome_to_last_history(
                         dist_m=float(nav_res.dist_m) if nav_res else 0.0,
                         success=bool(getattr(nav_res, "success", False) if nav_res else False),

@@ -10,6 +10,8 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 
 **Interactive agent:** `emet run agent` defaults to **`--memory-backend dynagraph`** (same controller stack + interactive merge/staleness). See [AGENT_RUN.md](AGENT_RUN.md).
 
+**Action-outcome ledger (opt-in):** same `GraphEQAMemory` store as GraphEQA — enable with `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` (default **off**). See [attempt_ledger.md](attempt_ledger.md).
+
 **Rerun (live Dynagraph):** Enabled **by default** (unlike `emet run agent`, which needs **`--rerun`**). Use **`--no-rerun`** to disable. Optional: **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**, **`--rerun-show-panels`**. Verify flags: `uv run python -m emet.app.run_dynagraph --help`.
 
 The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.md](rerun.md)) so the voxel map (`world/point_cloud`, `world/obstacles`, `world/explored`), boxes, and dynagraph nodes do not spin when the robot turns. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
@@ -60,7 +62,7 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
    ```bash
    uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --perfect-depth
    # Real robot (same default config; connection profile or --robot innate_mars)
-   uv run emet run dynagraph --connection herman
+   uv run emet run dynagraph --connection mars
    ```
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.

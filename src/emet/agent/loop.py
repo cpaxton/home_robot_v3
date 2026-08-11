@@ -40,6 +40,7 @@ from emet.agent.thinking_status import (
     format_tool_running_status,
     short_llm_label,
 )
+from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
 from emet.agent.tools import Tool, get_tools
 from emet.config.embodied_agent_config import (
     EmbodiedAgentConfig,
@@ -311,12 +312,32 @@ def _dispatch_tool_calls(
             results.append(summary)
             if verbose_tools:
                 print(colored("[executor summary]", "magenta"), summary, flush=True)
+            # Record pick/place outcomes into the attempt ledger when available.
+            gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
+            for cmd_name in cmd_names:
+                if cmd_name not in ("pickup", "place"):
+                    continue
+                maybe_record_tool_attempt(
+                    gm,
+                    ToolOutcome(
+                        ok=task_ok,
+                        status="ok" if task_ok else "failed",
+                        note=summary,
+                        tool=cmd_name,
+                        payload={"action_kind": "pick" if cmd_name == "pickup" else "place"},
+                    ),
+                    source="chat",
+                )
             continue
 
         try:
             result = tool.func(**args) if args else tool.func()
-            result_str = str(result) if result is not None else "ok"
-            results.append(f"[{name}] {result_str}")
+            outcome = ToolOutcome.coerce(name, result)
+            if isinstance(result, ToolOutcome) or (isinstance(result, dict) and "ok" in result):
+                result_str = outcome.render()
+            else:
+                result_str = f"[{name}] {result}" if result is not None else f"[{name}] ok"
+            results.append(result_str)
             if tool.returns_info and result is not None and result != "":
                 has_info = True
             if result is not None and result != "":
@@ -324,8 +345,11 @@ def _dispatch_tool_calls(
                     print(colored(f"[{name}]", "magenta"), result_str, flush=True)
                 else:
                     print(colored(f"[{name}]", "cyan"), result_str)
+            gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
+            maybe_record_tool_attempt(gm, outcome, source="chat")
         except Exception as e:
-            err = f"Tool {name} failed: {e}"
+            outcome = ToolOutcome.from_exception(name, e)
+            err = outcome.render()
             logger.warning(err)
             print(colored(err, "red"))
             if verbose_tools:
@@ -335,6 +359,8 @@ def _dispatch_tool_calls(
             results.append(err)
             if tool.returns_info:
                 has_info = True
+            gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
+            maybe_record_tool_attempt(gm, outcome, source="chat")
 
     if chat_log:
         for r in results:
@@ -1346,9 +1372,8 @@ def run_agent_with_robot(
                         names = [str(n) for n in tool_names if n]
                         if names == ["take_ee_picture"] or set(names) == {"take_ee_picture"}:
                             fallback = (
-                                "Wrist camera alone isn't a closer look (I'd need to aim the arm "
-                                "with IK, which I can't do here). Want me to describe_scene with "
-                                "the head camera instead?"
+                                "Wrist capture needs a successful aim_arm_at first (or use "
+                                "face_toward + describe_scene with the head camera)."
                             )
                         elif names == ["take_picture"] or set(names) == {"take_picture"}:
                             fallback = (

@@ -250,9 +250,9 @@ class DynamemTaskExecutor:
     ) -> bool:
         """Pick up an object. Returns True on success.
 
-        Stretch visual-servo / AnyGrasp success is propagated from
-        ``GraspObjectOperation.was_successful()`` or ``agent.manipulate`` (False when
-        grasp detection fails or the operator declines confirmation).
+        Stretch visual-servo uses ``GraspObjectOperation.was_successful``; AnyGrasp /
+        OK-Robot path propagates ``agent.manipulate`` (False when grasp detection fails
+        or the operator declines confirmation).
         """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
@@ -307,6 +307,7 @@ class DynamemTaskExecutor:
             theta = -0.6
 
         # Grasp the object using operation if it's available
+        ok = False
         if self.grasp_object is not None:
             self.robot.say("Grasping the " + str(target_object) + ".")
             print("Using operation to grasp object:", target_object)
@@ -325,30 +326,32 @@ class DynamemTaskExecutor:
             )
             # This retracts the arm
             self.robot.move_to_nav_posture()
-            ok = bool(self.grasp_object.was_successful())
+            was_ok = getattr(self.grasp_object, "was_successful", None)
+            ok = bool(was_ok()) if callable(was_ok) else bool(getattr(self.grasp_object, "_success", False))
             if not ok:
                 logger.error(f"Visual-servo grasp failed for {target_object!r}")
-                self.robot.say("I could not pick up the " + str(target_object) + ".")
-            return ok
-
-        # Otherwise, use the self.agent's manipulation method (OK-Robot / AnyGrasp).
-        print("Using self.agent to grasp object:", target_object)
-        try:
-            ok = bool(self.agent.manipulate(target_object, theta, skip_confirmation=skip_confirmations))
-        except Exception as e:
-            logger.error(f"agent.manipulate raised for {target_object!r}: {e}")
-            ok = False
+        else:
+            # Otherwise, use the self.agent's manipulation method
+            # This is from OK Robot
+            print("Using self.agent to grasp object:", target_object)
+            manip = getattr(self.agent, "manipulate", None)
+            if callable(manip):
+                try:
+                    ok = bool(manip(target_object, theta, skip_confirmation=skip_confirmations))
+                except Exception as e:
+                    logger.error(f"agent.manipulate raised for {target_object!r}: {e}")
+                    ok = False
+            else:
+                ok = False
         self.robot.look_front()
         if not ok:
-            logger.error(f"AnyGrasp / agent.manipulate failed for {target_object!r}")
             self.robot.say("I could not pick up the " + str(target_object) + ".")
         return ok
 
     def _place(self, target_receptacle: str, point: np.ndarray | None) -> bool:
         """Place an object. Returns True on success.
 
-        Stretch visual-servo / ``agent.place`` success is propagated from the place
-        API (False when detection fails); sim teleport/kinematic already return bool.
+        Stretch path propagates ``agent.place`` (False when receptacle detection fails).
         """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
@@ -408,14 +411,18 @@ class DynamemTaskExecutor:
             theta = -0.6
 
         self.robot.say("Placing object on the " + str(target_receptacle) + ".")
-        try:
-            ok = bool(self.agent.place(target_receptacle, init_tilt=theta, local=self.visual_servo))
-        except Exception as e:
-            logger.error(f"agent.place raised for {target_receptacle!r}: {e}")
+        # If you run this stack with visual servo, run it locally
+        place_fn = getattr(self.agent, "place", None)
+        if callable(place_fn):
+            try:
+                ok = bool(place_fn(target_receptacle, init_tilt=theta, local=self.visual_servo))
+            except Exception as e:
+                logger.error(f"agent.place raised for {target_receptacle!r}: {e}")
+                ok = False
+        else:
             ok = False
         self.robot.move_to_nav_posture()
         if not ok:
-            logger.error(f"Visual-servo / agent.place failed for {target_receptacle!r}")
             self.robot.say("I could not place the object on the " + str(target_receptacle) + ".")
         return ok
 

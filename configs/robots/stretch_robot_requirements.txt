@@ -1,0 +1,18 @@
+# Minimal Python deps for stretch_ros2_bridge on the robot (native ament_ws path).
+# emet_core is synced to ~/emet/emet_core and used via PYTHONPATH (see emet deploy).
+# Docker path (scripts/run_stretch_ai_ros2_bridge_server.sh) bundles its own image deps.
+pyzmq
+yacs
+pyyaml
+termcolor
+overrides
+schema
+Pillow
+trimesh
+numba
+omegaconf
+hydra-core
+sophuspy
+pyliblzfse
+pin
+scipy>=1.11

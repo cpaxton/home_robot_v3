@@ -113,16 +113,24 @@ python -m pip install empy catkin_pkg
 
 #### Set Up Ament Workspace on the Robot
 
-On your Stretch, symlink the `stretch_ros2_bridge` directory to your ament workspace and build:
+**Preferred (from the workstation):** use `emet deploy` to rsync `emet_core` + `stretch_ros2_bridge` and run `colcon build` on the robot — see [deploy.md](deploy.md).
 
 ```bash
-cd stretch_ai
+uv run emet connect save STRETCH_IP --user hello-robot --name stretch \
+  --robot stretch --workspace ~/ament_ws
+uv run emet deploy --robot stretch --start-bridge
+```
+
+**Manual (on the robot):** symlink the bridge into your ament workspace and build:
+
+```bash
+cd stretch_ai   # or this repo checkout on the robot
 ln -s `pwd`/src/stretch_ros2_bridge $HOME/ament_ws/src/stretch_ros2_bridge
 cd ~/ament_ws
 colcon build --packages-select stretch_ros2_bridge
 ```
 
-You need to rebuild the ROS2 bridge every time you update the codebase. You can do this with:
+Rebuild after codebase updates (`emet deploy` does this remotely, or on-robot):
 
 ```bash
 cd ~/ament_ws

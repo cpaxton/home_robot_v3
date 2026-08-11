@@ -708,7 +708,23 @@ class AgenticEQAExecutor:
             out = self._tool_finish(str(args.get("summary") or ""))
         else:
             out = {"ok": False, "error": f"unknown tool {name!r}"}
-        self._record_recent_action(name, args, out if isinstance(out, dict) else {})
+        if not isinstance(out, dict):
+            out = {"ok": False, "error": f"non-dict tool result for {name!r}"}
+        self._record_recent_action(name, args, out)
+        # Shared ToolOutcome → attempt ledger (no-op when ledger off / tool not mapped).
+        try:
+            from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
+
+            # navigate/investigate already dual-write via record_nav_attempt; skip
+            # duplicate navigate rows. Still record verify / explore / closer_look.
+            if name not in ("investigate", "navigate_to_obs"):
+                maybe_record_tool_attempt(
+                    self.graph_memory,
+                    ToolOutcome.from_eqa_dict(name, out),
+                    source="eqa",
+                )
+        except Exception:
+            pass
         return out
 
     def _record_recent_action(
@@ -1550,11 +1566,18 @@ class AgenticEQAExecutor:
         # common case and must not be treated as a failure. Use the NavOutcome
         # (reached/progress) as the "reached / progressing" signal.
         nav_progress = bool(nav_outcome.ok)
-        if hasattr(gm, "record_nav_attempt"):
+        from emet.controller.nav_attempt import nav_status_code
+
+        # Ledger dual-write is owned by DynamemController._log_nav_attempt
+        # (sync_nav_attempt_to_ledger). Fallback only when no result was published.
+        if nav_res is None and hasattr(gm, "record_nav_attempt"):
             gm.record_nav_attempt(oid, success=nav_progress, note=note or "agentic", dist_m=dist_m)
+            status = "ok" if nav_progress else "failed"
+        else:
+            status = nav_status_code(nav_res) if nav_res is not None else ("ok" if nav_progress else "failed")
         if not nav_progress:
             self._consecutive_nav_fail += 1
-            self._tried.setdefault(oid, "nav failed")
+            self._tried.setdefault(oid, f"nav failed ({status})")
             if self._consecutive_nav_fail >= NAV_CONSECUTIVE_FAIL_LIMIT:
                 # Stop retrying unreachable candidates: block every remaining
                 # investigate obs so the router must switch or fall back to the graph.
@@ -1585,6 +1608,7 @@ class AgenticEQAExecutor:
             "nav_progress": bool(nav_progress),
             "nav_dist_m": dist_m,
             "nav_note": note,
+            "nav_status_code": status,
             "nav_visit_n": self._nav_to_obs_counts[oid],
         }
         self._attach_gt(row, target)

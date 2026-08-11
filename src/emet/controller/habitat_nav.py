@@ -50,7 +50,12 @@ class NavOutcome(str, Enum):
 
 @dataclass
 class NavAttemptResult:
-    """Outcome of one navigate_to_target_pose call."""
+    """Outcome of one navigate_to_target_pose call.
+
+    ``status_code`` is a stable ledger/plan token (e.g. ``navmesh_no_path``,
+    ``rejected_low_clearance``, ``aborted_waypoint_timeout``). When unset, callers
+    should derive it via ``emet.controller.nav_attempt.nav_status_code``.
+    """
 
     success: bool
     finished: bool
@@ -61,6 +66,7 @@ class NavAttemptResult:
     goal_xy: tuple[float, float] | None = None
     effective_goal_xy: tuple[float, float] | None = None
     path_xy: list[list[float]] | None = None
+    status_code: str | None = None
 
 
 @dataclass(frozen=True)

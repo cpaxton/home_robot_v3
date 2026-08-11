@@ -139,3 +139,72 @@ def test_visual_servo_place_propagates_agent_place_failure():
     keep = exe([("place", "table")])
     assert keep is True
     assert exe._last_exec_ok is False
+
+
+def test_stretch_pickup_propagates_manipulate_false(monkeypatch):
+    """Real-robot / AnyGrasp path must not report success when manipulate fails."""
+    exe = _make_executor(session_caps={})  # no sim_set_body_pose → Stretch path
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.robot.look_front = MagicMock()
+    exe.agent.manipulate = MagicMock(return_value=False)
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._pickup("mug", point=None, skip_confirmations=True) is False
+    exe.agent.manipulate.assert_called_once()
+
+
+def test_stretch_place_propagates_place_false(monkeypatch):
+    exe = _make_executor(session_caps={})
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.agent.place = MagicMock(return_value=False)
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._place("table", point=None) is False
+    exe.agent.place.assert_called_once()
+
+
+def test_visual_servo_pickup_uses_was_successful(monkeypatch):
+    exe = _make_executor(session_caps={})
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.robot.get_six_joints = MagicMock(return_value=[0.0, 0.5, 0.0, 0.0, 0.0, 0.0])
+    exe.robot.arm_to = MagicMock()
+    exe.robot.look_front = MagicMock()
+    exe.visual_servo = True
+    grasp = MagicMock()
+    grasp.was_successful = MagicMock(return_value=False)
+    exe.grasp_object = grasp
+    exe.match_method = "class"
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._pickup("mug") is False
+    grasp.was_successful.assert_called_once()
