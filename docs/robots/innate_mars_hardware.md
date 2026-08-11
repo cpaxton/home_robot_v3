@@ -22,9 +22,9 @@ Use when physical Mars is on the network. Requires [innate-os](https://github.co
 | 8. Short map | `uv run emet run dynamem --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml -S` | `world/semantic_memory/pointcloud` grows |
 | 9. Nav probe | Send small `xyt` via dynagraph explore or client; watch base move | `at_goal` true after goal |
 | 10. Dynagraph export | `uv run emet run dynagraph --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml --export runs/mars_hw_001` | `floor_metrics.json` + graph export |
-| 11. Discord chat + explore | See [Discord chat + explore](#discord-chat--explore-herman) below | Bot replies; base moves on “explore …” |
+| 11. Discord chat + explore | See [Discord chat + explore](#discord-chat--explore) below | Bot replies; base moves on “explore …” |
 
-## Discord chat + explore (Herman)
+## Discord chat + explore
 
 Chat with the robot over **Discord** (text + photos/maps) while it explores. Voice / robot TTS are not required.
 
@@ -35,23 +35,23 @@ Chat with the robot over **Discord** (text + photos/maps) while it explores. Voi
 export DISCORD_TOKEN=...
 
 # One-time: pin agent YAML on the profile (persona name lives in the YAML)
-emet connect save 192.168.1.43 --user jetson1 --name herman \
+emet connect save MARS_IP --user jetson1 --name mars \
   --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
   --config configs/agent_innate_mars.yaml
 
-# Unified Qwen2-VL-7B on Jetson :8000 for text + captions (see docs/llm_serve.md).
-# Smoke: uv run emet llm health --host caliban && uv run emet llm smoke --host caliban
-# Chat:  uv run emet run chat --host caliban --once "Reply with exactly: pong"
-uv run emet run agent --connection herman --host caliban
+# Unified Qwen2-VL-7B on LAN Orin :8000 for text + captions (see docs/llm_serve.md).
+# Smoke: uv run emet llm health --host ORIN_HOST && uv run emet llm smoke --host ORIN_HOST
+# Chat:  uv run emet run chat --host ORIN_HOST --once "Reply with exactly: pong"
+uv run emet run agent --connection mars --host ORIN_HOST
 # Optional ``--rerun`` for live 3D; Discord alone is enough for chat + maps.
-# ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies host + config.
-# Prefer ``--onboard-da3`` on the bridge so olympia VRAM stays for voxels (caption VLM is remote).
+# ``emet run`` does not inject a default ``--robot-ip``; ``--connection mars`` supplies host + config.
+# Prefer ``--onboard-da3`` on the bridge so workstation VRAM stays for voxels (caption VLM is remote).
 # Memory: ``agent.memory_backend: dynagraph`` (single Dynagraph plug-in; not open_vocab + GraphEQA).
 ```
 
-Profile ``config`` is shared: with herman **active**, bare ``emet run dynamem`` / ``emet stream`` (no ``--config``) also load ``agent_innate_mars.yaml``. Pass an explicit ``--config`` or use a profile without ``config`` when switching to Stretch/sim on the same machine — see [cli.md](../cli.md) (`emet connect`).
+Profile ``config`` is shared: with the Mars profile **active**, bare ``emet run dynamem`` / ``emet stream`` (no ``--config``) also load ``agent_innate_mars.yaml``. Pass an explicit ``--config`` or use a profile without ``config`` when switching to Stretch/sim on the same machine — see [cli.md](../cli.md) (`emet connect`).
 
-Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name: Herman``, and ``agent.llm: openai``. Point at the Orin with ``--host caliban`` (or ``EMET_LLM_HOST``) so text + VL use unified-7b on ``:8000``. Voxels stay local. Optional: `--rerun` for Rerun; `--llm qwen35-4B` to force a local text router.
+Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name`` (e.g. Herman in the stock YAML), and ``agent.llm: openai``. Point at the Orin with ``--host ORIN_HOST`` (or ``EMET_LLM_HOST``) so text + VL use unified-7b on ``:8000``. Voxels stay local. Optional: `--rerun` for Rerun; `--llm qwen35-4B` to force a local text router.
 
 | Prompt (in Discord) | Expected |
 |---------------------|----------|
@@ -69,7 +69,7 @@ Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name:
 # Tethered Discord house chat on the workstation (yaw-only + SDPA escape hatch):
 export EMET_BASE_ROTATE_ONLY=1
 export EMET_ALLOW_SDPA_ATTN=1   # only when flash-attn is unavailable
-emet run agent --connection herman --host caliban
+emet run agent --connection mars --host ORIN_HOST
 ```
 
 **ZMQ nav wait:** `GenericZmqClient.move_base_to` always sends `nav_blocking=false` so the robot recv thread is not stuck in Nav2/Spin (that made Discord look hung). When the agent requests `blocking=True`, the **client** waits on `at_goal` / `nav_timeout_s` instead.
@@ -80,23 +80,23 @@ emet run agent --connection herman --host caliban
 
 From the dev machine (after `uv sync`):
 
-**`--deploy` / `emet deploy`** rsyncs `src/emet_core` → `~/emet/emet_core` (with `--delete`), syncs `src/innate_mars_bridge` into the ROS workspace, writes `~/emet/bridge_env.sh` (`PYTHONPATH=~/emet/emet_core:~/emet/src`), runs `colcon build`, then smoke-tests imports on the robot. Run this after any bridge or `emet_core` change; routine restarts can omit it.
+**`--deploy` / `emet deploy --robot innate_mars`** rsyncs `src/emet_core` → `~/emet/emet_core` (with `--delete`), syncs `src/innate_mars_bridge` into the ROS workspace, writes `~/emet/bridge_env.sh` (`PYTHONPATH=~/emet/emet_core:~/emet/src`), runs `colcon build`, then smoke-tests imports on the robot. (Stretch uses the same command with `--robot stretch` → `stretch_ros2_bridge` / `~/ament_ws`.) Run this after any bridge or `emet_core` change; routine restarts can omit it. Operator guide: [deploy.md](../deploy.md).
 
 ```bash
 # First time or after bridge / emet_core changes:
-emet mars start --ip herman --username jetson1 --deploy
+emet mars start --ip MARS_IP --username jetson1 --deploy
 
 # Sync only (no bridge restart):
-emet deploy --connection herman
+emet deploy --connection mars
 
 # Routine restart (innate-os already running on robot):
-emet mars start --ip herman --username jetson1
+emet mars start --ip MARS_IP --username jetson1
 
 # Optional camera smoke:
-emet mars start --ip herman --username jetson1 --preview
+emet mars start --ip MARS_IP --username jetson1 --preview
 
-emet mars status --ip herman --username jetson1
-emet mars stop --ip herman --username jetson1
+emet mars status --ip MARS_IP --username jetson1
+emet mars stop --ip MARS_IP --username jetson1
 ```
 
 Requires innate-os on the robot: `cd ~/innate-os && innate service start` (interactive sudo on first boot).
@@ -108,10 +108,10 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 
   ```bash
   # One-time: sync perception code + install depth-anything-3 on Jetson
-  emet mars start --connection herman --deploy --onboard-da3
+  emet mars start --connection mars --deploy --onboard-da3
 
   # Workstation mapping (uses ZMQ depth; no local DA3 load):
-  uv run emet stream --backend voxel_only --connection herman
+  uv run emet stream --backend voxel_only --connection mars
   ```
 
   The bridge sets `EMET_MARS_ONBOARD_DA3=1`, runs **DA3-SMALL** stereo on head cameras, and publishes JP2 `depth` on port 4401. With `depth_source: auto`, the workstation **never loads DA3** when depth is present.
@@ -132,4 +132,4 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 | Curved / bowed walls (RGB looks flat) | Usually DA3 + lighting/intrinsics, not stream misconfig. ``emet debug-da3-depth``; try ``DA3METRIC-LARGE`` or sensor depth in sim for A/B. [innate_mars.md](innate_mars.md). |
 | Red/blue swapped in Rerun RGB | Bridge must convert ROS ``bgr8`` → RGB before ``to_jpg`` (``innate_mars_bridge/ros/camera.py``) |
 | MJCF mesh head frozen / map vs model misaligned | **Hardware only:** ``joint_head`` inferred from ``camera_pose``; ``head_visual`` shifted forward (~70 mm). **Sim** keeps vanilla ``innate_mars.xml`` (head STL at neck pivot — may look slightly off vs cameras; arm/base replay unchanged). Hardware body gets **+90° Z** visual fix; sim does not. Meshes are dark semi-transparent; base sphere/arrow off by default. ``uv run python scripts/debug_innate_mars_head_align.py --ip <host>`` |
-| Black / missing EE (wrist) camera in Rerun | ``ros2 topic info /mars/arm/image_raw -v`` — need **Publisher count ≥ 1** (``maurice_cam`` arm stream). Bridge fills black JPEGs when absent. ``emet view-bridge`` or montage third panel shows ``ee_cam/color_image``. |
+| Black / missing EE (wrist) camera in Rerun | ``maurice_cam`` **ArmCameraDriver** needs a V4L symlink matching **`Arducam`** under `/dev/v4l/by-id/`. If missing: driver exits with `Camera symlink matching pattern 'Arducam' not found` and `/mars/arm/image_raw` stays at **Publisher count: 0** (bridge fills black). `emet mars status` reports `wrist down` / `no Arducam symlink`. Reseat USB + restart `maurice_cam` — **not** fixed by `emet deploy` alone. See [deploy.md § Wrist camera](../deploy.md#wrist-camera-arducam). |

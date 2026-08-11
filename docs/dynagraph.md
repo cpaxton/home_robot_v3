@@ -62,7 +62,7 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
    ```bash
    uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --perfect-depth
    # Real robot (same default config; connection profile or --robot innate_mars)
-   uv run emet run dynagraph --connection herman
+   uv run emet run dynagraph --connection mars
    ```
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.

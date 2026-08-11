@@ -55,17 +55,17 @@ Backends: `mujoco` (default), `robocasa`, `molmospaces`, `habitat`, **`llm`**.
 ```bash
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
 emet serve llm --vl --host 0.0.0.0 --port 8001   # dual-port caption/EQA beside text
-# Herman / LAN example (unified-7b): text + VL both on Jetson :8000 — docs/llm_serve.md
-export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
-# or: export EMET_LLM_HOST=caliban
+# LAN Orin example (unified-7b): text + VL both on Jetson :8000 — docs/llm_serve.md
+export EMET_OPENAI_BASE_URL=http://ORIN_HOST:8000/v1
+# or: export EMET_LLM_HOST=ORIN_HOST
 
 # Remote health / smoke (pass --host; unified-7b text+VL on :8000)
-uv run emet llm health --host caliban
-uv run emet llm smoke --host caliban
-uv run emet llm smoke --host caliban --vl-only
+uv run emet llm health --host ORIN_HOST
+uv run emet llm smoke --host ORIN_HOST
+uv run emet llm smoke --host ORIN_HOST --vl-only
 # Interactive / one-shot chat against LAN endpoints
-uv run emet run chat --host caliban --once "Reply with exactly: pong"
-uv run emet run chat --host caliban --vl --once "What color is the flag?" --image /path/to.jpg
+uv run emet run chat --host ORIN_HOST --once "Reply with exactly: pong"
+uv run emet run chat --host ORIN_HOST --vl --once "What color is the flag?" --image /path/to.jpg
 emet run agent --llm openai
 ```
 
@@ -277,35 +277,42 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 
 ### `emet deploy` / `emet deploy llm`
 
-**Robot (default):** sync `emet_core` + innate_mars_bridge to the Mars Jetson (`emet deploy`, same flags as before).
+**Operator guide:** [deploy.md](deploy.md) (Stretch + Mars bridges vs LAN Orin LLM, wrist Arducam checklist).
 
-**LAN LLM/VLM (caliban AGX Orin, ~64 GiB unified memory):**
+**Robot bridge:** sync `emet_core` + the bridge package for `--robot stretch` (`stretch_ros2_bridge` → `~/ament_ws`) or `--robot innate_mars` (`innate_mars_bridge` → innate-os workspace). Default robot comes from the active `emet connect` profile (`robot:` field), else `stretch`.
 
 ```bash
-uv run emet deploy llm                         # unified-7b (Qwen2-VL-7B on :8000)
-uv run emet deploy llm --profile dual-2b       # text :8000 + VL-2B :8001
-uv run emet deploy llm --host caliban --profile unified-7b
-uv run emet llm health --host caliban
-uv run emet llm smoke --host caliban --vl-only
+uv run emet deploy --robot stretch --start-bridge
+uv run emet deploy --connection mars          # profile robot=innate_mars
+uv run emet mars start --connection mars --deploy
 ```
 
-Details: [llm_serve.md](llm_serve.md). Shell equivalent: `./scripts/deploy_caliban_vl.sh --host caliban --profile unified-7b`.
+**LAN LLM/VLM (AGX Orin, ~64 GiB unified memory):**
+
+```bash
+uv run emet deploy llm --host ORIN_HOST                         # unified-7b (Qwen2-VL-7B on :8000)
+uv run emet deploy llm --host ORIN_HOST --profile dual-2b       # text :8000 + VL-2B :8001
+uv run emet llm health --host ORIN_HOST
+uv run emet llm smoke --host ORIN_HOST --vl-only
+```
+
+Details: [llm_serve.md](llm_serve.md). Shell helper: `./scripts/deploy_caliban_vl.sh --host ORIN_HOST --profile unified-7b` (script name is historical).
 
 ### `emet mars [start|status|stop]`
 
-Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. See [Innate Mars hardware bring-up](robots/innate_mars_hardware.md) for full recipes (`--deploy`, `--onboard-da3`, Herman connection profile).
+Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. See [deploy.md](deploy.md) and [Innate Mars hardware bring-up](robots/innate_mars_hardware.md) for full recipes (`--deploy`, `--onboard-da3`). Stretch uses `emet deploy --robot stretch` (no `emet mars`).
 
 ```bash
-emet mars start --ip herman --username jetson1 --deploy
-emet mars status --connection herman
-emet mars stop --connection herman
+emet mars start --ip MARS_IP --username jetson1 --deploy
+emet mars status --connection mars
+emet mars stop --connection mars
 ```
 
-`start` and `status` print a compact one- or two-line summary (bridge state, ZMQ ports, optional ROS hint, suggested next command). Colors follow Click when stdout is a TTY; set `NO_COLOR=1` or `EMET_NO_COLOR=1` to disable.
+`start` and `status` print a compact summary (bridge state, ZMQ ports, optional ROS hint, **head/wrist camera line**, suggested next command). Colors follow Click when stdout is a TTY; set `NO_COLOR=1` or `EMET_NO_COLOR=1` to disable.
 
 ---
 
-### `emet connect [save|list|show]`
+### `emet connect [save|list|show|use]`
 
 SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (field reference: ``src/emet/utils/connection.py``).
 
@@ -314,26 +321,30 @@ SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (f
 | `emet connect save HOST …` | Create or update a profile; default sets it **active** |
 | `emet connect list` | List profiles and mark which is active |
 | `emet connect show` | Print the active profile |
+| `emet connect use NAME` | Set active profile (switch Stretch ↔ Mars) |
 
 **`emet connect save` flags**
 
 | Flag | Stored as | Notes |
 |------|-----------|--------|
-| `--user` / `-u` | `user` | SSH login (default `root`) |
+| `--user` / `-u` | `user` | SSH login (default `root`; Stretch usually `hello-robot`, Mars `jetson1`) |
 | `--password` / `-p` | `password` | Optional; else `EMET_ROBOT_PASSWORD` or SSH keys at runtime |
 | `--name` / `-n` | profile key | Default: hostname/IP |
-| `--robot` | `robot` | Emet robot id (e.g. `innate_mars`) for CLI defaults |
+| `--robot` | `robot` | `stretch` or `innate_mars` — selects bridge for `emet deploy` |
 | `--config` | `config` | Default unified YAML when apps leave `--config` at Click default (e.g. `configs/agent_innate_mars.yaml`) |
-| `--workspace` | `workspace` | Remote ROS2 workspace (Mars: `~/innate-os/ros2_ws`) |
+| `--workspace` | `workspace` | Remote ROS2 workspace (Stretch: `~/ament_ws`; Mars: `~/innate-os/ros2_ws`) |
 | `--emet-dir` | `emet_dir` | Remote emet install root (default `~/emet`) |
 | `--no-active` | — | Save without setting active or updating `robot_ip.txt` |
 
 **Examples:**
 ```bash
-emet connect save herman --user jetson1 --name herman \
+emet connect save STRETCH_IP --user hello-robot --name stretch \
+  --robot stretch --workspace ~/ament_ws
+emet connect save MARS_IP --user jetson1 --name mars \
   --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
   --config configs/agent_innate_mars.yaml
 emet connect list
+emet connect use stretch
 emet connect show
 ```
 
@@ -345,7 +356,7 @@ emet connect show
 2. Else profile `config` for `--connection NAME`, or for the **active** profile when `--connection` is omitted.
 3. Else `EMET_CONFIG` / packaged default (`configs/emet/default.yaml`).
 
-So with herman active and `config=configs/agent_innate_mars.yaml`, a bare `emet run dynamem` (no `--config`) also loads that agent preset — usually fine on a Herman-only workstation (robot + Mars mapping defaults). For Stretch/sim on the same machine, pass an explicit `--config`, use a profile without `config`, or `--no-active` when saving the Mars profile.
+So with a Mars profile active and `config=configs/agent_innate_mars.yaml`, a bare `emet run dynamem` (no `--config`) also loads that agent preset — usually fine on a Mars-only workstation. For Stretch/sim on the same machine, pass an explicit `--config`, use a profile without `config`, or `--no-active` when saving the Mars profile.
 
 ---
 
@@ -380,8 +391,8 @@ One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observa
 **Examples:**
 ```bash
 emet capture
-emet capture --robot innate_mars --ip herman
-emet capture --connection herman --backend voxel_only --no-rerun
+emet capture --robot innate_mars --ip MARS_IP
+emet capture --connection mars --backend voxel_only --no-rerun
 emet capture --robot stretch --backend dynamem --no-rerun --out-dir /tmp/cap
 ```
 
@@ -426,10 +437,10 @@ Updates run at **`--hz`** (default 1 Hz). Other flags:
 **Examples:**
 ```bash
 emet stream --cameras-only
-emet stream --connection herman
-emet stream --connection herman --backend voxel_only
-emet stream --connection herman --backend dynagraph
-emet stream --connection herman --backend static_graph
+emet stream --connection mars
+emet stream --connection mars --backend voxel_only
+emet stream --connection mars --backend dynagraph
+emet stream --connection mars --backend static_graph
 emet stream --robot stretch --backend svm
 ```
 
@@ -469,7 +480,7 @@ emet preview-cameras
 emet preview-cameras --robot innate_mars --out /tmp/mars_cams.png
 emet preview-cameras --robot xlerobot --out /tmp/xlerobot_cams.png
 emet preview-cameras --source zmq --robot innate_mars --robot-ip 127.0.0.1
-emet preview-cameras --source zmq --connection herman
+emet preview-cameras --source zmq --connection mars
 
 emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-frames 41 --nod-video ./nod.mp4
 emet preview-cameras --nod --nod-motion once --nod-low -0.12 --nod-high 0.25 --nod-frames 25
@@ -849,7 +860,7 @@ Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2
 
 **`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
 
-**Remote answer VL (Caliban / Orin):** `emet hmeqa h2h` builds an explicit `env KEY=VAL …` string for `emet jobs run`. Parent-shell `export EMET_VL_ENDPOINT=…` is **not** inherited by the Habitat child unless listed there. Pass **`--host caliban`** (injects `EMET_LLM_HOST`, `EMET_OPENAI_BASE_URL`, `EMET_VL_ENDPOINT=openai@http://caliban:8000/v1` for unified-7b) or **`--vl-endpoint openai@http://HOST:8000/v1`**. Dual-2b: `--host caliban --vl-port 8001`. Launch stderr prints the injected endpoint; episode jsonl records `vl_endpoint`. Habitat-Sim still needs local GPU — Caliban only offloads the answer VLM. See `docs/llm_serve.md`.
+**Remote answer VL (LAN Orin):** `emet hmeqa h2h` builds an explicit `env KEY=VAL …` string for `emet jobs run`. Parent-shell `export EMET_VL_ENDPOINT=…` is **not** inherited by the Habitat child unless listed there. Pass **`--host ORIN_HOST`** (injects `EMET_LLM_HOST`, `EMET_OPENAI_BASE_URL`, `EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1` for unified-7b) or **`--vl-endpoint openai@http://ORIN_HOST:8000/v1`**. Dual-2b: `--host ORIN_HOST --vl-port 8001`. Launch stderr prints the injected endpoint; episode jsonl records `vl_endpoint`. Habitat-Sim still needs local GPU — the Orin only offloads the answer VLM. See `docs/llm_serve.md`.
 
 **`emet hmeqa overnight`** defaults to paper-router policy (`agentic_verifier=none`, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
 

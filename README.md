@@ -102,15 +102,38 @@ uv run emet run agent --robot stretch --no-discord --rerun
 # then try: explore / find the sofa / is there a remote on the coffee table?
 ```
 
+## Deploy to a robot (Stretch or Mars)
+
+Same `emet connect` + `emet deploy` flow for both robots — pick `--robot`.
+Full recipes: **[docs/deploy.md](docs/deploy.md)**. Replace `STRETCH_IP` / `MARS_IP` / `ORIN_HOST` with your LAN hosts.
+
+```bash
+# Stretch (native ament_ws; enable when the robot is on the LAN)
+uv run emet connect save STRETCH_IP --user hello-robot --name stretch \
+  --robot stretch --workspace ~/ament_ws
+uv run emet deploy --robot stretch --start-bridge
+uv run emet capture --robot stretch --connection stretch
+
+# Innate Mars (innate-os)
+uv run emet connect save MARS_IP --user jetson1 --name mars \
+  --robot innate_mars --workspace ~/innate-os/ros2_ws \
+  --config configs/agent_innate_mars.yaml
+uv run emet mars start --connection mars --deploy
+uv run emet mars status --connection mars   # head/wrist camera line
+uv run emet capture --connection mars
+
+# Switch active profile: emet connect use stretch|mars
+# Wrist black on Mars? Arducam USB — see docs/deploy.md
+```
+
 ## Remote inference + try an LLM
 
-Run the **text tool-router** and **caption VLM** on a LAN Jetson (or another GPU host) so the workstation keeps VRAM for voxels / mapping. Full detail: **[docs/llm_serve.md](docs/llm_serve.md)** (remote inference · testing LLMs · Jetson deploy).
+Run the **text tool-router** and **caption VLM** on a LAN Jetson (e.g. AGX Orin) so the workstation keeps VRAM for voxels / mapping. Full detail: **[docs/llm_serve.md](docs/llm_serve.md)**. Robot bridge deploy is separate: **[docs/deploy.md](docs/deploy.md)**.
 
 ```bash
 # Deploy / restart unified Qwen2-VL-7B on the Orin (:8000 = text + VL)
 uv run emet deploy llm --host ORIN_HOST --profile unified-7b
 
-# Health + smoke (replace ORIN_HOST, e.g. caliban)
 uv run emet llm health --host ORIN_HOST
 uv run emet llm smoke --host ORIN_HOST
 
@@ -128,7 +151,7 @@ export EMET_OPENAI_BASE_URL=http://ORIN_HOST:8000/v1
 export EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1
 ```
 
-Agent / Herman Discord: point `agent.llm` and `mapping.eqa.vl_endpoint` at the same URL (see [`configs/agent_innate_mars.yaml`](configs/agent_innate_mars.yaml) and [innate_mars_hardware.md](docs/robots/innate_mars_hardware.md)).
+Discord / Mars agent: point `agent.llm` and `mapping.eqa.vl_endpoint` at the same URL (see [`configs/agent_innate_mars.yaml`](configs/agent_innate_mars.yaml) and [innate_mars_hardware.md](docs/robots/innate_mars_hardware.md)).
 
 ## Quick Start (Simulation)
 
@@ -275,6 +298,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 |-----|-------------|
 | [first_test.md](docs/first_test.md) | Interactive agent in sim (table or MolmoSpaces); copy-paste prompts |
 | [cli.md](docs/cli.md) | `emet serve` / `run` / `test` / `eval` / `jobs` / `hmeqa` flags (verify with `--help`) |
+| [deploy.md](docs/deploy.md) | Stretch + Mars bridge deploy (`emet deploy --robot …` / `emet mars`) + LAN Orin LLM; wrist Arducam |
 | [emet_config.md](docs/emet_config.md) | Nested YAML (`configs/emet/default.yaml`), `--set` / `-O`, robot overlays |
 | [TESTING.md](docs/TESTING.md) | `uv run emet test`, memory-backend smokes, Dynagraph harnesses |
 | [known_issues.md](docs/known_issues.md) | Open bugs, Habitat EGL / agent segfault notes |

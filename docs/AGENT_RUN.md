@@ -84,7 +84,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | Preset | Robot | Notes |
 |--------|-------|-------|
 | `configs/emet/default.yaml` | discover / stretch | Unified default; **`agent.memory_backend: dynagraph`** |
-| `configs/agent_innate_mars.yaml` | innate_mars | Discord + EQA captions; DA3 depth overlay; `agent.name: Herman`; `agent.llm: openai` — pass **`--host caliban`** (or `EMET_LLM_HOST`) for unified VL-7B on `:8000` text+captions (dual-2b: `--vl-port 8001`); store on profile with `emet connect save … --config configs/agent_innate_mars.yaml` then `emet run agent --connection herman --host caliban` |
+| `configs/agent_innate_mars.yaml` | innate_mars | Discord + EQA captions; DA3 depth overlay; `agent.name: Herman`; `agent.llm: openai` — pass **`--host ORIN_HOST`** (or `EMET_LLM_HOST`) for unified VL-7B on `:8000` text+captions (dual-2b: `--vl-port 8001`); store on profile with `emet connect save … --config configs/agent_innate_mars.yaml` then `emet run agent --connection mars --host ORIN_HOST` |
 | `configs/agent_stretch_discord.yaml` | stretch | Discord + instance-graph; add **`--eqa`** for Qwen3-VL captions (recommended for intelligent “what can you see?”) |
 | `configs/agent_rby1_discord.yaml` | rby1 | Same tuning + `sim_config` for Molmo iTHOR |
 
@@ -199,12 +199,12 @@ uv run emet run agent --config configs/agent_stretch_discord.yaml --eqa --rerun
 uv run emet run agent --robot stretch --robot-ip <IP> --confirm-nav --rerun
 # or: EMET_CONFIRM_NAV=1 uv run emet run agent --robot stretch --robot-ip <IP> --rerun
 
-# Innate Mars (Herman) — Discord chat + explore (bridge must be up)
+# Innate Mars — Discord chat + explore (bridge must be up)
 export DISCORD_TOKEN=...
 # Preset: agent.llm openai + remote Orin via --host (docs/llm_serve.md); optional --rerun
-uv run emet run agent --connection herman --host caliban
+uv run emet run agent --connection mars --host ORIN_HOST
 # Profile should store --config configs/agent_innate_mars.yaml (persona name in YAML).
-# Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
+# Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore
 # Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
 # Load saved Dynagraph memory (graph.json + voxel_map.pkl; restores staleness clock)
