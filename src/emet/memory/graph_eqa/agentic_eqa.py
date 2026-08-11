@@ -2442,17 +2442,11 @@ class AgenticEQAExecutor:
             # Open-ended find / localize (OVMM "Where is the table?"): no MCQ letter
             # set exists, so a fresh view that actually shows the target is enough.
             # The assess prompt is open-aware, so answerable means "visible/localizable".
-            if bool(present) and not need_more_views:
+            # For location questions the VLM conservatively sets need_more_views=True
+            # even when the target is clearly in view — presence alone confirms here.
+            if bool(present):
                 self._pending_answerable = None
                 return True, "open_view_present"
-            if bool(present) and need_more_views:
-                self._pending_answerable = {
-                    "letter": "",
-                    "obs_id": int(obs_id),
-                    "phrase": str(phrase or self._target_phrase or ""),
-                    "present": bool(present),
-                }
-                return False, "open_need_more_views"
             return False, "open_not_present"
         if need_more_views:
             letter = self._mcq_letter_from_suggested(suggested_answer)
@@ -2565,6 +2559,17 @@ class AgenticEQAExecutor:
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
         }
+        _logger.info(
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
+            oid,
+            bool(assessment.present),
+            bool(assessment.answerable),
+            bool(assessment.need_more_views),
+            self._question_is_mcq(),
+            str(phrase or self._target_phrase or "")[:60],
+            str(assessment.suggested_answer or "")[:60],
+            str(assessment.reason or "")[:80],
+        )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
             (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
