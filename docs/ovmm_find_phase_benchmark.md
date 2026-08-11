@@ -161,6 +161,10 @@ Episode fields are phrased as questions (`Where is the jar on the counter?` / `W
 - FindRec scores one disambiguated GT body (prefer exact / short labels), not min-distance over every substring match.
 - Phases with no resolvable GT body are **unscored** (`find_*_scored=false`) and do not count as localization misses in partial success.
 
+**Reading the results — rooms help receptacles, not objects.** Room context (graph room tags / `current_room`) is a strong disambiguator for **FindRec**: receptacles are room-typical fixtures (`table` vs `counter` vs `cab`), so the room signal can localize or reject a candidate receptacle. It is **not** a useful cue for **FindObj**: a target object (`jar`, `red cylinder`) can sit on any receptacle in any room, so a room match (or mismatch) carries almost no evidence about where the object is. When triaging a miss:
+- FindRec miss + wrong-room candidate ⇒ look at room-cluster recall / room-mismatch escape floor (recep is room-correlated).
+- FindObj miss ⇒ the object's **receptacle / visual presence** is the signal; room alone should not be trusted to drive the search. An agent that over-trusts rooms may strand itself in a "matching" room without the object.
+
 Fair-default verification (GPU, one job at a time):
 
 ```bash
