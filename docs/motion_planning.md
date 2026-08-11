@@ -76,6 +76,21 @@ uv run emet test src/test/motion/test_a_star_clearance.py src/test/motion/algo/t
 
 ---
 
+## Two `manip_mode` namespaces
+
+Do not conflate OVMM harness flags with chat-agent YAML:
+
+| Namespace | Flag / key | Values | Used by |
+|-----------|------------|--------|---------|
+| **OVMM harness** | `--manip-mode` | `skip` \| `oracle` \| `sim` \| `attempt` | [`eval_ovmm_full.py`](../scripts/eval_ovmm_full.py) → [`ovmm_full.py`](../src/emet/eval/ovmm_full.py). `sim` snaps object freejoints via ZMQ; no DynamemTaskExecutor. |
+| **Chat / scripted agent** | `agent.manip_mode` / `EMET_MANIP_MODE` | `teleport` \| `kinematic` | [`DynamemTaskExecutor`](../src/emet/controller/task/dynamem/dynamem_task.py) after `_merge_chat_agent_manip_parameters` in the agent loop. |
+
+**Stretch MuJoCo default:** when the server advertises `sim_set_body_pose` and visual-servo is **off**, chat pick/place uses **GT teleport** (`prefer_sim_teleport_manip`). Pass **`--visual-servo` / `-V`** on `emet run agent` to keep the Stretch AnyGrasp / visual-servo path. OVMM `sim` always teleports object bodies regardless of `-V`.
+
+Details for OVMM: [ovmm_full_benchmark.md](ovmm_full_benchmark.md#ovmm---manip-mode--chat-agentmanip_mode). Molmo agent modes: [molmospaces.md](molmospaces.md#mobile-manipulation-sim-teleport--kinematic).
+
+---
+
 ## Arm kinematic planning (RRT-Connect)
 
 Used when `agent.manip_mode: kinematic` (or `EMET_MANIP_MODE=kinematic`) on robots that advertise `kinematic_manip` (e.g. rby1).

@@ -14,13 +14,15 @@ from emet.controller.zmq_client import StretchZmqClient
 def test_execute_trajectory_aborts_after_wait_timeout(monkeypatch):
     client = StretchZmqClient.__new__(StretchZmqClient)
     moves: list[tuple] = []
+    wait_kwargs: list[dict] = []
 
     def fake_move(pt, **kwargs):
         moves.append((tuple(np.asarray(pt).reshape(-1)[:3]), dict(kwargs)))
 
     waits = [True, False]  # second intermediate wait fails
 
-    def fake_wait(*_a, **_k):
+    def fake_wait(*_a, **kwargs):
+        wait_kwargs.append(kwargs)
         return waits.pop(0) if waits else True
 
     client.move_base_to = fake_move  # type: ignore[method-assign]
@@ -47,3 +49,5 @@ def test_execute_trajectory_aborts_after_wait_timeout(monkeypatch):
     assert 1.0 in reached_x
     assert 2.0 not in reached_x
     assert 3.0 not in reached_x
+    assert len(wait_kwargs) == 2
+    assert all(np.isinf(kwargs["rot_err_threshold"]) for kwargs in wait_kwargs)

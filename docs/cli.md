@@ -557,9 +557,46 @@ emet test agent-regression            # Discord / Herman / agent pack (no sim)
 emet test src/test/cli/test_cli.py
 emet test -k test_serve
 emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
+# VLM-free multi-env nav/explore (Robocasa + OVMM kitchen + MolmoSpaces):
+emet test -v src/test/simulation/test_multi_env_nav_explore_smoke.py
+emet test -k robocasa_l1 src/test/simulation/test_multi_env_nav_explore_smoke.py
 ```
 
 `emet test agent-regression` expands to the fixed no-sim pack used as the Discord/Herman gate (see `.cursor/rules/agent-discord-regression.mdc`).
+
+---
+
+### `emet ovmm <subcommand>`
+
+OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). Deep dives: [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [paper_benchmarks.md](paper_benchmarks.md).
+
+| Subcommand | Description |
+|------------|-------------|
+| `find` | Batch find-phase (FindObj / FindRec) across memory backends |
+| `full` | Batch full OVMM (find + pick/place; `--manip-mode`) |
+| `prepare` | Write `sim/` + `find_episodes.yaml` / `full_episodes.yaml` from a preset |
+| `sweep` | `prepare` → find → full → `rates` (paper multi-env path) |
+| `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
+| `status` | Per-episode outcomes + bind-fail counts |
+
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find uses the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions); preset `agentic_find: true`. Ablation only: `emet ovmm find --oneshot-localize` / `emet ovmm full --oneshot-localize` (no silent oneshot rescue on agentic miss). Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
+
+**Examples:**
+```bash
+# Multi-env dynagraph sweep (prefer --via-jobs on a shared GPU workstation)
+uv run emet ovmm sweep --preset molmo-robocasa --backend dynagraph --via-jobs
+
+# Stepwise
+uv run emet ovmm prepare --preset molmo-robocasa --out ~/runs/emet/ovmm_molmo_robocasa/DATE
+uv run emet ovmm find --episodes OUT/find_episodes.yaml --backend dynagraph --port-stride 4 \
+  --output-dir OUT/find --no-scene-cache
+uv run emet ovmm full --episodes OUT/full_episodes.yaml --backend dynagraph --manip-mode sim \
+  --port-stride 4 --output-dir OUT/full
+uv run emet ovmm rates --out OUT
+uv run emet ovmm status --out OUT
+```
+
+Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.
 
 ---
 
@@ -725,9 +762,9 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] -- CMD…` | Register + nohup wrapper (sets `EMET_JOB_ID`). With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. |
 
-`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). Prefer this over bare `nohup` for multi-hour GPU evals.
+`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
 ```bash
 uv run emet jobs

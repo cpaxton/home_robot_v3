@@ -74,6 +74,24 @@ def test_robot_zmq_discovery_when_unset():
     assert source == "zmq"
 
 
+def test_localhost_zmq_wins_over_profile_config_robot():
+    """Active Herman config YAML must not force innate_mars against local Stretch sim."""
+    cfg = load_config("configs/agent_innate_mars.yaml")
+    assert cfg.robot == "innate_mars"
+    with patch("emet.config.runtime.discover_zmq_server_robot_id", return_value="stretch"):
+        rid, source = resolve_robot_id(
+            None,
+            robot_from_default=True,
+            config=cfg,
+            connection_name=None,
+            host="127.0.0.1",
+            port_offset=0,
+            zmq_discover=True,
+        )
+    assert rid == "stretch"
+    assert source == "zmq"
+
+
 def test_localhost_skips_connection_robot_without_zmq():
     cfg = load_config(default_config_path())
     with patch("emet.config.runtime.get_connection", return_value={"robot": "innate_mars", "host": "herman"}):
@@ -165,3 +183,28 @@ def test_resolve_host_explicit_cli_beats_connection():
         )
     assert host == "10.0.0.9"
     assert source == "cli"
+
+
+def test_load_runtime_force_localhost_ignores_herman_host():
+    """``--start-sim`` must not dial the active Herman connection host."""
+    from unittest.mock import MagicMock
+
+    from click.core import ParameterSource
+
+    from emet.app.config_cli import load_runtime_from_cli
+
+    ctx = MagicMock()
+    ctx.get_parameter_source.return_value = ParameterSource.DEFAULT
+    with patch("emet.app.config_cli.load_resolved_config") as lr:
+        lr.return_value = load_config(default_config_path())
+        with patch("emet.config.runtime.get_host_from_connection", return_value="192.168.1.43"):
+            rt = load_runtime_from_cli(
+                ctx,
+                emet_config=default_config_path(),
+                robot="stretch",
+                robot_ip="127.0.0.1",
+                force_localhost=True,
+                zmq_discover=False,
+            )
+    assert rt.host == "127.0.0.1"
+    assert rt.robot_id == "stretch"

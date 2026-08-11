@@ -22,6 +22,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 
 | Variable | Where used | Notes |
 |----------|------------|-------|
+| `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
 | `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). YAML: `eval.export_map_video`. |
@@ -142,6 +143,9 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 |----------|------------|-------|
 | `EMET_ZMQ_STARTUP_TIMEOUT` | ZMQ clients, `emet run molmospaces-explore` | Seconds to wait for first observation (default 60). Documented in [molmospaces_environment_variables.md](molmospaces_environment_variables.md). |
 | `EMET_ZMQ_TIMING` | `BaseZmqServer` | `1` — print periodic SEND/RECV timing lines. Default off (also enabled by server `--verbose`). |
+| `EMET_ZMQ_FULL_HZ` | `BaseZmqServer` | Optional maximum full RGB-D observation publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 5 Hz. |
+| `EMET_ZMQ_STATE_HZ` | `BaseZmqServer` | Optional maximum low-level state publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 30 Hz. |
+| `EMET_ZMQ_SERVO_HZ` | `BaseZmqServer` | Optional maximum visual-servo stream publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 10 Hz. |
 | `EMET_NAVGRID_ASCII` | Dynamem / Dynagraph mapping | Terminal nav grid; see [dynagraph.md](dynagraph.md). |
 | `EMET_NAVGRID_MAX_SIDE` | Nav grid ASCII | Default 320. |
 | `EMET_NAVGRID_CONTEXTS` | Nav grid ASCII | Limit which hooks print. |

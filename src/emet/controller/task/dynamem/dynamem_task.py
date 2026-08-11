@@ -328,13 +328,19 @@ class DynamemTaskExecutor:
             self.robot.move_to_nav_posture()
             was_ok = getattr(self.grasp_object, "was_successful", None)
             ok = bool(was_ok()) if callable(was_ok) else bool(getattr(self.grasp_object, "_success", False))
+            if not ok:
+                logger.error(f"Visual-servo grasp failed for {target_object!r}")
         else:
             # Otherwise, use the self.agent's manipulation method
             # This is from OK Robot
             print("Using self.agent to grasp object:", target_object)
             manip = getattr(self.agent, "manipulate", None)
             if callable(manip):
-                ok = bool(manip(target_object, theta, skip_confirmation=skip_confirmations))
+                try:
+                    ok = bool(manip(target_object, theta, skip_confirmation=skip_confirmations))
+                except Exception as e:
+                    logger.error(f"agent.manipulate raised for {target_object!r}: {e}")
+                    ok = False
             else:
                 ok = False
         self.robot.look_front()
@@ -407,7 +413,14 @@ class DynamemTaskExecutor:
         self.robot.say("Placing object on the " + str(target_receptacle) + ".")
         # If you run this stack with visual servo, run it locally
         place_fn = getattr(self.agent, "place", None)
-        ok = bool(place_fn(target_receptacle, init_tilt=theta, local=self.visual_servo)) if callable(place_fn) else False
+        if callable(place_fn):
+            try:
+                ok = bool(place_fn(target_receptacle, init_tilt=theta, local=self.visual_servo))
+            except Exception as e:
+                logger.error(f"agent.place raised for {target_receptacle!r}: {e}")
+                ok = False
+        else:
+            ok = False
         self.robot.move_to_nav_posture()
         if not ok:
             self.robot.say("I could not place the object on the " + str(target_receptacle) + ".")

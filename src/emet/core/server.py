@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 import threading
 import time
 import timeit
@@ -28,6 +29,18 @@ logger = Logger(__name__)
 def _zmq_timing_enabled(verbose: bool) -> bool:
     """Periodic SEND/RECV timing lines: only with ``--verbose`` or ``EMET_ZMQ_TIMING=1``."""
     return bool(verbose) or env_zmq_timing()
+
+
+def _send_period_s(env_name: str) -> float:
+    raw = os.environ.get(env_name, "").strip()
+    if not raw:
+        return 0.0
+    hz = float(raw)
+    return 0.0 if hz <= 0 else 1.0 / hz
+
+
+def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:
+    time.sleep(max(minimum_s, period_s - elapsed_s))
 
 
 def _action_recv_log_line(action: dict[str, Any], step: int) -> str:
@@ -91,6 +104,9 @@ class BaseZmqServer(CommsNode, ABC):
         self.ee_image_scaling = ee_image_scaling
         self.depth_scaling = depth_scaling
         self.ee_depth_scaling = ee_depth_scaling
+        self._full_send_period_s = _send_period_s("EMET_ZMQ_FULL_HZ")
+        self._state_send_period_s = _send_period_s("EMET_ZMQ_STATE_HZ")
+        self._servo_send_period_s = _send_period_s("EMET_ZMQ_SERVO_HZ")
 
         # Set up the publisher socket using ZMQ
         self.send_socket = self._make_pub_socket(send_port, use_remote_computer)
@@ -243,7 +259,7 @@ class BaseZmqServer(CommsNode, ABC):
             if _zmq_timing_enabled(self.verbose):
                 print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._full_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_recv(self):
@@ -331,7 +347,7 @@ class BaseZmqServer(CommsNode, ABC):
             if _zmq_timing_enabled(self.verbose):
                 logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._state_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_send_servo(self):
@@ -366,7 +382,7 @@ class BaseZmqServer(CommsNode, ABC):
                     f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time / steps} rate={1 / (sum_time / steps)}"
                 )
 
-            time.sleep(1e-5)
+            _rate_sleep(self._servo_send_period_s, dt, 1e-5)
             t0 = timeit.default_timer()
 
     def close_zmq_resources(self) -> None:

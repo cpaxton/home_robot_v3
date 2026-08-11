@@ -103,8 +103,8 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 ### Real tests (not yet green on every machine)
 - [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
-- [ ] **Molmo kinematic approach frame**: table kinematic is green; Molmo iTHOR bowl→microwave still `pregrasp_ik_failed` (grasp_err≈0.60) — approach XYT / nav-world vs MuJoCo base disagree after base teleport (`docs/plans/2026-07-23_molmospaces_rby1_manip_review.md`).
-- [ ] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place).
+- [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
+- [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
 - [ ] **Robocasa / Stretch** pick-place smoke with and without `--visual-servo` to lock the teleport-vs-servo behavior.
 - [ ] **CI / overnight**: mark or gate the above under `RUN_MOLMOSPACES_TESTS` / sim markers so agents use `emet test --no-sim` for the offline pack only.
 

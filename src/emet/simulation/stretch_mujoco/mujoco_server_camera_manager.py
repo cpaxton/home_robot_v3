@@ -26,6 +26,47 @@ if TYPE_CHECKING:
     from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
 
 
+def robot_body_geom_groups(model: mujoco.MjModel, base_body_name: str = "base_link") -> set[int]:
+    """MuJoCo geom groups occupied by the robot's own bodies (descendants of *base_body_name*).
+
+    The sim head camera renders the robot's own mast / head / camera housings into the depth
+    image (group-2 stretch geoms), and the voxel map then treats the robot itself as a wall of
+    obstacles right around the base. On real hardware the head camera at nav posture does not
+    see the body, so in tight scenes (Robocasa kitchens) the self-obstacle ring leaves no
+    A* path with sufficient clearance and exploration stalls. We therefore mask robot-body
+    geoms out of the **head** camera render only (the ee camera keeps them for manipulation).
+    """
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if base_bid < 0:
+        return set()
+    robot_bodies: set[int] = set()
+    for b in range(model.nbody):
+        x = int(b)
+        while x > 0:
+            if x == base_bid:
+                robot_bodies.add(int(b))
+                break
+            x = int(model.body_parentid[x])
+    groups: set[int] = set()
+    for g in range(model.ngeom):
+        if int(model.geom_bodyid[g]) in robot_bodies:
+            groups.add(int(model.geom_group[g]))
+    return groups
+
+
+def head_camera_geomgroup_mask(model: mujoco.MjModel, base_body_name: str = "base_link") -> np.ndarray:
+    """Six-element ``MjvOption.geomgroup`` mask hiding the robot's own body geoms.
+
+    Group 0/1 (scene) stay on; robot groups are cleared so the head camera does not render
+    the robot's own mast / head / camera housings into the mapping depth / RGB.
+    """
+    mask = np.ones(6, dtype=np.uint8)
+    for grp in robot_body_geom_groups(model, base_body_name=base_body_name):
+        if 0 <= grp < 6:
+            mask[grp] = 0
+    return mask
+
+
 class MujocoServerCameraManagerSync:
     """
     Handles rendering scene cameras to a buffer.
@@ -118,6 +159,19 @@ class MujocoServerCameraManagerSync:
         renderer._scene_option.flags[mujoco._enums.mjtVisFlag.mjVIS_RANGEFINDER] = (
             False  # Disables the lidar yellow lines.
         )
+
+        # Head camera (d435i): hide the robot's own body so mapping does not treat it as a wall.
+        # The ee camera (d405) keeps robot geoms so the gripper stays visible for manipulation.
+        if for_camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth):
+            _mask = head_camera_geomgroup_mask(self.mujoco_server.mjmodel)
+            renderer._scene_option.geomgroup[:] = _mask
+            import sys
+
+            print(
+                f"[camera_manager] head camera {for_camera.name}: geomgroup mask={_mask.tolist()}",
+                file=sys.stderr,
+                flush=True,
+            )
 
         from emet.simulation.stretch_mujoco.mujoco_server_passive import MujocoServerPassive
 

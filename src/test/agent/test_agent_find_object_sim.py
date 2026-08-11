@@ -73,7 +73,14 @@ def test_agent_find_red_cylinder_no_llm():
     try:
         # Start MuJoCo server
         proc = subprocess.Popen(
-            [sys.executable, "-m", "emet.simulation.mujoco_server", "--headless"],
+            [
+                sys.executable,
+                "-m",
+                "emet.simulation.mujoco_server",
+                "--robot",
+                "stretch",
+                "--headless",
+            ],
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -92,8 +99,14 @@ def test_agent_find_red_cylinder_no_llm():
                 sys.executable,
                 "-m",
                 "emet.app.run_agent",
+                "--robot",
+                "stretch",
                 "--robot-ip",
                 "127.0.0.1",
+                "--memory-backend",
+                "dynagraph",
+                "--set",
+                "embodied_agent.graph_eqa_memory.use_sensor_perception=false",
                 "--no-llm",
                 "--no-discord",
                 "--command",
@@ -139,7 +152,14 @@ def test_agent_find_blue_cube_no_llm():
 
     try:
         proc = subprocess.Popen(
-            [sys.executable, "-m", "emet.simulation.mujoco_server", "--headless"],
+            [
+                sys.executable,
+                "-m",
+                "emet.simulation.mujoco_server",
+                "--robot",
+                "stretch",
+                "--headless",
+            ],
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -155,8 +175,14 @@ def test_agent_find_blue_cube_no_llm():
                 sys.executable,
                 "-m",
                 "emet.app.run_agent",
+                "--robot",
+                "stretch",
                 "--robot-ip",
                 "127.0.0.1",
+                "--memory-backend",
+                "dynagraph",
+                "--set",
+                "embodied_agent.graph_eqa_memory.use_sensor_perception=false",
                 "--no-llm",
                 "--no-discord",
                 "--command",
@@ -198,7 +224,14 @@ def test_agent_multi_command_no_llm():
 
     try:
         proc = subprocess.Popen(
-            [sys.executable, "-m", "emet.simulation.mujoco_server", "--headless"],
+            [
+                sys.executable,
+                "-m",
+                "emet.simulation.mujoco_server",
+                "--robot",
+                "stretch",
+                "--headless",
+            ],
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -215,8 +248,14 @@ def test_agent_multi_command_no_llm():
                 sys.executable,
                 "-m",
                 "emet.app.run_agent",
+                "--robot",
+                "stretch",
                 "--robot-ip",
                 "127.0.0.1",
+                "--memory-backend",
+                "dynagraph",
+                "--set",
+                "embodied_agent.graph_eqa_memory.use_sensor_perception=false",
                 "--no-llm",
                 "--no-discord",
                 "-c",

@@ -1,0 +1,76 @@
+# Focused object-search find sweep: 4 Robocasa + 4 MolmoSpaces (no full/manip).
+# Used by: emet ovmm prepare|sweep --preset molmo-robocasa-find8 --find-only
+
+name: molmo-robocasa-find8
+description: >
+  Dynagraph agentic FindObj/FindRec on 4 Robocasa layouts + 4 Molmo iTHOR scenes.
+  Find-only; no pick/place.
+
+defaults:
+  backend: dynagraph
+  manip_mode: skip
+  port_offset_find: 220
+  port_offset_full: 280
+  port_stride: 4
+  need_mib: 12000
+  sync_robocasa_registry: true
+  no_scene_cache: true
+  agentic_find: true
+
+find:
+  robocasa:
+    layouts: [1, 2, 3, 4]
+    style_equals_layout: true
+    robot: stretch
+    task: PickPlaceCounterToCabinet
+    seed: 0
+    object: jar
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.5
+    explore_steps: 8
+    tier: S1
+  molmo:
+    - id: molmo_ithor_idx0_bowl_explore
+      index: 0
+      robot: stretch
+      object: bowl
+      object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
+      start_recep: cabinet
+      goal_recep: microwave
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx1_chair_explore
+      index: 1
+      robot: stretch
+      object: chair
+      start_recep: table
+      goal_recep: sofa
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx2_chair_explore
+      index: 2
+      robot: stretch
+      object: chair
+      start_recep: table
+      goal_recep: sofa
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx3_explore
+      index: 3
+      robot: stretch
+      object: bowl
+      start_recep: cabinet
+      goal_recep: microwave
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+
+full:
+  robocasa:
+    layouts: []
+  molmo: []
