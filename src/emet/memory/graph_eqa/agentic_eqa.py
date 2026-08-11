@@ -933,6 +933,9 @@ class AgenticEQAExecutor:
             if ok:
                 self._consecutive_nav_fail = 0
                 self._retire_visited_frontier(frontier_xyz=frontier_xyz)
+            elif self._explore_nav_progressed():
+                # Chunked path: robot moved toward the frontier even if not finished.
+                self._consecutive_nav_fail = 0
         elif hasattr(agent, "run_exploration"):
             ok = bool(agent.run_exploration())
             self._n_explore += 1
@@ -1539,9 +1542,16 @@ class AgenticEQAExecutor:
         nav_res = getattr(agent, "_last_nav_attempt", None)
         dist_m = float(getattr(nav_res, "dist_m", 0.0) or 0.0) if nav_res else 0.0
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
+        # ``finished`` is False for chunked (path >8 waypoints) plans even when the
+        # robot made real progress toward the obs — in teleport mode that is the
+        # common case and must not be treated as a failure. Use nav_res.success
+        # (dist >= 0.12m OR finished) as the "reached / progressing" signal.
+        nav_progress = bool(
+            getattr(nav_res, "success", False) if nav_res is not None else finished
+        )
         if hasattr(gm, "record_nav_attempt"):
-            gm.record_nav_attempt(oid, success=finished, note=note or "agentic", dist_m=dist_m)
-        if not finished:
+            gm.record_nav_attempt(oid, success=nav_progress, note=note or "agentic", dist_m=dist_m)
+        if not nav_progress:
             self._consecutive_nav_fail += 1
             self._tried.setdefault(oid, "nav failed")
             if self._consecutive_nav_fail >= NAV_CONSECUTIVE_FAIL_LIMIT:
@@ -1570,13 +1580,14 @@ class AgenticEQAExecutor:
             "approach_index": int(next_ap),
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
             "nav_success": bool(finished),
+            "nav_progress": bool(nav_progress),
             "nav_dist_m": dist_m,
             "nav_note": note,
             "nav_visit_n": self._nav_to_obs_counts[oid],
         }
         self._attach_gt(row, target)
         self._append_trace(row)
-        if not finished:
+        if not nav_progress:
             return {
                 "ok": False,
                 "target_xyz": row["target_xyz"],
@@ -2003,6 +2014,16 @@ class AgenticEQAExecutor:
         if int(self._nav_to_obs_counts.get(oid, 0)) >= max_attempts:
             return True
         return False
+
+    def _explore_nav_progressed(self) -> bool:
+        """True if the last nav attempt made real progress (chunked path is not a miss)."""
+        agent = self.agent
+        if agent is None:
+            return False
+        nav_res = getattr(agent, "_last_nav_attempt", None)
+        if nav_res is None:
+            return False
+        return bool(getattr(nav_res, "success", False))
 
     def _retire_visited_frontier(
         self,
