@@ -834,7 +834,7 @@ class AgenticEQAExecutor:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
                 max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt(),
+                robot_xyt=self._robot_xyt_world(),
             )
         except TypeError:
             hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
@@ -992,7 +992,7 @@ class AgenticEQAExecutor:
                 if recent:
                     frontier_xyz = np.array([float(recent[-1][0]), float(recent[-1][1]), 1.0])
                 else:
-                    after = self._robot_xyt()
+                    after = self._robot_xyt_world()
                     if after is not None:
                         frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
             if ok and frontier_xyz is not None:
@@ -1077,7 +1077,7 @@ class AgenticEQAExecutor:
 
     def _dist_to_anchor_m(self, obs_id: int, hyp: NavHypothesis | None) -> float | None:
         anchor = self._place_anchor_xy(obs_id, hyp)
-        robot = self._robot_xyt()
+        robot = self._robot_xyt_world()
         if anchor is None or robot is None:
             return None
         return float(np.hypot(float(robot[0]) - anchor[0], float(robot[1]) - anchor[1]))
@@ -1227,7 +1227,7 @@ class AgenticEQAExecutor:
             except Exception:
                 stamp_xy = None
         if stamp_xy is None:
-            xyt = self._robot_xyt()
+            xyt = self._robot_xyt_world()
             if xyt is not None:
                 stamp_xy = (float(xyt[0]), float(xyt[1]))
         if stamp_xy is None:
@@ -1310,7 +1310,7 @@ class AgenticEQAExecutor:
                     oid,
                     voxel_map=voxel_map,
                     planner=planner,
-                    robot_xyt=self._robot_xyt(),
+                    robot_xyt=self._robot_xyt_world(),
                 )
             except Exception as e:
                 _logger.warning(f"place coverage refresh failed: {e}")
@@ -1343,7 +1343,7 @@ class AgenticEQAExecutor:
         gm = self.graph_memory
         if gm is None:
             return None
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         voxel_map, planner = self._voxel_planner()
         rec = self._place_inspect.get(int(obs_id))
         avoid = list(rec.tried_xy) if rec is not None else None
@@ -1946,7 +1946,7 @@ class AgenticEQAExecutor:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
                 max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt(),
+                robot_xyt=self._robot_xyt_world(),
             )
         except TypeError:
             hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
@@ -2112,7 +2112,7 @@ class AgenticEQAExecutor:
         agent = self.agent
         vm = getattr(agent, "voxel_map", None)
         planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if vm is not None and planner is not None and xyt is not None:
             try:
                 from emet.memory.graph_eqa.dynamem_graph_hooks import sync_graph_frontier_nodes
@@ -2971,7 +2971,7 @@ class AgenticEQAExecutor:
                     getattr(live_obs, "depth", None),
                 )
             )
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if xyt is not None:
             row["xyt"] = [float(x) for x in xyt.reshape(-1)[:3]]
         hyp = next((h for h in self._hypotheses if int(h.obs_id) == int(result.obs_id)), None)
@@ -3405,7 +3405,7 @@ class AgenticEQAExecutor:
             # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
             # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
             # per VLM.
-            xyt = self._robot_xyt()
+            xyt = self._robot_xyt_world()
             planner = getattr(agent, "planner", None)
             try:
                 (
@@ -3746,7 +3746,7 @@ class AgenticEQAExecutor:
             captions.append("Image 1: current robot view")
 
         gm = self.graph_memory
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if gm is not None and hasattr(gm, "nearby_object_observations") and xyt is not None:
             try:
                 nearby = gm.nearby_object_observations(xyt, k=k, max_dist_m=5.0)
@@ -3832,7 +3832,7 @@ class AgenticEQAExecutor:
         parsed = parse_tool_calls_response(text)
         vlm_room = coerce_room_label(parsed.get("current_room"), room_policy=self.room_policy)
         graph_room = "unknown"
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if gm is not None:
             if vlm_room != "unknown" and hasattr(gm, "stamp_vlm_room_at_robot"):
                 try:

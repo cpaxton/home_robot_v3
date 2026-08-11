@@ -433,6 +433,13 @@ class AStar(Planner):
                     f"min_clearance={getattr(self, 'min_clearance_m', None)}",
                     flush=True,
                 )
+                if start_pt[0] == 511 and start_pt[1] == 512:
+                    import traceback
+
+                    tb = " | ".join(
+                        f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=8)[:-1]
+                    )
+                    print(f"[navdebug] start_pt=(511,512) CALLER: {tb}", flush=True)
         start_pt = self.get_unoccupied_neighbor(
             start_pt, max_ring=self.start_escape_max_ring
         )
