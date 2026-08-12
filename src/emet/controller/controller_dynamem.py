@@ -865,6 +865,7 @@ class DynamemController(BaseController):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
         _t_update0 = time.time()
+        _t_g0 = time.time()
         obs = self.robot.get_observation()
         if obs is None:
             logger.warning("get_observation() returned None; skipping voxel update")
@@ -965,6 +966,8 @@ class DynamemController(BaseController):
                 self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] process_rgbd={time.time() - _t_g0:.3f}s", flush=True)
         robot_xy = None
         if obs.gps is not None and obs.compass is not None:
             g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
@@ -1029,6 +1032,8 @@ class DynamemController(BaseController):
                     graph_object_fusion=getattr(self, "_graph_object_fusion", None),
                     calibration_writer=getattr(self, "_calibration_writer", None),
                 )
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] graph_update={time.time() - _t_g0:.3f}s", flush=True)
 
         if self.graph_memory is not None:
             self._sync_graph_frontier_nodes()

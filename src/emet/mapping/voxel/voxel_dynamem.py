@@ -650,6 +650,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         original_depth = depth.copy()
         original_intrinsics = intrinsics.copy()
         original_pose = pose.copy()
+        _t_pr0 = time.time()
 
         # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
@@ -688,6 +689,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
             min_samples_clear=dbscan_min if dbscan_min > 0 else None,
             max_depth=self.max_depth,
         )
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] clear_points={time.time() - _t_pr0:.3f}s", flush=True)
 
         instance_image = None
         instance_classes = None
@@ -700,6 +703,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 instance_image = torch.from_numpy(instance.astype(np.int64))
                 instance_classes = torch.from_numpy(task_obs["instance_classes"].astype(np.int64))
                 instance_scores = torch.from_numpy(task_obs["instance_scores"].astype(np.float32))
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] detect={time.time() - _t_pr0:.3f}s", flush=True)
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
 
@@ -713,6 +718,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
             instance_classes=instance_classes,
             instance_scores=instance_scores,
         )
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] add()={time.time() - _t_pr0:.3f}s", flush=True)
 
         # Add image descriptions if we want to explore intelligently
         if self.run_eqa and self.image_description_client is not None:
