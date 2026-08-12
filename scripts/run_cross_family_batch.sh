@@ -78,7 +78,8 @@ done
 
 # --- runners -------------------------------------------------------------
 run_hmeqa() {
-    local qid="$1" dir="$OUT/hmeqa_q${qid}"
+    local qid="$1"
+    local dir="$OUT/hmeqa_q${qid}"
     mkdir -p "$dir"
     # Single-qid agentic arm via the standard H2H runner (writes agentic_q{qid}.jsonl).
     uv run emet hmeqa h2h "$dir" --arms agentic --ids "$qid" --preset paper-router --foreground
