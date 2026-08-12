@@ -146,19 +146,19 @@
       </body>
 
       <body name="lift_column" pos="0 0 0">
-        <geom type="mesh" mesh="lift_motor" class="robot_visual" pos="0 0 0.08"/>
+        <geom type="mesh" mesh="lift_motor" class="robot_visual" pos="0 0 0.26" quat="0.7071068 -0.7071068 0 0"/>
       </body>
       <body name="lift_carriage" pos="0 0 0">
         <joint name="lift" type="slide" axis="0 0 1" pos="0 0 0.1" range="0.0 0.2" damping="15" frictionloss="1.0" armature="0.2"/>
         <inertial pos="0 0 0.12" mass="0.6" diaginertia="0.005 0.005 0.008"/>
-        <geom type="mesh" mesh="lift_rack" class="robot_visual" pos="0 0 0.15000000000000002"/>
-        <body name="dome_plate_base_plate_dome_l" pos="-0.104 0 0.795">
+        <geom type="mesh" mesh="lift_rack" class="robot_visual" pos="0 0 0.22" quat="0.7071068 0 -0.7071068 0"/>
+        <body name="dome_plate_base_plate_dome_l" pos="-0.011749999999999997 0 0.795">
           <geom type="mesh" mesh="base_plate_dome_l" class="robot_visual"/>
         </body>
-        <body name="dome_plate_base_plate_dome_r" pos="0.104 0 0.795">
+        <body name="dome_plate_base_plate_dome_r" pos="0.011749999999999997 0 0.795">
           <geom type="mesh" mesh="base_plate_dome_r" class="robot_visual"/>
         </body>
-        <body name="dome_plate_base_plate_dome_rear" pos="0 -0.104 0.795">
+        <body name="dome_plate_base_plate_dome_rear" pos="0 -0.0005000000000000004 0.795">
           <geom type="mesh" mesh="base_plate_dome_rear" class="robot_visual"/>
         </body>
         <body name="head" pos="0 0 0.795">

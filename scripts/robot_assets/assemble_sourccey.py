@@ -325,8 +325,12 @@ def build() -> str:
         a("      </body>")
     a("")
     # ---- linear actuator column (fixed to base) ----
+    # The lift_motor STEP mesh is a 402mm cylinder with its long axis along Y (recentered
+    # at bbox center); rotate 90deg about X so it stands VERTICAL (long axis along Z).
     a('      <body name="lift_column" pos="0 0 0">')
-    a(f'        <geom type="mesh" mesh="lift_motor" class="robot_visual" pos="0 0 {L1_Z - 0.02}"/>')
+    a(
+        f'        <geom type="mesh" mesh="lift_motor" class="robot_visual" pos="0 0 {L1_Z + 0.16}" quat="0.7071068 -0.7071068 0 0"/>'
+    )
     a("      </body>")
     # ---- lift carriage (prismatic z) rides on the column ----
     a('      <body name="lift_carriage" pos="0 0 0">')
@@ -334,15 +338,26 @@ def build() -> str:
         f'        <joint name="lift" type="slide" axis="0 0 1" pos="0 0 {L1_Z}" range="{LIFT_MIN} {LIFT_MAX}" damping="15" frictionloss="1.0" armature="0.2"/>'
     )
     a('        <inertial pos="0 0 0.12" mass="0.6" diaginertia="0.005 0.005 0.008"/>')
-    # rack visual
-    a(f'        <geom type="mesh" mesh="lift_rack" class="robot_visual" pos="0 0 {L1_Z + 0.05}"/>')
-    # dome-level plates ride on carriage
+    # rack visual: 325mm along X, rotate Ry(-90) so it stands vertical (long axis along Z)
+    a(
+        f'        <geom type="mesh" mesh="lift_rack" class="robot_visual" pos="0 0 {L1_Z + 0.12}" quat="0.7071068 0 -0.7071068 0"/>'
+    )
+    # dome-level plates ride on carriage: left/right/rear ring segments.
+    # The STEP parts are ~207mm pieces (recentered at bbox center). Place each so its
+    # OUTER face sits at the dome-ring radius (~0.104, matching the L2 plate), not
+    # sticking out to ±0.2. left/right use the x half-extent; rear uses y.
+    _dome_half = {"l": 0.09225, "r": 0.09225, "rear": 0.1035}
     for name, dx, dy in (
         ("base_plate_dome_l", -DOME_HALF, 0),
         ("base_plate_dome_r", DOME_HALF, 0),
         ("base_plate_dome_rear", 0, -DOME_HALF),
     ):
-        a(f'        <body name="dome_plate_{name}" pos="{dx} {dy} {DOME_BASE_Z}">')
+        key = "rear" if "rear" in name else name[-1]
+        h = _dome_half[key]
+        # outer face at DOME_HALF: center = sign*(DOME_HALF - h)
+        cx = dx if dx == 0.0 else (1 if dx > 0 else -1) * (DOME_HALF - h)
+        cy = dy if dy == 0.0 else (1 if dy > 0 else -1) * (DOME_HALF - h)
+        a(f'        <body name="dome_plate_{name}" pos="{cx} {cy} {DOME_BASE_Z}">')
         a(f'          <geom type="mesh" mesh="{name}" class="robot_visual"/>')
         a("        </body>")
     # ---- head / dome ----
