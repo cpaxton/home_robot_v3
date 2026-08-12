@@ -1562,9 +1562,17 @@ class DynamemController(BaseController):
         """
         self.announce_action("Look around: sweeping head")
         tilt = float(motion_constants.look_front[1])
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            import traceback
+
+            tb = " | ".join(f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=6)[:-1])
+            print(f"[sweep] fast_lookaround={getattr(self, '_fast_explore_lookaround', False)} caller={tb}", flush=True)
         # Four pans for Realsense FOV coverage (left → right-ish). Soft-wait exits on settle.
         # Explore-loop / smoke: two extremes ~halves wall time (~100s → ~50s per excursion).
-        if getattr(self, "_fast_explore_lookaround", False):
+        # In fast-sim (teleport) eval mode the 4-pan sweep dominates wall time, so always
+        # halve to two extremes — the teleport base already turns to face each frontier.
+        fast = getattr(self, "_fast_explore_lookaround", False) or os.environ.get("EMET_SIM_NAV_TELEPORT") == "1"
+        if fast:
             pans = [0.6, -1.8]
         else:
             pans = [0.6, -0.2, -1.0, -1.8]
