@@ -226,14 +226,15 @@ class MaskSiglipEncoder(SiglipEncoder):
         feat = self.forward_one_block_(self.model.vision_model.head.attention, feat)
         feat = self.model.vision_model.head.layernorm(feat)
         feat = feat + self.model.vision_model.head.mlp(feat)
-        # fp32 before CPU interpolate (half bilinear unsupported on CPU; voxel features stay fp32).
-        feat = feat.detach().cpu().float()
+        # Do the spatial upsampling + normalize on GPU (fp32): CPU bilinear on a
+        # 512-channel 4D tensor is very slow and dominated per-update wall time in
+        # OVMM find evals. Only the final small feature map moves to CPU.
         with torch.no_grad():
             N, L, H, W = self.model.vision_model.embeddings.patch_embedding(x["pixel_values"]).shape
-        feat = feat.reshape(N, H, W, L).permute(0, 3, 1, 2)
+        feat = feat.reshape(N, H, W, L).permute(0, 3, 1, 2).float()
         feat = F.interpolate(feat, image_shape, mode="bilinear", align_corners=True)
         feat = F.normalize(feat, dim=1)
-        return feat.permute(0, 2, 3, 1)
+        return feat.permute(0, 2, 3, 1).detach().cpu()
 
     def run_mask_siglip(self, image, image_shape):
         """
@@ -252,7 +253,7 @@ class MaskSiglipEncoder(SiglipEncoder):
             if image.ndim == 3:
                 image = image.unsqueeze(0)
             image = F.interpolate(image, size=image_shape, mode="bilinear", align_corners=False).squeeze()
-        features = self.extract_mask_siglip_features(input, image.shape[-2:]).cpu()
+        features = self.extract_mask_siglip_features(input, image.shape[-2:])
 
         return image, features
 

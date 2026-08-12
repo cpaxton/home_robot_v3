@@ -284,6 +284,12 @@ class DynamemController(BaseController):
         self._lingbot_last_depth: np.ndarray | None = None
         self._lingbot_last_pose: np.ndarray | None = None
         self._lingbot_use_pose = bool(self.parameters.get("lingbot_use_pose", True))
+        # Heavy perception (YoloE detection + SigLIP dense features + instance memory
+        # + graph update) runs every N updates; occupancy/clearance update every frame
+        # so navigation is always current. The VLM/graph verification reads the latest
+        # full-perception observation, so a skipped frame only defers object recall by
+        # one cadence — a huge wall-time cut in teleport eval (each update was ~15-20s).
+        self._perception_every_n = max(1, int(self.parameters.get("perception_every_n", 2) or 1))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)
         ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")
@@ -861,6 +867,17 @@ class DynamemController(BaseController):
         doc = f"{base}\n\n---\n\n## Live status\n{live}"
         self.rerun_visualizer.log_text("robot_monologue", doc)
 
+    def _run_full_perception(self) -> bool:
+        """True when this update should run the expensive perception stack.
+
+        Occupancy/clearance (what navigation needs) updates every frame; YoloE +
+        SigLIP + instance memory + graph sync are throttled to every
+        ``perception_every_n`` frames. ``perception_every_n=1`` = always (old
+        behavior). The throttled path still produces a fresh depth/pointcloud, so
+        A* has current obstacles; only object-level recall lags by one cadence.
+        """
+        return self._perception_every_n <= 1 or (self.obs_count - 1) % self._perception_every_n == 0
+
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
@@ -964,7 +981,9 @@ class DynamemController(BaseController):
             if org is not None:
                 self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
-        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
+        self.voxel_map.process_rgbd_images(
+            rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=self._run_full_perception()
+        )
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
             print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
         robot_xy = None
@@ -1000,8 +1019,10 @@ class DynamemController(BaseController):
                 )
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
-        if self.graph_memory is not None and (
-            self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler
+        if (
+            self._run_full_perception()
+            and self.graph_memory is not None
+            and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler)
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (

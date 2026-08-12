@@ -636,6 +636,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         pose: np.ndarray,
         *,
         base_xyt: np.ndarray | None = None,
+        full_perception: bool = True,
     ):
         """
         Process rgbd images for Dynamem
@@ -644,6 +645,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
             base_xyt: Optional ``(x, y, yaw)`` in the same world frame as ``gps`` / ``compass`` from the
                 robot client. When set, stamps ``_visited`` at the **base** so A* ``_navigable`` matches the
                 planner start pose (camera pose alone can miss the footprint for head-mounted cameras).
+            full_perception: When False, skip the expensive object-level stack (YoloE
+                detection, SigLIP dense features, instance memory, semantic memory).
+                Occupancy / clearance / visited still update so navigation is current.
         """
         # Keep originals for scene graph processor (before any resizing/filtering)
         original_rgb = rgb.copy()
@@ -695,7 +699,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         instance_image = None
         instance_classes = None
         instance_scores = None
-        if self.use_instance_memory and self.detection_model is not None:
+        if full_perception and self.use_instance_memory and self.detection_model is not None:
             try:
                 sem, instance, task_obs = self.detection_model.predict(
                     rgb, depth=depth, draw_instance_predictions=False
@@ -765,7 +769,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             max_depth=self.max_depth,
         )
 
-        if self.encoder is not None:
+        if full_perception and self.encoder is not None:
             with torch.no_grad():
                 _t_enc = time.time()
                 rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
