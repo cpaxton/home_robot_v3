@@ -1969,6 +1969,17 @@ class AgenticEQAExecutor:
 
     def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
         """Install recalled hyps: drop visited frontiers; prefer untried in order."""
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            inv = [h for h in hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+            exp = [h for h in hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
+            _logger.info(
+                "[hyps] q=%r investigate=%d (%s) explore=%d (%s)",
+                self.query_text[:50],
+                len(inv),
+                [f"{int(h.obs_id)}:{h.phrase}" for h in inv][:8],
+                len(exp),
+                [f"{int(h.obs_id)}:{h.phrase}" for h in exp][:8],
+            )
         filtered: list[NavHypothesis] = []
         for h in hypotheses:
             oid = int(h.obs_id)
