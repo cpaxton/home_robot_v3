@@ -1661,13 +1661,6 @@ class AgenticEQAExecutor:
 
         cap = self._tool_capture_and_update()
         cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
-        # Sweep only when the arrive-capture did NOT advance a fresh view, and do
-        # NOT replace the arrival capture with the sweep's last pan. The arrival
-        # view now faces the object (investigate passes target_theta toward it), so
-        # it is the one to verify — the sweep is only map coverage. Using the sweep
-        # capture here made the assess look at a wall pan instead of the object.
-        if not cap_adv:
-            self._tool_look_around(verify=False)
         station_oid = None
         # Only a successful capture advance counts as a new station view.
         if cap_adv:
@@ -1684,12 +1677,17 @@ class AgenticEQAExecutor:
         verify_out = None
         if self.mode == "answer":
             if station_oid is not None:
+                # The arrival view faces the object (investigate passes target_theta
+                # toward it) — verify THIS view, before any map-coverage sweep turns
+                # the head away. Scoring the sweep's last pan made the assess look at
+                # a wall instead of the object.
                 verify_out = self.handle_tool(
                     "verify_siglip",
                     {"phrase": self._siglip_phrase(phrase), "obs_id": station_oid},
                 )
             else:
-                # Arrived but capture did not advance — score once, then block re-nav.
+                # Arrived but capture did not advance — score the live arrival view
+                # (still facing the object) once, then block re-nav.
                 verify_out = self._verify_stalled_nav_view(oid, phrase=phrase)
                 flag = {
                     "obs_id": oid,
@@ -1705,6 +1703,11 @@ class AgenticEQAExecutor:
                 _logger.warning(
                     f"agentic nav loop: obs_id={oid} visits={flag['visits']} verify={flag.get('verify_status')}"
                 )
+
+        # Sweep only for map coverage when the arrive-capture did not advance a fresh
+        # view. Never overwrite the verified arrival capture with a sweep pan.
+        if not cap_adv:
+            self._tool_look_around(verify=False)
 
         closest = self._dist_to_anchor_m(oid, hyp)
         rec = self._record_place_inspect(
