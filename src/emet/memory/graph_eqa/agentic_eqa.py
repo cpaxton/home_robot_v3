@@ -2169,7 +2169,21 @@ class AgenticEQAExecutor:
         return True
 
     def _begin_policy_approach(self, source: str, obs_id: int, phrase: str) -> str:
-        if self._evidence_policy.state == AgenticState.REPLAN:
+        # A prior verify may have left the policy in ANSWER (a different hypothesis
+        # was confirmed). Starting a new investigate must reset to a fresh
+        # SEARCH→APPROACH so the next capture+assess can confirm again — otherwise
+        # apply_vlm_assessment raises 'invalid in state ANSWER' and _verified never
+        # updates even when the VLM keeps reporting present=True. Only reset when
+        # switching to a new hypothesis (not re-verifying the same confirmed view).
+        if (
+            self._evidence_policy.state in (AgenticState.REPLAN, AgenticState.ANSWER)
+            and self._evidence_policy.active_hypothesis_id
+            and self._evidence_policy.active_hypothesis_id != f"{source}:{int(obs_id)}"
+        ):
+            self._evidence_policy.reset_for_new_approach()
+            self._verified = False
+            self._verified_obs_id = None
+        elif self._evidence_policy.state == AgenticState.REPLAN:
             self._evidence_policy.replan()
             self._verified = False
             self._verified_obs_id = None
@@ -2791,7 +2805,16 @@ class AgenticEQAExecutor:
                 need_more_views=assessment.need_more_views,
             )
         except (RuntimeError, ValueError) as exc:
-            _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
+            if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                _logger.warning(
+                    "evidence-policy VLM assess rejected: %s (state=%s, present=%s, answerable=%s)",
+                    exc,
+                    self._evidence_policy.state,
+                    assessment.present,
+                    assessment.answerable,
+                )
+            else:
+                _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
         confirmed = False
         confirm_reason = "no_vlm"
         if vlm_assessment is not None:
