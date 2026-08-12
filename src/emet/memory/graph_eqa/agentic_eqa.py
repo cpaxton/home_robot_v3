@@ -2021,6 +2021,13 @@ class AgenticEQAExecutor:
         # any microwave-like features we want to go look there.
         voxel_map, _ = self._voxel_planner()
         target = self._target_phrase or self._siglip_phrase()
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            _logger.info(
+                "[siglip-seed] target=%r voxel=%s target_phrase=%r",
+                target,
+                bool(voxel_map is not None),
+                self._target_phrase,
+            )
         if voxel_map is not None and target:
             try:
                 sim = voxel_map.find_alignment_over_model(target)
