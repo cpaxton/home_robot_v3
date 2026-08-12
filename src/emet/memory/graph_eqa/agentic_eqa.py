@@ -2061,7 +2061,7 @@ class AgenticEQAExecutor:
                                 )
                             )
             except Exception as e:
-                _logger.debug(f"siglip receptacle seed failed for {target!r}: {e}")
+                _logger.warning(f"siglip receptacle seed failed for {target!r}: {e}")
 
         # (2) container/fixture node labels as a geometric fallback.
         if not out and hasattr(gm, "get_nodes"):
