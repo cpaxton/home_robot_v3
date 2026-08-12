@@ -1661,19 +1661,13 @@ class AgenticEQAExecutor:
 
         cap = self._tool_capture_and_update()
         cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
-        # Sweep only when the arrive-capture did NOT advance a fresh view. The
-        # look-around exists to find a new vantage; if navigation already minted a
-        # new obs_id, sweeping the same spot adds no map info and (in sim teleport
-        # mode) dominates wall time — 60+ head sweeps ≈ 45+ min/episode. When
-        # capture advanced we verify the fresh view directly instead.
-        look = None
-        look_cap = None
+        # Sweep only when the arrive-capture did NOT advance a fresh view, and do
+        # NOT replace the arrival capture with the sweep's last pan. The arrival
+        # view now faces the object (investigate passes target_theta toward it), so
+        # it is the one to verify — the sweep is only map coverage. Using the sweep
+        # capture here made the assess look at a wall pan instead of the object.
         if not cap_adv:
-            look = self._tool_look_around(verify=False)
-            look_cap = look.get("capture") if isinstance(look, dict) else None
-            if isinstance(look_cap, dict) and look_cap.get("ok"):
-                cap = look_cap
-                cap_adv = True
+            self._tool_look_around(verify=False)
         station_oid = None
         # Only a successful capture advance counts as a new station view.
         if cap_adv:
