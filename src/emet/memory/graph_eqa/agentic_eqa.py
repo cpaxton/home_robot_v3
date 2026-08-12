@@ -2032,6 +2032,12 @@ class AgenticEQAExecutor:
             try:
                 sim = voxel_map.find_alignment_over_model(target)
                 points, _, _, _ = voxel_map.semantic_memory.get_pointcloud()
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    _logger.info(
+                        "[siglip-seed] sim=%s n_points=%s",
+                        "None" if sim is None else f"{sim.numel()}",
+                        "None" if points is None else str(tuple(points.shape)),
+                    )
                 if sim is not None and points is not None and sim.numel() > 0:
                     best = int(sim.cpu().argmax(dim=-1))
                     best_sim = float(sim.cpu().max(dim=-1)[0].item())
