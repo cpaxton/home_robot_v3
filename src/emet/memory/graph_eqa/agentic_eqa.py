@@ -1965,7 +1965,65 @@ class AgenticEQAExecutor:
             )
         except TypeError:
             hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
+        # OVMM receptacles ("Where is the microwave/table?") often have no direct
+        # object-place card (large fixtures YoloE labels as surroundings). Fall back
+        # to investigating nearby container/fixture nodes so the agent actually goes
+        # and looks instead of exploring randomly for 8 rounds.
+        if not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
+            adjacent = self._receptacle_adjacent_hypotheses(gm)
+            if adjacent:
+                hypotheses = adjacent + hypotheses
         self._set_hypotheses(hypotheses)
+
+    _FIXTURE_LABEL_TOKENS = frozenset(
+        {
+            "cabinet",
+            "counter",
+            "shelf",
+            "table",
+            "desk",
+            "dresser",
+            "chest",
+            "drawer",
+            "stove",
+            "oven",
+            "refrigerator",
+            "fridge",
+            "microwave",
+            "countertop",
+        }
+    )
+
+    def _receptacle_adjacent_hypotheses(self, gm: Any) -> list[NavHypothesis]:
+        """Container/fixture nodes to look at when a receptacle phrase has no direct
+        place card (microwave/table/cab often sit on/under these)."""
+        if gm is None or not hasattr(gm, "get_nodes"):
+            return []
+        seen: set[int] = set()
+        out: list[NavHypothesis] = []
+        for node in gm.get_nodes():
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
+            oid = int(getattr(node, "obs_id", -1))
+            if oid < 0 or oid in seen:
+                continue
+            labels = [str(lab).lower() for lab in (getattr(node, "labels", None) or [])]
+            if not any(tok in lab for lab in labels for tok in self._FIXTURE_LABEL_TOKENS):
+                continue
+            seen.add(oid)
+            xyz = np.asarray(node.xyz, dtype=float).reshape(-1)
+            out.append(
+                NavHypothesis(
+                    phrase="nearby fixture",
+                    obs_id=oid,
+                    xyz=xyz[:3],
+                    score=0.0,
+                    source="graph",
+                )
+            )
+            if len(out) >= 4:
+                break
+        return out
 
     def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
         """Install recalled hyps: drop visited frontiers; prefer untried in order."""
