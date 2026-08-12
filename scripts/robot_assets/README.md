@@ -77,12 +77,16 @@ JSON mapping URDF mesh basename → final STL path (or name), plus an optional
 ```json
 {
   "Arm-Base-V3-v1.stl": {"stl": "arm_base.stl", "offset_mm": [0, 0, 0]},
-  "Feetech-Servo-Motor-v1.stl": {"box_mm": [40, 20, 36.5], "color": "servo_dark"}
+  "Arm-Forearm-v1.stl": {"stl": "arm_forearm.stl", "aligned": true},
+  "Feetech-Servo-Motor-v1.stl": {"box_mm": [40, 20, 36.5]}
 }
 ```
 
-Entries with `box_mm` render as a `box` geom instead of a mesh (e.g. an
-off-the-shelf servo body with no STEP export).
+Entries with `box_mm` (off-the-shelf servo bodies with no STEP export) keep their
+kinematic joints but emit **no visual geom** — the URDF fixed-joint placement can
+scatter them far from the visible arm, so they'd render as floating boxes. Entries
+with `"aligned": true` are meshes pre-rotated by `align_urdf_meshes.py` (placed at
+the body origin with identity rotation).
 
 ## Collision & spawn (important for Robocasa/MolmoSpaces)
 

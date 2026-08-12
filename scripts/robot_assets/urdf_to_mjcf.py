@@ -12,14 +12,19 @@
 
 Carries over the kinematic chain: joint frames/axes/limits, inertial params, and
 visual meshes. The optional ``--mesh-map`` JSON maps each URDF mesh basename to
-either a vendored STL (with a centroid offset to compensate STEP-part recentering)
-or a ``box`` geom for off-the-shelf bodies that have no STEP export (e.g. servos).
+either a vendored STL (with a centroid offset to compensate STEP-part recentering,
+or ``"aligned": true`` for pre-aligned meshes — see ``align_urdf_meshes.py``) or a
+``box_mm`` entry for off-the-shelf bodies that have no STEP export (e.g. Feetech
+servos). ``box_mm`` bodies keep their kinematic joints but emit NO visual geom —
+the URDF fixed-joint placement can scatter them far from the visible arm, so they'd
+render as floating boxes.
 
 Example mesh-map::
 
     {
       "Arm-Base-V3-v1.stl": {"stl": "arm_base", "offset_mm": [0, 0, 0]},
-      "Feetech-Servo-Motor-v1.stl": {"box_mm": [40, 20, 36.5], "color": "servo_dark"}
+      "Arm-Forearm-v1.stl": {"stl": "arm_forearm", "aligned": true},
+      "Feetech-Servo-Motor-v1.stl": {"box_mm": [40, 20, 36.5]}
     }
 
 Run with any Python that has numpy (main venv is fine)::

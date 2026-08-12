@@ -177,7 +177,6 @@ def build() -> str:
     a("  <asset>")
     a('    <material name="plastic_white" rgba="0.93 0.93 0.93 1" specular="0.15" shininess="0.2"/>')
     a('    <material name="plastic_dark" rgba="0.15 0.15 0.15 1" specular="0.1" shininess="0.1"/>')
-    a('    <material name="servo_dark" rgba="0.08 0.08 0.1 1" specular="0.2" shininess="0.3"/>')
     a('    <material name="wheel_rubber" rgba="0.05 0.05 0.05 1"/>')
     a('    <material name="dome_cyan" rgba="0.7 0.85 0.95 0.9"/>')
     # base / body meshes
