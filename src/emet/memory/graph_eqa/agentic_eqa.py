@@ -2016,6 +2016,9 @@ class AgenticEQAExecutor:
         seen: set[int] = set()
 
         # (1) SigLIP soft ground: top-similarity voxel point for the target phrase.
+        # A soft *explore* seed only needs to point at the most likely spot, not a
+        # PRESENT-level confirmation, so use a low bar — if the semantic memory has
+        # any microwave-like features we want to go look there.
         voxel_map, _ = self._voxel_planner()
         target = self._target_phrase or self._siglip_phrase()
         if voxel_map is not None and target:
@@ -2025,7 +2028,14 @@ class AgenticEQAExecutor:
                 if sim is not None and points is not None and sim.numel() > 0:
                     best = int(sim.cpu().argmax(dim=-1))
                     best_sim = float(sim.cpu().max(dim=-1)[0].item())
-                    if best_sim > SIGLIP_PRESENT_THRESHOLD:
+                    if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                        _logger.info(
+                            "[siglip-seed] target=%r top_sim=%.3f n_points=%d",
+                            target,
+                            best_sim,
+                            int(points.shape[0]),
+                        )
+                    if best_sim > 0.12:
                         xyz = np.asarray(points[best].detach().cpu().numpy(), dtype=float).reshape(-1)[:3]
                         if xyz.size >= 3 and np.isfinite(xyz).all():
                             out.append(
