@@ -864,6 +864,7 @@ class DynamemController(BaseController):
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
+        _t_update0 = time.time()
         obs = self.robot.get_observation()
         if obs is None:
             logger.warning("get_observation() returned None; skipping voxel update")
@@ -1039,6 +1040,8 @@ class DynamemController(BaseController):
 
         self._rerun_refresh_monologue_panel()
         self._run_on_step_callbacks()
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] obs_count={self.obs_count} wall={time.time() - _t_update0:.3f}s", flush=True)
 
     def _run_on_step_callbacks(self) -> None:
         for cb in getattr(self, "_on_step_callbacks", ()) or ():

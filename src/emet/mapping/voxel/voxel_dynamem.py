@@ -759,8 +759,11 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         if self.encoder is not None:
             with torch.no_grad():
+                _t_enc = time.time()
                 rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
                 rgb, features = rgb.squeeze(), features.squeeze()
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] siglip_enc={time.time() - _t_enc:.3f}s", flush=True)
 
             valid_xyz = world_xyz[~mask]
             features = features[~mask]
