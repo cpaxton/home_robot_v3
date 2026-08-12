@@ -865,7 +865,6 @@ class DynamemController(BaseController):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
         _t_update0 = time.time()
-        _t_g0 = time.time()
         obs = self.robot.get_observation()
         if obs is None:
             logger.warning("get_observation() returned None; skipping voxel update")
