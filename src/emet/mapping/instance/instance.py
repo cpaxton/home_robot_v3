@@ -317,6 +317,13 @@ class Instance:
     moved_since_last: bool = False
     """True if center moved beyond threshold since last association."""
 
+    # Cache for the aggregated image embedding. get_image_embedding re-concats ALL
+    # views every call, which is O(views) per call and O(views^2) per association
+    # pass (the associate loop calls it once per (view x global_instance)). Cache
+    # the aggregated result and invalidate on add_instance_view.
+    _cached_embedding: Any = None
+    _cached_embedding_use_visual: bool | None = None
+
     def __repr__(self) -> str:
         n_views = len(self.instance_views)
         return (
@@ -342,7 +349,14 @@ class Instance:
         normalize: bool = True,
         use_visual_feat: bool = False,
     ) -> Any:
-        """Combined image embedding across all views."""
+        """Combined image embedding across all views (cached; invalidated on view add)."""
+        if (
+            self._cached_embedding is not None
+            and self._cached_embedding_use_visual == use_visual_feat
+            and aggregation_method == "mean"
+            and normalize
+        ):
+            return self._cached_embedding
         if use_visual_feat:
             view_embeddings = [v.visual_feat for v in self.instance_views]
         else:
@@ -361,6 +375,9 @@ class Instance:
             raise RuntimeError(f"Unsupported aggregation method {aggregation_method}. Options: max, mean.")
         if normalize and emb is not None:
             emb = emb / (emb.norm(dim=-1, keepdim=True).clamp(min=1e-8))
+        if aggregation_method == "mean" and normalize:
+            self._cached_embedding = emb
+            self._cached_embedding_use_visual = use_visual_feat
         return emb
 
     def get_best_view(self, metric: str = "area") -> InstanceView:
@@ -442,6 +459,8 @@ class Instance:
             logger.debug("Instance.show_best_view failed (e.g. no display): %s", e)
 
     def add_instance_view(self, instance_view: InstanceView) -> None:
+        self._cached_embedding = None
+        self._cached_embedding_use_visual = None
         if len(self.instance_views) == 0:
             self.category_id = instance_view.category_id
             self.instance_views.append(instance_view)
