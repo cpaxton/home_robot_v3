@@ -170,12 +170,10 @@ class UrdfToMjcf:
         if meshfile is not None:
             entry = mesh_map_entry(self.mesh_map, meshfile)
             if "box_mm" in entry:
-                half = [v / 2.0 / 1000.0 for v in entry["box_mm"]]
-                color = entry.get("color", "servo_dark")
-                lines.append(
-                    f'{indent}  <geom type="box" size="{vstr(half)}" material="{color}" '
-                    f'group="2" contype="0" conaffinity="0"/>'
-                )
+                # Off-the-shelf bodies with no STEP export (e.g. Feetech servos) carry the
+                # revolute joints but get NO visual geom: the URDF fixed-joint placement can
+                # scatter them far from the visible arm, so they'd render as floating boxes.
+                pass
             elif "stl" in entry:
                 if entry.get("aligned"):
                     # Pre-aligned mesh (long axis along link +y, entry joint at origin):
