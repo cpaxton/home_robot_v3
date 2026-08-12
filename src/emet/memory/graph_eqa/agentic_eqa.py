@@ -1571,14 +1571,22 @@ class AgenticEQAExecutor:
         if target is None:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = self._robot_xyt_world() if xyt is not None else np.array([0.0, 0.0, 0.0])
-        # Face the object on arrival: navigate_to_target_pose with target_theta=None
-        # leaves the final yaw arbitrary (often a wall), so the arrival capture sees
-        # a brick wall and the VLM assess reports present=False. Compute theta toward
-        # the target from the goal pose and pass it so the head looks at the object.
+        # Face the OBJECT on arrival, not the approach waypoint. navigate_to_target_pose
+        # with target_theta=None leaves the final yaw arbitrary (often a wall), so the
+        # arrival capture sees a brick wall and the VLM assess reports present=False.
+        # theta toward the object anchor from the standing waypoint makes the head look
+        # at the target itself.
         try:
             t_arr = np.asarray(target, dtype=float).reshape(-1)
-            s_arr = np.asarray(start, dtype=float).reshape(-1)
-            target_theta = float(np.arctan2(t_arr[1] - s_arr[1], t_arr[0] - s_arr[0]))
+            look_at = t_arr[:2]
+            gm = self.graph_memory
+            if gm is not None and hasattr(gm, "_obs_nav_anchor"):
+                anchor = gm._obs_nav_anchor(int(oid))
+                if anchor is not None:
+                    a_arr = np.asarray(anchor, dtype=float).reshape(-1)
+                    if a_arr.size >= 2 and np.isfinite(a_arr[:2]).all():
+                        look_at = a_arr[:2]
+            target_theta = float(np.arctan2(look_at[1] - t_arr[1], look_at[0] - t_arr[0]))
         except Exception:
             target_theta = None
         try:
