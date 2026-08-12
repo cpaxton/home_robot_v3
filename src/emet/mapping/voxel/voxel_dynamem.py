@@ -793,6 +793,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 from emet.utils.logger import warning as _warn_colored
 
                 _warn_colored(f"Scene graph update failed: {e}")
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] process_rgbd_images_end={time.monotonic():.3f}", flush=True)
 
     def add_to_semantic_memory(
         self,

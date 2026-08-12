@@ -967,7 +967,7 @@ class DynamemController(BaseController):
 
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
-            print(f"[update] process_rgbd={time.time() - _t_g0:.3f}s", flush=True)
+            print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
         robot_xy = None
         if obs.gps is not None and obs.compass is not None:
             g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
@@ -1033,7 +1033,7 @@ class DynamemController(BaseController):
                     calibration_writer=getattr(self, "_calibration_writer", None),
                 )
                 if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
-                    print(f"[update] graph_update={time.time() - _t_g0:.3f}s", flush=True)
+                    print(f"[update] graph_update={time.monotonic():.3f}", flush=True)
 
         if self.graph_memory is not None:
             self._sync_graph_frontier_nodes()
