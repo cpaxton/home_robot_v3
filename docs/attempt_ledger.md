@@ -89,6 +89,8 @@ Separate from classic EQA prompt `HISTORY:` (answer-iteration scrap). `GraphEQAM
 
 Agentic writers: investigate room-stamp → `stamp`; close ABSENT retract → `verify_absent` (+ ledger `room=` when on); place coverage → `closed` → `coverage_closed`. Paper-router H2H injects `EMET_EQA_ROOM_STAMP_INVESTIGATE=1` and `EMET_EQA_ATTEMPT_LEDGER=1`. This is **agent-visible memory**, not a nav/escape latch.
 
+**Experiment ladder:** [experiments/graph_room_evidence.md](experiments/graph_room_evidence.md) (smoke → rooms probe → wrong-room dwell metrics → optional scale).
+
 ### API on `GraphEQAMemory`
 
 | Method | Role |
