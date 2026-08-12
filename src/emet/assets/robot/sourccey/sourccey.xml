@@ -108,41 +108,41 @@
       <body name="plate_1" pos="0 0 0.335">
         <geom type="mesh" mesh="base_plate_l2" class="robot_visual" pos="0 0 0"/>
       </body>
-      <body name="wall_0_0.125_0" pos="0 0.125 0.21000000000000002" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
+      <body name="wall_1_y1" pos="0.0 0.018199999999999994 0.0">
+        <geom type="mesh" mesh="wall_l1_front" class="robot_visual" pos="0 0 0.21000000000000002" quat="1 0 0 0"/>
       </body>
-      <body name="wall_0_-0.125_0" pos="0 -0.125 0.21000000000000002" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l1_back" class="robot_visual"/>
+      <body name="wall_1_y-1" pos="0.0 -0.018199999999999994 0.0">
+        <geom type="mesh" mesh="wall_l1_back" class="robot_visual" pos="0 0 0.21000000000000002" quat="1 0 0 0"/>
       </body>
-      <body name="wall_0.125_0_0" pos="0.125 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
+      <body name="wall_1_x1" pos="0.018199999999999994 0.0 0.0">
+        <geom type="mesh" mesh="wall_l1_front" class="robot_visual" pos="0 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068"/>
       </body>
-      <body name="wall_-0.125_0_0" pos="-0.125 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l1_front" class="robot_visual"/>
+      <body name="wall_1_x-1" pos="-0.018199999999999994 0.0 0.0">
+        <geom type="mesh" mesh="wall_l1_front" class="robot_visual" pos="0 0 0.21000000000000002" quat="0.7071068 0 0 0.7071068"/>
       </body>
-      <body name="wall_0_0.104_0" pos="0 0.104 0.445" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l2_front" class="robot_visual"/>
+      <body name="wall_2_y1" pos="0.0 0.0005000000000000004 0.0">
+        <geom type="mesh" mesh="wall_l2_front" class="robot_visual" pos="0 0 0.445" quat="1 0 0 0"/>
       </body>
-      <body name="wall_0_-0.104_0" pos="0 -0.104 0.445" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l2_front" class="robot_visual"/>
+      <body name="wall_2_y-1" pos="0.0 -0.0005000000000000004 0.0">
+        <geom type="mesh" mesh="wall_l2_front" class="robot_visual" pos="0 0 0.445" quat="1 0 0 0"/>
       </body>
-      <body name="wall_-0.104_0_0" pos="-0.104 0 0.445" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l2_left" class="robot_visual"/>
+      <body name="wall_2_x-1" pos="-0.0005000000000000004 0.0 0.0">
+        <geom type="mesh" mesh="wall_l2_left" class="robot_visual" pos="0 0 0.445" quat="0.7071068 0 0 0.7071068"/>
       </body>
-      <body name="wall_0.104_0_0" pos="0.104 0 0.445" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l2_right" class="robot_visual"/>
+      <body name="wall_2_x1" pos="0.0005000000000000004 0.0 0.0">
+        <geom type="mesh" mesh="wall_l2_right" class="robot_visual" pos="0 0 0.445" quat="0.7071068 0 0 0.7071068"/>
       </body>
-      <body name="wall_0_0.092_1" pos="0 0.092 0.6799999999999999" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l3_front" class="robot_visual"/>
+      <body name="wall_3_y1" pos="0.0 0.00019999999999999185 0.0">
+        <geom type="mesh" mesh="wall_l3_front" class="robot_visual" pos="0 0 0.6799999999999999" quat="1 0 0 0"/>
       </body>
-      <body name="wall_0_-0.092_1" pos="0 -0.092 0.6799999999999999" quat="1 0 0 0">
-        <geom type="mesh" mesh="wall_l3_front" class="robot_visual"/>
+      <body name="wall_3_y-1" pos="0.0 -0.00019999999999999185 0.0">
+        <geom type="mesh" mesh="wall_l3_front" class="robot_visual" pos="0 0 0.6799999999999999" quat="1 0 0 0"/>
       </body>
-      <body name="wall_-0.092_0_1" pos="-0.092 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l3_left" class="robot_visual"/>
+      <body name="wall_3_x-1" pos="-0.00019999999999999185 0.0 0.0">
+        <geom type="mesh" mesh="wall_l3_left" class="robot_visual" pos="0 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068"/>
       </body>
-      <body name="wall_0.092_0_1" pos="0.092 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068">
-        <geom type="mesh" mesh="wall_l3_right" class="robot_visual"/>
+      <body name="wall_3_x1" pos="0.00019999999999999185 0.0 0.0">
+        <geom type="mesh" mesh="wall_l3_right" class="robot_visual" pos="0 0 0.6799999999999999" quat="0.7071068 0 0 0.7071068"/>
       </body>
 
       <body name="lift_column" pos="0 0 0">

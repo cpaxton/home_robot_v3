@@ -292,31 +292,36 @@ def build() -> str:
         a(f'        <geom type="mesh" mesh="{name}" class="robot_visual" pos="0 0 0"/>')
         a("      </body>")
     # Walls: each level is a shell of square panels. The STEP wall pieces are hollow
-    # panels (their mesh bounds are square, recentered at bbox center), so place each
-    # at the level's face and rotate to face outward. Panel half-size matches the plate.
-    # (front/back at +-y, left/right at +-x; rotate 90deg about z for side walls)
+    # panels (their mesh bounds are square, recentered at bbox center). Each wall is
+    # centered at ``plate_half - wall_half`` so the body outer face matches the plate
+    # (e.g. L1 plate 125mm - wall half 107mm = 18mm), keeping the body within the
+    # wheel footprint. (front/back at +-y, left/right at +-x; rotate 90deg for sides)
+    # wall half-sizes in m (from the recentered STLs)
+    WALL_HALF = {1: 0.1068, 2: 0.1035, 3: 0.0918}
+    wall_z = {1: WALL_1_Z, 2: WALL_2_Z, 3: WALL_3_Z}
+    plate_half = {1: L1_HALF, 2: L2_HALF, 3: L3_HALF}
     wall_layout = [
-        # (mesh, dx, dy, z, rotz_deg)
-        # Level 1: front/back/left/right (reuse front for sides; rotate for left/right)
-        ("wall_l1_front", 0, L1_HALF, WALL_1_Z, 0),
-        ("wall_l1_back", 0, -(L1_HALF), WALL_1_Z, 0),
-        ("wall_l1_front", L1_HALF, 0, WALL_1_Z, 90),
-        ("wall_l1_front", -(L1_HALF), 0, WALL_1_Z, 90),
-        # Level 2
-        ("wall_l2_front", 0, L2_HALF, WALL_2_Z, 0),
-        ("wall_l2_front", 0, -(L2_HALF), WALL_2_Z, 0),
-        ("wall_l2_left", -(L2_HALF), 0, WALL_2_Z, 90),
-        ("wall_l2_right", L2_HALF, 0, WALL_2_Z, 90),
-        # Level 3
-        ("wall_l3_front", 0, L3_HALF, WALL_3_Z, 0),
-        ("wall_l3_front", 0, -(L3_HALF), WALL_3_Z, 0),
-        ("wall_l3_left", -(L3_HALF), 0, WALL_3_Z, 90),
-        ("wall_l3_right", L3_HALF, 0, WALL_3_Z, 90),
+        # (mesh, level, axis('y'|'x'), sign, rotz_deg)
+        ("wall_l1_front", 1, "y", 1, 0),
+        ("wall_l1_back", 1, "y", -1, 0),
+        ("wall_l1_front", 1, "x", 1, 90),
+        ("wall_l1_front", 1, "x", -1, 90),
+        ("wall_l2_front", 2, "y", 1, 0),
+        ("wall_l2_front", 2, "y", -1, 0),
+        ("wall_l2_left", 2, "x", -1, 90),
+        ("wall_l2_right", 2, "x", 1, 90),
+        ("wall_l3_front", 3, "y", 1, 0),
+        ("wall_l3_front", 3, "y", -1, 0),
+        ("wall_l3_left", 3, "x", -1, 90),
+        ("wall_l3_right", 3, "x", 1, 90),
     ]
-    for name, dx, dy, z, rotz in wall_layout:
+    for name, lvl, axis, sign, rotz in wall_layout:
+        off = plate_half[lvl] - WALL_HALF[lvl]
+        dx = sign * off if axis == "x" else 0.0
+        dy = sign * off if axis == "y" else 0.0
         quat = "1 0 0 0" if rotz == 0 else "0.7071068 0 0 0.7071068"
-        a(f'      <body name="wall_{dx}_{dy}_{z:.0f}" pos="{dx} {dy} {z}" quat="{quat}">')
-        a(f'        <geom type="mesh" mesh="{name}" class="robot_visual"/>')
+        a(f'      <body name="wall_{lvl}_{axis}{sign}" pos="{dx} {dy} 0.0">')
+        a(f'        <geom type="mesh" mesh="{name}" class="robot_visual" pos="0 0 {wall_z[lvl]}" quat="{quat}"/>')
         a("      </body>")
     a("")
     # ---- linear actuator column (fixed to base) ----
