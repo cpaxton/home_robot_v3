@@ -1271,10 +1271,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     pose=base_pose,
                 )
                 if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
-                    print(f"[update] process_instances={time.time() - _t_pr0:.3f}s", flush=True)
+                    print(f"[update] process_instances={time.monotonic():.3f}", flush=True)
                 self.instances.associate_instances_to_memory()
                 if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
-                    print(f"[update] associate_instances={time.time() - _t_pr0:.3f}s", flush=True)
+                    print(f"[update] associate_instances={time.monotonic():.3f}", flush=True)
 
         # Add to voxel grid
         if feats is not None:
