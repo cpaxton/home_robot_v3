@@ -716,6 +716,9 @@ class GraphEQAMemory:
         # When True, clear_retracted_nav_claims keeps ABSENT blacklists across questions.
         # Default off so HM-EQA paper arms stay unchanged.
         self.persist_absent_claims: bool = False
+        # Room-scoped timeline (survives cluster rebuild; agent-facing via format_room_history).
+        self._room_events: list[dict[str, Any]] = []
+        self._room_events_max: int = 64
         self._load_navigation_settings()
         self._load_dynagraph_settings()
         self._load_frontier_settings()
@@ -965,6 +968,7 @@ class GraphEQAMemory:
         self.last_relevant_images = []
         self.last_eqa_answer_field_emitted = False
         self.last_eqa_salvage_used = False
+        self.clear_room_events()
 
     def invalidate_nodes_near(
         self,
@@ -2123,6 +2127,7 @@ class GraphEQAMemory:
         source: AttemptSource | str = "unknown",
         question_id: str | None = None,
         phrase: str = "",
+        room: str = "",
         force: bool = False,
     ) -> AttemptRecord | None:
         """Append one :class:`AttemptRecord` when the ledger is enabled (or ``force``).
@@ -2149,6 +2154,7 @@ class GraphEQAMemory:
                 "source": src,
                 "question_id": qid,
                 "phrase": phrase,
+                "room": room,
             }
         )
         self._attempt_records.append(rec)
@@ -2156,6 +2162,89 @@ class GraphEQAMemory:
         if len(self._attempt_records) > max_n:
             self._attempt_records = self._attempt_records[-max_n:]
         return rec
+
+    def clear_room_events(self) -> None:
+        """Drop the room timeline (new episode / world-change)."""
+        self._room_events = []
+
+    def record_room_event(
+        self,
+        *,
+        room: str | None,
+        kind: str,
+        step: int | None = None,
+        phrase: str = "",
+        obs_id: int | None = None,
+        note: str = "",
+    ) -> dict[str, Any] | None:
+        """Append a room-scoped timeline event when ``room`` is a known label.
+
+        Does **not** invent ``unknown``. Survives room-cluster rebuilds. Independent
+        of the attempt-ledger opt-in so agentic state can still show history.
+        """
+        from emet.memory.graph_eqa.room_clusters import normalize_current_room
+
+        room_n = normalize_current_room(room)
+        if room_n == "unknown":
+            return None
+        kind_s = str(kind or "").strip().lower()
+        if not kind_s:
+            return None
+        st = int(step if step is not None else self._effective_timestep())
+        event = {
+            "step": st,
+            "room": room_n,
+            "kind": kind_s[:40],
+            "phrase": str(phrase or "").strip().lower()[:80],
+            "obs_id": int(obs_id) if obs_id is not None else None,
+            "note": str(note or "").strip()[:120],
+        }
+        self._room_events.append(event)
+        max_n = max(8, int(self._room_events_max))
+        if len(self._room_events) > max_n:
+            self._room_events = self._room_events[-max_n:]
+        return dict(event)
+
+    def get_room_events(self, *, limit: int | None = None) -> list[dict[str, Any]]:
+        """Return room timeline rows (oldest first)."""
+        rows = [dict(e) for e in self._room_events]
+        if limit is not None and int(limit) >= 0:
+            rows = rows[-int(limit) :]
+        return rows
+
+    def format_room_history(
+        self,
+        *,
+        max_chars: int = 220,
+        target_rooms: list[str] | set[str] | None = None,
+    ) -> str:
+        """Newest-first compact room timeline for the agentic state card."""
+        if not self._room_events:
+            targets = sorted({str(t).strip().lower() for t in (target_rooms or []) if str(t).strip()})
+            if not targets:
+                return ""
+            return "Room history: (none) | targets=" + ",".join(targets)
+        bits: list[str] = []
+        for ev in reversed(self._room_events):
+            step = int(ev.get("step") or 0)
+            room = str(ev.get("room") or "").strip() or "?"
+            kind = str(ev.get("kind") or "").strip() or "?"
+            phrase = str(ev.get("phrase") or "").strip()
+            bit = f"r{step} {room} {kind}"
+            if phrase and kind.startswith("verify"):
+                bit += f"({phrase})"
+            bits.append(bit)
+        targets = sorted({str(t).strip().lower() for t in (target_rooms or []) if str(t).strip()})
+        prefix = "Room history: "
+        tail = (" | targets=" + ",".join(targets)) if targets else ""
+        # Drop oldest (end of newest-first list) until under budget.
+        while bits:
+            body = "; ".join(bits)
+            text = prefix + body + tail
+            if len(text) <= int(max_chars):
+                return text
+            bits = bits[:-1]
+        return (prefix + "(truncated)" + tail)[: int(max_chars)]
 
     def get_attempt_records(
         self,
@@ -3032,6 +3121,8 @@ class GraphEQAMemory:
         phrase: str,
         *,
         strip_matching_labels: bool = True,
+        room: str | None = None,
+        step: int | None = None,
     ) -> dict[str, Any]:
         """Stop offering a disproved stem-object claim without deleting the place.
 
@@ -3071,6 +3162,15 @@ class GraphEQAMemory:
                         labels=kept if kept else ["object"],
                     )
                     stripped_nodes += 1
+        room_ev = self.record_room_event(
+            room=room,
+            kind="verify_absent",
+            step=step,
+            phrase=key_phrase,
+            obs_id=oid,
+            note="retract claim",
+        )
+        room_label = str((room_ev or {}).get("room") or "")
         # Persist ABSENT as a verify attempt when the ledger is on (does not change
         # per-view semantics — ABSENT is not scene-wide proof of absence).
         self.record_attempt(
@@ -3081,6 +3181,8 @@ class GraphEQAMemory:
             obs_id=oid,
             phrase=key_phrase,
             source="eqa",
+            room=room_label,
+            step=step,
         )
         return {
             "ok": True,
@@ -3089,6 +3191,7 @@ class GraphEQAMemory:
             "stripped_obs": stripped_obs,
             "stripped_nodes": stripped_nodes,
             "n_retracted": len(self._retracted_nav_claims),
+            "room": room_label or None,
         }
 
     def clear_retracted_nav_claims(self) -> None:

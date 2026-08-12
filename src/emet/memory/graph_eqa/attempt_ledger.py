@@ -129,10 +129,12 @@ class AttemptRecord:
     source: AttemptSource = "unknown"
     question_id: str | None = None
     phrase: str = ""
+    # Canonical room label when known (schema v2). Empty for v1 imports / unknown.
+    room: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "action_kind": self.action_kind,
             "outcome": self.outcome,
             "status_code": self.status_code,
@@ -144,6 +146,7 @@ class AttemptRecord:
             "source": self.source,
             "question_id": self.question_id,
             "phrase": self.phrase,
+            "room": self.room,
         }
 
     def summary_bit(self) -> str:
@@ -181,6 +184,7 @@ class AttemptRecord:
             src = "unknown"
         nid = data.get("target_node_id")
         oid = data.get("obs_id")
+        room = str(data.get("room") or "").strip().lower()[:40]
         return cls(
             action_kind=kind,
             outcome=outcome,
@@ -193,6 +197,7 @@ class AttemptRecord:
             source=src,  # type: ignore[arg-type]
             question_id=str(data["question_id"]) if data.get("question_id") is not None else None,
             phrase=str(data.get("phrase") or "").strip().lower()[:80],
+            room=room,
         )
 
 

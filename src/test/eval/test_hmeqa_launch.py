@@ -77,3 +77,23 @@ def test_hmeqa_h2h_env_parts_local_keeps_hf_model_id():
     joined = " ".join(parts)
     assert "EQA_HF_MODEL_ID=" in joined
     assert hmeqa_h2h_vl_endpoint_from_env_parts(parts) is None
+    assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" not in joined
+    assert "EMET_EQA_ATTEMPT_LEDGER=1" not in joined
+
+
+def test_hmeqa_h2h_env_parts_agentic_router_enables_room_evidence():
+    parts = hmeqa_h2h_env_parts(
+        arms="agentic",
+        ids="2,104",
+        coverage_qids="15,28,47",
+        cooldown=20,
+        crash_policy="skip",
+        streak_abort=2,
+        agentic_verifier="none",
+        require_verified=True,
+        agentic_router=True,
+    )
+    joined = " ".join(parts)
+    assert "EMET_EQA_AGENTIC_ROUTER=1" in joined
+    assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" in joined
+    assert "EMET_EQA_ATTEMPT_LEDGER=1" in joined

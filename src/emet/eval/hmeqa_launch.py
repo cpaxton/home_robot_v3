@@ -72,6 +72,11 @@ def hmeqa_h2h_env_parts(
         f"EMET_EQA_AGENTIC_REQUIRE_VERIFIED={int(require_verified)}",
         f"EMET_EQA_AGENTIC_ROUTER={int(agentic_router)}",
     ]
+    # Graph-first room evidence: stamp investigates into room clusters + ledger so
+    # the agentic state card can show a room timeline (no escape latch).
+    if int(agentic_router):
+        parts.append("EMET_EQA_ROOM_STAMP_INVESTIGATE=1")
+        parts.append("EMET_EQA_ATTEMPT_LEDGER=1")
     host_s = (host or "").strip()
     ep_s = (vl_endpoint or "").strip()
     if ep_s:

@@ -17,6 +17,8 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 
 **Action-outcome ledger (opt-in):** `GraphEQAMemory` can store structured attempt rows (failed nav, verify ABSENT, pick/place, closer look) next to the scene graph. Default **off** for paper HM-EQA / OVMM. See [attempt_ledger.md](attempt_ledger.md).
 
+**Room timeline:** the same memory keeps a capped room-scoped event history (`stamp` / `verify_absent` / `coverage_closed`, …) for the agentic state card — agent-visible facts, not a nav escape latch. See [attempt_ledger.md](attempt_ledger.md#room-timeline-graph-history).
+
 ## When to use GraphEQA vs DynaMem EQA
 
 | | **EQA (DynaMem)** | **Graph EQA** |

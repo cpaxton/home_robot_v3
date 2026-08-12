@@ -1262,6 +1262,24 @@ class AgenticEQAExecutor:
             "xy": [float(stamp_xy[0]), float(stamp_xy[1])],
         }
         self._append_trace({"event": "room_stamp_investigate", **payload})
+        self._record_room_timeline(
+            kind="stamp",
+            room=merged,
+            obs_id=int(obs_id),
+            note=f"investigate stamp prev={prev}",
+        )
+        if gm is not None and hasattr(gm, "record_attempt"):
+            gm.record_attempt(
+                action_kind="investigate",
+                outcome="ok",
+                status_code="room_stamp",
+                note=f"stamp room={merged} at obs {int(obs_id)}",
+                step=int(self._round) + 1,
+                obs_id=int(obs_id),
+                phrase="",
+                source="eqa",
+                room=normalize_current_room(merged),
+            )
         return payload
 
     def _voxel_planner(self) -> tuple[Any | None, Any | None]:
@@ -1270,10 +1288,49 @@ class AgenticEQAExecutor:
         planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
         return voxel_map, planner
 
+    def _known_room_for_event(self) -> str:
+        """Canonical room label for timeline writes; empty when unknown (never invent)."""
+        for raw in (self._last_room_estimate, self._graph_room_estimate):
+            room = normalize_current_room(raw)
+            if room != "unknown":
+                return room
+        return ""
+
+    def _record_room_timeline(
+        self,
+        *,
+        kind: str,
+        room: str | None = None,
+        phrase: str = "",
+        obs_id: int | None = None,
+        note: str = "",
+    ) -> dict[str, Any] | None:
+        gm = self.graph_memory
+        if gm is None or not hasattr(gm, "record_room_event"):
+            return None
+        label = normalize_current_room(room) if room else self._known_room_for_event()
+        if label == "unknown" or not label:
+            label = self._known_room_for_event()
+        if not label:
+            return None
+        try:
+            return gm.record_room_event(
+                room=label,
+                kind=kind,
+                step=int(self._round) + 1,
+                phrase=phrase,
+                obs_id=obs_id,
+                note=note,
+            )
+        except Exception as e:
+            _logger.warning(f"record_room_event failed: {e}")
+            return None
+
     def _refresh_place_coverage(self, obs_id: int) -> PlaceInspectRecord:
         """Update Investigate-card coverage= from footprint ∩ unexplored frontier."""
         oid = int(obs_id)
         rec = self._place_inspect.get(oid) or PlaceInspectRecord()
+        prev_cov = str(rec.coverage or "unknown")
         gm = self.graph_memory
         voxel_map, planner = self._voxel_planner()
         cov = None
@@ -1292,6 +1349,12 @@ class AgenticEQAExecutor:
             rec.coverage = str(getattr(cov, "status", "unknown") or "unknown")
             rec.local_frontier_cells = int(getattr(cov, "local_frontier_cells", 0) or 0)
         self._place_inspect[oid] = rec
+        if prev_cov != "closed" and rec.coverage == "closed":
+            self._record_room_timeline(
+                kind="coverage_closed",
+                obs_id=oid,
+                note=f"obs {oid} local frontier closed",
+            )
         return rec
 
     def _mark_approach_tried(
@@ -1420,13 +1483,19 @@ class AgenticEQAExecutor:
         phrase = str(verify_out.get("phrase") or self._target_phrase or "").strip()
         if not phrase:
             return None
-        out = gm.retract_phrase_claim_at_obs(int(obs_id), phrase)
+        out = gm.retract_phrase_claim_at_obs(
+            int(obs_id),
+            phrase,
+            room=self._known_room_for_event() or None,
+            step=int(self._round) + 1,
+        )
         self._append_trace(
             {
                 "event": "retract_claim",
                 "obs_id": int(obs_id),
                 "phrase": str(out.get("phrase") or phrase),
                 "closest_m": float(closest_m),
+                "room": out.get("room"),
                 **{k: out.get(k) for k in ("stripped_obs", "stripped_nodes", "ok")},
             }
         )
@@ -3951,6 +4020,8 @@ class AgenticEQAExecutor:
         gm0 = self.graph_memory
         if gm0 is not None and hasattr(gm0, "clear_retracted_nav_claims"):
             gm0.clear_retracted_nav_claims()
+        if gm0 is not None and hasattr(gm0, "clear_room_events"):
+            gm0.clear_room_events()
         # Resolve panel dir early so HM-EQA bundles get picks even without trace_path.
         try:
             self._frontier_pick_out_dir()

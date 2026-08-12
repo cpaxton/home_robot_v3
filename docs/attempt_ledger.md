@@ -73,20 +73,34 @@ See [emet_config.md](emet_config.md) and [environment_variables.md](environment_
 | `phrase` | Text query when relevant |
 | `source` | `chat` \| `eqa` \| `unknown` |
 | `question_id` | Optional episode question id |
+| `room` | Canonical room label when known (**schema v2**); empty on v1 imports |
 
-Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records` (default 512).
+Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records` (default 512). Export `schema_version` is **2**.
+
+### Room timeline (graph history)
+
+Separate from classic EQA prompt `HISTORY:` (answer-iteration scrap). `GraphEQAMemory` keeps a capped `_room_events` list (`stamp`, `verify_absent`, `coverage_closed`, …) with `step` + `room`. It survives room-cluster rebuilds, clears on new agentic episode / `clear_eqa_working_memory`, and is **not** gated on the ledger opt-in.
+
+| Method | Role |
+|--------|------|
+| `record_room_event(...)` | Append when room is a known label (never invents `unknown`) |
+| `format_room_history(...)` | Newest-first compact line for agentic `build_state_message` |
+| `clear_room_events()` | Drop timeline |
+
+Agentic writers: investigate room-stamp → `stamp`; close ABSENT retract → `verify_absent` (+ ledger `room=` when on); place coverage → `closed` → `coverage_closed`. Paper-router H2H injects `EMET_EQA_ROOM_STAMP_INVESTIGATE=1` and `EMET_EQA_ATTEMPT_LEDGER=1`. This is **agent-visible memory**, not a nav/escape latch.
 
 ### API on `GraphEQAMemory`
 
 | Method | Role |
 |--------|------|
-| `record_attempt(...)` | Append one row (no-op when ledger off, unless `force=True`) |
+| `record_attempt(...)` | Append one row (no-op when ledger off, unless `force=True`); optional `room=` |
 | `get_attempt_records()` | Ordered list (oldest first) |
 | `export_attempt_ledger()` / `import_attempt_ledger(...)` | Serialize / restore |
 | `clear_attempt_ledger()` | Drop rows |
 | `attempt_summary_for_obs(obs_id)` | Compact `[attempts: …]` bits for place cards |
 | `set_attempt_ledger_question_id(...)` | Tag subsequent rows with a question id |
 | `record_nav_attempt(...)` | Always updates node counters; dual-writes a `navigate` row when ledger on |
+| `record_room_event` / `format_room_history` | Room-scoped timeline (see above) |
 
 Helpers:
 

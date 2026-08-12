@@ -347,6 +347,18 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 rooms_line = ""
             if isinstance(rooms_line, str) and rooms_line.strip():
                 lines.append(rooms_line)
+        hist_fn = getattr(gm, "format_room_history", None)
+        if callable(hist_fn):
+            try:
+                from emet.memory.graph_eqa.room_clusters import question_target_rooms
+
+                targets = sorted(question_target_rooms(str(getattr(executor, "question", "") or "")))
+                hist_line = hist_fn(max_chars=220, target_rooms=targets)
+            except Exception as e:
+                _logger.warning(f"room history for router state failed: {e}")
+                hist_line = ""
+            if isinstance(hist_line, str) and hist_line.strip():
+                lines.append(hist_line.strip())
         used_spatial = False
         if getattr(gm, "_spatial_rag_enabled", lambda: False)():
             try:
