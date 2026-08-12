@@ -1424,6 +1424,11 @@ class AgenticEQAExecutor:
                 return got
         if hasattr(gm, "_navigation_waypoint_for_obs"):
             return _as_xy(gm._navigation_waypoint_for_obs(int(obs_id), xyt))
+        # Synthetic cards (SigLIP soft-seeded search targets) carry their own xyz; the
+        # graph has no node for these obs_ids, so use the hypothesis position directly.
+        for h in self._hypotheses:
+            if int(h.obs_id) == int(obs_id):
+                return _as_xy(h.xyz)
         return None
 
     def _maybe_retract_claim_after_station(
@@ -1996,33 +2001,69 @@ class AgenticEQAExecutor:
 
     def _receptacle_adjacent_hypotheses(self, gm: Any) -> list[NavHypothesis]:
         """Container/fixture nodes to look at when a receptacle phrase has no direct
-        place card (microwave/table/cab often sit on/under these)."""
-        if gm is None or not hasattr(gm, "get_nodes"):
+        place card (microwave/table/cab often sit on/under these).
+
+        Two soft-search sources, both label-free:
+          (1) SigLIP text grounding of the target phrase against the voxel semantic
+              memory — the top-similarity world point is where the object is likely
+              to be even if YoloE never made a labeled node for it.
+          (2) container/fixture node labels (cabinet/counter/shelf/table/...) as a
+              geometric fallback when SigLIP has nothing above threshold.
+        """
+        if gm is None:
             return []
-        seen: set[int] = set()
         out: list[NavHypothesis] = []
-        for node in gm.get_nodes():
-            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
-                continue
-            oid = int(getattr(node, "obs_id", -1))
-            if oid < 0 or oid in seen:
-                continue
-            labels = [str(lab).lower() for lab in (getattr(node, "labels", None) or [])]
-            if not any(tok in lab for lab in labels for tok in self._FIXTURE_LABEL_TOKENS):
-                continue
-            seen.add(oid)
-            xyz = np.asarray(node.xyz, dtype=float).reshape(-1)
-            out.append(
-                NavHypothesis(
-                    phrase="nearby fixture",
-                    obs_id=oid,
-                    xyz=xyz[:3],
-                    score=0.0,
-                    source="graph",
+        seen: set[int] = set()
+
+        # (1) SigLIP soft ground: top-similarity voxel point for the target phrase.
+        voxel_map, _ = self._voxel_planner()
+        target = self._target_phrase or self._siglip_phrase()
+        if voxel_map is not None and target:
+            try:
+                sim = voxel_map.find_alignment_over_model(target)
+                points, _, _, _ = voxel_map.semantic_memory.get_pointcloud()
+                if sim is not None and points is not None and sim.numel() > 0:
+                    best = int(sim.cpu().argmax(dim=-1))
+                    best_sim = float(sim.cpu().max(dim=-1)[0].item())
+                    if best_sim > SIGLIP_PRESENT_THRESHOLD:
+                        xyz = np.asarray(points[best].detach().cpu().numpy(), dtype=float).reshape(-1)[:3]
+                        if xyz.size >= 3 and np.isfinite(xyz).all():
+                            out.append(
+                                NavHypothesis(
+                                    phrase=f"siglip {self._target_phrase or target}",
+                                    obs_id=-2_000_000 - len(out),
+                                    xyz=xyz,
+                                    score=0.0,
+                                    source="siglip",
+                                )
+                            )
+            except Exception as e:
+                _logger.debug(f"siglip receptacle seed failed for {target!r}: {e}")
+
+        # (2) container/fixture node labels as a geometric fallback.
+        if not out and hasattr(gm, "get_nodes"):
+            for node in gm.get_nodes():
+                if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                    continue
+                oid = int(getattr(node, "obs_id", -1))
+                if oid < 0 or oid in seen:
+                    continue
+                labels = [str(lab).lower() for lab in (getattr(node, "labels", None) or [])]
+                if not any(tok in lab for lab in labels for tok in self._FIXTURE_LABEL_TOKENS):
+                    continue
+                seen.add(oid)
+                xyz = np.asarray(node.xyz, dtype=float).reshape(-1)
+                out.append(
+                    NavHypothesis(
+                        phrase="nearby fixture",
+                        obs_id=oid,
+                        xyz=xyz[:3],
+                        score=0.0,
+                        source="graph",
+                    )
                 )
-            )
-            if len(out) >= 4:
-                break
+                if len(out) >= 4:
+                    break
         return out
 
     def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
