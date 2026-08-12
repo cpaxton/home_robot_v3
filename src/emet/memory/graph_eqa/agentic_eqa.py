@@ -1571,10 +1571,20 @@ class AgenticEQAExecutor:
         if target is None:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = self._robot_xyt_world() if xyt is not None else np.array([0.0, 0.0, 0.0])
+        # Face the object on arrival: navigate_to_target_pose with target_theta=None
+        # leaves the final yaw arbitrary (often a wall), so the arrival capture sees
+        # a brick wall and the VLM assess reports present=False. Compute theta toward
+        # the target from the goal pose and pass it so the head looks at the object.
         try:
-            nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
+            t_arr = np.asarray(target, dtype=float).reshape(-1)
+            s_arr = np.asarray(start, dtype=float).reshape(-1)
+            target_theta = float(np.arctan2(t_arr[1] - s_arr[1], t_arr[0] - s_arr[0]))
+        except Exception:
+            target_theta = None
+        try:
+            nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid)
         except TypeError:
-            nav_outcome = agent.navigate_to_target_pose(target, start, None)
+            nav_outcome = agent.navigate_to_target_pose(target, start, target_theta)
         finished = bool(nav_outcome.finished)
         nav_outcome_str = str(nav_outcome)
         self._n_nav += 1
