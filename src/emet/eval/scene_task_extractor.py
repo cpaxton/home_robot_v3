@@ -39,12 +39,13 @@ _RECEPTACLE_TOKEN = "receptacle"
 class SceneObject:
     """One scene body from MolmoSpaces metadata."""
 
-    body: str  # freejoint parent body name (sim_object_placements key)
+    body: str  # sim_object_placements key: the mesh child (``*_1_1_0``)
     category: str
     asset_id: str
     is_static: bool
     room_id: str
     mesh_child: str  # mesh child body (``*_1_1_0``) or body when absent
+    freejoint_parent: str = ""  # freejoint root (``*_1_0_0``), used for teleport snapping
     receptacle_sites: tuple[str, ...] = field(default_factory=tuple)
     has_grasps: bool = False
 
@@ -136,12 +137,13 @@ def scene_objects(metadata: dict, *, check_grasps: bool = True) -> list[SceneObj
         has_grasps = has_grasps_for_asset(asset_id) if (check_grasps and asset_id) else False
         out.append(
             SceneObject(
-                body=parent,
+                body=mesh_child,
                 category=category,
                 asset_id=asset_id,
                 is_static=is_static,
                 room_id=room_id,
                 mesh_child=mesh_child,
+                freejoint_parent=parent,
                 receptacle_sites=receptacle_sites,
                 has_grasps=has_grasps,
             )

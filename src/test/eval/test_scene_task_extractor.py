@@ -45,7 +45,7 @@ def test_pickable_objects_have_grasps(floorplan1_metadata):
     for o in picks:
         assert o.has_grasps, f"{o.body} should have a grasp asset"
         assert o.asset_id, f"{o.body} needs an asset_id"
-        assert o.body.endswith("_1_0_0"), f"{o.body} should be the freejoint parent"
+        assert o.body.endswith("_1_1_0"), f"{o.body} should be the mesh child (sim_object_placements key)"
 
 
 def test_receptacle_objects_have_sites(floorplan1_metadata):

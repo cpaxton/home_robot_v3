@@ -336,3 +336,144 @@ def execute_task_plan(
     plan.success = True
     plan.message = "ok"
     return plan
+
+
+# ---------------------------------------------------------------------------
+# MCTS pick-place: search task assignment, then ground via plan_pick_place
+# ---------------------------------------------------------------------------
+
+
+def plan_pick_place_mcts(
+    robot: Any,
+    *,
+    candidates: Sequence[dict[str, Any]],
+    grasp_poses: Sequence[Any],
+    executor: Any | None = None,
+    approach_standoff_m: float = 0.55,
+    top_k_grasps: int = 8,
+    mcts_iterations: int = 120,
+    mcts_breadth: int = 4,
+    mcts_depth: int = 5,
+    mcts_uct_c: float = 1.3,
+    seed: int | None = None,
+) -> TaskPlan:
+    """MCTS over candidate (object, receptacle) task assignments.
+
+    Each *candidate* is a dict with ``object_query``, ``receptacle_query``,
+    ``object_gt_body``, ``receptacle_gt_body``. The search uses
+    :class:`PickPlaceDistancePolicy` over the live scene geometry (base at the
+    scene origin), then grounds the winning assignment with
+    :func:`plan_pick_place` (approach standoff + IK-ranked reachable grasps).
+
+    This is the "agent-call-wrapping" TAMP seam: the distance heuristic policy
+    stands in for an LLM proposer, and the executor/MuJoCo grounding is the
+    simulator. Returns the best reachable plan (or an empty failed TaskPlan).
+    """
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+    from emet.motion.agent_mcts import AgentMCTSPlanner, MCTSConfig, PickPlaceDistancePolicy
+
+    pl = read_sim_object_placements(robot.get_emet_session()) or {}
+    cands = [c for c in candidates if c.get("object_gt_body") in pl]
+    if not cands:
+        return TaskPlan(
+            steps=[],
+            object_body="",
+            receptacle_body=None,
+            success=False,
+            message="no_gt_candidates",
+            expanded_nodes=[f"candidates={len(candidates)}"],
+        )
+
+    def _pos(body: str) -> np.ndarray:
+        return np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)[:2]
+
+    # Build MCTS over assignments: state = base-at-origin + current (object, receptacle).
+    # Each candidate is an independent 1-deep task decision; simulate grounds it.
+
+    policy = PickPlaceDistancePolicy(seed=seed)
+    cfg = MCTSConfig(
+        n_iterations=int(mcts_iterations),
+        expansion_breadth=int(mcts_breadth),
+        depth_limit=int(mcts_depth),
+        uct_c=float(mcts_uct_c),
+        seed=seed,
+    )
+
+    # State schema the distance policy expects: robot / object / carrying / receptacle.
+    def make_state(obj_body: str, recep_body: str) -> dict:
+        return {
+            "robot": np.zeros(2, dtype=np.float64),
+            "object": _pos(obj_body),
+            "carrying": False,
+            "receptacle": _pos(recep_body),
+        }
+
+    best: TaskPlan | None = None
+    for cand in cands:
+        obj_body = str(cand["object_gt_body"])
+        recep_body = str(cand.get("receptacle_gt_body") or "")
+        state = make_state(obj_body, recep_body)
+        goal = _pos(recep_body) if recep_body else state["object"]
+        planner = AgentMCTSPlanner(policy=policy, simulate=policy_rollout, config=cfg)
+        seq = planner.search(state, goal)
+        if not seq:
+            continue
+        # Ground the best assignment through the deterministic TAMP planner.
+        plan = plan_pick_place(
+            robot,
+            object_query=str(cand["object_query"]),
+            receptacle_query=str(cand["receptacle_query"]),
+            grasp_poses=grasp_poses,
+            object_gt_body=obj_body,
+            receptacle_gt_body=recep_body or None,
+            approach_standoff_m=approach_standoff_m,
+            top_k_grasps=top_k_grasps,
+            executor=executor,
+        )
+        plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())
+        if plan.success and (best is None or len(best.steps) <= len(plan.steps)):
+            best = plan
+    if best is not None:
+        return best
+    return TaskPlan(
+        steps=[],
+        object_body="",
+        receptacle_body=None,
+        success=False,
+        message="no_reachable_task",
+        expanded_nodes=[c.get("object_query", "") for c in cands],
+    )
+
+
+def policy_rollout(state: dict, action: Any) -> tuple[dict, float, bool]:
+    """Deterministic geometry rollout used by :func:`plan_pick_place_mcts`.
+
+    Mirrors the ``PickPlaceDistancePolicy`` test sim: moving reduces distance,
+    pickup/place apply when in range. Purely geometric — no physics, no server.
+    """
+
+    next_state = {k: np.asarray(v, dtype=float) if isinstance(v, np.ndarray) else v for k, v in state.items()}
+    next_state["carrying"] = bool(state["carrying"])
+    obj = np.asarray(next_state["object"], dtype=float)
+    rec = np.asarray(next_state["receptacle"], dtype=float)
+    robot = np.asarray(next_state["robot"], dtype=float)
+    cost_raw: Any = getattr(action, "cost", None)
+    cost = float(cost_raw if cost_raw is not None else 1.0)
+
+    if action.name == "move_to":
+        target = np.asarray(action.args["xy"], dtype=float).reshape(2)
+        next_state["robot"] = target.copy()
+        progress = max(0.0, float(np.linalg.norm(obj - rec)) - float(np.linalg.norm(obj - target)))
+        return next_state, progress - cost, False
+    if action.name == "pickup":
+        if float(np.linalg.norm(robot - obj)) <= 0.25 and not bool(state["carrying"]):
+            next_state["carrying"] = True
+            return next_state, -0.1, False
+        return state, -1.0, True
+    if action.name == "place":
+        if bool(state["carrying"]) and float(np.linalg.norm(robot - rec)) <= 0.30:
+            next_state["carrying"] = False
+            next_state["object"] = rec.copy()
+            return next_state, 10.0, True
+        return state, -1.0, True
+    return state, -float(cost), True
