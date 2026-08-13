@@ -11,6 +11,7 @@ GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [REA
 | HM-EQA vs GraphEQA paper numbers | [habitat_eqa_results.md](habitat_eqa_results.md) |
 | HM-EQA how-to (CLI flags) | [habitat/usage.md](../habitat/usage.md) · [habitat_eqa.md](habitat_eqa.md) |
 | Agentic HM-EQA approach | [agentic_qwen_context.md](agentic_qwen_context.md#approach-current) |
+| Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
 
