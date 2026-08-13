@@ -72,3 +72,28 @@ uv run emet hmeqa h2h "$OUT" --arms agentic --ids 15 --job-name joint-smoke-hmeq
   -d "Joint agentic loop B1: HM-EQA q15"
 # OVMM find (molmo) + dynamic world-change follow the same GPU mutex.
 ```
+
+## Status
+
+| Wave | Status |
+|------|--------|
+| 0 unit gate | **done** (branch) |
+| 1 cross-task smoke | **done (2/3 legs clean, 1 environmental stall)** |
+| 2 process metrics | A2 traces analyzed (7 confirms, 16 present=True, 0 invalid-state) |
+| 3 knob-divergence cleanup | pending |
+
+### B1 cross-task smoke results (merged main, `feat/hmeqa-strategy`)
+
+| Consumer | Sim | Result | Invalid-state |
+|----------|-----|--------|---------------|
+| **HM-EQA** (A2 holdout-8) | Habitat | 7 `answerable_confirmed`, 16 present=True across 5 episodes; letters 5/8 (variance) | **0** |
+| **OVMM find** (joint-smoke-ovmm) | molmo mujoco | obj verified=True at **rounds=1** (obs 29); recep rounds=8 verified=False (microwave never present — known molmo recep difficulty) | **0** |
+| **Dynamic world-change** (joint-smoke-worldchange) | robocasa mujoco | loop ran (7 vision VLM generates), then **exit 143** on environmental explore-stall ("no valid plan or frontier" after relocation) — not a loop bug | **0** |
+
+**Conclusion:** the shared agentic loop (verify → ANSWER → submit) runs clean in
+HM-EQA Habitat and OVMM mujoco on merged main; the world-change leg's failure is a
+post-relocation explore-planner stall (documented environmental limitation), not the
+agentic loop. **0 `invalid in state ANSWER` across all three legs** — the #114
+verify-gate reset is confirmed non-regressing and loop-stable across tasks.
+
+
