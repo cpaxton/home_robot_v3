@@ -4962,8 +4962,14 @@ class GraphEQAMemory:
             memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
             parsed_letter = extract_mcq_letter(answer, parsed_choices)
             abstain = answer_is_visibility_abstain(answer) or not parsed_letter
+            # The geometric equipment-distance guess must not override a confident VLM
+            # letter: on the full-113 (2026-08-13) it flipped correct image-grounded
+            # answers to wrong (q44/q47/q94/q101: json_answer == gold, scored via
+            # [memory-location]). Image landmarks still correct memory-steered letters
+            # (they are grounded in the attached views).
+            vlm_clear = bool(confidence) and bool(parsed_letter)
             preferred = ""
-            if equip_letter and (abstain or parsed_letter != equip_letter):
+            if not vlm_clear and equip_letter and (abstain or parsed_letter != equip_letter):
                 preferred = equip_letter
             elif img_letter and (abstain or parsed_letter != img_letter):
                 preferred = img_letter
