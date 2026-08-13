@@ -100,6 +100,6 @@ Ordered by paper priority, all gated:
 | A0 unit gate | **done** (branch: fixed stale tests + empty-pose guard) |
 | B0 consumer audit | done (see joint-loop doc) |
 | A1 holdout-4 | **draw 1: 2/4, draw 2: 1/4** (combined 3/8). q105→B, q17→A identical wrong letters in both draws. **0 invalid-in-state ANSWER, 0 assess-rejected** — verify gate runs clean. q15/q68 stable-varies. Prior 4/4 was also `confident=False` (search-limited, not clean confirms). **Conclusion: #114 reset safe for HM-EQA; letter drop = documented search-failure variance** (target never surfaces in graph → final MCQ on incomplete evidence) |
-| A2 holdout-8 | not run |
+| A2 holdout-8 | **done: 5/8** (q15, q56, q79, q88, q104 ✓; q65, q68, q105 ✗) vs 8/8 headline. Gate works: **7 `answerable_confirmed`, 16 present=True assesses** across holdout; 5 episodes confirmed, 3 (q79/q88/q105) never saw target (search misses). **0 invalid-in-state / 0 assess-rejected** — #114 reset confirmed non-regressing. 5/8 matches documented paper-router variance (docs: 5/8 on this slice; classic swings 25–100%) |
 | B1 cross-task smoke | not run |
 | Wave-2b control result | 3/10 on merged main (v4, terminated at 10/11) |
