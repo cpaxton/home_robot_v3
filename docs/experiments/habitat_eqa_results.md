@@ -49,7 +49,7 @@ Same HM-EQA CSV (113 questions, indices 0–112), 20/10 step budget, RTX 4090. S
 |--------|-----|---|----------|-----------|
 | graph_eqa repro | gemma-3-4b-it | **113** | **41.6%** (47/113) | `graph_eqa_gemma3_paper_q0-112.jsonl` |
 
-This is our best **full-benchmark** number — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched.
+This was our best **full-benchmark** number at 4B — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched. The post-nav 8B sweep below (44.2% dynagraph) supersedes it at 8B.
 
 ### Full benchmark — post–July-nav (Qwen3-VL-8B, 2026-08-13)
 
@@ -61,12 +61,13 @@ commit `8fb7c1a5` (strategy branch; `run-batch --debug-run-tag` fix + `EMET_ALLO
 | Method | VLM | n | Accuracy | JSONL tag |
 |--------|-----|---|----------|-----------|
 | dynagraph | Qwen3-VL-8B | 113 | **44.2%** (50/113) | `subset_paper113_20260813_104004_dynagraph_qwen3_vl.jsonl` |
-| static_graph | Qwen3-VL-8B | 113 | **PENDING** (running) | `subset_paper113_20260813_104004_static_graph_qwen3_vl.jsonl` |
+| static_graph | Qwen3-VL-8B | 113 | **37.2%** (42/113) | `subset_paper113_20260813_104004_static_graph_qwen3_vl.jsonl` |
 
-**Dynagraph result (complete):** 50/113 = **44.2%**, mean planning steps **50.1** —
-above the gemma-3-4b full-benchmark (41.6%) and the pre-nav post-fix paper-20 band.
-Still ~19–23 pp below GraphEQA API baselines (63.5–67.0%), consistent with the local
-VLM tier + partial semantics gap. static\_graph leg of the same sweep runs after.
+**Results (complete, 2026-08-13):** dynagraph **50/113 = 44.2%** (mean planning steps
+50.1) vs static_graph **42/113 = 37.2%** — **dynagraph +7 pp over static_graph on the
+full 113 at 8B**, confirming the Dynagraph memory gains hold at scale. Both are above
+the gemma-3-4b full-benchmark (41.6% static_graph); still ~19–23 pp below GraphEQA API
+baselines (63.5–67.0%), consistent with the local VLM tier + partial semantics gap.
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
@@ -137,9 +138,11 @@ On balanced-32 and paper slices at 3B/8B, **dynagraph ≥ graph_eqa** (+1–3 pp
 | Comparison | Gap | Likely cause |
 |------------|-----|--------------|
 | Us (41.6% / 113, gemma-3-4b) vs GraphEQA GPT-4o (63.5%) | ~−22 pp | Weaker local VLM + partial semantics + different graph stack |
+| Us (44.2% / 113, dynagraph, Qwen3-VL-8B + July nav) vs GraphEQA GPT-4o (63.5%) | ~−19 pp | Local 8B VLM + partial semantics; nav/memory gains close ~3 pp of the tier gap |
 | Us (87.5%, hold-out-8 graph_eqa, Qwen3-VL-8B + July nav) vs random (25%) | +62.5 pp | Nav stack works on search slice; small n |
 | Us (50%, hold-out-8 dynagraph pre-nav) vs post-nav graph_eqa (87.5%) | +37.5 pp | Nav + baseline graph path >> dynagraph extras on holdout |
-| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Need full 113 for meaningful comparison |
+| Us (44.2% dynagraph vs 37.2% static_graph, full 113 @ 8B) | **+7 pp** | Dynagraph memory (merge/staleness + CONFIRMED_MEMORY) holds at scale |
+| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Now comparable: full 113 @ 8B = 44.2% |
 | dynagraph vs graph_eqa (bal-32 @ 8B post-nav) | +3 pp (13/32 vs 12/32) | Debias/memory help on average; hurt on some holdout eps |
 
 We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance; post-nav balanced-32 favored dynagraph slightly (+1 pp) while holdout favored graph_eqa (+4 pp) before harness tuning.

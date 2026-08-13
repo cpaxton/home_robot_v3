@@ -382,11 +382,11 @@ Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_mer
 
 | Comparison | Our best | Prior art | Gap |
 |------------|----------|-----------|-----|
-| Full 113 Q | 41.6% (gemma-3-4b, static_graph / logged as graph_eqa) | 63.5–67.0% (GraphEQA + API VLM) | ~−22 pp |
-| Matched slice | dynagraph +3 pp vs static_graph (bal-32 @ 3B) | — | Dynagraph helps |
+| Full 113 Q | **44.2%** (dynagraph, Qwen3-VL-8B, post-nav) / 41.6% (gemma-3-4b, static_graph) | 63.5–67.0% (GraphEQA + API VLM) | ~−19–22 pp |
+| Matched slice | dynagraph +7 pp vs static_graph (full 113 @ 8B) | — | Dynagraph helps at scale |
 | Post-fix hold-out | 50% (8 Q, Qwen3-VL-8B) | 51.7% Explore-EQA (113 Q) | not comparable (small n) |
 
-**Next headline run (IN PROGRESS):** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + July 2026 nav stack + June 2026 fix stack — job `hmeqa-paper113-d1` (2026-08-13), OUT `~/runs/emet/hmeqa_paper113/20260813_104004` (`run-batch --debug-run-tag` fix + `EMET_ALLOW_SDPA_ATTN=1`).
+**Next headline run (DONE 2026-08-13):** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + July 2026 nav stack + June 2026 fix stack — dynagraph **44.2%** vs static_graph **37.2%** (job `hmeqa-paper113-d1`, OUT `~/runs/emet/hmeqa_paper113/20260813_104004`; required `run-batch --debug-run-tag` fix + `EMET_ALLOW_SDPA_ATTN=1`).
 
 Install: `./scripts/install_habitat.sh`. Entrypoint: `.venv-habitat/bin/emet-habitat`. Parity: `paper/sections/appendix/05_habitat_eqa_parity.tex`.
 
@@ -485,7 +485,7 @@ Before a headline HM-EQA sweep:
 `paper/sections/04_experiments.tex` should stay in sync with this doc:
 
 - [x] Goals list matches active tracks (Habitat EQA + OpenEQA milestone, SQA3D, OVMM, dynamic exploration, GT finding) — updated 2026-07
-- [x] Habitat HM-EQA interim prose + planned sweeps match [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md) — full 113 numbers still pending
+- [x] Habitat HM-EQA interim prose + planned sweeps match [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md) — full 113 numbers recorded (dynagraph 44.2% / static_graph 37.2% @ Qwen3-VL-8B, 2026-08-13)
 - [ ] `scripts/run_large_paper_eval.sh` phases and `SQA3D_GPUS` / skip env vars match `docs/environment_variables.md`
 - [ ] Table `tab:envs` lists correct entrypoint scripts
 - [ ] Each `sec:*_benchmark` protocol matches `--help` on the cited commands
