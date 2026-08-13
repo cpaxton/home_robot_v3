@@ -39,6 +39,11 @@ uv run emet serve mujoco --config configs/sim/robocasa_pick_place_sourccey.yaml 
 
 # MolmoSpaces merge
 uv run emet serve mujoco --config configs/sim/molmospaces_ithor_train_sourccey_0.yaml --headless
+
+# Agent (connect to the sim server, then run with an LLM endpoint)
+uv run emet serve mujoco --robot sourccey --scene ithor --headless          # terminal 1
+uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
+    --config configs/agent_sourccey.yaml --headless                          # terminal 2
 ```
 
 ## Model notes
