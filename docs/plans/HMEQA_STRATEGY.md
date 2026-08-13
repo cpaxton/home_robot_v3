@@ -79,7 +79,12 @@ Ordered by paper priority, all gated:
 
 1. **Full-113 dynagraph @ 8B + nav stack** (paper §04 item #1) — **DONE 2026-08-13**: dynagraph **44.2%** (50/113, steps 50.1) vs static_graph **37.2%** (42/113) — **+7 pp memory gain at scale**. Job `hmeqa-paper113-d1`, OUT `~/runs/emet/hmeqa_paper113/20260813_104004`. Required the `run-batch --debug-run-tag` fix (committed `8fb7c1a5`) + `EMET_ALLOW_SDPA_ATTN=1`.
 2. **32B int4** holdout-4 agentic → holdout-8 if healthy
-   (`--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct`); abort on OOM/EGL streak.
+   (`--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct`); abort on OOM/EGL streak. —
+   **ABORTED 2026-08-13: OOM on the 24 GB 4090.** 32B-int4 needs ~20.4 GB peak
+   (smoke), but with the Godot VLM process resident (~1.3 GB) the card had only
+   ~17 GB free at load → `CUDA out of memory` (tried 17.25 GiB). Not viable while
+   other GPU processes share the card; revisit on a larger GPU or with the Godot
+   process freed.
 3. **Matched static_graph** on the same 113 (isolate Dynagraph memory gains) — runs after dynagraph in the same job.
 4. Optional: semantics on/off on Q0–19, frontier ablation, API-VLM canonical-8
    upper bound.
