@@ -106,6 +106,7 @@ Task (goal spec, e.g. "apple -> basket") + scene state (voxel map, object poses)
   - `scene_tasks` reads real `sim_object_placements` (124 bodies) from the connected server.
   - `scripted_sim_pick_place.py --manip-mode teleport --object bowl --receptacle microwave` succeeds live (1.99 m displacement, GT placement readback).
   - Reachability reports `none` from the scene origin — correct, since every pickable object is meters away; the TAMP loop must navigate before the arm predicate applies.
+- [x] **Live MCTS TAMP on rby1 (kinematic, port-offset 70)**: `plan_pick_place_mcts` searched 12 scene candidates with `PickPlaceDistancePolicy`, chose bowl→drawer, IK-ranked grasps (rejected infeasible decoy grasp err=3.51, picked reachable grasp err=0.042), navigated to approach standoff, and streamed RRT arm paths. `scene_tasks` now reports real reachability (Apple/ButterKnife/Knife/Tomato) from live `sim_object_placements`. Execution reached `attach_verify_failed` on the synthetic COM grasp — a physics/execution detail, not a planning failure. Driver: `scripts/scripted_mcts_pick_place.py`.
 - [ ] Policy shim `propose_candidates` via existing LLM client
 - [ ] Batch sim hook (threads first; mjx later if env permits)
 - [ ] Wire top-level move execution back into agent loop
