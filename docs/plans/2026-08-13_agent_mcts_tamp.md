@@ -99,7 +99,7 @@ Task (goal spec, e.g. "apple -> basket") + scene state (voxel map, object poses)
 
 ## Status
 
-- [ ] `agent_mcts.py` skeleton + UCT search (no LLM yet, random policy) + unit tests
+- [x] `agent_mcts.py` skeleton + UCT search with a **distance-based heuristic policy + sampling** (`PickPlaceDistancePolicy`), unit tests in `test_agent_mcts.py` — no LLM yet
 - [ ] Policy shim `propose_candidates` via existing LLM client
 - [ ] Batch sim hook (threads first; mjx later if env permits)
 - [ ] Wire top-level move execution back into agent loop
