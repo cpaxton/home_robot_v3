@@ -51,6 +51,23 @@ Same HM-EQA CSV (113 questions, indices 0–112), 20/10 step budget, RTX 4090. S
 
 This is our best **full-benchmark** number — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched.
 
+### Full benchmark — post–July-nav (Qwen3-VL-8B, 2026-08-13)
+
+Full 113-question sweep after the July 2026 nav stack (Image-N waypoints, navmesh
+trajectory, frontier distance sort) with Qwen3-VL-8B. Run: `emet jobs`
+`hmeqa-paper113-d1`, OUT `~/runs/emet/hmeqa_paper113/20260813_104004`,
+commit `8fb7c1a5` (strategy branch; `run-batch --debug-run-tag` fix + `EMET_ALLOW_SDPA_ATTN=1`).
+
+| Method | VLM | n | Accuracy | JSONL tag |
+|--------|-----|---|----------|-----------|
+| dynagraph | Qwen3-VL-8B | 113 | **44.2%** (50/113) | `subset_paper113_20260813_104004_dynagraph_qwen3_vl.jsonl` |
+| static_graph | Qwen3-VL-8B | 113 | **PENDING** (running) | `subset_paper113_20260813_104004_static_graph_qwen3_vl.jsonl` |
+
+**Dynagraph result (complete):** 50/113 = **44.2%**, mean planning steps **50.1** —
+above the gemma-3-4b full-benchmark (41.6%) and the pre-nav post-fix paper-20 band.
+Still ~19–23 pp below GraphEQA API baselines (63.5–67.0%), consistent with the local
+VLM tier + partial semantics gap. static\_graph leg of the same sweep runs after.
+
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
 | Method | Slice | n | Accuracy | JSONL tag |
@@ -149,7 +166,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 \*Partial JSONL on some arms from early resume.
 
-**In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
+**In progress:** full-113 post-nav sweep (Qwen3-VL-8B, dynagraph + static_graph) — job `hmeqa-paper113-d1`, see [Full benchmark — post–July-nav](#full-benchmark--postjuly-nav-qwen3-vl-8b-2026-08-13). Representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures) also pending.
 
 **Merge policy (2026-07-11; clarified 2026-07-29):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`static_graph`** (legacy method tag `graph_eqa`) uses profile **`static_graph`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA-inspired comparison row. Historical JSONL / table labels may still say `graph_eqa`; they map to `static_graph`. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
 

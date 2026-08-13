@@ -386,7 +386,7 @@ Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_mer
 | Matched slice | dynagraph +3 pp vs static_graph (bal-32 @ 3B) | — | Dynagraph helps |
 | Post-fix hold-out | 50% (8 Q, Qwen3-VL-8B) | 51.7% Explore-EQA (113 Q) | not comparable (small n) |
 
-**Next headline run:** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + June 2026 fix stack (`emet-habitat run-batch --paper-subset --resume`).
+**Next headline run (IN PROGRESS):** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + July 2026 nav stack + June 2026 fix stack — job `hmeqa-paper113-d1` (2026-08-13), OUT `~/runs/emet/hmeqa_paper113/20260813_104004` (`run-batch --debug-run-tag` fix + `EMET_ALLOW_SDPA_ATTN=1`).
 
 Install: `./scripts/install_habitat.sh`. Entrypoint: `.venv-habitat/bin/emet-habitat`. Parity: `paper/sections/appendix/05_habitat_eqa_parity.tex`.
 

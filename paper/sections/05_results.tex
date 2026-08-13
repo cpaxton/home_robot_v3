@@ -75,7 +75,7 @@ We therefore treat the \emph{mean planning step} reduction as the primary, stati
 
 We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), and graph frontier nodes.
 Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}) sets HM-EQA \texttt{dynagraph} to \texttt{unified\_eqa} (0.45\,m merge), MCQ debias off, and \texttt{explore\_when\_uncovered=conservative}; HM-EQA \texttt{static\_graph} uses profile \texttt{static\_graph} (merge/staleness off).
-Tuned full-113 numbers are \textbf{pending}.
+Tuned full-113 numbers at 8B with the July nav stack were collected 2026-08-13 (Table~\ref{tab:hmeqa_vs_prior}).
 Table~\ref{tab:hmeqa_vs_prior} reproduces GraphEQA paper baselines alongside our own full-benchmark reproduction; Table~\ref{tab:hmeqa_slices} lists our held-out slices and ablations.
 All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
 
@@ -96,6 +96,8 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} harness (local VLMs; partial semantics)}} \\
     static\_graph & gemma-3-4b-it & 113 & 41.6\% \\
+    dynagraph & Qwen3-VL-8B & 113 & \textbf{44.2\%} \\
+    static\_graph & Qwen3-VL-8B & 113 & \textbf{TBD} (post-nav) \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Held-out slices and ablations: see Table~\ref{tab:hmeqa_slices}}} \\
     \bottomrule
@@ -127,9 +129,9 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
 \end{table}
 
 \noindent\textbf{Gap to prior art.}
-Our largest comparable run (gemma-3-4b, 113 questions) trails GraphEQA-GPT-4o by $\sim$22 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+Our largest completed run (gemma-3-4b, 113 questions) trails GraphEQA-GPT-4o by $\sim$22 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
 On matched slices Dynagraph is competitive with our \texttt{static\_graph} baseline (+3\,pp on letter-balanced 32 at 3B); holdout-8 after July nav favored \texttt{static\_graph} until harness tuning (Table~\ref{tab:hmeqa_preliminary}).
-Full 113-question evaluation with the 8B model and current stack is \textbf{planned} (Section~\ref{sec:experiments}).
+A full 113-question evaluation with Qwen3-VL-8B and the current nav stack was run 2026-08-13 (Table~\ref{tab:hmeqa_vs_prior}).
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
 
