@@ -163,10 +163,10 @@ Qualitative spot-check (2 episodes): did the router explore after `verify_absent
 
 | Wave | Status | OUT / notes |
 |------|--------|-------------|
-| 0 unit | ready on branch | |
-| 1 smoke | not run | |
-| 2 rooms probe | not run | |
-| 3 wrong-room set | blocked on wave 2 | |
+| 0 unit | **done** | ledger + hmeqa launch + room_policy tests green on `db2ba7eb` |
+| 1 smoke | **done (q2 only)** | `~/runs/emet/hmeqa_room_evidence_quick_20260812_122709` job `20260812_122944_49d38f`. Stamp+ledger+router on. 1× stamp blocked (`patio`), 1× stamp ok (`living_room`); explore `room_leave_hint=true` in living_room; `escape_source` all `none`. Letter miss (secondary). q104 not run. |
+| 2 rooms probe | **done** | `~/runs/emet/hmeqa_room_evidence_w2_20260812_231348` job `20260812_231618_2e6289`. 11/11 scored, 0 crashes. Process: 11 stamp-ok events (1 blocked), known router room on 10/11 eps, mismatch diag on 3/11 (q6,q11,q48). `escape_source` all `none`. Letters **2/11** (secondary; mean steps ~33). Control A/B not run yet. |
+| 3 wrong-room set | next | Focus ids with mismatch: **6,11,48** (+ wave-1 q2). Optional control with stamp/ledger off. |
 | 4 scale | blocked | |
 
 ## Related
