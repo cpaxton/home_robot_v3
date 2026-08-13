@@ -3000,6 +3000,20 @@ class GraphEQAMemory:
         for landmark in location_mcq_landmark_phrases(question):
             if landmark not in phrases:
                 phrases.append(landmark)
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            cand_labels = [
+                (int(n.obs_id), str(n.labels)[:40], bool(getattr(n, "is_viewpoint", False)),
+                 bool(getattr(n, "is_frontier", False)))
+                for n in self._nodes
+            ]
+            _logger.info(
+                "[recall] q=%r phrases=%r n_obs=%d n_nodes=%d all_nodes=%s",
+                question[:40],
+                phrases[:6],
+                len(self._observations),
+                len(self._nodes),
+                cand_labels,
+            )
         scored: list[NavHypothesis] = []
         seen: set[int] = set()
         retracted = getattr(self, "_retracted_nav_claims", None) or set()

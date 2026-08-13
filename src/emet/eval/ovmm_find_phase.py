@@ -883,6 +883,11 @@ def create_find_phase_agent(
         )
     else:
         raise ValueError(f"unknown backend {backend!r}")
+    # OVMM find is exploration-heavy (frontier sweeps after every investigate);
+    # the full 4-pan look-around dominated wall time (>=90% of an episode in
+    # teleport mode). Halve the pan count like run_dynagraph's explore loop.
+    if hasattr(agent, "_fast_explore_lookaround"):
+        agent._fast_explore_lookaround = True
     agent.start()
     return agent
 
@@ -1027,7 +1032,10 @@ def run_episode_find_phase(
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
         )
-        parameters["encoder"] = None
+        # Keep the shared SigLIP encoder (get_shared_mask_siglip_encoder, load-once)
+        # so the voxel semantic memory gets per-point features — the agentic find
+        # seeds receptacle search from SigLIP text grounding (no label match needed).
+        # Setting encoder=None here disabled semantic memory entirely.
         if run_cfg.perfect_depth:
             parameters["debug_perfect_sensor_depth"] = True
         parameters["find_phase_nav_step_timeout_s"] = nav_timeout

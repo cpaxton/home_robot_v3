@@ -631,6 +631,33 @@ class AgenticEQAExecutor:
         except Exception:
             return None
 
+    def _robot_xyt_world(self) -> np.ndarray | None:
+        """Robot base ``(x, y, θ)`` in the voxel-map / world frame for A* planning.
+
+        ``get_base_pose`` is episode-relative (ZMQ gps/compass), but the voxel map
+        and ``navigate_to_target_pose`` plan in the world frame anchored at
+        ``navigation_origin_xyt``. For sims whose spawn is not at world (0,0)
+        (robocasa origin ≈ (2.9,-1.7)) planning from the raw episode pose puts the
+        A* start at grid center / an unexplored cell → "non navigable point".
+        """
+        local = self._robot_xyt()
+        if local is None:
+            return None
+        agent = self.agent
+        convert = getattr(agent, "_planning_base_xyt", None)
+        if callable(convert):
+            try:
+                world = np.asarray(convert(local), dtype=float).reshape(-1)
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(
+                        f"[navstart] local={local.round(3).tolist()} world={world.round(3).tolist()}",
+                        flush=True,
+                    )
+                return world
+            except Exception:
+                pass
+        return local
+
     def _append_trace(self, row: dict[str, Any]) -> None:
         if not self._collect_trace:
             return
@@ -807,7 +834,7 @@ class AgenticEQAExecutor:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
                 max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt(),
+                robot_xyt=self._robot_xyt_world(),
             )
         except TypeError:
             hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
@@ -937,7 +964,7 @@ class AgenticEQAExecutor:
             bias,
         )
         ok = False
-        start = self._robot_xyt()
+        start = self._robot_xyt_world()
         if start is None:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
@@ -965,7 +992,7 @@ class AgenticEQAExecutor:
                 if recent:
                     frontier_xyz = np.array([float(recent[-1][0]), float(recent[-1][1]), 1.0])
                 else:
-                    after = self._robot_xyt()
+                    after = self._robot_xyt_world()
                     if after is not None:
                         frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
             if ok and frontier_xyz is not None:
@@ -1050,7 +1077,7 @@ class AgenticEQAExecutor:
 
     def _dist_to_anchor_m(self, obs_id: int, hyp: NavHypothesis | None) -> float | None:
         anchor = self._place_anchor_xy(obs_id, hyp)
-        robot = self._robot_xyt()
+        robot = self._robot_xyt_world()
         if anchor is None or robot is None:
             return None
         return float(np.hypot(float(robot[0]) - anchor[0], float(robot[1]) - anchor[1]))
@@ -1200,7 +1227,7 @@ class AgenticEQAExecutor:
             except Exception:
                 stamp_xy = None
         if stamp_xy is None:
-            xyt = self._robot_xyt()
+            xyt = self._robot_xyt_world()
             if xyt is not None:
                 stamp_xy = (float(xyt[0]), float(xyt[1]))
         if stamp_xy is None:
@@ -1340,7 +1367,7 @@ class AgenticEQAExecutor:
                     oid,
                     voxel_map=voxel_map,
                     planner=planner,
-                    robot_xyt=self._robot_xyt(),
+                    robot_xyt=self._robot_xyt_world(),
                 )
             except Exception as e:
                 _logger.warning(f"place coverage refresh failed: {e}")
@@ -1379,7 +1406,7 @@ class AgenticEQAExecutor:
         gm = self.graph_memory
         if gm is None:
             return None
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         voxel_map, planner = self._voxel_planner()
         rec = self._place_inspect.get(int(obs_id))
         avoid = list(rec.tried_xy) if rec is not None else None
@@ -1460,6 +1487,11 @@ class AgenticEQAExecutor:
                 return got
         if hasattr(gm, "_navigation_waypoint_for_obs"):
             return _as_xy(gm._navigation_waypoint_for_obs(int(obs_id), xyt))
+        # Synthetic cards (SigLIP soft-seeded search targets) carry their own xyz; the
+        # graph has no node for these obs_ids, so use the hypothesis position directly.
+        for h in self._hypotheses:
+            if int(h.obs_id) == int(obs_id):
+                return _as_xy(h.xyz)
         return None
 
     def _maybe_retract_claim_after_station(
@@ -1612,11 +1644,29 @@ class AgenticEQAExecutor:
         target = self._investigate_target_xyz(oid, next_ap)
         if target is None:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
-        start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
+        start = self._robot_xyt_world() if xyt is not None else np.array([0.0, 0.0, 0.0])
+        # Face the OBJECT on arrival, not the approach waypoint. navigate_to_target_pose
+        # with target_theta=None leaves the final yaw arbitrary (often a wall), so the
+        # arrival capture sees a brick wall and the VLM assess reports present=False.
+        # theta toward the object anchor from the standing waypoint makes the head look
+        # at the target itself.
         try:
-            nav_outcome = agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
+            t_arr = np.asarray(target, dtype=float).reshape(-1)
+            look_at = t_arr[:2]
+            gm = self.graph_memory
+            if gm is not None and hasattr(gm, "_obs_nav_anchor"):
+                anchor = gm._obs_nav_anchor(int(oid))
+                if anchor is not None:
+                    a_arr = np.asarray(anchor, dtype=float).reshape(-1)
+                    if a_arr.size >= 2 and np.isfinite(a_arr[:2]).all():
+                        look_at = a_arr[:2]
+            target_theta = float(np.arctan2(look_at[1] - t_arr[1], look_at[0] - t_arr[0]))
+        except Exception:
+            target_theta = None
+        try:
+            nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid)
         except TypeError:
-            nav_outcome = agent.navigate_to_target_pose(target, start, None)
+            nav_outcome = agent.navigate_to_target_pose(target, start, target_theta)
         finished = bool(nav_outcome.finished)
         nav_outcome_str = str(nav_outcome)
         self._n_nav += 1
@@ -1692,13 +1742,10 @@ class AgenticEQAExecutor:
             }
 
         cap = self._tool_capture_and_update()
-        look = self._tool_look_around(verify=False)
-        look_cap = look.get("capture") if isinstance(look, dict) else None
-        if isinstance(look_cap, dict) and look_cap.get("ok"):
-            cap = look_cap
+        cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
         station_oid = None
         # Only a successful capture advance counts as a new station view.
-        if isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None:
+        if cap_adv:
             station_oid = int(cap["obs_id"])
             self._station_obs_ids.add(station_oid)
             self._fresh_obs_ids.add(station_oid)
@@ -1712,12 +1759,17 @@ class AgenticEQAExecutor:
         verify_out = None
         if self.mode == "answer":
             if station_oid is not None:
+                # The arrival view faces the object (investigate passes target_theta
+                # toward it) — verify THIS view, before any map-coverage sweep turns
+                # the head away. Scoring the sweep's last pan made the assess look at
+                # a wall instead of the object.
                 verify_out = self.handle_tool(
                     "verify_siglip",
                     {"phrase": self._siglip_phrase(phrase), "obs_id": station_oid},
                 )
             else:
-                # Arrived but capture did not advance — score once, then block re-nav.
+                # Arrived but capture did not advance — score the live arrival view
+                # (still facing the object) once, then block re-nav.
                 verify_out = self._verify_stalled_nav_view(oid, phrase=phrase)
                 flag = {
                     "obs_id": oid,
@@ -1733,6 +1785,11 @@ class AgenticEQAExecutor:
                 _logger.warning(
                     f"agentic nav loop: obs_id={oid} visits={flag['visits']} verify={flag.get('verify_status')}"
                 )
+
+        # Sweep only for map coverage when the arrive-capture did not advance a fresh
+        # view. Never overwrite the verified arrival capture with a sweep pan.
+        if not cap_adv:
+            self._tool_look_around(verify=False)
 
         closest = self._dist_to_anchor_m(oid, hyp)
         rec = self._record_place_inspect(
@@ -1978,14 +2035,143 @@ class AgenticEQAExecutor:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
                 max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt(),
+                robot_xyt=self._robot_xyt_world(),
             )
         except TypeError:
             hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
+        # OVMM receptacles ("Where is the microwave/table?") often have no direct
+        # object-place card (large fixtures YoloE labels as surroundings). Fall back
+        # to investigating nearby container/fixture nodes so the agent actually goes
+        # and looks instead of exploring randomly for 8 rounds.
+        if not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
+            adjacent = self._receptacle_adjacent_hypotheses(gm)
+            if adjacent:
+                hypotheses = adjacent + hypotheses
         self._set_hypotheses(hypotheses)
+
+    _FIXTURE_LABEL_TOKENS = frozenset(
+        {
+            "cabinet",
+            "counter",
+            "shelf",
+            "table",
+            "desk",
+            "dresser",
+            "chest",
+            "drawer",
+            "stove",
+            "oven",
+            "refrigerator",
+            "fridge",
+            "microwave",
+            "countertop",
+        }
+    )
+
+    def _receptacle_adjacent_hypotheses(self, gm: Any) -> list[NavHypothesis]:
+        """Container/fixture nodes to look at when a receptacle phrase has no direct
+        place card (microwave/table/cab often sit on/under these).
+
+        Two soft-search sources, both label-free:
+          (1) SigLIP text grounding of the target phrase against the voxel semantic
+              memory — the top-similarity world point is where the object is likely
+              to be even if YoloE never made a labeled node for it.
+          (2) container/fixture node labels (cabinet/counter/shelf/table/...) as a
+              geometric fallback when SigLIP has nothing above threshold.
+        """
+        if gm is None:
+            return []
+        out: list[NavHypothesis] = []
+        seen: set[int] = set()
+
+        # (1) SigLIP soft ground: top-similarity voxel point for the target phrase.
+        # A soft *explore* seed only needs to point at the most likely spot, not a
+        # PRESENT-level confirmation, so use a low bar — if the semantic memory has
+        # any microwave-like features we want to go look there.
+        voxel_map, _ = self._voxel_planner()
+        target = self._target_phrase or self._siglip_phrase()
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            _logger.info(
+                "[siglip-seed] target=%r voxel=%s target_phrase=%r",
+                target,
+                bool(voxel_map is not None),
+                self._target_phrase,
+            )
+        if voxel_map is not None and target:
+            try:
+                sim = voxel_map.find_alignment_over_model(target)
+                points, _, _, _ = voxel_map.semantic_memory.get_pointcloud()
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    _logger.info(
+                        "[siglip-seed] sim=%s n_points=%s",
+                        "None" if sim is None else f"{sim.numel()}",
+                        "None" if points is None else str(tuple(points.shape)),
+                    )
+                if sim is not None and points is not None and sim.numel() > 0:
+                    best = int(sim.cpu().argmax(dim=-1))
+                    best_sim = float(sim.cpu().max(dim=-1)[0].item())
+                    if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                        _logger.info(
+                            "[siglip-seed] target=%r top_sim=%.3f n_points=%d",
+                            target,
+                            best_sim,
+                            int(points.shape[0]),
+                        )
+                    if best_sim > 0.12:
+                        xyz = np.asarray(points[best].detach().cpu().numpy(), dtype=float).reshape(-1)[:3]
+                        if xyz.size >= 3 and np.isfinite(xyz).all():
+                            out.append(
+                                NavHypothesis(
+                                    phrase=f"siglip {self._target_phrase or target}",
+                                    obs_id=-2_000_000 - len(out),
+                                    xyz=xyz,
+                                    score=0.0,
+                                    source="siglip",
+                                )
+                            )
+            except Exception as e:
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    _logger.warning(f"siglip receptacle seed failed for {target!r}: {e}")
+
+        # (2) container/fixture node labels as a geometric fallback.
+        if not out and hasattr(gm, "get_nodes"):
+            for node in gm.get_nodes():
+                if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                    continue
+                oid = int(getattr(node, "obs_id", -1))
+                if oid < 0 or oid in seen:
+                    continue
+                labels = [str(lab).lower() for lab in (getattr(node, "labels", None) or [])]
+                if not any(tok in lab for lab in labels for tok in self._FIXTURE_LABEL_TOKENS):
+                    continue
+                seen.add(oid)
+                xyz = np.asarray(node.xyz, dtype=float).reshape(-1)
+                out.append(
+                    NavHypothesis(
+                        phrase="nearby fixture",
+                        obs_id=oid,
+                        xyz=xyz[:3],
+                        score=0.0,
+                        source="graph",
+                    )
+                )
+                if len(out) >= 4:
+                    break
+        return out
 
     def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
         """Install recalled hyps: drop visited frontiers; prefer untried in order."""
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            inv = [h for h in hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+            exp = [h for h in hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
+            _logger.info(
+                "[hyps] q=%r investigate=%d (%s) explore=%d (%s)",
+                self.query_text[:50],
+                len(inv),
+                [f"{int(h.obs_id)}:{h.phrase}" for h in inv][:8],
+                len(exp),
+                [f"{int(h.obs_id)}:{h.phrase}" for h in exp][:8],
+            )
         filtered: list[NavHypothesis] = []
         for h in hypotheses:
             oid = int(h.obs_id)
@@ -2053,7 +2239,21 @@ class AgenticEQAExecutor:
         return True
 
     def _begin_policy_approach(self, source: str, obs_id: int, phrase: str) -> str:
-        if self._evidence_policy.state == AgenticState.REPLAN:
+        # A prior verify may have left the policy in ANSWER (a different hypothesis
+        # was confirmed). Starting a new investigate must reset to a fresh
+        # SEARCH→APPROACH so the next capture+assess can confirm again — otherwise
+        # apply_vlm_assessment raises 'invalid in state ANSWER' and _verified never
+        # updates even when the VLM keeps reporting present=True. Only reset when
+        # switching to a new hypothesis (not re-verifying the same confirmed view).
+        if (
+            self._evidence_policy.state in (AgenticState.REPLAN, AgenticState.ANSWER)
+            and self._evidence_policy.active_hypothesis_id
+            and self._evidence_policy.active_hypothesis_id != f"{source}:{int(obs_id)}"
+        ):
+            self._evidence_policy.reset_for_new_approach()
+            self._verified = False
+            self._verified_obs_id = None
+        elif self._evidence_policy.state == AgenticState.REPLAN:
             self._evidence_policy.replan()
             self._verified = False
             self._verified_obs_id = None
@@ -2144,7 +2344,7 @@ class AgenticEQAExecutor:
         agent = self.agent
         vm = getattr(agent, "voxel_map", None)
         planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if vm is not None and planner is not None and xyt is not None:
             try:
                 from emet.memory.graph_eqa.dynamem_graph_hooks import sync_graph_frontier_nodes
@@ -2675,7 +2875,16 @@ class AgenticEQAExecutor:
                 need_more_views=assessment.need_more_views,
             )
         except (RuntimeError, ValueError) as exc:
-            _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
+            if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                _logger.warning(
+                    "evidence-policy VLM assess rejected: %s (state=%s, present=%s, answerable=%s)",
+                    exc,
+                    self._evidence_policy.state,
+                    assessment.present,
+                    assessment.answerable,
+                )
+            else:
+                _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
         confirmed = False
         confirm_reason = "no_vlm"
         if vlm_assessment is not None:
@@ -3003,7 +3212,7 @@ class AgenticEQAExecutor:
                     getattr(live_obs, "depth", None),
                 )
             )
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if xyt is not None:
             row["xyt"] = [float(x) for x in xyt.reshape(-1)[:3]]
         hyp = next((h for h in self._hypotheses if int(h.obs_id) == int(result.obs_id)), None)
@@ -3437,7 +3646,7 @@ class AgenticEQAExecutor:
             # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
             # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
             # per VLM.
-            xyt = self._robot_xyt()
+            xyt = self._robot_xyt_world()
             planner = getattr(agent, "planner", None)
             try:
                 (
@@ -3778,7 +3987,7 @@ class AgenticEQAExecutor:
             captions.append("Image 1: current robot view")
 
         gm = self.graph_memory
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if gm is not None and hasattr(gm, "nearby_object_observations") and xyt is not None:
             try:
                 nearby = gm.nearby_object_observations(xyt, k=k, max_dist_m=5.0)
@@ -3864,7 +4073,7 @@ class AgenticEQAExecutor:
         parsed = parse_tool_calls_response(text)
         vlm_room = coerce_room_label(parsed.get("current_room"), room_policy=self.room_policy)
         graph_room = "unknown"
-        xyt = self._robot_xyt()
+        xyt = self._robot_xyt_world()
         if gm is not None:
             if vlm_room != "unknown" and hasattr(gm, "stamp_vlm_room_at_robot"):
                 try:

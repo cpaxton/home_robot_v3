@@ -284,6 +284,12 @@ class DynamemController(BaseController):
         self._lingbot_last_depth: np.ndarray | None = None
         self._lingbot_last_pose: np.ndarray | None = None
         self._lingbot_use_pose = bool(self.parameters.get("lingbot_use_pose", True))
+        # Heavy perception (YoloE detection + SigLIP dense features + instance memory
+        # + graph update) runs every N updates; occupancy/clearance update every frame
+        # so navigation is always current. The VLM/graph verification reads the latest
+        # full-perception observation, so a skipped frame only defers object recall by
+        # one cadence — a huge wall-time cut in teleport eval (each update was ~15-20s).
+        self._perception_every_n = max(1, int(self.parameters.get("perception_every_n", 2) or 1))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)
         ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")
@@ -477,7 +483,7 @@ class DynamemController(BaseController):
         keywords = exploration_keywords_from_text(text)
         robot = getattr(self, "robot", None)
         if robot is not None and hasattr(robot, "get_base_pose"):
-            pose = robot.get_base_pose()
+            pose = self._planning_base_xyt(robot.get_base_pose())
             rx, ry = float(pose[0]), float(pose[1])
         else:
             rx, ry = 0.0, 0.0
@@ -630,6 +636,7 @@ class DynamemController(BaseController):
             clearance_cost_weight=self._clearance_cost_weight,
             start_escape_max_ring=int(parameters.get("motion_planner/start_escape_max_ring", 8)),
         )
+        self.planner.debug_start_escape = True
         print("Dynamem create_obstacle_map: AStar ready", flush=True)
         print("Dynamem create_obstacle_map: configuring graph memory…", flush=True)
         # Frontier / explore memory: mark goals blocked after waypoint timeout so
@@ -860,9 +867,21 @@ class DynamemController(BaseController):
         doc = f"{base}\n\n---\n\n## Live status\n{live}"
         self.rerun_visualizer.log_text("robot_monologue", doc)
 
+    def _run_full_perception(self) -> bool:
+        """True when this update should run the expensive perception stack.
+
+        Occupancy/clearance (what navigation needs) updates every frame; YoloE +
+        SigLIP + instance memory + graph sync are throttled to every
+        ``perception_every_n`` frames. ``perception_every_n=1`` = always (old
+        behavior). The throttled path still produces a fresh depth/pointcloud, so
+        A* has current obstacles; only object-level recall lags by one cadence.
+        """
+        return self._perception_every_n <= 1 or (self.obs_count - 1) % self._perception_every_n == 0
+
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
+        _t_update0 = time.time()
         obs = self.robot.get_observation()
         if obs is None:
             logger.warning("get_observation() returned None; skipping voxel update")
@@ -962,7 +981,11 @@ class DynamemController(BaseController):
             if org is not None:
                 self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
-        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
+        self.voxel_map.process_rgbd_images(
+            rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=self._run_full_perception()
+        )
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
         robot_xy = None
         if obs.gps is not None and obs.compass is not None:
             g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
@@ -996,8 +1019,10 @@ class DynamemController(BaseController):
                 )
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
-        if self.graph_memory is not None and (
-            self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler
+        if (
+            self._run_full_perception()
+            and self.graph_memory is not None
+            and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler)
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
@@ -1027,6 +1052,8 @@ class DynamemController(BaseController):
                     graph_object_fusion=getattr(self, "_graph_object_fusion", None),
                     calibration_writer=getattr(self, "_calibration_writer", None),
                 )
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] graph_update={time.monotonic():.3f}", flush=True)
 
         if self.graph_memory is not None:
             self._sync_graph_frontier_nodes()
@@ -1038,6 +1065,8 @@ class DynamemController(BaseController):
 
         self._rerun_refresh_monologue_panel()
         self._run_on_step_callbacks()
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] obs_count={self.obs_count} wall={time.time() - _t_update0:.3f}s", flush=True)
 
     def _run_on_step_callbacks(self) -> None:
         for cb in getattr(self, "_on_step_callbacks", ()) or ():
@@ -1561,9 +1590,17 @@ class DynamemController(BaseController):
         """
         self.announce_action("Look around: sweeping head")
         tilt = float(motion_constants.look_front[1])
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            import traceback
+
+            tb = " | ".join(f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=6)[:-1])
+            print(f"[sweep] fast_lookaround={getattr(self, '_fast_explore_lookaround', False)} caller={tb}", flush=True)
         # Four pans for Realsense FOV coverage (left → right-ish). Soft-wait exits on settle.
         # Explore-loop / smoke: two extremes ~halves wall time (~100s → ~50s per excursion).
-        if getattr(self, "_fast_explore_lookaround", False):
+        # In fast-sim (teleport) eval mode the 4-pan sweep dominates wall time, so always
+        # halve to two extremes — the teleport base already turns to face each frontier.
+        fast = getattr(self, "_fast_explore_lookaround", False) or os.environ.get("EMET_SIM_NAV_TELEPORT") == "1"
+        if fast:
             pans = [0.6, -1.8]
         else:
             pans = [0.6, -0.2, -1.0, -1.8]
@@ -1649,7 +1686,11 @@ class DynamemController(BaseController):
         if vm is None or not hasattr(vm, "_update_visited"):
             return False
         try:
-            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            # Use world-frame base (planning frame) so the visited disk lands on the
+            # robot's actual map cell. Raw get_base_pose is episode-relative; for sims
+            # with a non-zero nav origin (robocasa) that maps the disk to grid center
+            # (0,0), leaving the real spawn cell unexplored → nav 'non navigable'.
+            xyt = self._planning_base_xyt(self.robot.get_base_pose())
         except Exception:
             return False
         if xyt.size < 2:
@@ -1727,7 +1768,7 @@ class DynamemController(BaseController):
             return 0.0 if require_map else requested
 
         try:
-            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            xyt = self._planning_base_xyt(self.robot.get_base_pose())
         except Exception:
             return 0.0 if require_map else requested
         if xyt.size < 3:
