@@ -99,7 +99,7 @@ Ordered by paper priority, all gated:
 |------|--------|
 | A0 unit gate | **done** (branch: fixed stale tests + empty-pose guard) |
 | B0 consumer audit | done (see joint-loop doc) |
-| A1 holdout-4 | not run |
+| A1 holdout-4 | **draw 1: 2/4** (q15 D✓, q68 B✓, q105 ✗, q17 ✗) — all submitted via `eqa_answer` budget path; **0 invalid-in-state ANSWER, 0 assess-rejected**; same VLM/scenes as prior 4/4 which was also `confident=False`. Variance suspected; re-run in progress |
 | A2 holdout-8 | not run |
 | B1 cross-task smoke | not run |
 | Wave-2b control result | 3/10 on merged main (v4, terminated at 10/11) |
