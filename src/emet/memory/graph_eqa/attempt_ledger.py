@@ -131,10 +131,14 @@ class AttemptRecord:
     phrase: str = ""
     # Canonical room label when known (schema v2). Empty for v1 imports / unknown.
     room: str = ""
+    # Stable graph identity fields (schema v3); legacy node/obs ids remain adapters.
+    target_kind: str = ""
+    target_id: str = ""
+    view_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "action_kind": self.action_kind,
             "outcome": self.outcome,
             "status_code": self.status_code,
@@ -147,6 +151,9 @@ class AttemptRecord:
             "question_id": self.question_id,
             "phrase": self.phrase,
             "room": self.room,
+            "target_kind": self.target_kind,
+            "target_id": self.target_id,
+            "view_id": self.view_id,
         }
 
     def summary_bit(self) -> str:
@@ -198,6 +205,9 @@ class AttemptRecord:
             question_id=str(data["question_id"]) if data.get("question_id") is not None else None,
             phrase=str(data.get("phrase") or "").strip().lower()[:80],
             room=room,
+            target_kind=str(data.get("target_kind") or "").strip().lower()[:40],
+            target_id=str(data.get("target_id") or "").strip()[:120],
+            view_id=str(data.get("view_id") or "").strip()[:120],
         )
 
 

@@ -49,6 +49,10 @@ from emet.memory.graph_eqa.mcq_debias import (
     match_freeform_to_choice,
     tally_choice_votes,
 )
+from emet.memory.graph_eqa.world_evidence import (
+    WorldEvidenceStore,
+    resolve_world_evidence_mode,
+)
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -639,6 +643,11 @@ class GraphEQAMemory:
         self.max_near_distance = max_near_distance
         self.last_eqa_raw: str = ""
         self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
+        # Model-native output before salvage, memory-location, or equipment overrides.
+        # Agentic grounded_v2 arbitration consumes these immutable fields.
+        self.last_eqa_model_raw: str = ""
+        self.last_eqa_model_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
+        self.last_agentic_decision: dict[str, Any] | None = None
         self.last_eqa_obs_ids: list[int] = []
         self.last_eqa_action_obs_id: int | None = None
         self.last_eqa_prompt_node_count: int = 0
@@ -658,6 +667,7 @@ class GraphEQAMemory:
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
         self._room_clusters: list[Any] = []
+        self._room_connectivity_fn: Callable[[tuple[float, float], tuple[float, float]], bool] | None = None
         self._relation_beliefs: dict[tuple[int, int, str], RelationBelief] = {}
         self._change_events: list[dict[str, Any]] = []
         self._observations: list[GraphObservation] = []
@@ -719,6 +729,16 @@ class GraphEQAMemory:
         # Room-scoped timeline (survives cluster rebuild; agent-facing via format_room_history).
         self._room_events: list[dict[str, Any]] = []
         self._room_events_max: int = 64
+        eqa_cfg = self._parameters_dict().get("eqa")
+        configured_world_mode = eqa_cfg.get("graph_evidence_mode", "off") if isinstance(eqa_cfg, dict) else "off"
+        world_mode = resolve_world_evidence_mode(
+            os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or configured_world_mode
+        )
+        self.world_evidence = WorldEvidenceStore(
+            mode=world_mode,
+            session_id=os.environ.get("EMET_WORLD_SESSION_ID", ""),
+        )
+        self._capture_context: dict[str, Any] = {}
         self._load_navigation_settings()
         self._load_dynagraph_settings()
         self._load_frontier_settings()
@@ -871,6 +891,7 @@ class GraphEQAMemory:
         step: int | None = None,
         viewpoint_tolerance_m: float = 0.75,
         absence_confirmations: int = 2,
+        visibility_context: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Conservatively detect disappeared objects from repeated same-view contradictions.
 
@@ -880,6 +901,18 @@ class GraphEQAMemory:
         """
         if viewer_xyz is None:
             return []
+        evidence_view_id = ""
+        if self.world_evidence.enabled:
+            context = dict(visibility_context or {})
+            required = (
+                bool(context.get("camera_frustum_ok")),
+                bool(context.get("depth_coverage_ok")),
+                bool(context.get("detector_ran")),
+                bool(context.get("occlusion_free")),
+            )
+            evidence_view_id = str(context.get("evidence_view_id") or "")
+            if not all(required) or not evidence_view_id:
+                return []
         now = self._effective_timestep() if step is None else int(step)
         viewer = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3]
         visible = [str(label) for label in labels if str(label).strip()]
@@ -902,6 +935,27 @@ class GraphEQAMemory:
                     belief_confidence=min(0.99, float(node.belief_confidence) + 0.1),
                 )
                 continue
+            if self.world_evidence.enabled:
+                entity = self.world_evidence.entity_for_node(int(node.node_id))
+                if entity is not None:
+                    self.world_evidence.record_event(
+                        subject_kind="entity",
+                        subject_id=entity.entity_id,
+                        predicate="visible_in_view",
+                        polarity="negative",
+                        source="detector",
+                        confidence=0.6,
+                        step=now,
+                        view_id=evidence_view_id,
+                        place_id=entity.place_id,
+                        payload={
+                            "claim_view_id": self.view_id_for_obs(int(node.obs_id)),
+                            "viewpoint_distance_m": distance,
+                            "frustum_checked": True,
+                            "depth_coverage_checked": True,
+                            "occlusion_checked": True,
+                        },
+                    )
             consecutive = (
                 int(node.expected_absence_count) + 1
                 if int(node.last_absence_step) < 0 or now - int(node.last_absence_step) <= 2
@@ -958,6 +1012,9 @@ class GraphEQAMemory:
         """
         self.last_eqa_raw = ""
         self.last_eqa_parsed = ("", "", False, "", "")
+        self.last_eqa_model_raw = ""
+        self.last_eqa_model_parsed = ("", "", False, "", "")
+        self.last_agentic_decision = None
         self.last_eqa_obs_ids = []
         self.last_eqa_action_obs_id = None
         self.last_eqa_prompt_node_count = 0
@@ -1037,6 +1094,7 @@ class GraphEQAMemory:
         self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self._reindex_world_entities()
         self._rebuild_viewpoint_index()
         self._update_edges()
         return len(to_drop)
@@ -1066,6 +1124,7 @@ class GraphEQAMemory:
         self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self._reindex_world_entities()
         self._rebuild_viewpoint_index()
         self._update_edges()
         return len(to_drop)
@@ -1095,6 +1154,106 @@ class GraphEQAMemory:
     def obs_revision(self, obs_id: int) -> int:
         """Content generation for *obs_id* (advances when candidate RGB is refreshed)."""
         return int(self._obs_revisions.get(int(obs_id), 0))
+
+    def set_capture_context(
+        self,
+        *,
+        camera_pose_world: Any = None,
+        base_pose_world: Any = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Attach immutable sensor-pose provenance to subsequent object views."""
+        self._capture_context = {
+            "camera_pose_world": (
+                np.asarray(camera_pose_world, dtype=float).reshape(4, 4).copy()
+                if camera_pose_world is not None
+                else None
+            ),
+            "base_pose_world": (
+                np.asarray(base_pose_world, dtype=float).reshape(-1)[:3].copy()
+                if base_pose_world is not None
+                else None
+            ),
+        }
+        if session_id:
+            self.world_evidence.session_id = str(session_id)
+
+    def clear_capture_context(self) -> None:
+        self._capture_context = {}
+
+    def _record_world_view_for_obs(self, obs_id: int) -> str:
+        if not self.world_evidence.enabled:
+            return ""
+        oid = int(obs_id)
+        node = next(
+            (
+                item
+                for item in self._nodes
+                if int(item.obs_id) == oid and not item.is_frontier and not item.is_viewpoint
+            ),
+            None,
+        )
+        obs = self._observation_by_id(oid)
+        if node is None or obs is None:
+            return ""
+        entity = self.world_evidence.ensure_entity(
+            identity_key=str(node.identity_key or f"obs:{oid}"),
+            node_id=int(node.node_id),
+            labels=list(node.labels),
+            xyz=node.xyz,
+            step=self._effective_timestep(),
+        )
+        if entity is None:
+            return ""
+        context = dict(self._capture_context or {})
+        view = self.world_evidence.append_view(
+            obs_id=oid,
+            revision=self.obs_revision(oid),
+            rgb=obs.rgb,
+            object_xyz=obs.xyz,
+            labels=list(obs.labels),
+            description=obs.description,
+            entity_id=entity.entity_id,
+            place_id=entity.place_id,
+            captured_step=self._effective_timestep(),
+            camera_pose_world=context.get("camera_pose_world"),
+            base_pose_world=context.get("base_pose_world", obs.viewer_xyz),
+        )
+        if view is not None:
+            self.world_evidence.record_event(
+                subject_kind="entity",
+                subject_id=entity.entity_id,
+                predicate="observed",
+                polarity="positive",
+                source="graph_observation",
+                confidence=float(getattr(node, "belief_confidence", 0.5) or 0.5),
+                step=self._effective_timestep(),
+                view_id=view.view_id,
+                place_id=entity.place_id,
+                payload={
+                    "labels": list(node.labels),
+                    "legacy_obs_id": oid,
+                    "revision": self.obs_revision(oid),
+                },
+            )
+        return view.view_id if view is not None else ""
+
+    def view_id_for_obs(self, obs_id: int) -> str:
+        return self.world_evidence.view_id_for_obs(int(obs_id))
+
+    def latest_world_view_id(self) -> str:
+        if not self.world_evidence.views:
+            return ""
+        return max(
+            self.world_evidence.views.values(),
+            key=lambda view: (view.captured_step, view.obs_id, view.revision),
+        ).view_id
+
+    def _reindex_world_entities(self) -> None:
+        self.world_evidence.reindex_entities(
+            self._nodes,
+            step=self._effective_timestep(),
+        )
 
     def _bump_obs_revision(self, obs_id: int) -> int:
         oid = int(obs_id)
@@ -1144,6 +1303,7 @@ class GraphEQAMemory:
             if viewer_a is not None:
                 o.viewer_xyz = viewer_a
             self._bump_obs_revision(oid)
+            self._record_world_view_for_obs(oid)
             return True
         return False
 
@@ -1279,6 +1439,7 @@ class GraphEQAMemory:
         )
         self._obs_revisions[int(obs_id)] = 1
         self._last_obs_content_update_id = int(obs_id)
+        self._record_world_view_for_obs(obs_id)
         if viewer_a is not None:
             self._ensure_viewpoint_node(obs_id, viewer_a)
         self._update_edges()
@@ -1478,10 +1639,18 @@ class GraphEQAMemory:
                 break
 
         src_obs_id = int(src.obs_id)
+        self.world_evidence.absorb_entity(
+            src_node_id=int(src_node_id),
+            dst_node_id=int(dst_node_id),
+        )
         self._nodes = [n for n in self._nodes if int(n.node_id) != int(src_node_id)]
         self._observations = [o for o in self._observations if int(o.obs_id) != src_obs_id]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self.world_evidence.reindex_entities(
+            self._nodes,
+            step=self._effective_timestep(),
+        )
         self._rebuild_viewpoint_index()
         self._update_edges()
         return True
@@ -1646,8 +1815,58 @@ class GraphEQAMemory:
         self._observations = [o for o in self._observations if int(o.obs_id) not in drop_obs]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self._reindex_world_entities()
         self._rebuild_viewpoint_index()
         self._update_edges()
+
+    def _frontier_support_attachment(
+        self,
+        *,
+        grid_ij: tuple[int, int],
+        xyz: np.ndarray,
+        unexplored: np.ndarray,
+        explored: np.ndarray,
+        reachable: np.ndarray | None,
+        step: int,
+    ) -> tuple[np.ndarray, tuple[str, ...], tuple[str, ...]]:
+        """Return real nearby RGB or an explicitly namespaced map crop."""
+        nearest_view = None
+        nearest_distance = float("inf")
+        if self.world_evidence.enabled:
+            for view in self.world_evidence.views.values():
+                if view.rgb is None:
+                    continue
+                anchor = view.base_pose_world or view.object_xyz
+                distance = float(
+                    np.linalg.norm(
+                        np.asarray(anchor[:2], dtype=float)
+                        - np.asarray(xyz[:2], dtype=float)
+                    )
+                )
+                if distance < nearest_distance:
+                    nearest_view, nearest_distance = view, distance
+        if nearest_view is not None and nearest_distance <= 5.0:
+            return (
+                np.asarray(nearest_view.rgb, dtype=np.uint8).copy(),
+                (nearest_view.view_id,),
+                (f"view:{nearest_view.view_id}",),
+            )
+
+        row, col = int(grid_ij[0]), int(grid_ij[1])
+        radius = 12
+        r0, r1 = max(0, row - radius), min(unexplored.shape[0], row + radius + 1)
+        c0, c1 = max(0, col - radius), min(unexplored.shape[1], col + radius + 1)
+        crop = np.full((r1 - r0, c1 - c0, 3), 32, dtype=np.uint8)
+        crop[np.asarray(explored[r0:r1, c0:c1], dtype=bool)] = (90, 90, 90)
+        if reachable is not None:
+            crop[np.asarray(reachable[r0:r1, c0:c1], dtype=bool)] = (70, 100, 160)
+        crop[np.asarray(unexplored[r0:r1, c0:c1], dtype=bool)] = (40, 210, 100)
+        if crop.size == 0:
+            crop = np.full((8, 8, 3), (40, 210, 100), dtype=np.uint8)
+        scale = max(1, int(np.ceil(64 / max(crop.shape[:2]))))
+        crop = np.repeat(np.repeat(crop, scale, axis=0), scale, axis=1)[:96, :96]
+        attachment_id = f"map:grid-{row}-{col}:step-{int(step)}"
+        return crop, (), (attachment_id,)
 
     def sync_frontier_nodes(
         self,
@@ -1664,6 +1883,7 @@ class GraphEQAMemory:
         from emet.memory.graph_eqa.frontier_nodes import (
             _as_bool_numpy,
             cluster_frontier_mask,
+            frontier_components,
             hint_labels_near_grid,
             keyword_overlap_score,
         )
@@ -1679,11 +1899,30 @@ class GraphEQAMemory:
             return sum(1 for n in self._nodes if n.is_frontier)
 
         unexplored = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
-        clusters = cluster_frontier_mask(
-            unexplored,
-            min_cells=self._frontier_min_cluster_cells,
-            reachable=reachable,
+        components = (
+            frontier_components(
+                unexplored,
+                min_cells=self._frontier_min_cluster_cells,
+                reachable=reachable,
+            )
+            if self.world_evidence.enabled
+            else None
         )
+        clusters = (
+            [
+                (component.transient_id, component.goal_ij, component.cell_count)
+                for component in components
+            ]
+            if components is not None
+            else cluster_frontier_mask(
+                unexplored,
+                min_cells=self._frontier_min_cluster_cells,
+                reachable=reachable,
+            )
+        )
+        component_by_id = {
+            component.transient_id: component for component in (components or ())
+        }
         image_descriptions = getattr(voxel_map, "image_descriptions", None) or []
         keywords = list(question_keywords or self._relevant_objects or self._enrich_object_hints or [])
 
@@ -1694,12 +1933,9 @@ class GraphEQAMemory:
             scored.append((kw_score, cluster_id, grid_ij, cell_count))
         scored.sort(key=lambda x: (-x[0], -x[3]))
 
-        keep_ids: set[str] = set()
         step = self._effective_timestep()
-        placeholder_rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-
-        for kw_score, cluster_id, grid_ij, cell_count in scored[: self._frontier_max_nodes]:
-            keep_ids.add(cluster_id)
+        prepared: list[dict[str, Any]] = []
+        for kw_score, transient_id, grid_ij, cell_count in scored[: self._frontier_max_nodes]:
             gi, gj = grid_ij
             try:
                 xy = voxel_map.grid_coords_to_xy(np.array([gi, gj], dtype=float))
@@ -1707,12 +1943,58 @@ class GraphEQAMemory:
                 continue
             xyz = np.array([float(xy[0]), float(xy[1]), 0.0], dtype=float)
             hints = hint_labels_near_grid(grid_ij, image_descriptions)
+            support_rgb, support_view_ids, attachment_ids = self._frontier_support_attachment(
+                grid_ij=grid_ij,
+                xyz=xyz,
+                unexplored=unexplored,
+                explored=_as_bool_numpy(explored),
+                reachable=reachable,
+                step=step,
+            )
+            component = component_by_id.get(transient_id)
+            prepared.append(
+                {
+                    "transient_id": transient_id,
+                    "grid_ij": grid_ij,
+                    "cell_count": int(cell_count),
+                    "cells": (
+                        component.cells
+                        if component is not None
+                        else ((int(grid_ij[0]), int(grid_ij[1])),)
+                    ),
+                    "centroid_xyz": xyz,
+                    "keyword_score": float(kw_score),
+                    "hints": hints,
+                    "support_rgb": support_rgb,
+                    "support_view_ids": support_view_ids,
+                    "attachment_ids": attachment_ids,
+                }
+            )
+
+        tracks = (
+            self.world_evidence.update_frontier_tracks(prepared, step=step)
+            if self.world_evidence.enabled
+            else []
+        )
+        keep_ids: set[str] = set()
+        for index, item in enumerate(prepared):
+            track = tracks[index] if index < len(tracks) else None
+            cluster_id = track.frontier_id if track is not None else str(item["transient_id"])
+            keep_ids.add(cluster_id)
+            xyz = np.asarray(item["centroid_xyz"], dtype=float)
+            hints = list(item["hints"])
+            cell_count = int(item["cell_count"])
+            kw_score = float(item["keyword_score"])
             labels = ["frontier"] + hints[:3]
             desc = self._frontier_desc(cluster_id)
             obs_desc = (
-                "unexplored areas; " + ", ".join(hints)
+                f"frontier_id={cluster_id}; attachments="
+                + ",".join(item["attachment_ids"])
+                + ("; unexplored areas; " + ", ".join(hints) if hints else "; unexplored space")
                 if hints
-                else "This observation corresponds to unexplored space;"
+                else f"frontier_id={cluster_id}; attachments="
+                + ",".join(item["attachment_ids"])
+                + "; unexplored space"
             )
 
             existing = self._find_frontier_node(cluster_id)
@@ -1732,7 +2014,10 @@ class GraphEQAMemory:
                         o.xyz = xyz.copy()
                         o.labels = list(labels)
                         o.description = obs_desc
+                        o.rgb = np.asarray(item["support_rgb"], dtype=np.uint8).copy()
                         break
+                if track is not None:
+                    self.world_evidence.set_frontier_obs(track.frontier_id, int(existing.obs_id))
             else:
                 obs_id = self._next_obs_id
                 self._next_obs_id += 1
@@ -1753,12 +2038,14 @@ class GraphEQAMemory:
                 self._observations.append(
                     GraphObservation(
                         obs_id=obs_id,
-                        rgb=placeholder_rgb.copy(),
+                        rgb=np.asarray(item["support_rgb"], dtype=np.uint8).copy(),
                         xyz=xyz.copy(),
                         labels=list(labels),
                         description=obs_desc,
                     )
                 )
+                if track is not None:
+                    self.world_evidence.set_frontier_obs(track.frontier_id, obs_id)
 
         self._remove_frontier_nodes(keep_ids)
         self._update_edges()
@@ -1948,6 +2235,13 @@ class GraphEQAMemory:
         except Exception:
             return 3.0
 
+    def set_room_connectivity_checker(
+        self,
+        checker: Callable[[tuple[float, float], tuple[float, float]], bool] | None,
+    ) -> None:
+        """Set a free-space line/connectivity gate used by room clustering."""
+        self._room_connectivity_fn = checker
+
     def refresh_room_clusters(self) -> list[Any]:
         """Recompute near+planar connected components over object nodes."""
         from emet.memory.graph_eqa.room_clusters import cluster_object_nodes
@@ -1956,7 +2250,32 @@ class GraphEQAMemory:
             self._nodes,
             self._edges,
             link_radius_m=self._room_link_radius_m(),
+            connectivity_fn=self._room_connectivity_fn,
         )
+        if self.world_evidence.enabled:
+            self._reindex_world_entities()
+            node_to_place: dict[int, str] = {}
+            for node in self._nodes:
+                entity = self.world_evidence.entity_for_node(int(node.node_id))
+                if entity is not None:
+                    node_to_place[int(node.node_id)] = entity.place_id
+            hypotheses = self.world_evidence.update_room_hypotheses(
+                list(clusters),
+                node_to_place=node_to_place,
+                step=self._effective_timestep(),
+            )
+            clusters = [
+                replace(
+                    cluster,
+                    room_id=hypothesis.room_id,
+                    room_name=(
+                        hypothesis.room_name
+                        if hypothesis.room_name != "unknown"
+                        else cluster.room_name
+                    ),
+                )
+                for cluster, hypothesis in zip(clusters, hypotheses, strict=True)
+            ]
         self._room_clusters = list(clusters)
         self.last_room_clusters = list(clusters)
         return self._room_clusters
@@ -1994,6 +2313,8 @@ class GraphEQAMemory:
         *,
         protect_indoor_from_outdoor: bool = True,
         corroborating_labels: list[str] | tuple[str, ...] | None = None,
+        source: str = "router_vlm",
+        source_view_id: str | None = None,
     ) -> str:
         """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown.
 
@@ -2037,6 +2358,35 @@ class GraphEQAMemory:
         if after_s != name:
             # Protection blocked the write (or nearest cluster out of range).
             return "unknown" if sanitize_room_phrase(prev) != name else after_s
+        if self.world_evidence.enabled:
+            nearest = min(
+                self._room_clusters,
+                key=lambda cluster: float(
+                    (cluster.centroid_xy[0] - xy[0]) ** 2
+                    + (cluster.centroid_xy[1] - xy[1]) ** 2
+                ),
+                default=None,
+            )
+            if nearest is not None and nearest.room_id:
+                confidence = 0.75 if source == "investigate_vlm" else 0.65
+                hypothesis = self.world_evidence.stamp_room(
+                    nearest.room_id,
+                    name,
+                    source=source,
+                    confidence=confidence,
+                    step=self._effective_timestep(),
+                    view_id=source_view_id,
+                )
+                if hypothesis is not None:
+                    self._room_clusters = [
+                        replace(cluster, room_name=hypothesis.room_name)
+                        if cluster.room_id == hypothesis.room_id
+                        else cluster
+                        for cluster in self._room_clusters
+                    ]
+                    self.last_room_clusters = list(self._room_clusters)
+                    if hypothesis.room_name != name:
+                        return "unknown"
         return name
 
     def nearby_object_observations(
@@ -2112,6 +2462,7 @@ class GraphEQAMemory:
     def set_attempt_ledger_question_id(self, question_id: str | None) -> None:
         """Tag subsequent ledger rows with a question/episode id (does not clear the store)."""
         self._attempt_ledger_question_id = str(question_id) if question_id else None
+        self.world_evidence.set_question_id(self._attempt_ledger_question_id)
 
     def record_attempt(
         self,
@@ -2128,16 +2479,56 @@ class GraphEQAMemory:
         question_id: str | None = None,
         phrase: str = "",
         room: str = "",
+        target_kind: str = "",
+        target_id: str = "",
+        view_id: str = "",
         force: bool = False,
     ) -> AttemptRecord | None:
         """Append one :class:`AttemptRecord` when the ledger is enabled (or ``force``).
 
         Returns the stored record, or ``None`` when the ledger is off.
         """
-        if not force and not self._attempt_ledger_enabled():
-            return None
         st = int(step if step is not None else self._effective_timestep())
         qid = question_id if question_id is not None else self._attempt_ledger_question_id
+        stable_kind = str(target_kind or "")
+        stable_id = str(target_id or "")
+        stable_view = str(view_id or "")
+        if target_node_id is not None and not stable_id:
+            entity = self.world_evidence.entity_for_node(int(target_node_id))
+            if entity is not None:
+                stable_kind = "place"
+                stable_id = entity.place_id
+        if obs_id is not None and not stable_view:
+            stable_view = self.view_id_for_obs(int(obs_id))
+        if not stable_id and stable_view:
+            view = self.world_evidence.views.get(stable_view)
+            if view is not None and view.place_id:
+                stable_kind = "place"
+                stable_id = view.place_id
+        ledger_enabled = bool(force or self._attempt_ledger_enabled())
+        if self.world_evidence.enabled:
+            subject_kind = stable_kind or ("observation" if obs_id is not None else "action")
+            subject_id = stable_id or (str(obs_id) if obs_id is not None else str(action_kind))
+            self.world_evidence.record_event(
+                subject_kind=subject_kind,
+                subject_id=subject_id,
+                predicate=str(action_kind),
+                polarity="positive" if str(outcome) in {"ok", "present"} else "negative",
+                source=str(source or "unknown"),
+                confidence=1.0,
+                step=st,
+                view_id=stable_view or None,
+                place_id=stable_id if stable_kind == "place" else None,
+                payload={
+                    "outcome": str(outcome),
+                    "status_code": str(status_code),
+                    "note": str(note)[:240],
+                    "legacy_obs_id": obs_id,
+                    "legacy_node_id": target_node_id,
+                },
+            )
+        if not ledger_enabled:
+            return None
         src = str(source or "unknown")
         if src not in ("chat", "eqa", "unknown"):
             src = "unknown"
@@ -2155,6 +2546,9 @@ class GraphEQAMemory:
                 "question_id": qid,
                 "phrase": phrase,
                 "room": room,
+                "target_kind": stable_kind,
+                "target_id": stable_id,
+                "view_id": stable_view,
             }
         )
         self._attempt_records.append(rec)
@@ -2199,6 +2593,23 @@ class GraphEQAMemory:
             "obs_id": int(obs_id) if obs_id is not None else None,
             "note": str(note or "").strip()[:120],
         }
+        world_event = self.world_evidence.record_event(
+            subject_kind="room",
+            subject_id=room_n,
+            predicate=kind_s,
+            polarity="negative" if "absent" in kind_s else "positive",
+            source="room_timeline",
+            confidence=0.7,
+            step=st,
+            view_id=self.view_id_for_obs(int(obs_id)) if obs_id is not None else None,
+            payload={
+                "phrase": str(phrase or "").strip()[:120],
+                "legacy_obs_id": int(obs_id) if obs_id is not None else None,
+                "note": str(note or "").strip()[:120],
+            },
+        )
+        if world_event is not None:
+            event["event_id"] = world_event.event_id
         self._room_events.append(event)
         max_n = max(8, int(self._room_events_max))
         if len(self._room_events) > max_n:
@@ -3116,18 +3527,34 @@ class GraphEQAMemory:
         """Drop a frontier node after visit — visited space is not a frontier."""
         oid = int(obs_id)
         drop_nodes: set[int] = set()
+        frontier_ids: set[str] = set()
+        from emet.memory.graph_eqa.frontier_nodes import FRONTIER_DESC_PREFIX
+
         for n in self._nodes:
             if n.is_frontier and int(n.obs_id) == oid:
                 drop_nodes.add(int(n.node_id))
+                desc = str(n.description or "")
+                if desc.startswith(FRONTIER_DESC_PREFIX):
+                    frontier_ids.add(desc[len(FRONTIER_DESC_PREFIX) :])
         if not drop_nodes:
             return False
+        for frontier_id in frontier_ids:
+            self.world_evidence.set_frontier_status(frontier_id, "visited")
         self._nodes = [n for n in self._nodes if int(n.node_id) not in drop_nodes]
         self._observations = [o for o in self._observations if int(o.obs_id) != oid]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self._reindex_world_entities()
         self._rebuild_viewpoint_index()
         self._update_edges()
         return True
+
+    def frontier_id_near_xy(self, xyz: Any, *, max_dist_m: float = 1.5) -> str:
+        track = self.world_evidence.frontier_near_xyz(
+            xyz,
+            max_dist_m=max_dist_m,
+        )
+        return track.frontier_id if track is not None else ""
 
     def retract_phrase_claim_at_obs(
         self,
@@ -3135,6 +3562,9 @@ class GraphEQAMemory:
         phrase: str,
         *,
         strip_matching_labels: bool = True,
+        apply_blacklist: bool = True,
+        evidence_obs_id: int | None = None,
+        evidence_source: str = "vlm",
         room: str | None = None,
         step: int | None = None,
     ) -> dict[str, Any]:
@@ -3151,7 +3581,10 @@ class GraphEQAMemory:
             return {"ok": False, "error": "empty phrase", "obs_id": oid}
         if not hasattr(self, "_retracted_nav_claims"):
             self._retracted_nav_claims = set()
-        self._retracted_nav_claims.add((oid, key_phrase))
+        if apply_blacklist:
+            self._retracted_nav_claims.add((oid, key_phrase))
+        evidence_oid = int(evidence_obs_id) if evidence_obs_id is not None else oid
+        source = str(evidence_source or "unknown").strip().lower()[:40]
         stripped_obs = 0
         stripped_nodes = 0
         if strip_matching_labels:
@@ -3181,8 +3614,8 @@ class GraphEQAMemory:
             kind="verify_absent",
             step=step,
             phrase=key_phrase,
-            obs_id=oid,
-            note="retract claim",
+            obs_id=evidence_oid,
+            note=f"{source} absent; claim_obs={oid}",
         )
         room_label = str((room_ev or {}).get("room") or "")
         # Persist ABSENT as a verify attempt when the ledger is on (does not change
@@ -3190,9 +3623,9 @@ class GraphEQAMemory:
         self.record_attempt(
             action_kind="verify",
             outcome="absent",
-            status_code="vlm_absent",
-            note=f"retract claim {key_phrase!r} at obs {oid}",
-            obs_id=oid,
+            status_code=f"{source}_absent",
+            note=f"negative evidence {key_phrase!r}: claim_obs={oid} evidence_obs={evidence_oid}",
+            obs_id=evidence_oid,
             phrase=key_phrase,
             source="eqa",
             room=room_label,
@@ -3201,10 +3634,14 @@ class GraphEQAMemory:
         return {
             "ok": True,
             "obs_id": oid,
+            "claim_obs_id": oid,
+            "evidence_obs_id": evidence_oid,
+            "evidence_source": source,
             "phrase": key_phrase,
             "stripped_obs": stripped_obs,
             "stripped_nodes": stripped_nodes,
             "n_retracted": len(self._retracted_nav_claims),
+            "recorded_only": not apply_blacklist and not strip_matching_labels,
             "room": room_label or None,
         }
 
@@ -4979,6 +5416,8 @@ class GraphEQAMemory:
             raw = f"Error: {exc}"
             self.last_eqa_raw = raw
             self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
+            self.last_eqa_model_raw = raw
+            self.last_eqa_model_parsed = self.last_eqa_parsed
             self._append_eqa_history(
                 self.format_eqa_history_outcome(
                     answer="Unknown",
@@ -5009,6 +5448,14 @@ class GraphEQAMemory:
                 raw or "",
                 prefer_json=False,
             )
+        self.last_eqa_model_raw = str(raw or "")
+        self.last_eqa_model_parsed = (
+            reasoning,
+            answer,
+            bool(confidence),
+            action,
+            confidence_reasoning,
+        )
         answer_outputs = (raw or "").replace("*", "").replace("#", "").lower()
         # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
         # Re-ask tersely for just the choice letter.

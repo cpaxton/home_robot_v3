@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -13,6 +14,17 @@ import torch
 from scipy.ndimage import label
 
 FRONTIER_DESC_PREFIX = "frontier:"
+
+
+@dataclass(frozen=True)
+class FrontierComponent:
+    transient_id: str
+    goal_ij: tuple[int, int]
+    cells: tuple[tuple[int, int], ...]
+
+    @property
+    def cell_count(self) -> int:
+        return len(self.cells)
 
 
 def exploration_keywords_from_text(
@@ -94,11 +106,28 @@ def cluster_frontier_mask(
     Returns:
         List of ``(cluster_id, (row, col) goal grid cell, cell_count)``.
     """
+    return [
+        (component.transient_id, component.goal_ij, component.cell_count)
+        for component in frontier_components(
+            unexplored,
+            min_cells=min_cells,
+            reachable=reachable,
+        )
+    ]
+
+
+def frontier_components(
+    unexplored: np.ndarray,
+    *,
+    min_cells: int = 3,
+    reachable: np.ndarray | None = None,
+) -> list[FrontierComponent]:
+    """Connected frontier components with cells retained for identity matching."""
     if not unexplored.any():
         return []
     labeled, n_comp = label(unexplored)
     reachable_b = _as_bool_numpy(reachable) if reachable is not None else None
-    out: list[tuple[str, tuple[int, int], int]] = []
+    out: list[FrontierComponent] = []
     for cid in range(1, int(n_comp) + 1):
         cells = np.argwhere(labeled == cid)
         if cells.shape[0] < min_cells:
@@ -109,7 +138,13 @@ def cluster_frontier_mask(
             snapped = reachable_waypoint_for_cluster(cells, reachable_b)
             if snapped is not None:
                 goal = snapped
-        out.append((f"c{cid}", goal, int(cells.shape[0])))
+        out.append(
+            FrontierComponent(
+                transient_id=f"c{cid}",
+                goal_ij=goal,
+                cells=tuple((int(row), int(col)) for row, col in cells),
+            )
+        )
     return out
 
 

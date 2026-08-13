@@ -77,6 +77,7 @@ class RoomCluster:
     centroid_xy: tuple[float, float]
     room_name: str
     area_proxy: float = 0.0
+    room_id: str = ""
 
 
 class _UnionFind:
@@ -322,6 +323,7 @@ def cluster_object_nodes(
     edges: Sequence[tuple[int, int, str]] | None = None,
     *,
     link_radius_m: float = DEFAULT_ROOM_LINK_RADIUS_M,
+    connectivity_fn: Any | None = None,
 ) -> list[RoomCluster]:
     """Connected components over object nodes via ``near`` edges and planar radius."""
     objects = [n for n in nodes if _is_object_node(n)]
@@ -337,14 +339,18 @@ def cluster_object_nodes(
             continue
         ai, bi = int(a), int(b)
         if ai in id_set and bi in id_set:
-            uf.union(ai, bi)
+            if connectivity_fn is None or bool(connectivity_fn(_xy(by_id[ai]), _xy(by_id[bi]))):
+                uf.union(ai, bi)
 
     radius = float(link_radius_m)
     for i, a in enumerate(objects):
         axy = _xy(a)
         aid = ids[i]
         for j in range(i + 1, len(objects)):
-            if _planar_dist(axy, _xy(objects[j])) <= radius:
+            bxy = _xy(objects[j])
+            if _planar_dist(axy, bxy) <= radius and (
+                connectivity_fn is None or bool(connectivity_fn(axy, bxy))
+            ):
                 uf.union(aid, ids[j])
 
     groups: dict[int, list[Any]] = {}
@@ -392,6 +398,7 @@ def cluster_object_nodes(
                 centroid_xy=c.centroid_xy,
                 room_name=c.room_name,
                 area_proxy=c.area_proxy,
+                room_id=c.room_id,
             )
         )
     return out

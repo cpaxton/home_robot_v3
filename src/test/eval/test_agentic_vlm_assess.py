@@ -82,6 +82,47 @@ def test_assess_view_uses_generate_multimodal():
     assert client.mm_calls
 
 
+def test_assess_view_parses_string_booleans_and_labeled_letter():
+    client = _MultiClient(
+        {
+            "target": "clock",
+            "present": "false",
+            "answerable": "true",
+            "need_more_views": "false",
+            "suggested_answer": "Answer: C",
+        }
+    )
+    out = assess_view_with_vlm(
+        client,
+        question="What time is it? A) Morning B) Noon C) Evening D) Night",
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        target_phrase="clock",
+    )
+    assert out.present is False
+    assert out.answerable is True
+    assert out.need_more_views is False
+    assert out.suggested_answer == "C"
+
+
+def test_assess_view_does_not_turn_choice_text_into_first_letter():
+    client = _MultiClient(
+        {
+            "target": "vase",
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": "Dining room",
+        }
+    )
+    out = assess_view_with_vlm(
+        client,
+        question="Where is the vase? A) Kitchen B) Bedroom C) Patio D) Dining room",
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        target_phrase="vase",
+    )
+    assert out.suggested_answer == "Dining room"
+
+
 def test_build_inventory_brief_excludes_detector_proposal():
     """SigLIP/OWL verdicts must not enter assess inventory (they color answers)."""
     brief = build_inventory_brief(

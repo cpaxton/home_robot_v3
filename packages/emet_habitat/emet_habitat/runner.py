@@ -419,6 +419,12 @@ def run_hmeqa_episode(
         formatted_answer = ""
         eqa_action = ""
         eqa_confidence_reasoning = ""
+        summary = getattr(agent, "_agentic_eqa_summary", None)
+        grounded_decision: dict[str, Any] | None = None
+        if isinstance(summary, dict) and summary.get("decision_policy") == "grounded_v2":
+            candidate = summary.get("final_decision")
+            if isinstance(candidate, dict):
+                grounded_decision = candidate
         if agent.graph_memory is not None:
             raw_eqa = agent.graph_memory.last_eqa_raw
             _reasoning, answer, model_confident, eqa_action, eqa_confidence_reasoning = (
@@ -433,13 +439,24 @@ def run_hmeqa_episode(
         if not predicted:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
+        if grounded_decision is not None:
+            grounded_letter = extract_mcq_letter(str(grounded_decision.get("answer") or ""), q.choices)
+            if grounded_letter:
+                predicted = grounded_letter
+                parsed_letter = grounded_letter
         # Location MCQ where the target never appeared in the attached views. Prefer a
         # geometric equipment letter when we have one, but keep the model's letter
         # otherwise: blanking it here scored a guaranteed zero where a guess scores
         # 0.25 in expectation. The episode is flagged so calibration can separate
         # these from grounded answers.
         unverified_location_guess = False
-        if agent.graph_memory is not None and q.choices and choices_are_location_mcq(q.choices) and not model_confident:
+        if (
+            grounded_decision is None
+            and agent.graph_memory is not None
+            and q.choices
+            and choices_are_location_mcq(q.choices)
+            and not model_confident
+        ):
             obs_ids = list(getattr(agent.graph_memory, "last_eqa_obs_ids", []) or [])
             visible_fn = getattr(agent.graph_memory, "_target_visible_in_obs_ids", None)
             visible = bool(callable(visible_fn) and visible_fn(obs_ids))
@@ -453,7 +470,8 @@ def run_hmeqa_episode(
         predebias_letter = ""
         debias_votes = ""
         if (
-            agent.graph_memory is not None
+            grounded_decision is None
+            and agent.graph_memory is not None
             and getattr(agent.graph_memory, "mcq_debias_enabled", False)
             and q.choices
             and predicted
@@ -468,7 +486,6 @@ def run_hmeqa_episode(
         correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices) if predicted else False
 
         salvage_pred = ""
-        summary = getattr(agent, "_agentic_eqa_summary", None)
         if isinstance(summary, dict):
             salvage_pred = str(summary.get("salvage_counterfactual_letter") or "").strip().upper()[:1]
         if not salvage_pred and agent.graph_memory is not None:
@@ -481,6 +498,8 @@ def run_hmeqa_episode(
         scored_policy = ""
         if isinstance(summary, dict) and summary.get("scored_policy"):
             scored_policy = str(summary.get("scored_policy") or "")
+        elif grounded_decision is not None:
+            scored_policy = "grounded_v2"
         elif salvage_pred or (isinstance(summary, dict) and "salvage_counterfactual_letter" in summary):
             scored_policy = "no_salvage"
 

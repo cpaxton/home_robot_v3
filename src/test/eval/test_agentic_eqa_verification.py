@@ -53,6 +53,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from emet.controller.habitat_nav import NavOutcome
+
 
 def _has_attr_path(mod_name: str, attr: str) -> bool:
     try:
@@ -157,7 +159,7 @@ def test_H3_answer_only_skips_nav():
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
     agent.planner = MagicMock()
     agent._planning_base_xyt = lambda xyt: xyt
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.rerun_visualizer = MagicMock()
     agent.space = MagicMock()
     agent.voxel_map = MagicMock()
@@ -278,7 +280,7 @@ def test_A3_agentic_loop_nav_before_answer():
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return True
+        return NavOutcome.REACHED
 
     def _update(*_a, **_k):
         order.append("update")
@@ -349,7 +351,7 @@ def test_follow_eqa_action_after_unknown_submit():
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return True
+        return NavOutcome.REACHED
 
     def _update(*_a, **_k):
         order.append("update")
@@ -408,7 +410,7 @@ def test_unknown_without_action_obs_explores():
     agent.robot = MagicMock()
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
     agent.robot.get_observation.return_value = None
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.update = MagicMock()
     agent.run_exploration = MagicMock(return_value=True)
     agent._siglip_guided_frontier = MagicMock(return_value=None)
@@ -783,7 +785,7 @@ def test_T2_router_parses_and_dispatches_nav():
     gm.eqa_client = client
     gm._navigation_waypoint_for_obs.return_value = np.array([1.0, 2.0, 0.0])
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
 
     ex = AgenticEQAExecutor(agent, "Where is the sink?", max_rounds=3, max_nav_steps=2)
     calls, picked_by, meta = ex._route_tool_calls()
@@ -853,7 +855,7 @@ def test_T4_router_env_off_fallback_only(monkeypatch):
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return True
+        return NavOutcome.REACHED
 
     def _verify(*_a, **_k):
         order.append("verify")
@@ -1506,7 +1508,13 @@ def test_answerable_deferred_without_phrase_hit(monkeypatch):
         lambda **k: "brief",
     )
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True, single_view_confirm=False)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+        single_view_confirm=False,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1571,7 +1579,13 @@ def test_answerable_two_view_agree_unlocks(monkeypatch):
 
     gm.verify_phrase_at_obs.side_effect = lambda phrase, obs_id, **k: _verify_ret(int(obs_id))
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True, single_view_confirm=False)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+        single_view_confirm=False,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1624,7 +1638,12 @@ def test_need_more_views_blocks_unlock(monkeypatch):
         lambda **k: "brief",
     )
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1848,7 +1867,7 @@ def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
         return_value=VerifyResult(status="ABSENT", sim=0.05, obs_id=16, phrase="wall clock", ok=False)
     )
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.update = MagicMock()  # never advances obs id
     agent.robot = None
@@ -2080,7 +2099,7 @@ def test_investigate_records_place_inspect_on_card():
     )
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.update = MagicMock()
     agent.robot = MagicMock()
@@ -2406,7 +2425,14 @@ def test_stamp_room_after_investigate_updates_graph_and_estimate():
     # Local evidence only: obs labels (not hyp.phrase / labels_near_obs).
     gm._observations = [MagicMock(obs_id=3, labels=["toilet", "bath mat"])]
 
-    def _stamp(xy, room, protect_indoor_from_outdoor=True, corroborating_labels=None):
+    def _stamp(
+        xy,
+        room,
+        protect_indoor_from_outdoor=True,
+        corroborating_labels=None,
+        source="router_vlm",
+        source_view_id=None,
+    ):
         from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
 
         gm._room_clusters = stamp_room_at_xy(
@@ -2826,7 +2852,7 @@ def test_navigate_rejects_obs_not_in_evidence():
 
     agent = MagicMock()
     agent.graph_memory = MagicMock()
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.graph_memory._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 0.0]))
     ex = AgenticEQAExecutor(agent, question="Where is the sink?", max_rounds=4, router=False)
     ex._hypotheses = [
@@ -2911,10 +2937,10 @@ def test_visited_frontier_retired_from_graph():
     assert "obs_id=3" in msg
 
 
-def test_nav_failed_allows_retry_until_approaches_exhausted():
-    """Transient planner misses rotate approach samples; block only when exhausted."""
+def test_consecutive_nav_failures_block_after_retry_limit():
+    """Planner misses rotate approaches until the anti-thrashing limit is reached."""
     _require_agentic()
-    from emet.memory.graph_eqa.agentic_eqa import PLACE_APPROACH_SAMPLES, AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_eqa import NAV_CONSECUTIVE_FAIL_LIMIT, AgenticEQAExecutor
     from emet.memory.graph_eqa.graph_memory import NavHypothesis
 
     agent = MagicMock()
@@ -2928,7 +2954,7 @@ def test_nav_failed_allows_retry_until_approaches_exhausted():
     gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
     gm.record_nav_attempt = MagicMock()
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=False)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.STUCK)
     agent.update = MagicMock()
     agent.robot = None
 
@@ -2950,16 +2976,16 @@ def test_nav_failed_allows_retry_until_approaches_exhausted():
         )
     ]
     targets = []
-    for _ in range(PLACE_APPROACH_SAMPLES):
+    for _ in range(NAV_CONSECUTIVE_FAIL_LIMIT):
         out = ex._tool_navigate_to_obs(7)
         assert out["ok"] is False
         assert out.get("status") != "NAV_LOOP_BLOCKED"
         targets.append(out.get("approach_index"))
-    assert targets == list(range(PLACE_APPROACH_SAMPLES))
+    assert targets == list(range(NAV_CONSECUTIVE_FAIL_LIMIT))
     assert ex._hypothesis_nav_blocked(7)
     blocked = ex._tool_navigate_to_obs(7)
     assert blocked.get("status") == "NAV_LOOP_BLOCKED"
-    assert agent.navigate_to_target_pose.call_count == PLACE_APPROACH_SAMPLES
+    assert agent.navigate_to_target_pose.call_count == NAV_CONSECUTIVE_FAIL_LIMIT
 
 
 def test_investigate_samples_new_approach_after_close_absent():
@@ -2986,7 +3012,7 @@ def test_investigate_samples_new_approach_after_close_absent():
     gm.record_nav_attempt = MagicMock()
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.robot = MagicMock()
     agent.robot.get_base_pose = MagicMock(return_value=np.array([-16.8, -1.0, 0.0]))

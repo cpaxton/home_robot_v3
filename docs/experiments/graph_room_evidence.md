@@ -1,149 +1,204 @@
-# Experiment: graph room evidence (agent-visible timeline)
+# Experiment plan: manifest-locked graph room evidence A/B
 
 **Branch:** `feature/graph-room-evidence`  
-**Code:** room timeline on `GraphEQAMemory` + `AttemptRecord.room` (schema v2) + state-card `Room history:`  
-**Refs:** [attempt_ledger.md](../attempt_ledger.md#room-timeline-graph-history), [agentic_scale.md](agentic_scale.md), [agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe)
+**Code:** explicit rollout axes + versioned `run_manifest.json`; room timeline on
+`GraphEQAMemory`; `AttemptRecord.room`; grounded agent state
+**Refs:** [attempt_ledger.md](../attempt_ledger.md#room-timeline-graph-history),
+[agentic_scale.md](agentic_scale.md),
+[agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe)
 
-## Goal
+> **Execution hold (2026-08-13):** do not launch this experiment while job
+> `20260813_103856_788d34` (`hmeqa-paper113-d1`, checkout `home_robot_v2`) is
+> running. The reported `emet-habitat` process is its descendant, not a second
+> job. Do not call `emet eval kill-stale`, cancel it, or start a competing
+> Habitat/VLM job.
 
-Test whether **writing room-scoped history into the graph** and **showing it to the paper-router** reduces wrong-room / re-scan budget burns — *without* sticky escape floors.
+## Question and hypothesis
 
-Hypothesis: when the agent sees ordered facts like `verify_absent` / `coverage_closed` / `stamp` for the current room (plus question target rooms), it chooses `explore_frontier` (or a better hyp) sooner than when those facts stay loop-local or invisible.
+Test whether stable graph evidence and room-scoped history, when made visible to
+the grounded decision policy, reduce wrong-room dwell, repeated inspections, and
+budget exhaustion.
 
-Non-goals for this experiment:
+The experiment must first re-establish a reproducible legacy control. Existing
+results do not isolate room stamps:
 
-- Claiming a letter win on bal-32 / holdout-8 (secondary if cheap)
+| Run | Result | Interpretation |
+|-----|--------|----------------|
+| July paper-router rooms probe | **7/11**, 34.1 mean planning steps | Historical reference only |
+| Aug 12 bundled stamp+ledger treatment | **2/11**, 32.6 steps | Hard regression, but several axes changed together |
+| Aug 13 plain-control partial | **3/10**, 37.8 steps; stopped before q84 | Legacy control also drifted; q6/q11/q12/q47 flipped from correct in July to wrong |
+
+The old OUTs predate the new manifest boundary. Keep them as diagnostic
+evidence; do not resume or combine them with new rows.
+
+Primary hypothesis: variant A2 below lowers median wrong-room dwell and repeated
+attempts relative to A0 on the same IDs. Letter accuracy is a safety gate, not
+the optimization target on small slices.
+
+Non-goals:
+
+- Claiming a new paper number from a 2-, 6-, or 11-question slice
 - Reintroducing room-mismatch `ESCAPE_MIN_TRAVEL_M` latches
-- Router-off arms (timeline is for agent-driven routing)
+- Changing model, budgets, IDs, verifier, router preset, or navigation stack
+  between paired variants
+- Testing all rollout axes at once
 
-## What “treatment” is
+## Frozen variants
 
-| Knob | Control (baseline) | Treatment |
-|------|--------------------|-----------|
-| Preset | `--preset paper-router` | same |
-| Room stamp | **off** (default; paper-router must not inject) | `EMET_EQA_ROOM_STAMP_INVESTIGATE=1` set explicitly |
-| Attempt ledger | off | `EMET_EQA_ATTEMPT_LEDGER=1` set explicitly |
-| Room timeline + state `Room history:` | router-only room labels (no investigate stamps) | stamps + writers + `format_room_history` |
-| Frame-streak escape (3 m after 2 not-present) | **unchanged** | unchanged |
+Every command sets every experimental axis explicitly. `--preset paper-router`
+may set verifier/router defaults, but it must not change these axes.
 
-**Important (2026-08-12):** forcing stamp+ledger on every paper-router H2H collapsed rooms-probe letters to **2/11** vs prior paper-router probe **7/11** (`hmeqa_rooms_verify_probe_20260730_234213`). Stamps stay opt-in only.
+| ID | Decision | Graph evidence | Room history | Room policy | Target hints | Investigate stamp | Ledger | Purpose |
+|----|----------|----------------|--------------|-------------|--------------|-------------------|--------|---------|
+| **A0** `gre-a0-legacy-r1` | `legacy` | `off` | `off` | `canonical` | on | off | `off` | Baseline recovery |
+| **A1** `gre-a1-shadow-r1` | `legacy` | `shadow` | `shadow` | `canonical` | on | off | `shadow` | Collection/no-leakage control |
+| **A2** `gre-a2-grounded-r1` | `grounded_v2` | `agent` | `agent` | `canonical` | on | off | `agent` | Agent-visible grounded state |
+| **A3** `gre-a3-stamp-r1` | `grounded_v2` | `agent` | `agent` | `canonical` | on | **on** | `agent` | Isolate the known stamp risk; smoke only first |
 
-Fair A/B on one commit: control = plain paper-router; treatment = same + explicit stamp/ledger env (never bake into `hmeqa_launch`).
+Defer `room_policy=llm` and `--no-room-target-hints` until A2 passes. Each is a
+separate one-axis ablation; neither belongs in the first treatment.
 
-## Metrics (primary → secondary)
+Fairness contract:
 
-### Process (primary — must analyze traces)
+- Use one clean commit for all paired variants. The manifest freezes the full
+  commit and dirty-tree digest; any later edit intentionally makes resume fail.
+- Hold IDs, order, Qwen model/family/quantization, answer and movement budgets,
+  paper-router preset, and operational crash policy constant.
+- Run one GPU job at a time and preserve each OUT independently.
+- Audit each manifest before comparing outputs. Config digests should differ
+  only because the declared variant axes differ.
 
-Per episode / arm, from `bundles/agentic_qN/agentic_trace.jsonl` + graph export if present:
+## Metrics and invariants
 
-| Metric | How |
-|--------|-----|
-| `n_room_events` | Count timeline kinds (`stamp`, `verify_absent`, `coverage_closed`, …) |
-| `frac_explore_after_history` | Explore rows whose prior state (or same-round user message dump if logged) contained non-empty `Room history` |
-| `wrong_room_dwell_rounds` | Rounds where `current_room` (router/graph) ∉ `question_target_rooms` and tool ∈ {investigate, look_around, verify} |
-| `path_m_before_first_target_room` | Planar path until first explore/investigate with `frontier_room` or `current_room` in targets (or ∞) |
-| `escape_source` histogram | Expect mostly `none` / `frame_streak`; **not** a new latch |
-| Letter / steps | Standard H2H scored accuracy + mean steps (secondary) |
+Collect per episode from `run_manifest.json`,
+`bundles/agentic_qN/agentic_trace.jsonl`, the attempt ledger, and graph export.
 
-Success on process: treatment shows **≥1 room event on ≥70%** of episodes with non-empty `question_target_rooms`, and **median wrong_room_dwell_rounds** drops vs control on the same id set.
+| Metric | Definition / gate |
+|--------|-------------------|
+| Manifest parity | Same git state, IDs/order, model, and budgets across paired OUTs |
+| Shadow no-leakage | A1 collects evidence/history/attempts, but policy-facing prompt/state contains none of it |
+| `room_event_coverage` | Fraction of target-room episodes with at least one qualified room event; A2 target **≥70%** |
+| `wrong_room_dwell_rounds` | Non-target-room rounds spent on investigate/look/verify before leaving |
+| `path_m_before_first_target_room` | Planar path before first target-room entry; report missing entry separately |
+| Repeat attempts | Same place/tool/outcome repeated without new evidence; derive from the ledger |
+| Budget behavior | Decision rounds, nav count, `budget_hit`, and forced-answer provenance |
+| Escape behavior | `escape_source` histogram; no new sticky room latch is allowed |
+| Secondary outcome | Letter, confidence/provenance, observations, planning steps, wall time |
 
-### Outcome (secondary)
+Use paired per-ID deltas. Do not treat a single small-slice letter difference as
+statistically meaningful. A2 passes the process gate only if median
+`wrong_room_dwell_rounds` falls versus A0, repeat attempts do not increase, and
+letter accuracy is no more than one answer worse on the paired six.
 
-- Agentic letter accuracy and mean steps vs control on the same ids
-- No regression vs pinned paper-router composite story without claiming a new of-record number until bal-32
+## Staged ladder
 
-## Ladder
+| Wave | Slice / variants | Pass / stop |
+|------|------------------|-------------|
+| **0 — CPU + freeze** | Final clean commit; targeted unit/config tests; help audit | No GPU until tests pass and the current paper113 job is gone |
+| **1 — paired six** | IDs `2,6,11,12,47,76`; run A0, then A1, then A2 | A0 must recover at least **3/4** on regression IDs `6,11,12,47`; otherwise stop before attributing anything to grounded state |
+| **2 — stamp isolation** | A3 on `2,76` only | Confirm stamps are actually recorded; stop on routing/pathology regression |
+| **3 — rooms probe** | A0 vs A2 on `6,8,11,12,21,28,39,47,48,80,84` | Process gate above; letters are a safety gate |
+| **4 — wrong-room focus** | Start `2,29,76`, then add high-dwell IDs selected from Wave 3 A0 | Dwell/path-to-target improve on paired rows |
+| **5 — scale** | Holdout-8 or bal-32 | Only after Waves 1–4; write a new OUT and never overwrite paper artifacts |
 
-| Wave | Slice | Arms | Pass / stop |
-|------|-------|------|-------------|
-| **0** | Unit + CPU | — | `uv run emet test src/test/memory/test_attempt_ledger.py src/test/eval/test_hmeqa_launch.py src/test/memory/test_room_policy.py -q` |
-| **1** | Smoke 2 ids | agentic paper-router | Timeline non-empty when rooms known; `Room history` in traces/state; GPU via `emet jobs` |
-| **2** | Rooms probe 11 | agentic paper-router | Process metrics vs control; letter not the gate |
-| **3** | Wrong-room focus set | agentic paper-router | Dwell / path-to-target-room improve |
-| **4** | Holdout-8 or bal-32 | only if wave 2–3 look healthy | Optional; do not overwrite paper figures |
+If A0 scores below 3/4 on the regression IDs, repeat A0 once before declaring a
+baseline failure. If both runs fail, investigate policy/provenance drift and do
+not spend GPU on A1–A3.
 
-### Id sets
+q104 is intentionally deferred to holdout scale: it is a known native-crash hot
+scene and is not needed for the baseline-recovery gate.
 
-**Wave 1 (smoke):** `2,104`  
-- q2: bathroom/bedroom targets (room mismatch opportunity)  
-- q104: outdoor spawn / search failure archetype (frame_streak still allowed)
+## Prepared harness (do not run during the execution hold)
 
-**Wave 2 (rooms_verify_probe):** `6,8,11,12,21,28,39,47,48,80,84`  
-(from [agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe); disjoint from holdout-8)
+The following commands were checked against current CLI help, but intentionally
+not launched while paper113 is active.
 
-**Wave 3 (wrong-room / leave focus):** start with `2,29,76` plus any wave-2 ids where control `wrong_room_dwell_rounds` is high. Recompute after wave 2 — do not hard-code until traces exist. Prefer ids with non-empty `question_target_rooms(...)`.
-
-**Wave 4:** holdout-8 `15,56,65,68,79,88,104,105` or bal-32 — only after process pass.
-
-## Harness (GPU)
-
-One GPU job at a time. Dogfood CLI; never inline Habitat in a Cursor turn.
+Readiness:
 
 ```bash
-uv run emet eval recover --need-mib 12000
-uv run emet habitat safe-start --job-name habitat-egl-probe-room-ev
-# wait until: uv run emet jobs status JOB → done; logs show EGL OK
-
-# Wave 2b — CONTROL (plain paper-router; stamp/ledger off — default)
-OUT=~/runs/emet/hmeqa_room_evidence_ctrl_w2_$(date +%Y%m%d_%H%M%S)
-uv run emet hmeqa h2h "$OUT" --preset paper-router --arms agentic \
-  --ids 6,8,11,12,21,28,39,47,48,80,84 --job-name room-evidence-ctrl-w2 \
-  -d "Wave2b control: paper-router rooms probe, no investigate stamps"
-
-# Treatment (explicit opt-in only)
-OUT_TX=~/runs/emet/hmeqa_room_evidence_tx_w2_$(date +%Y%m%d_%H%M%S)
-uv run emet jobs run --name room-evidence-tx-w2 --need-mib 12000 -- \
-  env EMET_EQA_ROOM_STAMP_INVESTIGATE=1 EMET_EQA_ATTEMPT_LEDGER=1 \
-  EMET_ALLOW_SDPA_ATTN=1 EMET_EQA_TRACE=1 ARMS=agentic \
-  HOLDOUT_IDS=6,8,11,12,21,28,39,47,48,80,84 \
-  EMET_EQA_AGENTIC_ROUTER=1 EMET_EQA_AGENTIC_VERIFIER=none \
-  EMET_EQA_AGENTIC_REQUIRE_VERIFIED=0 \
-  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT_TX"
+uv run emet jobs
+# Continue only when there are no intentional Habitat/VLM jobs or descendants.
+git status --short
+uv run emet habitat safe-start --need-mib 12000 \
+  --job-name habitat-egl-probe-grounded-graph
+# Wait for the returned probe job to be done, then inspect its logs.
 ```
 
-Wave 1 smoke (optional): same pattern with `--ids 2,104`.
+Prefer a clean experiment commit. A dirty launch is reproducible only while the
+working-tree digest remains byte-identical.
 
-Record `git rev-parse HEAD`, job id, and OUT in `emet status` / the run’s `STATUS.log` before launch.
+Paired-six A0:
+
+```bash
+IDS=2,6,11,12,47,76
+OUT_A0=~/runs/emet/gre_a0_legacy_r1_$(date +%Y%m%d_%H%M%S)
+uv run emet hmeqa h2h "$OUT_A0" --preset paper-router --arms agentic --ids "$IDS" \
+  --decision-policy legacy --graph-evidence-mode off --room-history-mode off \
+  --room-policy canonical --room-target-hints --no-investigate-stamp \
+  --attempt-ledger-mode off --variant-id gre-a0-legacy-r1 \
+  --job-name gre-a0-legacy-r1 -d "Graph-room evidence paired-six A0 legacy control"
+```
+
+Paired-six A1:
+
+```bash
+OUT_A1=~/runs/emet/gre_a1_shadow_r1_$(date +%Y%m%d_%H%M%S)
+uv run emet hmeqa h2h "$OUT_A1" --preset paper-router --arms agentic --ids "$IDS" \
+  --decision-policy legacy --graph-evidence-mode shadow --room-history-mode shadow \
+  --room-policy canonical --room-target-hints --no-investigate-stamp \
+  --attempt-ledger-mode shadow --variant-id gre-a1-shadow-r1 \
+  --job-name gre-a1-shadow-r1 -d "Graph-room evidence paired-six A1 shadow"
+```
+
+Paired-six A2:
+
+```bash
+OUT_A2=~/runs/emet/gre_a2_grounded_r1_$(date +%Y%m%d_%H%M%S)
+uv run emet hmeqa h2h "$OUT_A2" --preset paper-router --arms agentic --ids "$IDS" \
+  --decision-policy grounded_v2 --graph-evidence-mode agent --room-history-mode agent \
+  --room-policy canonical --room-target-hints --no-investigate-stamp \
+  --attempt-ledger-mode agent --variant-id gre-a2-grounded-r1 \
+  --job-name gre-a2-grounded-r1 -d "Graph-room evidence paired-six A2 grounded"
+```
+
+Launch one command only after the previous job is terminal. Record commit, job
+ID, OUT, and the exact next command before each launch. Resume only the same OUT:
+
+```bash
+uv run emet hmeqa resume "$OUT_A0" --job-name gre-a0-legacy-r1-resume
+```
+
+Omitted frozen flags come from the manifest; operational job metadata may
+change. A commit, dirty-tree, or frozen-config mismatch must fail closed.
 
 ## Analysis recipe
 
-After each wave:
+Before interpreting an OUT:
 
-```bash
-# Presence of timeline surface in explore / router-adjacent rows
-rg -n 'Room history:|verify_absent|coverage_closed|"kind": "stamp"|escape_source' \
-  "$OUT"/bundles/agentic_q*/agentic_trace.jsonl | head -80
+1. Validate `run_manifest.json` and record its variant ID/config digest.
+2. Confirm paired manifests have identical git state, IDs/order, model, and
+   budgets.
+3. Confirm A1 shadow rows exist in storage but do not appear in policy-facing
+   state or prompts.
+4. Produce a per-ID CSV with the metrics above and paired deltas A1−A0 and
+   A2−A0.
+5. Qualitatively inspect q2 plus the two largest dwell improvements/regressions.
 
-# Optional: small Python tally (n_room_events, escape_source hist, dwell)
-uv run python - <<'PY'
-import json, glob, os, collections
-out = os.environ["OUT"]
-for path in sorted(glob.glob(f"{out}/bundles/agentic_q*/agentic_trace.jsonl")):
-    kinds = collections.Counter()
-    escape = collections.Counter()
-    for line in open(path):
-        r = json.loads(line)
-        if r.get("event") == "room_stamp_investigate":
-            kinds["stamp_event"] += 1
-        if r.get("event") == "retract_claim":
-            kinds["retract"] += 1
-        if r.get("tool") == "explore_frontier":
-            escape[r.get("escape_source") or "none"] += 1
-            if r.get("escape_min_travel_m"):
-                kinds["explore_with_floor"] += 1
-    print(path.split("/")[-2], dict(kinds), dict(escape))
-PY
-```
-
-Qualitative spot-check (2 episodes): did the router explore after `verify_absent` / `coverage_closed` in a non-target room, or keep investigating?
+A CPU-only summarizer is a prerequisite before Wave 3; add
+`scripts/summarize_graph_room_evidence.py` rather than relying on ad-hoc grep
+counts. It should accept multiple OUTs, fail on manifest parity violations, and
+write both JSON and CSV.
 
 ## Decision rules
 
 | Result | Action |
 |--------|--------|
-| Wave 1: timeline empty because room stays `unknown` | Fix stamp / graph room writers before more GPU |
-| Wave 2: history present but dwell unchanged | Improve state-card salience / prompt examples (still no escape latch); optional router few-shot with room-history line |
-| Wave 2–3: dwell ↓, letters flat/up | Promote to optional holdout / bal-32 A/B |
+| A0 baseline does not recover after one repeat | Stop; diagnose policy/provenance drift before any treatment |
+| A1 data missing | Fix collectors/writers before A2 |
+| A1 evidence leaks into policy state | Fix shadow semantics; invalidate that run |
+| A2 history present but dwell unchanged | Improve state-card salience, still without an escape latch |
+| A2 dwell/repeats improve and letters are within the safety gate | Promote to paired rooms-11 |
+| A3 regresses | Keep investigate stamps off; retain only diagnostic writers |
 | Letters regress hard | Keep timeline for diagnostics only; do not enable stamp+ledger on paper of-record until understood |
 | Temptation to add sticky min-travel from room mismatch | **Reject** — out of scope; reopen only as a separate ablation labeled as a latch |
 
@@ -151,12 +206,14 @@ Qualitative spot-check (2 episodes): did the router explore after `verify_absent
 
 | Wave | Status | OUT / notes |
 |------|--------|-------------|
-| 0 unit | **done** | ledger + hmeqa launch + room_policy tests green on `db2ba7eb` |
-| 1 smoke | **done (q2 only)** | `~/runs/emet/hmeqa_room_evidence_quick_20260812_122709` job `20260812_122944_49d38f`. Stamp+ledger+router on. 1× stamp blocked (`patio`), 1× stamp ok (`living_room`); explore `room_leave_hint=true` in living_room; `escape_source` all `none`. Letter miss (secondary). q104 not run. |
-| 2 rooms probe | **done — letter fail** | Treatment with forced stamp: `~/runs/emet/hmeqa_room_evidence_w2_…` **2/11**. Prior paper-router rooms probe **7/11** (`…_20260730_234213`). Root cause: paper-router auto-injected `ROOM_STAMP_INVESTIGATE` (known regressor). **Fix:** remove inject from `hmeqa_launch`; re-run control. |
-| 2b control re-run | next | Plain paper-router rooms probe (stamp/ledger off) — expect ~prior 7/11 band |
-| 3 wrong-room set | blocked on 2b | Treatment only if control recovers; stamp opt-in via env |
-| 4 scale | blocked | |
+| Prior q2 pilot | archived | `hmeqa_room_evidence_quick_20260812_122709`; useful wiring evidence only |
+| Prior bundled treatment | archived | `hmeqa_room_evidence_w2_20260812_231348`; 2/11, confounded |
+| Prior control partial | archived | `hmeqa_room_evidence_ctrl_w2_20260813_001608`; 3/10, stopped before q84, no new manifest |
+| Execution hold | **active** | Wait for paper113 job `20260813_103856_788d34`; do not interfere |
+| Wave 0 | prepared | Phase-one CLI/manifest targeted CPU/config suite: 171 passed on 2026-08-13; rerun on final clean commit |
+| Wave 1 A0 | queued, not launched | Paired six after hold clears |
+| Waves 1 A1/A2 | blocked on A0 gate | |
+| Waves 2–5 | blocked | |
 
 ## Related
 

@@ -72,6 +72,63 @@ def test_q28_eqa_letter_beats_absence_and_coordinate_dump():
     assert out["answer_source"] == "eqa_answer"
 
 
+def test_grounded_v2_parses_native_json_before_conflicting_view(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, gm = _executor(
+        Q28,
+        query_answer="C",
+        raw='{"reasoning":"two fans are visible","answer":"B","confidence":true}',
+    )
+    gm.last_eqa_model_raw = gm.last_eqa_raw
+    gm.last_eqa_model_parsed = ("two fans are visible", "B", True, "", "")
+    ex._record_answer_evidence(
+        letter="C",
+        source="vlm_suggested",
+        obs_id=7,
+        present=True,
+        answerable=True,
+        need_more_views=False,
+        confidence=0.5,
+    )
+
+    out = ex._do_submit_answer(prefer_answer="C")
+
+    assert out["answer"] == "B"
+    assert out["answer_source"] == "eqa_answer"
+    assert out["final_decision"]["answer"] == "B"
+
+
+def test_grounded_v2_rejects_unaligned_router_answer(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, gm = _executor(Q28, query_answer="", raw="")
+    gm.last_eqa_model_raw = ""
+    gm.last_eqa_model_parsed = ("", "", False, "", "")
+
+    out = ex._do_submit_answer(prefer_answer="C")
+
+    assert out["answer"] == "Unknown"
+    assert any(row.get("event") == "answer_proposal_rejected" for row in ex._trace_rows)
+
+
+def test_grounded_v2_cheap_absent_cannot_retract_vlm_positive(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, gm = _executor(Q39)
+
+    out = ex._maybe_retract_claim_after_station(
+        4,
+        closest_m=0.5,
+        verify_out={
+            "status": "ABSENT",
+            "obs_id": 9,
+            "phrase": "fan",
+            "vlm_assess": {"ok": True, "obs_id": 9, "present": True, "answerable": True},
+        },
+    )
+
+    assert out is None
+    gm.retract_phrase_claim_at_obs.assert_not_called()
+
+
 def test_absent_view_never_supplies_the_scored_letter():
     """A ``present: false`` assess is a non-detection, not an MCQ answer."""
     ex, _gm = _executor(Q39, query_answer="")

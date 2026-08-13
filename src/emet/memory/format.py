@@ -160,6 +160,7 @@ class MemoryManifest:
     final_step: int | None = None
     has_voxel_pickle: bool = False  # voxel_map.pkl alongside (SparseVoxelMapDynamem.write_to_pickle)
     has_open_vocab_scene_graph: bool = False  # open_vocab_scene_graph/ sidecar
+    has_world_evidence: bool = False  # stable identities/views/events sidecar
 
 
 @dataclass

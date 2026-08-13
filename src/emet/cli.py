@@ -470,10 +470,7 @@ def serve(
         if use_vl and resolved_port == 8000:
             resolved_port = DEFAULT_VL_SERVE_PORT
         resolved = resolve_serve_device(llm_device)
-        click.echo(
-            f"emet serve llm: llm={resolved_llm} device={resolved} "
-            f"bind={llm_host}:{resolved_port} vl={use_vl}"
-        )
+        click.echo(f"emet serve llm: llm={resolved_llm} device={resolved} bind={llm_host}:{resolved_port} vl={use_vl}")
         serve_openai_llm(
             llm=resolved_llm,
             host=llm_host,
@@ -1879,13 +1876,9 @@ def jobs_run(
         from emet.utils.process_tree import terminate_process_tree
 
         terminate_process_tree(proc, grace_s=1.0)
-        raise click.ClickException(
-            f"detached supervisor failed to register job {job_id}; see {log_path}"
-        )
+        raise click.ClickException(f"detached supervisor failed to register job {job_id}; see {log_path}")
     if job.pid != proc.pid:
-        raise click.ClickException(
-            f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})"
-        )
+        raise click.ClickException(f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})")
     click.echo(f"registered  {job_id}", err=True)
     click.echo(f"pid         {proc.pid}", err=True)
     click.echo(job_id)
@@ -2401,37 +2394,321 @@ def hmeqa_ladder(
     sys.exit(0)
 
 
+def _hmeqa_nested_value(config: dict[str, Any], path: str) -> Any:
+    value: Any = config
+    for part in path.split("."):
+        value = value[part]
+    return value
+
+
+_HMEQA_FROZEN_PARAMETER_PATHS = {
+    "arms": "evaluation.arms",
+    "holdout_ids": "ids.question_ids",
+    "agentic_verifier": "evaluation.agentic_verifier",
+    "require_verified": "evaluation.require_verified",
+    "agentic_router": "evaluation.agentic_router",
+    "decision_policy": "variant.agentic_decision_policy",
+    "graph_evidence_mode": "variant.graph_evidence_mode",
+    "room_history_mode": "variant.room_history_mode",
+    "room_policy": "variant.room_policy",
+    "room_target_hints": "variant.room_target_hints",
+    "investigate_stamp": "variant.investigate_stamp",
+    "attempt_ledger_mode": "variant.attempt_ledger_mode",
+    "variant_id": "variant.id",
+    "eqa_hf_model_id": "model.requested_hf_model_id",
+    "eqa_vl_family": "model.vl_family",
+    "eqa_vl_quantization": "model.vl_quantization",
+    "eqa_answer_max_new_tokens": "budgets.answer_max_new_tokens",
+    "host": "model.host",
+    "vl_endpoint": "model.vl_endpoint",
+    "vl_port": "model.vl_port",
+    "episode_timeout": "budgets.episode_timeout_seconds",
+    "max_planning_steps": "budgets.max_planning_steps",
+    "max_movement_step": "budgets.max_movement_step",
+}
+
+
+def _hmeqa_frozen_options(fn):
+    """Shared behavior/model/budget flags for ``hmeqa h2h`` and ``resume``."""
+    options = [
+        click.option(
+            "--agentic-verifier",
+            type=click.Choice(["none", "owlv2", "yoloe"]),
+            default="none",
+            show_default=True,
+            help="Hybrid presence backend for the agentic arm.",
+        ),
+        click.option(
+            "--require-verified/--allow-unverified",
+            default=True,
+            show_default=True,
+            help="Require fused evidence before submit (the exhaustion ladder may still answer).",
+        ),
+        click.option(
+            "--agentic-router/--no-agentic-router",
+            default=False,
+            show_default=True,
+            help="Use VLM tool routing (fallback policy is deterministic).",
+        ),
+        click.option(
+            "--decision-policy",
+            type=click.Choice(["legacy", "grounded_v2"]),
+            default="legacy",
+            show_default=True,
+            help="Agentic decision implementation gate.",
+        ),
+        click.option(
+            "--graph-evidence-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Stable graph evidence rollout mode.",
+        ),
+        click.option(
+            "--room-history-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Room-history collection/visibility mode.",
+        ),
+        click.option(
+            "--room-policy",
+            type=click.Choice(["canonical", "llm"]),
+            default="canonical",
+            show_default=True,
+        ),
+        click.option(
+            "--room-target-hints/--no-room-target-hints",
+            default=True,
+            show_default=True,
+            help="Expose the legacy question-derived target-room hints.",
+        ),
+        click.option(
+            "--investigate-stamp/--no-investigate-stamp",
+            default=False,
+            show_default=True,
+            help="Write room timeline stamps after investigate (known letter-regression axis).",
+        ),
+        click.option(
+            "--attempt-ledger-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Attempt-ledger collection/visibility mode.",
+        ),
+        click.option(
+            "--variant-id",
+            default="legacy",
+            show_default=True,
+            help="Stable A/B label recorded in run_manifest.json and episode environments.",
+        ),
+        click.option(
+            "--preset",
+            type=click.Choice(["paper-router"]),
+            default=None,
+            help=(
+                "paper-router: none verifier + allow-unverified + agentic-router. "
+                "It never changes the explicit A/B axes; explicit flags still win."
+            ),
+        ),
+        click.option(
+            "--eqa-hf-model-id",
+            default=None,
+            help="Override HF VLM id (sets EQA_HF_MODEL_ID in the Habitat child).",
+        ),
+        click.option(
+            "--eqa-vl-family",
+            default=None,
+            help="Override VL family (sets EQA_VL_FAMILY in the Habitat child).",
+        ),
+        click.option(
+            "--eqa-vl-quantization",
+            default=None,
+            help="Freeze the effective VL quantization label (default: config int4).",
+        ),
+        click.option(
+            "--eqa-answer-max-new-tokens",
+            type=int,
+            default=384,
+            show_default=True,
+            help="Per-answer VLM decode cap.",
+        ),
+        click.option("--episode-timeout", type=int, default=7200, show_default=True),
+        click.option("--max-planning-steps", type=int, default=20, show_default=True),
+        click.option("--max-movement-step", type=int, default=10, show_default=True),
+        click.option(
+            "--host",
+            default=None,
+            help=(
+                "LAN LLM host. Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, and EMET_VL_ENDPOINT into the managed job."
+            ),
+        ),
+        click.option(
+            "--vl-endpoint",
+            default=None,
+            help="Override EMET_VL_ENDPOINT (wins over --host's default).",
+        ),
+        click.option(
+            "--vl-port",
+            type=int,
+            default=None,
+            help="With --host: VL OpenAI port (default 8000; dual-2b uses 8001).",
+        ),
+    ]
+    for option in reversed(options):
+        fn = option(fn)
+    return fn
+
+
+def _hmeqa_reuse_frozen_defaults(
+    ctx: click.Context,
+    *,
+    out: Path,
+    values: dict[str, Any],
+) -> dict[str, Any]:
+    """Reuse frozen values for omitted resume flags; explicit mismatches fail later."""
+    from emet.eval.hmeqa_launch import (
+        HmeqaRunManifestError,
+        load_hmeqa_run_manifest,
+        normalize_hmeqa_run_config,
+    )
+
+    try:
+        manifest = load_hmeqa_run_manifest(out)
+        config = normalize_hmeqa_run_config(manifest["config"])
+    except (KeyError, HmeqaRunManifestError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    result = dict(values)
+    for parameter, path in _HMEQA_FROZEN_PARAMETER_PATHS.items():
+        if ctx.get_parameter_source(parameter) is not ParameterSource.DEFAULT:
+            continue
+        value = _hmeqa_nested_value(config, path)
+        if parameter in {"arms", "holdout_ids"}:
+            value = ",".join(str(item) for item in value)
+        elif parameter == "eqa_hf_model_id" and value is None:
+            value = config["model"].get("hf_model_id")
+        result[parameter] = value
+    return result
+
+
+def _hmeqa_config_sources(ctx: click.Context, *, preset: str | None) -> dict[str, str]:
+    """Record where each frozen effective value came from on the first launch."""
+    source_labels = {
+        ParameterSource.COMMANDLINE: "command_line",
+        ParameterSource.ENVIRONMENT: "environment",
+        ParameterSource.DEFAULT_MAP: "default_map",
+        ParameterSource.DEFAULT: "cli_default",
+        ParameterSource.PROMPT: "prompt",
+    }
+    result: dict[str, str] = {}
+    for parameter, path in _HMEQA_FROZEN_PARAMETER_PATHS.items():
+        source = ctx.get_parameter_source(parameter)
+        label = source_labels.get(source, str(source or "unknown").lower())
+        if source is ParameterSource.DEFAULT and parameter in {
+            "eqa_hf_model_id",
+            "eqa_vl_family",
+            "eqa_vl_quantization",
+            "eqa_answer_max_new_tokens",
+        }:
+            label = "config_default"
+        if (
+            preset == "paper-router"
+            and source is ParameterSource.DEFAULT
+            and parameter in {"agentic_verifier", "require_verified", "agentic_router"}
+        ):
+            label = "preset:paper-router"
+        result[path] = label
+        if parameter == "eqa_hf_model_id":
+            result["model.hf_model_id"] = label
+    if (
+        ctx.get_parameter_source("vl_endpoint") is ParameterSource.DEFAULT
+        and ctx.get_parameter_source("host") is not ParameterSource.DEFAULT
+    ):
+        result["model.vl_endpoint"] = "derived:model.host"
+    if (
+        ctx.get_parameter_source("host") is not ParameterSource.DEFAULT
+        or ctx.get_parameter_source("vl_endpoint") is not ParameterSource.DEFAULT
+    ):
+        result["model.hf_model_id"] = "derived:remote_vl"
+    result["model.llm_port"] = "config_default"
+    result["budgets.agentic_max_tool_rounds"] = "config_default"
+    result["budgets.agentic_max_nav_steps"] = "config_default"
+    result["evaluation.seed"] = "not_configurable"
+    return result
+
+
+def _hmeqa_frozen_values(local_values: dict[str, Any]) -> dict[str, Any]:
+    """Select only manifest-frozen callback values from ``locals()``."""
+    return {name: local_values[name] for name in _HMEQA_FROZEN_PARAMETER_PATHS}
+
+
 def _hmeqa_launch(
     *,
     out: Path,
     resume: bool,
-    arms: str,
-    ids: str,
+    frozen_values: dict[str, Any],
     coverage_qids: str,
     cooldown: int,
     crash_policy: str,
     streak_abort: int,
-    agentic_verifier: str,
-    require_verified: bool,
-    agentic_router: bool,
     job_name: str,
     need_mib: int,
     foreground: bool,
-    eqa_hf_model_id: str | None = None,
-    eqa_vl_family: str | None = None,
-    eqa_answer_max_new_tokens: int | None = None,
     description: str | None = None,
-    host: str | None = None,
-    vl_endpoint: str | None = None,
-    vl_port: int | None = None,
+    config_sources: dict[str, str] | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
     import shlex
 
-    from emet.eval.hmeqa_launch import hmeqa_h2h_env_parts, hmeqa_h2h_vl_endpoint_from_env_parts
+    from emet.eval.hmeqa_launch import (
+        HmeqaRunManifestError,
+        build_hmeqa_run_config,
+        hmeqa_h2h_env_parts,
+        hmeqa_h2h_vl_endpoint_from_env_parts,
+        prepare_hmeqa_run_manifest,
+    )
 
     root = _project_root()
     script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
+    values = dict(frozen_values)
+    arms = str(values["arms"])
+    ids = str(values["holdout_ids"])
+    run_config = build_hmeqa_run_config(
+        arms=arms,
+        ids=ids,
+        agentic_verifier=values["agentic_verifier"],
+        require_verified=values["require_verified"],
+        agentic_router=values["agentic_router"],
+        decision_policy=values["decision_policy"],
+        graph_evidence_mode=values["graph_evidence_mode"],
+        room_history_mode=values["room_history_mode"],
+        room_policy=values["room_policy"],
+        room_target_hints=values["room_target_hints"],
+        investigate_stamp=values["investigate_stamp"],
+        attempt_ledger_mode=values["attempt_ledger_mode"],
+        variant_id=values["variant_id"],
+        eqa_hf_model_id=values["eqa_hf_model_id"],
+        eqa_vl_family=values["eqa_vl_family"],
+        eqa_vl_quantization=values["eqa_vl_quantization"],
+        eqa_answer_max_new_tokens=values["eqa_answer_max_new_tokens"],
+        host=values["host"],
+        vl_endpoint=values["vl_endpoint"],
+        vl_port=values["vl_port"],
+        episode_timeout_seconds=values["episode_timeout"],
+        max_planning_steps=values["max_planning_steps"],
+        max_movement_step=values["max_movement_step"],
+    )
+    try:
+        manifest = prepare_hmeqa_run_manifest(
+            out,
+            project_root=root,
+            config=run_config,
+            sources=config_sources,
+            resume=resume,
+        )
+    except HmeqaRunManifestError as exc:
+        raise click.ClickException(str(exc)) from exc
+    run_config = manifest["config"]
     env_parts = hmeqa_h2h_env_parts(
         arms=arms,
         ids=ids,
@@ -2439,16 +2716,12 @@ def _hmeqa_launch(
         cooldown=cooldown,
         crash_policy=crash_policy,
         streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
+        agentic_verifier=values["agentic_verifier"],
+        require_verified=values["require_verified"],
+        agentic_router=values["agentic_router"],
         resume=resume,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
-        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
+        run_config=run_config,
+        config_sources=config_sources,
     )
     vl_ep = hmeqa_h2h_vl_endpoint_from_env_parts(env_parts)
     inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
@@ -2471,10 +2744,14 @@ def _hmeqa_launch(
     if foreground:
         cmd.append("--foreground")
     cmd.extend(["--", "bash", "-lc", inner])
-    click.echo(f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms}", err=True)
+    click.echo(
+        f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms} "
+        f"variant={run_config['variant']['id']} digest={manifest['config_digest']}",
+        err=True,
+    )
     if vl_ep:
         click.echo(f"EQA VL endpoint (injected into job env): {vl_ep}", err=True)
-    elif host or vl_endpoint:
+    elif values["host"] or values["vl_endpoint"]:
         click.echo("warning: host/vl-endpoint set but EMET_VL_ENDPOINT missing from env parts", err=True)
     rc = subprocess.call(cmd, cwd=str(root))
     sys.exit(rc)
@@ -2506,71 +2783,7 @@ def _hmeqa_launch(
     show_default=True,
     help="Under skip: abort after N consecutive native crashes (0=never).",
 )
-@click.option(
-    "--agentic-verifier",
-    type=click.Choice(["none", "owlv2", "yoloe"]),
-    default="none",
-    show_default=True,
-    help="Hybrid presence backend for the agentic arm.",
-)
-@click.option(
-    "--require-verified/--allow-unverified",
-    default=True,
-    show_default=True,
-    help="Refuse submit_answer until evidence is fused; at exhaustion the forced-answer ladder still commits.",
-)
-@click.option(
-    "--agentic-router/--no-agentic-router",
-    default=False,
-    show_default=True,
-    help="Use VLM tool routing (fallback policy is deterministic).",
-)
-@click.option(
-    "--preset",
-    type=click.Choice(["paper-router"]),
-    default=None,
-    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
-)
-@click.option(
-    "--eqa-hf-model-id",
-    default=None,
-    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
-)
-@click.option(
-    "--eqa-vl-family",
-    default=None,
-    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
-)
-@click.option(
-    "--eqa-answer-max-new-tokens",
-    type=int,
-    default=None,
-    help="Override eqa_vl.answer_max_new_tokens for this run (answer decode cap). "
-    "Raise it when swapping in a more verbose VLM.",
-)
-@click.option(
-    "--host",
-    default=None,
-    help=(
-        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
-        "and EMET_VL_ENDPOINT (unified-7b on :8000) into the jobs-wrapped env. "
-        "Parent-shell exports alone are not enough — they are not in the Habitat child env."
-    ),
-)
-@click.option(
-    "--vl-endpoint",
-    default=None,
-    help=(
-        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://ORIN_HOST:8000/v1). "
-        "Wins over --host's default VL URL. Dual-2b: use :8001 or --host + --vl-port 8001."
-    ),
-)
-@click.option(
-    "--vl-port",
-    type=int,
-    default=None,
-    help="With --host: VL OpenAI port (default 8000 unified-7b; dual-2b uses 8001).",
-)
+@_hmeqa_frozen_options
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option(
     "--description",
@@ -2594,10 +2807,22 @@ def hmeqa_h2h(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    decision_policy: str,
+    graph_evidence_mode: str,
+    room_history_mode: str,
+    room_policy: str,
+    room_target_hints: bool,
+    investigate_stamp: bool,
+    attempt_ledger_mode: str,
+    variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
-    eqa_answer_max_new_tokens: int | None,
+    eqa_vl_quantization: str | None,
+    eqa_answer_max_new_tokens: int,
+    episode_timeout: int,
+    max_planning_steps: int,
+    max_movement_step: int,
     host: str | None,
     vl_endpoint: str | None,
     vl_port: int | None,
@@ -2608,42 +2833,41 @@ def hmeqa_h2h(
 ) -> None:
     from emet.eval.harness import DEFAULT_BAL32_IDS
 
-    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
-        ctx,
-        preset=preset,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
-    )
     if out_dir:
         out = Path(out_dir).expanduser().resolve()
     else:
         stamp = time.strftime("%Y%m%d_%H%M%S")
         out = Path.home() / "runs" / "emet" / f"hmeqa_agentic_h2h_{stamp}"
     out.mkdir(parents=True, exist_ok=True)
-    ids = holdout_ids or DEFAULT_BAL32_IDS
+
+    frozen = _hmeqa_frozen_values(locals())
+    if resume:
+        frozen = _hmeqa_reuse_frozen_defaults(ctx, out=out, values=frozen)
+    (
+        frozen["agentic_verifier"],
+        frozen["require_verified"],
+        frozen["agentic_router"],
+    ) = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=frozen["agentic_verifier"],
+        require_verified=frozen["require_verified"],
+        agentic_router=frozen["agentic_router"],
+    )
+    frozen["holdout_ids"] = frozen["holdout_ids"] or DEFAULT_BAL32_IDS
     _hmeqa_launch(
         out=out,
         resume=resume,
-        arms=arms,
-        ids=ids,
+        frozen_values=frozen,
         coverage_qids=coverage_qids,
         cooldown=cooldown,
         crash_policy=crash_policy,
         streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
-        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
         description=description,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
+        config_sources=_hmeqa_config_sources(ctx, preset=preset),
     )
 
 
@@ -2655,49 +2879,7 @@ def hmeqa_h2h(
 @click.option("--cooldown", type=int, default=30, show_default=True)
 @click.option("--crash-policy", type=click.Choice(["skip", "abort"]), default="skip", show_default=True)
 @click.option("--streak-abort", type=int, default=2, show_default=True)
-@click.option(
-    "--agentic-verifier",
-    type=click.Choice(["none", "owlv2", "yoloe"]),
-    default="none",
-    show_default=True,
-)
-@click.option("--require-verified/--allow-unverified", default=True, show_default=True)
-@click.option("--agentic-router/--no-agentic-router", default=False, show_default=True)
-@click.option(
-    "--preset",
-    type=click.Choice(["paper-router"]),
-    default=None,
-    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
-)
-@click.option(
-    "--eqa-hf-model-id",
-    default=None,
-    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
-)
-@click.option(
-    "--eqa-vl-family",
-    default=None,
-    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
-)
-@click.option(
-    "--host",
-    default=None,
-    help=(
-        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
-        "EMET_VL_ENDPOINT into the jobs-wrapped env."
-    ),
-)
-@click.option(
-    "--vl-endpoint",
-    default=None,
-    help="Override EMET_VL_ENDPOINT (wins over --host default).",
-)
-@click.option(
-    "--vl-port",
-    type=int,
-    default=None,
-    help="With --host: VL OpenAI port (default 8000; dual-2b: 8001).",
-)
+@_hmeqa_frozen_options
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
 @click.option(
     "--description",
@@ -2720,9 +2902,22 @@ def hmeqa_resume(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    decision_policy: str,
+    graph_evidence_mode: str,
+    room_history_mode: str,
+    room_policy: str,
+    room_target_hints: bool,
+    investigate_stamp: bool,
+    attempt_ledger_mode: str,
+    variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
+    eqa_vl_quantization: str | None,
+    eqa_answer_max_new_tokens: int,
+    episode_timeout: int,
+    max_planning_steps: int,
+    max_movement_step: int,
     host: str | None,
     vl_endpoint: str | None,
     vl_port: int | None,
@@ -2738,49 +2933,41 @@ def hmeqa_resume(
         write_host_freeze_capsule,
     )
 
-    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+    out = resolve_hmeqa_out(out_dir)
+    frozen = _hmeqa_reuse_frozen_defaults(
+        ctx,
+        out=out,
+        values=_hmeqa_frozen_values(locals()),
+    )
+    (
+        frozen["agentic_verifier"],
+        frozen["require_verified"],
+        frozen["agentic_router"],
+    ) = _hmeqa_apply_preset(
         ctx,
         preset=preset,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
+        agentic_verifier=frozen["agentic_verifier"],
+        require_verified=frozen["require_verified"],
+        agentic_router=frozen["agentic_router"],
     )
-    out = resolve_hmeqa_out(out_dir)
     freeze = detect_host_freeze(out)
     if freeze:
         cap = write_host_freeze_capsule(out, freeze)
         click.echo(f"host-freeze capsule → {cap}", err=True)
-    ids = holdout_ids or DEFAULT_BAL32_IDS
-    # Prefer HOLDOUT from orchestrator.log if present
-    orch = out / "orchestrator.log"
-    if holdout_ids is None and orch.is_file():
-        import re as _re
-
-        text = orch.read_text(encoding="utf-8", errors="replace")
-        m = _re.search(r"ids=([0-9,]+)", text)
-        if m:
-            ids = m.group(1)
+    frozen["holdout_ids"] = frozen["holdout_ids"] or DEFAULT_BAL32_IDS
     _hmeqa_launch(
         out=out,
         resume=True,
-        arms=arms,
-        ids=ids,
+        frozen_values=frozen,
         coverage_qids=coverage_qids,
         cooldown=cooldown,
         crash_policy=crash_policy,
         streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
         description=description,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
+        config_sources=_hmeqa_config_sources(ctx, preset=preset),
     )
 
 
@@ -3338,9 +3525,7 @@ def _llm_targets_from_host(
         if vl_url is not None and vl_url.strip() != "":
             vl_target = vl_url
         elif resolved:
-            vl_target = openai_base_for_host(
-                resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
-            )
+            vl_target = openai_base_for_host(resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT)
         else:
             env = (os.environ.get("EMET_VL_ENDPOINT") or os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
             vl_target = env or None

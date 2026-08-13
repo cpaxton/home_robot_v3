@@ -399,6 +399,10 @@ def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
     mem_events = getattr(graph_memory, "_change_events", None)
     if isinstance(mem_events, list) and mem_events:
         graph_memory._change_events = [_transform_change_event(dict(e), t) for e in mem_events]
+    world_evidence = getattr(graph_memory, "world_evidence", None)
+    transform_world = getattr(world_evidence, "transform_se2", None)
+    if callable(transform_world):
+        transform_world(t)
 
     rebuild = getattr(graph_memory, "_rebuild_viewpoint_index", None)
     if callable(rebuild):

@@ -3,6 +3,60 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Grounded graph room-evidence A/B — queued (2026-08-13)
+
+Canonical plan: [docs/experiments/graph_room_evidence.md](docs/experiments/graph_room_evidence.md).
+
+**Current safety hold:** job `20260813_103856_788d34` (`hmeqa-paper113-d1`) is
+running from `home_robot_v2`. The separately reported `emet-habitat` process is
+its descendant. Do not cancel it, call `emet eval kill-stale`, or launch another
+Habitat/VLM job.
+
+### Readiness
+
+- [ ] Wait for the paper113 job and its Habitat descendant to finish; confirm
+      `uv run emet jobs` has no intentional GPU work before any preflight.
+- [ ] Use one clean experiment commit for every paired arm. Do not launch while
+      code is still changing: `run_manifest.json` intentionally rejects resume
+      after a commit or dirty-tree digest change.
+- [ ] On the final commit, rerun the targeted CPU/config suite and CLI-help
+      checks from the plan.
+- [ ] Run detached `emet habitat safe-start --need-mib 12000`, wait for the
+      probe job to be `done`, and inspect logs before the first H2H arm.
+- [ ] Record commit, job ID, OUT, and exact next command in repo status before
+      every GPU launch.
+
+### Execution
+
+- [ ] Archive the old treatment (`2/11`) and stopped control (`3/10`) as
+      pre-manifest diagnostics. Do **not** resume or append to either OUT.
+- [ ] Run A0 legacy control on paired IDs `2,6,11,12,47,76`. Require at least
+      3/4 on regression IDs `6,11,12,47`; repeat A0 once and stop if it does not
+      recover.
+- [ ] Run A1 shadow on the identical commit/model/budgets/IDs. Require evidence,
+      history, and ledger collection with no policy-facing leakage.
+- [ ] Run A2 grounded on the same six only after A0/A1 pass. Compare paired
+      wrong-room dwell, repeat attempts, budget hits, path-to-target, and letter
+      safety.
+- [ ] Run A3 investigate-stamp isolation on `2,76` only; keep stamps off by
+      default unless this smoke is healthy.
+- [ ] Run paired rooms-11 A0 vs A2, then derive the wrong-room focus set. Scale
+      to holdout-8/bal-32 only after the process gate passes.
+- [ ] Test `room_policy=llm` and no-target-hints as separate later ablations,
+      never folded into the initial A2 treatment.
+- [ ] Keep q104 deferred until holdout scale; it is a known native-crash hot
+      scene and is not required for the baseline-recovery gate.
+
+### Analysis / handoff
+
+- [ ] Add a CPU-only `scripts/summarize_graph_room_evidence.py` that accepts
+      multiple OUTs, validates manifest parity, and emits per-ID JSON + CSV.
+- [ ] Audit manifests: same git state, IDs/order, model, and budgets; config
+      digest changes must be explained only by the declared variant axes.
+- [ ] Publish paired per-ID deltas and two qualitative traces before deciding
+      whether A2 advances. Small-slice letter accuracy is a safety gate, not a
+      paper claim.
+
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
 Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes nav

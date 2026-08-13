@@ -206,3 +206,46 @@ def test_evidence_image_off_keeps_diversified_pick():
     ex._do_submit_answer()
 
     gm.select_obs_ids_for_verified_answer.assert_not_called()
+
+
+def test_grounded_v2_vlm_letter_and_image_share_observation(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, gm = _executor(query_answer="", raw="")
+    gm.last_eqa_model_raw = ""
+    gm.last_eqa_model_parsed = ("", "", False, "", "")
+    gm.select_obs_ids_for_verified_answer.return_value = [5]
+    ex._assess_history = {
+        5: {
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": "B",
+        },
+        8: {
+            "present": True,
+            "answerable": False,
+            "need_more_views": True,
+            "suggested_answer": "C",
+        },
+    }
+
+    out = ex._do_submit_answer()
+
+    assert out["answer"] == "B"
+    assert out["final_decision"]["evidence"]["obs_id"] == 5
+    gm.select_obs_ids_for_verified_answer.assert_called_once_with(5, max_images=1)
+    assert gm.last_eqa_obs_ids == [5]
+
+
+def test_grounded_v2_never_uses_absent_answerable_as_evidence(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, _gm = _executor()
+    ex._assess_history = {
+        2: {
+            "present": False,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": "D",
+        }
+    }
+    assert ex._best_vlm_answer_evidence() is None

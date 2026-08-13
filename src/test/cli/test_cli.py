@@ -128,9 +128,145 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "--host" in result.stdout
     assert "--vl-endpoint" in result.stdout
     assert "--vl-port" in result.stdout
+    assert "--decision-policy" in result.stdout
+    assert "grounded_v2" in result.stdout
+    assert "--graph-evidence-mode" in result.stdout
+    assert "--room-history-mode" in result.stdout
+    assert "--room-policy" in result.stdout
+    assert "--room-target-hints" in result.stdout
+    assert "--investigate-stamp" in result.stdout
+    assert "--attempt-ledger-mode" in result.stdout
+    assert "--variant-id" in result.stdout
+    assert "--episode-timeout" in result.stdout
+    assert "--max-planning-steps" in result.stdout
+    assert "--max-movement-step" in result.stdout
     # Paper-router / Click default is Qwen-first (none), OWL opt-in only.
     assert "none" in result.stdout
     assert "owlv2" in result.stdout
+
+
+def test_hmeqa_resume_help_lists_frozen_variant_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "resume", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    for option in (
+        "--decision-policy",
+        "--graph-evidence-mode",
+        "--room-history-mode",
+        "--room-policy",
+        "--room-target-hints",
+        "--investigate-stamp",
+        "--attempt-ledger-mode",
+        "--variant-id",
+        "--eqa-hf-model-id",
+        "--eqa-vl-family",
+        "--eqa-vl-quantization",
+        "--eqa-answer-max-new-tokens",
+        "--episode-timeout",
+        "--max-planning-steps",
+        "--max-movement-step",
+    ):
+        assert option in result.stdout
+
+
+def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path),
+            "--ids",
+            "2,104",
+            "--preset",
+            "paper-router",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["agentic_router"] is True
+    assert frozen["decision_policy"] == "legacy"
+    assert frozen["graph_evidence_mode"] == "off"
+    assert frozen["room_history_mode"] == "off"
+    assert frozen["investigate_stamp"] is False
+    assert frozen["attempt_ledger_mode"] == "off"
+    assert frozen["variant_id"] == "legacy"
+
+
+def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
+    monkeypatch,
+    tmp_path,
+):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+    from emet.eval.hmeqa_launch import build_hmeqa_run_config, prepare_hmeqa_run_manifest
+
+    config = build_hmeqa_run_config(
+        arms="agentic",
+        ids="2,104",
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        decision_policy="grounded_v2",
+        graph_evidence_mode="shadow",
+        room_history_mode="agent",
+        room_policy="llm",
+        room_target_hints=False,
+        investigate_stamp=True,
+        attempt_ledger_mode="shadow",
+        variant_id="grounded-shadow-r1",
+        eqa_answer_max_new_tokens=512,
+        episode_timeout_seconds=3600,
+        max_planning_steps=12,
+        max_movement_step=6,
+    )
+    prepare_hmeqa_run_manifest(
+        tmp_path,
+        project_root=tmp_path,
+        config=config,
+        sources={"variant.id": "command_line"},
+        resume=False,
+        git_state={
+            "commit": "a" * 40,
+            "dirty": False,
+            "dirty_digest": None,
+            "status": [],
+        },
+    )
+
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        ["hmeqa", "resume", str(tmp_path), "--cooldown", "7"],
+    )
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["arms"] == "agentic"
+    assert frozen["holdout_ids"] == "2,104"
+    assert frozen["decision_policy"] == "grounded_v2"
+    assert frozen["graph_evidence_mode"] == "shadow"
+    assert frozen["room_history_mode"] == "agent"
+    assert frozen["room_policy"] == "llm"
+    assert frozen["room_target_hints"] is False
+    assert frozen["investigate_stamp"] is True
+    assert frozen["attempt_ledger_mode"] == "shadow"
+    assert frozen["variant_id"] == "grounded-shadow-r1"
+    assert frozen["eqa_answer_max_new_tokens"] == 512
+    assert frozen["episode_timeout"] == 3600
+    assert frozen["max_planning_steps"] == 12
+    assert frozen["max_movement_step"] == 6
+    assert captured["cooldown"] == 7
 
 
 def test_hmeqa_overnight_help():
@@ -271,7 +407,7 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     assert marker.read_text(encoding="utf-8") == "ok"
     wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "jobs register --job-id" in wrapper
-    assert wrapper.index("jobs register --job-id") < wrapper.index("jobs update \"$JOB_ID\" --status running")
+    assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
 
 
 def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,12 @@ from emet.memory.format import (
     load_memory,
     save_memory,
 )
+from emet.memory.graph_eqa.world_evidence import (
+    WORLD_EVIDENCE_FILENAME,
+    WorldEvidenceStore,
+)
+
+GRAPH_RUNTIME_FILENAME = "graph_runtime.json"
 
 
 def _to_numpy(x: Any) -> Any:
@@ -497,6 +504,12 @@ class GraphEQABackend(MemoryBackend):
                 )
 
         has_sim_gt = bool(sim_object_placements)
+        world_store = getattr(self._graph, "world_evidence", None)
+        has_world_evidence = bool(
+            isinstance(world_store, WorldEvidenceStore)
+            and world_store.enabled
+            and (world_store.entities or world_store.views or world_store.events)
+        )
         state = MemoryState(
             point_cloud=None,
             frames=frames,
@@ -509,9 +522,43 @@ class GraphEQABackend(MemoryBackend):
                 sim_gt_placements_file=SIM_GT_PLACEMENTS_FILENAME if has_sim_gt else None,
                 final_step=int(final_step) if final_step is not None else None,
                 has_voxel_pickle=wrote_voxel_pickle,
+                has_world_evidence=has_world_evidence,
             ),
         )
         save_memory(state, str(dir_path))
+        if has_world_evidence:
+            world_store.save(dir_path)
+        runtime = {
+            "schema_version": 1,
+            "next_obs_id": int(getattr(self._graph, "_next_obs_id", 1)),
+            "obs_revisions": {
+                str(key): int(value)
+                for key, value in dict(getattr(self._graph, "_obs_revisions", {}) or {}).items()
+            },
+            "attempt_ledger": list(self._graph.export_attempt_ledger()),
+            "room_events": list(getattr(self._graph, "_room_events", []) or []),
+            "retracted_nav_claims": [
+                [int(obs_id), str(phrase)]
+                for obs_id, phrase in sorted(
+                    getattr(self._graph, "_retracted_nav_claims", set()) or set()
+                )
+            ],
+            "navigation_samples": [
+                {
+                    "xyz": np.asarray(sample.xyz, dtype=float).reshape(-1)[:3].tolist(),
+                    "base_xyz": (
+                        np.asarray(sample.base_xyz, dtype=float).reshape(-1)[:3].tolist()
+                        if sample.base_xyz is not None
+                        else None
+                    ),
+                }
+                for sample in list(getattr(self._graph, "_nav_samples", []) or [])
+            ],
+        }
+        (dir_path / GRAPH_RUNTIME_FILENAME).write_text(
+            json.dumps(runtime, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
     def load(self, path: str) -> None:
         """Load from common directory format.
@@ -611,27 +658,112 @@ class GraphEQABackend(MemoryBackend):
             for node in self._graph._nodes
             for event in node.change_events
         ]
-        self._graph._observations = []
-        for i, fr in enumerate(state.frames):
-            xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-            if fr.world_xyz is not None and fr.world_xyz.size >= 3:
-                xyz = np.ravel(fr.world_xyz)[:3]
-            labels = (fr.info or {}).get("labels", [])
-            description = (fr.info or {}).get("description") if fr.info else None
-            rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
-            self._graph._observations.append(
-                GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels, description=description)
+        world_path = path_obj / WORLD_EVIDENCE_FILENAME
+        if world_path.is_file():
+            configured_mode = getattr(
+                getattr(self._graph, "world_evidence", None),
+                "mode",
+                "shadow",
             )
-        self._graph._next_obs_id = (
+            self._graph.world_evidence = WorldEvidenceStore.load(
+                path_obj,
+                mode=configured_mode,
+            )
+        self._graph._observations = []
+        world_store = getattr(self._graph, "world_evidence", None)
+        if isinstance(world_store, WorldEvidenceStore) and world_store.views:
+            current_views = [
+                record
+                for record in world_store.views.values()
+                if world_store.view_id_for_obs(record.obs_id) == record.view_id
+            ]
+            for record in sorted(current_views, key=lambda item: item.obs_id):
+                rgb = (
+                    np.asarray(record.rgb).copy()
+                    if record.rgb is not None
+                    else np.zeros((1, 1, 3), dtype=np.uint8)
+                )
+                self._graph._observations.append(
+                    GraphObservation(
+                        obs_id=int(record.obs_id),
+                        rgb=rgb,
+                        xyz=np.asarray(record.object_xyz, dtype=np.float64),
+                        labels=list(record.labels),
+                        description=record.description or None,
+                        viewer_xyz=(
+                            np.asarray(record.base_pose_world, dtype=np.float64)
+                            if record.base_pose_world is not None
+                            else None
+                        ),
+                    )
+                )
+        else:
+            for i, fr in enumerate(state.frames):
+                xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+                if fr.world_xyz is not None and fr.world_xyz.size >= 3:
+                    xyz = np.ravel(fr.world_xyz)[:3]
+                labels = (fr.info or {}).get("labels", [])
+                description = (fr.info or {}).get("description") if fr.info else None
+                rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
+                self._graph._observations.append(
+                    GraphObservation(
+                        obs_id=i + 1,
+                        rgb=rgb,
+                        xyz=xyz,
+                        labels=labels,
+                        description=description,
+                    )
+                )
+        runtime_path = path_obj / GRAPH_RUNTIME_FILENAME
+        runtime: dict[str, Any] = {}
+        if runtime_path.is_file():
+            runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+        self._graph._obs_revisions = {
+            int(key): int(value)
+            for key, value in dict(runtime.get("obs_revisions") or {}).items()
+        }
+        if not self._graph._obs_revisions and isinstance(world_store, WorldEvidenceStore):
+            for record in world_store.views.values():
+                self._graph._obs_revisions[record.obs_id] = max(
+                    self._graph._obs_revisions.get(record.obs_id, 0),
+                    int(record.revision),
+                )
+        computed_next = (
             max(
                 max((n.obs_id for n in self._graph._nodes), default=0),
-                len(self._graph._observations),
+                max((o.obs_id for o in self._graph._observations), default=0),
             )
             + 1
         )
+        self._graph._next_obs_id = max(
+            int(runtime.get("next_obs_id") or computed_next),
+            computed_next,
+        )
+        if runtime:
+            self._graph.import_attempt_ledger(
+                list(runtime.get("attempt_ledger") or []),
+                replace=True,
+            )
+            self._graph._room_events = [
+                dict(row) for row in runtime.get("room_events") or []
+            ]
+            self._graph._retracted_nav_claims = {
+                (int(row[0]), str(row[1]))
+                for row in runtime.get("retracted_nav_claims") or []
+                if isinstance(row, list) and len(row) >= 2
+            }
         self._graph._rebuild_viewpoint_index()
         if self.loaded_final_step is not None:
             self._graph.set_graph_timestep(self.loaded_final_step)
+        self._graph._reindex_world_entities()
+        if (
+            isinstance(world_store, WorldEvidenceStore)
+            and world_store.enabled
+            and not world_store.views
+        ):
+            for obs in self._graph._observations:
+                self._graph._obs_revisions.setdefault(int(obs.obs_id), 1)
+                self._graph._record_world_view_for_obs(int(obs.obs_id))
 
     def supports_save_load(self) -> bool:
         return True

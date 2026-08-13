@@ -72,6 +72,35 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _json_bool(value: Any, *, default: bool = False) -> bool:
+    """Parse a JSON-ish boolean without treating non-empty strings as true."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off", "null", "none", ""}:
+        return False
+    return bool(default)
+
+
+def _normalize_suggested_answer(value: Any) -> str | None:
+    """Normalize an explicit MCQ letter while preserving free-form choice text."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = re.fullmatch(
+        r"(?:answer\s*[:=-]\s*)?([A-D])(?:\s*[\).}]|\s*)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group(1).upper()
+    return text
+
+
 def _call_eqa_client(
     client: Any,
     payload: str | list[Any],
@@ -124,7 +153,7 @@ def extract_target_from_question(
     qtype = str(data.get("question_type") or "other").strip().lower()
     if qtype not in {"count", "location", "state", "other"}:
         qtype = "other"
-    close_look = bool(data.get("requires_close_look", False))
+    close_look = _json_bool(data.get("requires_close_look", False))
     if not phrase:
         phrase = (fallback_phrase or q).strip()
     return TargetExtract(
@@ -250,16 +279,13 @@ def assess_view_with_vlm(
             )
 
     data = _parse_json_object(raw)
-    suggested = data.get("suggested_answer")
-    if suggested is not None:
-        suggested = str(suggested).strip() or None
-        if suggested and suggested.upper()[:1] in "ABCD":
-            suggested = suggested.upper()[:1]
+    suggested = _normalize_suggested_answer(data.get("suggested_answer"))
+    answerable = _json_bool(data.get("answerable", False))
     return ViewAssessment(
         target=str(data.get("target") or target).strip(),
-        present=bool(data.get("present", False)),
-        answerable=bool(data.get("answerable", False)),
-        need_more_views=bool(data.get("need_more_views", not bool(data.get("answerable", False)))),
+        present=_json_bool(data.get("present", False)),
+        answerable=answerable,
+        need_more_views=_json_bool(data.get("need_more_views", not answerable), default=not answerable),
         suggested_answer=suggested,
         reason=str(data.get("reason") or "").strip(),
         raw=raw[:1000],

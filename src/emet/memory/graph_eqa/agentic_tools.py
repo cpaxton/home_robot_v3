@@ -133,6 +133,22 @@ _EQA_FORMAT_BLOCK_LLM = (
     '"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
 )
 
+_EQA_FORMAT_BLOCK_GROUNDED = """\
+# Response format
+Respond with ONLY a JSON object (no other text):
+{"current_room": "<short place phrase>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}], "message": ""}
+
+Rules:
+- Report the robot's current room from attached images and the state evidence.
+- Treat room labels, misses, history, costs, information gain, and failure risk as
+  uncertain evidence. They do not require any particular action.
+- investigate(obs_id) accepts only a listed place obs_adapter ID.
+- explore_frontier may use a listed frontier_id; omit it to let navigation select.
+- submit_answer is a proposal and must be supported by visible positive evidence.
+- SigLIP scores and absence are retrieval evidence, not final answer proof.
+- Choose one valid action. The executor applies valid choices unchanged.
+- Do not output reasoning."""
+
 # Back-compat alias (canonical).
 _EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
 
@@ -281,14 +297,42 @@ def question_implies_indoor(question: str) -> bool:
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
     """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
     submode = getattr(executor, "mode", "answer")
-    return build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    tools = build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
+        for tool in tools:
+            if tool.name == "explore_frontier":
+                tool.description = (
+                    "Navigate toward one active frontier to gather new scene evidence. "
+                    "Optional frontier_id selects a listed stable frontier; optional toward "
+                    "is a semantic ranking phrase when no ID is supplied."
+                )
+                properties = dict(tool.parameters.get("properties", {}))
+                properties["frontier_id"] = {
+                    "type": "string",
+                    "description": "Optional stable frontier_id listed in the current state.",
+                }
+                tool.parameters = {**tool.parameters, "properties": properties}
+            elif tool.name == "investigate":
+                tool.description = (
+                    "Navigate to a listed place obs_adapter ID and capture a closer view. "
+                    "Optional approach_index selects a distinct bearing."
+                )
+    return tools
 
 
-def build_graph_eqa_system_prompt(tools: list[Tool], *, room_policy: str = "canonical") -> str:
+def build_graph_eqa_system_prompt(
+    tools: list[Tool],
+    *,
+    room_policy: str = "canonical",
+    decision_policy: str = "legacy",
+) -> str:
     """Fixed routing system prompt (identity + tools + format). Keep byte-stable per mode."""
     tools_block = get_tool_descriptions_for_prompt(tools)
     policy = str(room_policy or "canonical").strip().lower()
-    fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
+    if str(decision_policy or "legacy").strip().lower() == "grounded_v2":
+        fmt = _EQA_FORMAT_BLOCK_GROUNDED
+    else:
+        fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
     return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}"
 
 
@@ -300,6 +344,16 @@ def _graph_stats_line(gm: Any) -> str:
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
+    if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
+        from emet.memory.graph_eqa.agentic_state import compile_agent_state, render_agent_state
+
+        snapshot = compile_agent_state(executor)
+        executor._last_agent_state_snapshot = snapshot
+        return render_agent_state(
+            snapshot,
+            max_chars=int(getattr(executor, "agent_state_max_chars", 6000)),
+        )
+
     from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES
     from emet.memory.graph_eqa.room_clusters import room_leave_needed
 

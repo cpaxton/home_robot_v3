@@ -38,9 +38,18 @@
 #   EMET_EQA_AGENTIC_ROUTER=0|1  honor for agentic arm (default 0). paper-router /
 #                          emet hmeqa overnight pass 1; do not hardcode over the env.
 #   EMET_EQA_AGENTIC_VERIFIER / EMET_EQA_AGENTIC_REQUIRE_VERIFIED  passed through.
+#   EMET_EQA_AGENTIC_DECISION_POLICY=legacy|grounded_v2
+#   EMET_EQA_GRAPH_EVIDENCE_MODE=off|shadow|agent
+#   EMET_EQA_ROOM_HISTORY_MODE=off|shadow|agent
+#   EMET_EQA_ROOM_POLICY=canonical|llm
+#   EMET_EQA_ROOM_TARGET_HINTS=0|1
+#   EMET_EQA_ROOM_STAMP_INVESTIGATE=0|1
+#   EMET_EQA_ATTEMPT_LEDGER_MODE=off|shadow|agent
+#   EMET_HMEQA_VARIANT_ID=legacy  explicit A/B label; all are frozen in run_manifest.json.
 #   EQA_HF_MODEL_ID / EQA_VL_FAMILY / EQA_VL_QUANTIZATION  → emet-habitat
 #                          --eqa-hf-model-id / --eqa-vl-family / (quant via config env).
 #                          Used for larger-VLM ladder (e.g. Qwen3-VL-32B-Instruct).
+#   HMEQA_MAX_PLANNING_STEPS=20 / HMEQA_MAX_MOVEMENT_STEP=10  frozen episode budgets.
 #
 # Prefer: uv run emet hmeqa h2h|resume  (dogfood CLI over hand-rolled env/taskset).
 # Recovery after an agent/session death (from *this* checkout — not a sibling tree):
@@ -79,6 +88,46 @@ EQA_HF_MODEL_ID="${EQA_HF_MODEL_ID:-}"
 EQA_VL_FAMILY="${EQA_VL_FAMILY:-}"
 EQA_VL_QUANTIZATION="${EQA_VL_QUANTIZATION:-}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
+
+# Create a versioned manifest on first launch. On resume, omitted frozen env
+# values are restored from it; explicit config/commit/dirty-tree mismatches fail.
+_MANIFEST_ENV_FILE="$(mktemp "$OUT/.manifest-env.XXXXXX")"
+if uv run python - "$OUT" "$ROOT" "$RESUME" >"$_MANIFEST_ENV_FILE" <<'PY'
+import shlex
+import sys
+from pathlib import Path
+
+from emet.eval.hmeqa_launch import (
+    HmeqaRunManifestError,
+    hmeqa_config_env,
+    prepare_hmeqa_run_manifest_from_env,
+)
+
+out = Path(sys.argv[1])
+root = Path(sys.argv[2])
+resume = sys.argv[3] == "1"
+try:
+    manifest = prepare_hmeqa_run_manifest_from_env(
+        out,
+        project_root=root,
+        resume=resume,
+    )
+except HmeqaRunManifestError as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(2) from exc
+for key, value in sorted(hmeqa_config_env(manifest["config"]).items()):
+    print(f"export {key}={shlex.quote(value)}")
+PY
+then
+    # shellcheck disable=SC1090
+    source "$_MANIFEST_ENV_FILE"
+    rm -f "$_MANIFEST_ENV_FILE"
+else
+    rc=$?
+    rm -f "$_MANIFEST_ENV_FILE"
+    exit "$rc"
+fi
+unset EMET_HMEQA_RUN_CONFIG_JSON EMET_HMEQA_RUN_SOURCES_JSON
 
 # Extra flags for emet-habitat run-episode (larger-VLM ladder).
 EQA_EXTRA_ARGS=()
@@ -390,6 +439,7 @@ if ! uv run python -c "from emet.llms.attn_impl import flash_attn_2_available; r
 fi
 
 log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS total_units=$PROGRESS_TOTAL arms=$ARMS resume=$RESUME"
+log "variant=$EMET_HMEQA_VARIANT_ID digest=$EMET_HMEQA_CONFIG_DIGEST decision=$EMET_EQA_AGENTIC_DECISION_POLICY graph=$EMET_EQA_GRAPH_EVIDENCE_MODE room_history=$EMET_EQA_ROOM_HISTORY_MODE room_policy=$EMET_EQA_ROOM_POLICY target_hints=$EMET_EQA_ROOM_TARGET_HINTS investigate_stamp=$EMET_EQA_ROOM_STAMP_INVESTIGATE ledger=$EMET_EQA_ATTEMPT_LEDGER_MODE"
 apply_eval_cpu_affinity
 if [[ "$RESUME" == "1" ]]; then
     note_host_freeze_if_any
@@ -457,6 +507,8 @@ run_arm() {
             env PYTHONFAULTHANDLER=1 "$@" timeout --kill-after=30s "$TIMEOUT" "$EMET_HABITAT" run-episode \
                 --question-id "$qid" \
                 --method dynagraph \
+                --max-planning-steps "$HMEQA_MAX_PLANNING_STEPS" \
+                --max-movement-step "$HMEQA_MAX_MOVEMENT_STEP" \
                 --explore-when-uncovered off \
                 --no-mcq-debias \
                 --memory-summary \

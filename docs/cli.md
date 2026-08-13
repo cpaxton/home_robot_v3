@@ -881,7 +881,7 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 | Command | Purpose |
 |---------|---------|
 | `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
-| `emet hmeqa resume [OUT] [--preset paper-router]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
+| `emet hmeqa resume [OUT] [variant flags…]` | Resolve latest OUT if omitted; reuse its frozen variant/model/budgets/IDs, validate commit + dirty state + digest, then set `RESUME=1` |
 | `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips `DONE` phases; `RESUME=1` on partial H2H) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
@@ -895,7 +895,20 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 
 Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
 
-**`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
+**Frozen A/B axes (on both `h2h` and `resume`):**
+
+- `--decision-policy legacy|grounded_v2`
+- `--graph-evidence-mode off|shadow|agent`
+- `--room-history-mode off|shadow|agent`
+- `--room-policy canonical|llm`
+- `--room-target-hints|--no-room-target-hints`
+- `--investigate-stamp|--no-investigate-stamp`
+- `--attempt-ledger-mode off|shadow|agent`
+- `--variant-id ID`
+
+Legacy-compatible defaults are `legacy`, graph/history/ledger `off`, `canonical`, target hints on, investigate stamps off, and variant ID `legacy`. Model and budget controls (`--eqa-hf-model-id`, `--eqa-vl-family`, `--eqa-vl-quantization`, `--eqa-answer-max-new-tokens`, `--episode-timeout`, `--max-planning-steps`, `--max-movement-step`) are frozen with the IDs. Each new OUT gets a versioned `run_manifest.json` containing the full commit, dirty-tree state/digest, effective values and sources, and a deterministic config digest. Resume fills omitted frozen flags from that manifest and refuses commit, dirty-tree, or config mismatches. Operational controls such as cooldown, crash policy/streak, job description/name, VRAM threshold, coverage-figure IDs, and foreground mode may change safely on resume. Historical partial OUTs without a manifest fail closed.
+
+**`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. It does **not** alter any frozen A/B axis above. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
 
 **Remote answer VL (LAN Orin):** `emet hmeqa h2h` builds an explicit `env KEY=VAL …` string for `emet jobs run`. Parent-shell `export EMET_VL_ENDPOINT=…` is **not** inherited by the Habitat child unless listed there. Pass **`--host ORIN_HOST`** (injects `EMET_LLM_HOST`, `EMET_OPENAI_BASE_URL`, `EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1` for unified-7b) or **`--vl-endpoint openai@http://ORIN_HOST:8000/v1`**. Dual-2b: `--host ORIN_HOST --vl-port 8001`. Launch stderr prints the injected endpoint; episode jsonl records `vl_endpoint`. Habitat-Sim still needs local GPU — the Orin only offloads the answer VLM. See `docs/llm_serve.md`.
 

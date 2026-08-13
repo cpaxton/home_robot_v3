@@ -35,7 +35,7 @@ def test_attempt_record_roundtrip():
     )
     d = rec.to_dict()
     assert d["xyz"] == [1.0, 2.0, 0.5]
-    assert d["schema_version"] == 2
+    assert d["schema_version"] == 3
     assert d["room"] == "kitchen"
     back = AttemptRecord.from_dict(d)
     assert back == rec
@@ -229,6 +229,39 @@ def test_retract_records_verify_absent_and_persist_flag():
     assert (5, "fruit bowl") in mem._retracted_nav_claims
     mem.clear_retracted_nav_claims()
     assert (5, "fruit bowl") in mem._retracted_nav_claims
+
+
+def test_additive_negative_evidence_keeps_claim_and_records_both_views():
+    mem = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"eqa": {"attempt_ledger": True}},
+    )
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=5,
+            xyz=np.array([0.0, 0.0, 0.5]),
+            labels=["fruit bowl", "table"],
+        )
+    ]
+    out = mem.retract_phrase_claim_at_obs(
+        5,
+        "fruit bowl",
+        strip_matching_labels=False,
+        apply_blacklist=False,
+        evidence_obs_id=9,
+        evidence_source="vlm",
+        room="kitchen",
+        step=3,
+    )
+    assert out["recorded_only"] is True
+    assert out["claim_obs_id"] == 5
+    assert out["evidence_obs_id"] == 9
+    assert mem._nodes[0].labels == ["fruit bowl", "table"]
+    assert (5, "fruit bowl") not in mem._retracted_nav_claims
+    rows = mem.get_attempt_records(action_kind="verify")
+    assert rows[0].obs_id == 9
+    assert rows[0].status_code == "vlm_absent"
 
 
 def test_attempt_summary_for_obs():

@@ -110,6 +110,26 @@ def update_graph_memory_from_dynamem_observation(
         graph_memory.set_graph_timestep(int(frame_step))
 
     viewer_xyz = viewer_xyz_world_from_observation(obs, robot=robot)
+    if hasattr(graph_memory, "set_capture_context"):
+        session_id = ""
+        session_fn = getattr(robot, "get_emet_session", None)
+        if callable(session_fn):
+            try:
+                session = session_fn() or {}
+                if isinstance(session, dict):
+                    session_id = str(
+                        session.get("session_id")
+                        or session.get("run_id")
+                        or session.get("environment_name")
+                        or ""
+                    )
+            except Exception:
+                session_id = ""
+        graph_memory.set_capture_context(
+            camera_pose_world=obs.camera_pose,
+            base_pose_world=viewer_xyz,
+            session_id=session_id or None,
+        )
     scene_profile = resolve_graph_scene_profile(
         robot=robot,
         parameters=getattr(graph_memory, "parameters", None),
