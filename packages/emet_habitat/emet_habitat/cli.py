@@ -390,6 +390,7 @@ def run_batch(
     mcq_debias: bool | None,
     memory_summary: bool | None,
     explore_when_uncovered: str | None,
+    debug_run_tag: str | None = None,
 ) -> None:
     """Run a slice of HM-EQA (GraphEQA paper: 113 questions; default method=static_graph)."""
     from emet_habitat.runner import run_hmeqa_batch
