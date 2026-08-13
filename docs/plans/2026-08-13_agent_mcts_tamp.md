@@ -100,6 +100,8 @@ Task (goal spec, e.g. "apple -> basket") + scene state (voxel map, object poses)
 ## Status
 
 - [x] `agent_mcts.py` skeleton + UCT search with a **distance-based heuristic policy + sampling** (`PickPlaceDistancePolicy`), unit tests in `test_agent_mcts.py` — no LLM yet
+- [x] **MolmoSpaces scene-task extractor** (`src/emet/eval/scene_task_extractor.py`): loads `*_physics_metadata.json`, enumerates pickable objects (grasp assets), receptacle sites, emits `full_episodes.yaml`-schema tasks, and computes per-object gripper-contact reachability via `ArmManipProfile` + IK. Tests in `test_scene_task_extractor.py`.
+- [x] **Exposed as a CHAT agent tool** `scene_tasks(object_filter, robot)` — the agent can now ask "what can I pick up and where can I put it" and get a digest with per-robot reachability (from live sim placements when connected).
 - [ ] Policy shim `propose_candidates` via existing LLM client
 - [ ] Batch sim hook (threads first; mjx later if env permits)
 - [ ] Wire top-level move execution back into agent loop
