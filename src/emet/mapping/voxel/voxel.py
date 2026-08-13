@@ -12,6 +12,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import copy
+import os
 import pickle
 import timeit
 from collections import namedtuple
@@ -656,6 +657,13 @@ class SparseVoxelMap:
         origin = self.grid_origin[:2].to(device=device, dtype=base_pose.dtype)
         map_xy = ((base_pose[:2] / res) + origin).long()
         mx, my = int(map_xy[0]), int(map_xy[1])
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(
+                f"[visited] base_pose={base_pose.detach().cpu().numpy().round(3).tolist()} "
+                f"grid_cell=({mx},{my}) disk_r={int(self._disk_size)} "
+                f"visited_sum_before={int((self._visited > 0).sum())}",
+                flush=True,
+            )
         ds = int(self._disk_size)
         h, w = int(self._visited.shape[0]), int(self._visited.shape[1])
         x0, x1 = max(0, mx - ds), min(h, mx + ds + 1)

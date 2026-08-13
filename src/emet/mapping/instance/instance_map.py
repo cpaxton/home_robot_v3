@@ -642,20 +642,26 @@ class InstanceMemory:
         # self.local_id_to_global_id_map[env_id] = {}
         # append image to list of images; move tensors to cpu to prevent memory from blowing up
         # TODO: This should probably be an option
-
-        if self.images[env_id] is None:
-            self.images[env_id] = image.unsqueeze(0).detach().cpu()
-        else:
-            self.images[env_id] = torch.cat(
-                [self.images[env_id], image.unsqueeze(0).detach().cpu()], dim=0
-            )
-        if self.point_cloud[env_id] is None:
-            self.point_cloud[env_id] = point_cloud.unsqueeze(0).detach().cpu()
-        else:
-            self.point_cloud[env_id] = torch.cat(
-                [self.point_cloud[env_id], point_cloud.unsqueeze(0).detach().cpu()],
-                dim=0,
-            )
+        # NOTE: These per-frame image/point-cloud buffers are only consumed by the
+        # debug visualization path (add_instance_view under self.debug_visualize).
+        # Accumulating them unconditionally is O(N^2) (torch.cat re-copies every
+        # prior frame each update), which dominated per-update wall time in OVMM
+        # find evals (instance memory grew ~9s/frame). Skip entirely when debug
+        # visualization is off.
+        if self.debug_visualize:
+            if self.images[env_id] is None:
+                self.images[env_id] = image.unsqueeze(0).detach().cpu()
+            else:
+                self.images[env_id] = torch.cat(
+                    [self.images[env_id], image.unsqueeze(0).detach().cpu()], dim=0
+                )
+            if self.point_cloud[env_id] is None:
+                self.point_cloud[env_id] = point_cloud.unsqueeze(0).detach().cpu()
+            else:
+                self.point_cloud[env_id] = torch.cat(
+                    [self.point_cloud[env_id], point_cloud.unsqueeze(0).detach().cpu()],
+                    dim=0,
+                )
 
         # Valid points
         if valid_points is None:

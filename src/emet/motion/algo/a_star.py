@@ -106,6 +106,7 @@ class AStar(Planner):
         obs = np.asarray(obs, dtype=bool)
         exp = np.asarray(exp, dtype=bool)
         self._navigable = (~obs) & exp
+        self._navigable_explored_frac = lambda: float(exp.mean()) if exp.size else 0.0
         self._clearance_m = self._build_clearance_field(obs, exp)
         if self.min_clearance_m > 0 and self._clearance_m is not None:
             # Hard gate: treat low-clearance free cells as non-navigable for search.
@@ -421,10 +422,33 @@ class AStar(Planner):
         self.reset()
         # Obstacle dilation + pose noise often marks the robot cell occupied;
         # ring radius comes from motion_planner.start_escape_max_ring (config).
+        if getattr(self, "debug_start_escape", False) and self._navigable is not None:
+            import os
+
+            if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                nb = self._navigable
+                print(
+                    f"[navdebug] start_pt={start_pt} navigable_sum={int(nb.sum())} "
+                    f"explored_frac={float(self._navigable_explored_frac()):.4f} "
+                    f"min_clearance={getattr(self, 'min_clearance_m', None)}",
+                    flush=True,
+                )
+                if start_pt[0] == 511 and start_pt[1] == 512:
+                    import traceback
+
+                    tb = " | ".join(
+                        f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=8)[:-1]
+                    )
+                    print(f"[navdebug] start_pt=(511,512) CALLER: {tb}", flush=True)
         start_pt = self.get_unoccupied_neighbor(
             start_pt, max_ring=self.start_escape_max_ring
         )
         if start_pt is None:
+            if getattr(self, "debug_start_escape", False):
+                import os
+
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print("[navdebug] NO unoccupied neighbor within escape ring", flush=True)
             return set()
 
         reachable_points: set[tuple[int, int]] = set()
