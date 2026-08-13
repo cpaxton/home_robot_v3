@@ -2061,7 +2061,8 @@ class AgenticEQAExecutor:
                                 )
                             )
             except Exception as e:
-                _logger.warning(f"siglip receptacle seed failed for {target!r}: {e}")
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    _logger.warning(f"siglip receptacle seed failed for {target!r}: {e}")
 
         # (2) container/fixture node labels as a geometric fallback.
         if not out and hasattr(gm, "get_nodes"):
