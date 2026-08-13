@@ -293,6 +293,12 @@ class EvidencePolicy:
         self._fresh_obs_id = None
         self.state = AgenticState.SEARCH
 
+    def reset_for_new_approach(self) -> None:
+        """Return to SEARCH from any state (re-investigating after an ANSWER/verify)."""
+        self.active_hypothesis_id = None
+        self._fresh_obs_id = None
+        self.state = AgenticState.SEARCH
+
     @property
     def scored_obs_ids(self) -> frozenset[int]:
         return frozenset(self._globally_scored_obs_ids)

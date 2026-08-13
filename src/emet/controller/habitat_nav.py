@@ -9,14 +9,53 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 import numpy as np
 
 
+class NavOutcome(str, Enum):
+    """Categorical outcome of one ``navigate_to_target_pose`` call.
+
+    Replaces the bare ``finished`` bool (which was ``not truncated`` and therefore
+    returned ``False`` for chunked long paths even when the robot made real
+    progress). String values so agents / traces / routers get full visibility.
+    """
+
+    REACHED = "reached"  # arrived at goal (finished)
+    PROGRESS = "progress"  # moved toward goal but path was chunked (>8 waypoints)
+    NO_TARGET = "no_target"  # no navigable target was sampled (sample_nav_failed)
+    PLAN_FAILED = "plan_failed"  # A* planner returned failure
+    SAFETY_REJECTED = "safety_rejected"  # trajectory rejected by safety filter
+    ABORTED_TIMEOUT = "aborted_timeout"  # execution aborted on a waypoint timeout
+    USER_CANCELLED = "user_cancelled"  # user rejected the plan
+    STUCK = "stuck"  # executed but moved < min threshold
+
+    @property
+    def ok(self) -> bool:
+        """Made real progress (reached or partially navigated a chunked path)."""
+        return self in (NavOutcome.REACHED, NavOutcome.PROGRESS)
+
+    @property
+    def finished(self) -> bool:
+        return self is NavOutcome.REACHED
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+    def __str__(self) -> str:
+        return self.value
+
+
 @dataclass
 class NavAttemptResult:
-    """Outcome of one navigate_to_target_pose call."""
+    """Outcome of one navigate_to_target_pose call.
+
+    ``status_code`` is a stable ledger/plan token (e.g. ``navmesh_no_path``,
+    ``rejected_low_clearance``, ``aborted_waypoint_timeout``). When unset, callers
+    should derive it via ``emet.controller.nav_attempt.nav_status_code``.
+    """
 
     success: bool
     finished: bool
@@ -27,6 +66,7 @@ class NavAttemptResult:
     goal_xy: tuple[float, float] | None = None
     effective_goal_xy: tuple[float, float] | None = None
     path_xy: list[list[float]] | None = None
+    status_code: str | None = None
 
 
 @dataclass(frozen=True)

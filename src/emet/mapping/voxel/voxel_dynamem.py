@@ -13,6 +13,7 @@ import logging
 import os
 import pickle
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -635,6 +636,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         pose: np.ndarray,
         *,
         base_xyt: np.ndarray | None = None,
+        full_perception: bool = True,
     ):
         """
         Process rgbd images for Dynamem
@@ -643,12 +645,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
             base_xyt: Optional ``(x, y, yaw)`` in the same world frame as ``gps`` / ``compass`` from the
                 robot client. When set, stamps ``_visited`` at the **base** so A* ``_navigable`` matches the
                 planner start pose (camera pose alone can miss the footprint for head-mounted cameras).
+            full_perception: When False, skip the expensive object-level stack (YoloE
+                detection, SigLIP dense features, instance memory, semantic memory).
+                Occupancy / clearance / visited still update so navigation is current.
         """
         # Keep originals for scene graph processor (before any resizing/filtering)
         original_rgb = rgb.copy()
         original_depth = depth.copy()
         original_intrinsics = intrinsics.copy()
         original_pose = pose.copy()
+        _t_pr0 = time.time()
 
         # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
@@ -687,11 +693,13 @@ class SparseVoxelMap(SparseVoxelMapBase):
             min_samples_clear=dbscan_min if dbscan_min > 0 else None,
             max_depth=self.max_depth,
         )
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] clear_points={time.time() - _t_pr0:.3f}s", flush=True)
 
         instance_image = None
         instance_classes = None
         instance_scores = None
-        if self.use_instance_memory and self.detection_model is not None:
+        if full_perception and self.use_instance_memory and self.detection_model is not None:
             try:
                 sem, instance, task_obs = self.detection_model.predict(
                     rgb, depth=depth, draw_instance_predictions=False
@@ -699,6 +707,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 instance_image = torch.from_numpy(instance.astype(np.int64))
                 instance_classes = torch.from_numpy(task_obs["instance_classes"].astype(np.int64))
                 instance_scores = torch.from_numpy(task_obs["instance_scores"].astype(np.float32))
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] detect={time.time() - _t_pr0:.3f}s", flush=True)
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
 
@@ -712,6 +722,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
             instance_classes=instance_classes,
             instance_scores=instance_scores,
         )
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] add()={time.time() - _t_pr0:.3f}s", flush=True)
 
         # Add image descriptions if we want to explore intelligently
         if self.run_eqa and self.image_description_client is not None:
@@ -757,10 +769,13 @@ class SparseVoxelMap(SparseVoxelMapBase):
             max_depth=self.max_depth,
         )
 
-        if self.encoder is not None:
+        if full_perception and self.encoder is not None:
             with torch.no_grad():
+                _t_enc = time.time()
                 rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
                 rgb, features = rgb.squeeze(), features.squeeze()
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] siglip_enc={time.time() - _t_enc:.3f}s", flush=True)
 
             valid_xyz = world_xyz[~mask]
             features = features[~mask]
@@ -782,6 +797,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 from emet.utils.logger import warning as _warn_colored
 
                 _warn_colored(f"Scene graph update failed: {e}")
+        if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+            print(f"[update] process_rgbd_images_end={time.monotonic():.3f}", flush=True)
 
     def add_to_semantic_memory(
         self,
@@ -1259,7 +1276,11 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     valid_points=valid_depth,
                     pose=base_pose,
                 )
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] process_instances={time.monotonic():.3f}", flush=True)
                 self.instances.associate_instances_to_memory()
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print(f"[update] associate_instances={time.monotonic():.3f}", flush=True)
 
         # Add to voxel grid
         if feats is not None:

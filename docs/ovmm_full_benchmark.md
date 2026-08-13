@@ -24,15 +24,31 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 
 `attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp).
 
+**Action-outcome ledger:** when `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is on and the agent has `graph_memory`, scored pick/place phases in `emet.eval.ovmm_full` call `record_manip_attempt` (`pick` / `place` rows). Default **off**. See [attempt_ledger.md](attempt_ledger.md).
+
 **Servers:** Stretch MuJoCo and robosuite (e.g. **rby1** / MolmoSpaces merges) advertise `capabilities.sim_set_body_pose`. Molmo iTHOR objects are freejoint roots (`…_1_0_0`) with mesh children (`…_1_1_0`); teleport resolves the freejoint ancestor when the GT body is the child.
 
+### OVMM `--manip-mode` ≠ chat `agent.manip_mode`
+
+These are **separate namespaces**. OVMM full scoring does **not** read chat-agent YAML or `EMET_MANIP_*`.
+
+| Surface | Knob | Values | Who executes pick/place |
+|---------|------|--------|-------------------------|
+| OVMM full (`emet ovmm full` / `eval_ovmm_full.py`) | `--manip-mode` / `FindPhaseRunConfig.manip_mode` | `skip` \| `oracle` \| `sim` \| `attempt` | Harness teleports GT bodies (`sim` / sim-`attempt`), or `agent.manipulate`/`place` on the find-phase **controller** (nonsim `attempt`) |
+| Chat agent (`emet run agent`) | `agent.manip_mode` / `EMET_MANIP_MODE` | `teleport` \| `kinematic` | [`DynamemTaskExecutor`](../src/emet/controller/task/dynamem/dynamem_task.py) (env vars still override YAML) |
+
+Wiring chat `agent.manip_*` into the executor (so operators need not set `EMET_MANIP_*`) does **not** change OVMM `--manip-mode sim` behavior. Chat **kinematic** IK/RRT is a different path; see [motion_planning.md](motion_planning.md#two-manip_mode-namespaces).
+
 ## Quick start
+
+Prefer **`emet ovmm full`** (scripts remain thin wrappers). Multi-env paper path: `emet ovmm sweep --preset molmo-robocasa`.
 
 ```bash
 uv run emet test src/test/memory/test_ovmm_full_metrics.py -q
 
 # S0 distinct recep, oracle manip (fast GT smoke)
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id default_table_s0_distinct_recep \
   --backend ground_truth \
   --not-rotate --cpu-only \
@@ -40,14 +56,16 @@ uv run python scripts/eval_ovmm_full.py \
   --output-dir ~/runs/emet/ovmm_full/smoke
 
 # Sim E2E (find + sim pick/place; GPU for perception mapping)
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id default_table_s0_distinct_recep \
   --backend dynagraph \
   --manip-mode attempt \
   --output-dir ~/runs/emet/ovmm_full/e2e
 
 # MolmoSpaces iTHOR + rby1 (teleport manip; needs .venv-molmospaces + iTHOR assets)
-uv run python scripts/eval_ovmm_full.py \
+uv run emet ovmm full \
+  --episodes configs/ovmm/full_episodes.yaml \
   --episode-id molmo_ithor_rby1_s2_bowl_pp \
   --backend ground_truth \
   --not-rotate --cpu-only \

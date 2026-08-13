@@ -63,7 +63,7 @@ def test_semantic_label_strips_instance_hash():
     assert semantic_label_from_instance("kitchen cabinet door") == "kitchen cabinet door"
 
 
-def test_resolve_object_query_prefers_clean_cat():
+def test_resolve_object_query_uses_episode_language_not_gt_cat():
     from emet.eval.ovmm_find_phase import FindPhaseEpisode, resolve_object_query
 
     ep = FindPhaseEpisode(
@@ -82,6 +82,37 @@ def test_resolve_object_query_prefers_clean_cat():
         }
     }
     assert resolve_object_query(ep, placements) == "bowl"
+    # Usable episode label must not be overwritten by a different GT spawn cat.
+    ep_jar = FindPhaseEpisode(
+        id="t2",
+        tier="S1",
+        sim="x.yaml",
+        object="jar",
+        start_recep="counter",
+        goal_recep="cab",
+        object_gt_body="obj_main",
+    )
+    assert (
+        resolve_object_query(ep_jar, {"obj_main": {"cat": "milk", "pos": [0, 0, 0]}}) == "jar"
+    )
+
+
+def test_resolve_object_query_stub_falls_back_to_gt_cat():
+    from emet.eval.ovmm_find_phase import FindPhaseEpisode, resolve_object_query
+
+    ep = FindPhaseEpisode(
+        id="t",
+        tier="S1",
+        sim="x.yaml",
+        object="obj",
+        start_recep="counter",
+        goal_recep="cab",
+        object_gt_body="obj_main",
+    )
+    assert (
+        resolve_object_query(ep, {"obj_main": {"cat": "marshmallow", "pos": [0, 0, 0]}})
+        == "marshmallow"
+    )
 
 
 def test_pick_find_object_prefers_start_recep():
@@ -123,7 +154,7 @@ def test_score_find_object_failure_far():
     assert out["localization_err_obj_m"] > 0.75
 
 
-def test_score_find_recep_any_matching_body():
+def test_score_find_recep_prefers_primary_gt_body():
     placements = {
         "cab_a": {"cat": "cabinet", "pos": [0.0, 1.0, 0.5]},
         "cab_b": {"cat": "upper cabinet", "pos": [0.5, 1.0, 1.2]},
@@ -131,7 +162,25 @@ def test_score_find_recep_any_matching_body():
     pred = np.array([0.1, 1.05, 0.0])
     out = score_find_recep(pred, placements, "cabinet", radius_m=0.75)
     assert out["find_recep_success"] is True
+    assert out["find_recep_scored"] is True
+    assert out["gt_recep_body"] == "cab_a"
     assert out["localization_err_recep_m"] < 0.2
+
+
+def test_score_find_recep_does_not_vacuous_hit_long_fixture_path():
+    """Score against the primary short label, not a door-handle substring match."""
+    from emet.eval.ovmm_find_phase import pick_find_recep_gt_body
+
+    placements = {
+        "cab_main": {"cat": "cab", "pos": [0.0, 0.0, 0.5]},
+        "handle": {"cat": "cab left group left door handle", "pos": [5.0, 5.0, 0.9]},
+    }
+    assert pick_find_recep_gt_body(placements, "cab") == "cab_main"
+    # Prediction on the handle must not count as FindRec success vs primary cab.
+    out = score_find_recep([5.0, 5.0, 0.9], placements, "cab", radius_m=0.5)
+    assert out["gt_recep_body"] == "cab_main"
+    assert out["find_recep_success"] is False
+    assert out["localization_err_recep_m"] > 1.0
 
 
 def test_pick_find_object_respects_gt_body():
@@ -145,9 +194,45 @@ def test_pick_find_object_respects_gt_body():
     assert body == "object2"
 
 
-def test_query_variants_includes_gt_cat():
-    variants = _query_variants("cab", {"cab_main": {"cat": "cab"}})
-    assert "cab" in variants
+def test_query_variants_language_only_no_gt_cats():
+    variants = _query_variants("cab")
+    assert variants[0] == "cab"
+    assert "cab left group left door handle" not in variants
+    assert all("handle" not in v.lower() for v in variants)
+
+
+def test_score_find_object_unscored_without_gt_match():
+    placements = {"table": {"cat": "table", "pos": [0.0, 0.0, 0.5]}}
+    out = score_find_object(
+        [0.1, 0.2, 0.3],
+        placements,
+        "chair",
+        "table",
+        radius_m=0.75,
+    )
+    assert out["find_object_scored"] is False
+    assert out["find_object_unscored_reason"] == "no_gt_match"
+    assert out["find_object_success"] is False
+    assert out["localization_err_obj_m"] is None
+    assert out["obj_pred_present"] is True
+
+
+def test_compute_find_phase_partial_ignores_unscored():
+    placements = {"table": {"cat": "table", "pos": [0.0, -0.5, 0.5]}}
+    metrics = compute_find_phase_metrics(
+        obj_pred_xyz=[0.0, -0.5, 0.5],
+        recep_pred_xyz=[0.0, -0.5, 0.5],
+        placements=placements,
+        object_query="chair",  # no GT match → unscored
+        start_recep="table",
+        goal_recep="table",  # scored success
+        radius_m=0.75,
+    )
+    assert metrics["find_object_scored"] is False
+    assert metrics["find_recep_scored"] is True
+    assert metrics["find_recep_success"] is True
+    assert metrics["find_phases_scored"] == 1
+    assert metrics["find_partial_success"] == 1.0
 
 
 def test_distance_to_bounds_habitat_xz():
@@ -399,7 +484,13 @@ def test_run_episode_find_phase_includes_timing_fields(
                             return_value=MagicMock(),
                         ):
                             with patch("emet.utils.port_utils.kill_processes_on_port"):
-                                result = run_episode_find_phase(episode, run_cfg)
+                                with patch(
+                                    "emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder"
+                                ):
+                                    with patch(
+                                        "emet.perception.detection.yoloe.get_shared_yoloe_perception"
+                                    ):
+                                        result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):
         assert key in result
@@ -407,3 +498,6 @@ def test_run_episode_find_phase_includes_timing_fields(
     assert result["use_sensor_perception"] is False
     assert result["prefer_voxel"] is True
     assert result["seed"] == 7
+    # ZMQ must stay idle during SigLIP/YoloE load (Robocasa HWM wedge otherwise).
+    assert mock_robot_client.call_args.kwargs.get("start_immediately") is False
+    mock_robot.set_velocity.assert_called_once()

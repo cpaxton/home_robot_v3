@@ -225,12 +225,13 @@ uv run python scripts/download_robocasa_assets.py --yes
 # or: ./scripts/install_simulation.sh -y
 ```
 
-Verify registry (after ``fixtures_lw``, restore vendored YAML then sync — the lw zip adds meshes but often **replaces** ``fixture_registry/`` with a slim subset, deleting per-type files such as ``fridge_bottom_freezer.yaml`` that kitchen layouts require):
+Verify registry (after ``fixtures_lw``, restore vendored YAML then sync — the lw zip adds meshes but often **replaces** ``fixture_registry/`` with a slim subset, deleting per-type files such as ``fridge_bottom_freezer.yaml`` that kitchen layouts require). Sync also registers ``objects/lightwheel/`` accessories (e.g. ``UtensilRack009``) and cabinet door/handle mesh ids:
 
 ```bash
 git -C third_party/robocasa checkout -- robocasa/models/assets/fixtures/fixture_registry/
 uv run python scripts/sync_robocasa_lightwheel_registry.py
 grep Sink025 third_party/robocasa/robocasa/models/assets/fixtures/fixture_registry/sink.yaml
+grep UtensilRack009 third_party/robocasa/robocasa/models/assets/fixtures/fixture_registry/utensil_rack.yaml
 ls third_party/robocasa/robocasa/models/assets/fixtures/fixture_registry/fridge_bottom_freezer.yaml
 ```
 

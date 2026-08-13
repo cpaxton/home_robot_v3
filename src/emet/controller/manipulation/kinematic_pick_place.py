@@ -35,6 +35,7 @@ from emet.simulation.sim_manipulation import (
     resolve_sim_object_body,
     robot_zmq_attach_body,
     robot_zmq_detach_body,
+    robot_zmq_set_body_pose,
 )
 from emet.utils.logger import Logger
 
@@ -210,16 +211,45 @@ class KinematicPickPlaceExecutor:
             return list(spec.actuator_names)
         return list(self.profile.actuator_names)
 
+    def _world_base_xyt(self) -> np.ndarray | None:
+        """Base ``(x, y, θ)`` in MuJoCo world (not episode-relative GPS).
+
+        ``robot.get_base_pose()`` is episode-relative for robosuite/Molmo; GT placements and
+        the offline MJCF freejoint are world-frame. Prefer session ``navigation_origin_xyt``
+        composition; fall back to ``base_xyz`` XY + episode yaw only when origin is missing.
+        """
+        from emet.utils.geometry import nav_xyt_to_world_xyt
+
+        pose = np.asarray(self.robot.get_base_pose(timeout=2.0), dtype=np.float64).reshape(-1)
+        if pose.size < 3:
+            return None
+        sess = None
+        get_sess = getattr(self.robot, "get_emet_session", None)
+        if callable(get_sess):
+            raw = get_sess()
+            if isinstance(raw, dict):
+                sess = raw
+        world = nav_xyt_to_world_xyt(pose[:3], sess)
+        state = getattr(self.robot, "_state", None)
+        if isinstance(state, dict) and state.get("base_xyz") is not None:
+            try:
+                xyz = np.asarray(state["base_xyz"], dtype=np.float64).reshape(-1)
+                if xyz.size >= 2:
+                    world = np.array([float(xyz[0]), float(xyz[1]), float(world[2])], dtype=np.float64)
+            except Exception:
+                pass
+        return world
+
     def _sync_base_freejoint(self) -> None:
         assert self._model is not None and self._data is not None
         jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, self.profile.base_freejoint_name)
         if jid < 0:
             return
         qadr = int(self._model.jnt_qposadr[jid])
-        pose = np.asarray(self.robot.get_base_pose(timeout=2.0), dtype=np.float64).reshape(-1)
-        if pose.size < 3:
+        world = self._world_base_xyt()
+        if world is None:
             return
-        x, y, th = float(pose[0]), float(pose[1]), float(pose[2])
+        x, y, th = float(world[0]), float(world[1]), float(world[2])
         z = float(self._data.qpos[qadr + 2])
         state = getattr(self.robot, "_state", None)
         if isinstance(state, dict) and state.get("base_xyz") is not None:
@@ -457,17 +487,60 @@ class KinematicPickPlaceExecutor:
         if not ok:
             robot_zmq_detach_body(self.robot, body)
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "lift_ik_failed")
-        self._sleep(0.25)
+        self._sleep(0.35)
+        # Re-glue at the lift pose: Molmo freejoint children can lag the EE during actuator
+        # streaming even when attach was registered (seen as attach_verify_failed with ~2cm dz).
+        robot_zmq_attach_body(self.robot, body, self.ee_body, snap_pos=lift)
+        self._sleep(0.2)
         if not self._verify_grasp_lift(body, lift, pre_pos=pre_pos):
             robot_zmq_detach_body(self.robot, body)
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "attach_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, g_err, None, "ok")
+
+    def _approach_xy(
+        self,
+        target_xy: np.ndarray,
+        *,
+        standoff_m: float = 0.55,
+        yaw: float | None = None,
+    ) -> None:
+        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach."""
+        import os
+
+        os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
+        xy = np.asarray(target_xy, dtype=np.float64).reshape(2)
+        # Stand off along the vector from target toward current base (fallback +Y).
+        cur = self._world_base_xyt()
+        if cur is not None:
+            delta = np.asarray(cur[:2], dtype=np.float64) - xy
+            n = float(np.linalg.norm(delta))
+            if n > 1e-3:
+                delta = delta / n
+            else:
+                delta = np.array([0.0, 1.0], dtype=np.float64)
+        else:
+            delta = np.array([0.0, 1.0], dtype=np.float64)
+        approach_xy = xy + float(standoff_m) * delta
+        if yaw is None:
+            # Face the receptacle from the approach pose.
+            face = xy - approach_xy
+            th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
+        else:
+            th = float(yaw)
+        approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
+        move = getattr(self.robot, "move_base_to", None)
+        if not callable(move):
+            return
+        logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
+        move(approach, blocking=True, world_frame=True)
+        self._sleep(0.4)
 
     def place_only(
         self,
         receptacle_query: str,
         *,
         object_gt_body: str | None = None,
+        approach_base: bool = True,
     ) -> KinematicPickPlaceResult:
         if not self._ensure_model():
             return KinematicPickPlaceResult(False, None, self.ee_body, None, None, "mjcf_missing")
@@ -482,24 +555,50 @@ class KinematicPickPlaceExecutor:
         receps = bodies_matching_category(pl, receptacle_query)
         if not receps:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "recep_not_in_gt")
-        # First category match only — see TODO.md (GT body / receptacle disambiguation).
-        recep_pos = np.asarray(pl[receps[0]]["pos"], dtype=np.float64).reshape(3)
+        # Prefer farthest matching recep from the held object (same idea as OVMM sim place).
+        # Among far candidates, prefer lower Z — tall appliance body COMs are not shelves.
+        obj_xy = np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)[:2]
+        scored: list[tuple[float, float, str]] = []
+        for cand in receps:
+            cpos = np.asarray(pl[cand]["pos"], dtype=np.float64).reshape(3)
+            d = float(np.linalg.norm(obj_xy - cpos[:2]))
+            prefer = 0.05 if str(cand).endswith("_main") else 0.0
+            scored.append((d + prefer, float(cpos[2]), cand))
+        scored.sort(key=lambda t: (-t[0], t[1]))
+        recep_body = scored[0][2]
+        recep_pos = np.asarray(pl[recep_body]["pos"], dtype=np.float64).reshape(3)
+        logger.info(
+            f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} "
+            f"(n_receps={len(receps)})"
+        )
+        if approach_base:
+            self._approach_xy(recep_pos[:2])
+            # Re-register attach after base teleport so offset matches the live EE.
+            robot_zmq_attach_body(self.robot, body, self.ee_body)
+            self._sleep(0.15)
         place = recep_pos + np.array([0.0, 0.0, self.place_z_offset_m])
         preplace = place + np.array([0.0, 0.0, 0.12])
-        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
+        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos, "recep_body": recep_body}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")
         ok, p_err = self._plan_and_execute_ee(place)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_ik_failed")
+        # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
+        # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         robot_zmq_detach_body(self.robot, body)
+        robot_zmq_set_body_pose(self.robot, body, place)
+        self._sleep(0.15)
+        ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         try:
             self._set_gripper(open_=True)
         except Exception as e:
             logger.warning(f"KinematicPickPlace: open gripper after place failed: {e}")
-        self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
-        ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
+        try:
+            self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
+        except Exception as e:
+            logger.warning(f"KinematicPickPlace: retract after place failed: {e}")
         if not ok_place:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, None, p_err, "ok")

@@ -63,6 +63,72 @@ def test_sync_lightwheel_registry_adds_sink025_when_mesh_present():
     assert "Sink025:" in text
 
 
+def test_sync_lightwheel_registry_adds_object_lightwheel_accessories(tmp_path: Path):
+    """Kitchen styles reference UtensilRack009 under objects/lightwheel, not fixtures/."""
+    from emet.simulation.robocasa_registry_sync import sync_lightwheel_registry
+
+    pkg = tmp_path / "robocasa"
+    reg = pkg / "models/assets/fixtures/fixture_registry"
+    rack = pkg / "models/assets/objects/lightwheel/utensil_rack/UtensilRack009"
+    reg.mkdir(parents=True)
+    rack.mkdir(parents=True)
+    (rack / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
+    (reg / "utensil_rack.yaml").write_text(
+        "default:\n  name: utensil_rack\nUtensilRack004:\n  xml: fixtures/accessories/utensil_racks/metal\n",
+        encoding="utf-8",
+    )
+    assert sync_lightwheel_registry(pkg) >= 1
+    text = (reg / "utensil_rack.yaml").read_text(encoding="utf-8")
+    assert "UtensilRack009:" in text
+    assert "objects/lightwheel/utensil_rack/UtensilRack009" in text
+    assert "UtensilRack004:" in text  # existing entries preserved
+
+
+def test_sync_upgrades_legacy_fixture_pascalcase_to_lightwheel_object(tmp_path: Path):
+    """Stool009→rattan_stool has no reg_bbox; LW Stool009 does — upgrade for floor attach."""
+    from emet.simulation.robocasa_registry_sync import sync_lightwheel_registry
+
+    pkg = tmp_path / "robocasa"
+    reg = pkg / "models/assets/fixtures/fixture_registry"
+    stool = pkg / "models/assets/objects/lightwheel/stool/Stool009"
+    reg.mkdir(parents=True)
+    stool.mkdir(parents=True)
+    (stool / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
+    (reg / "stool.yaml").write_text(
+        "default:\n  name: chair\n  size: [null, null, 1.0]\n"
+        "Stool009:\n  xml: fixtures/accessories/stools/rattan_stool\n",
+        encoding="utf-8",
+    )
+    assert sync_lightwheel_registry(pkg) >= 1
+    data = __import__("yaml").safe_load((reg / "stool.yaml").read_text(encoding="utf-8"))
+    assert data["Stool009"]["xml"] == "objects/lightwheel/stool/Stool009"
+
+
+def test_sync_cabinet_panels_and_handles(tmp_path: Path):
+    from emet.simulation.robocasa_registry_sync import sync_lightwheel_registry
+
+    pkg = tmp_path / "robocasa"
+    fixtures = pkg / "models/assets/fixtures"
+    reg = fixtures / "fixture_registry"
+    panel = fixtures / "cabinets/cabinet_panels/CabinetDoorPanel003"
+    handle = fixtures / "handles/CabinetHandle014"
+    reg.mkdir(parents=True)
+    panel.mkdir(parents=True)
+    handle.mkdir(parents=True)
+    (panel / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
+    (handle / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
+    (reg / "cabinet.yaml").write_text(
+        "default:\n  texture: textures/flat/white.png\n"
+        "CabinetDoorPanel047:\n  panel_type: slab\n",
+        encoding="utf-8",
+    )
+    assert sync_lightwheel_registry(pkg) >= 2
+    data = __import__("yaml").safe_load((reg / "cabinet.yaml").read_text(encoding="utf-8"))
+    assert data["CabinetDoorPanel003"] == {"panel_type": "CabinetDoorPanel003"}
+    assert data["CabinetHandle014"] == {"handle_type": "CabinetHandle014"}
+    assert data["CabinetDoorPanel047"]["panel_type"] == "slab"
+
+
 def test_fixture_registry_layout_requires_fridge_stems():
     pkg = robocasa_package_dir()
     if not pkg.is_dir():

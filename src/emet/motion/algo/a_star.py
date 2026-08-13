@@ -106,6 +106,7 @@ class AStar(Planner):
         obs = np.asarray(obs, dtype=bool)
         exp = np.asarray(exp, dtype=bool)
         self._navigable = (~obs) & exp
+        self._navigable_explored_frac = lambda: float(exp.mean()) if exp.size else 0.0
         self._clearance_m = self._build_clearance_field(obs, exp)
         if self.min_clearance_m > 0 and self._clearance_m is not None:
             # Hard gate: treat low-clearance free cells as non-navigable for search.
@@ -327,6 +328,7 @@ class AStar(Planner):
 
     def clean_path_for_xy(self, waypoints, start_yaw: float | None = None):
         """Simplify path and assign continuous yaw via shortest-turn unwrap from start heading."""
+        start = np.asarray(waypoints[0], dtype=np.float64).reshape(-1)
         goal = waypoints[-1]
         if start_yaw is None:
             g0 = np.asarray(waypoints[0], dtype=np.float64).reshape(-1)
@@ -334,6 +336,10 @@ class AStar(Planner):
         waypts = [self.to_pt(waypoint) for waypoint in waypoints]
         waypts = self.clean_path(waypts)
         waypoints_xy = [self.to_xy(waypt) for waypt in waypts]
+        # Keep the measured base pose as the first trajectory point. Grid
+        # round-tripping moves it to the cell center, which can make the
+        # execution filter stop recognizing a tight-clearance start.
+        waypoints_xy[0] = (float(start[0]), float(start[1]))
         traj = []
         prev_yaw = float(start_yaw)
         for i in range(len(waypoints_xy) - 1):
@@ -416,10 +422,33 @@ class AStar(Planner):
         self.reset()
         # Obstacle dilation + pose noise often marks the robot cell occupied;
         # ring radius comes from motion_planner.start_escape_max_ring (config).
+        if getattr(self, "debug_start_escape", False) and self._navigable is not None:
+            import os
+
+            if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                nb = self._navigable
+                print(
+                    f"[navdebug] start_pt={start_pt} navigable_sum={int(nb.sum())} "
+                    f"explored_frac={float(self._navigable_explored_frac()):.4f} "
+                    f"min_clearance={getattr(self, 'min_clearance_m', None)}",
+                    flush=True,
+                )
+                if start_pt[0] == 511 and start_pt[1] == 512:
+                    import traceback
+
+                    tb = " | ".join(
+                        f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=8)[:-1]
+                    )
+                    print(f"[navdebug] start_pt=(511,512) CALLER: {tb}", flush=True)
         start_pt = self.get_unoccupied_neighbor(
             start_pt, max_ring=self.start_escape_max_ring
         )
         if start_pt is None:
+            if getattr(self, "debug_start_escape", False):
+                import os
+
+                if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
+                    print("[navdebug] NO unoccupied neighbor within escape ring", flush=True)
             return set()
 
         reachable_points: set[tuple[int, int]] = set()
@@ -492,8 +521,10 @@ class AStar(Planner):
         if remove_line_of_sight_points:
             path = self.clean_path(path)
 
-        # return [start_xy] + [self.to_xy(pt) for pt in path[1:-1]] + [end_xy]
-        return [start_xy] + [self.to_xy(pt) for pt in path[1:]]
+        # Preserve the clearance-safe start escape cell when the measured base
+        # pose had to be snapped out of a non-navigable grid cell.
+        offset = 1 if self.to_pt(start_xy) == start_pt else 0
+        return [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
 
     def run_astar_multi_goal(
         self,
@@ -513,11 +544,9 @@ class AStar(Planner):
             return None, None
 
         goal_ijs: list[tuple[int, int] | None] = []
-        snapped_goals: list[tuple[float, float]] = []
         for gxy in goals_xy:
             gpt = self.get_unoccupied_neighbor(self.to_pt(gxy), start_pt)
             goal_ijs.append(gpt)
-            snapped_goals.append(gxy)
 
         result = plan_grid_multi_goal(
             start_pt,
@@ -528,9 +557,13 @@ class AStar(Planner):
         if not result.success or result.goal_index is None:
             return None, None
 
-        path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[1:-1]]
+        # Keep the safe grid endpoint selected by ``get_unoccupied_neighbor``.
+        # Re-appending the requested goal XY can put a low-clearance point back
+        # into an otherwise valid path, causing the execution safety filter to
+        # reject every multi-goal trajectory.
+        offset = 1 if self.to_pt(start_xy) == start_pt else 0
+        path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[offset:]]
         gi = int(result.goal_index)
-        path_xy.append(snapped_goals[gi])
         return path_xy, gi
 
     def plan(self, start, goal, verbose: bool = True, goals=None, **kwargs) -> PlanResult:

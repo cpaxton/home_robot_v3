@@ -30,6 +30,7 @@ from emet.eval.ovmm_find_phase import (
     distance_to_placement_xy,
     pick_find_object_gt_body,
 )
+from emet.memory.graph_eqa.attempt_metrics import record_manip_attempt
 
 
 def _snapshot_placements(placements: dict[str, dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
@@ -90,8 +91,14 @@ def score_place_success(
     goal_recep: str,
     radius_m: float,
     placements_before: dict[str, dict[str, Any]] | None = None,
+    goal_gt_body: str | None = None,
 ) -> dict[str, Any]:
-    """Place success: object GT body within ``radius_m`` of any goal-recep GT body."""
+    """Place success: object GT body within ``radius_m`` of a goal-recep GT body.
+
+    When ``goal_gt_body`` is set (sim teleport target), score only against that body so
+    other category matches (e.g. many ``cab_*`` fixtures) cannot vacuous-fail the
+    ``improved`` check.
+    """
     if not placements_after or not object_gt_body or object_gt_body not in placements_after:
         return {
             "place_success": False,
@@ -99,7 +106,10 @@ def score_place_success(
             "gt_object_body": object_gt_body,
             "gt_recep_bodies": [],
         }
-    recep_bodies = bodies_matching_category(placements_after, goal_recep)
+    if goal_gt_body and goal_gt_body in placements_after:
+        recep_bodies = [goal_gt_body]
+    else:
+        recep_bodies = bodies_matching_category(placements_after, goal_recep)
     if not recep_bodies:
         return {
             "place_success": False,
@@ -178,15 +188,62 @@ def _robot_set_body_pose(robot: Any, body: str, pos: np.ndarray) -> None:
     from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
     robot_zmq_set_body_pose(robot, body, pos)
+    # Stretch/Robocasa ZMQ may need a physics tick before placements refresh.
+    time.sleep(0.15)
 
 
-def _goal_place_xyz(placements: dict[str, dict[str, Any]], goal_recep: str) -> np.ndarray | None:
+def _goal_place_xyz(
+    placements: dict[str, dict[str, Any]],
+    goal_recep: str,
+    *,
+    object_gt_body: str | None = None,
+) -> tuple[np.ndarray | None, str | None]:
+    """Pick a goal-recep GT body for sim place teleport.
+
+    Prefer a body far from the held object so scoring ``improved`` is meaningful when many
+    fixtures share a category (Robocasa ``cab_1``…``cab_main``).
+    """
     recep_bodies = bodies_matching_category(placements, goal_recep)
     if not recep_bodies:
-        return None
-    anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()
+        return None, None
+    body = recep_bodies[0]
+    if object_gt_body and object_gt_body in placements:
+        obj_xy = np.asarray(placements[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
+        best_d = -1.0
+        for cand in recep_bodies:
+            # Prefer explicit ``*_main`` when distances tie within a few cm.
+            d = float(np.linalg.norm(obj_xy - np.asarray(placements[cand]["pos"], dtype=np.float64).reshape(3)[:2]))
+            prefer = 0.05 if str(cand).endswith("_main") or str(cand) == "cab_main" else 0.0
+            score = d + prefer
+            if score > best_d:
+                best_d = score
+                body = cand
+    anchor = np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3).copy()
     anchor[2] += 0.02
-    return anchor
+    return anchor, body
+
+
+def _ledger_manip(
+    agent: Any,
+    *,
+    action_kind: str,
+    success: bool,
+    phrase: str,
+    status_code: str,
+    note: str = "",
+    xyz: Any = None,
+) -> None:
+    gm = getattr(agent, "graph_memory", None) if agent is not None else None
+    record_manip_attempt(
+        gm,
+        action_kind=action_kind,
+        success=bool(success),
+        phrase=phrase,
+        status_code=status_code,
+        note=note,
+        xyz=xyz,
+        source="eqa",
+    )
 
 
 def _run_sim_manip_phases(
@@ -197,11 +254,21 @@ def _run_sim_manip_phases(
     placements_before: dict[str, dict[str, Any]] | None,
     gt_body: str | None,
     mode: ManipMode,
+    agent: Any = None,
+    object_query: str = "",
 ) -> dict[str, Any]:
     radius_m = float(episode.success_radius_m)
     t_manip0 = time.monotonic()
     before_pick = _snapshot_placements(placements_before)
     if not gt_body or gt_body not in before_pick:
+        _ledger_manip(
+            agent,
+            action_kind="pick",
+            success=False,
+            phrase=object_query or episode.object,
+            status_code="missing_gt_object_body",
+            note="missing_gt_object_body",
+        )
         return {
             "manip_mode": mode,
             "pick_attempted": True,
@@ -219,6 +286,18 @@ def _run_sim_manip_phases(
     pick_pos[2] += 0.12
     _robot_set_body_pose(robot, gt_body, pick_pos)
     after_pick = _read_placements(robot) or before_pick
+    # Retry once if the freejoint did not move (Stretch/Robocasa timing flake).
+    if gt_body in after_pick:
+        moved = float(
+            np.linalg.norm(
+                np.asarray(after_pick[gt_body]["pos"], dtype=np.float64).reshape(3)
+                - np.asarray(before_pick[gt_body]["pos"], dtype=np.float64).reshape(3)
+            )
+        )
+        if moved < 1e-3:
+            time.sleep(0.25)
+            _robot_set_body_pose(robot, gt_body, pick_pos)
+            after_pick = _read_placements(robot) or after_pick
     pick_scores = score_pick_success(
         before_pick,
         after_pick,
@@ -227,9 +306,18 @@ def _run_sim_manip_phases(
         radius_m=radius_m,
     )
     pick_wall_s = time.monotonic() - t_pick0
+    _ledger_manip(
+        agent,
+        action_kind="pick",
+        success=bool(pick_scores["pick_success"]),
+        phrase=object_query or episode.object,
+        status_code="ok" if pick_scores["pick_success"] else "pick_gt_miss",
+        note=f"sim teleport pick body={gt_body}",
+        xyz=pick_pos,
+    )
 
     t_place0 = time.monotonic()
-    place_pos = _goal_place_xyz(after_pick, episode.goal_recep)
+    place_pos, goal_body = _goal_place_xyz(after_pick, episode.goal_recep, object_gt_body=gt_body)
     if place_pos is None:
         place_scores = {
             "place_success": False,
@@ -237,6 +325,14 @@ def _run_sim_manip_phases(
             "gt_object_body": gt_body,
             "gt_recep_bodies": [],
         }
+        _ledger_manip(
+            agent,
+            action_kind="place",
+            success=False,
+            phrase=episode.goal_recep,
+            status_code="missing_goal_recep",
+            note="no goal receptacle placement",
+        )
     else:
         _robot_set_body_pose(robot, gt_body, place_pos)
         after_place = _read_placements(robot) or after_pick
@@ -246,6 +342,16 @@ def _run_sim_manip_phases(
             goal_recep=episode.goal_recep,
             radius_m=radius_m,
             placements_before=before_pick,
+            goal_gt_body=goal_body,
+        )
+        _ledger_manip(
+            agent,
+            action_kind="place",
+            success=bool(place_scores["place_success"]),
+            phrase=episode.goal_recep,
+            status_code="ok" if place_scores["place_success"] else "place_gt_miss",
+            note=f"sim teleport place body={gt_body}",
+            xyz=place_pos,
         )
     place_wall_s = time.monotonic() - t_place0
     manip_wall_s = time.monotonic() - t_manip0
@@ -338,6 +444,8 @@ def run_ovmm_manip_phases(
             placements_before=placements_before,
             gt_body=gt_body,
             mode=effective,  # type: ignore[arg-type]
+            agent=agent,
+            object_query=object_query,
         )
 
     before_pick = _snapshot_placements(placements_before)
@@ -359,6 +467,19 @@ def run_ovmm_manip_phases(
         radius_m=radius_m,
     )
     pick_wall_s = time.monotonic() - t_pick0
+    pick_ok = bool(pick_scores["pick_success"])
+    _ledger_manip(
+        agent,
+        action_kind="pick",
+        success=pick_ok,
+        phrase=object_query,
+        status_code=(
+            "ok"
+            if pick_ok
+            else ("controller_failed" if not pick_controller_ok else "pick_gt_miss")
+        ),
+        note=f"attempt pick controller_ok={pick_controller_ok}",
+    )
 
     place_controller_ok = False
     t_place0 = time.monotonic()
@@ -378,13 +499,26 @@ def run_ovmm_manip_phases(
         placements_before=after_pick,
     )
     place_wall_s = time.monotonic() - t_place0
+    place_ok = bool(place_scores["place_success"])
+    _ledger_manip(
+        agent,
+        action_kind="place",
+        success=place_ok,
+        phrase=episode.goal_recep,
+        status_code=(
+            "ok"
+            if place_ok
+            else ("controller_failed" if not place_controller_ok else "place_gt_miss")
+        ),
+        note=f"attempt place controller_ok={place_controller_ok}",
+    )
     manip_wall_s = time.monotonic() - t_manip0
 
     full = compute_ovmm_full_metrics(
         find_object_success=bool(find_metrics.get("find_object_success")),
         find_recep_success=bool(find_metrics.get("find_recep_success")),
-        pick_success=bool(pick_scores["pick_success"]),
-        place_success=bool(place_scores["place_success"]),
+        pick_success=pick_ok,
+        place_success=place_ok,
     )
     return {
         "manip_mode": mode,

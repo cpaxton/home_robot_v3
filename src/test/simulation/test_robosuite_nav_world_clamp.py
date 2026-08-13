@@ -62,6 +62,135 @@ def test_episode_rotate_compose_keeps_same_world_xy():
         assert abs(world[2] - theta) < 1e-6
 
 
+def test_freejoint_navigation_writes_linear_velocity_before_angular_velocity():
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option gravity="0 0 0" timestep="0.01"/>
+          <worldbody>
+            <body name="base_link">
+              <freejoint/>
+              <geom type="sphere" size="0.1" mass="1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.qpos[3:7] = [np.sqrt(0.5), np.sqrt(0.5), 0.0, 0.0]
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel = model
+    server._mjdata = data
+    server._nav_goal_world = np.array([1.0, 0.0, 0.5], dtype=np.float64)
+    server._spec = type("_Spec", (), {"base_link_name": "base_link"})()
+    server._nav_kp_xy = 1.0
+    server._nav_v_max = 0.4
+    server._nav_kp_theta = 1.0
+    server._nav_w_max = 0.5
+    server._nav_tol_xy = 0.02
+    server._nav_tol_theta = 0.02
+    server._nav_drive_debug_ticks = 0
+    server._base_freejoint_addrs = lambda: (0, 0)
+    server._planar_base_velocity_actuator_ids = lambda: None
+    server._sim_nav_debug_enabled = lambda: False
+    server.get_base_xyt = lambda: np.zeros(3, dtype=np.float64)
+
+    server._step_base_navigation_drive()
+    np.testing.assert_allclose(data.qvel[:3], [0.4, 0.0, 0.0], atol=1e-9)
+    rotation_world_from_body = np.asarray(data.body("base_link").xmat).reshape(3, 3)
+    expected_angular_body = rotation_world_from_body.T @ np.array([0.0, 0.0, 0.5])
+    np.testing.assert_allclose(data.qvel[3:6], expected_angular_body, atol=1e-9)
+    mujoco.mj_step(model, data)
+    assert data.qpos[0] > 0.0
+
+
+def test_freejoint_navigation_keeps_translating_inside_former_deadband():
+    """Near-goal XY must still command velocity when yaw is already satisfied."""
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option gravity="0 0 0" timestep="0.01"/>
+          <worldbody>
+            <body name="base_link">
+              <freejoint/>
+              <geom type="sphere" size="0.1" mass="1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel = model
+    server._mjdata = data
+    server._nav_goal_world = np.array([0.12, 0.0, 0.0], dtype=np.float64)
+    server._spec = type("_Spec", (), {"base_link_name": "base_link"})()
+    server._nav_kp_xy = 1.0
+    server._nav_v_max = 0.4
+    server._nav_kp_theta = 1.0
+    server._nav_w_max = 0.5
+    server._nav_tol_xy = 0.07
+    server._nav_tol_theta = 0.15
+    server._nav_drive_debug_ticks = 0
+    server._base_freejoint_addrs = lambda: (0, 0)
+    server._planar_base_velocity_actuator_ids = lambda: None
+    server._sim_nav_debug_enabled = lambda: False
+    server.get_base_xyt = lambda: np.zeros(3, dtype=np.float64)
+
+    server._step_base_navigation_drive()
+    assert float(data.qvel[0]) > 0.05, f"expected near-goal translation, qvel={data.qvel[:3]}"
+
+
+def test_freejoint_at_goal_refreshes_idle_snapshot():
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option gravity="0 0 0" timestep="0.01"/>
+          <worldbody>
+            <body name="base_link">
+              <freejoint/>
+              <geom type="sphere" size="0.1" mass="1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.qpos[:3] = [1.0, -0.5, 0.0]
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel = model
+    server._mjdata = data
+    server._nav_goal_world = np.array([1.0, -0.5, 0.0], dtype=np.float64)
+    server._spec = type("_Spec", (), {"base_link_name": "base_link"})()
+    server._nav_kp_xy = 1.0
+    server._nav_v_max = 0.4
+    server._nav_kp_theta = 1.0
+    server._nav_w_max = 0.5
+    server._nav_tol_xy = 0.07
+    server._nav_tol_theta = 0.15
+    server._nav_drive_debug_ticks = 0
+    server._stationary_base_freejoint_qpos = np.zeros(7, dtype=np.float64)
+    server._stationary_planar_base_qpos = None
+    server._base_freejoint_addrs = lambda: (0, 0)
+    server._planar_base_velocity_actuator_ids = lambda: None
+    server._sim_nav_debug_enabled = lambda: False
+    server.get_base_xyt = lambda: np.array([1.0, -0.5, 0.0], dtype=np.float64)
+
+    server._step_base_navigation_drive()
+    assert server._at_goal is True
+    assert server._nav_goal_world is None
+    np.testing.assert_allclose(server._stationary_base_freejoint_qpos[:3], [1.0, -0.5, 0.0], atol=1e-9)
+
+
 def test_nav_world_wins_over_nav_relative():
     """If a buggy client sends both flags, server resolves as absolute world."""
     from emet.robots.innate_mars import InnateMarsBackend

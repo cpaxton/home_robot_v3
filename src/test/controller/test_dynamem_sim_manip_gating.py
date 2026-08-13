@@ -87,3 +87,124 @@ def test_kinematic_mode_without_cap_still_allows_gt_manip():
     exe = _make_executor(manip_mode="kinematic", session_caps={"sim_set_body_pose": True})
     assert can_use_sim_gt_manip(exe.robot, manip_mode="kinematic", visual_servo=False)
     assert exe._can_sim_gt_manip()
+
+
+def test_visual_servo_pickup_propagates_grasp_operation_failure():
+    """Stretch visual-servo path must not report success when GraspObjectOperation fails."""
+    exe = _make_executor(manip_mode="teleport", session_caps={"sim_set_body_pose": True})
+    exe.visual_servo = True
+    exe.match_method = "class"
+    exe.robot.get_head_pose.return_value = np.eye(4)
+    exe.robot.get_six_joints.return_value = [0.0, 0.5, 0.0, 0.0, 0.0, 0.0]
+    exe.robot.arm_to = MagicMock()
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.look_front = MagicMock()
+    exe._find = MagicMock(return_value=np.array([1.0, 0.0, 0.5]))
+
+    grasp = MagicMock()
+    grasp.was_successful.return_value = False
+    exe.grasp_object = grasp
+
+    assert exe._pickup("bowl", point=np.array([1.0, 0.0, 0.5])) is False
+    grasp.assert_called_once()
+    keep = exe([("pickup", "bowl")])
+    assert keep is True
+    assert exe._last_exec_ok is False
+
+
+def test_visual_servo_pickup_propagates_agent_manipulate_failure():
+    exe = _make_executor(manip_mode="teleport", session_caps={})
+    exe.visual_servo = True
+    exe.grasp_object = None
+    exe.robot.get_head_pose.return_value = np.eye(4)
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.look_front = MagicMock()
+    exe.agent.manipulate = MagicMock(return_value=False)
+
+    assert exe._pickup("cup", point=None, skip_confirmations=True) is False
+    exe.agent.manipulate.assert_called_once()
+
+
+def test_visual_servo_place_propagates_agent_place_failure():
+    exe = _make_executor(manip_mode="teleport", session_caps={})
+    exe.visual_servo = True
+    exe.robot.get_head_pose.return_value = np.eye(4)
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.move_to_nav_posture = MagicMock()
+    exe.agent.place = MagicMock(return_value=False)
+    exe._find = MagicMock(return_value=np.array([0.5, 0.0, 0.8]))
+
+    assert exe._place("table", point=None) is False
+    exe.agent.place.assert_called_once()
+    keep = exe([("place", "table")])
+    assert keep is True
+    assert exe._last_exec_ok is False
+
+
+def test_stretch_pickup_propagates_manipulate_false(monkeypatch):
+    """Real-robot / AnyGrasp path must not report success when manipulate fails."""
+    exe = _make_executor(session_caps={})  # no sim_set_body_pose → Stretch path
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.robot.look_front = MagicMock()
+    exe.agent.manipulate = MagicMock(return_value=False)
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._pickup("mug", point=None, skip_confirmations=True) is False
+    exe.agent.manipulate.assert_called_once()
+
+
+def test_stretch_place_propagates_place_false(monkeypatch):
+    exe = _make_executor(session_caps={})
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.agent.place = MagicMock(return_value=False)
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._place("table", point=None) is False
+    exe.agent.place.assert_called_once()
+
+
+def test_visual_servo_pickup_uses_was_successful(monkeypatch):
+    exe = _make_executor(session_caps={})
+    exe.robot.get_emet_session.return_value = {"is_simulation": False, "capabilities": {}}
+    exe.robot.switch_to_manipulation_mode = MagicMock()
+    exe.robot.get_head_pose = MagicMock(return_value=np.eye(4))
+    exe.robot.get_six_joints = MagicMock(return_value=[0.0, 0.5, 0.0, 0.0, 0.0, 0.0])
+    exe.robot.arm_to = MagicMock()
+    exe.robot.look_front = MagicMock()
+    exe.visual_servo = True
+    grasp = MagicMock()
+    grasp.was_successful = MagicMock(return_value=False)
+    exe.grasp_object = grasp
+    exe.match_method = "class"
+
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_kinematic_manip",
+        lambda *a, **k: False,
+    )
+    monkeypatch.setattr(
+        "emet.simulation.sim_manipulation.prefer_sim_teleport_manip",
+        lambda *a, **k: False,
+    )
+
+    assert exe._pickup("mug") is False
+    grasp.was_successful.assert_called_once()

@@ -1,0 +1,100 @@
+# Multi-env OVMM sweep: Robocasa kitchens + MolmoSpaces iTHOR (no default_table).
+# Used by: emet ovmm prepare|sweep --preset molmo-robocasa
+
+name: molmo-robocasa
+description: >
+  Dynagraph find on Robocasa layouts 1–10 + Molmo iTHOR idx 0–3;
+  full OVMM (manip=sim) on odd Robocasa layouts + Molmo rby1 bowl.
+
+defaults:
+  backend: dynagraph
+  manip_mode: sim
+  port_offset_find: 200
+  port_offset_full: 260
+  port_stride: 4
+  need_mib: 8000
+  sync_robocasa_registry: true
+  # Live DynagraphController rotate/explore (not prebuilt scene-map cache).
+  no_scene_cache: true
+  # FindObj/FindRec via shared AgenticEQAExecutor (OVMM phrased as questions).
+  agentic_find: true
+
+find:
+  robocasa:
+    layouts: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    style_equals_layout: true
+    robot: stretch
+    task: PickPlaceCounterToCabinet
+    seed: 0
+    object: jar
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.5
+    explore_steps: 8
+    tier: S1
+  molmo:
+    - id: molmo_ithor_idx0_bowl_explore
+      index: 0
+      robot: stretch
+      object: bowl
+      object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
+      start_recep: cabinet
+      goal_recep: microwave
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx1_chair_explore
+      index: 1
+      robot: stretch
+      object: chair
+      start_recep: table
+      goal_recep: sofa
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx2_chair_explore
+      index: 2
+      robot: stretch
+      object: chair
+      start_recep: table
+      goal_recep: sofa
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+    - id: molmo_ithor_idx3_explore
+      index: 3
+      robot: stretch
+      object: bowl
+      start_recep: cabinet
+      goal_recep: microwave
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2
+
+full:
+  robocasa:
+    layouts: [1, 3, 5, 7, 9]
+    style_equals_layout: true
+    robot: stretch
+    task: PickPlaceCounterToCabinet
+    seed: 0
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.5
+    explore_steps: 8
+    tier: S1
+  molmo:
+    - id: molmo_ithor_idx0_rby1_bowl_full
+      index: 0
+      robot: rby1
+      sim: molmo_ithor_idx0_rby1
+      object: bowl
+      object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
+      start_recep: cabinet
+      goal_recep: microwave
+      success_radius_m: 0.75
+      explore_steps: 15
+      tier: S2

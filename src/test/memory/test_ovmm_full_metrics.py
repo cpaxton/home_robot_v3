@@ -72,6 +72,54 @@ def test_score_place_fails_without_improvement():
     assert out["place_success"] is False
 
 
+def test_score_place_goal_gt_body_ignores_other_category_matches():
+    """Sim teleport targets one receptacle; other ``cab_*`` bodies must not vacuous-fail."""
+    before = {
+        "obj_main": {"cat": "obj", "pos": [0.0, 0.0, 0.8]},
+        "cab_1": {"cat": "cab", "pos": [0.0, 0.0, 1.0]},  # already on a cab in XY
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 1.0]},
+    }
+    after = {
+        "obj_main": {"cat": "obj", "pos": [1.0, 0.0, 1.02]},
+        "cab_1": {"cat": "cab", "pos": [0.0, 0.0, 1.0]},
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 1.0]},
+    }
+    # Without goal_gt_body: min distance to any cab was already 0 → not improved.
+    vacuous = score_place_success(
+        after,
+        object_gt_body="obj_main",
+        goal_recep="cab",
+        radius_m=0.5,
+        placements_before=before,
+    )
+    assert vacuous["place_success"] is False
+    # With teleport target: improved toward cab_main.
+    out = score_place_success(
+        after,
+        object_gt_body="obj_main",
+        goal_recep="cab",
+        radius_m=0.5,
+        placements_before=before,
+        goal_gt_body="cab_main",
+    )
+    assert out["place_success"] is True
+    assert out["gt_recep_bodies"] == ["cab_main"]
+
+
+def test_goal_place_xyz_picks_farthest_recep():
+    from emet.eval.ovmm_full import _goal_place_xyz
+
+    pl = {
+        "obj_main": {"cat": "obj", "pos": [0.0, 0.0, 0.8]},
+        "cab_1": {"cat": "cab", "pos": [0.0, 0.0, 1.0]},
+        "cab_main": {"cat": "cab", "pos": [2.0, 0.0, 1.0]},
+    }
+    pos, body = _goal_place_xyz(pl, "cab", object_gt_body="obj_main")
+    assert body == "cab_main"
+    assert pos is not None
+    assert abs(float(pos[0]) - 2.0) < 1e-6
+
+
 def test_compute_ovmm_full_metrics_all_true():
     out = compute_ovmm_full_metrics(
         find_object_success=True,

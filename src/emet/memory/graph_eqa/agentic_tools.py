@@ -25,107 +25,113 @@ _logger = Logger(__name__)
 
 # Response format block. Constant string (with the tools block) so the routing
 # system prompt is byte-identical across rounds and question banks — required
-# for Qwen3-VL system-prefix KV cache hits. Canonical vs LLM are separate
-# stable strings (policy is fixed per episode).
-_EQA_FORMAT_BLOCK_CANONICAL = """\
-# Response format
-Respond with ONLY a JSON object (no other text):
-{"current_room": "<room>", "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
+# for Qwen3-VL system-prefix KV cache hits. Canonical vs LLM share rule atoms
+# below; compose once at import so the final strings stay stable.
+_EQA_RULE_INVESTIGATE = (
+    "- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).\n"
+    "  Do not investigate frontiers — those are Explore-only.\n"
+)
+_EQA_RULE_RECENT_ACTIONS = "- Use Recent actions to avoid repeating a stuck investigate/explore loop.\n"
+_EQA_RULES_ANSWERABILITY = (
+    "- SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a\n"
+    "  promising place, then confirm with VLM). They are not proof of presence or\n"
+    "  answer — trust Qwen vlm_assess on the image for answerability.\n"
+    "- Never submit_answer while unverified (vlm_answerable=false) if rounds or nav\n"
+    "  budget remain — keep gathering evidence; the harness forces a final answer at\n"
+    "  budget exhaustion.\n"
+    "- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,\n"
+    "  on/off or open/closed state, fine detail) prefer investigate(obs_id) or\n"
+    "  look_around over explore_frontier.\n"
+    "- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.\n"
+    "- One or two tool calls per turn.\n"
+)
 
-Rules:
-- Always set current_room to where the robot is NOW from the room-context images
-  (current view + nearby object images with distances) and Investigate cards —
-  not the destination. Prefer: patio, outdoor, kitchen, living_room, dining_room,
-  bedroom, bathroom, hallway, garage, unknown.
-- Grass / yard / outdoor furniture → outdoor or patio (never invent dining from chairs).
-- Hierarchical choice (GraphEQA-style): prefer an Investigate card whose room=
-  is relevant to the question; otherwise explore_frontier toward other rooms /
-  frontiers. Do not invent room aliases — use the room= tags on cards.
-- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage
-  (then verify/assess runs at the station after investigate).
-- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
-  Do not investigate frontiers — those are Explore-only.
-- explore_frontier: map growth when no place is worth a closer look, or after
-  places look fruitless. toward= is weak coverage bias ONLY —
-  never a substitute for investigate(obs_id).
-- Use Recent actions to avoid repeating a stuck investigate/explore loop.
-- After a close look where VLM assess says present=false, prefer explore_frontier
-  once to grow coverage, then investigate remaining Question-relevant place cards.
-- SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
-  promising place, then confirm with VLM). They are not proof of presence or
-  answer — trust Qwen vlm_assess on the image for answerability.
-- Never submit_answer while unverified (vlm_answerable=false) if rounds or nav
-  budget remain — keep gathering evidence; the harness forces a final answer at
-  budget exhaustion.
-- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,
-  on/off or open/closed state, fine detail) prefer investigate(obs_id) or
-  look_around over explore_frontier.
-- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
-- One or two tool calls per turn.
+_EQA_FORMAT_BLOCK_CANONICAL = (
+    "# Response format\n"
+    "Respond with ONLY a JSON object (no other text):\n"
+    '{"current_room": "<room>", "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}\n'
+    "\n"
+    "Rules:\n"
+    "- Always set current_room to where the robot is NOW from the room-context images\n"
+    "  (current view + nearby object images with distances) and Investigate cards —\n"
+    "  not the destination. Prefer: patio, outdoor, kitchen, living_room, dining_room,\n"
+    "  bedroom, bathroom, hallway, garage, unknown.\n"
+    "- Grass / yard / outdoor furniture → outdoor or patio (never invent dining from chairs).\n"
+    "- Hierarchical choice (GraphEQA-style): prefer an Investigate card whose room=\n"
+    "  is relevant to the question; otherwise explore_frontier toward other rooms /\n"
+    "  frontiers. Do not invent room aliases — use the room= tags on cards.\n"
+    "- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage\n"
+    "  (then verify/assess runs at the station after investigate).\n"
+    + _EQA_RULE_INVESTIGATE
+    + "- explore_frontier: map growth when no place is worth a closer look, or after\n"
+    "  places look fruitless. toward= is weak coverage bias ONLY —\n"
+    "  never a substitute for investigate(obs_id).\n"
+    + _EQA_RULE_RECENT_ACTIONS
+    + "- After a close look where VLM assess says present=false, prefer explore_frontier\n"
+    "  once to grow coverage, then investigate remaining Question-relevant place cards.\n"
+    + _EQA_RULES_ANSWERABILITY
+    + "\n"
+    "# Examples\n"
+    "State: Investigate obs_id=3 phrase='sink' room=kitchen source=graph investigated=0 approaches=0/4 coverage=open\n"
+    '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}\n'
+    "State: Recent actions: r0 investigate obs=3 assess present=false; Prefer explore_frontier\n"
+    '{"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}\n'
+    "State: Question about dining chairs; Investigate dining-table card room=kitchen available\n"
+    '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}\n'
+    "State: VLM assess answerable=true (vlm_answerable); place card corroborated\n"
+    '{"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}\n'
+    "State: Investigate (none); Explore frontiers available\n"
+    '{"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
+)
 
-# Examples
-State: Investigate obs_id=3 phrase='sink' room=kitchen source=graph investigated=0 approaches=0/4 coverage=open
-{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Recent actions: r0 investigate obs=3 assess present=false; Prefer explore_frontier
-{"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
-State: Question about dining chairs; Investigate dining-table card room=kitchen available
-{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}
-State: VLM assess answerable=true (vlm_answerable); place card corroborated
-{"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
-State: Investigate (none); Explore frontiers available
-{"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
-
-_EQA_FORMAT_BLOCK_LLM = """\
-# Response format
-Respond with ONLY a JSON object (no other text):
-{"current_room": "<short place phrase>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
-
-Rules:
-- Always set current_room to where the robot is NOW from the room-context images
-  (current view + nearby object images) — a short natural phrase (2–6 words),
-  e.g. "master bathroom", "open kitchen living", "brick patio", "hallway",
-  or "unknown". Do not force a closed room vocabulary.
-- Always set in_target_area: true if the current place looks useful for answering
-  the Question (you could gather the needed evidence here); false if you are
-  clearly elsewhere; omit only if truly unsure.
-- Prefer Investigate cards whose room=/near=/labels help answer the Question;
-  otherwise explore_frontier. Graph room= tags are context — trust your judgment.
-- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage.
-- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
-  Do not investigate frontiers — those are Explore-only.
-- explore_frontier: map growth when no place is worth a closer look, or after
-  places look fruitless. toward= is optional weak bias ONLY —
-  never a substitute for investigate(obs_id). Prefer leaving toward= empty and
-  letting the frontier VLM pick from the Question + images.
-- Use Recent actions to avoid repeating a stuck investigate/explore loop.
-- After a close look where VLM assess says present=false, prefer explore_frontier
-  once to grow coverage, then investigate remaining Question-relevant place cards
-  (do not explore forever).
-- in_target_area=false means leave OR look closer at a listed Investigate card that
-  could answer the Question — never "explore_frontier only" while place cards exist.
-- SigLIP/OWL scores only rank WHERE to go next to grow the graph (drive to a
-  promising place, then confirm with VLM). They are not proof of presence or
-  answer — trust Qwen vlm_assess on the image for answerability.
-- Never submit_answer while unverified (vlm_answerable=false) if rounds or nav
-  budget remain — keep gathering evidence; the harness forces a final answer at
-  budget exhaustion.
-- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,
-  on/off or open/closed state, fine detail) prefer investigate(obs_id) or
-  look_around over explore_frontier.
-- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
-- One or two tool calls per turn.
-
-# Examples
-State: Question about bathroom shower rug; Investigate obs_id=3 phrase='sink' room=bathroom
-{"current_room": "bathroom", "in_target_area": true, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Question about bathroom shower; Current room: living room; no Investigate cards
-{"current_room": "living room", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
-State: Question about dining chairs; Current room: kitchen; in_target_area=false; Investigate obs_id=12 phrase='dining table'
-{"current_room": "kitchen", "in_target_area": false, "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 12}}], "message": ""}
-State: VLM assess answerable=true (vlm_answerable); place card corroborated
-{"current_room": "open living area", "in_target_area": true, "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
-State: Investigate (none); Explore frontiers available
-{"current_room": "unknown", "in_target_area": false, "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
+_EQA_FORMAT_BLOCK_LLM = (
+    "# Response format\n"
+    "Respond with ONLY a JSON object (no other text):\n"
+    '{"current_room": "<short place phrase>", "in_target_area": true|false, '
+    '"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}\n'
+    "\n"
+    "Rules:\n"
+    "- Always set current_room to where the robot is NOW from the room-context images\n"
+    "  (current view + nearby object images) — a short natural phrase (2–6 words),\n"
+    '  e.g. "master bathroom", "open kitchen living", "brick patio", "hallway",\n'
+    '  or "unknown". Do not force a closed room vocabulary.\n'
+    "- Always set in_target_area: true if the current place looks useful for answering\n"
+    "  the Question (you could gather the needed evidence here); false if you are\n"
+    "  clearly elsewhere; omit only if truly unsure.\n"
+    "- Prefer Investigate cards whose room=/near=/labels help answer the Question;\n"
+    "  otherwise explore_frontier. Graph room= tags are context — trust your judgment.\n"
+    "- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage.\n"
+    + _EQA_RULE_INVESTIGATE
+    + "- explore_frontier: map growth when no place is worth a closer look, or after\n"
+    "  places look fruitless. toward= is optional weak bias ONLY —\n"
+    "  never a substitute for investigate(obs_id). Prefer leaving toward= empty and\n"
+    "  letting the frontier VLM pick from the Question + images.\n"
+    + _EQA_RULE_RECENT_ACTIONS
+    + "- After a close look where VLM assess says present=false, prefer explore_frontier\n"
+    "  once to grow coverage, then investigate remaining Question-relevant place cards\n"
+    "  (do not explore forever).\n"
+    '- in_target_area=false means leave OR look closer at a listed Investigate card that\n'
+    '  could answer the Question — never "explore_frontier only" while place cards exist.\n'
+    + _EQA_RULES_ANSWERABILITY
+    + "\n"
+    "# Examples\n"
+    "State: Question about bathroom shower rug; Investigate obs_id=3 phrase='sink' room=bathroom\n"
+    '{"current_room": "bathroom", "in_target_area": true, '
+    '"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}\n'
+    "State: Question about bathroom shower; Current room: living room; no Investigate cards\n"
+    '{"current_room": "living room", "in_target_area": false, '
+    '"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}\n'
+    "State: Question about dining chairs; Current room: kitchen; in_target_area=false; "
+    "Investigate obs_id=12 phrase='dining table'\n"
+    '{"current_room": "kitchen", "in_target_area": false, '
+    '"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 12}}], "message": ""}\n'
+    "State: VLM assess answerable=true (vlm_answerable); place card corroborated\n"
+    '{"current_room": "open living area", "in_target_area": true, '
+    '"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}\n'
+    "State: Investigate (none); Explore frontiers available\n"
+    '{"current_room": "unknown", "in_target_area": false, '
+    '"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
+)
 
 # Back-compat alias (canonical).
 _EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
@@ -488,6 +494,12 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             tried = executor._tried.get(oid)
             if tried:
                 bits += f" [tried: {tried}]"
+            # Enrich with graph-memory attempt ledger when present (opt-in).
+            gm = executor.graph_memory
+            if gm is not None and hasattr(gm, "attempt_summary_for_obs"):
+                ledger_bits = gm.attempt_summary_for_obs(oid)
+                if ledger_bits:
+                    bits += f" [attempts: {ledger_bits}]"
             lines.append(
                 f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"

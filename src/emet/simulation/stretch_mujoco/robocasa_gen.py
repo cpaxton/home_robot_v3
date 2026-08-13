@@ -252,9 +252,11 @@ def model_generation_wizard(
         control_freq=20,
     )
     env.reset()
+    layout_label = layouts.get(int(layout), f"layout{int(layout)}")
+    style_label = styles.get(int(style), f"style{int(style)}")
     print(
         colored(
-            f"Showing configuration:\n    Layout: {layouts[layout]}\n    Style: {styles[style]}",
+            f"Showing configuration:\n    Layout: {layout_label}\n    Style: {style_label}",
             "green",
         )
     )

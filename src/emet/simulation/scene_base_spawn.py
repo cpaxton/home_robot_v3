@@ -57,6 +57,123 @@ _DEFAULT_MOLMOSPACES_GRID_STEP_M = 0.46
 logger = log.Logger(__name__)
 
 
+def _static_collision_occupancy(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    floor_geom_name: str,
+    grid_resolution_m: float,
+    xy_rect: tuple[float, float, float, float],
+    obstacle_band: tuple[float, float] = (0.2, 1.5),
+) -> np.ndarray | None:
+    """Top-down occupancy of scene collision geoms in the walkable band.
+
+    Marks cells covered by any collision geom (``contype``/``conaffinity`` non-zero) whose body is
+    **not** the robot and whose surface lies in the *obstacle_band* (0.2–1.5 m). Geom footprint is
+    approximated by its world position + bounding radius, so tall walls/counters register without
+    ray-casting pitfalls (vertical rays hit ceiling-level shells first). Mirrors what the head
+    camera voxel map builds so spawn validation matches planner clearance.
+    """
+    floor_eff = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_eff)
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    robot_bodies: set[int] = set()
+    if base_bid >= 0:
+        for b in range(model.nbody):
+            x = int(b)
+            while x > 0:
+                if x == base_bid:
+                    robot_bodies.add(int(b))
+                    break
+                x = int(model.body_parentid[x])
+    res = float(grid_resolution_m)
+    x0, x1, y0, y1 = xy_rect
+    nx = max(1, int(round((x1 - x0) / res)))
+    ny = max(1, int(round((y1 - y0) / res)))
+    occ = np.zeros((nx, ny), dtype=bool)
+    band_lo, band_hi = float(obstacle_band[0]), float(obstacle_band[1])
+    # Geoms whose entire surface sits above the mobile base's navigable height do not block
+    # navigation (Robocasa room boundary shells live at z≈1.5). Only count geoms that reach
+    # down into the band.
+    nav_ceiling_m = float(os.environ.get("EMET_ROBOCASA_NAV_CEILING_M", "1.2"))
+    for g in range(model.ngeom):
+        if g == floor_gid:
+            continue
+        if int(model.geom_bodyid[g]) in robot_bodies:
+            continue
+        if int(model.geom_contype[g]) == 0 and int(model.geom_conaffinity[g]) == 0:
+            continue
+        if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_PLANE:
+            continue
+        p = data.geom_xpos[g]
+        sz = model.geom_size[g]
+        # Lowest / highest point of the geom surface (approx. from size + small mesh margin).
+        z_lo = float(p[2]) - (float(sz[2]) if sz.size >= 3 else 0.0) - 0.05
+        z_hi = float(p[2]) + (float(sz[2]) if sz.size >= 3 else 0.0) + 0.05
+        if z_lo > nav_ceiling_m:
+            # Entire geom hangs above navigation height (room shells / upper cabinets).
+            continue
+        if z_hi < band_lo:
+            # Entire geom sits below the obstacle band (floor slab / backing).
+            continue
+        rb = float(model.geom_rbound[g])
+        if rb <= 0.0:
+            continue
+        # Use the horizontal extent (half-diagonal) rather than the 3D rbound so tall thin
+        # walls do not mark cells many meters away.
+        rad = float(np.hypot(sz[0], sz[1])) if sz.size >= 2 else rb
+        rad = min(max(rad, 0.05), 1.0)
+        i0 = max(0, int(np.floor((float(p[0]) - rad - x0) / res)))
+        i1 = min(nx - 1, int(np.ceil((float(p[0]) + rad - x0) / res)))
+        j0 = max(0, int(np.floor((float(p[1]) - rad - y0) / res)))
+        j1 = min(ny - 1, int(np.ceil((float(p[1]) + rad - y0) / res)))
+        if i1 >= i0 and j1 >= j0:
+            occ[i0 : i1 + 1, j0 : j1 + 1] = True
+    return occ
+
+
+def robocasa_navigable_clearance_field(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    floor_geom_name: str,
+    xy_rect: tuple[float, float, float, float],
+    min_clearance_m: float = 0.22,
+    pad_m: float = 0.20,
+    grid_resolution_m: float = 0.10,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float, float, float]] | None:
+    """Return ``(navigable, clearance_m, labels, rect)`` for static scene geometry.
+
+    Occupancy is sampled at *grid_resolution_m*, obstacles are padded by *pad_m* (matching the
+    planner's ``pad_obstacles``), then an EDT clearance field is computed. A cell is *navigable*
+    when free and ``clearance >= min_clearance_m`` — the same gate the A* planner applies to
+    voxel map obstacles. ``labels`` gives connected navigable regions for area checks.
+    """
+    occ = _static_collision_occupancy(
+        model,
+        data,
+        floor_geom_name=floor_geom_name,
+        grid_resolution_m=grid_resolution_m,
+        xy_rect=xy_rect,
+    )
+    if occ is None:
+        return None
+    try:
+        from scipy import ndimage as _ndi
+        from skimage.morphology import disk as _disk
+
+        pad_cells = int(round(float(pad_m) / float(grid_resolution_m)))
+        occ_p = _ndi.binary_dilation(occ, structure=_disk(max(1, pad_cells)))
+        clr = _ndi.distance_transform_edt(~occ_p) * float(grid_resolution_m)
+        clr[occ_p] = 0.0
+        labels, _nlab = _ndi.label((~occ_p) & (clr >= float(min_clearance_m)))
+    except Exception as exc:  # pragma: no cover - optional scipy/skimage path
+        logger.warning(f"robocasa navigable clearance skipped ({exc!r}).")
+        return None
+    nav = (~occ_p) & (clr >= float(min_clearance_m))
+    return nav, clr, labels, (float(xy_rect[0]), float(xy_rect[1]), float(xy_rect[2]), float(xy_rect[3]))
+
+
 def spawn_debug_enabled() -> bool:
     """True when ``EMET_MOLMOSPACES_SPAWN_DEBUG`` is set or ``--debug-molmospaces-spawn`` turned it on.
 
@@ -2690,6 +2807,10 @@ def find_robocasa_freejoint_xyz(
     if robocasa_first_clearance_m is None:
         robocasa_first_clearance_m = robot_spec.planar_spawn_robocasa_first_clearance_m
 
+    # When a Robocasa first-clearance is configured, do not return the first near-hint
+    # hit: prefer the open-floor pose with larger contact clearance (tie-break: nearer hint).
+    prefer_open_floor = robocasa_first_clearance_m is not None
+
     hint_xy: tuple[float, float] | None = None
     hint_yaw: float | None = None
     if spawn_hint_xyt is not None:
@@ -2774,22 +2895,36 @@ def find_robocasa_freejoint_xyz(
         priority_xy.append(hint_xy)
         if hint_yaw is not None:
             priority_xy.extend(_robocasa_backward_bias_xy(hint_xy[0], hint_xy[1], hint_yaw))
-    seen_xy = {(round(a, 2), round(b, 2)) for a, b in base_candidates}
-    for pt in priority_xy:
-        seen_xy.add((round(pt[0], 2), round(pt[1], 2)))
+    # Dedupe against the broad base set *without* pre-seeding from it, so base candidates can
+    # be appended to priority_xy for the Robocasa open-floor search (needed to move the spawn
+    # off a counter-adjacent hint that has no A*-navigable path out).
+    seen_xy = {(round(a, 2), round(b, 2)) for a, b in priority_xy}
     for px, py in base_candidates:
         k = (round(px, 2), round(py, 2))
         if k in seen_xy:
             continue
         seen_xy.add(k)
         priority_xy.append((float(px), float(py)))
-    candidates = priority_xy if hint_xy is not None else base_candidates
-    if hint_xy is not None:
+    # Robocasa open-floor profile: also allow the broad annulus/grid candidate set so the
+    # navigability gate can move the spawn away from a counter-adjacent hint. Otherwise the
+    # hint corridor (hint + backward bias) can trap the robot against a wall or counter with
+    # no A*-navigable path out.
+    if prefer_open_floor:
+        candidates = priority_xy  # hint corridor first, then broad annulus/grid candidates
+    elif hint_xy is not None:
+        candidates = priority_xy
         hx, hy = hint_xy
         candidates.sort(key=lambda p: (p[0] - hx) ** 2 + (p[1] - hy) ** 2)
+    else:
+        candidates = base_candidates
 
     raw_xy_cap = os.environ.get("EMET_PLANAR_SPAWN_MAX_XY", "").strip()
-    max_xy_candidates = int(raw_xy_cap) if raw_xy_cap.isdigit() else 400
+    max_xy_candidates = int(raw_xy_cap) if raw_xy_cap.isdigit() else (1200 if prefer_open_floor else 400)
+    spawn_dbg(
+        f"robocasa_freejoint_find: n_base_candidates={len(base_candidates)} "
+        f"n_priority={len(priority_xy)} r_annulus_max={r_annulus_max:.2f} "
+        f"xy_clip={'yes' if xy_clip is not None else 'no'}"
+    )
     if max_xy_candidates > 0 and len(candidates) > max_xy_candidates:
         candidates = candidates[:max_xy_candidates]
 
@@ -2820,12 +2955,127 @@ def find_robocasa_freejoint_xyz(
     )
     min_upward = -1.0
 
+    # True A*-style navigability gate. Contact distance alone saturates at 1.0 (no contact) so
+    # the old "open floor" score happily chose a pose 0.5 m from a room wall, where the planner's
+    # padded clearance field never reaches min_clearance and every explore plan is rejected.
+    # Build this *before* the candidate loop (candidate breadth depends on prefer_open_floor).
+    nav_field: tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float, float, float]] | None = None
+    nav_area_map: np.ndarray | None = None
+    if prefer_open_floor and xy_clip_scene is not None:
+        nav_field = robocasa_navigable_clearance_field(
+            model,
+            data,
+            floor_geom_name=floor_effective,
+            xy_rect=xy_clip_scene,
+            min_clearance_m=float(robot_spec.footprint.width) * 0.5 + 0.05,
+            pad_m=0.20,
+            grid_resolution_m=0.10,
+        )
+        if nav_field is not None:
+            nav, _clr, labels, _rect = nav_field
+            import scipy.ndimage as _ndi
+
+            _nlab = int(labels.max())
+            nav_area_map = _ndi.sum(np.ones_like(nav), labels, index=range(1, _nlab + 1))
+            spawn_dbg(
+                f"robocasa_freejoint_find: navigable regions={_nlab} "
+                f"cells={int(nav.sum())} area_m2={float(nav.sum()) * 0.01:.1f}"
+            )
+
+    def _nav_lookup(x: float, y: float) -> tuple[float, int]:
+        """Return ``(navigable-region area m2, 1 if navigable)`` for world ``(x, y)``."""
+        if nav_field is None or nav_area_map is None:
+            return 0.0, 1
+        nav, _clr, labels, rect = nav_field
+        # Rect convention is ``(xmin, xmax, ymin, ymax)`` (see collision_scene_xy_clip_rect).
+        x0n, _x1n, y0n, _y1n = rect
+        res = 0.10
+        i = int(round((float(x) - x0n) / res))
+        j = int(round((float(y) - y0n) / res))
+        nx_, ny_ = nav.shape
+        if not (0 <= i < nx_ and 0 <= j < ny_):
+            return 0.0, 0
+        if not bool(nav[i, j]):
+            return 0.0, 0
+        label = int(labels[i, j])
+        if label <= 0 or label - 1 >= len(nav_area_map):
+            return 0.0, 0
+        return float(nav_area_map[label - 1]), 1
+
     spawn_dbg(
         f"robocasa_freejoint_find: scene={scene_label!r} n_xy={len(candidates)} "
-        f"margin_m={margin:.3f} hint={'yes' if hint_xy else 'no'}"
+        f"margin_m={margin:.3f} hint={'yes' if hint_xy else 'no'} "
+        f"prefer_open_floor={prefer_open_floor} first_cands={[(round(a,2), round(b,2)) for a,b in candidates[:6]]}"
     )
+    # Require the winning pose to sit in a navigable region of at least this area so OVMM
+    # explore actually has room to move (not a 1-cell pocket next to a wall).
+    min_nav_area_m2 = float(os.environ.get("EMET_ROBOCASA_SPAWN_MIN_NAV_AREA_M2", "1.5"))
+    if prefer_open_floor and nav_field is not None and nav_area_map is not None:
+        prefiltered = [p for p in candidates if _nav_lookup(float(p[0]), float(p[1]))[1] == 1
+                       and _nav_lookup(float(p[0]), float(p[1]))[0] >= min_nav_area_m2]
+        spawn_dbg(
+            f"robocasa_freejoint_find: prefilter navigable candidates "
+            f"{len(prefiltered)}/{len(candidates)}"
+        )
+        if prefiltered:
+            # Prefer open floor: larger navigable region, then closer to the walkable-clip
+            # centroid (away from counters / walls), then nearer the hint.
+            cx = 0.5 * (float(xy_clip[0]) + float(xy_clip[1])) if xy_clip is not None else 0.0
+            cy = 0.5 * (float(xy_clip[2]) + float(xy_clip[3])) if xy_clip is not None else 0.0
+            hx = float(hint_xy[0]) if hint_xy is not None else 0.0
+            hy = float(hint_xy[1]) if hint_xy is not None else 0.0
+
+            def _open_floor_key(p: tuple[float, float]) -> tuple[float, float, float]:
+                na = _nav_lookup(float(p[0]), float(p[1]))[0]
+                dc = math.hypot(float(p[0]) - cx, float(p[1]) - cy)
+                dh = math.hypot(float(p[0]) - hx, float(p[1]) - hy)
+                return (-na, dc, dh)
+
+            candidates = sorted(prefiltered, key=_open_floor_key)
+        else:
+            # No candidate is navigable on the full grid; fall back to the hint corridor so we
+            # still return *something* (the sim will spawn contact-free even if explore is tight).
+            candidates = [p for p in candidates if abs(float(p[0]) - (hint_xy[0] if hint_xy else 0.0)) < 1.0]
+            spawn_dbg(
+                f"robocasa_freejoint_find: no navigable candidates; hint-corridor fallback "
+                f"n={len(candidates)}"
+            )
 
     for min_clear, tag in clearance_passes:
+        # With the navigable prefilter, all candidates already satisfy the open-floor gate, so
+        # return the first pose that also passes the contact-clearance placement (no full scan).
+        if prefer_open_floor and nav_field is not None and nav_area_map is not None:
+            for x, y in candidates:
+                for yaw in yaws:
+                    placed = _try_robocasa_freejoint_at_xy_yaw(
+                        model,
+                        data,
+                        base_body_name=base_body_name,
+                        floor_effective=floor_effective,
+                        robot_bodies=robot_bodies,
+                        ray_exclude=ray_exclude,
+                        x=float(x),
+                        y=float(y),
+                        yaw=float(yaw),
+                        z_margins=z_margins,
+                        min_nonfloor_clearance=float(min_clear),
+                        min_upward_clearance=min_upward,
+                        xy_clip_scene=xy_clip_scene,
+                        clip_edge_pad_m=float(clip_pad),
+                        clip_guard_body_names=tuple(str(n) for n in guard_names),
+                        clip_guard_pad_m=guard_pad,
+                        settle_kw=settle_kw,
+                        zb_probe_bodies=zb_probe,
+                    )
+                    if placed is not None:
+                        nav_area = _nav_lookup(float(x), float(y))[0]
+                        spawn_dbg(
+                            f"robocasa_freejoint_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) "
+                            f"yaw={yaw:.3f} nav_area={nav_area:.2f}m2"
+                        )
+                        return placed
+            continue
+        best: tuple[tuple[float, float], tuple[float, float, float], float, float, float] | None = None
         for x, y in candidates:
             for yaw in yaws:
                 placed = _try_robocasa_freejoint_at_xy_yaw(
@@ -2848,9 +3098,72 @@ def find_robocasa_freejoint_xyz(
                     settle_kw=settle_kw,
                     zb_probe_bodies=zb_probe,
                 )
-                if placed is not None:
-                    spawn_dbg(f"robocasa_freejoint_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f}")
+                if placed is None:
+                    continue
+                if not prefer_open_floor:
+                    spawn_dbg(
+                        f"robocasa_freejoint_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f}"
+                    )
                     return placed
+                worst = float(
+                    worst_robot_nonfloor_contact_dist(
+                        model,
+                        data,
+                        base_body_name=base_body_name,
+                        floor_geom_name=floor_effective,
+                    )
+                )
+                nav_area, nav_ok = _nav_lookup(float(x), float(y))
+                if nav_ok != 1 or nav_area < min_nav_area_m2:
+                    spawn_dbg(
+                        f"robocasa_freejoint_find: skip pass={tag!r} xy=({x:.3f},{y:.3f}) "
+                        f"nav_area={nav_area:.2f}m2 (need >= {min_nav_area_m2:.1f})"
+                    )
+                    continue
+                if hint_xy is not None:
+                    d_hint = float(math.hypot(float(x) - hint_xy[0], float(y) - hint_xy[1]))
+                else:
+                    d_hint = 0.0
+                # Prefer genuinely open floor: navigable region size first, then contact
+                # clearance, then closer to the walkable-clip centroid (hint is a soft tie-break).
+                if xy_clip is not None:
+                    cx = 0.5 * (float(xy_clip[0]) + float(xy_clip[1]))
+                    cy = 0.5 * (float(xy_clip[2]) + float(xy_clip[3]))
+                    d_cent = float(math.hypot(float(x) - cx, float(y) - cy))
+                else:
+                    d_cent = 0.0
+                score = (nav_area, worst, -d_cent, -d_hint)
+                if best is None or score > best[0]:
+                    best = (score, placed, float(x), float(y), float(yaw))
+        if best is not None:
+            _score, placed_best, bx, by, byaw = best
+            # Re-apply winner so ``data`` / freejoint match the returned pose.
+            placed_final = _try_robocasa_freejoint_at_xy_yaw(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_effective=floor_effective,
+                robot_bodies=robot_bodies,
+                ray_exclude=ray_exclude,
+                x=bx,
+                y=by,
+                yaw=byaw,
+                z_margins=z_margins,
+                min_nonfloor_clearance=float(min_clear),
+                min_upward_clearance=min_upward,
+                xy_clip_scene=xy_clip_scene,
+                clip_edge_pad_m=float(clip_pad),
+                clip_guard_body_names=tuple(str(n) for n in guard_names),
+                clip_guard_pad_m=guard_pad,
+                settle_kw=settle_kw,
+                zb_probe_bodies=zb_probe,
+            )
+            out = placed_final if placed_final is not None else placed_best
+            spawn_dbg(
+                f"robocasa_freejoint_find: OK pass={tag!r} xy=({bx:.3f},{by:.3f}) yaw={byaw:.3f} "
+                f"nav_area={_score[0]:.2f}m2 worst={_score[1]:.4f} d_cent={-_score[2]:.3f}"
+            )
+            return out
 
     spawn_dbg(f"robocasa_freejoint_find: failed scene={scene_label!r}")
     if restore_freejoint_base_from_model_qpos0(model, data, base_body_name=base_body_name):

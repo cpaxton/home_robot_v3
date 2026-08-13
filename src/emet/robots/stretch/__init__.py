@@ -56,6 +56,10 @@ class StretchBackend(RobotBackend):
             urdf_path=MANIP_STRETCH_URDF,
             footprint=Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1),
             sim_uses_stretch_mujoco_zmq=True,
+            # Robocasa freejoint spawn: pick-place hint sits near the counter; extra margin +
+            # first clearance keep OVMM/dynagraph explore starts on open floor (not jammed aisles).
+            planar_spawn_xy_extra_margin_m=0.35,
+            planar_spawn_robocasa_first_clearance_m=0.06,
         )
 
     def create_client(self, robot_ip: str, **kwargs) -> StretchZmqClient:

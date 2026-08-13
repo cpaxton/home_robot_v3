@@ -22,6 +22,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 
 | Variable | Where used | Notes |
 |----------|------------|-------|
+| `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
 | `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). YAML: `eval.export_map_video`. |
@@ -60,6 +61,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_ROOM_POLICY` | `AgenticEQAExecutor` | `canonical` (default) or `llm` — how room identity is stored for agentic explore. Canonical buckets via `normalize_current_room` / `question_target_rooms` (metrics + leave hint). LLM keeps free-text `current_room` + router `in_target_area`. Frontier picks re-ask the real Question with graph `room=`/`near=` context — no frozen MCQ-derived place brief. Also `eqa.room_policy`. |
 | `EMET_EQA_ROOM_STAMP_INVESTIGATE` | `AgenticEQAExecutor` | Default **off**. When `1`, stamp room clusters after investigate from local obs labels. Off restores explore-streak-only behavior (HM-EQA A/B: stamps regressed accuracy). Also `eqa.room_stamp_investigate`. |
 | `EMET_EQA_MERGED_MEMORY` | `GraphEQAMemory.query_answer` | Default **on**: fold CONFIRMED_MEMORY into `SCENE_GRAPH` (graph-grounded `present` tags + short tail for candidates/unobserved) instead of a separate summary block. Set `0` to restore the standalone summary block (the HM-EQA paper row pins this off via `configs/benchmarks/dynagraph.yaml`). SigLIP alone never asserts present/absent. Also `eqa.merged_memory`. |
+| `EMET_EQA_ATTEMPT_LEDGER` | `GraphEQAMemory.record_attempt` | Default **off**. When `1`, append structured `AttemptRecord` rows (navigate / verify / pick / place / closer_look / …) in graph memory in addition to per-node `nav_attempts` / `nav_failures`. Also `eqa.attempt_ledger` (`true` or `{enabled: true, max_records, persist_absent_claims}`). Full reference: [attempt_ledger.md](attempt_ledger.md). |
+| `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT` | `GraphEQAMemory.clear_retracted_nav_claims` | When `1`, keep close-look ABSENT claim blacklists across questions (ledger rows always persist when the ledger is on). Default **off**. Also `eqa.attempt_ledger.persist_absent_claims`. |
+| `EMET_ATTEMPT_LEDGER_MAX` | `GraphEQAMemory` | Cap on stored `AttemptRecord` rows (default `512`). Also `eqa.attempt_ledger.max_records`. |
 | `EMET_EQA_AGENTIC_MCQ_DEBIAS` | `AgenticEQAExecutor` | Default **on**. Unverified forced answers (budget exhaustion) run the letter-free debias (`vote_mcq_letter`: freeform + ≤2 rotation votes) before the ladder, fixing the last-option (D) bias seen in the trace audit. `0` restores the raw EQA letter. Also `eqa.agentic_mcq_debias`. |
 | `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Ask the per-episode VLM extract (keyword fallback) whether the question needs a close look (clock/state/count/detail); when it does, the router state says so and a 2+-frontier streak redirects to investigate/`look_around` instead of exploring forever (q84 time-question fix). `0` disables. Also `eqa.agentic_close_look`. |
 | `EMET_EQA_AGENTIC_NO_EARLY_UNVERIFIED` | `AgenticEQAExecutor` | Default **on**. Unverified auto-submits (bare `answerable` state) are held while rounds/nav budget remain — the harness forces the debiased ladder answer at exhaustion (q2 early-abandon fix). `0` restores early unverified submits. Also `eqa.agentic_no_early_unverified`. |
@@ -139,6 +143,9 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 |----------|------------|-------|
 | `EMET_ZMQ_STARTUP_TIMEOUT` | ZMQ clients, `emet run molmospaces-explore` | Seconds to wait for first observation (default 60). Documented in [molmospaces_environment_variables.md](molmospaces_environment_variables.md). |
 | `EMET_ZMQ_TIMING` | `BaseZmqServer` | `1` — print periodic SEND/RECV timing lines. Default off (also enabled by server `--verbose`). |
+| `EMET_ZMQ_FULL_HZ` | `BaseZmqServer` | Optional maximum full RGB-D observation publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 5 Hz. |
+| `EMET_ZMQ_STATE_HZ` | `BaseZmqServer` | Optional maximum low-level state publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 30 Hz. |
+| `EMET_ZMQ_SERVO_HZ` | `BaseZmqServer` | Optional maximum visual-servo stream publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 10 Hz. |
 | `EMET_NAVGRID_ASCII` | Dynamem / Dynagraph mapping | Terminal nav grid; see [dynagraph.md](dynagraph.md). |
 | `EMET_NAVGRID_MAX_SIDE` | Nav grid ASCII | Default 320. |
 | `EMET_NAVGRID_CONTEXTS` | Nav grid ASCII | Limit which hooks print. |
@@ -183,7 +190,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `OPENAI_BASE_URL` | same | Fallback if `EMET_OPENAI_BASE_URL` unset. |
 | `EMET_OPENAI_MODEL` | `get_llm_client("openai")` | Model id sent to the remote server (default `gpt-4o` when unset). |
 | `EMET_VL_ENDPOINT` | `OpenaiVLLMClient` / `create_dynamem_vllm` | Override `eqa.vl_endpoint` (unified-7b: `openai@http://HOST:8000/v1`; dual-2b uses `:8001`). Caption/EQA only; voxels stay local. |
-| `EMET_LLM_HOST` | `emet run chat --host`, `emet run agent --host`, `emet llm …`, `emet deploy llm` | LAN OpenAI host (no default). Example: `caliban`. Sets text+VL endpoints via `apply_llm_host`. |
+| `EMET_LLM_HOST` | `emet run chat --host`, `emet run agent --host`, `emet llm …`, `emet deploy llm` | LAN OpenAI host (no default). Example: your Orin hostname. Sets text+VL endpoints via `apply_llm_host`. |
 | `EMET_CALIBAN_HOST` | same (compat alias) | Fallback if `EMET_LLM_HOST` unset. |
 | `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
