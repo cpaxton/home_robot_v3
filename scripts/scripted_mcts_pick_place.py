@@ -157,8 +157,8 @@ def main() -> int:
         robot.stop() if hasattr(robot, "stop") else None
         return 1
 
-    # Execute the winning plan.
-    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=flat_grasps, manip_mode=mode)
+    # Execute the winning plan using the grasps the planner grounded against.
+    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses or flat_grasps, manip_mode=mode)
     print(f"\nexecute success={plan.success} msg={plan.message!r}", flush=True)
     if plan.success:
         after = read_sim_object_placements(robot.get_emet_session()) or {}

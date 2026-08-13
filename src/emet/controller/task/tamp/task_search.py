@@ -40,6 +40,9 @@ class TaskPlan:
     expanded_nodes: list[str] = field(default_factory=list)
     success: bool = False
     message: str = ""
+    # Grasp candidates used to ground this plan (executor needs the exact list,
+    # e.g. synthesized teleport grasps, to map chosen_grasp_index -> pose).
+    grasp_poses: list[Any] = field(default_factory=list)
 
 
 def approach_pose_for_object_xy(obj_xy: np.ndarray, *, standoff: float = 0.55) -> np.ndarray:
@@ -418,18 +421,26 @@ def plan_pick_place_mcts(
         seq = planner.search(state, goal)
         if not seq:
             continue
-        # Ground the best assignment through the deterministic TAMP planner.
+        # Ground the best assignment through the deterministic TAMP planner. When no
+        # grasp candidates were supplied (teleport path), synthesize a top-down grasp
+        # at the object COM so the plan still grounds and executes via sim teleport.
+        grounding_grasps = list(grasp_poses)
+        if not grounding_grasps:
+            from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+
+            grounding_grasps = [top_down_grasp_T(np.asarray(pl[obj_body]["pos"], dtype=np.float64).reshape(3))]
         plan = plan_pick_place(
             robot,
             object_query=str(cand["object_query"]),
             receptacle_query=str(cand["receptacle_query"]),
-            grasp_poses=grasp_poses,
+            grasp_poses=grounding_grasps,
             object_gt_body=obj_body,
             receptacle_gt_body=recep_body or None,
             approach_standoff_m=approach_standoff_m,
             top_k_grasps=top_k_grasps,
             executor=executor,
         )
+        plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())
         if plan.success and (best is None or len(best.steps) <= len(plan.steps)):
             best = plan
