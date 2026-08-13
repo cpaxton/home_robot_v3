@@ -99,7 +99,7 @@ Ordered by paper priority, all gated:
 |------|--------|
 | A0 unit gate | **done** (branch: fixed stale tests + empty-pose guard) |
 | B0 consumer audit | done (see joint-loop doc) |
-| A1 holdout-4 | **draw 1: 2/4** (q15 D✓, q68 B✓, q105 ✗, q17 ✗) — all submitted via `eqa_answer` budget path; **0 invalid-in-state ANSWER, 0 assess-rejected**; same VLM/scenes as prior 4/4 which was also `confident=False`. Variance suspected; re-run in progress |
+| A1 holdout-4 | **draw 1: 2/4, draw 2: 1/4** (combined 3/8). q105→B, q17→A identical wrong letters in both draws. **0 invalid-in-state ANSWER, 0 assess-rejected** — verify gate runs clean. q15/q68 stable-varies. Prior 4/4 was also `confident=False` (search-limited, not clean confirms). **Conclusion: #114 reset safe for HM-EQA; letter drop = documented search-failure variance** (target never surfaces in graph → final MCQ on incomplete evidence) |
 | A2 holdout-8 | not run |
 | B1 cross-task smoke | not run |
 | Wave-2b control result | 3/10 on merged main (v4, terminated at 10/11) |
