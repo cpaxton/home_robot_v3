@@ -53,8 +53,26 @@ was only enforced for nearest-furniture memory, not the equipment branch.
 letter with a parsed letter wins). Image-landmark overrides stay (they are
 image-grounded and intended to correct memory-steered letters). Regression test added.
 
-**Impact estimate:** if the model's confident letters were correct, dynagraph
-44.2% → ~54%, static_graph 37.2% → ~50% (re-run to verify).
+**Config-gated (2026-08-13, commit after `f416c528`):**
+- `eqa.location_override_equip_gate` (default true) — equip override gated on VLM
+  confidence; env `EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0` restores legacy.
+- `eqa.location_override_image_gate` (default false) — stricter option: also gate
+  image-landmark overrides; env `EMET_EQA_LOCATION_OVERRIDE_IMAGE_GATE=1`.
+- `eqa.parse_json_answer_field` (default true) — `_answer_field_lines` also matches
+  the JSON `"answer": "X"` key (Qwen3-VL emits JSON; the old line-start regex missed
+  it in 53/107 episodes — latent, ~0 scored impact in this run).
+- Legacy reference config: `configs/benchmarks/hmeqa_legacy_location_override.yaml`.
+- Offline A/B (no GPU): `uv run python scripts/hmeqa_override_ab.py <jsonl>`.
+
+**Offline-verified impact (2026-08-13, `scripts/hmeqa_override_ab.py` on the saved jsonl):**
+| Method | as-scored | equip-gated (fix) | recovered |
+|--------|-----------|-------------------|-----------|
+| dynagraph | 44.2% (50/113) | **52.2%** (59/113) | +9 (q14,24,25,31,39,44,47,94,101) |
+| static_graph | 37.2% (42/113) | **44.2%** (50/113) | +8 (q21,25,44,47,67,85,104,105) |
+
+The equipment-override-on-confident-VLM bug cost ~8–10 pp on each method; the fix
+recovers it without re-running the GPU sweep. (Recorded `model_confident` is lowered
+by the graph-coverage gate, so the A/B reads the raw JSON confidence field.)
 
 ### 5. Latent (not scored): JSON `"answer"` field parse gap
 `_answer_field_lines` matches line-start `answer:`, but Qwen3-VL emits JSON
@@ -76,13 +94,15 @@ so a better scoring/override policy (items 4–5) is the lever, not rebalancing.
 
 ## What to improve (priority)
 
-1. **Re-run the full-113 after the override fix** (item 4) — expect dynagraph ~54%,
-   static_graph ~50%. This is the single highest-value action.
+1. **Adopt the override fix + re-run the full-113** to confirm the offline-verified
+   44.2%→52.2% (dynagraph) / 37.2%→44.2% (static_graph) gains on a fresh sweep. The
+   fix is default-on; `EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0` reproduces legacy.
 2. **Improve location/state/count reasoning** (item 2): presence works (72%), spatial
    questions don't. Investigate graph-context prompts / spatial-RAG for those types.
 3. **Download the missing HM3D semantics** (76 scenes) and re-run — helps static_graph
    more (+13 pp) than dynagraph (+6.5 pp); narrows the comparability gap to GraphEQA.
-4. **Harden `_answer_field_lines` for JSON** (item 5) — latent, low priority but cheap.
+4. **Harden `_answer_field_lines` for JSON** (item 5) — done (parse_json_answer_field),
+   latent/low priority but cheap.
 5. **Quantify the methods' divergence** (item 1) in the paper — 37% disagreement is a
    strong "methods are complementary" / ensembling signal.
 

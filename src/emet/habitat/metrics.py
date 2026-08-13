@@ -378,10 +378,30 @@ def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
 
 
 def _answer_field_lines(raw: str) -> list[str]:
-    """Capture text after each line-start ``answer:`` (ignore prose like ``cannot answer``)."""
-    return [
-        m.group(1).strip() for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw or "", flags=re.IGNORECASE)
+    """Capture text after each ``answer:`` field, line-start OR JSON key form.
+
+    Qwen3-VL emits ``{"reasoning": ..., "answer": "A", ...}``; the old line-start
+    regex ``(?:^|\n)answer:`` missed the JSON key, so the VLM's letter was silently
+    dropped (53/107 episodes on the full-113 2026-08-13 sweep had a JSON answer
+    field the parser missed). Match both forms so JSON answers are scored.
+    """
+    raw_s = raw or ""
+    fields = [
+        m.group(1).strip()
+        for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw_s, flags=re.IGNORECASE)
     ]
+    if not fields:
+        # JSON key form: "answer": "A" (also "answer" : "A" / single quotes).
+        json_fields = [
+            m.group(1).strip().strip("\"'")
+            for m in re.finditer(
+                r"[\"']answer[\"']\s*:\s*[\"']([^\"']*)[\"']",
+                raw_s,
+                flags=re.IGNORECASE,
+            )
+        ]
+        fields.extend(f for f in json_fields if f)
+    return fields
 
 
 def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) -> str:
