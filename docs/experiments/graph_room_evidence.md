@@ -21,12 +21,14 @@ Non-goals for this experiment:
 | Knob | Control (baseline) | Treatment |
 |------|--------------------|-----------|
 | Preset | `--preset paper-router` | same |
-| Room stamp | unset / `EMET_EQA_ROOM_STAMP_INVESTIGATE=0` | **on** (paper-router H2H injects `1` on this branch) |
-| Attempt ledger | off | **on** (injected with router) |
-| Room timeline + state `Room history:` | absent / empty | active writers + `format_room_history` in `build_state_message` |
-| Frame-streak escape (3 m after 2 not-present) | **unchanged** (still on `main`) | unchanged |
+| Room stamp | **off** (default; paper-router must not inject) | `EMET_EQA_ROOM_STAMP_INVESTIGATE=1` set explicitly |
+| Attempt ledger | off | `EMET_EQA_ATTEMPT_LEDGER=1` set explicitly |
+| Room timeline + state `Room history:` | router-only room labels (no investigate stamps) | stamps + writers + `format_room_history` |
+| Frame-streak escape (3 m after 2 not-present) | **unchanged** | unchanged |
 
-Fair A/B on one commit: toggle only stamp+ledger+timeline surface via env, or compare this branch’s paper-router vs an older paper-router OUT without room history (document commit SHAs).
+**Important (2026-08-12):** forcing stamp+ledger on every paper-router H2H collapsed rooms-probe letters to **2/11** vs prior paper-router probe **7/11** (`hmeqa_rooms_verify_probe_20260730_234213`). Stamps stay opt-in only.
+
+Fair A/B on one commit: control = plain paper-router; treatment = same + explicit stamp/ledger env (never bake into `hmeqa_launch`).
 
 ## Metrics (primary → secondary)
 
@@ -82,38 +84,24 @@ uv run emet eval recover --need-mib 12000
 uv run emet habitat safe-start --job-name habitat-egl-probe-room-ev
 # wait until: uv run emet jobs status JOB → done; logs show EGL OK
 
-# Wave 1 — treatment (this branch; paper-router injects stamp+ledger)
-OUT=~/runs/emet/hmeqa_room_evidence_w1_$(date +%Y%m%d_%H%M%S)
+# Wave 2b — CONTROL (plain paper-router; stamp/ledger off — default)
+OUT=~/runs/emet/hmeqa_room_evidence_ctrl_w2_$(date +%Y%m%d_%H%M%S)
 uv run emet hmeqa h2h "$OUT" --preset paper-router --arms agentic \
-  --ids 2,104 --job-name room-evidence-w1 \
-  -d "Wave1 room timeline smoke q2,q104"
+  --ids 6,8,11,12,21,28,39,47,48,80,84 --job-name room-evidence-ctrl-w2 \
+  -d "Wave2b control: paper-router rooms probe, no investigate stamps"
 
-uv run emet jobs status JOB_ID
-uv run emet hmeqa inspect "$OUT" --qid 2
-```
-
-**Control (same machine, after treatment or separate night):** paper-router agentic with stamp+ledger forced off:
-
-```bash
-OUT_CTRL=~/runs/emet/hmeqa_room_evidence_ctrl_w1_$(date +%Y%m%d_%H%M%S)
-uv run emet jobs run --name room-evidence-ctrl-w1 --need-mib 12000 -- \
-  env EMET_EQA_ROOM_STAMP_INVESTIGATE=0 EMET_EQA_ATTEMPT_LEDGER=0 \
-  EMET_ALLOW_SDPA_ATTN=1 EMET_EQA_TRACE=1 ARMS=agentic HOLDOUT_IDS=2,104 \
+# Treatment (explicit opt-in only)
+OUT_TX=~/runs/emet/hmeqa_room_evidence_tx_w2_$(date +%Y%m%d_%H%M%S)
+uv run emet jobs run --name room-evidence-tx-w2 --need-mib 12000 -- \
+  env EMET_EQA_ROOM_STAMP_INVESTIGATE=1 EMET_EQA_ATTEMPT_LEDGER=1 \
+  EMET_ALLOW_SDPA_ATTN=1 EMET_EQA_TRACE=1 ARMS=agentic \
+  HOLDOUT_IDS=6,8,11,12,21,28,39,47,48,80,84 \
   EMET_EQA_AGENTIC_ROUTER=1 EMET_EQA_AGENTIC_VERIFIER=none \
   EMET_EQA_AGENTIC_REQUIRE_VERIFIED=0 \
-  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT_CTRL"
+  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT_TX"
 ```
 
-(Adjust to match whatever `hmeqa h2h --preset paper-router` expands to if the script wrapper changes — verify with `uv run emet hmeqa h2h --help` and a dry env dump.)
-
-Wave 2:
-
-```bash
-OUT=~/runs/emet/hmeqa_room_evidence_w2_$(date +%Y%m%d_%H%M%S)
-uv run emet hmeqa h2h "$OUT" --preset paper-router --arms agentic \
-  --ids 6,8,11,12,21,28,39,47,48,80,84 --job-name room-evidence-w2 \
-  -d "Wave2 rooms probe + room timeline"
-```
+Wave 1 smoke (optional): same pattern with `--ids 2,104`.
 
 Record `git rev-parse HEAD`, job id, and OUT in `emet status` / the run’s `STATUS.log` before launch.
 
@@ -165,8 +153,9 @@ Qualitative spot-check (2 episodes): did the router explore after `verify_absent
 |------|--------|-------------|
 | 0 unit | **done** | ledger + hmeqa launch + room_policy tests green on `db2ba7eb` |
 | 1 smoke | **done (q2 only)** | `~/runs/emet/hmeqa_room_evidence_quick_20260812_122709` job `20260812_122944_49d38f`. Stamp+ledger+router on. 1× stamp blocked (`patio`), 1× stamp ok (`living_room`); explore `room_leave_hint=true` in living_room; `escape_source` all `none`. Letter miss (secondary). q104 not run. |
-| 2 rooms probe | **done** | `~/runs/emet/hmeqa_room_evidence_w2_20260812_231348` job `20260812_231618_2e6289`. 11/11 scored, 0 crashes. Process: 11 stamp-ok events (1 blocked), known router room on 10/11 eps, mismatch diag on 3/11 (q6,q11,q48). `escape_source` all `none`. Letters **2/11** (secondary; mean steps ~33). Control A/B not run yet. |
-| 3 wrong-room set | next | Focus ids with mismatch: **6,11,48** (+ wave-1 q2). Optional control with stamp/ledger off. |
+| 2 rooms probe | **done — letter fail** | Treatment with forced stamp: `~/runs/emet/hmeqa_room_evidence_w2_…` **2/11**. Prior paper-router rooms probe **7/11** (`…_20260730_234213`). Root cause: paper-router auto-injected `ROOM_STAMP_INVESTIGATE` (known regressor). **Fix:** remove inject from `hmeqa_launch`; re-run control. |
+| 2b control re-run | next | Plain paper-router rooms probe (stamp/ledger off) — expect ~prior 7/11 band |
+| 3 wrong-room set | blocked on 2b | Treatment only if control recovers; stamp opt-in via env |
 | 4 scale | blocked | |
 
 ## Related

@@ -81,7 +81,8 @@ def test_hmeqa_h2h_env_parts_local_keeps_hf_model_id():
     assert "EMET_EQA_ATTEMPT_LEDGER=1" not in joined
 
 
-def test_hmeqa_h2h_env_parts_agentic_router_enables_room_evidence():
+def test_hmeqa_h2h_env_parts_agentic_router_does_not_force_room_stamp():
+    """Paper-router must not auto-enable investigate stamps (known letter regression)."""
     parts = hmeqa_h2h_env_parts(
         arms="agentic",
         ids="2,104",
@@ -95,5 +96,5 @@ def test_hmeqa_h2h_env_parts_agentic_router_enables_room_evidence():
     )
     joined = " ".join(parts)
     assert "EMET_EQA_AGENTIC_ROUTER=1" in joined
-    assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" in joined
-    assert "EMET_EQA_ATTEMPT_LEDGER=1" in joined
+    assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" not in joined
+    assert "EMET_EQA_ATTEMPT_LEDGER=1" not in joined
