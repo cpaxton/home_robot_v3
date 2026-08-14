@@ -21,12 +21,26 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 | `oracle` (default) | Pick/place success copied from find success (harness smoke / upper bound) |
 | `sim` | MuJoCo freejoint teleport via ZMQ `sim_set_body_pose` (sim E2E) |
 | `attempt` | AnyGrasp pick/place on real robot; **auto uses sim teleport when `is_simulation`** |
+| `mcts` | **Kinematic arm** via [`plan_pick_place_mcts`](../src/emet/controller/task/tamp/task_search.py): distance-heuristic UCT search picks the (object, receptacle) assignment, then `execute_task_plan` drives approach → grasp → place. Scoring uses the same GT placement deltas as `sim`, so MCTS-vs-teleport is directly comparable. Requires a kinematic-capable server (`kinematic_manip: true`, e.g. rby1 / Galaxea). |
 
-`attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp).
+`attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp). `mcts` is the arm-driving path; see the [MCTS/TAMP plan](../plans/2026-08-13_agent_mcts_tamp.md).
 
 **Action-outcome ledger:** when `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is on and the agent has `graph_memory`, scored pick/place phases in `emet.eval.ovmm_full` call `record_manip_attempt` (`pick` / `place` rows). Default **off**. See [attempt_ledger.md](attempt_ledger.md).
 
 **Servers:** Stretch MuJoCo and robosuite (e.g. **rby1** / MolmoSpaces merges) advertise `capabilities.sim_set_body_pose`. Molmo iTHOR objects are freejoint roots (`…_1_0_0`) with mesh children (`…_1_1_0`); teleport resolves the freejoint ancestor when the GT body is the child.
+
+### Floor pick/place (TAMP floor suite)
+
+`full_episodes.yaml` has episodes with `floor_object: true`: the harness drops the GT object to the floor (`drop_object_to_floor`, z ≈ 0.02 m) before the pick phase, so the robot must **pick something off the floor** (or just find it while exploring) to complete the task. See the [experiment plan](../../docs/plans/2026-08-13_agent_mcts_tamp.md) and runner:
+
+```bash
+# Floor-only TAMP suite (mcts = kinematic arm, sim/oracle = teleport references)
+NEED_MIB=8000 uv run emet jobs run --name tamp-floor-suite --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_floor.py --manip-mode mcts
+uv run python scripts/eval_tamp_floor.py --manip-mode sim    # teleport reference
+```
+
+Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic), `robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport references), `robocasa_floor_find_only_explore` (find-only, explore the room).
 
 ### OVMM `--manip-mode` ≠ chat `agent.manip_mode`
 
@@ -34,7 +48,7 @@ These are **separate namespaces**. OVMM full scoring does **not** read chat-agen
 
 | Surface | Knob | Values | Who executes pick/place |
 |---------|------|--------|-------------------------|
-| OVMM full (`emet ovmm full` / `eval_ovmm_full.py`) | `--manip-mode` / `FindPhaseRunConfig.manip_mode` | `skip` \| `oracle` \| `sim` \| `attempt` | Harness teleports GT bodies (`sim` / sim-`attempt`), or `agent.manipulate`/`place` on the find-phase **controller** (nonsim `attempt`) |
+| OVMM full (`emet ovmm full` / `eval_ovmm_full.py`) | `--manip-mode` / `FindPhaseRunConfig.manip_mode` | `skip` \| `oracle` \| `sim` \| `attempt` \| `mcts` | Harness teleports GT bodies (`sim` / sim-`attempt`), drives the kinematic arm (`mcts`), or `agent.manipulate`/`place` on the find-phase **controller** (nonsim `attempt`) |
 | Chat agent (`emet run agent`) | `agent.manip_mode` / `EMET_MANIP_MODE` | `teleport` \| `kinematic` | [`DynamemTaskExecutor`](../src/emet/controller/task/dynamem/dynamem_task.py) (env vars still override YAML) |
 
 Wiring chat `agent.manip_*` into the executor (so operators need not set `EMET_MANIP_*`) does **not** change OVMM `--manip-mode sim` behavior. Chat **kinematic** IK/RRT is a different path; see [motion_planning.md](motion_planning.md#two-manip_mode-namespaces).

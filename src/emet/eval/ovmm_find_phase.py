@@ -36,7 +36,7 @@ from emet.eval.memory_backends import (
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = OVMM_MEMORY_BACKEND
-ManipMode = Literal["skip", "oracle", "sim", "attempt"]
+ManipMode = Literal["skip", "oracle", "sim", "attempt", "mcts"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
     "voxel",
@@ -88,6 +88,10 @@ class FindPhaseEpisode:
     success_radius_m: float = 0.75
     explore_steps: int = 0
     object_gt_body: str | None = None
+    # TAMP floor pick/place: drop the object to the floor before the pick phase
+    # (RoboCasa "pick something off the floor" / room-exploration tasks).
+    floor_object: bool = False
+    floor_z_m: float | None = None
 
 
 @dataclass
@@ -154,6 +158,8 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
                 explore_steps=int(row.get("explore_steps", 0)),
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
+                floor_object=bool(row.get("floor_object", False)),
+                floor_z_m=(float(row["floor_z_m"]) if row.get("floor_z_m") is not None else None),
             )
         )
     return out
@@ -1050,12 +1056,8 @@ def run_episode_find_phase(
             from emet.perception.detection.yoloe import get_shared_yoloe_perception
             from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
 
-            get_shared_mask_siglip_encoder(
-                version="so400m", device="cuda", feature_matching_threshold=0.14
-            )
-            get_shared_yoloe_perception(
-                confidence_threshold=det_conf, device="cuda", size="l"
-            )
+            get_shared_mask_siglip_encoder(version="so400m", device="cuda", feature_matching_threshold=0.14)
+            get_shared_yoloe_perception(confidence_threshold=det_conf, device="cuda", size="l")
             print("OVMM find: perception preload done", flush=True)
 
         # Capture server stderr so bind failures include the real crash reason
@@ -1083,8 +1085,7 @@ def run_episode_find_phase(
             rc = server.poll()
             raise RuntimeError(
                 f"sim server did not bind port {recv_port} (port_offset={port_offset}, "
-                f"exit={rc}, sim={episode.sim})"
-                + (f":\n{err_tail}" if err_tail.strip() else "")
+                f"exit={rc}, sim={episode.sim})" + (f":\n{err_tail}" if err_tail.strip() else "")
             )
         settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
         if run_cfg.cpu_only:

@@ -246,6 +246,27 @@ def _ledger_manip(
     )
 
 
+def drop_object_to_floor(robot: Any, gt_body: str, placements: dict[str, dict[str, Any]]) -> bool:
+    """Lower a GT object to the floor for floor-pick episodes.
+
+    Uses the existing sim body-pose teleport so the object rests on the floor (z ~0)
+    before the pick phase. Returns True when the server reports the move.
+    """
+    info = placements.get(gt_body)
+    if not info:
+        return False
+    pos = np.asarray(info.get("pos"), dtype=np.float64).reshape(3).copy()
+    # Floor: use the min fixture z already known, or a small default clearance.
+    floor_z = 0.02
+    pos[2] = max(floor_z, float(pos[2]))
+    pos[2] = floor_z
+    _robot_set_body_pose(robot, gt_body, pos)
+    after = _read_placements(robot) or placements
+    if gt_body in after:
+        return float(np.linalg.norm(np.asarray(after[gt_body]["pos"], dtype=np.float64).reshape(3) - pos)) < 1e-3
+    return False
+
+
 def _run_sim_manip_phases(
     robot: Any,
     episode: FindPhaseEpisode,
@@ -377,6 +398,118 @@ def _run_sim_manip_phases(
     }
 
 
+def _run_mcts_manip_phases(
+    robot: Any,
+    episode: FindPhaseEpisode,
+    *,
+    find_metrics: dict[str, Any],
+    placements_before: dict[str, dict[str, Any]] | None,
+    gt_body: str | None,
+    agent: Any = None,
+    object_query: str = "",
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Run Pick + Place via the MCTS / heuristic TAMP planner (kinematic arm).
+
+    Uses :func:`plan_pick_place_mcts` (distance heuristic policy + UCT search) to
+    select an (object, receptacle) assignment, then :func:`execute_task_plan` to
+    drive approach → grasp → place on the real arm. Scoring uses sim GT placement
+    deltas (same as the teleport path) so MCTS-vs-teleport is comparable.
+
+    Floor episodes: the object is dropped to the floor first (``episode.floor_object``),
+    so this exercises "pick something off the floor".
+    """
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
+    from emet.motion.arm_manip_profile import resolve_manip_mode_for_robot
+
+    t_manip0 = time.monotonic()
+    mode = resolve_manip_mode_for_robot(robot, manip_mode="auto")
+    if mode != "kinematic":
+        return {
+            "manip_mode": "mcts",
+            "pick_attempted": False,
+            "place_attempted": False,
+            "pick_success": False,
+            "place_success": False,
+            "manip_error": f"mcts_requires_kinematic_got_{mode}",
+            "manip_wall_s": float(time.monotonic() - t_manip0),
+        }
+
+    before = _snapshot_placements(placements_before)
+    if episode.floor_object and gt_body and gt_body in before:
+        drop_object_to_floor(robot, gt_body, before)
+        before = _snapshot_placements(_read_placements(robot) or before)
+
+    exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
+    candidates = [
+        {
+            "object_query": episode.object,
+            "receptacle_query": episode.goal_recep,
+            "object_gt_body": gt_body,
+            "receptacle_gt_body": None,
+        }
+    ]
+    plan = plan_pick_place_mcts(
+        robot,
+        candidates=candidates,
+        executor=exe,
+        approach_standoff_m=0.55,
+        mcts_iterations=150,
+        seed=seed,
+    )
+    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode="kinematic")
+
+    after = _read_placements(robot) or before
+    pick_scores = score_pick_success(
+        before,
+        after,
+        object_gt_body=gt_body,
+        start_recep=episode.start_recep,
+        radius_m=float(episode.success_radius_m),
+    )
+    place_scores = score_place_success(
+        after,
+        object_gt_body=gt_body,
+        goal_recep=episode.goal_recep,
+        radius_m=float(episode.success_radius_m),
+        placements_before=before,
+    )
+    _ledger_manip(
+        agent,
+        action_kind="pick",
+        success=bool(pick_scores["pick_success"]),
+        phrase=object_query or episode.object,
+        status_code="ok" if pick_scores["pick_success"] else "mcts_pick_miss",
+        note=f"mcts plan={plan.message} steps={len(plan.steps)}",
+    )
+    _ledger_manip(
+        agent,
+        action_kind="place",
+        success=bool(place_scores["place_success"]),
+        phrase=episode.goal_recep,
+        status_code="ok" if place_scores["place_success"] else "mcts_place_miss",
+        note=f"mcts plan={plan.message}",
+    )
+    full = compute_ovmm_full_metrics(
+        find_object_success=bool(find_metrics.get("find_object_success")),
+        find_recep_success=bool(find_metrics.get("find_recep_success")),
+        pick_success=bool(pick_scores["pick_success"]),
+        place_success=bool(place_scores["place_success"]),
+    )
+    return {
+        "manip_mode": "mcts",
+        "pick_attempted": True,
+        "place_attempted": True,
+        "pick_controller_ok": bool(plan.success),
+        "place_controller_ok": None,
+        "manip_wall_s": float(time.monotonic() - t_manip0),
+        **pick_scores,
+        **place_scores,
+        **full,
+    }
+
+
 def run_ovmm_manip_phases(
     agent: Any,
     robot: Any,
@@ -448,6 +581,18 @@ def run_ovmm_manip_phases(
             object_query=object_query,
         )
 
+    if mode == "mcts":
+        return _run_mcts_manip_phases(
+            robot,
+            episode,
+            find_metrics=find_metrics,
+            placements_before=placements_before,
+            gt_body=gt_body,
+            agent=agent,
+            object_query=object_query,
+            seed=run_cfg.seed,
+        )
+
     before_pick = _snapshot_placements(placements_before)
     pick_controller_ok = False
     t_pick0 = time.monotonic()
@@ -473,11 +618,7 @@ def run_ovmm_manip_phases(
         action_kind="pick",
         success=pick_ok,
         phrase=object_query,
-        status_code=(
-            "ok"
-            if pick_ok
-            else ("controller_failed" if not pick_controller_ok else "pick_gt_miss")
-        ),
+        status_code=("ok" if pick_ok else ("controller_failed" if not pick_controller_ok else "pick_gt_miss")),
         note=f"attempt pick controller_ok={pick_controller_ok}",
     )
 
@@ -505,11 +646,7 @@ def run_ovmm_manip_phases(
         action_kind="place",
         success=place_ok,
         phrase=episode.goal_recep,
-        status_code=(
-            "ok"
-            if place_ok
-            else ("controller_failed" if not place_controller_ok else "place_gt_miss")
-        ),
+        status_code=("ok" if place_ok else ("controller_failed" if not place_controller_ok else "place_gt_miss")),
         note=f"attempt place controller_ok={place_controller_ok}",
     )
     manip_wall_s = time.monotonic() - t_manip0

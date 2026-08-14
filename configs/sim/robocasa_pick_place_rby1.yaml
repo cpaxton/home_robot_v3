@@ -1,0 +1,11 @@
+# Robocasa kitchen task + rby1 (Galaxea R1 family, kinematic arm; mobile-base spawn).
+# Same task/layout/style as robocasa_pick_place.yaml, but with rby1 so kinematic
+# manip (MCTS TAMP pick-place) is available. See docs/ovmm_full_benchmark.md.
+kind: robocasa
+robot: rby1
+robocasa_task: PickPlaceCounterToCabinet
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0
