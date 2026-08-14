@@ -13,7 +13,9 @@
 #   env EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0 \
 #       EMET_EQA_LOCATION_OVERRIDE_IMAGE_GATE=0 \
 #       ./scripts/run_hmeqa_paper113_h2h.sh
-# or on CLI apps: `--set eqa.location_override_equip_gate=false`.
+# (env vars are the reliable toggle for the runner / overnight jobs.)
+# On CLI apps: `--set eqa.location_override_equip_gate=false` (eqa is a top-level
+# section in the unified config loaded by the CLI).
 #
 # Offline comparison (no GPU):
 #   uv run python scripts/hmeqa_override_ab.py \
