@@ -18,10 +18,12 @@ the legacy (always-override) vs gated policy, WITHOUT re-running the GPU sweep:
 
 Caveat: the jsonl records the *outcome* ([memory-location] marker + appended
 letter) but not which fallback branch fired (equip vs image-landmark vs
-memory). Recovery is attributed to the equip gate, which is correct when the
-VLM was confident with a parsed letter (the memory branch requires abstain and
-the image branch would not fire when img_letter == VLM letter). Episodes where
-the recovery assumption may not hold are printed with "REVIEW".
+memory). Both gates suppress a confident VLM letter, so with
+location_override_equip_gate=true AND location_override_image_gate=true the
+recovered set is what a live run should realize. (The 2026-08-14 live re-run
+showed the image-label branch is the MAIN offender for the q44/q14/q25/q41/q47
+class, so both gates default on.) Episodes where the recovery assumption may
+not hold are printed with "REVIEW".
 """
 
 from __future__ import annotations

@@ -256,8 +256,15 @@ def test_select_relevant_obs_ids_attribute_prefers_lamp_over_frontier():
     assert obs_ids[0] == 2
 
 
-def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
-    """Attached fridge view wins over SigLIP-nearest dining table for trash MCQ."""
+def test_location_letter_image_gate_keeps_confident_vlm_by_default():
+    """Image-label mapping must not override a confident VLM letter (default on).
+
+    2026-08-14 live re-run: the image branch was the MAIN source of [memory-location]
+    overrides that clobbered confident, correct VLM letters (q44/q14/q25/q41/q47).
+    Even when the VLM answer is memory-steered, a confident A–D is kept; the image
+    mapping only corrects an uncertain/absent VLM letter (location_override_image_gate
+    now defaults true). Pass image_gate=false to restore the legacy image override.
+    """
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     raw = "reasoning: memory says dining table\nanswer: A\nconfidence: true\naction: none\nconfidence_reasoning: memory"
     mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
@@ -272,10 +279,11 @@ def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
         "A) Next to the dining table B) Next to the TV "
         "C) Next to the kitchen sink D) Next to the refrigerator. Answer:"
     )
-    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
-    assert answer.strip().upper().startswith("D") or "D" in answer.upper()
-    # SigLIP-only target: do not finalize until images support the letter.
-    assert confidence is False
+    _r, answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    # Default image gate ON: the confident VLM letter A is kept, not replaced by
+    # the image-label mapping's D.
+    assert mem.last_eqa_parsed[1].strip().upper() == "A"
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
 
 
 def test_query_answer_does_not_finalize_under_equipment_without_geometry():

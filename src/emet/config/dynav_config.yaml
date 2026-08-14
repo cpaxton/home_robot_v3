@@ -69,12 +69,13 @@ eqa:
   #     override a confident VLM letter (full-113 fix, 2026-08-13: 11 dynagraph +
   #     14 static_graph episodes scored a wrong letter via [memory-location]).
   #   location_override_image_gate: true → also gate image-landmark overrides on
-  #     confidence (off by default: image landmarks are grounded in attached views
-  #     and still correct memory-steered letters, see test_graph_eqa_memory).
+  #     confidence. Default ON since the 2026-08-14 live re-run: the image-label
+  #     mapping is the main source of [memory-location] overrides that clobber
+  #     confident, correct VLM letters (q44/q14/q25/q41/q47).
   # (_answer_field_lines always accepts both the line-start and JSON "answer" forms;
   #   no separate parse gate is needed.)
   location_override_equip_gate: true
-  location_override_image_gate: false
+  location_override_image_gate: true
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8
