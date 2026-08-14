@@ -16,6 +16,7 @@ import subprocess
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_NEED_MIB = 12000
 DEFAULT_STABLE_CHECKS = 3
@@ -484,3 +485,144 @@ def wait_gpu_stable(
         rounds += 1
         _sleep(interval)
     return False
+
+
+# --- disk preflight (episode debug bundles) --------------------------------
+
+def _episodes_root() -> Path | None:
+    try:
+        from emet.habitat.episode_debug import default_episodes_root
+
+        return Path(default_episodes_root())
+    except Exception:
+        return None
+
+
+def _dir_gb(path: Path) -> float:
+    """Directory size in GiB (shallow recursive)."""
+    try:
+        total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+    except Exception:
+        return 0.0
+    return total / (1024**3)
+
+
+def disk_free_gb(path: Path | str) -> float:
+    """Free space (GiB) on the filesystem containing *path*."""
+    p = Path(path).expanduser()
+    p.mkdir(parents=True, exist_ok=True) if not p.exists() else None
+    try:
+        shutil.disk_usage(p)
+    except Exception:
+        return 0.0
+    return shutil.disk_usage(p).free / (1024**3)
+
+
+def disk_status_lines(episodes_root: Path | None = None) -> list[str]:
+    """Free-space + episode-bundle summary lines for ``emet eval status``."""
+    root = episodes_root or _episodes_root()
+    lines: list[str] = []
+    if root is not None:
+        free = disk_free_gb(root)
+        lines.append(f"disk free under {root}: {free:.1f} GB")
+        if root.is_dir():
+            bundles = [p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
+            total = sum(_dir_gb(p) for p in bundles)
+            lines.append(f"episode bundles: {len(bundles)} dirs, {total:.1f} GB "
+                         f"(clean with: emet eval clean-bundles)")
+    return lines
+
+
+def clean_episode_bundles(
+    keep: int = 2,
+    max_age_days: float = 0.0,
+    *,
+    apply: bool = False,
+    root: Path | None = None,
+    protect_newer_than_h: float = 12.0,
+) -> list[str]:
+    """Retention-prune episode debug bundles under ``~/.cache/habitat_eqa/episodes``.
+
+    ``keep`` count-prunes only old RUNS (a run = a sweep prefix such as
+    ``subset_paper113_20260813_104004_dynagraph``; per-qid H2H bundles sharing one
+    run tag group together). Runs whose newest mtime is within
+    ``protect_newer_than_h`` hours are never count-pruned (they are the active or
+    just-finished sweep). ``max_age_days`` removes anything older than N days.
+    Returns human lines; ``apply=False`` is a dry run. Never touches results/*.jsonl.
+    """
+    import re as _re
+
+    root = root or _episodes_root()
+    if root is None or not root.is_dir():
+        return [f"no episode bundles under {root}"]
+    dirs = sorted(
+        (p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")),
+        key=lambda p: p.stat().st_mtime,
+    )
+
+    def _run_tag(name: str) -> str:
+        # Sweep bundles: ``subset_paper113_20260813_104004_dynagraph_qwen3_vl``.
+        m = _re.search(r"(subset_\w+_\d{8}_\d{6})", name)
+        if m:
+            return m.group(1)
+        # Per-qid H2H bundles share one run tag, e.g.
+        # ``h2h_agentic_q0012_gre_a2_grounded_fae4b89c_20260814_160721``.
+        m = _re.search(r"(h2h_[a-z0-9]+_q\d{4}_\S+?_\d{8}_\d{6})", name)
+        if m:
+            return m.group(1)
+        # Anything else (cli_episode_q*, ad-hoc) is unique — age-pruned only.
+        return name
+
+    now = time.time()
+    by_run: dict[str, list[Path]] = {}
+    is_run: dict[Path, bool] = {}
+    for p in dirs:
+        tag = _run_tag(p.name)
+        by_run.setdefault(tag, []).append(p)
+        is_run[p] = tag != p.name  # False => unique/ad-hoc, age-pruned only
+
+    runs = sorted(
+        by_run.values(),
+        key=lambda ps: max(p.stat().st_mtime for p in ps),
+        reverse=True,
+    )
+
+    doomed: list[tuple[Path, str]] = []
+    for ps in runs:
+        newest = max(p.stat().st_mtime for p in ps)
+        # Unique/ad-hoc bundles are never count-pruned (age-only).
+        if not any(is_run[p] for p in ps):
+            if max_age_days > 0 and (now - newest) / 86400.0 > max_age_days:
+                for p in ps:
+                    doomed.append((p, f"older than {max_age_days:.0f}d"))
+            continue
+        protected = (now - newest) < protect_newer_than_h * 3600.0
+        if max_age_days > 0 and (now - newest) / 86400.0 > max_age_days:
+            for p in ps:
+                doomed.append((p, f"older than {max_age_days:.0f}d"))
+            continue
+        if protected:
+            continue
+        unprotected = [r for r in runs if (now - max(p.stat().st_mtime for p in r)) / 3600.0 >= protect_newer_than_h]
+        rank = unprotected.index(ps) if ps in unprotected else -1
+        if rank >= keep:
+            for p in ps:
+                doomed.append((p, f"beyond keep={keep} runs"))
+
+    out: list[str] = []
+    freed = 0.0
+    for p, why in doomed:
+        sz = _dir_gb(p)
+        freed += sz
+        if apply:
+            out.append(f"DELETE {sz:7.2f} GB  {p.name}  ({why})")
+            shutil.rmtree(p, ignore_errors=True)
+        else:
+            out.append(f"would   {sz:7.2f} GB  {p.name}  ({why})")
+    out.append(
+        f"freed: {freed:.2f} GB ({len(doomed)} bundles) "
+        f"[{'APPLIED' if apply else 'dry-run; use --apply to delete'}]"
+    )
+    out.append(f"kept {len(dirs) - len(doomed)} bundles; results/*.jsonl untouched.")
+    return out
+
