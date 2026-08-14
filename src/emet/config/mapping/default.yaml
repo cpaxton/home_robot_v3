@@ -60,6 +60,17 @@ eqa:
   # Cap RGB fed to the VL (longest side). 0 = no resize. Optional pixel budget via vl_image_max_pixels.
   vl_image_max_side: 512
   vl_image_max_pixels: 0
+  # Location-MCQ letter overrides. A confident VLM A–D is ground truth; geometric /
+  # image-landmark fallbacks only correct an uncertain/absent letter.
+  # location_override_equip_gate: true  → equipment-distance guess must not override
+  #   a confident VLM letter (full-113 fix, 2026-08-13; ~10 pp offline recovery).
+  # location_override_image_gate: false → also gate image-landmark overrides on
+  #   confidence (off by default: image landmarks correct memory-steered letters).
+  # parse_json_answer_field: true → _answer_field_lines also matches the JSON
+  #   "answer": "X" key (Qwen3-VL emits JSON).
+  location_override_equip_gate: true
+  location_override_image_gate: false
+  parse_json_answer_field: true
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8

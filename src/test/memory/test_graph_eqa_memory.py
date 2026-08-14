@@ -369,6 +369,43 @@ def test_equipment_guess_does_not_override_confident_vlm_letter():
     assert "[memory-location]" not in (mem.last_eqa_raw or "")
 
 
+def test_equipment_gate_obeys_config_value():
+    """The equip gate follows ``eqa.location_override_equip_gate`` from config.
+
+    Proves the yaml-config path (not just the env var) drives the gate: with the
+    flag false, a confident VLM letter IS overridden by the equipment guess.
+    """
+    from emet.core.parameters import Parameters
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: Image 3 clearly shows the wall clock above the sink, matching option A\n"
+        "answer: A\nconfidence: true\naction: none\nconfidence_reasoning: wall clock above the sink"
+    )
+    params = Parameters()
+    params["eqa"] = {"location_override_equip_gate": False}
+    mem = GraphEQAMemory(
+        eqa_client=lambda _c: raw,
+        image_description_client=lambda _x: "clock",
+        parameters=params,
+    )
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall clock", "sink"])
+    mem._relevant_phrases = ["wall clock"]
+    mem._relevant_objects = ["wall clock"]
+    mem._location_letter_from_attached_images = lambda _choices, _obs_ids: ""  # type: ignore[method-assign]
+    mem._equipment_letter_from_target_distances = lambda _choices: "D"  # type: ignore[method-assign]
+    mem._location_letter_from_nearest_memory = lambda _choices: "D"  # type: ignore[method-assign]
+    q = (
+        "Where is the wall clock? "
+        "A) Above the sink B) Next to the refrigerator C) Near the stove D) On the wall opposite the windows. Answer:"
+    )
+    _r, answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    # Gate off -> the equipment guess D overrides the confident VLM letter A.
+    assert mem.last_eqa_parsed[1].strip().upper() == "D"
+    assert "[memory-location]" in (mem.last_eqa_raw or "")
+
+
 def test_memory_location_does_not_override_vlm_choice_text():
     """Holdout q56 regression: NL answer matching choice C must not become memory A."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)

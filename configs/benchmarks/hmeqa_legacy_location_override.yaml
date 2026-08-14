@@ -1,5 +1,9 @@
 # Legacy HM-EQA location-letter override policy (pre-2026-08-13 full-113 sweep).
 #
+# ⚠️ PARTIAL REFERENCE ONLY — do NOT pass this file to `--dynav-config` /
+# `--config`. It contains only the eqa: overrides; a full config (robot,
+# mapping, sim, ...) is required to load. Use the env-var / --set forms below.
+#
 # Reproduces the behavior recorded for `subset_paper113_20260813_104004`
 # (dynagraph 44.2% / static_graph 37.2%). The post-sweep default in
 # `src/emet/config/dynav_config.yaml` gates the equipment-distance override on
