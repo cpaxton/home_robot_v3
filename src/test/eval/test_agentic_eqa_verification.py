@@ -1594,6 +1594,8 @@ def test_answerable_two_view_agree_unlocks(monkeypatch):
     ex._tool_verify_siglip("clock", 11)
     assert ex._verified is True
     assert ex._evidence_policy.state == AgenticState.ANSWER
+    assert ex._confirmed_answer_evidence is not None
+    assert (ex._confirmed_answer_evidence.letter, ex._confirmed_answer_evidence.obs_id) == ("B", 11)
     assert any(r.get("event") == "answerable_confirmed" and r.get("reason") == "two_view_agree" for r in ex._trace_rows)
 
 

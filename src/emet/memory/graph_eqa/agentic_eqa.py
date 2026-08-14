@@ -584,6 +584,10 @@ class AgenticEQAExecutor:
         self._last_positive_letter: str = ""
         self._last_positive_obs_id: int | None = None
         self._answer_evidence: list[AnswerEvidenceRecord] = []
+        # Episode-level answer evidence survives a later coverage motion. The
+        # current EvidencePolicy hypothesis may reset, but a confirmed view must
+        # not be silently replaced by an unverified budget guess.
+        self._confirmed_answer_evidence: AnswerEvidenceRecord | None = None
         self._final_answer_decision: FinalAnswerDecision | None = None
         # How the final letter was obtained when the episode could not verify.
         self._answer_provenance: str = ""
@@ -603,12 +607,8 @@ class AgenticEQAExecutor:
             env_decision if env_decision is not None else cfg_decision
         )
         eqa_cfg = _eqa_cfg(agent)
-        graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get(
-            "graph_evidence_mode", "off"
-        )
-        history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get(
-            "room_history_mode", "off"
-        )
+        graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
+        history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
         self.graph_evidence_mode = str(graph_mode).strip().lower()
         self.room_history_mode = str(history_mode).strip().lower()
         if self.graph_evidence_mode not in {"off", "shadow", "agent"}:
@@ -997,11 +997,7 @@ class AgenticEQAExecutor:
             candidates: list[np.ndarray | None] = []
             if requested_frontier_id:
                 world = getattr(gm, "world_evidence", None) if gm is not None else None
-                record = (
-                    world.frontiers.get(requested_frontier_id)
-                    if world is not None
-                    else None
-                )
+                record = world.frontiers.get(requested_frontier_id) if world is not None else None
                 if record is None or record.status != "active":
                     return {
                         "ok": False,
@@ -1265,11 +1261,7 @@ class AgenticEQAExecutor:
         rec.last_suggested = suggested
         self._place_inspect[oid] = rec
         # Close look: only VLM assess_present=False nudges explore (not SigLIP ABSENT alone).
-        if (
-            self.decision_policy != "grounded_v2"
-            and dist <= 1.0
-            and visit.assess_present is False
-        ):
+        if self.decision_policy != "grounded_v2" and dist <= 1.0 and visit.assess_present is False:
             self._prefer_explore = True
             self._prefer_explore_reason = "absent"
         return rec
@@ -2006,11 +1998,13 @@ class AgenticEQAExecutor:
 
     def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
         agent = self.agent
-        hypothesis_id = self._begin_policy_approach(
-            "look",
-            -2_000_000 - self._n_nav - self._n_explore,
-            self.query_text,
-        )
+        hypothesis_id = None
+        if verify:
+            hypothesis_id = self._begin_policy_approach(
+                "look",
+                -2_000_000 - self._n_nav - self._n_explore,
+                self.query_text,
+            )
         ok = False
         if hasattr(agent, "look_around"):
             try:
@@ -2020,7 +2014,7 @@ class AgenticEQAExecutor:
                 _logger.warning(f"look_around failed: {e}")
         cap = self._tool_capture_and_update()
         verify_out = None
-        if cap.get("ok") and cap.get("obs_id") is not None:
+        if hypothesis_id is not None and cap.get("ok") and cap.get("obs_id") is not None:
             self._policy_approached(hypothesis_id, int(cap["obs_id"]))
             if verify and self.mode == "answer":
                 verify_out = self._verify_after_motion(phrase=self.query_text)
@@ -2146,6 +2140,8 @@ class AgenticEQAExecutor:
             self._vlm_assessed_obs_ids.discard(use_id)
             self._assess_history.pop(use_id, None)
             self._answer_evidence = [item for item in self._answer_evidence if item.obs_id != use_id]
+            if self._confirmed_answer_evidence is not None and self._confirmed_answer_evidence.obs_id == use_id:
+                self._confirmed_answer_evidence = None
             scored = getattr(self._evidence_policy, "_globally_scored_obs_ids", None)
             if isinstance(scored, set):
                 scored.discard(use_id)
@@ -2749,9 +2745,7 @@ class AgenticEQAExecutor:
             self._not_present_streak = 0
         else:
             self._not_present_streak += 1
-        self.agent._explore_min_travel_m = (
-            0.0 if self.decision_policy == "grounded_v2" else self._escape_min_travel_m()
-        )
+        self.agent._explore_min_travel_m = 0.0 if self.decision_policy == "grounded_v2" else self._escape_min_travel_m()
 
     def _frontier_pick_out_dir(self) -> Path:
         """Directory for numbered pick panels (episode bundle when available)."""
@@ -2947,6 +2941,21 @@ class AgenticEQAExecutor:
                 item.obs_revision,
             ),
         )
+
+    def _confirmed_vlm_answer_evidence(self, *, letter: str = "") -> AnswerEvidenceRecord | None:
+        """Return the latest VLM answer that opened the ANSWER gate."""
+        record = self._confirmed_answer_evidence
+        expected = self._mcq_letter_from_text(letter)
+        if (
+            record is None
+            or record.source != "vlm_suggested"
+            or not record.present
+            or not record.answerable
+            or record.need_more_views
+            or (expected and record.letter != expected)
+        ):
+            return None
+        return record
 
     def _question_is_mcq(self) -> bool:
         """True for HM-EQA-style A–D questions; False for open find/localize questions."""
@@ -3198,11 +3207,7 @@ class AgenticEQAExecutor:
                 }
             )
         # Qwen says target not in this view — prefer coverage before the next investigate.
-        if (
-            self.decision_policy != "grounded_v2"
-            and assessment.present is False
-            and not assessment.answerable
-        ):
+        if self.decision_policy != "grounded_v2" and assessment.present is False and not assessment.answerable:
             self._prefer_explore = True
             self._prefer_explore_reason = "absent"
         self._update_escape_streak(present=assessment.present)
@@ -3227,12 +3232,13 @@ class AgenticEQAExecutor:
             "inventory": inventory,
         }
         self._last_vlm_assess = payload
+        answer_evidence = None
         if assessment.present:
             positive = self._mcq_letter_from_suggested(assessment.suggested_answer)
             if positive:
                 self._last_positive_letter = positive
                 self._last_positive_obs_id = oid
-                self._record_answer_evidence(
+                answer_evidence = self._record_answer_evidence(
                     letter=positive,
                     source="vlm_suggested",
                     obs_id=oid,
@@ -3242,6 +3248,8 @@ class AgenticEQAExecutor:
                     confidence=_PROVENANCE_CONFIDENCE["vlm_suggested"],
                     raw=assessment.raw,
                 )
+        if confirmed and answer_evidence is not None:
+            self._confirmed_answer_evidence = answer_evidence
         self._append_trace(payload)
         return {
             "ok": True,
@@ -3634,7 +3642,8 @@ class AgenticEQAExecutor:
         quoting them anywhere.
         """
         score = _PROVENANCE_CONFIDENCE.get(provenance, 0.4)
-        if self._verified:
+        confirmed_vlm = provenance == "vlm_suggested" and self._confirmed_vlm_answer_evidence() is not None
+        if self._verified or confirmed_vlm:
             score += 0.15
         return round(min(score, 0.95), 2)
 
@@ -3654,27 +3663,40 @@ class AgenticEQAExecutor:
         """
         from emet.habitat.metrics import parse_mcq_choices_from_question
 
-        if not self._force_answer:
+        if not self._force_answer and self._confirmed_vlm_answer_evidence() is None:
             return self._abstain_unverified(reason=reason)
 
         out = self._do_submit_answer(prefer_answer=prefer_answer)
         answer = str(out.get("answer") or "")
         provenance = str(out.get("answer_source") or "query")
         choices = parse_mcq_choices_from_question(self.question)
-        raw_eqa_letter = self._mcq_letter_from_text(answer) if choices else ""
+        resolved_letter = self._mcq_letter_from_text(answer) if choices else ""
+        raw_eqa_letter = self._eqa_self_answer_letter() if choices else ""
         grounded_decision = (
             self.decision_policy == "grounded_v2"
             and self._final_answer_decision is not None
             and bool(self._mcq_letter_from_text(self._final_answer_decision.answer))
             and self._final_answer_decision.source in {"eqa_answer", "prefer", "vlm_suggested"}
         )
+        evidence_backed_decision = (
+            self._final_answer_decision is not None
+            and self._final_answer_decision.evidence is not None
+            and bool(self._mcq_letter_from_text(self._final_answer_decision.answer))
+        )
+        answer_verified = bool(self._verified or evidence_backed_decision)
         # Unverified forced answers show a letter-position bias (the 2026-08 bal-32
         # audit: wrong forced letters were overwhelmingly the last option). Run the
         # letter-free debias (freeform + capped rotation vote) before the ladder so
         # the final letter is position-bias-free; the raw EQA letter stays diagnostic.
         debias_letter = ""
         debias_detail: dict[str, Any] = {}
-        if self._mcq_debias and choices and len(choices) >= 2 and not grounded_decision:
+        if (
+            self._mcq_debias
+            and choices
+            and len(choices) >= 2
+            and not grounded_decision
+            and not evidence_backed_decision
+        ):
             gm = self.graph_memory
             vote_fn = getattr(gm, "vote_mcq_letter", None) if gm is not None else None
             if callable(vote_fn):
@@ -3689,7 +3711,7 @@ class AgenticEQAExecutor:
                     debias_detail = dict(getattr(gm, "last_mcq_debias", None) or {})
         if debias_letter:
             answer, provenance = debias_letter, "mcq_debias"
-        elif choices and (self._answer_unknownish(answer) or not raw_eqa_letter):
+        elif choices and (self._answer_unknownish(answer) or not resolved_letter):
             # Keep channel tags distinct so calibration / H2H summaries can separate a
             # view that saw the target from a deferred assess letter from a coin-flip prior.
             trusted = self._trusted_vlm_letter()
@@ -3701,18 +3723,17 @@ class AgenticEQAExecutor:
                     answer, provenance = pending, "pending_letter"
                 else:
                     answer, provenance = self._uniform_prior_letter(len(choices)), "uniform_prior"
-        if self.decision_policy == "grounded_v2":
-            evidence = (
-                self._final_answer_decision.evidence
-                if self._final_answer_decision is not None and self._final_answer_decision.answer == answer
-                else None
-            )
-            self._final_answer_decision = FinalAnswerDecision(
-                answer=answer,
-                source=provenance,
-                confidence=self._confidence_for_provenance(provenance),
-                evidence=evidence,
-            )
+        evidence = (
+            self._final_answer_decision.evidence
+            if self._final_answer_decision is not None and self._final_answer_decision.answer == answer
+            else None
+        )
+        self._final_answer_decision = FinalAnswerDecision(
+            answer=answer,
+            source=provenance,
+            confidence=self._confidence_for_provenance(provenance),
+            evidence=evidence,
+        )
         self._answer_provenance = provenance
         confidence_score = self._confidence_for_provenance(provenance)
         self._append_trace(
@@ -3723,11 +3744,14 @@ class AgenticEQAExecutor:
                 "answer_provenance": provenance,
                 "answer_confidence": confidence_score,
                 "raw_eqa_letter": raw_eqa_letter or None,
+                "resolved_letter_before_fallback": resolved_letter or None,
                 "mcq_debias": debias_detail or None,
+                "agentic_mcq_debias_enabled": bool(self._mcq_debias),
+                "evidence_backed_decision": bool(evidence_backed_decision),
                 "final_decision": (
                     self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
                 ),
-                "verified": bool(self._verified),
+                "verified": answer_verified,
                 "n_nav": self._n_nav,
                 "n_explore": self._n_explore,
                 "last_verify": (
@@ -3753,12 +3777,12 @@ class AgenticEQAExecutor:
                 "final_decision": (
                     self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
                 ),
-                "confidence": bool(self._verified),
+                "confidence": answer_verified,
                 "discord_text": (
                     f"Answer:{answer}\nConfidence:{confidence_score}\n"
                     f"[answer_provenance:{provenance}] [forced: {reason}]"
                 ),
-                "verified": bool(self._verified),
+                "verified": answer_verified,
             }
         )
         return out
@@ -3823,6 +3847,9 @@ class AgenticEQAExecutor:
         an option (``None`` / ``No, there is none``) scored 0/7 in the trace audit
         and overrode correct four-image answers on q28 and q39.
         """
+        confirmed = self._confirmed_vlm_answer_evidence()
+        if confirmed is not None:
+            return confirmed.letter
         if self.decision_policy == "grounded_v2":
             evidence = self._best_vlm_answer_evidence()
             return evidence.letter if evidence is not None else ""
@@ -3849,7 +3876,9 @@ class AgenticEQAExecutor:
             model_raw = str(model_raw_value or "") if isinstance(model_raw_value, str) else ""
             if isinstance(parsed, tuple) and len(parsed) >= 2:
                 field = str(parsed[1] or "").strip()
-                if field and not should_abstain_location_mcq(model_raw or field, parse_mcq_choices_from_question(self.question)):
+                if field and not should_abstain_location_mcq(
+                    model_raw or field, parse_mcq_choices_from_question(self.question)
+                ):
                     letter = self._mcq_letter_from_text(field)
                     if letter:
                         return letter
@@ -3991,12 +4020,13 @@ class AgenticEQAExecutor:
     ) -> tuple[str, str]:
         """Pick the scored answer text and record which channel produced it.
 
-        Precedence, in order of measured reliability:
+        Precedence:
 
-        1. ``prefer`` — an explicit letter the caller/router already committed to.
-        2. ``eqa_answer`` — the four-image EQA's own ``Answer:`` block.
-        3. ``vlm_suggested`` — a single view assess that *saw* the target.
-        4. ``query`` — ``query_answer`` prose, unless it is a nearest-furniture XYZ
+        1. ``vlm_suggested`` — the view that opened the confirmed ANSWER gate.
+        2. ``prefer`` — an explicit letter when no confirmed view exists.
+        3. ``eqa_answer`` — the four-image EQA's own ``Answer:`` block.
+        4. An unconfirmed ``vlm_suggested`` view that still saw the target.
+        5. ``query`` — ``query_answer`` prose, unless it is a nearest-furniture XYZ
            dump, which is about whatever object happened to be closest and is
            therefore not an answer at all.
         """
@@ -4014,6 +4044,27 @@ class AgenticEQAExecutor:
             return decision.answer, decision.source
 
         prefer_letter = self._mcq_letter_from_text(prefer)
+        confirmed = self._confirmed_vlm_answer_evidence()
+        if confirmed is not None:
+            if prefer_letter and prefer_letter != confirmed.letter:
+                self._append_trace(
+                    {
+                        "event": "answer_proposal_rejected",
+                        "source": "prefer",
+                        "answer": prefer_letter,
+                        "reason": "conflicts with confirmed VLM answer evidence",
+                        "confirmed_answer": confirmed.letter,
+                        "confirmed_obs_id": confirmed.obs_id,
+                    }
+                )
+            self._final_answer_decision = FinalAnswerDecision(
+                confirmed.letter,
+                "vlm_suggested",
+                self._confidence_for_provenance("vlm_suggested"),
+                evidence=confirmed,
+            )
+            return confirmed.letter, "vlm_suggested"
+
         if prefer_letter:
             self._final_answer_decision = FinalAnswerDecision(
                 prefer_letter,
@@ -4107,8 +4158,10 @@ class AgenticEQAExecutor:
         if gm is not None and hasattr(gm, "query_answer"):
             # Prefer verified observation as Image 1 (query_answer must honor force_obs_ids;
             # setting last_eqa_obs_ids alone was overwritten by diversified selection).
-            if self._verified_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
-                force_obs_ids = gm.select_obs_ids_for_verified_answer(self._verified_obs_id, max_images=1)
+            confirmed_evidence = self._confirmed_vlm_answer_evidence()
+            confirmed_obs_id = confirmed_evidence.obs_id if confirmed_evidence is not None else self._verified_obs_id
+            if confirmed_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
+                force_obs_ids = gm.select_obs_ids_for_verified_answer(confirmed_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(force_obs_ids)
             elif self._evidence_image and hasattr(gm, "select_obs_ids_for_verified_answer"):
                 # Unverified: pin the best VLM-assessed view instead of a pure
@@ -4387,12 +4440,7 @@ class AgenticEQAExecutor:
         # After a close ABSENT look, grow coverage before the next investigate —
         # but only once; if we already explored this streak and place cards remain,
         # look closer instead of frontier-only loops.
-        if (
-            self.decision_policy != "grounded_v2"
-            and budget_left
-            and not frontiers_gone
-            and self._prefer_explore
-        ):
+        if self.decision_policy != "grounded_v2" and budget_left and not frontiers_gone and self._prefer_explore:
             streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
             hyp = self._next_untried_hypothesis()
             if streak >= 1 and hyp is not None:
@@ -4532,17 +4580,11 @@ class AgenticEQAExecutor:
         from emet.memory.graph_eqa.agentic_state import state_text_digest
 
         self._router_call_seq += 1
-        question_id = str(
-            self._trace_meta.get("question_id")
-            or self._trace_meta.get("qid")
-            or "question"
-        )
+        question_id = str(self._trace_meta.get("question_id") or self._trace_meta.get("qid") or "question")
         router_call_id = f"{question_id}:router:{self._router_call_seq:04d}"
         pose = self._robot_xyt_world()
         pose_list = (
-            [float(value) for value in np.asarray(pose, dtype=float).reshape(-1)[:3]]
-            if pose is not None
-            else None
+            [float(value) for value in np.asarray(pose, dtype=float).reshape(-1)[:3]] if pose is not None else None
         )
         if pose_list is not None:
             if self._router_path_world:
@@ -4764,6 +4806,7 @@ class AgenticEQAExecutor:
         self._station_obs_ids = set()
         self._assess_history = {}
         self._answer_evidence = []
+        self._confirmed_answer_evidence = None
         self._final_answer_decision = None
         self._last_positive_letter = ""
         self._last_positive_obs_id = None
@@ -4977,8 +5020,7 @@ class AgenticEQAExecutor:
                 # Router re-picked a stalled hyp or a capture station — force explore.
                 if (
                     self.decision_policy != "grounded_v2"
-                    and
-                    tool in ("navigate_to_obs", "investigate")
+                    and tool in ("navigate_to_obs", "investigate")
                     and not out.get("ok")
                     and str(out.get("status") or "") in {"NAV_LOOP_BLOCKED", "STATION_OBS_NOT_PLACE"}
                     and self.mode == "answer"

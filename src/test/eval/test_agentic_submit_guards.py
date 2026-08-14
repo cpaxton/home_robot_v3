@@ -58,6 +58,8 @@ def test_forced_debias_replaces_lettered_eq_answer():
 
     assert out["answer"] == "B"
     assert out["answer_provenance"] == "mcq_debias"
+    assert out["final_decision"]["answer"] == "B"
+    assert out["final_decision"]["source"] == "mcq_debias"
     gm.vote_mcq_letter.assert_called_once()
     row = [r for r in ex._trace_rows if r.get("tool") == "forced_answer"][0]
     assert row["raw_eqa_letter"] == "D"
