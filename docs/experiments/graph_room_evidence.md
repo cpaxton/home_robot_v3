@@ -71,7 +71,8 @@ Fairness contract:
 ## Metrics and invariants
 
 Collect per episode from `run_manifest.json`,
-`bundles/agentic_qN/agentic_trace.jsonl`, the attempt ledger, and graph export.
+`bundles/agentic_qN/agentic_trace.jsonl`, `world_evidence.json`,
+`attempt_ledger.json`, and `room_events.json`.
 
 | Metric | Definition / gate |
 |--------|-------------------|

@@ -19,6 +19,9 @@ from typing import Any
 from emet.habitat.config import default_habitat_eqa_data_dir
 from emet.habitat.metrics import EpisodeMetrics
 
+ATTEMPT_LEDGER_FILENAME = "attempt_ledger.json"
+ROOM_EVENTS_FILENAME = "room_events.json"
+
 
 def default_episodes_root() -> Path:
     return default_habitat_eqa_data_dir().parent / "episodes"
@@ -188,6 +191,32 @@ def _frontier_node_summaries(graph_memory: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _save_agentic_evidence_artifacts(episode_dir: Path, graph_memory: Any) -> None:
+    """Persist policy-sidecar evidence needed for shadow/agent audits."""
+    world_evidence = getattr(graph_memory, "world_evidence", None)
+    if world_evidence is not None and bool(getattr(world_evidence, "enabled", False)):
+        save_world_evidence = getattr(world_evidence, "save", None)
+        if not callable(save_world_evidence):
+            raise TypeError("enabled world_evidence store does not provide save()")
+        save_world_evidence(episode_dir)
+
+    export_attempt_ledger = getattr(graph_memory, "export_attempt_ledger", None)
+    if callable(export_attempt_ledger):
+        attempt_rows = list(export_attempt_ledger() or [])
+        (episode_dir / ATTEMPT_LEDGER_FILENAME).write_text(
+            json.dumps(attempt_rows, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    get_room_events = getattr(graph_memory, "get_room_events", None)
+    if callable(get_room_events):
+        room_rows = list(get_room_events() or [])
+        (episode_dir / ROOM_EVENTS_FILENAME).write_text(
+            json.dumps(room_rows, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+
 def enrich_episode_metrics(
     metrics: EpisodeMetrics,
     *,
@@ -253,7 +282,9 @@ def save_episode_debug_bundle(
     Save per-question artifacts under ``~/.cache/habitat_eqa/episodes/<run_tag>/q<id>_<method>/``.
 
     Always writes: ``metrics.json``, ``raw_eqa.txt``, ``eqa_history.json``, ``scene_graph_report.txt``,
-    ``frontier_nodes.json``. Set ``HABITAT_EQA_EXPORT_GRAPH=1`` for full ``export_graph_eqa_dir`` checkpoint.
+    ``frontier_nodes.json``, room events, and the attempt ledger. Enabled shadow/agent stores also write
+    ``world_evidence.json`` plus their evidence views. Set ``HABITAT_EQA_EXPORT_GRAPH=1`` for the full
+    ``export_graph_eqa_dir`` checkpoint.
     When ``recorder`` is set (or env ``EMET_EVAL_EXPORT_MAP``), also writes maps / video via
     :mod:`emet.eval.episode_diagnostics`.
     """
@@ -317,6 +348,7 @@ def save_episode_debug_bundle(
             json.dumps(_frontier_node_summaries(gm), indent=2) + "\n",
             encoding="utf-8",
         )
+        _save_agentic_evidence_artifacts(episode_dir, gm)
 
     export_graph = os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower() in (
         "1",

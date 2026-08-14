@@ -130,6 +130,103 @@ def test_save_episode_debug_bundle_writes_graph_report(tmp_path: Path, monkeypat
     ]
 
 
+def test_save_episode_debug_bundle_writes_agentic_evidence(tmp_path: Path, monkeypatch):
+    import numpy as np
+
+    from emet.habitat.episode_debug import save_episode_debug_bundle
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    monkeypatch.setattr(
+        "emet.habitat.episode_debug.default_episodes_root",
+        lambda: tmp_path / "episodes",
+    )
+
+    graph_memory = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={
+            "eqa": {
+                "graph_evidence_mode": "shadow",
+                "attempt_ledger": True,
+            }
+        },
+    )
+    graph_memory.world_evidence.session_id = "session-1"
+    graph_memory.set_attempt_ledger_question_id("12")
+    obs_id = graph_memory.add_observation(
+        np.full((4, 4, 3), 17, dtype=np.uint8),
+        np.array([1.0, 2.0, 0.5]),
+        ["clock"],
+        viewer_xyz=np.array([0.0, 2.0, 0.0]),
+    )
+    graph_memory.record_attempt(
+        action_kind="investigate",
+        outcome="absent",
+        status_code="vlm_absent",
+        obs_id=obs_id,
+        step=3,
+        source="eqa",
+    )
+    graph_memory.record_room_event(
+        room="kitchen",
+        kind="verify_absent",
+        obs_id=obs_id,
+        step=3,
+    )
+
+    class _Agent:
+        voxel_map = None
+
+    agent = _Agent()
+    agent.graph_memory = graph_memory
+    metrics = EpisodeMetrics(
+        dataset="hmeqa",
+        method="dynagraph",
+        question_id=12,
+        scene="s",
+        floor=0,
+        question="q",
+        gold_answer_letter="D",
+        predicted_answer="D",
+        correct=True,
+        confident=True,
+        planning_steps=3,
+        success=True,
+    )
+    bundle = save_episode_debug_bundle(
+        run_tag="shadow_run",
+        metrics=metrics,
+        agent=agent,
+    )
+
+    world = json.loads((bundle / "world_evidence.json").read_text(encoding="utf-8"))
+    attempts = json.loads((bundle / "attempt_ledger.json").read_text(encoding="utf-8"))
+    rooms = json.loads((bundle / "room_events.json").read_text(encoding="utf-8"))
+    assert world["mode"] == "shadow"
+    assert world["question_id"] == "12"
+    assert world["events"][0]["event_id"] == "event_00000001"
+    assert attempts[0]["action_kind"] == "investigate"
+    assert attempts[0]["outcome"] == "absent"
+    assert rooms[0]["kind"] == "verify_absent"
+    assert rooms[0]["room"] == "kitchen"
+    assert (bundle / world["views"][0]["rgb_file"]).is_file()
+
+
+def test_hmeqa_snapshot_copies_agentic_evidence_artifacts():
+    script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_agentic_h2h.sh"
+    text = script.read_text(encoding="utf-8")
+    for artifact in (
+        "world_evidence.json",
+        "attempt_ledger.json",
+        "room_events.json",
+        "world_evidence_views",
+    ):
+        assert artifact in text
+    assert '[[ -s "$dst/world_evidence.json" ]]' in text
+    assert '[[ -s "$dst/attempt_ledger.json" ]]' in text
+    assert '[[ -s "$dst/room_events.json" ]]' in text
+    assert "evidence snapshot incomplete" in text
+
+
 def test_save_error_episode_bundle(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "emet.habitat.episode_debug.default_episodes_root",

@@ -99,7 +99,9 @@ Each `run-batch --output …/my_run.jsonl` writes:
 | `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
 | `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
 
-Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `topdown_gt_navmesh.png`, `topdown_map_overlay.png`, `maps/overlay_step_*.png`, `topdown_exploration.mp4`, `obstacles_2d.npy`, `trajectory.jsonl`, `nav_attempts.jsonl` (includes navmesh `path_xy` when available), motion-paced `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
+Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Graph-memory episodes also write `attempt_ledger.json` and `room_events.json`; shadow/agent graph-evidence modes additionally write `world_evidence.json` and `world_evidence_views/`. H2H runs copy these evidence artifacts into each `OUT/bundles/<arm>_q<id>/` snapshot.
+
+With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `topdown_gt_navmesh.png`, `topdown_map_overlay.png`, `maps/overlay_step_*.png`, `topdown_exploration.mp4`, `obstacles_2d.npy`, `trajectory.jsonl`, `nav_attempts.jsonl` (includes navmesh `path_xy` when available), motion-paced `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
 
 ```bash
 export HABITAT_EQA_EXPORT_GRAPH=1   # adds graph_checkpoint/ (frames, graph.json, …)

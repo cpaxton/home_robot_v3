@@ -398,11 +398,30 @@ snapshot_bundle() {
         explored_2d.npy obstacles_2d.npy grid_meta.json trajectory.jsonl \
         spawn_record.json metrics.json diagnostics_manifest.json floor_metrics.json \
         floor_area.jsonl floor_area_growth.png \
-        topdown_exploration.mp4 episode_rgb.mp4 agentic_trace.jsonl agentic_summary.json; do
+        topdown_exploration.mp4 episode_rgb.mp4 agentic_trace.jsonl agentic_summary.json \
+        world_evidence.json attempt_ledger.json room_events.json; do
         [[ -e "$src/$f" ]] && cp -a "$src/$f" "$dst/"
     done
     [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
     [[ -d "$src/frontier_picks" ]] && rm -rf "$dst/frontier_picks" && cp -a "$src/frontier_picks" "$dst/frontier_picks"
+    [[ -d "$src/world_evidence_views" ]] && rm -rf "$dst/world_evidence_views" && cp -a "$src/world_evidence_views" "$dst/world_evidence_views"
+    if [[ "$arm" == "agentic" ]]; then
+        local missing=()
+        if [[ "${EMET_EQA_GRAPH_EVIDENCE_MODE:-off}" != "off" ]]; then
+            [[ -s "$dst/world_evidence.json" ]] || missing+=("world_evidence.json")
+            [[ -d "$dst/world_evidence_views" ]] || missing+=("world_evidence_views/")
+        fi
+        if [[ "${EMET_EQA_ATTEMPT_LEDGER_MODE:-off}" != "off" ]]; then
+            [[ -s "$dst/attempt_ledger.json" ]] || missing+=("attempt_ledger.json")
+        fi
+        if [[ "${EMET_EQA_ROOM_HISTORY_MODE:-off}" != "off" ]]; then
+            [[ -s "$dst/room_events.json" ]] || missing+=("room_events.json")
+        fi
+        if (( ${#missing[@]} > 0 )); then
+            log "ERROR: evidence snapshot incomplete for $arm q$qid: ${missing[*]}"
+            return 1
+        fi
+    fi
     # Head-camera frames are large; symlink the full dir + copy a few keyframes.
     if [[ -d "$src/frames" ]]; then
         ln -sfn "$src/frames" "$dst/frames_all"
