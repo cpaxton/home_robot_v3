@@ -96,3 +96,53 @@ def test_build_inventory_brief_excludes_detector_proposal():
     assert "cheap_proposal" not in brief
     assert "decision=" not in brief
     assert "ABSENT" not in brief
+
+
+def test_assess_view_includes_siglip_evidence_in_prompt():
+    """Image-text similarity for the target must reach the VLM (cube vs brick help)."""
+    client = _MultiClient(
+        {
+            "target": "sugar cube",
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": None,
+            "reason": "cube on floor visible",
+        }
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    out = assess_view_with_vlm(
+        client,
+        question="Where is the sugar cube on the floor?",
+        rgb=rgb,
+        inventory="observations_seen=5",
+        target_phrase="sugar cube",
+        siglip_evidence="'sugar cube' similarity=0.21 (present-like)",
+    )
+    assert out.present is True
+    assert client.mm_calls
+    prompt = client.mm_calls[0][0]
+    assert "Visual evidence (image-text similarity)" in prompt
+    assert "sugar cube' similarity=0.21" in prompt
+
+
+def test_assess_view_without_evidence_omits_line():
+    client = _MultiClient(
+        {
+            "target": "lamp",
+            "present": False,
+            "answerable": False,
+            "need_more_views": True,
+            "suggested_answer": None,
+            "reason": "not visible",
+        }
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    assess_view_with_vlm(
+        client,
+        question="Where is the lamp?",
+        rgb=rgb,
+        target_phrase="lamp",
+    )
+    prompt = client.mm_calls[0][0]
+    assert "Visual evidence" not in prompt

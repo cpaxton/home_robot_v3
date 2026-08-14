@@ -2765,6 +2765,25 @@ class AgenticEQAExecutor:
             n_rounds=self._round,
             n_nav=self._n_nav + self._n_explore,
         )
+        # Cheap image-text evidence for the same view: SigLIP similarity for the target
+        # phrase (full frame + dense patch best-of). This directly helps small / visually
+        # ambiguous targets (sugar cube vs brick) that the VLM can mistake on pixels alone.
+        siglip_evidence = ""
+        try:
+            if rgb is not None and hasattr(gm, "verify_phrase_at_obs"):
+                vres = gm.verify_phrase_at_obs(
+                    self._target_phrase or phrase,
+                    oid,
+                    rgb=rgb,
+                    min_sim=self.verify_min_sim,
+                )
+                full_sim = float(getattr(vres, "sim", 0.0) or 0.0)
+                dense_sim = self._dense_max_sim_for_rgb(self._target_phrase or phrase, rgb)
+                best_sim = float(dense_sim) if dense_sim is not None else full_sim
+                label = "present-like" if best_sim >= SIGLIP_IMAGE_PRESENT_THRESHOLD else "weak"
+                siglip_evidence = f"'{self._target_phrase or phrase}' similarity={best_sim:.3f} ({label})"
+        except Exception as exc:
+            _logger.warning(f"siglip evidence for vlm_assess failed: {exc}")
         assessment = assess_view_with_vlm(
             client,
             question=self.question,
@@ -2772,6 +2791,7 @@ class AgenticEQAExecutor:
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
             is_mcq=self._question_is_mcq(),
+            siglip_evidence=siglip_evidence,
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as

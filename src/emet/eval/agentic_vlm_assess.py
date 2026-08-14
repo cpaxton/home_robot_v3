@@ -169,15 +169,26 @@ def assess_view_with_vlm(
     inventory: str = "",
     target_phrase: str = "",
     is_mcq: bool = True,
+    siglip_evidence: str = "",
 ) -> ViewAssessment:
-    """Multimodal VLM: is this image enough to answer the question?"""
+    """Multimodal VLM: is this image enough to answer the question?
+
+    ``siglip_evidence`` is an optional image-similarity hint (e.g. a SigLIP score for
+    the target phrase on this view). It is **evidence, not ground truth**: small /
+    visually ambiguous targets (a sugar cube vs a brick) can score high on both, so
+    the VLM should weigh it against what it actually sees rather than treat it as a
+    verdict.
+    """
     q = (question or "").strip()
     target = (target_phrase or "").strip()
+    evidence = (siglip_evidence or "").strip()
+    evidence_line = f"\nVisual evidence (image-text similarity): {evidence}\n" if evidence else "\n"
     if is_mcq:
         user = (
             f"Question:\n{q}\n\n"
             f"Target phrase (hint): {target or '(none)'}\n\n"
-            f"Inventory:\n{inventory or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n"
+            f"{evidence_line}"
             "Look at the image. Return JSON with keys:\n"
             "  target: string\n"
             "  present: bool — is the target / relevant evidence visible?\n"
@@ -194,7 +205,8 @@ def assess_view_with_vlm(
         user = (
             f"Question:\n{q}\n\n"
             f"Target phrase (hint): {target or '(none)'}\n\n"
-            f"Inventory:\n{inventory or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n"
+            f"{evidence_line}"
             "Look at the image. Return JSON with keys:\n"
             "  target: string\n"
             "  present: bool — is the target / relevant evidence visible in this view?\n"
