@@ -583,6 +583,121 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    # -- scene_tasks ----------------------------------------------------------
+    def scene_tasks(object_filter: str = "", robot: str = "") -> str:
+        """Enumerate pick-and-place options from the current scene as a compact digest."""
+        from collections import Counter
+
+        from emet.eval.scene_task_extractor import (
+            default_molmospaces_scenes_dir,
+            emit_tasks,
+            load_scene_metadata,
+            pickable_objects,
+            receptacle_objects,
+            scene_objects,
+        )
+
+        scene_dir = default_molmospaces_scenes_dir()
+        ithor = scene_dir / "ithor"
+        candidates = sorted(ithor.glob("*_physics_metadata.json")) if ithor.is_dir() else []
+        if not candidates:
+            return (
+                "No MolmoSpaces scene metadata installed "
+                "(expected *_physics_metadata.json under ~/.cache/molmospaces/assets/scenes/ithor)."
+            )
+        metadata = load_scene_metadata(candidates[0])
+        objs = scene_objects(metadata)
+        picks = pickable_objects(objs)
+        recepts = receptacle_objects(objs)
+        tasks = emit_tasks(objs, sim="configs/sim/molmospaces_ithor_train_0.yaml")
+        filt = (object_filter or "").strip().lower()
+        if filt:
+            tasks = [t for t in tasks if filt in t.object or filt in t.goal_recep]
+
+        by_obj: Counter = Counter(t.object for t in tasks)
+        lines = [
+            f"Scene: {candidates[0].parent.name}/{candidates[0].stem}",
+            f"Pickable objects ({len(picks)}): {', '.join(sorted({p.category for p in picks}))}",
+            f"Receptacles ({len(recepts)}): {', '.join(sorted({r.category for r in recepts}))}",
+        ]
+        if filt:
+            lines.append(f"Tasks matching {filt!r} ({len(tasks)}):")
+        else:
+            lines.append(f"Task options by object ({len(tasks)} unique object->receptacle pairs):")
+        shown = 0
+        for obj, count in by_obj.most_common(10):
+            lines.append(f"  - {obj}: {count} placement options")
+            shown += 1
+        if len(by_obj) > shown:
+            lines.append(f"  ... and {len(by_obj) - shown} more object categories")
+        if tasks:
+            ex = tasks[0]
+            lines.append(
+                f"Example: pick {ex.object} from {ex.start_recep} to {ex.goal_recep} (gt_body={ex.object_gt_body})"
+            )
+        rid = (robot or "").strip().lower()
+        if rid:
+            try:
+                from emet.eval.scene_task_extractor import compute_reachability_priors
+
+                # Prefer real object poses from a connected sim server; fall back to a
+                # documented zero-pose proxy so reachability still exercises the IK path.
+                placements: dict[str, dict] = {}
+                executor = context.get("executor")
+                if executor is not None:
+                    robot_obj = getattr(executor, "robot", None)
+                    session = (
+                        robot_obj.get_emet_session()
+                        if robot_obj is not None and hasattr(robot_obj, "get_emet_session")
+                        else None
+                    )
+                    if session:
+                        placements = session.get("sim_object_placements") or {}
+                if placements:
+
+                    def _pose(body: str) -> np.ndarray:
+                        info = placements.get(body)
+                        pos = (info or {}).get("pos")
+                        return np.asarray(pos, dtype=np.float64).reshape(3) if pos is not None else np.zeros(3)
+
+                    priors = compute_reachability_priors(objs, robot_id=rid, arm="left", object_pose_fn=_pose)
+                else:
+                    priors = compute_reachability_priors(objs, robot_id=rid, arm="left")
+                reachable = [r.category for r in priors.values() if r.reachable]
+                src = "sim placements" if placements else "zero-pose proxy (no sim connected)"
+                lines.append(
+                    f"Reachable by {rid} from {src} ({len(reachable)}): {', '.join(sorted(set(reachable))) or 'none'}"
+                )
+            except Exception as e:
+                lines.append(f"(reachability for {rid} unavailable: {e})")
+        return "\n".join(lines)
+
+    tools.append(
+        Tool(
+            name="scene_tasks",
+            description=(
+                "Enumerate candidate pick-and-place tasks from the current sim scene: pickable objects "
+                "with grasp assets, receptacle sites, and proposed tasks (object -> start_recep -> goal_recep)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "object_filter": {
+                        "type": "string",
+                        "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                    },
+                    "robot": {
+                        "type": "string",
+                        "description": "Optional robot id (e.g. 'sourccey', 'rby1') to also report which objects its arm can reach.",
+                    },
+                },
+                "required": [],
+            },
+            func=scene_tasks,
+            returns_info=True,
+        )
+    )
+
     # -- find_objects --------------------------------------------------------
     def find_objects(text: str) -> str:
         executor = context.get("executor")

@@ -68,3 +68,5 @@ These works motivate \emph{incremental} and \emph{bounded} memory but do not add
 \subsection{Benchmarks}
 
 We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces} episodes in MuJoCo with multi-robot support in \texttt{emet}.
+MolmoSpaces also hosts an open manipulation leaderboard; the leading non-ID system, \textbf{TiPToP}~\citep{shen2026tiptop}, composes a GPU-parallel Task-and-Motion-Planning core (cuTAMP~\citep{shen2024cutamp}) with off-the-shelf perception and VLM grounding to search pick-and-place sequences directly from pixels.
+We target the EQA/find-phase legs of these episodes, leaving the pick/place planner to future work.
