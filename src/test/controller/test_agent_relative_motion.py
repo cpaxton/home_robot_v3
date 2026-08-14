@@ -41,6 +41,7 @@ def test_rotate_base_and_move_forward_tools_registered():
 
 def test_clip_forward_distance_hits_obstacle():
     agent = DynamemController.__new__(DynamemController)
+    agent._cached_navigation_origin_xyt = None
     agent.robot = SimpleNamespace(get_base_pose=lambda: np.array([0.0, 0.0, 0.0]))
     obstacles = np.zeros((20, 20), dtype=bool)
     obstacles[10, 13] = True  # will map probe points here via mock
@@ -67,6 +68,7 @@ def test_clip_forward_distance_hits_obstacle():
 
 def test_clip_forward_refuses_empty_map_without_seed():
     agent = DynamemController.__new__(DynamemController)
+    agent._cached_navigation_origin_xyt = None
     agent.robot = SimpleNamespace(get_base_pose=lambda: np.array([0.0, 0.0, 0.0]))
 
     class EmptyVM:
@@ -97,6 +99,7 @@ def test_clip_forward_refuses_empty_map_without_seed():
 def test_clip_forward_seeds_local_radius_disk():
     """Empty cloud + _update_visited → short nudge inside explored disk, not beyond."""
     agent = DynamemController.__new__(DynamemController)
+    agent._cached_navigation_origin_xyt = None
     agent.robot = SimpleNamespace(get_base_pose=lambda: np.array([0.0, 0.0, 0.0]))
     obstacles = np.zeros((40, 40), dtype=bool)
     explored = np.zeros((40, 40), dtype=bool)
@@ -139,6 +142,7 @@ def test_move_forward_tool_asks_when_cannot_drive():
 
 def test_rotate_base_degrees_calls_relative_move():
     agent = DynamemController.__new__(DynamemController)
+    agent._cached_navigation_origin_xyt = None
     agent._realtime_updates = True
     agent.announce_action = MagicMock()
     agent._find_phase_nav_timeout = lambda: 2.0

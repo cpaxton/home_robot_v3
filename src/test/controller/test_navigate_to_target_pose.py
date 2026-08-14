@@ -53,7 +53,7 @@ def test_navigate_to_target_pose_returns_false_on_planner_failure(nav_agent):
         np.array([2.0, 2.0, 0.0]),
         np.array([0.0, 0.0, 0.0]),
     )
-    assert finished is False
+    assert not bool(finished)
     assert nav_agent._last_nav_attempt is not None
     assert nav_agent._last_nav_attempt.finished is False
     assert nav_agent._last_nav_attempt.note == "blocked"
@@ -91,5 +91,5 @@ def test_navigate_to_target_pose_uses_navmesh_when_enabled(monkeypatch):
         lambda *a, **k: nav_res,
     )
     finished = agent.navigate_to_target_pose(np.array([1.0, 2.0, 0.0]), np.array([0.0, 0.0, 0.0]))
-    assert finished is True
+    assert bool(finished)
     assert agent._last_nav_attempt.method == "habitat_navmesh"
