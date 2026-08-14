@@ -4983,7 +4983,7 @@ class GraphEQAMemory:
             # can be reproduced for A/B (eqa.location_override_equip_gate; env
             # EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0 restores legacy).
             _gate_equip = self._eqa_override_gate("location_override_equip_gate", True)
-            _gate_img = self._eqa_override_gate("location_override_image_gate", False)
+            _gate_img = self._eqa_override_gate("location_override_image_gate", True)
             vlm_clear = bool(confidence) and bool(parsed_letter)
             preferred = ""
             if not (vlm_clear and _gate_equip) and equip_letter and (abstain or parsed_letter != equip_letter):

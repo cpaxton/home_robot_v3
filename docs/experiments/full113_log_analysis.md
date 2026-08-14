@@ -56,8 +56,13 @@ image-grounded and intended to correct memory-steered letters). Regression test 
 **Config-gated (2026-08-13, commit after `f416c528`):**
 - `eqa.location_override_equip_gate` (default true) — equip override gated on VLM
   confidence; env `EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0` restores legacy.
-- `eqa.location_override_image_gate` (default false) — stricter option: also gate
-  image-landmark overrides; env `EMET_EQA_LOCATION_OVERRIDE_IMAGE_GATE=1`.
+- `eqa.location_override_image_gate` (default **true**, flipped 2026-08-14) — image-label
+  mapping gated on VLM confidence; env `EMET_EQA_LOCATION_OVERRIDE_IMAGE_GATE=0` restores
+  legacy. **Live re-run correction:** the 2026-08-14 live sweep with equip-gate-only was a
+  null-op (+2 pp vs baseline) — the offline A/B attributed all recoveries to the equip
+  branch, but the image branch is actually the MAIN offender for the q44/q14/q25/q41/q47
+  class (VLM confident + correct, Image-1 label mapping replaced the letter). Both gates
+  now default on so a confident VLM letter is never clobbered.
 - Legacy reference config: `configs/benchmarks/hmeqa_legacy_location_override.yaml`.
 - Offline A/B (no GPU): `uv run python scripts/hmeqa_override_ab.py <jsonl>`.
 - JSON `"answer":"X"` parsing is always on in `_answer_field_lines` (not a config
@@ -65,14 +70,22 @@ image-grounded and intended to correct memory-steered letters). Regression test 
   ~0 scored impact in this run).
 
 **Offline-verified impact (2026-08-13, `scripts/hmeqa_override_ab.py` on the saved jsonl):**
-| Method | as-scored | equip-gated (fix) | recovered |
-|--------|-----------|-------------------|-----------|
+| Method | as-scored | equip+image-gated (fix) | recovered |
+|--------|-----------|-------------------------|-----------|
 | dynagraph | 44.2% (50/113) | **52.2%** (59/113) | +9 (q14,24,25,31,39,44,47,94,101) |
 | static_graph | 37.2% (42/113) | **44.2%** (50/113) | +8 (q21,25,44,47,67,85,104,105) |
 
-The equipment-override-on-confident-VLM bug cost ~8–10 pp on each method; the fix
-recovers it without re-running the GPU sweep. (Recorded `model_confident` is lowered
-by the graph-coverage gate, so the A/B reads the raw JSON confidence field.)
+**Live re-run (2026-08-14, `20260814_121450`, equip-gate-only — cancelled at 95/113):**
+dynagraph **45.3%** (43/95) — the equip-gate-only fix was a **null-op** vs the 44.2%
+baseline because the image branch (ungated) kept overriding the confident-correct VLM
+letters. Partial recovery set still overridden: q14/q25/q41/q44/q47 (VLM == gold,
+confident). Root cause: the offline A/B could not distinguish equip vs image branch
+from the jsonl. **Fix:** `location_override_image_gate` now defaults **true**; a fresh
+sweep should realize the ~50%+ recovery.
+
+The override-on-confident-VLM bug cost ~8–10 pp on each method. (Recorded
+`model_confident` is lowered by the graph-coverage gate, so the A/B reads the raw JSON
+confidence field.)
 
 ### 5. Latent (not scored): JSON `"answer"` field parse gap — fixed
 `_answer_field_lines` previously matched only line-start `answer:`, but Qwen3-VL emits

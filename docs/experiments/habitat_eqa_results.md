@@ -70,10 +70,13 @@ the gemma-3-4b full-benchmark (41.6% static_graph); still ~19–23 pp below Grap
 baselines (63.5–67.0%), consistent with the local VLM tier + partial semantics gap.
 
 > **As-scored vs override fix:** these are the as-scored numbers (commit `8fb7c1a5`).
-> A post-sweep scoring bug (equipment-distance `[memory-location]` override clobbering
-> confident VLM letters) is fixed and config-gated (`location_override_equip_gate`);
-> offline A/B on this jsonl suggests dynagraph ≈ 52.2% / static_graph ≈ 44.2% with the
-> fix. See [full113_log_analysis.md](full113_log_analysis.md) and
+> A post-sweep scoring bug (`[memory-location]` override clobbering confident VLM
+> letters) is fixed and config-gated: `location_override_equip_gate` **and**
+> `location_override_image_gate` both default **on**. Offline A/B on this jsonl
+> suggests dynagraph ≈ 52.2% / static_graph ≈ 44.2% with both gates. **Note:** a
+> 2026-08-14 live re-run with equip-gate-only was a null-op (+2 pp) — the image branch
+> (ungated) was the real offender for the q44/q14/q25/q41/q47 class, so the image gate
+> now defaults on too. See [full113_log_analysis.md](full113_log_analysis.md) and
 > `scripts/hmeqa_override_ab.py`. Quote the recorded numbers unless the fix is re-run.
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
