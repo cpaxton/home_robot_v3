@@ -32,6 +32,7 @@ CANONICAL_ROBOT_KEYS = (
     "innate_mars",
     "xlerobot",
     "franka_fr3",
+    "sourccey",
     "yor",
 )
 

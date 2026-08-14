@@ -1,0 +1,36 @@
+# Sourccey agent preset (unified nested config) — sim + DynaMem/Dynagraph.
+# Start the MuJoCo sim server with the same robot, then run the agent:
+#   # terminal 1 (sim):
+#   uv run emet serve mujoco --robot sourccey --scene ithor --headless
+#   # terminal 2 (agent, local OpenAI-compatible VLM/LM):
+#   uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
+#       --llm openai --headless
+extends: configs/emet/default.yaml
+
+robot: sourccey
+connection: local
+
+agent:
+  name: Sourccey
+  llm: openai
+  eqa: true
+  discord: false
+  memory_backend: dynagraph
+
+embodied_agent:
+  open_vocab_scene_graph:
+    enabled: false
+    config_name: default_scene_graph
+  graph_eqa_memory:
+    enabled: true
+    use_instance_graph: true
+    use_sensor_perception: true
+    graph_object_fusion:
+      enabled: true
+      spatial_merge_xy_m: 0.42
+      embedding_min_cosine: 0.62
+      bounds_3d_iou_min: 0.08
+
+mapping:
+  eqa_vl:
+    model_size: "4B"

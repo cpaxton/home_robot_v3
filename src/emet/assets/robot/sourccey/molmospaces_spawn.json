@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "notes": "Sourccey (Vulcan Robotics) spawn tuning. Dome/arms ride a vertical lift carriage; base is planar.",
+  "molmospaces_target_foot_clearance_above_floor_m": 0.055,
+  "molmospaces_nominal_base_height_above_floor_m": 0.10
+}

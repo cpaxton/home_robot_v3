@@ -25,6 +25,7 @@ These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the Z
 | **rby1** | `galaxea_r1`, `rb_y1` | freejoint | yes | strip-replace | `GenericZmqClient` | `molmospaces-explore` |
 | **innate_mars** | `maurice` | planar | yes | strip-replace + spawn guards | `GenericZmqClient` | `record_innate_mars_episode.py`, dynagraph |
 | **xlerobot** | `xlerobot_dual` | planar / diff-drive | yes | strip-replace | `GenericZmqClient` | `molmospaces-explore`, DynaMem/Dynagraph nav baselines (`--robot xlerobot`); ZMQ `head_to`, `gripper_left`/`gripper_right` |
+| **sourccey** | — | planar (wheels) + lift | yes | strip-replace + spawn guards | `GenericZmqClient` (stub) | [sourccey.md](sourccey.md) — Vulcan Robotics; vendored MJCF from STEP CAD + `lerobot-vulcan` `Arm.urdf` |
 
 ## Tabletop manipulation (MolmoBot data alignment)
 
