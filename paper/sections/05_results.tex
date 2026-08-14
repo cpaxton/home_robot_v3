@@ -129,9 +129,10 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
 \end{table}
 
 \noindent\textbf{Gap to prior art.}
-Our largest completed run (gemma-3-4b, 113 questions) trails GraphEQA-GPT-4o by $\sim$22 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+Our full-113 Qwen3-VL-8B run (2026-08-13; dynagraph 44.2\%) trails GraphEQA-GPT-4o by $\sim$19--23 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+The earlier gemma-3-4b full-benchmark (41.6\% static\_graph) showed a similar $\sim$22\,pp gap.
 On matched slices Dynagraph is competitive with our \texttt{static\_graph} baseline (+3\,pp on letter-balanced 32 at 3B); holdout-8 after July nav favored \texttt{static\_graph} until harness tuning (Table~\ref{tab:hmeqa_preliminary}).
-A full 113-question evaluation with Qwen3-VL-8B and the current nav stack was run 2026-08-13 (Table~\ref{tab:hmeqa_vs_prior}).
+Numbers in Table~\ref{tab:hmeqa_vs_prior} are as-scored on that sweep; a post-sweep equipment-override fix is expected to raise the 8B dynagraph row (offline A/B $\approx$52\%; pending re-run).
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
 

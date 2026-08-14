@@ -58,11 +58,11 @@ image-grounded and intended to correct memory-steered letters). Regression test 
   confidence; env `EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0` restores legacy.
 - `eqa.location_override_image_gate` (default false) — stricter option: also gate
   image-landmark overrides; env `EMET_EQA_LOCATION_OVERRIDE_IMAGE_GATE=1`.
-- `eqa.parse_json_answer_field` (default true) — `_answer_field_lines` also matches
-  the JSON `"answer": "X"` key (Qwen3-VL emits JSON; the old line-start regex missed
-  it in 53/107 episodes — latent, ~0 scored impact in this run).
 - Legacy reference config: `configs/benchmarks/hmeqa_legacy_location_override.yaml`.
 - Offline A/B (no GPU): `uv run python scripts/hmeqa_override_ab.py <jsonl>`.
+- JSON `"answer":"X"` parsing is always on in `_answer_field_lines` (not a config
+  toggle; the old line-start-only regex missed it in 53/107 episodes — latent,
+  ~0 scored impact in this run).
 
 **Offline-verified impact (2026-08-13, `scripts/hmeqa_override_ab.py` on the saved jsonl):**
 | Method | as-scored | equip-gated (fix) | recovered |
@@ -74,12 +74,11 @@ The equipment-override-on-confident-VLM bug cost ~8–10 pp on each method; the 
 recovers it without re-running the GPU sweep. (Recorded `model_confident` is lowered
 by the graph-coverage gate, so the A/B reads the raw JSON confidence field.)
 
-### 5. Latent (not scored): JSON `"answer"` field parse gap
-`_answer_field_lines` matches line-start `answer:`, but Qwen3-VL emits JSON
-(`"answer":"X"`). The parser misses the JSON field in **53/107** episodes, but the
-runner's fallback (`extract_mcq_letter(answer, ...)`) recovers most; only 6 ended
-with a different letter, and none of those had JSON==gold, so **no scored impact**.
-Still worth hardening `_answer_field_lines` to match JSON keys.
+### 5. Latent (not scored): JSON `"answer"` field parse gap — fixed
+`_answer_field_lines` previously matched only line-start `answer:`, but Qwen3-VL emits
+JSON (`"answer":"X"`). The parser missed the JSON field in **53/107** episodes; the
+runner's fallback recovered most (only 6 different letters; none JSON==gold → **no
+scored impact**). Hardened to always match JSON keys (always-on; not a config toggle).
 
 ### 6. Empty answers (6/113) are genuine abstains, not parse bugs
 `q36,q58,q82,q84,q92,q103` returned no letter. The VLM reasoning says "None of the
@@ -101,8 +100,8 @@ so a better scoring/override policy (items 4–5) is the lever, not rebalancing.
    questions don't. Investigate graph-context prompts / spatial-RAG for those types.
 3. **Download the missing HM3D semantics** (76 scenes) and re-run — helps static_graph
    more (+13 pp) than dynagraph (+6.5 pp); narrows the comparability gap to GraphEQA.
-4. **Harden `_answer_field_lines` for JSON** (item 5) — done (parse_json_answer_field),
-   latent/low priority but cheap.
+4. **Harden `_answer_field_lines` for JSON** (item 5) — done (always-on JSON key
+   match in `emet.habitat.metrics`), latent/low priority but cheap.
 5. **Quantify the methods' divergence** (item 1) in the paper — 37% disagreement is a
    strong "methods are complementary" / ensembling signal.
 

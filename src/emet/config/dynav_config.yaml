@@ -71,11 +71,10 @@ eqa:
   #   location_override_image_gate: true → also gate image-landmark overrides on
   #     confidence (off by default: image landmarks are grounded in attached views
   #     and still correct memory-steered letters, see test_graph_eqa_memory).
-  #   parse_json_answer_field: true → _answer_field_lines also matches the JSON
-  #     "answer": "X" key (Qwen3-VL emits JSON; the old line-start regex missed it).
+  # (_answer_field_lines always accepts both the line-start and JSON "answer" forms;
+  #   no separate parse gate is needed.)
   location_override_equip_gate: true
   location_override_image_gate: false
-  parse_json_answer_field: true
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8

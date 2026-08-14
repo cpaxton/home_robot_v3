@@ -66,11 +66,10 @@ eqa:
   #   a confident VLM letter (full-113 fix, 2026-08-13; ~10 pp offline recovery).
   # location_override_image_gate: false → also gate image-landmark overrides on
   #   confidence (off by default: image landmarks correct memory-steered letters).
-  # parse_json_answer_field: true → _answer_field_lines also matches the JSON
-  #   "answer": "X" key (Qwen3-VL emits JSON).
+  # (_answer_field_lines always accepts both the line-start and JSON "answer" forms;
+  #   no separate parse gate is needed.)
   location_override_equip_gate: true
   location_override_image_gate: false
-  parse_json_answer_field: true
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Offline A/B of the HM-EQA location-MCQ letter-override policy on saved jsonl.
 
 The full-113 sweep (2026-08-13) exposed a scoring bug: the geometric
