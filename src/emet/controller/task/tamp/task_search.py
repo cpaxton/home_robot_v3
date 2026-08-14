@@ -311,6 +311,7 @@ def execute_task_plan(
                 result = executor.place_only(
                     args["receptacle_query"],
                     object_gt_body=args.get("object_gt_body"),
+                    receptacle_gt_body=args.get("receptacle_gt_body"),
                 )
                 if not result.success:
                     plan.success = False
@@ -437,7 +438,7 @@ def plan_pick_place_mcts(
             "robot": np.zeros(2, dtype=np.float64),
             "object": _pos(obj_body),
             "carrying": False,
-            "receptacle": _pos(recep_body),
+            "receptacle": _pos(recep_body) if recep_body else _pos(obj_body),
         }
 
     best: TaskPlan | None = None
@@ -483,6 +484,19 @@ def plan_pick_place_mcts(
         message="no_reachable_task",
         expanded_nodes=[c.get("object_query", "") for c in cands],
     )
+
+
+def replace_step_op(steps: Sequence[TaskPlanStep], op: str, receptacle_gt_body: str) -> list[TaskPlanStep]:
+    """Return *steps* with the ``op`` step's ``receptacle_gt_body`` argument replaced."""
+    out: list[TaskPlanStep] = []
+    for s in steps:
+        if s.op == op:
+            args = dict(s.args)
+            args["receptacle_gt_body"] = str(receptacle_gt_body)
+            out.append(TaskPlanStep(s.op, args, s.note))
+        else:
+            out.append(s)
+    return out
 
 
 def policy_rollout(state: dict, action: Any) -> tuple[dict, float, bool]:

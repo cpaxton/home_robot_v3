@@ -420,7 +420,7 @@ def _run_mcts_manip_phases(
     so this exercises "pick something off the floor".
     """
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
-    from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
+    from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts, replace_step_op
     from emet.motion.arm_manip_profile import resolve_manip_mode_for_robot
 
     t_manip0 = time.monotonic()
@@ -441,13 +441,19 @@ def _run_mcts_manip_phases(
         drop_object_to_floor(robot, gt_body, before)
         before = _snapshot_placements(_read_placements(robot) or before)
 
+    # Resolve the goal receptacle GT body (must exist for MCTS state geometry).
+    from emet.eval.ovmm_find_phase import bodies_matching_category
+
+    recep_bodies = bodies_matching_category(before, episode.goal_recep)
+    recep_gt = recep_bodies[0] if recep_bodies else None
+
     exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
     candidates = [
         {
             "object_query": episode.object,
             "receptacle_query": episode.goal_recep,
             "object_gt_body": gt_body,
-            "receptacle_gt_body": None,
+            "receptacle_gt_body": recep_gt,
         }
     ]
     plan = plan_pick_place_mcts(
@@ -458,6 +464,10 @@ def _run_mcts_manip_phases(
         mcts_iterations=150,
         seed=seed,
     )
+    if plan.success and recep_gt and recep_gt in (before or {}):
+        # Align the executor's place target with the harness's scored receptacle so
+        # placement scoring is not vacuous (executor prefers the farthest recep body).
+        plan.steps = replace_step_op(plan.steps, "place", recep_gt)
     plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode="kinematic")
 
     after = _read_placements(robot) or before

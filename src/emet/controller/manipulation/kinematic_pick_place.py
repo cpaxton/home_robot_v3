@@ -540,6 +540,7 @@ class KinematicPickPlaceExecutor:
         receptacle_query: str,
         *,
         object_gt_body: str | None = None,
+        receptacle_gt_body: str | None = None,
         approach_base: bool = True,
     ) -> KinematicPickPlaceResult:
         if not self._ensure_model():
@@ -552,7 +553,10 @@ class KinematicPickPlaceExecutor:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "object_not_in_gt")
         from emet.eval.ovmm_find_phase import bodies_matching_category
 
-        receps = bodies_matching_category(pl, receptacle_query)
+        if receptacle_gt_body and receptacle_gt_body in pl:
+            receps = [receptacle_gt_body]
+        else:
+            receps = bodies_matching_category(pl, receptacle_query)
         if not receps:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "recep_not_in_gt")
         # Prefer farthest matching recep from the held object (same idea as OVMM sim place).
@@ -568,8 +572,7 @@ class KinematicPickPlaceExecutor:
         recep_body = scored[0][2]
         recep_pos = np.asarray(pl[recep_body]["pos"], dtype=np.float64).reshape(3)
         logger.info(
-            f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} "
-            f"(n_receps={len(receps)})"
+            f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} (n_receps={len(receps)})"
         )
         if approach_base:
             self._approach_xy(recep_pos[:2])

@@ -112,6 +112,7 @@ Task (goal spec, e.g. "apple -> basket") + scene state (voxel map, object poses)
   - `_run_mcts_manip_phases` in `ovmm_full.py`: MCTS pick-place over the kinematic arm (approach → grasp → place), scored with the same GT placement deltas as `sim` teleport for a direct MCTS-vs-teleport comparison.
   - Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic), `robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport refs), `robocasa_floor_find_only_explore` (find-only). Config `configs/sim/robocasa_pick_place_rby1.yaml`.
   - Tests: `test_tamp_floor_episodes.py` (schema + floor-drop) + `filter_episodes(..., floor_only=True)`.
+  - **Live result (RoboCasa rby1, floor sugar_cube → counter)**: `find_object_success=True`, `pick_success=True` (arm lifted the object off the floor, 3.6 m displacement), `ovmm_full_partial=0.75`. Place phase is the known rby1 kinematic attach/release flake (object detach + freejoint publication), not a planning failure.
 - [ ] Policy shim `propose_candidates` via existing LLM client
 - [ ] Batch sim hook (threads first; mjx later if env permits)
 - [ ] Wire top-level move execution back into agent loop
