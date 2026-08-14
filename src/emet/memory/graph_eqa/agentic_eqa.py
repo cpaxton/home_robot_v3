@@ -2784,6 +2784,19 @@ class AgenticEQAExecutor:
                 siglip_evidence = f"'{self._target_phrase or phrase}' similarity={best_sim:.3f} ({label})"
         except Exception as exc:
             _logger.warning(f"siglip evidence for vlm_assess failed: {exc}")
+        # Close-look zoom: for count / clock / fine-detail questions, crop the highest
+        # phrase-aligned dense patch and show the VLM the zoomed region alongside the
+        # wide frame so it can read detail the full image hides.
+        close_look_crop = None
+        if self._close_look_required and rgb is not None:
+            try:
+                from emet.eval.presence_verifiers import dense_siglip_argmax_crop
+
+                crop = dense_siglip_argmax_crop(None, rgb, self._target_phrase or phrase)
+                if crop is not None:
+                    close_look_crop, _crop_sim = crop
+            except Exception as exc:
+                _logger.warning(f"close-look crop for vlm_assess failed: {exc}")
         assessment = assess_view_with_vlm(
             client,
             question=self.question,
@@ -2792,6 +2805,7 @@ class AgenticEQAExecutor:
             target_phrase=self._target_phrase or phrase,
             is_mcq=self._question_is_mcq(),
             siglip_evidence=siglip_evidence,
+            close_look_crop=close_look_crop,
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
@@ -2802,9 +2816,10 @@ class AgenticEQAExecutor:
             "need_more_views": bool(assessment.need_more_views),
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
+            "close_look": bool(close_look_crop is not None),
         }
         _logger.info(
-            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s",
             oid,
             bool(assessment.present),
             bool(assessment.answerable),
@@ -2813,6 +2828,7 @@ class AgenticEQAExecutor:
             str(phrase or self._target_phrase or "")[:60],
             str(assessment.suggested_answer or "")[:60],
             str(assessment.reason or "")[:80],
+            bool(close_look_crop is not None),
         )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(

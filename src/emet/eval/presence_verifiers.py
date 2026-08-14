@@ -62,6 +62,68 @@ def siglip_cosine(encoder: Any, rgb: np.ndarray, phrase: str) -> float:
     return float(image_np @ text_np)
 
 
+def dense_siglip_argmax_crop(
+    encoder: Any,
+    rgb: np.ndarray,
+    phrase: str,
+    *,
+    patch_frac: float = 0.45,
+) -> tuple[np.ndarray, float] | None:
+    """Crop around the SigLIP dense-sim argmax patch for *phrase* (close-look).
+
+    Returns ``(crop_rgb, max_sim)`` — a zoomed region centered on the most
+    phrase-aligned patch so the VLM can read fine detail (counts, clock faces)
+    that a wide frame hides. Falls back to ``None`` when the encoder / forward
+    fails (callers keep the wide frame).
+    """
+    try:
+        import torch
+        import torch.nn.functional as F
+
+        from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+        if encoder is None:
+            encoder = get_shared_mask_siglip_encoder()
+        image = np.asarray(rgb, dtype=np.uint8)
+        if image.ndim != 3:
+            return None
+        text_t = encoder.encode_text(phrase).detach().float().reshape(-1)
+        text_t = text_t / (text_t.norm() + 1e-12)
+        inputs = encoder._to_model_inputs(encoder.processor(images=image, return_tensors="pt"))
+        with torch.no_grad():
+            out = encoder.model.vision_model(inputs["pixel_values"], output_hidden_states=True)
+            feat = F.normalize(out.last_hidden_state.float(), dim=-1)
+            sims = (feat @ text_t.to(device=feat.device, dtype=feat.dtype).reshape(-1, 1)).squeeze(-1)
+        # sims layout: [batch, seq] where seq = 1 cls + patch tokens (excluding masks).
+        if sims.ndim == 1:
+            sims = sims.unsqueeze(0)
+        # Drop the CLS token and infer a square-ish grid from the patch count.
+        patches = sims[0][1:]
+        max_sim = float(patches.max().item())
+        if max_sim < 0.0 or patches.numel() < 4:
+            return None
+        argmax = int(patches.argmax().item())
+        n = int(patches.numel())
+        grid = int(round(n**0.5))
+        if grid * grid != n:
+            grid = max(1, int(round(n**0.5)))
+        ph, pw = grid, max(1, n // grid)
+        r, c = argmax // pw, argmax % pw
+        h, w = image.shape[:2]
+        # Map a patch block to image pixels (roughly patch_frac of the frame).
+        cw = int(max(1, round(w * patch_frac)))
+        ch = int(max(1, round(h * patch_frac)))
+        cx = int(round((c + 0.5) / pw * w))
+        cy = int(round((r + 0.5) / ph * h))
+        x0, x1 = max(0, cx - cw // 2), min(w, cx + cw // 2)
+        y0, y1 = max(0, cy - ch // 2), min(h, cy + ch // 2)
+        if x1 <= x0 or y1 <= y0:
+            return None
+        return image[y0:y1, x0:x1].copy(), max_sim
+    except Exception:
+        return None
+
+
 class OwlV2PresenceDetector:
     name = "owlv2"
 

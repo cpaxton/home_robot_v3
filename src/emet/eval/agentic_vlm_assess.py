@@ -170,6 +170,7 @@ def assess_view_with_vlm(
     target_phrase: str = "",
     is_mcq: bool = True,
     siglip_evidence: str = "",
+    close_look_crop: np.ndarray | None = None,
 ) -> ViewAssessment:
     """Multimodal VLM: is this image enough to answer the question?
 
@@ -178,6 +179,10 @@ def assess_view_with_vlm(
     visually ambiguous targets (a sugar cube vs a brick) can score high on both, so
     the VLM should weigh it against what it actually sees rather than treat it as a
     verdict.
+
+    ``close_look_crop`` is an optional zoomed region around the target (for count /
+    clock / fine-detail questions). When provided, it is shown to the VLM *in
+    addition to* the wide frame so fine detail is readable.
     """
     q = (question or "").strip()
     target = (target_phrase or "").strip()
@@ -225,8 +230,21 @@ def assess_view_with_vlm(
             reason="no rgb for VLM assess",
         )
 
+    # When a zoomed crop is available, describe it so the VLM knows to read it for detail.
+    crop_line = ""
+    if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
+        crop_line = (
+            "\nA zoomed crop of the target region is attached as a second image. "
+            "Use it to read fine detail (count objects, read a clock/label) — do not "
+            "rely on the wide frame alone for detail.\n"
+        )
+    user = f"{user}{crop_line}"
+
     # Prefer generate_multimodal when the shared VL client is exposed.
     raw = ""
+    images = [np.asarray(rgb)]
+    if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
+        images.append(np.asarray(close_look_crop))
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):
         try:
@@ -235,7 +253,7 @@ def assess_view_with_vlm(
                     user,
                     system_prompt=_ASSESS_SYSTEM,
                     max_new_tokens=192,
-                    image=np.asarray(rgb),
+                    image=images[0] if len(images) == 1 else images,
                     reset_context=True,
                 )
             )
@@ -246,10 +264,10 @@ def assess_view_with_vlm(
         try:
             from PIL import Image
 
-            pil = Image.fromarray(np.asarray(rgb, dtype=np.uint8), mode="RGB")
+            pil = [Image.fromarray(np.asarray(im, dtype=np.uint8), mode="RGB") for im in images]
             raw = _call_eqa_client(
                 client,
-                [user, pil],
+                [user, *pil],
                 system_prompt=_ASSESS_SYSTEM,
                 max_new_tokens=192,
             )

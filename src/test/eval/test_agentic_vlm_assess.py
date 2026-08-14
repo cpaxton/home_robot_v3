@@ -146,3 +146,33 @@ def test_assess_view_without_evidence_omits_line():
     )
     prompt = client.mm_calls[0][0]
     assert "Visual evidence" not in prompt
+
+
+def test_assess_view_feeds_close_look_crop_as_second_image():
+    """A close-look crop must reach the VLM as a second image (count/clock detail)."""
+    client = _MultiClient(
+        {
+            "target": "clock",
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": None,
+            "reason": "clock face readable in zoom",
+        }
+    )
+    wide = np.zeros((16, 16, 3), dtype=np.uint8)
+    crop = np.full((6, 6, 3), 128, dtype=np.uint8)
+    out = assess_view_with_vlm(
+        client,
+        question="What time is it now?",
+        rgb=wide,
+        target_phrase="clock",
+        close_look_crop=crop,
+    )
+    assert out.present is True
+    assert client.mm_calls
+    prompt, kwargs = client.mm_calls[0]
+    assert "zoomed crop" in prompt
+    imgs = kwargs.get("image")
+    assert isinstance(imgs, list) and len(imgs) == 2
+    assert imgs[1].shape == (6, 6, 3)

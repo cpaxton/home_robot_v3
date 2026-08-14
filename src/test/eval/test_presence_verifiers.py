@@ -1,6 +1,7 @@
 # Copyright (c) Chris Paxton 2026
 
 import numpy as np
+import torch
 
 from emet.eval.presence_verifiers import (
     OwlV2PresenceDetector,
@@ -16,6 +17,75 @@ def test_crop_bbox_clips_and_pads():
     assert crop is not None
     assert crop.shape[0] >= 7
     assert crop.shape[1] >= 6
+
+
+class _DenseSimEncoder:
+    """Fake encoder whose dense sim peaks at a known patch so the crop is testable."""
+
+    def __init__(self, peak_patch: int, n_patches: int):
+        self._peak = peak_patch
+        self._n = n_patches
+        peak = peak_patch
+        n = n_patches
+
+        class _VM:
+            def __call__(self, pixel_values, output_hidden_states=False):
+                return self.forward(pixel_values, output_hidden_states=output_hidden_states)
+
+            def forward(self, pixel_values, output_hidden_states=False):
+                sims = -torch.ones(1, 1 + n, 8)
+                sims[0, 1 + peak, :] = 1.0
+                out = self
+                out.last_hidden_state = sims
+                return out
+
+        class _Model:
+            def __init__(self):
+                self.vision_model = _VM()
+
+        self._model = _Model()
+
+    def encode_text(self, phrase):
+        return torch.ones(8)
+
+    def _to_model_inputs(self, inputs):
+        return inputs
+
+    def processor(self, **kwargs):
+        class _P(dict):
+            pixel_values = None
+
+        p = _P()
+        p["pixel_values"] = None
+        p.pixel_values = None
+        return p
+
+    @property
+    def model(self):
+        return self._model
+
+
+def test_dense_siglip_argmax_crop_returns_crop():
+    from emet.eval.presence_verifiers import dense_siglip_argmax_crop
+
+    # 16 patches on a 16x16 grid -> 4x4, peak at patch 5 (row 1, col 1).
+    encoder = _DenseSimEncoder(peak_patch=5, n_patches=16)
+    rgb = np.zeros((64, 64, 3), dtype=np.uint8)
+    crop = dense_siglip_argmax_crop(encoder, rgb, "clock", patch_frac=0.5)
+    assert crop is not None
+    crop_img, sim = crop
+    assert crop_img.ndim == 3
+    assert sim > 0.0
+
+
+def test_dense_siglip_argmax_crop_none_on_failure():
+    from emet.eval.presence_verifiers import dense_siglip_argmax_crop
+
+    class BadEncoder:
+        def encode_text(self, phrase):
+            raise RuntimeError("boom")
+
+    assert dense_siglip_argmax_crop(BadEncoder(), np.zeros((16, 16, 3), dtype=np.uint8), "x") is None
 
 
 def test_owl_detector_selects_max_box():
