@@ -8,11 +8,11 @@ import numpy as np
 
 from emet.controller.zmq_client import StretchZmqClient
 from emet.utils.geometry import xyt_base_to_global
+from src.test.controller import make_zmq_test_client
 
 
 def test_move_base_to_relative_sends_absolute_episode_xyt():
-    client = StretchZmqClient.__new__(StretchZmqClient)
-    client._rerun = None
+    client = make_zmq_test_client(StretchZmqClient)
     pose = np.array([1.0, 2.0, 0.5], dtype=np.float64)
     client.get_base_pose = MagicMock(return_value=pose.copy())
     client.get_emet_session = MagicMock(return_value={"capabilities": {"teleport_base": True}})
