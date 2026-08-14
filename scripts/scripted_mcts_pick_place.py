@@ -51,7 +51,6 @@ def main() -> int:
 
     from emet.controller.generic_zmq_client import GenericZmqClient
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
-    from emet.controller.task.tamp.smoke_grasps import plant_mixed_grasp_poses
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
     from emet.eval.scene_task_extractor import (
         default_molmospaces_scenes_dir,
@@ -109,6 +108,7 @@ def main() -> int:
                     "receptacle_query": r.category.lower(),
                     "object_gt_body": p.body,
                     "receptacle_gt_body": r.body,
+                    "asset_id": p.asset_id,
                 }
             )
             if len(candidates) >= args.max_candidates:
@@ -124,19 +124,9 @@ def main() -> int:
 
     exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05) if mode == "kinematic" else None
 
-    # Synthetic COM grasp poses per candidate object (oracle-free, like --skip-oracle).
-    grasps_by_body: dict[str, np.ndarray] = {}
-    for c in candidates:
-        body = c["object_gt_body"]
-        if body not in grasps_by_body and body in pl:
-            com = np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)
-            grasps_by_body[body] = plant_mixed_grasp_poses(com + np.array([0.0, 0.0, 0.02]), n_infeasible=0)
-
-    flat_grasps = [] if mode != "kinematic" else [g for body_grasps in grasps_by_body.values() for g in body_grasps]
     plan = plan_pick_place_mcts(
         robot,
         candidates=candidates,
-        grasp_poses=flat_grasps,
         executor=exe,
         approach_standoff_m=0.55,
         top_k_grasps=args.top_k_grasps,
@@ -158,7 +148,7 @@ def main() -> int:
         return 1
 
     # Execute the winning plan using the grasps the planner grounded against.
-    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses or flat_grasps, manip_mode=mode)
+    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode=mode)
     print(f"\nexecute success={plan.success} msg={plan.message!r}", flush=True)
     if plan.success:
         after = read_sim_object_placements(robot.get_emet_session()) or {}

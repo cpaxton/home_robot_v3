@@ -103,6 +103,89 @@ def test_plan_pick_place_mcts_finds_reachable_task():
     assert names == ["approach", "grasp", "place"]
 
 
+def test_mcts_uses_per_object_grasps():
+    """Each candidate must ground with its own grasp list, not a mixed flat list."""
+    placements = {
+        "bowl_gt": _placement(np.array([0.3, -0.5, 1.0]), "Bowl"),
+        "microwave_gt": _placement(np.array([-0.2, -2.5, 0.9]), "Microwave"),
+    }
+    robot = _FakeRobot(placements)
+    candidates = [_cand("bowl", "microwave")]
+
+    # Only the per-body mapping is supplied (no flat list).
+    plan = plan_pick_place_mcts(
+        robot,
+        candidates=candidates,
+        grasp_poses_by_body={"bowl_gt": [_dummy_grasp_pose()]},
+        executor=None,
+        mcts_iterations=40,
+        seed=1,
+    )
+    assert plan.success
+    assert plan.object_body == "bowl_gt"
+    assert len(plan.grasp_poses) == 1
+
+
+def test_mcts_grounds_without_grasps_via_topdown():
+    """No grasp poses at all -> built-in resolver provides grasps (or top-down fallback)."""
+    from emet.perception.grasps.molmo_grasp_library import default_grasps_dir
+
+    placements = {
+        "bowl_gt": _placement(np.array([0.3, -0.5, 1.0]), "Bowl"),
+        "microwave_gt": _placement(np.array([-0.2, -2.5, 0.9]), "Microwave"),
+    }
+    # Tag asset_id so the built-in resolver finds the real DROID asset when present.
+    placements["bowl_gt"]["asset_id"] = "Bowl_1"
+    robot = _FakeRobot(placements)
+    candidates = [_cand("bowl", "microwave")]
+
+    plan = plan_pick_place_mcts(
+        robot,
+        candidates=candidates,
+        executor=None,
+        mcts_iterations=40,
+        seed=1,
+    )
+    assert plan.success
+    assert plan.chosen_grasp_index == 0
+    if (default_grasps_dir() / "droid" / "Bowl_1").is_dir():
+        assert len(plan.grasp_poses) > 1  # real DROID grasps resolved
+    else:
+        assert len(plan.grasp_poses) == 1  # top-down fallback
+
+
+def test_resolve_scene_grasps_real_droid_asset(tmp_path):
+    """resolve_scene_grasps loads real DROID grasp poses when the asset is present."""
+    from emet.controller.task.tamp.task_search import resolve_scene_grasps
+    from emet.perception.grasps.molmo_grasp_library import default_grasps_dir
+
+    if not (default_grasps_dir() / "droid" / "Bowl_1").is_dir():
+        import pytest
+
+        pytest.skip("DROID Bowl_1 grasp asset not installed")
+
+    placements = {
+        "bowl_1_1_0": {
+            "pos": [0.3, -0.5, 1.0],
+            "quat": [1.0, 0.0, 0.0, 0.0],
+            "asset_id": "Bowl_1",
+            "cat": "Bowl",
+        }
+    }
+    poses = resolve_scene_grasps("bowl_1_1_0", placements)
+    assert len(poses) >= 1
+    for p in poses:
+        assert np.asarray(p.T_world).shape == (4, 4)
+        assert getattr(p, "asset_id", "") == "Bowl_1"
+
+
+def test_resolve_scene_grasps_returns_empty_for_unknown():
+    from emet.controller.task.tamp.task_search import resolve_scene_grasps
+
+    poses = resolve_scene_grasps("nonsense_body", {"nonsense_body": {"pos": [0, 0, 0], "cat": "X"}})
+    assert poses == []
+
+
 def test_plan_pick_place_mcts_skips_missing_gt():
     robot = _FakeRobot({})  # no placements
     plan = plan_pick_place_mcts(

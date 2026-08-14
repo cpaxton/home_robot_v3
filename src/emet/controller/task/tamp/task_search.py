@@ -350,7 +350,8 @@ def plan_pick_place_mcts(
     robot: Any,
     *,
     candidates: Sequence[dict[str, Any]],
-    grasp_poses: Sequence[Any],
+    grasp_poses: Sequence[Any] = (),
+    grasp_poses_by_body: dict[str, Sequence[Any]] | None = None,
     executor: Any | None = None,
     approach_standoff_m: float = 0.55,
     top_k_grasps: int = 8,
@@ -367,6 +368,11 @@ def plan_pick_place_mcts(
     :class:`PickPlaceDistancePolicy` over the live scene geometry (base at the
     scene origin), then grounds the winning assignment with
     :func:`plan_pick_place` (approach standoff + IK-ranked reachable grasps).
+
+    Grasps are per-object: pass ``grasp_poses_by_body`` keyed by ``object_gt_body``
+    (preferred), or a flat ``grasp_poses`` list used for every candidate. When
+    neither is available (teleport path) a top-down grasp is synthesized at the
+    object COM.
 
     This is the "agent-call-wrapping" TAMP seam: the distance heuristic policy
     stands in for an LLM proposer, and the executor/MuJoCo grounding is the
@@ -386,6 +392,29 @@ def plan_pick_place_mcts(
             message="no_gt_candidates",
             expanded_nodes=[f"candidates={len(candidates)}"],
         )
+
+    by_body = {str(c.get("object_gt_body")): c for c in cands}
+    flat_by_body: dict[str, list[Any]] = {}
+    for g in grasp_poses:
+        body = str(getattr(g, "object_body", "") or "")
+        flat_by_body.setdefault(body, []).append(g)
+
+    def _grasps_for(body: str) -> list[Any]:
+        if grasp_poses_by_body is not None and body in grasp_poses_by_body:
+            return list(grasp_poses_by_body[body])
+        if body in flat_by_body:
+            return list(flat_by_body[body])
+        if body in by_body and by_body[body].get("grasp_poses"):
+            return list(by_body[body]["grasp_poses"])
+        if grasp_poses:
+            return list(grasp_poses)
+        # No caller-supplied grasps: resolve real DROID grasps from the scene asset +
+        # live placement pose (in-process oracle). Falls back to an empty list so the
+        # caller synthesizes a top-down grasp (teleport path).
+        try:
+            return resolve_scene_grasps(body, pl, category=by_body.get(body, {}).get("object_query"))
+        except Exception:
+            return []
 
     def _pos(body: str) -> np.ndarray:
         return np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)[:2]
@@ -424,7 +453,7 @@ def plan_pick_place_mcts(
         # Ground the best assignment through the deterministic TAMP planner. When no
         # grasp candidates were supplied (teleport path), synthesize a top-down grasp
         # at the object COM so the plan still grounds and executes via sim teleport.
-        grounding_grasps = list(grasp_poses)
+        grounding_grasps = list(_grasps_for(obj_body))
         if not grounding_grasps:
             from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
 
@@ -488,3 +517,32 @@ def policy_rollout(state: dict, action: Any) -> tuple[dict, float, bool]:
             return next_state, 10.0, True
         return state, -1.0, True
     return state, -float(cost), True
+
+
+def resolve_scene_grasps(body: str, placements: dict[str, Any], *, category: str | None = None) -> list[Any]:
+    """Resolve real DROID grasp poses for ``body`` from its live placement pose.
+
+    Uses the in-process :class:`MolmoGraspOracle` over on-disk DROID grasp assets
+    (``~/.cache/molmospaces/assets/grasps/droid/...``). Returns an empty list when
+    no asset exists for the body (callers fall back to a synthetic top-down grasp).
+    """
+    from emet.perception.grasps.molmo_grasp_library import pose_matrix_from_pos_quat
+    from emet.perception.grasps.oracle import MolmoGraspOracle
+
+    info = placements.get(body)
+    if not info:
+        return []
+    pos = info.get("pos")
+    if pos is None:
+        return []
+    pos = np.asarray(pos, dtype=np.float64).reshape(3)
+    quat = info.get("quat")
+    T_obj = pose_matrix_from_pos_quat(pos, quat if quat is not None else [1.0, 0.0, 0.0, 0.0])
+    oracle = MolmoGraspOracle()
+    asset = str(info.get("asset_id") or "")
+    if asset and oracle.has_asset(asset):
+        return oracle.predict_from_asset(asset, T_obj, top_k=8)
+    try:
+        return oracle.predict_for_body(body, T_obj, category=category, top_k=8)
+    except Exception:
+        return []
