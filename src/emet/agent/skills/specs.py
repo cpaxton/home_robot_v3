@@ -96,8 +96,7 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 "approach_index": {
                     "type": "integer",
                     "description": (
-                        "Optional orbit sample 0..3 around the place. Omit to auto-pick "
-                        "the next unused approach."
+                        "Optional orbit sample 0..3 around the place. Omit to auto-pick the next unused approach."
                     ),
                 },
             },
@@ -107,9 +106,7 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="navigate_to_obs",
         modes=frozenset({AgentMode.EQA_EPISODE}),
-        description=(
-            "Alias for investigate(obs_id). Prefer calling investigate explicitly."
-        ),
+        description=("Alias for investigate(obs_id). Prefer calling investigate explicitly."),
         parameters={
             "type": "object",
             "properties": {
@@ -538,6 +535,31 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 }
             },
             "required": ["object_label"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="scene_tasks",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Enumerate candidate pick-and-place tasks from the current sim scene (MolmoSpaces / iTHOR): "
+            "pickable objects with grasp assets, receptacle sites, and proposed tasks with reachability "
+            "priors computed from the active robot's arm profile. Use to pick which object to manipulate "
+            "next or when asked 'what can you pick up and where can you put it'."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "object_filter": {
+                    "type": "string",
+                    "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                },
+                "robot": {
+                    "type": "string",
+                    "description": "Optional robot id (e.g. 'sourccey', 'rby1') to also report which objects its arm can reach.",
+                },
+            },
+            "required": [],
         },
         returns_info=True,
     ),

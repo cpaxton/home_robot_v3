@@ -1,0 +1,10 @@
+# MolmoSpaces iTHOR FloorPlan1 (index 0) + Sourccey — requires .venv-molmospaces.
+kind: molmospaces
+robot: sourccey
+scene: ithor
+split: train
+index: 0
+molmospaces_install: false
+headless: true
+port_offset: 0
+seed: 0

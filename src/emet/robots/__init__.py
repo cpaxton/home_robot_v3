@@ -25,6 +25,7 @@ ROBOT_REGISTRY = {
     "xlerobot_dual": "emet.robots.xlerobot",
     "franka_fr3": "emet.robots.franka_fr3",
     "franka": "emet.robots.franka_fr3",
+    "sourccey": "emet.robots.sourccey",
     "yor": "emet.robots.yor",
 }
 

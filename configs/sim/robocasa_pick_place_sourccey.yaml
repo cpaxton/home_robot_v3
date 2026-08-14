@@ -1,0 +1,9 @@
+# Robocasa pick-place + Sourccey (emet mobile robot merge; planar base autoplace).
+kind: robocasa
+robot: sourccey
+robocasa_task: PickPlaceCounterToCabinet
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0

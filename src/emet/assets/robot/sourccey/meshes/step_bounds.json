@@ -1,0 +1,470 @@
+{
+  "arm_base": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Base.step",
+    "size_mm": [
+      60.01685469355306,
+      28.0138884988215,
+      60.06136949960525
+    ],
+    "center_mm": [
+      1.70174985214544e-12,
+      -5.996067210076319,
+      0.022257403024996236
+    ]
+  },
+  "arm_shoulder": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Shoulder/Shoulder.step",
+    "size_mm": [
+      119.67392109718877,
+      47.61125017726232,
+      79.16059688434602
+    ],
+    "center_mm": [
+      -20.285178229963357,
+      -18.712636010705594,
+      -0.0060569812885375995
+    ]
+  },
+  "arm_bicep_l": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Bicep Left.step",
+    "size_mm": [
+      124.61947134154168,
+      79.28716626551419,
+      21.596498603236725
+    ],
+    "center_mm": [
+      22.666056338813853,
+      0.0,
+      5.322457292033768
+    ]
+  },
+  "arm_forearm": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Forearm.step",
+    "size_mm": [
+      83.14538551976176,
+      36.226048973399735,
+      157.54147671482443
+    ],
+    "center_mm": [
+      -0.09415900052731274,
+      0.0,
+      53.76290872274583
+    ]
+  },
+  "arm_wrist": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Wrist.step",
+    "size_mm": [
+      75.06030745736098,
+      80.29210986064172,
+      35.30872371444195
+    ],
+    "center_mm": [
+      27.515169583862118,
+      0.1370207518596409,
+      0.005287165177445985
+    ]
+  },
+  "gripper_base": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Gripper/Gripper Base.step",
+    "size_mm": [
+      199.00000020000155,
+      109.17721741220845,
+      54.87850314511854
+    ],
+    "center_mm": [
+      -10.0,
+      -5.57644095744833,
+      10.379031966363135
+    ]
+  },
+  "gripper_front": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Gripper/Camera Cover.step",
+    "size_mm": [
+      40.51685469355306,
+      40.51083653436619,
+      9.762793625669289
+    ],
+    "center_mm": [
+      0.0,
+      0.0030090795934345493,
+      1.375373993860505
+    ]
+  },
+  "gripper_finger": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Arms/Gripper/Gripper Finger.step",
+    "size_mm": [
+      25.79408027802893,
+      93.78277574275549,
+      64.87737137925767
+    ],
+    "center_mm": [
+      0.11380678516410558,
+      33.60815451752738,
+      -18.47733030420079
+    ]
+  },
+  "base_plate_l1": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 1/Level 1 Plate.step",
+    "size_mm": [
+      249.6254548288079,
+      249.6254548288079,
+      15.244243617700846
+    ],
+    "center_mm": [
+      124.73875222406602,
+      124.73875222406605,
+      -2.6193869355320203
+    ]
+  },
+  "base_plate_l2": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 2/Level 2 Base Plate.step",
+    "size_mm": [
+      207.49868133105866,
+      207.49868133105866,
+      15.252075538847746
+    ],
+    "center_mm": [
+      -103.5,
+      -103.5,
+      7.3766971038945295
+    ]
+  },
+  "base_plate_l3_f": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 3/Level 3 Front Plate.step",
+    "size_mm": [
+      183.75676545039215,
+      183.75676545039215,
+      15.24434731195147
+    ],
+    "center_mm": [
+      114.136770286563,
+      -114.136770286563,
+      7.380561217342668
+    ]
+  },
+  "base_plate_l3_b": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 3/Level 3 Back Plate.step",
+    "size_mm": [
+      207.4986813315228,
+      17.75207553884877,
+      207.49868133105883
+    ],
+    "center_mm": [
+      134.2071067814187,
+      422.37330289610605,
+      -177.79289321881248
+    ]
+  },
+  "base_plate_l3_l": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 3/Level 3 Left Plate.step",
+    "size_mm": [
+      184.99143805751328,
+      206.2649786306393,
+      15.248453902075031
+    ],
+    "center_mm": [
+      114.75,
+      102.886770286563,
+      -7.378507922280882
+    ]
+  },
+  "base_plate_l3_r": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Level 3/Level 3 Right Plate.step",
+    "size_mm": [
+      184.99143805751328,
+      206.2649786306393,
+      15.248453902075035
+    ],
+    "center_mm": [
+      114.75,
+      102.886770286563,
+      7.378507922280885
+    ]
+  },
+  "base_plate_dome_l": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Dome Level/Dome Plate Left.step",
+    "size_mm": [
+      185.37182584210115,
+      206.64536641522724,
+      20.871825842101256
+    ],
+    "center_mm": [
+      114.55980610770604,
+      102.696576394269,
+      -20.190193892294005
+    ]
+  },
+  "base_plate_dome_r": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Dome Level/Dome Plate Right.step",
+    "size_mm": [
+      185.37182584210117,
+      206.64536641522727,
+      20.871825842101266
+    ],
+    "center_mm": [
+      114.55980610770605,
+      102.69657639426902,
+      0.1901938922940003
+    ]
+  },
+  "base_plate_dome_rear": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Base Plates/Dome Level/Dome Plate Rear.step",
+    "size_mm": [
+      207.8686771799337,
+      207.86867717993385,
+      21.045629348128966
+    ],
+    "center_mm": [
+      103.31500207556248,
+      103.3150020755624,
+      10.096521840340001
+    ]
+  },
+  "dome_front": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Dome Front.step",
+    "size_mm": [
+      207.29617778114925,
+      207.29617778114923,
+      196.28032142893576
+    ],
+    "center_mm": [
+      102.88677028656298,
+      102.88677028656299,
+      67.62115788954371
+    ]
+  },
+  "dome_back": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Dome Back.step",
+    "size_mm": [
+      208.494932452944,
+      208.49493245294403,
+      196.1470271681069
+    ],
+    "center_mm": [
+      103.5,
+      103.49999999999999,
+      67.67395264241856
+    ]
+  },
+  "dome_left": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Dome Left.step",
+    "size_mm": [
+      207.2961777811492,
+      208.52263720802324,
+      196.28032142893576
+    ],
+    "center_mm": [
+      102.886770286563,
+      103.49999999999997,
+      67.62115788954371
+    ]
+  },
+  "dome_right": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Dome Right.step",
+    "size_mm": [
+      207.29617778114925,
+      208.52263720802327,
+      196.2803214289358
+    ],
+    "center_mm": [
+      102.886770286563,
+      -105.49999999999999,
+      67.62115788954372
+    ]
+  },
+  "dome_top": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Dome Top.step",
+    "size_mm": [
+      252.48545837921958,
+      252.56313624124746,
+      53.61075155809908
+    ],
+    "center_mm": [
+      -0.07768993762000775,
+      1.4210854715202004e-14,
+      181.51904341218224
+    ]
+  },
+  "eye_platform": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Eye Platform.step",
+    "size_mm": [
+      135.38399156370457,
+      59.95511633368005,
+      65.42021304964264
+    ],
+    "center_mm": [
+      0.004138087070721497,
+      27.917673585483733,
+      0.0
+    ]
+  },
+  "camera_holder": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Dome/Camera Holder.step",
+    "size_mm": [
+      94.01308618293024,
+      27.47791308033647,
+      34.00702486468428
+    ],
+    "center_mm": [
+      -0.00048167321910241867,
+      -8.238956440168234,
+      0.0035123323420744867
+    ]
+  },
+  "lift_motor": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Linear Actuator/LinearActuator.step",
+    "size_mm": [
+      75.22580897996657,
+      402.2987776486734,
+      75.22580294367197
+    ],
+    "center_mm": [
+      39.134081405890775,
+      190.64938872433686,
+      -84.13163087112736
+    ]
+  },
+  "lift_rack": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Linear Actuator/Rack.step",
+    "size_mm": [
+      324.7897407277393,
+      12.524091075896603,
+      53.81490928759035
+    ],
+    "center_mm": [
+      162.39246117628,
+      -16.25,
+      -14.09495454379453
+    ]
+  },
+  "lift_base": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Linear Actuator/Linear Actuator Base.step",
+    "size_mm": [
+      144.23716176713816,
+      144.23716176713813,
+      98.11548515779916
+    ],
+    "center_mm": [
+      -0.010080783569058838,
+      0.010080783569051732,
+      43.97509014419508
+    ]
+  },
+  "wheel_holder_fl": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Wheels/Wheel Holder Front Left.step",
+    "size_mm": [
+      138.17682463735088,
+      124.03623150854365,
+      71.41344769844511
+    ],
+    "center_mm": [
+      -25.153178887547632,
+      14.776388924317878,
+      35.198894214556134
+    ]
+  },
+  "wall_l1_front": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 1/Bottom Wall Front.step",
+    "size_mm": [
+      214.0756621993388,
+      214.17730581493834,
+      220.41755312602749
+    ],
+    "center_mm": [
+      106.62301284696034,
+      -106.56960568250096,
+      109.79395831030467
+    ]
+  },
+  "wall_l1_back": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 1/Bottom Wall Back.step",
+    "size_mm": [
+      213.92492804464118,
+      213.92234268798154,
+      220.26681897132983
+    ],
+    "center_mm": [
+      106.69837992430918,
+      -106.69708724597936,
+      109.8693253876535
+    ]
+  },
+  "wall_l2_front": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 2/Second Level Front.step",
+    "size_mm": [
+      207.5199322265983,
+      207.51993222659829,
+      220.26270098661755
+    ],
+    "center_mm": [
+      103.49999999999997,
+      -103.49999999999999,
+      109.87138438000964
+    ]
+  },
+  "wall_l2_left": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 2/Second Level Left.step",
+    "size_mm": [
+      207.64361085819505,
+      207.64361085819502,
+      220.35857091128608
+    ],
+    "center_mm": [
+      103.46596939112986,
+      103.46596939112987,
+      109.82344941767538
+    ]
+  },
+  "wall_l2_right": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 2/Second Level Right.step",
+    "size_mm": [
+      207.90599963941486,
+      207.90599963941486,
+      220.6209596925059
+    ],
+    "center_mm": [
+      103.33477500051993,
+      -103.33477500051993,
+      109.69225502706544
+    ]
+  },
+  "wall_l3_front": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 3/Third Level Front Wall.step",
+    "size_mm": [
+      184.41509597692664,
+      184.41509597692664,
+      236.09526434634168
+    ],
+    "center_mm": [
+      114.136770286563,
+      114.136770286563,
+      117.47685447127053
+    ]
+  },
+  "wall_l3_left": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 3/Third Level Left Wall.step",
+    "size_mm": [
+      185.50492660748938,
+      206.77846718061565,
+      220.5051981770631
+    ],
+    "center_mm": [
+      114.75,
+      -102.88677028656288,
+      2.250135784786849
+    ]
+  },
+  "wall_l3_right": {
+    "step": "/tmp/opencode/sourccey-hardware/Robot/Walls/Level 3/Third Level Right Wall.step",
+    "size_mm": [
+      185.5072940765383,
+      206.7808346496643,
+      220.50638191158754
+    ],
+    "center_mm": [
+      114.75,
+      102.886770286563,
+      2.249543917524626
+    ]
+  }
+}
