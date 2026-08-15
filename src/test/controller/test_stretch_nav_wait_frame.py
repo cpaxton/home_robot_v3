@@ -7,10 +7,11 @@ import numpy as np
 
 from emet.controller.zmq_client import StretchZmqClient
 from emet.utils.geometry import nav_xyt_to_world_xyt
+from src.test.controller import make_zmq_test_client
 
 
 def test_get_base_pose_world_composes_navigation_origin(monkeypatch):
-    client = object.__new__(StretchZmqClient)
+    client = make_zmq_test_client(StretchZmqClient)
     local = np.array([1.0, 0.0, 0.0], dtype=np.float64)
     origin = [10.0, 20.0, 0.0]
     monkeypatch.setattr(client, "get_base_pose", lambda timeout=5.0: local)
@@ -22,7 +23,7 @@ def test_get_base_pose_world_composes_navigation_origin(monkeypatch):
 
 
 def test_wait_for_waypoint_world_frame_uses_world_pose(monkeypatch):
-    client = object.__new__(StretchZmqClient)
+    client = make_zmq_test_client(StretchZmqClient)
     client._finish = False
     # Episode gps far from world goal; world pose matches goal → must succeed with world_frame.
     monkeypatch.setattr(client, "get_base_pose", lambda timeout=5.0: np.array([0.1, 0.2, 0.0]))
@@ -41,7 +42,7 @@ def test_wait_for_waypoint_world_frame_uses_world_pose(monkeypatch):
 
 
 def test_wait_for_waypoint_episode_frame_ignores_world_helper(monkeypatch):
-    client = object.__new__(StretchZmqClient)
+    client = make_zmq_test_client(StretchZmqClient)
     client._finish = False
     monkeypatch.setattr(client, "get_base_pose", lambda timeout=5.0: np.array([0.5, -0.5, 0.0]))
     monkeypatch.setattr(

@@ -600,6 +600,7 @@ def run_hmeqa_batch(
     memory_summary: bool | None = None,
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
+    debug_run_tag: str | None = None,
     export_map: bool | None = None,
     export_video: bool | None = None,
     map_stride: int | None = None,
@@ -609,7 +610,8 @@ def run_hmeqa_batch(
     results: list[EpisodeMetrics] = []
     questions = load_hmeqa_questions(questions_path)
     done: set[int] = set()
-    run_tag = run_tag_from_output_jsonl(output_jsonl)
+    explicit_tag = (debug_run_tag or "").strip() or None
+    run_tag = explicit_tag or run_tag_from_output_jsonl(output_jsonl)
     parameters = get_parameters("dynav_config.yaml")
     _configure_frontier_parameters(
         parameters,
@@ -661,7 +663,7 @@ def run_hmeqa_batch(
                 memory_summary=memory_summary,
                 mcq_debias=mcq_debias,
                 explore_when_uncovered=explore_when_uncovered,
-                debug_run_tag=run_tag if output_jsonl is not None else None,
+                debug_run_tag=run_tag,
                 export_map=export_map,
                 export_video=export_video,
                 map_stride=map_stride,

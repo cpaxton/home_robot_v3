@@ -2987,6 +2987,7 @@ def test_consecutive_nav_failures_block_after_retry_limit():
     assert ex._hypothesis_nav_blocked(7)
     blocked = ex._tool_navigate_to_obs(7)
     assert blocked.get("status") == "NAV_LOOP_BLOCKED"
+    assert blocked.get("ok") is False
     assert agent.navigate_to_target_pose.call_count == NAV_CONSECUTIVE_FAIL_LIMIT
 
 

@@ -186,6 +186,8 @@ OVMM full `--manip-mode sim|oracle|attempt` is a **different** flag from chat `a
 
 **Arm IK + RRT:** [`emet.motion.mujoco_arm_ik`](../src/emet/motion/mujoco_arm_ik.py), [`emet.motion.arm_rrt`](../src/emet/motion/arm_rrt.py); executor: [`kinematic_pick_place.py`](../src/emet/controller/manipulation/kinematic_pick_place.py). Full motion-planning overview: [motion_planning.md](motion_planning.md). Unit smoke: `uv run emet test src/test/motion/test_rby1_mujoco_arm_ik.py src/test/motion/test_kinematic_tamp_helpers.py src/test/motion/test_arm_rrt.py src/test/motion/test_voxel_obstacle_planning.py`.
 
+**Scene task inventory tool (`scene_tasks`):** the CHAT agent can enumerate pickable objects (with DROID grasp assets), receptacle sites, and proposed pick/place tasks from a MolmoSpaces scene, optionally reporting per-robot arm reachability (live sim placements when connected). Backed by [`emet.eval.scene_task_extractor`](../src/emet/eval/scene_task_extractor.py); unit tests in `src/test/eval/test_scene_task_extractor.py`.
+
 ```bash
 uv run emet serve mujoco --scene ithor --split train --index 0 --robot rby1 --headless
 uv run emet run agent --robot rby1 --robot-ip 127.0.0.1 --no-discord \

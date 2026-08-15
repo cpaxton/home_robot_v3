@@ -720,9 +720,12 @@ class AgenticEQAExecutor:
         if robot is None or not hasattr(robot, "get_base_pose"):
             return None
         try:
-            return np.asarray(robot.get_base_pose(), dtype=float).reshape(-1)
+            pose = np.asarray(robot.get_base_pose(), dtype=float).reshape(-1)
         except Exception:
             return None
+        if pose.size < 2 or not np.isfinite(pose[:2]).all():
+            return None
+        return pose
 
     def _robot_xyt_world(self) -> np.ndarray | None:
         """Robot base ``(x, y, θ)`` in the voxel-map / world frame for A* planning.

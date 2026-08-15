@@ -22,7 +22,7 @@ src/emet/motion/
   algo/           # RRT, RRT-Connect, A*, Shortcut, SimplifyXYT
   base/           # ConfigurationSpace, Planner, PlanResult
   arm_rrt.py      # Joint-space RRT-Connect wrapper for kinematic manip
-  arm_manip_profile.py  # Per-robot EE / joint / home profiles (rby1, galaxea)
+  arm_manip_profile.py  # Per-robot EE / joint / gripper / home profiles (discovered from MJCF)
   voxel_arm_collision.py
   mujoco_arm_ik.py
   base_goal_rank.py     # Multi-goal base XY on navigable grid (one A*/Dijkstra)
@@ -233,8 +233,35 @@ Fake grasp predictor over ZMQ using on-disk MolmoSpaces NPZ grasps (`~/.cache/mo
 
 | Cap | Executor |
 |-----|----------|
-| `kinematic_manip` | [`KinematicPickPlaceExecutor`](../src/emet/controller/manipulation/kinematic_pick_place.py) + [`ArmManipProfile`](../src/emet/motion/arm_manip_profile.py) (rby1 / galaxea_r1) |
+| `kinematic_manip` | [`KinematicPickPlaceExecutor`](../src/emet/controller/manipulation/kinematic_pick_place.py) + [`ArmManipProfile`](../src/emet/motion/arm_manip_profile.py) |
 | `sim_set_body_pose` only | Teleport object to grasp XYZ ([`sim_teleport_to_grasp_pose`](../src/emet/simulation/sim_manipulation.py)) — Stretch etc. |
+
+### ArmManipProfile discovery (no hardcoded table)
+
+`ArmManipProfile.for_robot()` first checks the small explicit table (`rby1` / `galaxea_r1`
+shared arms + gripper fingers), then falls back to **discovery from the robot's spec +
+vendored MJCF** via `discover_from_spec()`. This is what makes every registry robot with an
+arm pick-planable without per-robot wiring:
+
+- **Arm joints** by side convention — `left_`/`right_` prefix (sourccey, rby1), `*_L`/`*_R`
+  suffix (xlerobot), or a single un-suffixed chain (innate_mars, franka_fr3).
+- **EE body** = deepest terminal body scored by gripper/jaw/finger/ee/hand tokens
+  (`Moving_Jaw`, `ee_link`, `fr3_link7`, …).
+- **Gripper contact bodies** = finger/jaw bodies (or EE fallback) for fake-grasp contact checks.
+- **Actuator map + home q** from the spec MJCF (`actuator_trnid`, `qpos0`).
+
+### End-to-end pick verification (no physics, no EGL)
+
+`src/test/motion/test_arm_manip_profile.py` parametrizes every supported pick robot
+(sourccey, xlerobot, rby1, innate_mars, franka_fr3) and verifies, per arm:
+
+1. **Discovery resolves** — profile has joints, EE body, and a gripper contact body; every
+   name exists in the MJCF.
+2. **IK reaches the target** — `solve_position_ik_multiseed` drives the EE to a point a few
+   cm in front of the arm's home EE, within tolerance.
+3. **Fake-grasp contact** — an annotated gripper body lands within the object's contact
+   radius. Grasp *physics* (attachment/force) is not simulated; "contact" means the gripper
+   is at the object, so a mis-wired EE/joint/gripper map fails without a live robot or EGL.
 
 ```bash
 # Unit (no sim)
