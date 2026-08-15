@@ -129,9 +129,9 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
 \end{table}
 
 \noindent\textbf{Gap to prior art.}
-Our full-113 Qwen3-VL-8B run (2026-08-14; dynagraph 49.6\%, static\_graph 47.8\%) trails GraphEQA-GPT-4o by $\sim$14--18 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+Our full-113 Qwen3-VL-8B run (2026-08-14; dynagraph 49.6\%, static\_graph 47.8\% on the pooled set; 48.7\% / 44.7\% on the 76 scenes without GT semantics) trails GraphEQA-GPT-4o by $\sim$14--18 percentage points---consistent with weaker local VLMs and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
 The earlier gemma-3-4b full-benchmark (41.6\% static\_graph) showed a $\sim$22\,pp gap.
-Note: the recorded 2026-08-14 numbers include a post-sweep scoring fix (the \texttt{[memory-location]} override no longer clobbers confident VLM letters, gates default on); that fix raised both methods, so the Dynagraph-vs-baseline \emph{memory} delta is best read from a matched no-bug comparison rather than this single run.
+Two notes: (1) the recorded numbers include a post-sweep scoring fix (the \texttt{[memory-location]} override no longer clobbers confident VLM letters, gates default on); (2) the runner disables GT HM3D semantics (\texttt{--no-hm3d-semantics}) so the agent uses only its own perception---the GraphEQA prior art instead uses full GT semantics. On the GT-free subset the Dynagraph-vs-static\_graph memory delta is $+4$\,pp (48.7\% vs.\ 44.7\%).
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
 
