@@ -60,24 +60,29 @@ commit `8fb7c1a5` (strategy branch; `run-batch --debug-run-tag` fix + `EMET_ALLO
 
 | Method | VLM | n | Accuracy | JSONL tag |
 |--------|-----|---|----------|-----------|
-| dynagraph | Qwen3-VL-8B | 113 | **44.2%** (50/113) | `subset_paper113_20260813_104004_dynagraph_qwen3_vl.jsonl` |
-| static_graph | Qwen3-VL-8B | 113 | **37.2%** (42/113) | `subset_paper113_20260813_104004_static_graph_qwen3_vl.jsonl` |
+| dynagraph | Qwen3-VL-8B | 113 | **49.6%** (56/113) | `subset_paper113_20260814_171051_dynagraph_qwen3_vl.jsonl` |
+| static_graph | Qwen3-VL-8B | 113 | **47.8%** (54/113) | `subset_paper113_20260814_171051_static_graph_qwen3_vl.jsonl` |
 
-**Results (complete, 2026-08-13):** dynagraph **50/113 = 44.2%** (mean planning steps
-50.1) vs static_graph **42/113 = 37.2%** — **dynagraph +7 pp over static_graph on the
-full 113 at 8B**, confirming the Dynagraph memory gains hold at scale. Both are above
-the gemma-3-4b full-benchmark (41.6% static_graph); still ~19–23 pp below GraphEQA API
-baselines (63.5–67.0%), consistent with the local VLM tier + partial semantics gap.
+**Results — as-scored (2026-08-13, pre-fix):** dynagraph **44.2%** (50/113) vs
+static_graph **37.2%** (42/113) — dynagraph +7 pp over static_graph.
 
-> **As-scored vs override fix:** these are the as-scored numbers (commit `8fb7c1a5`).
-> A post-sweep scoring bug (`[memory-location]` override clobbering confident VLM
-> letters) is fixed and config-gated: `location_override_equip_gate` **and**
-> `location_override_image_gate` both default **on**. Offline A/B on this jsonl
-> suggests dynagraph ≈ 52.2% / static_graph ≈ 44.2% with both gates. **Note:** a
-> 2026-08-14 live re-run with equip-gate-only was a null-op (+2 pp) — the image branch
-> (ungated) was the real offender for the q44/q14/q25/q41/q47 class, so the image gate
-> now defaults on too. See [full113_log_analysis.md](full113_log_analysis.md) and
-> `scripts/hmeqa_override_ab.py`. Quote the recorded numbers unless the fix is re-run.
+**Results — with override fix (2026-08-14, both gates on):**
+
+| Method | as-scored | fixed | Δ |
+|--------|-----------|-------|---|
+| dynagraph | 44.2% (50/113) | **49.6% (56/113)** | **+5.4 pp** |
+| static_graph | 37.2% (42/113) | **47.8% (54/113)** | **+10.6 pp** |
+
+> **Attribution (be careful — the gains are the SCORING fix, not memory):**
+> The `[memory-location]` override (equipment-distance + image-label mapping) was
+> clobbering confident-correct VLM letters. With both `location_override_equip_gate`
+> and `location_override_image_gate` on, overrides dropped to **0/113 (dynagraph)** and
+> **3/113 (static_graph)**. Because the bug hurt BOTH methods equally, fixing it raised
+> both ~5–11 pp — and the **memory delta (dynagraph vs static_graph) shrank to +1.8 pp**
+> (19 dyna-only vs 17 sg-only correct). So this run's headline is the **scoring fix**;
+> the Dynagraph-memory-vs-baseline claim needs a clean re-run comparison where the bug
+> doesn't mask it. Gap to GraphEQA API VLMs (63.5–67.0%) is still ~14–18 pp (local 8B +
+> partial semantics).
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
