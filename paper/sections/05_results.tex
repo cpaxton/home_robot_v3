@@ -96,8 +96,8 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} harness (local VLMs; partial semantics)}} \\
     static\_graph & gemma-3-4b-it & 113 & 41.6\% \\
-    dynagraph & Qwen3-VL-8B & 113 & \textbf{44.2\%} \\
-    static\_graph & Qwen3-VL-8B & 113 & 37.2\% \\
+    dynagraph & Qwen3-VL-8B & 113 & \textbf{49.6\%} \\
+    static\_graph & Qwen3-VL-8B & 113 & 47.8\% \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Held-out slices and ablations: see Table~\ref{tab:hmeqa_slices}}} \\
     \bottomrule
@@ -129,10 +129,9 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
 \end{table}
 
 \noindent\textbf{Gap to prior art.}
-Our full-113 Qwen3-VL-8B run (2026-08-13; dynagraph 44.2\%) trails GraphEQA-GPT-4o by $\sim$19--23 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
-The earlier gemma-3-4b full-benchmark (41.6\% static\_graph) showed a similar $\sim$22\,pp gap.
-On matched slices Dynagraph is competitive with our \texttt{static\_graph} baseline (+3\,pp on letter-balanced 32 at 3B); holdout-8 after July nav favored \texttt{static\_graph} until harness tuning (Table~\ref{tab:hmeqa_preliminary}).
-Numbers in Table~\ref{tab:hmeqa_vs_prior} are as-scored on that sweep; a post-sweep equipment-override fix is expected to raise the 8B dynagraph row (offline A/B $\approx$52\%; pending re-run).
+Our full-113 Qwen3-VL-8B run (2026-08-14; dynagraph 49.6\%, static\_graph 47.8\%) trails GraphEQA-GPT-4o by $\sim$14--18 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+The earlier gemma-3-4b full-benchmark (41.6\% static\_graph) showed a $\sim$22\,pp gap.
+Note: the recorded 2026-08-14 numbers include a post-sweep scoring fix (the \texttt{[memory-location]} override no longer clobbers confident VLM letters, gates default on); that fix raised both methods, so the Dynagraph-vs-baseline \emph{memory} delta is best read from a matched no-bug comparison rather than this single run.
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
 

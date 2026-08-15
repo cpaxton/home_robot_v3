@@ -1948,12 +1948,14 @@ def eval_group() -> None:
     """
 
 
-@eval_group.command("status", short_help="Show free VRAM and GPU compute apps")
+@eval_group.command("status", short_help="Show free VRAM, GPU compute apps, and disk")
 def eval_status() -> None:
-    """Print GPU free/total MiB and nvidia-smi compute apps (read-only)."""
-    from emet.utils.gpu_preflight import format_status_lines
+    """Print GPU free/total MiB, nvidia-smi compute apps, and disk free (read-only)."""
+    from emet.utils.gpu_preflight import disk_status_lines, format_status_lines
 
     for line in format_status_lines():
+        click.echo(line)
+    for line in disk_status_lines():
         click.echo(line)
 
 
@@ -2053,6 +2055,26 @@ def eval_kill_stale(no_gpu: bool, settle_sec: float | None) -> None:
         log=lambda m: click.echo(m, err=True),
     )
     click.echo(f"kill-stale done (signaled≈{n})")
+
+
+@eval_group.command("clean-bundles", short_help="Retention-prune HM-EQA episode debug bundles")
+@click.option("--keep", type=int, default=2, help="keep newest N runs per sweep prefix (default 2)")
+@click.option("--max-age-days", type=float, default=0.0, help="also delete bundles older than N days")
+@click.option("--apply", is_flag=True, help="actually delete (default: dry-run)")
+def eval_clean_bundles(keep: int, max_age_days: float, apply: bool) -> None:
+    """Prune large per-episode debug bundles under ~/.cache/habitat_eqa/episodes.
+
+    Each full-113 sweep writes GB of debug frames/MP4/topdown maps per method; the
+    scored results live in results/*.jsonl and are never touched. Keeps the newest
+    ``--keep`` runs per sweep, deletes the rest. Dry-run by default; use --apply.
+    """
+    from emet.utils.gpu_preflight import clean_episode_bundles, disk_status_lines
+
+    for line in disk_status_lines():
+        click.echo(line)
+    click.echo("---")
+    for line in clean_episode_bundles(keep=keep, max_age_days=max_age_days, apply=apply):
+        click.echo(line)
 
 
 @eval_group.command("affinity", short_help="Show or apply turbo-CPU exclusion mask")

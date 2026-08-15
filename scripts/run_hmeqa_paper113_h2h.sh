@@ -21,10 +21,31 @@ OUT_DIR="${OUT_DIR:-$HOME/runs/emet/hmeqa_paper113/${RUN_ID}}"
 mkdir -p "$OUT_DIR"
 TIMEOUT="${TIMEOUT:-86400}"
 NEED_MIB="${NEED_MIB:-12000}"
+NEED_FREE_GB="${NEED_FREE_GB:-50}"
 METHODS="${METHODS:-static_graph dynagraph}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
+
+# --- disk preflight: a full-113 sweep writes GB of episode debug bundles per
+# method (frame PNGs / MP4 / topdown maps) under ~/.cache/habitat_eqa/episodes.
+# Refuse to start when free space is below NEED_FREE_GB so we don't crash
+# mid-run on a full disk (2026-08-14: /tmp filled, dill import died).
+_free_kb="$(df -Pk "$HOME/.cache/habitat_eqa" 2>/dev/null | awk 'NR==2{print $4}')"
+if [[ -z "${_free_kb:-}" ]]; then
+  echo "[$(date -Is)] WARNING: could not read free space for ~/.cache/habitat_eqa; continuing"
+else
+  FREE_GB=$((_free_kb / 1024 / 1024))
+  if (( FREE_GB < NEED_FREE_GB )); then
+    echo "[$(date -Is)] ABORT: free disk under ~/.cache/habitat_eqa is ${FREE_GB} GB (< ${NEED_FREE_GB} GB)." >&2
+    echo "  A full-113 sweep writes GB of episode bundles per method." >&2
+    echo "  Free space first, e.g.:" >&2
+    echo "    uv run python scripts/clean_episode_bundles.py --keep 2 --apply" >&2
+    echo "  or set NEED_FREE_GB to a smaller floor to override." >&2
+    exit 4
+  fi
+  echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
+fi
 
 {
   echo "run_id=$RUN_ID"
