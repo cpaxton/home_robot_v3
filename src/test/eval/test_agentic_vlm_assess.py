@@ -176,3 +176,35 @@ def test_assess_view_feeds_close_look_crop_as_second_image():
     imgs = kwargs.get("image")
     assert isinstance(imgs, list) and len(imgs) == 2
     assert imgs[1].shape == (6, 6, 3)
+
+
+def test_assess_view_feeds_multi_close_look_crops():
+    """Multiple close-look crops from different views must all reach the VLM."""
+    client = _MultiClient(
+        {
+            "target": "pillows",
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": None,
+            "reason": "counted across views",
+        }
+    )
+    wide = np.zeros((16, 16, 3), dtype=np.uint8)
+    crop_a = np.full((6, 6, 3), 10, dtype=np.uint8)
+    crop_b = np.full((6, 6, 3), 200, dtype=np.uint8)
+    out = assess_view_with_vlm(
+        client,
+        question="How many pillows?",
+        rgb=wide,
+        target_phrase="pillows",
+        close_look_crop=crop_a,
+        multi_close_look_crops=[crop_b],
+    )
+    assert out.present is True
+    prompt, kwargs = client.mm_calls[0]
+    assert "different views" in prompt
+    imgs = kwargs.get("image")
+    assert isinstance(imgs, list) and len(imgs) == 3  # wide + crop_a + crop_b
+    assert imgs[1].shape == (6, 6, 3)
+    assert imgs[2].shape == (6, 6, 3)

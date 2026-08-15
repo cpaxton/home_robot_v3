@@ -371,6 +371,25 @@ def env_eqa_agentic_close_look() -> bool | None:
     return None
 
 
+def env_eqa_agentic_close_look_multiview() -> bool | None:
+    """Aggregate close-look crops across views before VLM assess (default off).
+
+    DeWorldSG-style temporal evidence: instead of assessing the current wide frame
+    plus a single crop, keep the best recent close-look crops per target and feed
+    them all to the VLM as additional images. Helps count / clock questions where
+    one glance (even zoomed) can be ambiguous.
+
+    ``EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1`` enables; default off (conservative,
+    keeps single-view behavior until the option is validated).
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
 def env_eqa_agentic_no_early_unverified() -> bool | None:
     """Hold unverified auto-submits while budget remains (default on).
 
@@ -479,6 +498,7 @@ class AgenticEQAExecutor:
         no_early_unverified: bool | None = None,
         single_view_confirm: bool | None = None,
         evidence_image: bool | None = None,
+        close_look_multiview: bool | None = None,
     ):
         self.agent = agent
         self.mode = "answer" if question else "explore"
@@ -606,7 +626,14 @@ class AgenticEQAExecutor:
         self._evidence_image = bool(
             evidence_image if evidence_image is not None else (env_ev if env_ev is not None else cfg_ev)
         )
+        env_mv = env_eqa_agentic_close_look_multiview()
+        cfg_mv = _eqa_cfg(agent).get("agentic_close_look_multiview", False)
+        self._close_look_multiview = bool(
+            close_look_multiview if close_look_multiview is not None else (env_mv if env_mv is not None else cfg_mv)
+        )
         self._assess_history: dict[int, dict[str, Any]] = {}
+        # Close-look crops per target phrase (multi-view consensus, opt-in).
+        self._close_look_crops: dict[str, list[np.ndarray]] = {}
         self._close_look_required = False
         self._close_look_source = "disabled"
         self._tools: list[Any] | None = None
@@ -2793,6 +2820,7 @@ class AgenticEQAExecutor:
         # phrase-aligned dense patch and show the VLM the zoomed region alongside the
         # wide frame so it can read detail the full image hides.
         close_look_crop = None
+        multi_crops: list[np.ndarray] = []
         if self._close_look_required and rgb is not None:
             try:
                 from emet.eval.presence_verifiers import dense_siglip_argmax_crop
@@ -2800,6 +2828,16 @@ class AgenticEQAExecutor:
                 crop = dense_siglip_argmax_crop(None, rgb, self._target_phrase or phrase)
                 if crop is not None:
                     close_look_crop, _crop_sim = crop
+                    # Multi-view consensus (DeWorldSG-style temporal evidence): keep the
+                    # current crop and, when enabled, the best recent crops for this target
+                    # so the VLM sees more than one glance (helps ambiguous count/clock).
+                    key = self._target_phrase or phrase or str(oid)
+                    recent = self._close_look_crops.setdefault(key, [])
+                    recent.append(close_look_crop)
+                    if len(recent) > 3:
+                        recent.pop(0)
+                    if self._close_look_multiview:
+                        multi_crops = [np.asarray(c) for c in recent]
             except Exception as exc:
                 _logger.warning(f"close-look crop for vlm_assess failed: {exc}")
         assessment = assess_view_with_vlm(
@@ -2811,6 +2849,7 @@ class AgenticEQAExecutor:
             is_mcq=self._question_is_mcq(),
             siglip_evidence=siglip_evidence,
             close_look_crop=close_look_crop,
+            multi_close_look_crops=multi_crops,
         )
         self._vlm_assessed_obs_ids.add(oid)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
@@ -2822,9 +2861,10 @@ class AgenticEQAExecutor:
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
             "close_look": bool(close_look_crop is not None),
+            "close_look_views": len(multi_crops) if multi_crops else (1 if close_look_crop is not None else 0),
         }
         _logger.info(
-            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s",
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s close_look_views=%d",
             oid,
             bool(assessment.present),
             bool(assessment.answerable),
@@ -2834,6 +2874,7 @@ class AgenticEQAExecutor:
             str(assessment.suggested_answer or "")[:60],
             str(assessment.reason or "")[:80],
             bool(close_look_crop is not None),
+            len(multi_crops) if multi_crops else (1 if close_look_crop is not None else 0),
         )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(

@@ -171,6 +171,7 @@ def assess_view_with_vlm(
     is_mcq: bool = True,
     siglip_evidence: str = "",
     close_look_crop: np.ndarray | None = None,
+    multi_close_look_crops: list[np.ndarray] | None = None,
 ) -> ViewAssessment:
     """Multimodal VLM: is this image enough to answer the question?
 
@@ -183,6 +184,10 @@ def assess_view_with_vlm(
     ``close_look_crop`` is an optional zoomed region around the target (for count /
     clock / fine-detail questions). When provided, it is shown to the VLM *in
     addition to* the wide frame so fine detail is readable.
+
+    ``multi_close_look_crops`` (opt-in) adds several crops from different views of
+    the same target so the VLM can aggregate temporal evidence before deciding
+    (DeWorldSG-style) — useful when a single glance, even zoomed, is ambiguous.
     """
     q = (question or "").strip()
     target = (target_phrase or "").strip()
@@ -232,11 +237,21 @@ def assess_view_with_vlm(
 
     # When a zoomed crop is available, describe it so the VLM knows to read it for detail.
     crop_line = ""
+    n_extra = 0
     if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
+        n_extra += 1
         crop_line = (
             "\nA zoomed crop of the target region is attached as a second image. "
             "Use it to read fine detail (count objects, read a clock/label) — do not "
             "rely on the wide frame alone for detail.\n"
+        )
+    multi = [np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3]
+    n_extra += len(multi)
+    if multi:
+        crop_line += (
+            f"\n{n_extra} zoomed crops of the target from different views are attached "
+            "(the current view plus earlier close looks). Aggregate across all of them "
+            "before answering — a single view may be ambiguous.\n"
         )
     user = f"{user}{crop_line}"
 
@@ -245,6 +260,7 @@ def assess_view_with_vlm(
     images = [np.asarray(rgb)]
     if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
         images.append(np.asarray(close_look_crop))
+    images.extend(multi)
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):
         try:
