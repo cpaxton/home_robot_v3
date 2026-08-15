@@ -49,7 +49,40 @@ Same HM-EQA CSV (113 questions, indices 0–112), 20/10 step budget, RTX 4090. S
 |--------|-----|---|----------|-----------|
 | graph_eqa repro | gemma-3-4b-it | **113** | **41.6%** (47/113) | `graph_eqa_gemma3_paper_q0-112.jsonl` |
 
-This is our best **full-benchmark** number — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched.
+This was our best **full-benchmark** number at 4B — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched. The post-nav 8B sweep below (44.2% dynagraph) supersedes it at 8B.
+
+### Full benchmark — post–July-nav (Qwen3-VL-8B, 2026-08-13)
+
+Full 113-question sweep after the July 2026 nav stack (Image-N waypoints, navmesh
+trajectory, frontier distance sort) with Qwen3-VL-8B. Run: `emet jobs`
+`hmeqa-paper113-d1`, OUT `~/runs/emet/hmeqa_paper113/20260813_104004`,
+commit `8fb7c1a5` (strategy branch; `run-batch --debug-run-tag` fix + `EMET_ALLOW_SDPA_ATTN=1`).
+
+| Method | VLM | n | Accuracy | JSONL tag |
+|--------|-----|---|----------|-----------|
+| dynagraph | Qwen3-VL-8B | 113 | **49.6%** (56/113) | `subset_paper113_20260814_171051_dynagraph_qwen3_vl.jsonl` |
+| static_graph | Qwen3-VL-8B | 113 | **47.8%** (54/113) | `subset_paper113_20260814_171051_static_graph_qwen3_vl.jsonl` |
+
+**Results — as-scored (2026-08-13, pre-fix):** dynagraph **44.2%** (50/113) vs
+static_graph **37.2%** (42/113) — dynagraph +7 pp over static_graph.
+
+**Results — with override fix (2026-08-14, both gates on):**
+
+| Method | as-scored | fixed | Δ |
+|--------|-----------|-------|---|
+| dynagraph | 44.2% (50/113) | **49.6% (56/113)** | **+5.4 pp** |
+| static_graph | 37.2% (42/113) | **47.8% (54/113)** | **+10.6 pp** |
+
+> **Attribution (be careful — the gains are the SCORING fix, not memory):**
+> The `[memory-location]` override (equipment-distance + image-label mapping) was
+> clobbering confident-correct VLM letters. With both `location_override_equip_gate`
+> and `location_override_image_gate` on, overrides dropped to **0/113 (dynagraph)** and
+> **3/113 (static_graph)**. Because the bug hurt BOTH methods equally, fixing it raised
+> both ~5–11 pp — and the **memory delta (dynagraph vs static_graph) shrank to +1.8 pp**
+> (19 dyna-only vs 17 sg-only correct). So this run's headline is the **scoring fix**;
+> the Dynagraph-memory-vs-baseline claim needs a clean re-run comparison where the bug
+> doesn't mask it. Gap to GraphEQA API VLMs (63.5–67.0%) is still ~14–18 pp (local 8B +
+> partial semantics).
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
@@ -120,9 +153,11 @@ On balanced-32 and paper slices at 3B/8B, **dynagraph ≥ graph_eqa** (+1–3 pp
 | Comparison | Gap | Likely cause |
 |------------|-----|--------------|
 | Us (41.6% / 113, gemma-3-4b) vs GraphEQA GPT-4o (63.5%) | ~−22 pp | Weaker local VLM + partial semantics + different graph stack |
+| Us (44.2% / 113, dynagraph, Qwen3-VL-8B + July nav) vs GraphEQA GPT-4o (63.5%) | ~−19 pp | Local 8B VLM + partial semantics; nav/memory gains close ~3 pp of the tier gap |
 | Us (87.5%, hold-out-8 graph_eqa, Qwen3-VL-8B + July nav) vs random (25%) | +62.5 pp | Nav stack works on search slice; small n |
 | Us (50%, hold-out-8 dynagraph pre-nav) vs post-nav graph_eqa (87.5%) | +37.5 pp | Nav + baseline graph path >> dynagraph extras on holdout |
-| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Need full 113 for meaningful comparison |
+| Us (44.2% dynagraph vs 37.2% static_graph, full 113 @ 8B) | **+7 pp** | Dynagraph memory (merge/staleness + CONFIRMED_MEMORY) holds at scale |
+| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Now comparable: full 113 @ 8B = 44.2% |
 | dynagraph vs graph_eqa (bal-32 @ 8B post-nav) | +3 pp (13/32 vs 12/32) | Debias/memory help on average; hurt on some holdout eps |
 
 We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance; post-nav balanced-32 favored dynagraph slightly (+1 pp) while holdout favored graph_eqa (+4 pp) before harness tuning.
@@ -149,7 +184,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 \*Partial JSONL on some arms from early resume.
 
-**In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
+**In progress:** full-113 post-nav sweep (Qwen3-VL-8B, dynagraph + static_graph) — job `hmeqa-paper113-d1`, see [Full benchmark — post–July-nav](#full-benchmark--postjuly-nav-qwen3-vl-8b-2026-08-13). Representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures) also pending.
 
 **Merge policy (2026-07-11; clarified 2026-07-29):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`static_graph`** (legacy method tag `graph_eqa`) uses profile **`static_graph`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA-inspired comparison row. Historical JSONL / table labels may still say `graph_eqa`; they map to `static_graph`. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
 

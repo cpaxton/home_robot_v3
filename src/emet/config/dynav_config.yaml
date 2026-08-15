@@ -63,6 +63,19 @@ eqa:
   # Cap RGB fed to the VL (longest side). 0 = no resize. Optional pixel budget via vl_image_max_pixels.
   vl_image_max_side: 512
   vl_image_max_pixels: 0
+  # Location-MCQ letter overrides. A confident VLM A–D is ground truth; geometric /
+  # image-landmark fallbacks should only correct an uncertain or absent letter.
+  #   location_override_equip_gate: true  → do not let the equipment-distance guess
+  #     override a confident VLM letter (full-113 fix, 2026-08-13: 11 dynagraph +
+  #     14 static_graph episodes scored a wrong letter via [memory-location]).
+  #   location_override_image_gate: true → also gate image-landmark overrides on
+  #     confidence. Default ON since the 2026-08-14 live re-run: the image-label
+  #     mapping is the main source of [memory-location] overrides that clobber
+  #     confident, correct VLM letters (q44/q14/q25/q41/q47).
+  # (_answer_field_lines always accepts both the line-start and JSON "answer" forms;
+  #   no separate parse gate is needed.)
+  location_override_equip_gate: true
+  location_override_image_gate: true
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8

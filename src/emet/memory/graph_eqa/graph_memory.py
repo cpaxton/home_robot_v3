@@ -2361,6 +2361,20 @@ class GraphEQAMemory:
             return params.get(f"eqa/{key}", default)
         return default
 
+    def _eqa_override_gate(self, key: str, default: bool) -> bool:
+        """Boolean eqa flag with an env escape hatch: ``EMET_EQA_<KEY>=0|1``.
+
+        Lets the Habitat HM-EQA runner / overnight jobs toggle location-letter
+        override behavior (equip/image gates) without editing a config file.
+        """
+        env_name = "EMET_EQA_" + key.upper()
+        env = os.environ.get(env_name, "").strip().lower()
+        if env in ("1", "true", "yes", "on"):
+            return True
+        if env in ("0", "false", "no", "off"):
+            return False
+        return bool(self._eqa_cfg_value(key, default))
+
     def _spatial_rag_enabled(self) -> bool:
         """True when eqa.spatial_rag or EMET_EQA_SPATIAL_RAG requests REGION prompts."""
         env = os.environ.get("EMET_EQA_SPATIAL_RAG", "").strip().lower()
@@ -4962,10 +4976,19 @@ class GraphEQAMemory:
             memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
             parsed_letter = extract_mcq_letter(answer, parsed_choices)
             abstain = answer_is_visibility_abstain(answer) or not parsed_letter
+            # The geometric equipment-distance guess must not override a confident VLM
+            # letter: on the full-113 (2026-08-13) it flipped correct image-grounded
+            # answers to wrong (q44/q47/q94/q101: json_answer == gold, scored via
+            # [memory-location]). Config-gated so the legacy (always-override) behavior
+            # can be reproduced for A/B (eqa.location_override_equip_gate; env
+            # EMET_EQA_LOCATION_OVERRIDE_EQUIP_GATE=0 restores legacy).
+            _gate_equip = self._eqa_override_gate("location_override_equip_gate", True)
+            _gate_img = self._eqa_override_gate("location_override_image_gate", True)
+            vlm_clear = bool(confidence) and bool(parsed_letter)
             preferred = ""
-            if equip_letter and (abstain or parsed_letter != equip_letter):
+            if not (vlm_clear and _gate_equip) and equip_letter and (abstain or parsed_letter != equip_letter):
                 preferred = equip_letter
-            elif img_letter and (abstain or parsed_letter != img_letter):
+            elif not (vlm_clear and _gate_img) and img_letter and (abstain or parsed_letter != img_letter):
                 preferred = img_letter
             elif abstain and memory_letter and (self._any_graph_label_match_for_confirmed() or not img_letter):
                 preferred = memory_letter

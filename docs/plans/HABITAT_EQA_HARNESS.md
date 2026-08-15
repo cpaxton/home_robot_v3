@@ -2,11 +2,11 @@
 
 Engineering plan for reproducing GraphEQA-style embodied question answering evaluation in Habitat-Sim, driving **emet** `GraphEQAMemory` / `DynagraphController` instead of the original GraphEQA ROS/Hydra stack.
 
-**Status:** **HM-EQA implemented** — phases A–G below are done (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`, batch JSONL, diagnostics). Preliminary paper numbers exist on held-out slices; **full 113-question sweep** and **OpenEQA** remain open.
+**Status:** **HM-EQA implemented** — phases A–G below are done (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`, batch JSONL, diagnostics). Preliminary paper numbers exist on held-out slices; **full 113-question sweep DONE 2026-08-13** (dynagraph 44.2% / static_graph 37.2% @ Qwen3-VL-8B); **OpenEQA** remains open.
 
 **User docs:** [docs/habitat/README.md](../habitat/README.md) (install, data, Matterport API tokens, troubleshooting, [navigation](../habitat/usage.md#navigation-habitat-only)).
 
-**Paper dependency:** Headline HM-EQA table in `paper/sections/05_results.tex` pending full 113-question post–July-2026 nav-fix sweep. Recorded numbers: [docs/experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md).
+**Paper dependency:** Headline HM-EQA table in `paper/sections/05_results.tex` — full 113-question post–July-2026 nav-fix sweep recorded (dynagraph 44.2% / static_graph 37.2% @ Qwen3-VL-8B). Recorded numbers: [docs/experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md).
 
 **Branch:** Harness merged to `main`; active eval work on feature branches (e.g. `feature/eval-tools`).
 

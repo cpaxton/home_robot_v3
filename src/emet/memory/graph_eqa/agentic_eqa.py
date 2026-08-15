@@ -627,9 +627,12 @@ class AgenticEQAExecutor:
         if robot is None or not hasattr(robot, "get_base_pose"):
             return None
         try:
-            return np.asarray(robot.get_base_pose(), dtype=float).reshape(-1)
+            pose = np.asarray(robot.get_base_pose(), dtype=float).reshape(-1)
         except Exception:
             return None
+        if pose.size < 2 or not np.isfinite(pose[:2]).all():
+            return None
+        return pose
 
     def _robot_xyt_world(self) -> np.ndarray | None:
         """Robot base ``(x, y, θ)`` in the voxel-map / world frame for A* planning.
@@ -648,6 +651,8 @@ class AgenticEQAExecutor:
         if callable(convert):
             try:
                 world = np.asarray(convert(local), dtype=float).reshape(-1)
+                if world.size < 2 or not np.isfinite(world[:2]).all():
+                    return local
                 if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
                     print(
                         f"[navstart] local={local.round(3).tolist()} world={world.round(3).tolist()}",

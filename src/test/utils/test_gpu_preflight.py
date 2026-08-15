@@ -133,3 +133,67 @@ def test_diagnose_flags_empty_cuda_visible(monkeypatch, tmp_path):
     assert ok is False
     assert any("CUDA_VISIBLE_DEVICES is empty" in ln for ln in lines)
     assert any("empty nvidia-smi compute apps" in ln for ln in lines)
+
+
+def test_clean_episode_bundles_keeps_newest_per_prefix(tmp_path):
+    """Retention keeps the newest N runs per sweep, groups dynagraph+static_graph."""
+    root = tmp_path / "episodes"
+    root.mkdir()
+    # Two sweeps (20260810 old, 20260812 new), each with dynagraph + static_graph.
+    import time
+
+    now = time.time()
+    for stem, age in [
+        ("subset_paper113_20260810_100000", now - 5 * 86400),
+        ("subset_paper113_20260812_100000", now - 1 * 86400),
+    ]:
+        for method in ("dynagraph_qwen3_vl", "static_graph_qwen3_vl"):
+            d = root / f"{stem}_{method}"
+            d.mkdir()
+            (d / "frame.png").write_bytes(b"x" * 100)
+            os.utime(d, (age, age))
+    # keep=1: delete the 20260810 run (both methods), keep 20260812 (both).
+    out = gp.clean_episode_bundles(keep=1, root=root, apply=True)
+    remaining = sorted(p.name for p in root.iterdir())
+    assert "subset_paper113_20260810_100000_dynagraph_qwen3_vl" not in remaining
+    assert "subset_paper113_20260810_100000_static_graph_qwen3_vl" not in remaining
+    assert "subset_paper113_20260812_100000_dynagraph_qwen3_vl" in remaining
+    assert "subset_paper113_20260812_100000_static_graph_qwen3_vl" in remaining
+    assert any("freed" in ln and "APPLIED" in ln for ln in out)
+
+
+def test_clean_episode_bundles_dry_run_touches_nothing(tmp_path):
+    root = tmp_path / "episodes"
+    root.mkdir()
+    for stem in ("subset_paper113_20260801_100000", "subset_paper113_20260813_100000"):
+        d = root / f"{stem}_dynagraph_qwen3_vl"
+        d.mkdir()
+        (d / "frame.png").write_bytes(b"x" * 100)
+    before = sorted(p.name for p in root.iterdir())
+    gp.clean_episode_bundles(keep=1, root=root, apply=False)
+    after = sorted(p.name for p in root.iterdir())
+    assert before == after
+
+
+def test_clean_bundles_keeps_unique_and_newest_runs(tmp_path):
+    """keep=N prunes only timestamped runs; unique bundles survive unless aged."""
+    import time
+
+    root = tmp_path / "episodes"
+    root.mkdir()
+    now = time.time()
+    # One unique ad-hoc bundle + two sweep runs (old + new).
+    u = root / "cli_episode_q0000"
+    u.mkdir(); (u / "f").write_bytes(b"x")
+    os.utime(u, (now - 3 * 86400, now - 3 * 86400))
+    for stem, age in [("subset_paper113_20260801_100000", now - 5 * 86400),
+                      ("subset_paper113_20260813_100000", now - 1 * 86400)]:
+        d = root / f"{stem}_dynagraph_qwen3_vl"
+        d.mkdir(); (d / "f").write_bytes(b"x")
+        os.utime(d, (age, age))
+    out = gp.clean_episode_bundles(keep=1, root=root, apply=True)
+    remaining = sorted(p.name for p in root.iterdir())
+    assert "cli_episode_q0000" in remaining  # unique kept despite keep=1
+    assert "subset_paper113_20260801_100000_dynagraph_qwen3_vl" not in remaining
+    assert "subset_paper113_20260813_100000_dynagraph_qwen3_vl" in remaining
+    assert any("APPLIED" in ln for ln in out)

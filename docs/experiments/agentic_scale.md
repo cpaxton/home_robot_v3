@@ -14,8 +14,8 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 | 1b | Fail-set / explore / verify-gate fixes (q104/q105, carve, soft-recent) | done (PR #87: station-filter + explore-after-ABSENT) |
 | 1c | Paper-router + explore agentic-only bal-32 | **DONE** — 16/32 @ `e7d0eb20` |
 | 2 | Paper-20 **or** annotated-semantics H2H (one night) | optional |
-| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if claiming letter win | later |
-| larger VLM | 32B int4 smoke → holdout-4 agentic → optional holdout-8 / bal-32 | **recipe only** — see below; no GPU launch until smoke OK |
+| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if claiming letter win | **DONE (2026-08-13)** — post-nav Qwen3-VL-8B: dynagraph **44.2%** vs static_graph **37.2%** (job `hmeqa-paper113-d1`); agentic-113 still optional |
+| larger VLM | 32B int4 smoke → holdout-4 agentic → optional holdout-8 / bal-32 | **recipe only** — see below; smoke OK (peak 20.4/24.5 GB), no GPU launch until full-113 frees the GPU |
 
 ## Policy timeline
 
