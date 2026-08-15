@@ -35,6 +35,8 @@ Reproduced from GraphEQA Table 1 (HM-EQA column). All use Habitat-Sim, 20 VLM pl
 | GraphEQA | Gemini-2.5 Pro | 113 | **67.0%** | Best published sim result |
 | GraphEQA | Llama4-Mav | 113 | 57.7% | Strong open model in ref. stack |
 
+**Scene-graph-generation prior art (not EQA rows):** [DeWorldSG](https://deworldsg2026.github.io/) (Kim et al., ECCV 2026) builds depth-aware 3D scene graphs from RGB-D via world-model priors — relevant as a *graph-perception* method, not a benchmark row. Our GraphEQAMemory is built online from the agent's own perception (or GT semantics where enabled), not from an offline SGG module.
+
 Mean planning steps in the paper are **3–5** on *successful* trials (API VLMs often stop early). Trajectory length 3.6–12.6 m on successes.
 
 ## Our harness (`emet-habitat`, local VLMs)
@@ -98,6 +100,36 @@ static_graph **37.2%** (42/113) — dynagraph +7 pp over static_graph.
 > score higher (both methods benefit from GT labels), which is why the pooled 113 sits a
 > few pp above the GT-free subset. Gap to GraphEQA API VLMs (63.5–67.0%, which use full
 > GT semantics) is ~14–18 pp on the pooled set.
+
+### GraphEQA-parity baseline (the real paper episodes, GT on/off)
+
+**Motivation:** the "paper-113" above is a re-creation on whatever scenes questions.csv
+rows 0–112 happened to use — only 14/49 of its scenes overlap the GraphEQA paper's. To
+make the GT-vs-no-GT point on the *actual* paper episodes, we added a parity baseline
+on the real GraphEQA question set.
+
+**Episodes:** the 114 Explore-EQA rows whose scene appears in the GraphEQA enrich set
+(`hmeqa_enrich_labels.yaml.bundled`) — 59 HM3D train scenes, **all with `.semantic.glb`
+on disk** (GT semantics available for every episode). Enrich qid `i` == the `i`-th such
+row in CSV order (validated: 0 scene mismatches, 112/114 also confirm via label-token
+in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_question_ids`.
+
+**Arms** (`scripts/run_hmeqa_grapheqa_baseline.sh`, 4 arms × 114):
+
+| Method | GT semantics | What it shows |
+|--------|--------------|---------------|
+| dynagraph | on | GT perception + Dynagraph memory (GraphEQA-sim-like) |
+| static_graph | on | GT perception, GraphEQA-inspired baseline (Hydra-like perception) |
+| dynagraph | off | no GT + Dynagraph memory (real-world perception) |
+| static_graph | off | no GT, GraphEQA-inspired baseline |
+
+**Interpretation once run:**
+- `dynagraph/on − dynagraph/off` = the GT-semantics perception effect (we expect this
+  to be large; GT labels/positions are a sim crutch that won't transfer).
+- `dynagraph − static_graph` within each semantics mode = the Dynagraph memory delta,
+  held to a fixed perception channel.
+- Comparing GT-off (our real-world setup) against the GraphEQA-paper 63.5–67.0% (which
+  use full GT) quantifies the honest, transferable gap.
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 

@@ -53,3 +53,33 @@ def enrich_labels_for_question(
     """Return enrich label string for ``{question_id}_{scene}``, or empty."""
     table = load_hmeqa_enrich_labels(labels_path)
     return table.get(f"{question_id}_{scene}", "")
+
+
+def grapheqa_baseline_question_ids(
+    *,
+    questions_path: Path | None = None,
+    labels_path: Path | None = None,
+) -> list[int]:
+    """Row indices of the ACTUAL GraphEQA paper HM-EQA episodes.
+
+    The GraphEQA paper evaluates a specific set of Explore-EQA episodes defined by
+    ``explore_eqa_dataset_enrich_labels.yaml`` (bundled here), keyed
+    ``{questionId}_{scene}`` across 59 HM3D train scenes. Our questions.csv lists all
+    Explore-EQA questions in file order, so the paper episode ``i`` (0..113) is the
+    ``i``-th row **whose scene appears in the enrich set**, in CSV order.
+
+    Returns those row indices (114 for the paper set) so the runner can target the
+    real GraphEQA episodes via ``--question-ids`` instead of the by-index 0–112
+    re-creation. All 59 scenes have ``.semantic.glb`` on disk, so GT semantics can be
+    enabled for every episode.
+
+    Note: this deliberately does NOT use ``hmeqa_paper_question_ids`` (0..112) — that
+    is the re-created slice on whatever scenes questions.csv rows 0..112 happen to use.
+    """
+    from emet.habitat.datasets import load_hmeqa_questions
+
+    enrich = load_hmeqa_enrich_labels(labels_path)
+    ge_scenes = {str(k).split("_", 1)[1] for k in enrich}
+    questions = load_hmeqa_questions(questions_path)
+    return [q.index for q in questions if q.scene in ge_scenes]
+
