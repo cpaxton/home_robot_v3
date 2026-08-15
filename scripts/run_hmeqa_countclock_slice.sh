@@ -11,6 +11,7 @@
 #   QUESTION_IDS   comma-separated ids (default: 15 count/clock ids)
 #   TIMEOUT        per-batch wall timeout seconds (default 7200)
 #   NEED_MIB       VRAM gate (default 12000)
+#   MULTIVIEW      "1" -> EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1 (default 0)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -25,15 +26,19 @@ QUESTION_IDS="${QUESTION_IDS:-12,21,28,32,33,43,47,48,51,60,78,84,86,88,93}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
+if [[ "${MULTIVIEW:-0}" == "1" ]]; then
+    export EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1
+fi
 
 log() { echo "[$(date -Is)] $*" | tee -a "$OUT_DIR/run.log"; }
 
-log "run_id=$RUN_ID ids=$QUESTION_IDS methods=$METHODS"
+log "run_id=$RUN_ID ids=$QUESTION_IDS methods=$METHODS multiview=${MULTIVIEW:-0}"
 log "out=$OUT_DIR"
 {
     echo "run_id=$RUN_ID"
     echo "question_ids=$QUESTION_IDS"
     echo "methods=$METHODS"
+    echo "multiview=${MULTIVIEW:-0}"
     echo "git=$(git -C "$ROOT" rev-parse --short HEAD)"
 } | tee "$OUT_DIR/META.txt"
 
