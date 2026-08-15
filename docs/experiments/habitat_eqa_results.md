@@ -35,13 +35,15 @@ Reproduced from GraphEQA Table 1 (HM-EQA column). All use Habitat-Sim, 20 VLM pl
 | GraphEQA | Gemini-2.5 Pro | 113 | **67.0%** | Best published sim result |
 | GraphEQA | Llama4-Mav | 113 | 57.7% | Strong open model in ref. stack |
 
+**Scene-graph-generation prior art (not EQA rows):** [DeWorldSG](https://deworldsg2026.github.io/) (Kim et al., ECCV 2026) builds depth-aware 3D scene graphs from RGB-D via world-model priors — relevant as a *graph-perception* method, not a benchmark row. Our GraphEQAMemory is built online from the agent's own perception (or GT semantics where enabled), not from an offline SGG module.
+
 Mean planning steps in the paper are **3–5** on *successful* trials (API VLMs often stop early). Trajectory length 3.6–12.6 m on successes.
 
 ## Our harness (`emet-habitat`, local VLMs)
 
 Same HM-EQA CSV (113 questions, indices 0–112), 20/10 step budget, RTX 4090. Stack differs: `GraphEQAMemory` / DynaMem voxels, optional graph frontier nodes, navmesh nav — see [appendix 05](../../paper/sections/appendix/05_habitat_eqa_parity.tex).
 
-**Comparability gaps:** local 3–8B VLMs (not GPT-4o/Gemini); **partial** HM3D semantics (~37/113 questions had `.semantic.glb` at last audit); different scene graph and frontier planner.
+**Comparability gaps:** local 3–8B VLMs (not GPT-4o/Gemini); different scene graph and frontier planner. **GT HM3D semantics are disabled** in the full-113 runner (`--no-hm3d-semantics`): the semantic sensor would otherwise feed ground-truth per-pixel object labels + GT positions into the graph on scenes that happen to have `.semantic.glb`, an inconsistent and unfair perception shortcut (see the no-semantics stratification below).
 
 ### Full benchmark (largest n)
 
@@ -78,11 +80,56 @@ static_graph **37.2%** (42/113) — dynagraph +7 pp over static_graph.
 > clobbering confident-correct VLM letters. With both `location_override_equip_gate`
 > and `location_override_image_gate` on, overrides dropped to **0/113 (dynagraph)** and
 > **3/113 (static_graph)**. Because the bug hurt BOTH methods equally, fixing it raised
-> both ~5–11 pp — and the **memory delta (dynagraph vs static_graph) shrank to +1.8 pp**
-> (19 dyna-only vs 17 sg-only correct). So this run's headline is the **scoring fix**;
-> the Dynagraph-memory-vs-baseline claim needs a clean re-run comparison where the bug
-> doesn't mask it. Gap to GraphEQA API VLMs (63.5–67.0%) is still ~14–18 pp (local 8B +
-> partial semantics).
+> both ~5–11 pp. On the pooled 113 the **memory delta (dynagraph vs static_graph)
+> shrank to +1.8 pp** (19 dyna-only vs 17 sg-only correct). So this run's pooled
+> headline is the **scoring fix**; the Dynagraph-memory-vs-baseline claim needs a clean
+> comparison where the bug doesn't mask it and GT semantics don't confound it.
+
+> **GT-semantics-free numbers (the honest comparison):** the runner now passes
+> `--no-hm3d-semantics`, so all full-113 runs use the agent's own perception only
+> (no ground-truth semantic sensor). Stratifying the 2026-08-14 fixed run by whether a
+> scene happened to have `.semantic.glb`:
+>
+> | Method | no-GT-semantics (76) | with-GT-semantics (37) |
+> |--------|----------------------|------------------------|
+> | dynagraph | **48.7%** (37/76) | 51.4% (19/37) |
+> | static_graph | **44.7%** (34/76) | 54.1% (20/37) |
+>
+> On the **76 GT-free scenes** the memory delta is **+4 pp (dynagraph 48.7% vs
+> static_graph 44.7%)** — a clean, GT-independent Dynagraph gain. With-semantics scenes
+> score higher (both methods benefit from GT labels), which is why the pooled 113 sits a
+> few pp above the GT-free subset. Gap to GraphEQA API VLMs (63.5–67.0%, which use full
+> GT semantics) is ~14–18 pp on the pooled set.
+
+### GraphEQA-parity baseline (the real paper episodes, GT on/off)
+
+**Motivation:** the "paper-113" above is a re-creation on whatever scenes questions.csv
+rows 0–112 happened to use — only 14/49 of its scenes overlap the GraphEQA paper's. To
+make the GT-vs-no-GT point on the *actual* paper episodes, we added a parity baseline
+on the real GraphEQA question set.
+
+**Episodes:** the 114 Explore-EQA rows whose scene appears in the GraphEQA enrich set
+(`hmeqa_enrich_labels.yaml.bundled`) — 59 HM3D train scenes, **all with `.semantic.glb`
+on disk** (GT semantics available for every episode). Enrich qid `i` == the `i`-th such
+row in CSV order (validated: 0 scene mismatches, 112/114 also confirm via label-token
+in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_question_ids`.
+
+**Arms** (`scripts/run_hmeqa_grapheqa_baseline.sh`, 4 arms × 114):
+
+| Method | GT semantics | What it shows |
+|--------|--------------|---------------|
+| dynagraph | on | GT perception + Dynagraph memory (GraphEQA-sim-like) |
+| static_graph | on | GT perception, GraphEQA-inspired baseline (Hydra-like perception) |
+| dynagraph | off | no GT + Dynagraph memory (real-world perception) |
+| static_graph | off | no GT, GraphEQA-inspired baseline |
+
+**Interpretation once run:**
+- `dynagraph/on − dynagraph/off` = the GT-semantics perception effect (we expect this
+  to be large; GT labels/positions are a sim crutch that won't transfer).
+- `dynagraph − static_graph` within each semantics mode = the Dynagraph memory delta,
+  held to a fixed perception channel.
+- Comparing GT-off (our real-world setup) against the GraphEQA-paper 63.5–67.0% (which
+  use full GT) quantifies the honest, transferable gap.
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
