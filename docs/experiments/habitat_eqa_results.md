@@ -159,8 +159,44 @@ in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_q
 3. **Honest transferable numbers:** no-GT dynagraph 52.6% / static_graph 54.4% on the
    real GraphEQA episodes — comparable to Explore-EQA (51.7%) and ~9–13 pp below
    GraphEQA's GT+API-VLM rows (63.5–67.0%).
-4. **VLM tier caveat:** these use local Qwen3-VL-8B; the paper's rows use GPT-4o/Gemini
-   with full GT. The no-GT-vs-GT *direction* is the robust, model-agnostic finding.
+ 4. **VLM tier caveat:** these use local Qwen3-VL-8B; the paper's rows use GPT-4o/Gemini
+    with full GT. The no-GT-vs-GT *direction* is the robust, model-agnostic finding.
+
+### Lessons for tuning the graph (from the parity baseline)
+
+**Note on "static_graph":** it is our own `GraphEQAMemory` with merge/staleness **off**,
+an ablation of our method (a clean per-episode graph), not an independent baseline
+(Hydra 3DSG is a different stack). Treat it as the "no-memory-merge" arm.
+
+**Question-type accuracy is the signal (no-GT, real episodes):**
+
+| Label | dynagraph | static_graph |
+|-------|-----------|--------------|
+| existence | **69%** (22/32) | **72%** (23/32) |
+| state | 54% (13/24) | 46% (11/24) |
+| location | 40% (10/25) | 56% (14/25) |
+| count | 38% (8/21) | 43% (9/21) |
+| identification | 58% (7/12) | 42% (5/12) |
+
+**Count and location are the weak spots in both arms** — the graph has the objects
+but the answer reasoning fails. Failure modes (from raw reasoning):
+
+1. **count under-counts**: VLM counts one image ("one basket", "no umbrellas") instead
+   of aggregating across graph nodes. → Tuning lever: **graph-aggregated counts**
+   (count label-match nodes per room/equipment) rather than single-view eyeballing.
+2. **location room-mapping errors**: graph has the object at a position but the VLM
+   maps it to the wrong option (trash can at (0.9,-0.8) → C not D). → Tuning lever:
+   better position→choice matching (distance to option landmarks), already partly in
+   `_location_letter_from_*`.
+3. **recall (MISS)**: target never entered the graph (q95/q183/q317/q385). → Tuning
+   lever: coverage-driven explore for unresolved targets (the `explore_when_uncovered`
+   / frontier work).
+
+**Data we can collect to tune these:** per-episode graph snapshots with per-node
+`(label, xyz, room, obs_id)` + the answer decision, so we can A/B count/location
+reasoning offline without re-running the GPU sweep (like `hmeqa_override_ab.py` but
+for graph-content features).
+
 
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
