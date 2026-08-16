@@ -3060,6 +3060,7 @@ class GraphEQAMemory:
         phrase: str,
         *,
         strip_matching_labels: bool = True,
+        strip_across_obs: bool = True,
     ) -> dict[str, Any]:
         """Stop offering a disproved stem-object claim without deleting the place.
 
@@ -3067,6 +3068,11 @@ class GraphEQAMemory:
         that (obs, phrase) for hyp recall and optionally strip matching labels from
         the observation / node. Location-MCQ *place* landmarks should not call this
         for the place name itself (the island is real; only the object was missing).
+
+        ``strip_across_obs`` (default True): a closer look at one view disproving the
+        object should strip the label from nodes at OTHER views too — otherwise a stale
+        node created at an earlier obs survives and inflates count / confuses location
+        ("we're not removing things when we take a closer look").
         """
         oid = int(obs_id)
         key_phrase = str(phrase or "").strip().lower()
@@ -3079,7 +3085,7 @@ class GraphEQAMemory:
         stripped_nodes = 0
         if strip_matching_labels:
             for o in self._observations:
-                if int(o.obs_id) != oid:
+                if not strip_across_obs and int(o.obs_id) != oid:
                     continue
                 before = list(o.labels or [])
                 kept = [lab for lab in before if not label_matches_relevant_object(key_phrase, lab)]
@@ -3087,9 +3093,9 @@ class GraphEQAMemory:
                     o.labels = kept if kept else ["object"]
                     stripped_obs += 1
             for i, n in enumerate(self._nodes):
-                if int(n.obs_id) != oid:
-                    continue
                 if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
+                    continue
+                if not strip_across_obs and int(n.obs_id) != oid:
                     continue
                 before = list(n.labels or [])
                 kept = [lab for lab in before if not label_matches_relevant_object(key_phrase, lab)]

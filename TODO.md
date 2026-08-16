@@ -27,7 +27,15 @@ surfaced a concrete tuning target. **Start here next.**
 arms; existence is 69–72%.** Failure modes:
 - [ ] **Count under-counts**: VLM eyeballs one image ("one basket", "no umbrellas")
       instead of aggregating graph nodes. → **graph-aggregated counts** (count
-      label-matching nodes per room/equipment), not single-view.
+      label-matching nodes per room/equipment), not single-view. (No aggregation exists
+      today — `graph_memory` has no count-of-nodes helper.)
+- [ ] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
+      (graph_memory.py:3060) strips labels **only at that one `obs_id`**. A node created at
+      obs A that a closer look at obs B disproves **survives** → count inflation + location
+      confusion (e.g. stale "1 basket" nodes linger). Fix: on ABSENT retract, strip/remove
+      matching nodes across ALL obs (or mark `retracted` on the node so count/prompt skip it),
+      not just the current view. This is the "we're not removing things when we take a
+      closer look" issue.
 - [ ] **Location room-mapping errors**: graph has the object at a position but the VLM
       maps it to the wrong option (trash can at (0.9,-0.8) → C not D). → stronger
       position→choice matching (distance to option landmarks) than

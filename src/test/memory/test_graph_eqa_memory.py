@@ -798,6 +798,26 @@ def test_retract_stem_claim_drops_hyp_keeps_place_node():
     assert any(int(n.obs_id) == int(oid) for n in mem._nodes)
 
 
+def test_retract_across_obs_strips_stale_cross_view_node():
+    """A closer look at one obs disproving the object strips the label from nodes
+    at OTHER views too (stale cross-obs nodes otherwise inflate count / confuse
+    location — 'we're not removing things when we take a closer look')."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    oid_a = mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl", "table"])
+    oid_b = mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa", "lamp"])
+    mem._relevant_objects = ["fruit bowl"]
+    mem._relevant_phrases = ["fruit bowl"]
+    # Closer look at obs B says ABSENT — the stale node at obs A must lose the label.
+    out = mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl")
+    assert out["ok"] is True
+    assert out["stripped_nodes"] >= 1
+    node_a = next(n for n in mem._nodes if int(n.obs_id) == int(oid_a) and not getattr(n, "is_viewpoint", False))
+    assert "fruit" not in str(node_a.labels).lower() and "bowl" not in str(node_a.labels).lower()
+    # Node itself survives (place geometry kept), but no longer advertises the object.
+    assert any(int(n.obs_id) == int(oid_a) for n in mem._nodes)
+
+
 def test_extract_relevant_objects_prefers_phrases():
     mem = GraphEQAMemory(
         defer_llm_clients=True,
