@@ -131,6 +131,37 @@ in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_q
 - Comparing GT-off (our real-world setup) against the GraphEQA-paper 63.5–67.0% (which
   use full GT) quantifies the honest, transferable gap.
 
+**Results (2026-08-15, job `hmeqa-grapheqa-baseline`, OUT `20260815_013914`, all 114):
+
+| Method | GT on | GT off | Δ (off − on) |
+|--------|-------|--------|-------------|
+| dynagraph | 43.9% (50/114) | **52.6%** (60/114) | **+8.7 pp** |
+| static_graph | 54.4% (62/114) | 54.4% (62/114) | 0 pp |
+
+**Memory delta (dynagraph − static_graph), within fixed perception:**
+- GT on: dyna-only 8, sg-only 20 → **−10.5 pp** (static_graph better under GT)
+- GT off: dyna-only 12, sg-only 14 → **−1.8 pp** (near-tied; the honest real-world view)
+
+**GT-effect deltas (per-episode flips):**
+- dynagraph: GT-off-only 21 vs GT-on-only 11 → **+8.8 pp for no-GT**
+- static_graph: GT-off-only 11 vs GT-on-only 11 → 0 pp
+
+**Read:**
+1. **GT semantics do not help — and hurt Dynagraph.** On the real paper episodes,
+   no-GT Dynagraph is **+8.7 pp better** than GT-on (52.6% vs 43.9%). GT positions can
+   mislead the memory vs. the agent's own grounded estimates. This directly supports
+   "GT semantics are a sim crutch that won't transfer."
+2. **The Dynagraph memory claim does not hold under GT.** With GT perception,
+   static_graph beats dynagraph by 10.5 pp — the memory merge/staleness *hurts* when
+   perception is already perfect. Under real (no-GT) perception they're near-tied
+   (−1.8 pp). So our HM-EQA Dynagraph advantage (seen on the re-created 113) is not a
+   clean memory win on this slice; it was partly perception- and dataset-dependent.
+3. **Honest transferable numbers:** no-GT dynagraph 52.6% / static_graph 54.4% on the
+   real GraphEQA episodes — comparable to Explore-EQA (51.7%) and ~9–13 pp below
+   GraphEQA's GT+API-VLM rows (63.5–67.0%).
+4. **VLM tier caveat:** these use local Qwen3-VL-8B; the paper's rows use GPT-4o/Gemini
+   with full GT. The no-GT-vs-GT *direction* is the robust, model-agnostic finding.
+
 ### Letter-balanced and canonical slices (Qwen2.5-VL-3B era)
 
 | Method | Slice | n | Accuracy | JSONL tag |
