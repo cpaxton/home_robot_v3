@@ -3,11 +3,50 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## HM-EQA graph tuning — parity baseline findings (PRIORITY — 2026-08-15)
+
+The GraphEQA-parity baseline (114 real paper episodes, 4 arms, `fix/no-gt-semantics`,
+OUT `~/runs/emet/hmeqa_grapheqa/20260815_013914`) settled the GT-semantics question and
+surfaced a concrete tuning target. **Start here next.**
+
+**Results (no-GT vs GT, on the real paper episodes):**
+| Method | GT on | GT off |
+|--------|-------|--------|
+| dynagraph | 43.9% | **52.6%** |
+| static_graph | 54.4% | 54.4% |
+
+- GT semantics **hurt Dynagraph (+8.7 pp without GT)** — GT positions mislead vs the
+  agent's own grounding; GT-on also more than doubles graph size (85 vs 41 nodes) and
+  changes routing. GT is a sim crutch that won't transfer.
+- static_graph GT on/off are **identical because it never reads the HM3D semantic
+  channel** (the labeler is wired only into `dynamem_graph_hooks.py` / Dynagraph
+  controller). It is an ablation (our memory, merge off), not an independent baseline.
+- **Dynagraph memory delta is not a clean win**: −10.5 pp under GT, −1.8 pp no-GT.
+
+**The tuning lever — count (38–43%) and location (40–56%) are the weak spots in both
+arms; existence is 69–72%.** Failure modes:
+- [ ] **Count under-counts**: VLM eyeballs one image ("one basket", "no umbrellas")
+      instead of aggregating graph nodes. → **graph-aggregated counts** (count
+      label-matching nodes per room/equipment), not single-view.
+- [ ] **Location room-mapping errors**: graph has the object at a position but the VLM
+      maps it to the wrong option (trash can at (0.9,-0.8) → C not D). → stronger
+      position→choice matching (distance to option landmarks) than
+      `_location_letter_from_*`.
+- [ ] **Recall misses**: target never entered the graph (q95/q183/q317/q385). →
+      coverage-driven explore for unresolved targets.
+
+**Data collection:** `HABITAT_EQA_EXPORT_GRAPH=1` already writes per-episode
+`graph.json` (node labels/xyz/room/confidence) via `export_graph_eqa_dir` — build an
+offline count/location failure-mode analyzer to A/B reasoning without re-running GPU.
+Analysis/numbers: `docs/experiments/habitat_eqa_results.md` (§ GraphEQA-parity baseline,
+§ Lessons for tuning the graph).
+
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
 Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes nav
 (sample_target_point projection, chunked-nav-as-progress); PR #111 (stacked) adds the
 `NavOutcome` enum + question-type-aware verification + camera diagnostic. What's left:
+
 
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
       runs all 8 rounds with `nav=0..2 explore=N`; the router keeps picking
