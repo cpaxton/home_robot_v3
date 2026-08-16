@@ -4675,6 +4675,56 @@ class GraphEQAMemory:
             return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
         return None
 
+    def _graph_count_hint(self, question: str) -> str:
+        """Graph-aggregated count hint for count MCQs ("How many X?").
+
+        Count questions are answered poorly by single-view VLM eyeballing. This counts
+        label-matching object nodes (non-frontier, non-viewpoint) in the graph and
+        returns a compact hint line so the answer VLM aggregates over the graph instead
+        of one image. Returns "" when the question is not a count MCQ or nothing matches.
+        """
+        try:
+            from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
+
+            choices = parse_mcq_choices_from_question(question)
+            if not choices or not choices_are_count_mcq(choices):
+                return ""
+        except Exception:
+            return ""
+        # Target phrase: stem keywords (exclude MCQ option text / filler).
+        stem = question_stem_for_keywords(question or "")
+        tokens = [
+            t
+            for t in (stem or "").lower().split()
+            if len(t) > 2 and t not in _QUESTION_STOPWORDS
+        ]
+        if not tokens:
+            return ""
+
+        def _match(lbls: str, tok: str) -> bool:
+            # Substring plus singular/plural root so "umbrella" matches "umbrellas" etc.
+            if tok in lbls:
+                return True
+            root = tok[:-2] if tok.endswith("es") else (tok[:-1] if tok.endswith("s") else tok)
+            return len(root) > 3 and root in lbls
+
+        matched: list[GraphNode] = []
+        for n in self._nodes:
+            if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
+                continue
+            lbls = " ".join(str(x) for x in (n.labels or [])).lower()
+            if any(_match(lbls, t) for t in tokens):
+                matched.append(n)
+        if not matched:
+            return ""
+        return (
+            f"GRAPH_COUNT: {len(matched)} object node(s) in the scene graph match "
+            f"'{stem.strip()}' (labels: {', '.join(str(n.labels[0]) for n in matched[:4])}"
+            f"{' …' if len(matched) > 4 else ''}); answer the count from the graph, "
+            "not a single image. Graph nodes are grounded; count only nodes with the "
+            "target label."
+        )
+
     def query_answer(
         self,
         question: str,
@@ -4771,6 +4821,11 @@ class GraphEQAMemory:
             record_prompt_count=True,
             merge_confirmed=merge_confirmed,
         )
+        # Count MCQs: inject the graph-aggregated node count so the answer VLM counts
+        # over the graph instead of a single image (count questions under-score ~38-43%).
+        count_hint = self._graph_count_hint(question)
+        if count_hint:
+            graph_str = f"{graph_str.rstrip()}\n{count_hint}"
         # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []

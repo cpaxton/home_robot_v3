@@ -1627,3 +1627,18 @@ def test_alternate_nav_target_skips_failed_frontier_obs():
     assert alt is not None
     assert abs(float(alt[0]) - 4.0) < 1e-6
     assert abs(float(alt[1]) - 5.0) < 1e-6
+
+
+def test_graph_count_hint_aggregates_label_matching_nodes():
+    """Count MCQs get a graph-aggregated node count hint (not single-view eyeballing)."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["umbrella", "vase"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["umbrella"])
+    mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["umbrella"])
+    mem._relevant_objects = ["umbrella"]
+    q = "How many umbrellas are there in the ceramic vase? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 3" in hint, hint
+    # Non-count question -> no hint.
+    assert mem._graph_count_hint("Where is the umbrella? A) Kitchen B) Bathroom C) Bedroom D) Hall. Answer:") == ""
