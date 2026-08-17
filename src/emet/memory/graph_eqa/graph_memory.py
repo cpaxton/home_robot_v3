@@ -3060,7 +3060,7 @@ class GraphEQAMemory:
         phrase: str,
         *,
         strip_matching_labels: bool = True,
-        strip_across_obs: bool = True,
+        strip_across_obs: bool = False,
     ) -> dict[str, Any]:
         """Stop offering a disproved stem-object claim without deleting the place.
 

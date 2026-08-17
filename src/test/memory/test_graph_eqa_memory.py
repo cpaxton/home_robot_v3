@@ -808,8 +808,9 @@ def test_retract_across_obs_strips_stale_cross_view_node():
     oid_b = mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa", "lamp"])
     mem._relevant_objects = ["fruit bowl"]
     mem._relevant_phrases = ["fruit bowl"]
-    # Closer look at obs B says ABSENT — the stale node at obs A must lose the label.
-    out = mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl")
+    # Closer look at obs B says ABSENT — with corroboration (prior ABSENT at another
+    # view) the stale node at obs A must lose the label.
+    out = mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl", strip_across_obs=True)
     assert out["ok"] is True
     assert out["stripped_nodes"] >= 1
     node_a = next(n for n in mem._nodes if int(n.obs_id) == int(oid_a) and not getattr(n, "is_viewpoint", False))
@@ -1642,3 +1643,17 @@ def test_graph_count_hint_aggregates_label_matching_nodes():
     assert "GRAPH_COUNT: 3" in hint, hint
     # Non-count question -> no hint.
     assert mem._graph_count_hint("Where is the umbrella? A) Kitchen B) Bathroom C) Bedroom D) Hall. Answer:") == ""
+
+
+def test_retract_default_is_obs_local_not_cross_obs():
+    """Default retract keeps other views' nodes (one weak glance shouldn't delete
+    a node seen elsewhere — cross-obs stripping is opt-in / corroborated only)."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    oid_a = mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl", "table"])
+    oid_b = mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa", "lamp"])
+    mem._relevant_objects = ["fruit bowl"]
+    mem._relevant_phrases = ["fruit bowl"]
+    out = mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl")  # strip_across_obs defaults False
+    node_a = next(n for n in mem._nodes if int(n.obs_id) == int(oid_a) and not getattr(n, "is_viewpoint", False))
+    assert "bowl" in str(node_a.labels).lower()  # still advertises at obs A

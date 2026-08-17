@@ -1457,7 +1457,20 @@ class AgenticEQAExecutor:
         phrase = str(verify_out.get("phrase") or self._target_phrase or "").strip()
         if not phrase:
             return None
-        out = gm.retract_phrase_claim_at_obs(int(obs_id), phrase)
+        # Cross-view strip only when ABSENT is corroborated at 2+ distinct views
+        # (one weak glance shouldn't delete a node seen elsewhere — that regressed
+        # existence/state in the graph-tuning experiment). Strip at THIS obs always.
+        n_prior = 0
+        retracted = getattr(gm, "_retracted_nav_claims", None) or set()
+        key = phrase.strip().lower()
+        for (rid, rphrase) in list(retracted):
+            if int(rid) != int(obs_id) and str(rphrase or "").strip().lower() == key:
+                n_prior += 1
+        out = gm.retract_phrase_claim_at_obs(
+            int(obs_id),
+            phrase,
+            strip_across_obs=n_prior >= 1,
+        )
         self._append_trace(
             {
                 "event": "retract_claim",
