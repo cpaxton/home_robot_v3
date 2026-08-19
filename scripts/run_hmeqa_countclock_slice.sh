@@ -26,6 +26,9 @@ QUESTION_IDS="${QUESTION_IDS:-12,21,28,32,33,43,47,48,51,60,78,84,86,88,93}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
+# CUDA VL / EQA loads need either flash-attn or the SDPA fallback. This box has no
+# flash-attn wheel; always allow SDPA so the run is not a silent 0/15 failure.
+export EMET_ALLOW_SDPA_ATTN=1
 if [[ "${MULTIVIEW:-0}" == "1" ]]; then
     export EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1
 fi
