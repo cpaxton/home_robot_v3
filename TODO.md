@@ -3,7 +3,7 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-## Grounded graph room-evidence A/B — diagnostics complete; no-go for scale (2026-08-19)
+## Grounded graph room-evidence A/B — diagnostics complete; no-go for scale (2026-08-22)
 
 Canonical record:
 [docs/experiments/graph_room_evidence.md](docs/experiments/graph_room_evidence.md).
@@ -27,9 +27,9 @@ Canonical record:
       q12 and q76, did not fix q2, and did not demonstrate lower dwell or fewer
       repeats. This compares the whole grounded treatment, not graph evidence
       alone.
-- [x] Complete the GT-free q11 infrastructure sequence. Three complete runs
-      scored **0/3**; nonnumeric IDs and blocked-navigation redirect now work,
-      but trash-can discovery/coverage remains unsolved.
+- [x] Complete the pre-fix GT-free q11 infrastructure sequence. Three complete
+      runs scored **0/3**; nonnumeric IDs and blocked-navigation redirect worked,
+      but trash-can discovery/coverage was still unsolved at that point.
 - [x] Fix CPU-audited correctness blockers before another run: strict
       off/shadow/agent visibility, semantic handling of a valid `None` answer,
       placeholder-safe fallback, world-frame room refresh, qualified negative
@@ -48,20 +48,27 @@ Canonical record:
 - [ ] q2: parse one target room and bind gray rug evidence to the shower.
 - [ ] q11: reproduce the new direct trash-can/refrigerator grounding from a
       clean commit; the pre-fix sequence was 0/3 and the dirty diagnostic is 1/1.
-- [ ] q12: prefer direct image evidence over a graph undercount.
+- [ ] q12: validate the new direct-image-over-graph precedence on a clean run;
+      the prior grounded treatment trusted a graph undercount.
 - [ ] q76: enter and cover a bedroom instead of exhausting living-area frontiers.
 - [ ] Add `scripts/summarize_graph_room_evidence.py`; fail on manifest parity
       violations and emit paired dwell/path/repeat/budget/evidence metrics.
 
 ### Conservative next experiment
 
-- [ ] Commit and freeze a clean GT-free state (`--no-hm3d-semantics`,
-      `--no-enrich-labels`) after the full CPU-only suite passes.
-- [ ] Only then repeat the passing q11 A2 canary from the clean commit. First
-      launch `emet habitat safe-start`, require terminal `done` plus
-      `Habitat EGL OK`, then launch exactly one registered `emet jobs`
-      experiment. Stop unless q11 again reaches the kitchen and directly
-      observes the relation without plausibility or budget fallback.
+- [x] Freeze and push the reviewed GT-free implementation at `f8ceaa49`
+      (`--no-hm3d-semantics`, `--no-enrich-labels`) in PR #115. The focused
+      suite, `agent-regression`, and pre-commit pass.
+- [ ] Close the CPU baseline gate before another GPU run. The full no-sim run
+      has 1827 passes and four failures: the worker test passes after unsetting
+      inherited `OMP_NUM_THREADS=1`, while three map-rendering failures are in
+      files unchanged from `origin/main`. Fix or explicitly record that baseline
+      separately; do not describe the full suite as green.
+- [ ] Only then repeat the passing q11 A2 canary from `f8ceaa49`. First launch
+      `emet habitat safe-start`, require terminal `done` plus `Habitat EGL OK`,
+      then launch exactly one registered `emet jobs` experiment. Stop unless
+      q11 again reaches the kitchen and directly observes the relation without
+      plausibility or budget fallback.
 - [ ] If that passes, gate A0→A1→A2 on `6,11,12,47`, then repeat an A1/A2
       hard-room pair on `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked
       until both process and letter gates pass.
