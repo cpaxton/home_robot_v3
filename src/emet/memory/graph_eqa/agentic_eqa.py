@@ -44,7 +44,11 @@ from emet.memory.graph_eqa.graph_memory import (
     label_matches_relevant_object,
     question_stem_for_keywords,
 )
-from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
+from emet.memory.graph_eqa.mcq_debias import (
+    answer_is_unknownish,
+    match_freeform_to_choice,
+    valid_choice_indices,
+)
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     question_target_rooms,
@@ -182,6 +186,7 @@ class AnswerEvidenceRecord:
 
     letter: str
     source: str
+    answer_text: str = ""
     obs_id: int | None = None
     obs_revision: int = 0
     view_id: str = ""
@@ -192,8 +197,10 @@ class AnswerEvidenceRecord:
     raw: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        choice_index = ord(self.letter) - ord("A") if len(self.letter) == 1 and self.letter in "ABCDE" else None
         return {
-            "letter": self.letter,
+            "answer_text": self.answer_text or None,
+            "choice_index": choice_index,
             "source": self.source,
             "obs_id": self.obs_id,
             "obs_revision": int(self.obs_revision),
@@ -214,10 +221,14 @@ class FinalAnswerDecision:
     source: str
     confidence: float
     evidence: AnswerEvidenceRecord | None = None
+    answer_text: str = ""
+    choice_index: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "answer": self.answer,
+            "answer_text": self.answer_text or None,
+            "choice_index": self.choice_index,
             "source": self.source,
             "confidence": float(self.confidence),
             "evidence": self.evidence.to_dict() if self.evidence is not None else None,
@@ -609,12 +620,16 @@ class AgenticEQAExecutor:
         eqa_cfg = _eqa_cfg(agent)
         graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
         history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
+        attempt_mode = os.environ.get("EMET_EQA_ATTEMPT_LEDGER_MODE", "") or eqa_cfg.get("attempt_ledger_mode", "off")
         self.graph_evidence_mode = str(graph_mode).strip().lower()
         self.room_history_mode = str(history_mode).strip().lower()
+        self.attempt_ledger_mode = str(attempt_mode).strip().lower()
         if self.graph_evidence_mode not in {"off", "shadow", "agent"}:
             raise ValueError(f"invalid graph_evidence_mode: {graph_mode!r}")
         if self.room_history_mode not in {"off", "shadow", "agent"}:
             raise ValueError(f"invalid room_history_mode: {history_mode!r}")
+        if self.attempt_ledger_mode not in {"off", "shadow", "agent"}:
+            raise ValueError(f"invalid attempt_ledger_mode: {attempt_mode!r}")
         hints_env = os.environ.get("EMET_EQA_ROOM_TARGET_HINTS", "").strip().lower()
         if hints_env in _TRUE:
             self.room_target_hints = True
@@ -760,6 +775,23 @@ class AgenticEQAExecutor:
                 pass
         return local
 
+    def _refresh_graph_room_estimate(self) -> str:
+        """Read the current graph room in world coordinates before routing."""
+        gm = self.graph_memory
+        room_fn = getattr(gm, "graph_room_at_robot", None) if gm is not None else None
+        if not callable(room_fn):
+            return self._graph_room_estimate
+        try:
+            graph_room = coerce_room_label(
+                room_fn(self._robot_xyt_world()),
+                room_policy=self.room_policy,
+            )
+        except Exception as e:
+            _logger.warning(f"graph room refresh before router state failed: {e}")
+            return self._graph_room_estimate
+        self._graph_room_estimate = graph_room
+        return graph_room
+
     def _append_trace(self, row: dict[str, Any]) -> None:
         if not self._collect_trace:
             return
@@ -821,20 +853,44 @@ class AgenticEQAExecutor:
                     approach_index = int(raw_ap)
                 except (TypeError, ValueError):
                     approach_index = None
-            out = self._tool_investigate(
-                int(args.get("obs_id", -1)),
-                tool_name=name,
-                approach_index=approach_index,
-            )
+            raw_obs_id = args.get("obs_id", -1)
+            try:
+                obs_id = int(raw_obs_id)
+            except (TypeError, ValueError):
+                listed = sorted({int(h.obs_id) for h in self._hypotheses})
+                out = {
+                    "ok": False,
+                    "status": "OBS_NOT_IN_EVIDENCE",
+                    "obs_id": raw_obs_id,
+                    "listed_obs_ids": listed,
+                    "error": "obs_id must be a numeric evidence-card id",
+                }
+            else:
+                out = self._tool_investigate(
+                    obs_id,
+                    tool_name=name,
+                    approach_index=approach_index,
+                )
         elif name == "look_around":
             out = self._tool_look_around()
         elif name == "capture_and_update":
             out = self._tool_capture_and_update()
         elif name == "verify_siglip":
-            out = self._tool_verify_siglip(
-                str(args.get("phrase") or ""),
-                int(args.get("obs_id", -1)) if args.get("obs_id") is not None else None,
-            )
+            raw_obs_id = args.get("obs_id")
+            try:
+                obs_id = int(raw_obs_id) if raw_obs_id is not None else None
+            except (TypeError, ValueError):
+                out = {
+                    "ok": False,
+                    "status": "OBS_NOT_IN_EVIDENCE",
+                    "obs_id": raw_obs_id,
+                    "error": "obs_id must be a numeric evidence-card id",
+                }
+            else:
+                out = self._tool_verify_siglip(
+                    str(args.get("phrase") or ""),
+                    obs_id,
+                )
         elif name == "submit_answer":
             out = self._tool_submit_answer(str(args.get("answer") or ""))
         elif name == "finish":
@@ -879,7 +935,11 @@ class AgenticEQAExecutor:
         if name in ("investigate", "navigate_to_obs"):
             oid = args.get("obs_id", out.get("obs_id"))
             if oid is not None:
-                bits.append(f"obs={int(oid)}")
+                try:
+                    obs_label = str(int(oid))
+                except (TypeError, ValueError):
+                    obs_label = str(oid)[:32]
+                bits.append(f"obs={obs_label}")
             if out.get("ok"):
                 self._n_consecutive_explore = 0
             ap = out.get("approach_index")
@@ -2832,16 +2892,9 @@ class AgenticEQAExecutor:
             _logger.warning(f"frontier pick panel failed: {e}")
             return None
 
-    @staticmethod
-    def _mcq_letter_from_suggested(raw: Any) -> str:
-        s = str(raw or "").strip().upper()
-        if re.fullmatch(r"[A-E]", s):
-            return s
-        labeled = re.fullmatch(r"ANSWER\s*[:=-]\s*([A-E])(?:\s*[\).}]|\s*)", s)
-        if labeled:
-            return labeled.group(1)
-        m = re.search(r"\b([A-E])\b", s)
-        return m.group(1) if m else ""
+    def _mcq_letter_from_suggested(self, raw: Any) -> str:
+        """Map semantic VLM answer text to the benchmark choice encoding."""
+        return self._mcq_letter_from_text(str(raw or ""))
 
     def _view_identity_for_obs(self, obs_id: int | None) -> tuple[int, str]:
         if obs_id is None:
@@ -2873,15 +2926,18 @@ class AgenticEQAExecutor:
         answerable: bool,
         need_more_views: bool,
         confidence: float,
+        answer_text: str = "",
         raw: str = "",
     ) -> AnswerEvidenceRecord | None:
         canonical = self._mcq_letter_from_text(letter)
         if not canonical:
             return None
+        semantic = str(answer_text or "").strip() or self._choice_text_for_letter(canonical)
         revision, view_id = self._view_identity_for_obs(obs_id)
         record = AnswerEvidenceRecord(
             letter=canonical,
             source=str(source or "unknown"),
+            answer_text=semantic,
             obs_id=int(obs_id) if obs_id is not None else None,
             obs_revision=revision,
             view_id=view_id,
@@ -2926,6 +2982,7 @@ class AgenticEQAExecutor:
                 candidate = self._record_answer_evidence(
                     letter=str(history.get("suggested_answer") or ""),
                     source="vlm_suggested",
+                    answer_text=str(history.get("suggested_answer") or ""),
                     obs_id=int(oid),
                     present=True,
                     answerable=True,
@@ -3033,6 +3090,7 @@ class AgenticEQAExecutor:
             letter = self._mcq_letter_from_suggested(suggested_answer)
             self._pending_answerable = {
                 "letter": letter,
+                "answer_text": str(suggested_answer or "").strip(),
                 "obs_id": int(obs_id),
                 "phrase": str(phrase or self._target_phrase or ""),
                 "present": bool(present),
@@ -3069,6 +3127,7 @@ class AgenticEQAExecutor:
         # Defer — stash / refresh pending for a later confirm.
         self._pending_answerable = {
             "letter": letter,
+            "answer_text": str(suggested_answer or "").strip(),
             "obs_id": int(obs_id),
             "phrase": str(phrase or self._target_phrase or ""),
             "present": bool(present),
@@ -3244,6 +3303,7 @@ class AgenticEQAExecutor:
                 answer_evidence = self._record_answer_evidence(
                     letter=positive,
                     source="vlm_suggested",
+                    answer_text=str(assessment.suggested_answer or ""),
                     obs_id=oid,
                     present=True,
                     answerable=bool(assessment.answerable),
@@ -3633,9 +3693,17 @@ class AgenticEQAExecutor:
         Deterministic per question so reruns stay comparable, and spread across the
         option set so a whole benchmark is not biased toward one letter.
         """
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
         n = max(1, min(int(n_choices), len("ABCDE")))
+        choices = parse_mcq_choices_from_question(self.question)
+        if not choices:
+            choices = list(getattr(self, "_mcq_choices", None) or [])
+        valid = valid_choice_indices(choices[:n]) if choices else list(range(n))
+        if not valid:
+            valid = list(range(n))
         digest = hashlib.sha1((self.question or "").encode("utf-8")).hexdigest()
-        return chr(ord("A") + int(digest[:8], 16) % n)
+        return chr(ord("A") + valid[int(digest[:8], 16) % len(valid)])
 
     def _confidence_for_provenance(self, provenance: str) -> float:
         """Coarse calibrated confidence so a robot can say "I think X, but I'm unsure".
@@ -3661,7 +3729,7 @@ class AgenticEQAExecutor:
         The previous behavior returned a bare ``Unknown`` without ever calling the
         four-image EQA, so every budget-exhausted episode scored zero even when the
         graph held the evidence. Now we run the EQA, walk the answer channels in
-        reliability order, and fall back to a uniform-prior letter, recording which
+        reliability order, and fall back to a uniform-prior option, recording which
         rung fired so accuracy and calibration can be measured separately.
         """
         from emet.habitat.metrics import parse_mcq_choices_from_question
@@ -3674,6 +3742,7 @@ class AgenticEQAExecutor:
         provenance = str(out.get("answer_source") or "query")
         choices = parse_mcq_choices_from_question(self.question)
         resolved_letter = self._mcq_letter_from_text(answer) if choices else ""
+        raw_eqa_answer = self._eqa_self_answer_text() if choices else ""
         raw_eqa_letter = self._eqa_self_answer_letter() if choices else ""
         grounded_decision = (
             self.decision_policy == "grounded_v2"
@@ -3681,16 +3750,18 @@ class AgenticEQAExecutor:
             and bool(self._mcq_letter_from_text(self._final_answer_decision.answer))
             and self._final_answer_decision.source in {"eqa_answer", "prefer", "vlm_suggested"}
         )
-        evidence_backed_decision = (
-            self._final_answer_decision is not None
-            and self._final_answer_decision.evidence is not None
-            and bool(self._mcq_letter_from_text(self._final_answer_decision.answer))
+        decision_evidence = self._final_answer_decision.evidence if self._final_answer_decision is not None else None
+        evidence_backed_decision = bool(
+            decision_evidence is not None
+            and decision_evidence.present
+            and decision_evidence.answerable
+            and not decision_evidence.need_more_views
+            and self._mcq_letter_from_text(self._final_answer_decision.answer)
         )
         answer_verified = bool(self._verified or evidence_backed_decision)
-        # Unverified forced answers show a letter-position bias (the 2026-08 bal-32
-        # audit: wrong forced letters were overwhelmingly the last option). Run the
-        # letter-free debias (freeform + capped rotation vote) before the ladder so
-        # the final letter is position-bias-free; the raw EQA letter stays diagnostic.
+        # Unverified forced answers show an option-position bias (the 2026-08 bal-32
+        # audit: wrong forced choices were overwhelmingly last). Run semantic
+        # freeform + capped rotation voting before the fallback ladder.
         debias_letter = ""
         debias_detail: dict[str, Any] = {}
         if (
@@ -3713,29 +3784,38 @@ class AgenticEQAExecutor:
                 if gm is not None:
                     debias_detail = dict(getattr(gm, "last_mcq_debias", None) or {})
         if debias_letter:
-            answer, provenance = debias_letter, "mcq_debias"
-        elif choices and (self._answer_unknownish(answer) or not resolved_letter):
+            answer, provenance = self._choice_text_for_letter(debias_letter), "mcq_debias"
+        elif choices and not resolved_letter:
             # Keep channel tags distinct so calibration / H2H summaries can separate a
-            # view that saw the target from a deferred assess letter from a coin-flip prior.
+            # view that saw the target from a deferred assess from a uniform prior.
             trusted = self._trusted_vlm_letter()
             if trusted:
-                answer, provenance = trusted, "vlm_suggested"
+                answer, provenance = self._choice_text_for_letter(trusted), "vlm_suggested"
             else:
                 pending = self._pending_answerable_letter()
                 if pending:
-                    answer, provenance = pending, "pending_letter"
+                    answer, provenance = self._choice_text_for_letter(pending), "pending_letter"
                 else:
-                    answer, provenance = self._uniform_prior_letter(len(choices)), "uniform_prior"
+                    prior = self._uniform_prior_letter(len(choices))
+                    answer, provenance = self._choice_text_for_letter(prior), "uniform_prior"
+        resolved_letter = self._mcq_letter_from_text(answer) if choices else ""
         evidence = (
             self._final_answer_decision.evidence
             if self._final_answer_decision is not None and self._final_answer_decision.answer == answer
             else None
+        )
+        answer_text = (
+            self._final_answer_decision.answer_text
+            if self._final_answer_decision is not None and self._final_answer_decision.answer == answer
+            else answer
         )
         self._final_answer_decision = FinalAnswerDecision(
             answer=answer,
             source=provenance,
             confidence=self._confidence_for_provenance(provenance),
             evidence=evidence,
+            answer_text=answer_text,
+            choice_index=(ord(resolved_letter) - ord("A") if resolved_letter else None),
         )
         self._answer_provenance = provenance
         confidence_score = self._confidence_for_provenance(provenance)
@@ -3746,8 +3826,9 @@ class AgenticEQAExecutor:
                 "answer": answer,
                 "answer_provenance": provenance,
                 "answer_confidence": confidence_score,
-                "raw_eqa_letter": raw_eqa_letter or None,
-                "resolved_letter_before_fallback": resolved_letter or None,
+                "raw_eqa_answer": raw_eqa_answer or None,
+                "raw_eqa_choice_index": (ord(raw_eqa_letter) - ord("A") if raw_eqa_letter else None),
+                "resolved_choice_index": (ord(resolved_letter) - ord("A") if resolved_letter else None),
                 "mcq_debias": debias_detail or None,
                 "agentic_mcq_debias_enabled": bool(self._mcq_debias),
                 "evidence_backed_decision": bool(evidence_backed_decision),
@@ -3836,12 +3917,76 @@ class AgenticEQAExecutor:
         if not raw:
             return ""
         choices = parse_mcq_choices_from_question(self.question)
-        letter = extract_mcq_letter(raw, choices or None)
+        if not choices:
+            choices = list(getattr(self, "_mcq_choices", None) or [])
+        if not choices:
+            return ""
+        letter = extract_mcq_letter(raw, choices)
         if letter:
             return letter
+        if choices:
+            idx = match_freeform_to_choice(raw, choices)
+            if idx is not None and 0 <= idx < min(len(choices), 5):
+                return chr(ord("A") + idx)
         if len(raw) == 1 and raw.upper() in "ABCDE":
             return raw.upper()
         return ""
+
+    def _choice_text_for_letter(self, letter: str) -> str:
+        """Return semantic option text for an internal benchmark letter."""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        canonical = str(letter or "").strip().upper()
+        choices = parse_mcq_choices_from_question(self.question)
+        if not choices:
+            choices = list(getattr(self, "_mcq_choices", None) or [])
+        if len(canonical) != 1 or canonical not in "ABCDE":
+            return ""
+        idx = ord(canonical) - ord("A")
+        return str(choices[idx]).strip() if 0 <= idx < len(choices) else ""
+
+    def _semantic_answer_text(self, raw: str, letter: str) -> str:
+        """Keep semantic text, replacing legacy letter-only forms with option text."""
+        text = str(raw or "").strip()
+        labeled = re.fullmatch(
+            r"(?:answer\s*[:=-]\s*)?([A-E])\s*[\).:-]\s*(.+)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if labeled and labeled.group(1).upper() == str(letter or "").strip().upper():
+            return self._choice_text_for_letter(letter) or labeled.group(2).strip()
+        if text and not re.fullmatch(
+            r"(?:answer\s*[:=-]\s*)?[A-E](?:\s*[\).}]|\s*)",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            return text
+        return self._choice_text_for_letter(letter) or text
+
+    def _decision_for_letter(
+        self,
+        letter: str,
+        source: str,
+        *,
+        evidence: AnswerEvidenceRecord | None = None,
+        answer_text: str = "",
+    ) -> FinalAnswerDecision:
+        """Build a semantic decision while retaining its resolved choice index."""
+        canonical = self._mcq_letter_from_text(letter)
+        semantic = (
+            evidence.answer_text
+            if evidence is not None and evidence.answer_text
+            else self._semantic_answer_text(answer_text, canonical)
+        )
+        idx = ord(canonical) - ord("A") if canonical else None
+        return FinalAnswerDecision(
+            answer=semantic or str(answer_text or "").strip() or "Unknown",
+            source=source,
+            confidence=self._confidence_for_provenance(source),
+            evidence=evidence,
+            answer_text=semantic,
+            choice_index=idx,
+        )
 
     def _trusted_vlm_letter(self) -> str:
         """MCQ letter from the most recent assess that actually saw the target.
@@ -3863,15 +4008,8 @@ class AgenticEQAExecutor:
                 return letter
         return self._last_positive_letter
 
-    def _eqa_self_answer_letter(self) -> str:
-        """Letter from the four-image EQA's own ``Answer:`` block.
-
-        ``extract_mcq_letter_from_raw_eqa`` intentionally reads the *last* ``answer:``
-        field, which by submit time can be a ``[salvage]`` / ``[memory-location]``
-        override. Here we want the EQA's own verdict, so we stop at the first
-        override marker. Falls back to free-form choice matching so a prose answer
-        (``The time is 2:30 PM``) still scores instead of going blank.
-        """
+    def _eqa_self_answer_text(self) -> str:
+        """Semantic answer from the four-image EQA before post-model overrides."""
         gm = self.graph_memory
         if self.decision_policy == "grounded_v2" and gm is not None:
             parsed = getattr(gm, "last_eqa_model_parsed", None)
@@ -3882,14 +4020,7 @@ class AgenticEQAExecutor:
                 if field and not should_abstain_location_mcq(
                     model_raw or field, parse_mcq_choices_from_question(self.question)
                 ):
-                    letter = self._mcq_letter_from_text(field)
-                    if letter:
-                        return letter
-                    choices = parse_mcq_choices_from_question(self.question)
-                    if choices:
-                        idx = match_freeform_to_choice(field, choices)
-                        if idx is not None and 0 <= idx < len(choices):
-                            return chr(ord("A") + idx)
+                    return field
             # Older graph memories and debug fixtures may only expose raw JSON.
             raw_candidate = model_raw or str(getattr(gm, "last_eqa_raw", "") or "")
             if raw_candidate.strip():
@@ -3901,15 +4032,10 @@ class AgenticEQAExecutor:
                     data = None
                 if isinstance(data, dict):
                     field = str(data.get("answer") or "").strip()
-                    if field:
-                        letter = self._mcq_letter_from_text(field)
-                        if letter:
-                            return letter
-                        choices = parse_mcq_choices_from_question(self.question)
-                        if choices:
-                            idx = match_freeform_to_choice(field, choices)
-                            if idx is not None and 0 <= idx < len(choices):
-                                return chr(ord("A") + idx)
+                    if field and not should_abstain_location_mcq(
+                        raw_candidate, parse_mcq_choices_from_question(self.question)
+                    ):
+                        return field
         raw = str(getattr(gm, "last_eqa_raw", "") or "") if gm is not None else ""
         if not raw.strip():
             return ""
@@ -3918,7 +4044,8 @@ class AgenticEQAExecutor:
         m = re.search(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", head, flags=re.IGNORECASE)
         if not m:
             # Terse ``A}`` / ``A) <choice text>`` reply: no labeled fields at all.
-            return extract_mcq_letter(head, choices or None)
+            letter = extract_mcq_letter(head, choices or None)
+            return letter or ""
         field = m.group(1).strip()
         if not field:
             return ""
@@ -3926,9 +4053,19 @@ class AgenticEQAExecutor:
         # signal — let the ladder move on rather than forcing this text to a letter.
         if should_abstain_location_mcq(head, choices or None):
             return ""
-        letter = extract_mcq_letter(field, choices or None)
+        return field
+
+    def _eqa_self_answer_letter(self) -> str:
+        """Benchmark choice encoding derived from the EQA's semantic answer."""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        field = self._eqa_self_answer_text()
+        if not field:
+            return ""
+        letter = self._mcq_letter_from_text(field)
         if letter:
             return letter
+        choices = parse_mcq_choices_from_question(self.question)
         if choices:
             idx = match_freeform_to_choice(field, choices)
             if idx is not None and 0 <= idx < 5:
@@ -3941,73 +4078,95 @@ class AgenticEQAExecutor:
         prefer_answer: str,
         query_answer: str,
     ) -> FinalAnswerDecision:
-        """Resolve one scored answer and keep its supporting view attached."""
-        gm = self.graph_memory
+        """Resolve one scored answer and keep its supporting view attached.
+
+        Image evidence outranks graph-steered multi-image EQA. The view that
+        opened the ANSWER gate (or any present+answerable assess) is the scored
+        channel when it exists; EQA is only a fallback when no such view exists.
+        """
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
         qa = str(query_answer or "").strip()
 
-        # The multi-image EQA saw exactly last_eqa_obs_ids. Preserve its native parse
-        # before considering a router proposal or single-view assessment.
-        eqa_letter = self._eqa_self_answer_letter()
-        if eqa_letter:
-            obs_ids = list(getattr(gm, "last_eqa_obs_ids", []) or []) if gm is not None else []
-            obs_id = int(obs_ids[0]) if obs_ids else None
-            history = self._assess_history.get(obs_id, {}) if obs_id is not None else {}
-            evidence = self._record_answer_evidence(
-                letter=eqa_letter,
-                source="eqa_answer",
-                obs_id=obs_id,
-                present=bool(history.get("present")),
-                answerable=True,
-                need_more_views=False,
-                confidence=_PROVENANCE_CONFIDENCE["eqa_answer"],
-                raw=str(getattr(gm, "last_eqa_model_raw", "") or "") if gm is not None else "",
+        confirmed = self._confirmed_vlm_answer_evidence()
+        if confirmed is not None:
+            prefer_letter = self._mcq_letter_from_text(prefer_answer)
+            if prefer_letter and prefer_letter != confirmed.letter:
+                self._append_trace(
+                    {
+                        "event": "answer_proposal_rejected",
+                        "source": "prefer",
+                        "answer": self._semantic_answer_text(prefer_answer, prefer_letter),
+                        "choice_index": ord(prefer_letter) - ord("A"),
+                        "reason": "conflicts with confirmed VLM answer evidence",
+                        "confirmed_answer": confirmed.answer_text,
+                        "confirmed_choice_index": ord(confirmed.letter) - ord("A"),
+                        "confirmed_obs_id": confirmed.obs_id,
+                    }
+                )
+            return self._decision_for_letter(
+                confirmed.letter,
+                "vlm_suggested",
+                evidence=confirmed,
             )
-            return FinalAnswerDecision(
-                answer=eqa_letter,
-                source="eqa_answer",
-                confidence=self._confidence_for_provenance("eqa_answer"),
+
+        evidence = self._best_vlm_answer_evidence()
+        if evidence is not None:
+            return self._decision_for_letter(
+                evidence.letter,
+                "vlm_suggested",
                 evidence=evidence,
             )
 
         prefer_letter = self._mcq_letter_from_text(prefer_answer)
         if prefer_letter:
-            evidence = self._best_vlm_answer_evidence(letter=prefer_letter)
-            if evidence is not None:
-                return FinalAnswerDecision(
-                    answer=prefer_letter,
-                    source="prefer",
-                    confidence=self._confidence_for_provenance("prefer"),
-                    evidence=evidence,
+            aligned = self._best_vlm_answer_evidence(letter=prefer_letter)
+            if aligned is not None:
+                return self._decision_for_letter(
+                    prefer_letter,
+                    "prefer",
+                    evidence=aligned,
                 )
             self._append_trace(
                 {
                     "event": "answer_proposal_rejected",
                     "source": "prefer",
-                    "answer": prefer_letter,
+                    "answer": self._semantic_answer_text(prefer_answer, prefer_letter),
+                    "choice_index": ord(prefer_letter) - ord("A"),
                     "reason": "no aligned present+answerable view",
                 }
             )
 
-        evidence = self._best_vlm_answer_evidence()
-        if evidence is not None:
-            return FinalAnswerDecision(
-                answer=evidence.letter,
-                source="vlm_suggested",
-                confidence=self._confidence_for_provenance("vlm_suggested"),
-                evidence=evidence,
+        # No image-backed answer: fall back to the multi-image EQA native parse.
+        eqa_answer_text = self._eqa_self_answer_text()
+        eqa_letter = self._eqa_self_answer_letter()
+        if eqa_letter:
+            return self._decision_for_letter(
+                eqa_letter,
+                "eqa_answer",
+                answer_text=eqa_answer_text or self._choice_text_for_letter(eqa_letter),
             )
 
+        qa_letter = self._mcq_letter_from_text(qa)
+        if qa_letter and not self._looks_like_coordinate_dump(qa):
+            return self._decision_for_letter(
+                qa_letter,
+                "query",
+                answer_text=qa,
+            )
         if qa and not self._looks_like_coordinate_dump(qa):
             return FinalAnswerDecision(
                 answer=qa,
                 source="query",
                 confidence=self._confidence_for_provenance("query"),
+                answer_text=qa,
             )
         if not parse_mcq_choices_from_question(self.question) and prefer_answer.strip():
             return FinalAnswerDecision(
                 answer=prefer_answer.strip(),
                 source="prefer",
                 confidence=self._confidence_for_provenance("prefer"),
+                answer_text=prefer_answer.strip(),
             )
         return FinalAnswerDecision(
             answer="Unknown",
@@ -4026,7 +4185,7 @@ class AgenticEQAExecutor:
         Precedence:
 
         1. ``vlm_suggested`` — the view that opened the confirmed ANSWER gate.
-        2. ``prefer`` — an explicit letter when no confirmed view exists.
+        2. ``prefer`` — explicit semantic option text when no confirmed view exists.
         3. ``eqa_answer`` — the four-image EQA's own ``Answer:`` block.
         4. An unconfirmed ``vlm_suggested`` view that still saw the target.
         5. ``query`` — ``query_answer`` prose, unless it is a nearest-furniture XYZ
@@ -4054,52 +4213,68 @@ class AgenticEQAExecutor:
                     {
                         "event": "answer_proposal_rejected",
                         "source": "prefer",
-                        "answer": prefer_letter,
+                        "answer": self._semantic_answer_text(prefer, prefer_letter),
+                        "choice_index": ord(prefer_letter) - ord("A"),
                         "reason": "conflicts with confirmed VLM answer evidence",
-                        "confirmed_answer": confirmed.letter,
+                        "confirmed_answer": confirmed.answer_text,
+                        "confirmed_choice_index": ord(confirmed.letter) - ord("A"),
                         "confirmed_obs_id": confirmed.obs_id,
                     }
                 )
-            self._final_answer_decision = FinalAnswerDecision(
+            self._final_answer_decision = self._decision_for_letter(
                 confirmed.letter,
                 "vlm_suggested",
-                self._confidence_for_provenance("vlm_suggested"),
                 evidence=confirmed,
             )
-            return confirmed.letter, "vlm_suggested"
+            return self._final_answer_decision.answer, "vlm_suggested"
 
         if prefer_letter:
-            self._final_answer_decision = FinalAnswerDecision(
+            self._final_answer_decision = self._decision_for_letter(
                 prefer_letter,
                 "prefer",
-                self._confidence_for_provenance("prefer"),
+                answer_text=self._semantic_answer_text(prefer, prefer_letter),
             )
-            return prefer_letter, "prefer"
+            return self._final_answer_decision.answer, "prefer"
 
         eqa_letter = self._eqa_self_answer_letter()
         if eqa_letter:
-            self._final_answer_decision = FinalAnswerDecision(
+            self._final_answer_decision = self._decision_for_letter(
                 eqa_letter,
                 "eqa_answer",
-                self._confidence_for_provenance("eqa_answer"),
+                answer_text=self._semantic_answer_text(self._eqa_self_answer_text(), eqa_letter),
             )
-            return eqa_letter, "eqa_answer"
+            return self._final_answer_decision.answer, "eqa_answer"
 
         suggested_letter = self._trusted_vlm_letter()
         if suggested_letter:
-            self._final_answer_decision = FinalAnswerDecision(
+            suggested_evidence = self._best_vlm_answer_evidence(letter=suggested_letter)
+            self._final_answer_decision = self._decision_for_letter(
                 suggested_letter,
                 "vlm_suggested",
-                self._confidence_for_provenance("vlm_suggested"),
+                evidence=suggested_evidence,
+                answer_text=(
+                    suggested_evidence.answer_text
+                    if suggested_evidence is not None
+                    else self._choice_text_for_letter(suggested_letter)
+                ),
             )
-            return suggested_letter, "vlm_suggested"
+            return self._final_answer_decision.answer, "vlm_suggested"
 
         # A coordinate dump is not an answer; fall through rather than let it win.
+        qa_letter = self._mcq_letter_from_text(qa)
+        if qa_letter and not self._looks_like_coordinate_dump(qa):
+            self._final_answer_decision = self._decision_for_letter(
+                qa_letter,
+                "query",
+                answer_text=qa,
+            )
+            return self._final_answer_decision.answer, "query"
         if qa and not self._looks_like_coordinate_dump(qa):
             self._final_answer_decision = FinalAnswerDecision(
                 qa,
                 "query",
                 self._confidence_for_provenance("query"),
+                answer_text=qa,
             )
             return qa, "query"
         if prefer:
@@ -4107,6 +4282,7 @@ class AgenticEQAExecutor:
                 prefer,
                 "prefer",
                 self._confidence_for_provenance("prefer"),
+                answer_text=prefer,
             )
             return prefer, "prefer"
         if qa and not parse_mcq_choices_from_question(self.question):
@@ -4115,6 +4291,7 @@ class AgenticEQAExecutor:
                 qa,
                 "query",
                 self._confidence_for_provenance("query"),
+                answer_text=qa,
             )
             return qa, "query"
         self._final_answer_decision = FinalAnswerDecision("Unknown", "query", 0.0)
@@ -4202,7 +4379,7 @@ class AgenticEQAExecutor:
                 prefer_answer=prefer,
                 query_answer=query_ans,
             )
-            # Letter from VLM assess / tool arg is the decision we want to score; do not
+            # Semantic answer from VLM assess / tool arg is the decision we want to score; do not
             # inherit False confidence from a coordinate-dump query_answer path.
             if answer_source in ("prefer", "vlm_suggested") and self._mcq_letter_from_text(answer):
                 confidence = bool(self._verified) or bool(confidence)
@@ -4259,10 +4436,13 @@ class AgenticEQAExecutor:
             ),
         }
 
-    @staticmethod
-    def _answer_unknownish(answer: Any) -> bool:
-        ans = str(answer or "").strip().lower()
-        return (not ans) or ans in {"unknown", "none", "n/a", "na"} or "frontier" in ans
+    def _answer_unknownish(self, answer: Any) -> bool:
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        return answer_is_unknownish(
+            str(answer or ""),
+            parse_mcq_choices_from_question(self.question),
+        )
 
     def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[str, Any]:
         """Keep scored Unknown; optionally log a salvage counterfactual letter.
@@ -4349,9 +4529,8 @@ class AgenticEQAExecutor:
         gm = self.graph_memory
         if gm is None:
             return False
-        ans = str(submit_out.get("answer") or "").strip().lower()
         conf = bool(submit_out.get("confidence"))
-        unknownish = (not ans) or ans in {"unknown", "none", "n/a", "na"} or "frontier" in ans
+        unknownish = self._answer_unknownish(submit_out.get("answer"))
         if conf and not unknownish:
             return False
         if not unknownish:
@@ -4578,6 +4757,7 @@ class AgenticEQAExecutor:
             tool, args = self._fallback_tool()
             return [(tool, args)], "fallback", meta
         self._ensure_router_prompt()
+        self._refresh_graph_room_estimate()
         img_parts, nearby_meta, img_prefix = self._room_visual_pack()
         state = build_state_message(self)
         from emet.memory.graph_eqa.agentic_state import state_text_digest
@@ -4792,6 +4972,51 @@ class AgenticEQAExecutor:
         if self._evidence_policy.state == AgenticState.ANSWER and self._maybe_follow_eqa_explore_action(final):
             final = self._do_submit_answer()
         return final
+
+    def _recover_failed_router_motion(self, *, tool: str, out: dict[str, Any]) -> bool:
+        """Recover a router turn that selected an unusable navigation target.
+
+        A rejected tool call performs no motion, so letting it consume the round
+        unchanged invites the router to repeat the same stale id until exhaustion.
+        Redirect invalid evidence ids to the best listed place card and force one
+        exploration step when a selected place is exhausted or unusable.
+        """
+        if (
+            tool not in ("navigate_to_obs", "investigate")
+            or out.get("ok")
+            or self.mode != "answer"
+            or self._n_nav + self._n_explore >= self.max_nav_steps
+        ):
+            return False
+        status = str(out.get("status") or "")
+        invalid_pick = status in {"OBS_NOT_IN_EVIDENCE", "NOT_INVESTIGATE_CARD"}
+        blocked_pick = status in {
+            "NAV_LOOP_BLOCKED",
+            "STATION_OBS_NOT_PLACE",
+        }
+        if not invalid_pick and not blocked_pick:
+            return False
+
+        redirect_tool = "explore_frontier"
+        redirect_args: dict[str, Any] = {"toward": self.query_text}
+        if invalid_pick:
+            hyp = self._next_untried_hypothesis()
+            if hyp is not None:
+                redirect_tool = "investigate"
+                redirect_args = {"obs_id": int(hyp.obs_id)}
+
+        self._append_trace(
+            {
+                "event": "nav_loop_redirect",
+                "from_obs_id": out.get("obs_id"),
+                "status": status,
+                "listed_obs_ids": out.get("listed_obs_ids"),
+                "to": redirect_tool,
+                "to_obs_id": redirect_args.get("obs_id"),
+            }
+        )
+        self.handle_tool(redirect_tool, redirect_args)
+        return True
 
     def run(self) -> AgenticEQAResult:
         t0 = time.monotonic()
@@ -5020,24 +5245,7 @@ class AgenticEQAExecutor:
                 if not out.get("ok") and "budget" in str(out.get("error", "")):
                     # Budget gate rejected — stop dispatching the rest of this reply.
                     break
-                # Router re-picked a stalled hyp or a capture station — force explore.
-                if (
-                    self.decision_policy != "grounded_v2"
-                    and tool in ("navigate_to_obs", "investigate")
-                    and not out.get("ok")
-                    and str(out.get("status") or "") in {"NAV_LOOP_BLOCKED", "STATION_OBS_NOT_PLACE"}
-                    and self.mode == "answer"
-                    and self._n_nav + self._n_explore < self.max_nav_steps
-                ):
-                    self._append_trace(
-                        {
-                            "event": "nav_loop_redirect",
-                            "from_obs_id": out.get("obs_id"),
-                            "status": out.get("status"),
-                            "to": "explore_frontier",
-                        }
-                    )
-                    self.handle_tool("explore_frontier", {"toward": self.query_text})
+                self._recover_failed_router_motion(tool=tool, out=out)
                 # Motion tools chain verify themselves (router + fallback). Do not
                 # double-verify here — that burned rounds on SKIPPED_SAME_VIEW.
             if final is not None:
@@ -5146,9 +5354,8 @@ class AgenticEQAExecutor:
         """Write the agentic decision into ``last_eqa_*`` so Habitat scores it.
 
         Habitat ``runner.py`` reads ``graph_memory.last_eqa_raw`` /
-        ``last_eqa_parsed``, not ``AgenticEQAResult.answer``. Without this sync,
-        a correct ``vlm_suggested`` letter is overwritten by truncated
-        ``query_answer`` ``[salvage]`` (bal-32r2 q28/q39).
+        ``last_eqa_parsed``, not ``AgenticEQAResult.answer``. Preserve semantic
+        option text here; the runner alone converts it to benchmark encoding.
         """
         gm = self.graph_memory
         if gm is None:
@@ -5164,9 +5371,16 @@ class AgenticEQAExecutor:
             letter = extract_mcq_letter(str(result.answer or ""), choices)
         if not letter:
             return
+        decision = self._final_answer_decision
+        answer_text = ""
+        if decision is not None and decision.answer == result.answer:
+            answer_text = str(decision.answer_text or "").strip()
+        answer_text = self._semantic_answer_text(answer_text or str(result.answer or ""), letter)
+        if not answer_text:
+            return
         source = str(final.get("answer_source") or "agentic")
         prior = getattr(gm, "last_eqa_raw", "") or ""
-        gm.last_eqa_raw = f"{prior.rstrip()}\n[agentic_submit]\nsource:{source}\nanswer:\n{letter}\n"
+        gm.last_eqa_raw = f"{prior.rstrip()}\n[agentic_submit]\nsource:{source}\nanswer:\n{answer_text}\n"
         prev = getattr(gm, "last_eqa_parsed", None)
         if isinstance(prev, tuple) and len(prev) >= 5:
             reasoning, _old, _conf, action, conf_reason = prev[:5]
@@ -5174,7 +5388,7 @@ class AgenticEQAExecutor:
             reasoning, action, conf_reason = "", "", ""
         gm.last_eqa_parsed = (
             str(reasoning or ""),
-            letter,
+            answer_text,
             bool(result.confidence),
             str(action or ""),
             str(conf_reason or ""),
@@ -5184,7 +5398,8 @@ class AgenticEQAExecutor:
         self._append_trace(
             {
                 "event": "sync_scored_answer",
-                "letter": letter,
+                "answer_text": answer_text,
+                "choice_index": ord(letter) - ord("A"),
                 "source": source,
                 "confidence": bool(result.confidence),
                 "obs_ids": list(getattr(gm, "last_eqa_obs_ids", []) or []),

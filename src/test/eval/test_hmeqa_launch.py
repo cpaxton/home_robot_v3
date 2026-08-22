@@ -124,6 +124,8 @@ def test_hmeqa_h2h_env_parts_translates_explicit_variant_axes():
         agentic_verifier="none",
         require_verified=False,
         agentic_router=True,
+        use_hm3d_semantics=True,
+        use_enrich_labels=True,
         decision_policy="grounded_v2",
         graph_evidence_mode="shadow",
         room_history_mode="agent",
@@ -142,6 +144,8 @@ def test_hmeqa_h2h_env_parts_translates_explicit_variant_axes():
     assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" in joined
     assert "EMET_EQA_ATTEMPT_LEDGER_MODE=shadow" in joined
     assert "EMET_EQA_ATTEMPT_LEDGER=1" in joined
+    assert "EMET_HMEQA_USE_HM3D_SEMANTICS=1" in joined
+    assert "EMET_HMEQA_USE_ENRICH_LABELS=1" in joined
     assert "EMET_HMEQA_VARIANT_ID=grounded-shadow-r1" in joined
 
 
@@ -149,6 +153,8 @@ def test_direct_script_defaults_preserve_legacy_policy():
     config = hmeqa_run_config_from_env({})
     assert config["evaluation"]["require_verified"] is False
     assert config["evaluation"]["agentic_router"] is False
+    assert config["evaluation"]["use_hm3d_semantics"] is False
+    assert config["evaluation"]["use_enrich_labels"] is False
     assert config["variant"] == {
         "id": "legacy",
         "agentic_decision_policy": "legacy",
@@ -168,6 +174,8 @@ def _treatment_config():
         agentic_verifier="none",
         require_verified=False,
         agentic_router=True,
+        use_hm3d_semantics=False,
+        use_enrich_labels=False,
         decision_policy="grounded_v2",
         graph_evidence_mode="shadow",
         room_history_mode="agent",

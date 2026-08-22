@@ -123,6 +123,11 @@ in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_q
 | dynagraph | off | no GT + Dynagraph memory (real-world perception) |
 | static_graph | off | no GT, GraphEQA-inspired baseline |
 
+The launcher defaults to compact diagnostics for these 114-episode arms. It
+retains reloadable graph-only checkpoints and final maps under
+`OUT_DIR/compact_memory/`, but omits per-step/evidence RGB and videos. Set the
+corresponding `EMET_EVAL_*` exports explicitly to recover full visual diagnostics.
+
 **Interpretation once run:**
 - `dynagraph/on − dynagraph/off` = the GT-semantics perception effect (we expect this
   to be large; GT labels/positions are a sim crutch that won't transfer).

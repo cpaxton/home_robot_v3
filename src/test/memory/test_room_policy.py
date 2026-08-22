@@ -81,11 +81,11 @@ def test_graph_eqa_system_prompt_byte_stable_for_prefix_kv():
     # Pinned hashes of the format blocks (shared rule atoms must compose identically).
     assert (
         hashlib.sha256(at._EQA_FORMAT_BLOCK_CANONICAL.encode()).hexdigest()
-        == "f0c0bf654f830425085209dbfe7e25115529caa108c3a4eb56fc2732de5e82c1"
+        == "aaa5ef0d105998b871246381b95902f3362cde2d7956ab0639e0cb9593f8946f"
     )
     assert (
         hashlib.sha256(at._EQA_FORMAT_BLOCK_LLM.encode()).hexdigest()
-        == "c0d18a0ef425003e5da57bb93be5a942e6c1a2092cdac60f0d27797a59f35f40"
+        == "bbc015204e2795b3cb84aa5b8cedcc3cdbf564f30cefd8ba06ea323d0f2ed1f1"
     )
     tools: list = []
     for policy in ("canonical", "llm"):

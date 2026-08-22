@@ -3,59 +3,69 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-## Grounded graph room-evidence A/B — queued (2026-08-13)
+## Grounded graph room-evidence A/B — diagnostics complete; no-go for scale (2026-08-19)
 
-Canonical plan: [docs/experiments/graph_room_evidence.md](docs/experiments/graph_room_evidence.md).
+Canonical record:
+[docs/experiments/graph_room_evidence.md](docs/experiments/graph_room_evidence.md).
 
-**Current safety hold:** job `20260813_103856_788d34` (`hmeqa-paper113-d1`) is
-running from `home_robot_v2`. The separately reported `emet-habitat` process is
-its descendant. Do not cancel it, call `emet eval kill-stale`, or launch another
-Habitat/VLM job.
+### Completed evidence and recovery
 
-### Readiness
+- [x] Reconstruct the 2026-08-19 reboot. The last record is an NX-protected
+      supervisor instruction-fetch kernel fault; there was no OOM, `libcuda`
+      crash, NVRM Xid, or active managed GPU job. This is not evidence of GPU
+      starvation; details are preserved in `segfault.md`.
+- [x] Archive the old pre-manifest treatment/control OUTs as diagnostic-only.
+- [x] Complete the A0 resolver gate at `e85cda20`: **4/6**, including **3/4**
+      on regression IDs `6,11,12,47`.
+- [x] Complete A1 collection/no-leakage at `fae4b89c`: **4/6**; 621 evidence
+      views, 55 ledger rows, 11 room events, and all 40 policy-visible event
+      lists empty.
+- [x] Complete the strongest clean same-commit comparison at `fae4b89c`:
+      A1 shadow **4/6**, 29.2 mean planning steps, 2 budget hits; A2 grounded
+      **3/6**, 34.2 steps, 3 budget hits, and room events on only 3/6 episodes.
+- [x] Record the A2 decision: **do not promote or scale**. It gained q47, lost
+      q12 and q76, did not fix q2, and did not demonstrate lower dwell or fewer
+      repeats. This compares the whole grounded treatment, not graph evidence
+      alone.
+- [x] Complete the GT-free q11 infrastructure sequence. Three complete runs
+      scored **0/3**; nonnumeric IDs and blocked-navigation redirect now work,
+      but trash-can discovery/coverage remains unsolved.
+- [x] Fix CPU-audited correctness blockers before another run: strict
+      off/shadow/agent visibility, semantic handling of a valid `None` answer,
+      placeholder-safe fallback, world-frame room refresh, qualified negative
+      evidence, pending-answer visibility, enrich-label ID mapping, explicit
+      semantic/enrich oracle axes, and staged compact checkpoints that cannot
+      retain stale pixel/voxel state.
+- [x] Run one explicitly diagnostic, dirty-tree GT-free q11 A2 canary after an
+      EGL safe-start. Job `20260822_175646_219c08`, OUT
+      `~/runs/emet/gre_q11_a2_canary_d3ee32e8_20260822_175238`, scored **1/1**
+      with a direct present+answerable view at obs 76, semantic answer
+      `Next to the refrigerator`, no salvage, and no native failure. This is a
+      capability signal, not clean comparison or scale evidence.
 
-- [ ] Wait for the paper113 job and its Habitat descendant to finish; confirm
-      `uv run emet jobs` has no intentional GPU work before any preflight.
-- [ ] Use one clean experiment commit for every paired arm. Do not launch while
-      code is still changing: `run_manifest.json` intentionally rejects resume
-      after a commit or dirty-tree digest change.
-- [ ] On the final commit, rerun the targeted CPU/config suite and CLI-help
-      checks from the plan.
-- [ ] Run detached `emet habitat safe-start --need-mib 12000`, wait for the
-      probe job to be `done`, and inspect logs before the first H2H arm.
-- [ ] Record commit, job ID, OUT, and exact next command in repo status before
-      every GPU launch.
+### Capability gaps
 
-### Execution
+- [ ] q2: parse one target room and bind gray rug evidence to the shower.
+- [ ] q11: reproduce the new direct trash-can/refrigerator grounding from a
+      clean commit; the pre-fix sequence was 0/3 and the dirty diagnostic is 1/1.
+- [ ] q12: prefer direct image evidence over a graph undercount.
+- [ ] q76: enter and cover a bedroom instead of exhausting living-area frontiers.
+- [ ] Add `scripts/summarize_graph_room_evidence.py`; fail on manifest parity
+      violations and emit paired dwell/path/repeat/budget/evidence metrics.
 
-- [ ] Archive the old treatment (`2/11`) and stopped control (`3/10`) as
-      pre-manifest diagnostics. Do **not** resume or append to either OUT.
-- [ ] Run A0 legacy control on paired IDs `2,6,11,12,47,76`. Require at least
-      3/4 on regression IDs `6,11,12,47`; repeat A0 once and stop if it does not
-      recover.
-- [ ] Run A1 shadow on the identical commit/model/budgets/IDs. Require evidence,
-      history, and ledger collection with no policy-facing leakage.
-- [ ] Run A2 grounded on the same six only after A0/A1 pass. Compare paired
-      wrong-room dwell, repeat attempts, budget hits, path-to-target, and letter
-      safety.
-- [ ] Run A3 investigate-stamp isolation on `2,76` only; keep stamps off by
-      default unless this smoke is healthy.
-- [ ] Run paired rooms-11 A0 vs A2, then derive the wrong-room focus set. Scale
-      to holdout-8/bal-32 only after the process gate passes.
-- [ ] Test `room_policy=llm` and no-target-hints as separate later ablations,
-      never folded into the initial A2 treatment.
-- [ ] Keep q104 deferred until holdout scale; it is a known native-crash hot
-      scene and is not required for the baseline-recovery gate.
+### Conservative next experiment
 
-### Analysis / handoff
-
-- [ ] Add a CPU-only `scripts/summarize_graph_room_evidence.py` that accepts
-      multiple OUTs, validates manifest parity, and emits per-ID JSON + CSV.
-- [ ] Audit manifests: same git state, IDs/order, model, and budgets; config
-      digest changes must be explained only by the declared variant axes.
-- [ ] Publish paired per-ID deltas and two qualitative traces before deciding
-      whether A2 advances. Small-slice letter accuracy is a safety gate, not a
-      paper claim.
+- [ ] Commit and freeze a clean GT-free state (`--no-hm3d-semantics`,
+      `--no-enrich-labels`) after the full CPU-only suite passes.
+- [ ] Only then repeat the passing q11 A2 canary from the clean commit. First
+      launch `emet habitat safe-start`, require terminal `done` plus
+      `Habitat EGL OK`, then launch exactly one registered `emet jobs`
+      experiment. Stop unless q11 again reaches the kitchen and directly
+      observes the relation without plausibility or budget fallback.
+- [ ] If that passes, gate A0→A1→A2 on `6,11,12,47`, then repeat an A1/A2
+      hard-room pair on `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked
+      until both process and letter gates pass.
+- [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 

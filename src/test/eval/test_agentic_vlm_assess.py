@@ -82,7 +82,7 @@ def test_assess_view_uses_generate_multimodal():
     assert client.mm_calls
 
 
-def test_assess_view_parses_string_booleans_and_labeled_letter():
+def test_assess_view_accepts_legacy_labeled_letter():
     client = _MultiClient(
         {
             "target": "clock",
@@ -121,6 +121,9 @@ def test_assess_view_does_not_turn_choice_text_into_first_letter():
         target_phrase="vase",
     )
     assert out.suggested_answer == "Dining room"
+    prompt = client.mm_calls[0][0]
+    assert "exact semantic option text" in prompt
+    assert "MCQ letter A-D" not in prompt
 
 
 def test_build_inventory_brief_excludes_detector_proposal():

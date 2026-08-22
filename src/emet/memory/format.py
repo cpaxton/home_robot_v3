@@ -98,6 +98,14 @@ class GraphNodeView:
     change_events: list[dict[str, Any]] | None = None
     expected_absence_count: int = 0
     last_absence_step: int = -1
+    bbox_xyxy: list[int] | None = None
+    frontier_cell_count: int = 0
+    frontier_keyword_score: float = 0.0
+    embedding: list[float] | None = None
+    nav_attempts: int = 0
+    nav_failures: int = 0
+    last_nav_note: str | None = None
+    last_nav_at_step: int = 0
 
 
 @dataclass
@@ -161,6 +169,8 @@ class MemoryManifest:
     has_voxel_pickle: bool = False  # voxel_map.pkl alongside (SparseVoxelMapDynamem.write_to_pickle)
     has_open_vocab_scene_graph: bool = False  # open_vocab_scene_graph/ sidecar
     has_world_evidence: bool = False  # stable identities/views/events sidecar
+    has_world_evidence_rgb: bool = False  # world_evidence_views/*.png are present
+    checkpoint_profile: str = "full"  # full | graph_only
 
 
 @dataclass
@@ -413,9 +423,7 @@ def save_memory(state: MemoryState, path: str) -> None:
                     **({"detection_label": n.detection_label} if getattr(n, "detection_label", None) else {}),
                     **({"last_seen": int(n.last_seen)} if getattr(n, "last_seen", None) is not None else {}),
                     **(
-                        {"support_count": int(n.support_count)}
-                        if getattr(n, "support_count", None) is not None
-                        else {}
+                        {"support_count": int(n.support_count)} if getattr(n, "support_count", None) is not None else {}
                     ),
                     **({"is_viewpoint": True} if getattr(n, "is_viewpoint", False) else {}),
                     **({"is_frontier": True} if getattr(n, "is_frontier", False) else {}),
@@ -429,21 +437,9 @@ def save_memory(state: MemoryState, path: str) -> None:
                         if getattr(n, "position_covariance", None) is not None
                         else {}
                     ),
-                    **(
-                        {"position_history": n.position_history}
-                        if getattr(n, "position_history", None)
-                        else {}
-                    ),
-                    **(
-                        {"identity_key": n.identity_key}
-                        if getattr(n, "identity_key", None)
-                        else {}
-                    ),
-                    **(
-                        {"change_events": n.change_events}
-                        if getattr(n, "change_events", None)
-                        else {}
-                    ),
+                    **({"position_history": n.position_history} if getattr(n, "position_history", None) else {}),
+                    **({"identity_key": n.identity_key} if getattr(n, "identity_key", None) else {}),
+                    **({"change_events": n.change_events} if getattr(n, "change_events", None) else {}),
                     **(
                         {"expected_absence_count": int(n.expected_absence_count)}
                         if getattr(n, "expected_absence_count", 0)
@@ -454,6 +450,22 @@ def save_memory(state: MemoryState, path: str) -> None:
                         if getattr(n, "last_absence_step", -1) >= 0
                         else {}
                     ),
+                    **({"bbox_xyxy": list(n.bbox_xyxy)} if getattr(n, "bbox_xyxy", None) is not None else {}),
+                    **(
+                        {"frontier_cell_count": int(n.frontier_cell_count)}
+                        if getattr(n, "frontier_cell_count", 0)
+                        else {}
+                    ),
+                    **(
+                        {"frontier_keyword_score": float(n.frontier_keyword_score)}
+                        if getattr(n, "frontier_keyword_score", 0.0)
+                        else {}
+                    ),
+                    **({"embedding": n.embedding} if getattr(n, "embedding", None) is not None else {}),
+                    **({"nav_attempts": int(n.nav_attempts)} if getattr(n, "nav_attempts", 0) else {}),
+                    **({"nav_failures": int(n.nav_failures)} if getattr(n, "nav_failures", 0) else {}),
+                    **({"last_nav_note": n.last_nav_note} if getattr(n, "last_nav_note", None) else {}),
+                    **({"last_nav_at_step": int(n.last_nav_at_step)} if getattr(n, "last_nav_at_step", 0) else {}),
                 }
                 for n in state.graph.nodes
             ],
@@ -462,11 +474,7 @@ def save_memory(state: MemoryState, path: str) -> None:
                     "id1": e.id1,
                     "id2": e.id2,
                     "relation": e.relation,
-                    **(
-                        {"confidence": float(e.confidence)}
-                        if getattr(e, "confidence", None) is not None
-                        else {}
-                    ),
+                    **({"confidence": float(e.confidence)} if getattr(e, "confidence", None) is not None else {}),
                     **(
                         {"last_evidence_step": int(e.last_evidence_step)}
                         if getattr(e, "last_evidence_step", None) is not None

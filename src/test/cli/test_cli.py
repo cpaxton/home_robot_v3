@@ -121,6 +121,8 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "agentic-verifier" in result.stdout
     assert "require-verified" in result.stdout
     assert "agentic-router" in result.stdout
+    assert "--use-hm3d-semantics" in result.stdout
+    assert "--enrich-labels" in result.stdout
     assert "paper-router" in result.stdout
     assert "eqa-hf-model-id" in result.stdout
     assert "eqa-vl-family" in result.stdout
@@ -154,6 +156,8 @@ def test_hmeqa_resume_help_lists_frozen_variant_flags():
     assert result.returncode == 0
     for option in (
         "--decision-policy",
+        "--use-hm3d-semantics",
+        "--enrich-labels",
         "--graph-evidence-mode",
         "--room-history-mode",
         "--room-policy",
@@ -200,6 +204,8 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     assert frozen["investigate_stamp"] is False
     assert frozen["attempt_ledger_mode"] == "off"
     assert frozen["variant_id"] == "legacy"
+    assert frozen["use_hm3d_semantics"] is False
+    assert frozen["use_enrich_labels"] is False
 
 
 def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
@@ -217,6 +223,8 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
         agentic_verifier="none",
         require_verified=False,
         agentic_router=True,
+        use_hm3d_semantics=True,
+        use_enrich_labels=True,
         decision_policy="grounded_v2",
         graph_evidence_mode="shadow",
         room_history_mode="agent",
@@ -258,6 +266,8 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
     assert frozen["graph_evidence_mode"] == "shadow"
     assert frozen["room_history_mode"] == "agent"
     assert frozen["room_policy"] == "llm"
+    assert frozen["use_hm3d_semantics"] is True
+    assert frozen["use_enrich_labels"] is True
     assert frozen["room_target_hints"] is False
     assert frozen["investigate_stamp"] is True
     assert frozen["attempt_ledger_mode"] == "shadow"

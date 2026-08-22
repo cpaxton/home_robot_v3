@@ -356,12 +356,8 @@ def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
     for n in nodes:
         xyz = transform_points_xyz(np.asarray(n.xyz, dtype=np.float64).reshape(1, 3), t)[0]
         bounds = _transform_bounds_3d(getattr(n, "bounds_3d", None), t)
-        history = [
-            _transform_change_event(dict(entry), t) for entry in (getattr(n, "position_history", None) or [])
-        ]
-        changes = [
-            _transform_change_event(dict(entry), t) for entry in (getattr(n, "change_events", None) or [])
-        ]
+        history = [_transform_change_event(dict(entry), t) for entry in (getattr(n, "position_history", None) or [])]
+        changes = [_transform_change_event(dict(entry), t) for entry in (getattr(n, "change_events", None) or [])]
         cov = _transform_position_covariance(getattr(n, "position_covariance", None), t)
         extent = getattr(n, "extent_half", None)
         if bounds is not None and bounds.get("size") is not None:
@@ -784,9 +780,7 @@ def verify_lifelong_restore(
             f"checkpoint has {expected['n_graph_nodes']} graph nodes but controller has 0 after load"
         )
     elif expected["n_graph_nodes"] > 0 and n_nodes < max(1, expected["n_graph_nodes"] // 2):
-        report["errors"].append(
-            f"checkpoint has {expected['n_graph_nodes']} graph nodes but only {n_nodes} restored"
-        )
+        report["errors"].append(f"checkpoint has {expected['n_graph_nodes']} graph nodes but only {n_nodes} restored")
 
     if expected["has_voxel_pickle"] and expected["voxel_pickle_bytes"] > 10_000:
         if voxel_pts == 0 and semantic_pts == 0:
@@ -906,10 +900,7 @@ def load_lifelong_checkpoint(
     if want_ov:
         info["open_vocab_loaded"] = load_open_vocab_scene_graph_sidecar(controller, path_obj)
     elif ov_dir.is_dir():
-        logger.info(
-            f"lifelong: ignoring {OPEN_VOCAB_SCENE_GRAPH_DIR}/ "
-            f"(memory_backend={mb or 'graph/dynagraph'})"
-        )
+        logger.info(f"lifelong: ignoring {OPEN_VOCAB_SCENE_GRAPH_DIR}/ (memory_backend={mb or 'graph/dynagraph'})")
         info["open_vocab_loaded"] = False
 
     saved_xyz = voxel_semantic_xyz(vm)
@@ -942,13 +933,10 @@ def load_lifelong_checkpoint(
     refresh = refresh_rerun_after_memory_load(controller)
     info["rerun_refreshed"] = bool(refresh.get("ok"))
     if info["voxel_pickle_loaded"] and info["voxel_points"] == 0 and info["semantic_points"] == 0:
-        logger.warning(
-            "lifelong: voxel_map.pkl loaded but point clouds are empty — Rerun will look blank"
-        )
+        logger.warning("lifelong: voxel_map.pkl loaded but point clouds are empty — Rerun will look blank")
     elif refresh.get("ok"):
         logger.info(
-            f"lifelong: Rerun refreshed "
-            f"(voxel_pts={info['voxel_points']} semantic_pts={info['semantic_points']})"
+            f"lifelong: Rerun refreshed (voxel_pts={info['voxel_points']} semantic_pts={info['semantic_points']})"
         )
 
     info["verify"] = verify_lifelong_restore(controller, path_obj, info, strict=True)
@@ -999,11 +987,7 @@ def refresh_rerun_after_memory_load(controller: Any) -> dict[str, Any]:
             viz.update_voxel_map(space=space, robot_base_xy=robot_xy, force=True)
             out["voxel"] = True
         sm = getattr(vm, "semantic_memory", None) if vm is not None else None
-        if (
-            sm is not None
-            and getattr(sm, "_points", None) is not None
-            and hasattr(viz, "log_custom_pointcloud")
-        ):
+        if sm is not None and getattr(sm, "_points", None) is not None and hasattr(viz, "log_custom_pointcloud"):
             rgb = getattr(sm, "_rgb", None)
             pts = sm._points
             if hasattr(pts, "detach"):

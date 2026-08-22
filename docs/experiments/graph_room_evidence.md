@@ -1,17 +1,17 @@
 # Experiment plan: manifest-locked graph room evidence A/B
 
-**Branch:** `feature/graph-room-evidence`  
+**Branch:** `feature/graph-room-evidence`
 **Code:** explicit rollout axes + versioned `run_manifest.json`; room timeline on
 `GraphEQAMemory`; `AttemptRecord.room`; grounded agent state
 **Refs:** [attempt_ledger.md](../attempt_ledger.md#room-timeline-graph-history),
 [agentic_scale.md](agentic_scale.md),
 [agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe)
 
-> **Execution hold (2026-08-13):** do not launch this experiment while job
-> `20260813_103856_788d34` (`hmeqa-paper113-d1`, checkout `home_robot_v2`) is
-> running. The reported `emet-habitat` process is its descendant, not a second
-> job. Do not call `emet eval kill-stale`, cancel it, or start a competing
-> Habitat/VLM job.
+> **Status (2026-08-22): no-go for scale.** The strongest clean pair still has
+> A2 grounded at 3/6 versus A1 shadow at 4/6, with more planning steps and
+> budget hits. A post-fix, GT-free q11 canary passed 1/1 with direct evidence,
+> but it came from a manifest-recorded dirty tree. New scale work remains blocked
+> until the fixes are committed, the CPU suite passes, and q11 repeats cleanly.
 
 ## Question and hypothesis
 
@@ -19,8 +19,8 @@ Test whether stable graph evidence and room-scoped history, when made visible to
 the grounded decision policy, reduce wrong-room dwell, repeated inspections, and
 budget exhaustion.
 
-The experiment must first re-establish a reproducible legacy control. Existing
-results do not isolate room stamps:
+The experiment re-established a reproducible legacy control. Earlier results
+remain diagnostic-only because they did not isolate room stamps:
 
 | Run | Result | Interpretation |
 |-----|--------|----------------|
@@ -31,9 +31,9 @@ results do not isolate room stamps:
 The old OUTs predate the new manifest boundary. Keep them as diagnostic
 evidence; do not resume or combine them with new rows.
 
-Primary hypothesis: variant A2 below lowers median wrong-room dwell and repeated
-attempts relative to A0 on the same IDs. Letter accuracy is a safety gate, not
-the optimization target on small slices.
+The primary hypothesis was that A2 would lower wrong-room dwell and repeated
+attempts without a material letter regression. The completed paired-six did not
+support that hypothesis.
 
 Non-goals:
 
@@ -68,6 +68,53 @@ Fairness contract:
 - Audit each manifest before comparing outputs. Config digests should differ
   only because the declared variant axes differ.
 
+## Completed evidence
+
+The strongest valid comparison is the clean same-commit `fae4b89c` pair:
+
+| Variant / OUT | Result | Process |
+|---------------|--------|---------|
+| A1 shadow — `~/runs/emet/gre_a1_shadow_fae4b89c_20260814_131815` | **4/6**: q6, q11, q12, q76 | 29.2 mean planning steps; 2 budget hits; 621 evidence views, 55 ledger rows, 11 room events; all 40 policy-visible event lists empty |
+| A2 grounded — `~/runs/emet/gre_a2_grounded_fae4b89c_20260814_160721` | **3/6**: q6, q11, q47 | 34.2 mean planning steps; 3 budget hits; room events on 3/6 |
+
+A2 gained q47 but lost q12 and q76. It did not demonstrate lower dwell or fewer
+repeats, and the planned CPU summarizer was not implemented. This is a no-go for
+promotion. The pair measures the entire grounded treatment—decision policy plus
+graph/history/ledger visibility—not graph evidence in isolation.
+
+Other manifest-era results:
+
+| OUT | Job | Result / use |
+|-----|-----|--------------|
+| `gre_a0_resolver_e85cda20_20260813_232912` | `20260813_232917_c9edba` | 4/6; A0 regression gate 3/4 |
+| `gre_a1_shadow_e85cda20_20260814_000315` | `20260814_000321_dd2556` | 3/6; valid outcomes, but shadow artifacts were not persisted |
+| `gre_a2_grounded_imgfirst_20260814_171000` | `20260814_171004_86674a` | cancelled after two IDs; invalid comparison |
+| `gre_a2_grounded_imgfirst_postmain_20260815_011514` | `20260815_011843_f470c3` | dirty diagnostic, 3/6; no matched control |
+| `gre_q11_a2_canary_d3ee32e8_20260822_175238` | `20260822_175646_219c08` | dirty GT-free diagnostic, **1/1**; verified semantic D from direct obs 76, no salvage/native failure |
+
+There is no clean same-commit A0/A1/A2 triplet. The principal A1/A2 manifests
+also predate explicit freezing of HM3D semantics and per-question enrich labels,
+so they do not establish a GT-free perception result.
+
+Per-question findings:
+
+- **q2:** target parsing admitted bathroom and bedroom, suppressing mismatch
+  handling; the agent could not bind rug color to the shower and hit budget.
+- **q6:** robust after answer-resolution fixes; useful visual reasoning despite
+  noisy graph-room labeling, not a demonstrated room-history gain.
+- **q11:** prior correct letters were plausibility guesses, and three complete
+  GT-free pre-fix follow-ups scored 0/3. The post-fix dirty canary reached the
+  kitchen, investigated obs 76, and directly returned
+  `Next to the refrigerator` from a present+answerable view. That 1/1 validates
+  the corrected path once, but it needs a clean repeat before promotion.
+- **q12:** the graph undercounted nightstands while images supported two; A2
+  trusted the graph and regressed. The dirty image-first diagnostic recovered
+  the answer, supporting evidence precedence.
+- **q47:** A2 eventually captured a clear wall-clock view and fixed
+  reason/answer consistency; this was a visual-evidence gain, not room routing.
+- **q76:** A2 exhausted six frontier explores without entering a bedroom. A1's
+  correct fallback was not evidence of successful target-room search.
+
 ## Metrics and invariants
 
 Collect per episode from `run_manifest.json`,
@@ -91,38 +138,37 @@ statistically meaningful. A2 passes the process gate only if median
 `wrong_room_dwell_rounds` falls versus A0, repeat attempts do not increase, and
 letter accuracy is no more than one answer worse on the paired six.
 
-## Staged ladder
+## Conservative next ladder
 
 | Wave | Slice / variants | Pass / stop |
 |------|------------------|-------------|
-| **0 — CPU + freeze** | Final clean commit; targeted unit/config tests; help audit | No GPU until tests pass and the current paper113 job is gone |
-| **1 — paired six** | IDs `2,6,11,12,47,76`; run A0, then A1, then A2 | A0 must recover at least **3/4** on regression IDs `6,11,12,47`; otherwise stop before attributing anything to grounded state |
-| **2 — stamp isolation** | A3 on `2,76` only | Confirm stamps are actually recorded; stop on routing/pathology regression |
-| **3 — rooms probe** | A0 vs A2 on `6,8,11,12,21,28,39,47,48,80,84` | Process gate above; letters are a safety gate |
-| **4 — wrong-room focus** | Start `2,29,76`, then add high-dwell IDs selected from Wave 3 A0 | Dwell/path-to-target improve on paired rows |
-| **5 — scale** | Holdout-8 or bal-32 | Only after Waves 1–4; write a new OUT and never overwrite paper artifacts |
-
-If A0 scores below 3/4 on the regression IDs, repeat A0 once before declaring a
-baseline failure. If both runs fail, investigate policy/provenance drift and do
-not spend GPU on A1–A3.
+| **0 — CPU + freeze** | Correctness tests, compact round-trip, CLI/help/doc audit; clean commit with HM3D semantics and enrich labels explicitly off | No simulator or VLM until all CPU gates pass |
+| **1 — q11 canary** | A2 on `11`; repeat once only after a pass | No exception/ID rewrite; reaches kitchen; direct evidence supports the relation; no plausibility or budget fallback |
+| **2 — baseline gate** | A0 on `6,11,12,47` | ≥3/4; repeat once if below, then stop all treatment work on a second failure |
+| **3 — shadow gate** | A1 on the same four | All artifacts present; every policy-visible event list empty; no severe letter regression |
+| **4 — grounded gate** | A2 on the same four | At most one letter below A1; budget hits and mean steps no worse; grounded q11 and q12/q47 reason-letter consistency |
+| **5 — hard-room pair** | A1 then A2 on `2,76`; repeat the pair once | q2 reaches bathroom and binds rug/shower color; q76 reaches bedroom; dwell/repeats improve |
+| **6 — formal paired six** | Clean A0/A1/A2 on `2,6,11,12,47,76` | Manifest parity plus process gates; otherwise stop |
+| **7 — later work** | A3 `2,76`, rooms-11, then holdout/scale | Only after all prior gates pass |
 
 q104 is intentionally deferred to holdout scale: it is a known native-crash hot
 scene and is not needed for the baseline-recovery gate.
 
-## Prepared harness (do not run during the execution hold)
+## Managed harness
 
-The following commands were checked against current CLI help, but intentionally
-not launched while paper113 is active.
+Run a fresh detached probe before every experimental job. Do not queue the next
+probe or experiment until the current job is terminal.
 
 Readiness:
 
 ```bash
 uv run emet jobs
-# Continue only when there are no intentional Habitat/VLM jobs or descendants.
 git status --short
 uv run emet habitat safe-start --need-mib 12000 \
   --job-name habitat-egl-probe-grounded-graph
-# Wait for the returned probe job to be done, then inspect its logs.
+uv run emet jobs status JOB_ID
+uv run emet jobs logs JOB_ID --tail 40
+# Continue only after status=done and logs contain "Habitat EGL OK".
 ```
 
 Prefer a clean experiment commit. A dirty launch is reproducible only while the
@@ -136,7 +182,8 @@ OUT_A0=~/runs/emet/gre_a0_legacy_r1_$(date +%Y%m%d_%H%M%S)
 uv run emet hmeqa h2h "$OUT_A0" --preset paper-router --arms agentic --ids "$IDS" \
   --decision-policy legacy --graph-evidence-mode off --room-history-mode off \
   --room-policy canonical --room-target-hints --no-investigate-stamp \
-  --attempt-ledger-mode off --variant-id gre-a0-legacy-r1 \
+  --attempt-ledger-mode off --no-hm3d-semantics --no-enrich-labels \
+  --variant-id gre-a0-legacy-r1 \
   --job-name gre-a0-legacy-r1 -d "Graph-room evidence paired-six A0 legacy control"
 ```
 
@@ -147,7 +194,8 @@ OUT_A1=~/runs/emet/gre_a1_shadow_r1_$(date +%Y%m%d_%H%M%S)
 uv run emet hmeqa h2h "$OUT_A1" --preset paper-router --arms agentic --ids "$IDS" \
   --decision-policy legacy --graph-evidence-mode shadow --room-history-mode shadow \
   --room-policy canonical --room-target-hints --no-investigate-stamp \
-  --attempt-ledger-mode shadow --variant-id gre-a1-shadow-r1 \
+  --attempt-ledger-mode shadow --no-hm3d-semantics --no-enrich-labels \
+  --variant-id gre-a1-shadow-r1 \
   --job-name gre-a1-shadow-r1 -d "Graph-room evidence paired-six A1 shadow"
 ```
 
@@ -158,7 +206,8 @@ OUT_A2=~/runs/emet/gre_a2_grounded_r1_$(date +%Y%m%d_%H%M%S)
 uv run emet hmeqa h2h "$OUT_A2" --preset paper-router --arms agentic --ids "$IDS" \
   --decision-policy grounded_v2 --graph-evidence-mode agent --room-history-mode agent \
   --room-policy canonical --room-target-hints --no-investigate-stamp \
-  --attempt-ledger-mode agent --variant-id gre-a2-grounded-r1 \
+  --attempt-ledger-mode agent --no-hm3d-semantics --no-enrich-labels \
+  --variant-id gre-a2-grounded-r1 \
   --job-name gre-a2-grounded-r1 -d "Graph-room evidence paired-six A2 grounded"
 ```
 
@@ -210,11 +259,13 @@ write both JSON and CSV.
 | Prior q2 pilot | archived | `hmeqa_room_evidence_quick_20260812_122709`; useful wiring evidence only |
 | Prior bundled treatment | archived | `hmeqa_room_evidence_w2_20260812_231348`; 2/11, confounded |
 | Prior control partial | archived | `hmeqa_room_evidence_ctrl_w2_20260813_001608`; 3/10, stopped before q84, no new manifest |
-| Execution hold | **active** | Wait for paper113 job `20260813_103856_788d34`; do not interfere |
-| Wave 0 | prepared | Phase-one CLI/manifest targeted CPU/config suite: 171 passed on 2026-08-13; rerun on final clean commit |
-| Wave 1 A0 | queued, not launched | Paired six after hold clears |
-| Waves 1 A1/A2 | blocked on A0 gate | |
-| Waves 2–5 | blocked | |
+| A0 resolver | complete | `gre_a0_resolver_e85cda20_20260813_232912`: 4/6 |
+| A1 shadow | complete | `gre_a1_shadow_fae4b89c_20260814_131815`: 4/6; collection/no-leakage passed |
+| A2 grounded | **no-go** | `gre_a2_grounded_fae4b89c_20260814_160721`: 3/6, slower, more budget hits |
+| GT-free q11 pre-fix sequence | complete, failed capability gate | 0/3 complete runs; infrastructure improved |
+| Post-fix q11 diagnostic | passed once, dirty | `gre_q11_a2_canary_d3ee32e8_20260822_175238`: 1/1, direct verified evidence, no salvage |
+| Recovery correctness | in progress | Finish self-review, commit, and pass the full CPU-only gate |
+| Next GPU work | blocked | One clean q11 repeat only after the commit and all CPU gates |
 
 ## Related
 

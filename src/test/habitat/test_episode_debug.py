@@ -175,6 +175,7 @@ def test_save_episode_debug_bundle_writes_agentic_evidence(tmp_path: Path, monke
 
     class _Agent:
         voxel_map = None
+        obs_count = 42
 
     agent = _Agent()
     agent.graph_memory = graph_memory
@@ -211,6 +212,87 @@ def test_save_episode_debug_bundle_writes_agentic_evidence(tmp_path: Path, monke
     assert (bundle / world["views"][0]["rgb_file"]).is_file()
 
 
+def test_save_episode_debug_bundle_writes_reloadable_compact_memory(tmp_path: Path, monkeypatch):
+    import numpy as np
+
+    from emet.eval.episode_diagnostics import EpisodeDiagnosticsConfig
+    from emet.habitat.episode_debug import save_episode_debug_bundle
+    from emet.memory.adapters import GraphEQABackend
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    monkeypatch.setattr(
+        "emet.habitat.episode_debug.default_episodes_root",
+        lambda: tmp_path / "episodes",
+    )
+    graph_memory = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"eqa": {"graph_evidence_mode": "shadow"}},
+    )
+    graph_memory.add_observation(
+        np.full((32, 32, 3), 17, dtype=np.uint8),
+        np.array([1.0, 2.0, 0.5]),
+        ["clock"],
+        viewer_xyz=np.array([0.0, 2.0, 0.0]),
+    )
+
+    class _Agent:
+        voxel_map = None
+        obs_count = 42
+
+    agent = _Agent()
+    agent.graph_memory = graph_memory
+    metrics = EpisodeMetrics(
+        dataset="hmeqa",
+        method="dynagraph",
+        question_id=12,
+        scene="s",
+        floor=0,
+        question="q",
+        gold_answer_letter="D",
+        predicted_answer="D",
+        correct=True,
+        confident=True,
+        planning_steps=3,
+        success=True,
+    )
+    cfg = EpisodeDiagnosticsConfig(
+        export_map=False,
+        export_obstacle_grids=False,
+        export_trajectory=False,
+        export_rgb_frames=False,
+        export_video=False,
+        export_object_crops=False,
+        export_compact_memory=True,
+        export_world_evidence_rgb=False,
+        export_gt_navmesh_map=False,
+        export_map_overlay=False,
+        export_map_video=False,
+        export_video_substeps=False,
+    )
+
+    bundle = save_episode_debug_bundle(
+        run_tag="compact_run",
+        metrics=metrics,
+        agent=agent,
+        diagnostics_cfg=cfg,
+    )
+    compact = bundle / "compact_memory"
+    restored = GraphEQAMemory(defer_llm_clients=True)
+    GraphEQABackend(restored).load(str(compact))
+
+    assert (compact / "manifest.json").is_file()
+    assert (compact / "graph.json").is_file()
+    assert not (compact / "frames").exists()
+    assert not (compact / "world_evidence_views").exists()
+    assert not (bundle / "world_evidence_views").exists()
+    assert restored.get_nodes()[0].labels == ["clock"]
+    manifest = json.loads((compact / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["final_step"] == 42
+    assert manifest["checkpoint_profile"] == "graph_only"
+    diagnostics = json.loads((bundle / "diagnostics_manifest.json").read_text(encoding="utf-8"))
+    assert diagnostics["compact_memory"] == str(compact)
+
+
 def test_hmeqa_snapshot_copies_agentic_evidence_artifacts():
     script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_agentic_h2h.sh"
     text = script.read_text(encoding="utf-8")
@@ -219,12 +301,33 @@ def test_hmeqa_snapshot_copies_agentic_evidence_artifacts():
         "attempt_ledger.json",
         "room_events.json",
         "world_evidence_views",
+        "compact_memory",
     ):
         assert artifact in text
     assert '[[ -s "$dst/world_evidence.json" ]]' in text
     assert '[[ -s "$dst/attempt_ledger.json" ]]' in text
     assert '[[ -s "$dst/room_events.json" ]]' in text
+    assert '[[ -s "$dst/compact_memory/manifest.json" ]]' in text
+    assert 'rm -rf "$dst"' in text
     assert "evidence snapshot incomplete" in text
+
+
+def test_hmeqa_h2h_disables_gt_semantics():
+    script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_agentic_h2h.sh"
+    text = script.read_text(encoding="utf-8")
+    assert "EQA_EXTRA_ARGS=(--no-hm3d-semantics)" in text
+    assert '"${EQA_EXTRA_ARGS[@]}"' in text
+
+
+def test_grapheqa_baseline_defaults_to_compact_memories():
+    script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_grapheqa_baseline.sh"
+    text = script.read_text(encoding="utf-8")
+
+    assert 'EMET_EVAL_EXPORT_COMPACT_MEMORY="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-1}"' in text
+    assert 'EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB="${EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB:-0}"' in text
+    assert 'EMET_EVAL_EXPORT_FRAMES="${EMET_EVAL_EXPORT_FRAMES:-0}"' in text
+    assert 'EMET_EVAL_EXPORT_VIDEO="${EMET_EVAL_EXPORT_VIDEO:-0}"' in text
+    assert 'cp -a "$checkpoint/." "$compact_out/$episode_name/"' in text
 
 
 def test_save_error_episode_bundle(tmp_path: Path, monkeypatch):
@@ -247,6 +350,10 @@ def test_save_error_episode_bundle(tmp_path: Path, monkeypatch):
         success=False,
         error="boom",
     )
+    prior = tmp_path / "episodes" / "test_run" / "q0003_graph_eqa"
+    prior.mkdir(parents=True)
+    (prior / "stale_success_artifact.json").write_text("stale", encoding="utf-8")
     bundle = save_error_episode_bundle(run_tag="test_run", metrics=metrics)
     assert (bundle / "error.txt").read_text(encoding="utf-8") == "boom"
     assert json.loads((bundle / "metrics.json").read_text(encoding="utf-8"))["question_id"] == 3
+    assert not (bundle / "stale_success_artifact.json").exists()

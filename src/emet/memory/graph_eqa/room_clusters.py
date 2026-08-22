@@ -348,9 +348,7 @@ def cluster_object_nodes(
         aid = ids[i]
         for j in range(i + 1, len(objects)):
             bxy = _xy(objects[j])
-            if _planar_dist(axy, bxy) <= radius and (
-                connectivity_fn is None or bool(connectivity_fn(axy, bxy))
-            ):
+            if _planar_dist(axy, bxy) <= radius and (connectivity_fn is None or bool(connectivity_fn(axy, bxy))):
                 uf.union(aid, ids[j])
 
     groups: dict[int, list[Any]] = {}

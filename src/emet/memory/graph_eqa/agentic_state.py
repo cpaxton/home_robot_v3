@@ -66,6 +66,8 @@ class EvidenceState:
     source: str
     confidence: float
     view_id: str | None
+    labels: tuple[str, ...] = ()
+    details: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,9 @@ class AgentStateSnapshot:
     target_rooms: tuple[str, ...]
     verified: bool
     last_capture_status: str | None
+    pending_answer: str | None = None
+    pending_answer_obs_id: int | None = None
+    pending_answer_present: bool | None = None
     places: tuple[PlaceState, ...] = ()
     frontiers: tuple[FrontierState, ...] = ()
     rooms: tuple[RoomState, ...] = ()
@@ -118,10 +123,7 @@ def _attempt_bits(graph_memory: Any, obs_id: int) -> tuple[tuple[str, ...], floa
         )
         or ()
     )
-    bits = tuple(
-        f"{row.action_kind}:{row.outcome}:{row.status_code}"
-        for row in rows[-6:]
-    )
+    bits = tuple(f"{row.action_kind}:{row.outcome}:{row.status_code}" for row in rows[-6:])
     nav = [row for row in rows if row.action_kind == "navigate"]
     failed = [row for row in nav if row.outcome != "ok"]
     risk = float(len(failed)) / float(len(nav)) if nav else 0.0
@@ -147,8 +149,10 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
     world = getattr(graph_memory, "world_evidence", None)
     graph_mode = str(getattr(executor, "graph_evidence_mode", "off") or "off")
     history_mode = str(getattr(executor, "room_history_mode", "off") or "off")
+    attempt_mode = str(getattr(executor, "attempt_ledger_mode", "off") or "off")
     agent_graph = graph_mode == "agent" and world is not None
     agent_history = history_mode == "agent"
+    agent_attempts = attempt_mode == "agent"
 
     pose = None
     pose_fn = getattr(executor, "_robot_xyt_world", None)
@@ -164,8 +168,7 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
     node_by_obs = {
         int(node.obs_id): node
         for node in nodes
-        if not bool(getattr(node, "is_frontier", False))
-        and not bool(getattr(node, "is_viewpoint", False))
+        if not bool(getattr(node, "is_frontier", False)) and not bool(getattr(node, "is_viewpoint", False))
     }
     for hypothesis in hypotheses:
         source = str(getattr(hypothesis, "source", ""))
@@ -173,21 +176,15 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
             continue
         obs_id = int(hypothesis.obs_id)
         node = node_by_obs.get(obs_id)
-        entity = (
-            world.entity_for_node(int(node.node_id))
-            if agent_graph and node is not None
-            else None
-        )
+        entity = world.entity_for_node(int(node.node_id)) if agent_graph and node is not None else None
         place_id = entity.place_id if entity is not None else f"obs:{obs_id}"
         place = world.places.get(place_id) if entity is not None else None
         room = world.rooms.get(place.room_id) if place is not None and place.room_id else None
-        attempts, risk = _attempt_bits(graph_memory, obs_id)
+        attempts, risk = _attempt_bits(graph_memory, obs_id) if agent_attempts else ((), 0.0)
         inspect = inspect_ledger.get(obs_id)
         approaches_left = int(getattr(inspect, "approaches_left", 4) if inspect is not None else 4)
         coverage = str(getattr(inspect, "coverage", "unknown") if inspect is not None else "unknown")
-        local_cells = int(
-            getattr(inspect, "local_frontier_cells", 0) if inspect is not None else 0
-        )
+        local_cells = int(getattr(inspect, "local_frontier_cells", 0) if inspect is not None else 0)
         current_view = world.view_for_obs(obs_id) if agent_graph else None
         revision = int(current_view.revision) if current_view is not None else 0
         labels = tuple(str(x) for x in getattr(node, "labels", ()) or ())
@@ -221,9 +218,7 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
     if agent_graph:
         hyp_cost_by_obs = {
             int(hyp.obs_id): (
-                float(hyp.path_cost)
-                if isinstance(getattr(hyp, "path_cost", None), (int, float))
-                else None
+                float(hyp.path_cost) if isinstance(getattr(hyp, "path_cost", None), (int, float)) else None
             )
             for hyp in hypotheses
         }
@@ -274,9 +269,7 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
                 continue
             sources = tuple(
                 dict.fromkeys(
-                    events_by_id[event_id].source
-                    for event_id in record.evidence_event_ids
-                    if event_id in events_by_id
+                    events_by_id[event_id].source for event_id in record.evidence_event_ids if event_id in events_by_id
                 )
             )
             rooms.append(
@@ -293,16 +286,28 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
     evidence: list[EvidenceState] = []
     if agent_history and world is not None:
         question_id = str(getattr(world, "question_id", "") or "")
-        candidates = [
-            event
-            for event in world.events
-            if not question_id or event.question_id in {None, question_id}
-        ]
+        candidates = [event for event in world.events if not question_id or event.question_id in {None, question_id}]
         for event in candidates[-int(max_events) :]:
-            if event.polarity == "negative" and not bool(
-                event.payload.get("visibility_qualified", False)
-            ):
-                continue
+            payload = dict(event.payload or {})
+            if event.polarity == "negative":
+                qualified_negative = bool(payload.get("visibility_qualified", False))
+                qualified_negative = qualified_negative or bool(payload.get("outcome"))
+                qualified_negative = qualified_negative or event.source == "room_timeline"
+                if not qualified_negative:
+                    continue
+            labels: tuple[str, ...] = ()
+            if event.subject_kind == "entity":
+                entity = world.entities.get(event.subject_id)
+                labels = tuple(entity.labels) if entity is not None else ()
+            elif event.subject_kind == "place":
+                place = world.places.get(event.subject_id)
+                entity = world.entities.get(place.entity_id) if place is not None else None
+                labels = tuple(entity.labels) if entity is not None else ()
+            details = tuple(
+                f"{key}={str(payload[key]).strip()[:80]}"
+                for key in ("phrase", "outcome", "status_code", "note")
+                if payload.get(key) not in (None, "")
+            )
             evidence.append(
                 EvidenceState(
                     event_id=event.event_id,
@@ -314,6 +319,8 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
                     source=event.source,
                     confidence=float(event.confidence),
                     view_id=event.view_id,
+                    labels=labels,
+                    details=details,
                 )
             )
 
@@ -330,6 +337,14 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
         f"obs={item.get('obs_id')} visits={item.get('visits')} status={item.get('status')}"
         for item in list(getattr(executor, "_nav_loop_flags", None) or ())[-4:]
     )
+    pending = dict(getattr(executor, "_pending_answerable", None) or {})
+    pending_answer = str(pending.get("answer_text") or "").strip()
+    if len(pending_answer) == 1 and pending_answer.upper() in "ABCDE":
+        pending_answer = ""
+    if not pending_answer and pending.get("letter"):
+        choice_text = getattr(executor, "_choice_text_for_letter", None)
+        if callable(choice_text):
+            pending_answer = str(choice_text(pending.get("letter")) or "").strip()
     return AgentStateSnapshot(
         schema_version=1,
         question=str(getattr(executor, "question", "") or ""),
@@ -345,6 +360,9 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
         target_rooms=target_rooms,
         verified=bool(getattr(executor, "_verified", False)),
         last_capture_status=getattr(executor, "_last_capture_status", None),
+        pending_answer=pending_answer or None,
+        pending_answer_obs_id=(int(pending["obs_id"]) if pending.get("obs_id") is not None else None),
+        pending_answer_present=(bool(pending["present"]) if pending.get("present") is not None else None),
         places=tuple(places),
         frontiers=tuple(frontiers),
         rooms=tuple(rooms),
@@ -356,6 +374,7 @@ def compile_agent_state(executor: Any, *, max_events: int = 16) -> AgentStateSna
             "decision_policy": str(getattr(executor, "decision_policy", "legacy")),
             "graph_evidence_mode": graph_mode,
             "room_history_mode": history_mode,
+            "attempt_ledger_mode": attempt_mode,
         },
     )
 
@@ -379,6 +398,25 @@ def render_agent_state(snapshot: AgentStateSnapshot, *, max_chars: int = 6000) -
         lines.append("Question room hints: " + ",".join(snapshot.target_rooms))
     if snapshot.last_capture_status:
         lines.append(f"Last capture: {snapshot.last_capture_status}")
+    if snapshot.pending_answer and not snapshot.verified:
+        lines.append(
+            f"Pending answer evidence: answer={snapshot.pending_answer} "
+            f"obs_id={snapshot.pending_answer_obs_id} present={snapshot.pending_answer_present} "
+            "(needs corroboration; do not submit yet)"
+        )
+
+    lines.append("Evidence history:")
+    for event in snapshot.evidence:
+        labels = ",".join(event.labels) or "unknown"
+        details = ";".join(event.details) or "none"
+        lines.append(
+            f"- event_id={event.event_id} step={event.step} {event.polarity} "
+            f"{event.subject_kind}:{event.subject_id} labels={labels} predicate={event.predicate} "
+            f"source={event.source} confidence={event.confidence:.2f} "
+            f"view_id={event.view_id or 'none'} details={details}"
+        )
+    if not snapshot.evidence:
+        lines.append("- none")
 
     lines.append("Room hypotheses:")
     for room in snapshot.rooms:
@@ -415,15 +453,6 @@ def render_agent_state(snapshot: AgentStateSnapshot, *, max_chars: int = 6000) -
     if not snapshot.frontiers:
         lines.append("- none")
 
-    lines.append("Evidence history:")
-    for event in snapshot.evidence:
-        lines.append(
-            f"- event_id={event.event_id} step={event.step} {event.polarity} "
-            f"{event.subject_kind}:{event.subject_id} predicate={event.predicate} "
-            f"source={event.source} confidence={event.confidence:.2f} view_id={event.view_id or 'none'}"
-        )
-    if not snapshot.evidence:
-        lines.append("- none")
     if snapshot.recent_actions:
         lines.append("Recent action outcomes: " + " | ".join(snapshot.recent_actions))
     if snapshot.loop_flags:

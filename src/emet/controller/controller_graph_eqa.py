@@ -134,7 +134,12 @@ class GraphEQAController(DynamemController):
             backend.load(graph_memory_input_path)
             voxel_pickle = Path(graph_memory_input_path) / VOXEL_PICKLE_FILENAME
             vm = getattr(self, "voxel_map", None)
-            if voxel_pickle.exists() and vm is not None and hasattr(vm, "read_from_pickle"):
+            if (
+                bool(getattr(backend, "loaded_has_voxel_pickle", False))
+                and voxel_pickle.exists()
+                and vm is not None
+                and hasattr(vm, "read_from_pickle")
+            ):
                 vm.read_from_pickle(voxel_pickle)
             # Resume the staleness clock from the checkpoint so maintain() does not
             # immediately prune reloaded nodes (lifelong checkpoint resume).

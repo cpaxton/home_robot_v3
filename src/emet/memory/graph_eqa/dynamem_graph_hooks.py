@@ -118,10 +118,7 @@ def update_graph_memory_from_dynamem_observation(
                 session = session_fn() or {}
                 if isinstance(session, dict):
                     session_id = str(
-                        session.get("session_id")
-                        or session.get("run_id")
-                        or session.get("environment_name")
-                        or ""
+                        session.get("session_id") or session.get("run_id") or session.get("environment_name") or ""
                     )
             except Exception:
                 session_id = ""
@@ -164,8 +161,10 @@ def update_graph_memory_from_dynamem_observation(
             for d in raw_dets
         ]
         visible_labels.extend(str(item[0]) for item in instance_items)
-        if not instance_items and getattr(frame, "instance", None) is not None and getattr(
-            vm, "use_instance_memory", False
+        if (
+            not instance_items
+            and getattr(frame, "instance", None) is not None
+            and getattr(vm, "use_instance_memory", False)
         ):
             instance_items = [
                 it

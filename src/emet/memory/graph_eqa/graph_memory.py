@@ -43,10 +43,11 @@ from emet.memory.graph_eqa.attempt_ledger import (
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 from emet.memory.graph_eqa.mcq_debias import (
     LETTERS,
+    answer_is_unknownish,
     extract_single_letter,
-    format_rotated_question,
     letter_to_original_index,
     match_freeform_to_choice,
+    rotated_choice_order,
     tally_choice_votes,
 )
 from emet.memory.graph_eqa.world_evidence import (
@@ -951,6 +952,7 @@ class GraphEQAMemory:
                         payload={
                             "claim_view_id": self.view_id_for_obs(int(node.obs_id)),
                             "viewpoint_distance_m": distance,
+                            "visibility_qualified": True,
                             "frustum_checked": True,
                             "depth_coverage_checked": True,
                             "occlusion_checked": True,
@@ -1170,9 +1172,7 @@ class GraphEQAMemory:
                 else None
             ),
             "base_pose_world": (
-                np.asarray(base_pose_world, dtype=float).reshape(-1)[:3].copy()
-                if base_pose_world is not None
-                else None
+                np.asarray(base_pose_world, dtype=float).reshape(-1)[:3].copy() if base_pose_world is not None else None
             ),
         }
         if session_id:
@@ -1837,12 +1837,7 @@ class GraphEQAMemory:
                 if view.rgb is None:
                     continue
                 anchor = view.base_pose_world or view.object_xyz
-                distance = float(
-                    np.linalg.norm(
-                        np.asarray(anchor[:2], dtype=float)
-                        - np.asarray(xyz[:2], dtype=float)
-                    )
-                )
+                distance = float(np.linalg.norm(np.asarray(anchor[:2], dtype=float) - np.asarray(xyz[:2], dtype=float)))
                 if distance < nearest_distance:
                     nearest_view, nearest_distance = view, distance
         if nearest_view is not None and nearest_distance <= 5.0:
@@ -1909,10 +1904,7 @@ class GraphEQAMemory:
             else None
         )
         clusters = (
-            [
-                (component.transient_id, component.goal_ij, component.cell_count)
-                for component in components
-            ]
+            [(component.transient_id, component.goal_ij, component.cell_count) for component in components]
             if components is not None
             else cluster_frontier_mask(
                 unexplored,
@@ -1920,9 +1912,7 @@ class GraphEQAMemory:
                 reachable=reachable,
             )
         )
-        component_by_id = {
-            component.transient_id: component for component in (components or ())
-        }
+        component_by_id = {component.transient_id: component for component in (components or ())}
         image_descriptions = getattr(voxel_map, "image_descriptions", None) or []
         keywords = list(question_keywords or self._relevant_objects or self._enrich_object_hints or [])
 
@@ -1957,11 +1947,7 @@ class GraphEQAMemory:
                     "transient_id": transient_id,
                     "grid_ij": grid_ij,
                     "cell_count": int(cell_count),
-                    "cells": (
-                        component.cells
-                        if component is not None
-                        else ((int(grid_ij[0]), int(grid_ij[1])),)
-                    ),
+                    "cells": (component.cells if component is not None else ((int(grid_ij[0]), int(grid_ij[1])),)),
                     "centroid_xyz": xyz,
                     "keyword_score": float(kw_score),
                     "hints": hints,
@@ -1971,11 +1957,7 @@ class GraphEQAMemory:
                 }
             )
 
-        tracks = (
-            self.world_evidence.update_frontier_tracks(prepared, step=step)
-            if self.world_evidence.enabled
-            else []
-        )
+        tracks = self.world_evidence.update_frontier_tracks(prepared, step=step) if self.world_evidence.enabled else []
         keep_ids: set[str] = set()
         for index, item in enumerate(prepared):
             track = tracks[index] if index < len(tracks) else None
@@ -1992,9 +1974,7 @@ class GraphEQAMemory:
                 + ",".join(item["attachment_ids"])
                 + ("; unexplored areas; " + ", ".join(hints) if hints else "; unexplored space")
                 if hints
-                else f"frontier_id={cluster_id}; attachments="
-                + ",".join(item["attachment_ids"])
-                + "; unexplored space"
+                else f"frontier_id={cluster_id}; attachments=" + ",".join(item["attachment_ids"]) + "; unexplored space"
             )
 
             existing = self._find_frontier_node(cluster_id)
@@ -2268,11 +2248,7 @@ class GraphEQAMemory:
                 replace(
                     cluster,
                     room_id=hypothesis.room_id,
-                    room_name=(
-                        hypothesis.room_name
-                        if hypothesis.room_name != "unknown"
-                        else cluster.room_name
-                    ),
+                    room_name=(hypothesis.room_name if hypothesis.room_name != "unknown" else cluster.room_name),
                 )
                 for cluster, hypothesis in zip(clusters, hypotheses, strict=True)
             ]
@@ -2362,8 +2338,7 @@ class GraphEQAMemory:
             nearest = min(
                 self._room_clusters,
                 key=lambda cluster: float(
-                    (cluster.centroid_xy[0] - xy[0]) ** 2
-                    + (cluster.centroid_xy[1] - xy[1]) ** 2
+                    (cluster.centroid_xy[0] - xy[0]) ** 2 + (cluster.centroid_xy[1] - xy[1]) ** 2
                 ),
                 default=None,
             )
@@ -3427,8 +3402,12 @@ class GraphEQAMemory:
                 phrases.append(landmark)
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
             cand_labels = [
-                (int(n.obs_id), str(n.labels)[:40], bool(getattr(n, "is_viewpoint", False)),
-                 bool(getattr(n, "is_frontier", False)))
+                (
+                    int(n.obs_id),
+                    str(n.labels)[:40],
+                    bool(getattr(n, "is_viewpoint", False)),
+                    bool(getattr(n, "is_frontier", False)),
+                )
                 for n in self._nodes
             ]
             _logger.info(
@@ -3817,7 +3796,11 @@ class GraphEQAMemory:
         """
         if self._obs_is_frontier(int(obs_id)):
             return False
-        return self._observation_by_id(int(obs_id)) is not None
+        obs = self._observation_by_id(int(obs_id))
+        if obs is None:
+            return False
+        rgb = np.asarray(obs.rgb)
+        return bool(rgb.ndim == 3 and rgb.shape[0] >= 2 and rgb.shape[1] >= 2)
 
     def _select_relevant_obs_ids(
         self,
@@ -4316,6 +4299,7 @@ class GraphEQAMemory:
             return None
         # Accept common key aliases from chatty VLMs.
         key_map = {str(k).strip().lower(): k for k in data}
+
         def _get(*names: str) -> Any:
             for n in names:
                 k = key_map.get(n)
@@ -4333,9 +4317,12 @@ class GraphEQAMemory:
             action = ""
         else:
             action = str(action_raw).strip().replace("\n", " ").replace("\t", " ")
-        confidence_reasoning = str(
-            _get("confidence_reasoning", "confidence_reason", "conf_reasoning") or ""
-        ).strip().replace("\n", " ").replace("\t", " ")
+        confidence_reasoning = (
+            str(_get("confidence_reasoning", "confidence_reason", "conf_reasoning") or "")
+            .strip()
+            .replace("\n", " ")
+            .replace("\t", " ")
+        )
         return reasoning, answer, confidence, action, confidence_reasoning
 
     def parse_answer(
@@ -4413,7 +4400,7 @@ class GraphEQAMemory:
         reasoning: str,
         salvage: bool = False,
     ) -> str:
-        """One-line HISTORY entry — letter/outcome only, not a raw model replay."""
+        """One-line HISTORY entry — semantic answer/outcome, not a raw model replay."""
         ans = (answer or "").strip().replace("\n", " ")[:40] or "?"
         act = (action or "").strip().replace("\n", " ")
         act_bit = ""
@@ -4577,8 +4564,9 @@ class GraphEQAMemory:
         lines = "\n".join(f"  {chr(65 + i)}) {choice}" for i, choice in enumerate(choices[:4]))
         return (
             "LOCATION_MCQ: The options are places, not yes/no. When the question asks "
-            "'did you see … anywhere?', you must still pick the letter (A–D) for WHERE "
-            "the object was observed. Prefer landmarks visible in the attached images; "
+            "'did you see … anywhere?', answer with the matching location option text for "
+            "WHERE the object was observed. Do not output its A/B/C/D label. "
+            "Prefer landmarks visible in the attached images; "
             "treat WORKING_MEMORY / CONFIRMED_MEMORY as hints to verify, not as a final "
             "answer if images disagree. Never answer yes/no on answer:.\n"
             f"{lines}"
@@ -4587,15 +4575,20 @@ class GraphEQAMemory:
     def _salvage_answer_letter(self, question: str, commands: list[Any]) -> str:
         """Terse follow-up when the main EQA output never produced an ``answer:`` field.
 
-        Reuses the attached images from ``commands`` and asks for only a letter, which
-        recovers runaway-caption episodes (the small VLM loops before emitting answer).
+        The VLM names the semantic answer; this compatibility helper maps that text to
+        the benchmark letter expected by older callers.
         """
         if self.eqa_client is None:
             return ""
+        from emet.habitat.metrics import parse_mcq_choices_from_question
+
+        choices = parse_mcq_choices_from_question(question)
+        if not choices:
+            return ""
         images = [c for c in commands if isinstance(c, Image.Image)]
         directive = (
-            "Answer the multiple-choice question with ONLY a single letter (A, B, C, or D). "
-            "Do not caption images. Do not explain. Output just the letter.\n"
+            "Answer the multiple-choice question with the exact text of the best option. "
+            "Do not output its A/B/C/D label. Do not caption images or explain.\n"
             f"Question: {question}"
         )
         try:
@@ -4604,11 +4597,11 @@ class GraphEQAMemory:
             _logger.warning(f"EQA answer salvage failed ({e})")
             return ""
         text = (salvage_raw or "").strip()
-        m = re.search(r"\b([A-D])\b", text)
-        if m:
-            return m.group(1)
-        m = re.search(r"([A-D])", text)
-        return m.group(1) if m else ""
+        idx = match_freeform_to_choice(text, choices)
+        if idx is not None and 0 <= idx < min(len(choices), len(LETTERS)):
+            return LETTERS[idx]
+        # Read-only compatibility for old clients/traces that still return a letter.
+        return extract_mcq_letter(text, choices)
 
     def _neighbor_label_blob_for_present_objects(self) -> str:
         """Concatenate nearest-furniture labels around PRESENT question objects."""
@@ -4811,7 +4804,7 @@ class GraphEQAMemory:
         choices: list[str],
         commands: list[Any],
     ) -> str:
-        """Re-ask for a location letter when the model answered visibility yes/no."""
+        """Re-ask for semantic location text, then map it for legacy callers."""
         if self.eqa_client is None or len(choices) < 2:
             return ""
         images = [c for c in commands if isinstance(c, Image.Image)]
@@ -4821,8 +4814,8 @@ class GraphEQAMemory:
         directive = (
             "The target object WAS observed during exploration (see CONFIRMED_MEMORY). "
             "This is a WHERE-did-you-see-it multiple choice question. "
-            "Pick the single best location option letter (A, B, C, or D). "
-            "Do NOT answer yes/no. Output only:\nanswer:\n<letter>\n"
+            "Answer with the exact text of the single best location option, without its "
+            "A/B/C/D label. Do NOT answer yes/no or explain.\n"
         )
         if memory:
             directive += memory + "\n"
@@ -4833,11 +4826,10 @@ class GraphEQAMemory:
             _logger.warning(f"Location-MCQ salvage failed ({e})")
             return ""
         text = (salvage_raw or "").strip()
-        m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
-        if m:
-            return m.group(1).upper()
-        m = re.search(r"\b([A-D])\b", text)
-        return m.group(1) if m else ""
+        idx = match_freeform_to_choice(text, choices)
+        if idx is not None and 0 <= idx < min(len(choices), len(LETTERS)):
+            return LETTERS[idx]
+        return extract_mcq_letter(text, choices)
 
     def vote_mcq_letter(
         self,
@@ -4899,18 +4891,21 @@ class GraphEQAMemory:
             }
             return letter
 
-        prior_index = letter_to_original_index(
-            extract_single_letter(self.last_eqa_parsed[1], n), rotation=0, n_choices=n
-        )
+        prior_text = str(self.last_eqa_parsed[1] or "")
+        prior_index = match_freeform_to_choice(prior_text, choices[:n])
+        if prior_index is None:
+            prior_index = letter_to_original_index(extract_single_letter(prior_text, n), rotation=0, n_choices=n)
         votes: list[int | None] = []
         replies: list[str] = []
         n_votes = int(max_votes) if int(max_votes) >= 0 else n
+        question_stem = re.split(r"\s+A\s*[\).]\s*", question, maxsplit=1, flags=re.IGNORECASE)[0].strip()
         for r in range(min(n, n_votes)):
-            formatted = format_rotated_question(question, choices[:n], r)
+            order = rotated_choice_order(n, r)
+            option_lines = "\n".join(f"- {choices[idx]}" for idx in order)
             directive = (
-                "Answer the multiple-choice question with ONLY a single letter "
-                f"(one of {', '.join(LETTERS[:n])}). Do not caption images. Do not "
-                f"explain. Output just the letter.\nQuestion: {formatted}"
+                "Answer the multiple-choice question with the exact text of the best "
+                "option. Do not output an option letter, caption images, or explain.\n"
+                f"Question: {question_stem}\nOptions:\n{option_lines}"
             )
             try:
                 reply = self.eqa_client([directive, *images])
@@ -4918,7 +4913,7 @@ class GraphEQAMemory:
                 _logger.warning(f"MCQ letter vote failed ({e})")
                 reply = ""
             replies.append((reply or "").strip()[:200])
-            votes.append(letter_to_original_index(extract_single_letter(reply, n), r, n))
+            votes.append(match_freeform_to_choice(reply, choices[:n]))
         win = tally_choice_votes(votes, choices[:n], prior_index=prior_index)
         letter = LETTERS[win] if win is not None else ""
         self.last_mcq_debias = {
@@ -5308,9 +5303,7 @@ class GraphEQAMemory:
         # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
-        graph_obs_ids = {
-            int(n.obs_id) for n in self._nodes if not n.is_frontier and not n.is_viewpoint
-        }
+        graph_obs_ids = {int(n.obs_id) for n in self._nodes if not n.is_frontier and not n.is_viewpoint}
         if obs_ids:
             if include_image_descriptions:
                 img_desc_str = self._get_image_descriptions_str(
@@ -5472,14 +5465,13 @@ class GraphEQAMemory:
         )
         answer_outputs = (raw or "").replace("*", "").replace("#", "").lower()
         # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
-        # Re-ask tersely for just the choice letter.
+        # Re-ask tersely for semantic option text.
         # - Empty answer → always salvage (64-token truncation / runaway caption).
         # - ``Unknown`` on attribute/yes-no → salvage (holdout q65).
         # - Empty/``Unknown`` on location MCQ → do NOT invent a letter (holdout q104/q105);
         #   agentic should follow Action:/explore instead of memory/salvage A–D.
         _ans_stripped = (answer or "").strip()
-        _ans_unknown = _ans_stripped.lower() in {"unknown", "none", "n/a", "na"}
-        _ans_unknownish = _ans_unknown or not _ans_stripped
+        _ans_unknownish = answer_is_unknownish(_ans_stripped, parsed_choices)
         _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
         # A stream that never reached ``answer:`` / ``"answer"`` was cut off mid-caption.
         _answer_field_emitted = bool(
@@ -5499,13 +5491,14 @@ class GraphEQAMemory:
             # human_answer / agentic follow-up treat this as Unknown, not memory-B.
             answer = "Unknown"
             _ans_stripped = "Unknown"
-            _ans_unknown = True
             _ans_unknownish = True
         if _should_salvage:
-            salvage = self._salvage_answer_letter(question, commands)
-            if salvage:
-                answer = salvage
-                raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
+            salvage_letter = self._salvage_answer_letter(question, commands)
+            if salvage_letter:
+                salvage_idx = ord(salvage_letter) - ord("A")
+                salvage_text = parsed_choices[salvage_idx] if 0 <= salvage_idx < len(parsed_choices) else salvage_letter
+                answer = salvage_text
+                raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage_text}\n"
                 self.last_eqa_raw = raw
                 self.last_eqa_salvage_used = True
         elif (
@@ -5547,24 +5540,26 @@ class GraphEQAMemory:
             if _ans_unknownish:
                 pass
             elif preferred and (abstain or parsed_letter != preferred):
-                answer = preferred
-                raw = (raw or "") + f"\n[memory-location]\nanswer:\n{preferred}\n"
+                preferred_idx = ord(preferred) - ord("A")
+                preferred_text = (
+                    parsed_choices[preferred_idx] if 0 <= preferred_idx < len(parsed_choices) else preferred
+                )
+                answer = preferred_text
+                raw = (raw or "") + f"\n[memory-location]\nanswer:\n{preferred_text}\n"
                 self.last_eqa_raw = raw
             elif abstain:
                 # Visibility-style Yes/No on a WHERE question may still salvage; empty/Unknown
                 # already handled above. Do not salvage bare abstains without a letter.
                 if answer_is_visibility_abstain(answer) and not _ans_unknownish:
-                    salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
-                    if salvage:
-                        answer = salvage
-                        raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
+                    salvage_letter = self._salvage_location_mcq_letter(question, parsed_choices, commands)
+                    if salvage_letter:
+                        salvage_idx = ord(salvage_letter) - ord("A")
+                        salvage_text = (
+                            parsed_choices[salvage_idx] if 0 <= salvage_idx < len(parsed_choices) else salvage_letter
+                        )
+                        answer = salvage_text
+                        raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage_text}\n"
                         self.last_eqa_raw = raw
-            elif parsed_letter and not re.fullmatch(r"[A-E]", (answer or "").strip(), flags=re.I):
-                # Normalize NL choice text → letter so downstream scoring / human format
-                # see the same canonical answer the override logic respected.
-                answer = parsed_letter
-                raw = (raw or "") + f"\n[choice-text]\nanswer:\n{parsed_letter}\n"
-                self.last_eqa_raw = raw
         self.last_eqa_model_confident = bool(confidence)
         covered = self._graph_covers_relevant_objects()
         if confidence and not covered:
@@ -5584,13 +5579,9 @@ class GraphEQAMemory:
                 confidence_reasoning
                 + " Yes/No from missing evidence is not final; keep exploring until objects are observed."
             ).strip()
-        # Empty / Unknown is never a confirmed MCQ answer — keep updating memory.
-        if not (answer or "").strip() or (answer or "").strip().lower() in {
-            "unknown",
-            "none",
-            "n/a",
-            "na",
-        }:
+        # Abstentions are never confirmed MCQ answers. A count option whose
+        # semantic text is ``None`` is a real answer, not an abstention.
+        if answer_is_unknownish(str(answer or ""), parsed_choices):
             confidence = False
             confidence_reasoning = (
                 confidence_reasoning + " No clear letter yet; explore and refresh memory before confirming."
@@ -5604,8 +5595,7 @@ class GraphEQAMemory:
             and not attribute_q
             and not self._any_graph_label_match_for_confirmed()
         ):
-            letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
-            parsed_letter = letter_m.group(1).upper() if letter_m else ""
+            parsed_letter = extract_mcq_letter(str(answer or ""), parsed_choices)
             img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)
             if parsed_letter and img_letter and parsed_letter != img_letter:
                 confidence = False
@@ -5643,11 +5633,13 @@ class GraphEQAMemory:
                         confidence_reasoning
                         + " Under-equipment location needs a clearer mat↔equipment distance before confirming."
                     ).strip()
-                elif re.search(r"\b([a-d])\b", (answer or "").strip().lower()):
-                    letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
-                    if letter_m and letter_m.group(1).upper() != equip:
-                        answer = equip
-                        raw = (raw or "") + f"\n[equipment-location]\nanswer:\n{equip}\n"
+                else:
+                    parsed_letter = extract_mcq_letter(str(answer or ""), parsed_choices)
+                    if parsed_letter and parsed_letter != equip:
+                        equip_idx = ord(equip) - ord("A")
+                        equip_text = parsed_choices[equip_idx] if 0 <= equip_idx < len(parsed_choices) else equip
+                        answer = equip_text
+                        raw = (raw or "") + f"\n[equipment-location]\nanswer:\n{equip_text}\n"
                         self.last_eqa_raw = raw
         # Attribute/state: never finalize from memory priors (images only).
         if confidence and attribute_q and self.memory_summary_enabled:

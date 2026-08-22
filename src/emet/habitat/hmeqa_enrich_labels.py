@@ -55,6 +55,25 @@ def enrich_labels_for_question(
     return table.get(f"{question_id}_{scene}", "")
 
 
+def enrich_labels_for_dataset_question(
+    question_id: int,
+    scene: str,
+    *,
+    questions_path: Path | None = None,
+    labels_path: Path | None = None,
+) -> str:
+    """Map a questions.csv row id to the GraphEQA enrich-set ordinal."""
+    selected_ids = grapheqa_baseline_question_ids(
+        questions_path=questions_path,
+        labels_path=labels_path,
+    )
+    try:
+        enrich_id = selected_ids.index(int(question_id))
+    except ValueError:
+        return ""
+    return enrich_labels_for_question(enrich_id, scene, labels_path=labels_path)
+
+
 def grapheqa_baseline_question_ids(
     *,
     questions_path: Path | None = None,
@@ -82,4 +101,3 @@ def grapheqa_baseline_question_ids(
     ge_scenes = {str(k).split("_", 1)[1] for k in enrich}
     questions = load_hmeqa_questions(questions_path)
     return [q.index for q in questions if q.scene in ge_scenes]
-

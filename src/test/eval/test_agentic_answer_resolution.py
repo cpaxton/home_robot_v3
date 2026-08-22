@@ -34,6 +34,11 @@ Q47 = (
 )
 Q43 = "What time is it now? A) 10am-12pm B) 2pm-4pm C) 6pm-8pm D) 8am-10am"
 Q12 = "How many bedside tables are there? A) Three B) One C) None D) Two"
+Q11 = (
+    "Where did I leave the silver trash can at? "
+    "A) Next to the dining table B) Next to the TV "
+    "C) Next to the kitchen sink D) Next to the refrigerator"
+)
 
 
 def _executor(question: str, *, query_answer: str = "", raw: str = "", **kwargs):
@@ -55,10 +60,11 @@ def _executor(question: str, *, query_answer: str = "", raw: str = "", **kwargs)
     return ex, gm
 
 
-def _set_confirmed_vlm_answer(ex, letter: str, *, obs_id: int = 7):
+def _set_confirmed_vlm_answer(ex, letter: str, *, obs_id: int = 7, answer_text: str = ""):
     record = ex._record_answer_evidence(
         letter=letter,
         source="vlm_suggested",
+        answer_text=answer_text,
         obs_id=obs_id,
         present=True,
         answerable=True,
@@ -84,7 +90,7 @@ def test_q28_eqa_letter_beats_absence_and_coordinate_dump():
 
     out = ex._do_submit_answer()
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "Two"
     assert out["answer_source"] == "eqa_answer"
 
 
@@ -101,7 +107,7 @@ def test_confirmed_q12_vlm_letter_beats_conflicting_four_image_eqa():
 
     out = ex._do_submit_answer()
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "Two"
     assert out["answer_source"] == "vlm_suggested"
     assert out["final_decision"]["evidence"]["obs_id"] == 7
 
@@ -118,7 +124,7 @@ def test_forced_debias_cannot_replace_confirmed_vlm_answer():
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "Two"
     assert out["answer_provenance"] == "vlm_suggested"
     assert out["answer_confidence"] == pytest.approx(0.65)
     assert out["confidence"] is True
@@ -126,8 +132,9 @@ def test_forced_debias_cannot_replace_confirmed_vlm_answer():
     assert out["final_decision"]["evidence"]["obs_id"] == 7
     gm.vote_mcq_letter.assert_not_called()
     forced = next(row for row in ex._trace_rows if row.get("tool") == "forced_answer")
-    assert forced["raw_eqa_letter"] == "B"
-    assert forced["resolved_letter_before_fallback"] == "D"
+    assert forced["raw_eqa_answer"] == "B) One"
+    assert forced["raw_eqa_choice_index"] == 1
+    assert forced["resolved_choice_index"] == 3
     assert forced["agentic_mcq_debias_enabled"] is True
     assert forced["evidence_backed_decision"] is True
 
@@ -150,30 +157,94 @@ def test_coverage_look_around_preserves_confirmed_answer_state():
     assert ex._verified_obs_id == 7
 
 
-def test_grounded_v2_parses_native_json_before_conflicting_view(monkeypatch):
+def test_grounded_v2_confirmed_view_beats_conflicting_eqa(monkeypatch):
+    """Image that opened ANSWER outranks graph-steered multi-image EQA JSON."""
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    ex, gm = _executor(
+        Q12,
+        query_answer="The nightstand is at approximately (1.36, 2.64, 0.25) m.",
+        raw='{"reasoning":"one nightstand in SCENE_GRAPH","answer":"B","confidence":true}',
+    )
+    gm.last_eqa_model_raw = gm.last_eqa_raw
+    gm.last_eqa_model_parsed = ("one nightstand in SCENE_GRAPH", "B", True, "", "")
+    _set_confirmed_vlm_answer(ex, "D")
+    ex._verified = True
+    ex._verified_obs_id = 7
+
+    out = ex._do_submit_answer(prefer_answer="B")
+
+    assert out["answer"] == "Two"
+    assert out["answer_source"] == "vlm_suggested"
+    assert out["final_decision"]["evidence"]["obs_id"] == 7
+
+
+def test_grounded_v2_eqa_used_only_without_image_evidence(monkeypatch):
+    """Native EQA parse is still the fallback when no present+answerable view exists."""
     monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
     ex, gm = _executor(
         Q28,
-        query_answer="C",
+        query_answer="",
         raw='{"reasoning":"two fans are visible","answer":"B","confidence":true}',
     )
     gm.last_eqa_model_raw = gm.last_eqa_raw
     gm.last_eqa_model_parsed = ("two fans are visible", "B", True, "", "")
-    ex._record_answer_evidence(
-        letter="C",
-        source="vlm_suggested",
-        obs_id=7,
-        present=True,
-        answerable=True,
-        need_more_views=False,
-        confidence=0.5,
-    )
 
-    out = ex._do_submit_answer(prefer_answer="C")
+    out = ex._do_submit_answer()
 
-    assert out["answer"] == "B"
+    assert out["answer"] == "Three"
     assert out["answer_source"] == "eqa_answer"
-    assert out["final_decision"]["answer"] == "B"
+
+
+def test_q11_semantic_eqa_answer_maps_to_d_without_fabricated_view_evidence(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    semantic = "Next to the refrigerator"
+    ex, gm = _executor(
+        Q11,
+        raw=(f'{{"reasoning":"The trash can is beside the refrigerator.","answer":"{semantic}","confidence":true}}'),
+    )
+    gm.last_eqa_model_raw = gm.last_eqa_raw
+    gm.last_eqa_model_parsed = (
+        "The trash can is beside the refrigerator.",
+        semantic,
+        True,
+        "",
+        "visible",
+    )
+    ex._assess_history[15] = {
+        "present": False,
+        "answerable": False,
+        "need_more_views": True,
+    }
+
+    out = ex._forced_answer_fallback(reason="budget exhausted after absent views")
+
+    assert out["answer"] == semantic
+    assert out["answer_source"] == "eqa_answer"
+    assert out["verified"] is False
+    assert out["final_decision"]["answer_text"] == semantic
+    assert out["final_decision"]["choice_index"] == 3
+    assert out["final_decision"]["evidence"] is None
+
+
+def test_q11_semantic_view_answer_survives_channel_selection(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    semantic = "Next to the refrigerator"
+    ex, gm = _executor(Q11, raw="")
+    gm.last_eqa_model_raw = ""
+    gm.last_eqa_model_parsed = ("", "", False, "", "")
+    record = _set_confirmed_vlm_answer(ex, semantic, obs_id=11, answer_text=semantic)
+    ex._verified = True
+    ex._verified_obs_id = 11
+
+    out = ex._do_submit_answer(prefer_answer=semantic)
+
+    assert record.letter == "D"
+    assert out["answer"] == semantic
+    assert out["final_decision"]["answer_text"] == semantic
+    assert out["final_decision"]["choice_index"] == 3
+    assert out["final_decision"]["evidence"]["answer_text"] == semantic
+    assert out["final_decision"]["evidence"]["choice_index"] == 3
+    assert "letter" not in out["final_decision"]["evidence"]
 
 
 def test_grounded_v2_rejects_unaligned_router_answer(monkeypatch):
@@ -288,7 +359,7 @@ def test_q43_prose_answer_still_scores_a_letter():
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] in {"A", "B", "C", "D"}
+    assert out["answer"] in {"10am-12pm", "2pm-4pm", "6pm-8pm", "8am-10am"}
     assert out["answer_provenance"] in {"eqa_answer", "uniform_prior"}
 
 
@@ -307,13 +378,13 @@ def test_q80_budget_exhaustion_invokes_the_four_image_eqa():
     out = ex._tool_submit_answer("")
 
     assert gm.query_answer.called
-    assert out["answer"] == "C"
+    assert out["answer"] == "By the bathtub"
     assert out["answer_provenance"] == "eqa_answer"
     assert any(row.get("tool") == "forced_answer" for row in ex._trace_rows)
 
 
 def test_forced_guess_is_deterministic_and_low_confidence():
-    """With no usable channel we still commit to a letter, flagged as a guess."""
+    """With no usable channel we still commit to option text, flagged as a guess."""
     ex_a, _ = _executor(Q28, query_answer="")
     ex_b, _ = _executor(Q28, query_answer="")
     ex_a._round = 7
@@ -323,7 +394,7 @@ def test_forced_guess_is_deterministic_and_low_confidence():
     out_b = ex_b._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
     assert out_a["answer"] == out_b["answer"]
-    assert out_a["answer"] in {"A", "B", "C", "D"}
+    assert out_a["answer"] in {"One", "Three", "None", "Two"}
     assert out_a["answer_provenance"] == "uniform_prior"
     assert out_a["answer_confidence"] == pytest.approx(0.25)
     assert out_a["confidence"] is False
@@ -338,7 +409,7 @@ def test_forced_ladder_tags_trusted_view_as_vlm_suggested_not_pending():
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "Two"
     assert out["answer_provenance"] == "vlm_suggested"
     assert out["answer_confidence"] == pytest.approx(0.50)
 
@@ -352,7 +423,7 @@ def test_forced_ladder_tags_deferred_assess_as_pending_letter():
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "B"
+    assert out["answer"] == "Three"
     assert out["answer_provenance"] == "pending_letter"
     assert out["answer_confidence"] == pytest.approx(0.35)
 
@@ -384,7 +455,7 @@ def test_force_answer_off_does_not_discard_confirmed_evidence(monkeypatch):
 
     out = ex._forced_answer_fallback(reason="later coverage exhausted the budget")
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "Two"
     assert out["answer_provenance"] == "vlm_suggested"
     assert out["verified"] is True
     assert gm.query_answer.called

@@ -68,7 +68,7 @@ uv run emet run agent --robot stretch --config configs/agent_stretch_discord.yam
 
 # Scored HM-EQA via the shared episode function (identical to emet-habitat; no chat router)
 uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
-  --extra-instruction "Answer with a single letter A–D."
+  --extra-instruction "Answer with concise semantic option text; omit A–D labels."
 
 # Scripted skill smoke (no Discord)
 uv run emet run agent --robot stretch --start-sim --no-discord \

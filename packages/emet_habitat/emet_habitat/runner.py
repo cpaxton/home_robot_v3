@@ -30,7 +30,7 @@ from emet.habitat.episode_debug import (
     save_error_episode_bundle,
     write_run_manifest,
 )
-from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
+from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_dataset_question
 from emet.habitat.metrics import (
     EpisodeMetrics,
     append_episode_jsonl,
@@ -40,8 +40,15 @@ from emet.habitat.metrics import (
     grade_mcq_answer,
     should_abstain_location_mcq,
 )
+from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.simulator import HabitatEQASimulator
+
+
+def _semantic_choice_letter(answer_text: str, choices: list[str]) -> str:
+    """Resolve semantic answer text to the benchmark's letter encoding."""
+    idx = match_freeform_to_choice(str(answer_text or ""), choices)
+    return chr(ord("A") + idx) if idx is not None and 0 <= idx < min(len(choices), 5) else ""
 
 
 def _release_gpu_memory() -> None:
@@ -272,6 +279,7 @@ def run_hmeqa_episode(
     no_rerun: bool = True,
     rotate_in_place: bool = True,
     use_hm3d_semantics: bool | None = None,
+    use_enrich_labels: bool = False,
     eqa_vl_family: str | None = None,
     eqa_hf_model_id: str | None = None,
     device: str | None = "cuda",
@@ -378,13 +386,14 @@ def run_hmeqa_episode(
         agent._eqa_question = eqa_question
         agent.start()
         if agent.graph_memory is not None:
-            # GraphEQA per-question enrich labels are GT-derived object hints
-            # (bundled YAML keyed {question_id}_{scene}); only seed them when GT
-            # HM3D semantics are requested — a real-world agent has no such hints.
-            # (Currently the bundled scene IDs do not overlap the paper-113 episodes,
-            # so this is latent, but keep it gated so it can never leak.)
-            if use_hm3d_semantics:
-                hints = enrich_labels_for_question(question_id, q.scene)
+            # GraphEQA enrich labels are a separate GT-derived oracle axis. Keep
+            # them opt-in rather than coupling them to the semantic sensor.
+            if use_enrich_labels:
+                hints = enrich_labels_for_dataset_question(
+                    question_id,
+                    q.scene,
+                    questions_path=questions_path,
+                )
                 if hints:
                     agent.graph_memory.seed_object_hints(hints)
             agent.graph_memory.extract_relevant_objects(eqa_question)
@@ -437,19 +446,29 @@ def run_hmeqa_episode(
                 agent.graph_memory.last_eqa_parsed
             )
             formatted_answer = str(answer or "")
-            # Prefer raw mLLM ``answer:`` field; human formatting can replace letters with prose.
-            parsed_letter = extract_mcq_letter_from_raw_eqa(raw_eqa, q.choices)
-            if not parsed_letter:
-                parsed_letter = extract_mcq_letter(answer, q.choices)
+            # New runs preserve semantic answer text until this scoring boundary.
+            parsed_letter = _semantic_choice_letter(formatted_answer, q.choices)
+            if not parsed_letter and len(formatted_answer) <= 16:
+                # Read-only compatibility for historical letter-first backends.
+                parsed_letter = extract_mcq_letter(formatted_answer, q.choices)
+            if not parsed_letter and not formatted_answer:
+                parsed_letter = extract_mcq_letter_from_raw_eqa(raw_eqa, q.choices)
         predicted = parsed_letter
-        if not predicted:
+        if not predicted and grounded_decision is None:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
         if grounded_decision is not None:
-            grounded_letter = extract_mcq_letter(str(grounded_decision.get("answer") or ""), q.choices)
+            grounded_text = str(grounded_decision.get("answer_text") or "")
+            grounded_letter = _semantic_choice_letter(grounded_text, q.choices)
+            if not grounded_letter and not grounded_text:
+                # Historical grounded summaries carried only a canonical letter.
+                grounded_letter = extract_mcq_letter(str(grounded_decision.get("answer") or ""), q.choices)
             if grounded_letter:
                 predicted = grounded_letter
                 parsed_letter = grounded_letter
+            else:
+                predicted = ""
+                parsed_letter = ""
         # Location MCQ where the target never appeared in the attached views. Prefer a
         # geometric equipment letter when we have one, but keep the model's letter
         # otherwise: blanking it here scored a guaranteed zero where a guess scores
@@ -598,6 +617,7 @@ def run_hmeqa_batch(
     device: str | None = "cuda",
     continue_on_error: bool = True,
     use_hm3d_semantics: bool | None = None,
+    use_enrich_labels: bool = False,
     output_jsonl: Path | None = None,
     resume: bool = False,
     frontier_nodes_enabled: bool | None = None,
@@ -641,6 +661,8 @@ def run_hmeqa_batch(
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
             device=device,
+            use_hm3d_semantics=use_hm3d_semantics,
+            use_enrich_labels=use_enrich_labels,
             resume=resume,
             parameters=parameters,
         )
@@ -663,6 +685,7 @@ def run_hmeqa_batch(
                 eqa_hf_model_id=eqa_hf_model_id,
                 device=device,
                 use_hm3d_semantics=use_hm3d_semantics,
+                use_enrich_labels=use_enrich_labels,
                 frontier_nodes_enabled=frontier_nodes_enabled,
                 frontier_keyword_weight=frontier_keyword_weight,
                 habitat_perfect_nav=habitat_perfect_nav,
@@ -726,6 +749,7 @@ def run_hmeqa_compare(
     eqa_hf_model_id: str | None = None,
     device: str | None = "cuda",
     use_hm3d_semantics: bool | None = None,
+    use_enrich_labels: bool = False,
 ) -> tuple[list[EpisodeMetrics], list[EpisodeMetrics]]:
     """Run the same HM-EQA questions with static_graph then dynagraph."""
     common: Any = {
@@ -739,6 +763,7 @@ def run_hmeqa_compare(
         "eqa_hf_model_id": eqa_hf_model_id,
         "device": device,
         "use_hm3d_semantics": use_hm3d_semantics,
+        "use_enrich_labels": use_enrich_labels,
     }
     graph = run_hmeqa_batch(question_ids=question_ids, method="static_graph", **cast(Any, common))
     _release_gpu_memory()

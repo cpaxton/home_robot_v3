@@ -91,6 +91,7 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
     maps/overlay_step_NNNN.png   # GT overlay stride snapshots (when export_map_overlay)
     floor_metrics.json
     diagnostics_manifest.json
+    compact_memory/               # optional reloadable graph-only checkpoint
     (track-specific: raw_eqa.txt, memory/, …)
 ```
 
@@ -112,6 +113,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
 | `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` (when >0; else `map_video_stride` drives auto stride for map video) |
 | `EMET_EVAL_EXPORT_GRAPH` | off | Full graph checkpoint (heavy) |
+| `EMET_EVAL_EXPORT_COMPACT_MEMORY` | off | Graph-only semantic/runtime/evidence metadata; no voxel map, dense frames, navigation pixels, or evidence-view pixels, so reload supports semantic inspection but not visual verification |
+| `EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB` | on | Full-resolution evidence-view PNGs; disable for compact sweeps |
 | `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
 | `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
 
@@ -122,6 +125,11 @@ Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_
 **Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → YAML → defaults. See [emet_config.md](emet_config.md).
 
 **Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`. On Habitat, when `export_video_substeps` is on, `HabitatRobotClient` post-step hooks append one RGB frame per discrete sim action (smoother head-camera MP4 during navmesh following).
+
+The GraphEQA baseline sweep defaults to compact exports: graph-only checkpoints,
+final maps, trajectories, and JSON traces are retained under the run output, while
+per-step RGB, evidence-view pixels, and videos are disabled. Individual
+`EMET_EVAL_*` variables can opt those visual artifacts back in.
 
 **CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
 

@@ -21,6 +21,7 @@ from emet.habitat.metrics import EpisodeMetrics
 
 ATTEMPT_LEDGER_FILENAME = "attempt_ledger.json"
 ROOM_EVENTS_FILENAME = "room_events.json"
+COMPACT_MEMORY_DIRNAME = "compact_memory"
 
 
 def default_episodes_root() -> Path:
@@ -127,6 +128,8 @@ def write_run_manifest(
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str | None,
+    use_hm3d_semantics: bool | None = None,
+    use_enrich_labels: bool = False,
     resume: bool,
     parameters: Any = None,
 ) -> Path:
@@ -150,6 +153,8 @@ def write_run_manifest(
         "eqa_vl_family": eqa_vl_family,
         "eqa_hf_model_id": eqa_hf_model_id or eqa_cfg.get("vl_hf_model_id"),
         "device": device,
+        "use_hm3d_semantics": use_hm3d_semantics,
+        "use_enrich_labels": bool(use_enrich_labels),
         "resume": resume,
         "git_commit": _git_head(),
         "code_state": code_state_fingerprint(),
@@ -191,14 +196,19 @@ def _frontier_node_summaries(graph_memory: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _save_agentic_evidence_artifacts(episode_dir: Path, graph_memory: Any) -> None:
+def _save_agentic_evidence_artifacts(
+    episode_dir: Path,
+    graph_memory: Any,
+    *,
+    include_world_evidence_rgb: bool,
+) -> None:
     """Persist policy-sidecar evidence needed for shadow/agent audits."""
     world_evidence = getattr(graph_memory, "world_evidence", None)
     if world_evidence is not None and bool(getattr(world_evidence, "enabled", False)):
         save_world_evidence = getattr(world_evidence, "save", None)
         if not callable(save_world_evidence):
             raise TypeError("enabled world_evidence store does not provide save()")
-        save_world_evidence(episode_dir)
+        save_world_evidence(episode_dir, include_rgb=include_world_evidence_rgb)
 
     export_attempt_ledger = getattr(graph_memory, "export_attempt_ledger", None)
     if callable(export_attempt_ledger):
@@ -284,14 +294,39 @@ def save_episode_debug_bundle(
     Always writes: ``metrics.json``, ``raw_eqa.txt``, ``eqa_history.json``, ``scene_graph_report.txt``,
     ``frontier_nodes.json``, room events, and the attempt ledger. Enabled shadow/agent stores also write
     ``world_evidence.json`` plus their evidence views. Set ``HABITAT_EQA_EXPORT_GRAPH=1`` for the full
-    ``export_graph_eqa_dir`` checkpoint.
+    ``export_graph_eqa_dir`` checkpoint, or ``EMET_EVAL_EXPORT_COMPACT_MEMORY=1`` for a reloadable
+    graph/runtime checkpoint without voxel frames or view pixels.
     When ``recorder`` is set (or env ``EMET_EVAL_EXPORT_MAP``), also writes maps / video via
     :mod:`emet.eval.episode_diagnostics`.
     """
     episode_dir = default_episodes_root() / run_tag / f"q{metrics.question_id:04d}_{metrics.method}"
     episode_dir.mkdir(parents=True, exist_ok=True)
+    from emet.eval.episode_diagnostics import EpisodeDiagnosticsConfig
+
+    cfg = diagnostics_cfg or EpisodeDiagnosticsConfig.from_env()
 
     gm = getattr(agent, "graph_memory", None)
+    for stale_name in (
+        "eqa_history.json",
+        "raw_eqa.txt",
+        "metrics.json",
+        "error.txt",
+        "scene_graph_report.txt",
+        "frontier_nodes.json",
+        ATTEMPT_LEDGER_FILENAME,
+        ROOM_EVENTS_FILENAME,
+        "world_evidence.json",
+    ):
+        (episode_dir / stale_name).unlink(missing_ok=True)
+    for stale_dir_name in ("frontier_picks", "world_evidence_views"):
+        stale_dir = episode_dir / stale_dir_name
+        if stale_dir.is_dir():
+            shutil.rmtree(stale_dir)
+    if not (cfg.export_compact_memory and gm is not None):
+        stale_compact = episode_dir / COMPACT_MEMORY_DIRNAME
+        if stale_compact.is_dir():
+            shutil.rmtree(stale_compact)
+
     history = list(getattr(gm, "_history_outputs", []) or []) if gm is not None else []
     (episode_dir / "eqa_history.json").write_text(
         json.dumps({"iterations": history}, indent=2) + "\n",
@@ -348,7 +383,30 @@ def save_episode_debug_bundle(
             json.dumps(_frontier_node_summaries(gm), indent=2) + "\n",
             encoding="utf-8",
         )
-        _save_agentic_evidence_artifacts(episode_dir, gm)
+        _save_agentic_evidence_artifacts(
+            episode_dir,
+            gm,
+            include_world_evidence_rgb=cfg.export_world_evidence_rgb,
+        )
+
+    compact_memory_dir: Path | None = None
+    if cfg.export_compact_memory and gm is not None:
+        from emet.memory.adapters import GraphEQABackend
+
+        compact_memory_dir = episode_dir / COMPACT_MEMORY_DIRNAME
+        GraphEQABackend(gm).save(
+            str(compact_memory_dir),
+            final_step=int(
+                getattr(
+                    agent,
+                    "obs_count",
+                    getattr(gm, "_graph_timestep", 0),
+                )
+                or 0
+            ),
+            include_frames=False,
+            include_world_evidence_rgb=False,
+        )
 
     export_graph = os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower() in (
         "1",
@@ -370,12 +428,11 @@ def save_episode_debug_bundle(
         (episode_dir / "error.txt").write_text(metrics.error, encoding="utf-8")
 
     from emet.eval.episode_diagnostics import (
-        EpisodeDiagnosticsConfig,
+        DIAGNOSTICS_MANIFEST,
         EpisodeDiagnosticsRecorder,
         flush_episode_diagnostics,
     )
 
-    cfg = diagnostics_cfg or EpisodeDiagnosticsConfig.from_env()
     diag_rec = recorder
     if diag_rec is None and any(
         (
@@ -387,6 +444,7 @@ def save_episode_debug_bundle(
             cfg.export_obstacle_grids,
             cfg.export_object_crops,
             cfg.export_full_graph,
+            cfg.export_compact_memory,
             cfg.export_voxel_history,
             cfg.export_voxel_pickle,
         )
@@ -394,6 +452,13 @@ def save_episode_debug_bundle(
         diag_rec = EpisodeDiagnosticsRecorder(cfg=cfg)
     if diag_rec is not None:
         manifest = flush_episode_diagnostics(episode_dir, agent, diag_rec)
+        if compact_memory_dir is not None:
+            manifest["compact_memory"] = str(compact_memory_dir)
+            manifest_path = episode_dir / DIAGNOSTICS_MANIFEST
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n",
+                encoding="utf-8",
+            )
         if manifest.get("topdown_map"):
             metrics.topdown_map_path = str(manifest["topdown_map"])
         if manifest.get("diagnostics_manifest"):
@@ -410,6 +475,8 @@ def save_episode_debug_bundle(
 def save_error_episode_bundle(*, run_tag: str, metrics: EpisodeMetrics) -> Path:
     """Minimal bundle when the episode crashes before an agent exists."""
     episode_dir = default_episodes_root() / run_tag / f"q{metrics.question_id:04d}_{metrics.method}"
+    if episode_dir.is_dir():
+        shutil.rmtree(episode_dir)
     episode_dir.mkdir(parents=True, exist_ok=True)
     if metrics.error:
         (episode_dir / "error.txt").write_text(metrics.error, encoding="utf-8")

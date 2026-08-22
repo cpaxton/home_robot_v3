@@ -45,6 +45,7 @@
 #   EMET_EQA_ROOM_TARGET_HINTS=0|1
 #   EMET_EQA_ROOM_STAMP_INVESTIGATE=0|1
 #   EMET_EQA_ATTEMPT_LEDGER_MODE=off|shadow|agent
+#   EMET_EVAL_EXPORT_COMPACT_MEMORY=0|1  compact graph/runtime checkpoint (default 1)
 #   EMET_HMEQA_VARIANT_ID=legacy  explicit A/B label; all are frozen in run_manifest.json.
 #   EQA_HF_MODEL_ID / EQA_VL_FAMILY / EQA_VL_QUANTIZATION  → emet-habitat
 #                          --eqa-hf-model-id / --eqa-vl-family / (quant via config env).
@@ -87,6 +88,7 @@ EPISODE_GPU_WAIT="${EPISODE_GPU_WAIT:-1}"
 EQA_HF_MODEL_ID="${EQA_HF_MODEL_ID:-}"
 EQA_VL_FAMILY="${EQA_VL_FAMILY:-}"
 EQA_VL_QUANTIZATION="${EQA_VL_QUANTIZATION:-}"
+export EMET_EVAL_EXPORT_COMPACT_MEMORY="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-1}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
 # Create a versioned manifest on first launch. On resume, omitted frozen env
@@ -129,8 +131,17 @@ else
 fi
 unset EMET_HMEQA_RUN_CONFIG_JSON EMET_HMEQA_RUN_SOURCES_JSON
 
-# Extra flags for emet-habitat run-episode (larger-VLM ladder).
-EQA_EXTRA_ARGS=()
+# Perception/oracle axes are frozen into run_manifest.json. Defaults are GT-free.
+if [[ "${EMET_HMEQA_USE_HM3D_SEMANTICS:-0}" =~ ^(1|true|yes|on)$ ]]; then
+    EQA_EXTRA_ARGS=(--use-hm3d-semantics)
+else
+    EQA_EXTRA_ARGS=(--no-hm3d-semantics)
+fi
+if [[ "${EMET_HMEQA_USE_ENRICH_LABELS:-0}" =~ ^(1|true|yes|on)$ ]]; then
+    EQA_EXTRA_ARGS+=(--enrich-labels)
+else
+    EQA_EXTRA_ARGS+=(--no-enrich-labels)
+fi
 if [[ -n "$EQA_VL_FAMILY" ]]; then
     EQA_EXTRA_ARGS+=(--eqa-vl-family "$EQA_VL_FAMILY")
 fi
@@ -375,7 +386,6 @@ snapshot_bundle() {
     local qid="$2"
     local ep="$3"
     local dst="$OUT/bundles/${arm}_q${qid}"
-    mkdir -p "$dst"
     local src=""
     if [[ -s "$ep" ]]; then
         src="$(uv run python -c "
@@ -394,6 +404,8 @@ snapshot_bundle() {
         log "WARN: no bundle to snapshot for $arm q$qid"
         return 0
     fi
+    rm -rf "$dst"
+    mkdir -p "$dst"
     for f in topdown_map.png topdown_map_overlay.png topdown_gt_navmesh.png \
         explored_2d.npy obstacles_2d.npy grid_meta.json trajectory.jsonl \
         spawn_record.json metrics.json diagnostics_manifest.json floor_metrics.json \
@@ -405,11 +417,19 @@ snapshot_bundle() {
     [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
     [[ -d "$src/frontier_picks" ]] && rm -rf "$dst/frontier_picks" && cp -a "$src/frontier_picks" "$dst/frontier_picks"
     [[ -d "$src/world_evidence_views" ]] && rm -rf "$dst/world_evidence_views" && cp -a "$src/world_evidence_views" "$dst/world_evidence_views"
+    [[ -d "$src/compact_memory" ]] && rm -rf "$dst/compact_memory" && cp -a "$src/compact_memory" "$dst/compact_memory"
+    local missing=()
+    local compact="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-0}"
+    if [[ "${compact,,}" =~ ^(1|true|yes|on)$ ]]; then
+        [[ -s "$dst/compact_memory/manifest.json" ]] || missing+=("compact_memory/manifest.json")
+    fi
     if [[ "$arm" == "agentic" ]]; then
-        local missing=()
         if [[ "${EMET_EQA_GRAPH_EVIDENCE_MODE:-off}" != "off" ]]; then
             [[ -s "$dst/world_evidence.json" ]] || missing+=("world_evidence.json")
-            [[ -d "$dst/world_evidence_views" ]] || missing+=("world_evidence_views/")
+            local evidence_rgb="${EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB:-1}"
+            if [[ ! "${evidence_rgb,,}" =~ ^(0|false|no|off)$ ]]; then
+                [[ -d "$dst/world_evidence_views" ]] || missing+=("world_evidence_views/")
+            fi
         fi
         if [[ "${EMET_EQA_ATTEMPT_LEDGER_MODE:-off}" != "off" ]]; then
             [[ -s "$dst/attempt_ledger.json" ]] || missing+=("attempt_ledger.json")
@@ -417,10 +437,10 @@ snapshot_bundle() {
         if [[ "${EMET_EQA_ROOM_HISTORY_MODE:-off}" != "off" ]]; then
             [[ -s "$dst/room_events.json" ]] || missing+=("room_events.json")
         fi
-        if (( ${#missing[@]} > 0 )); then
-            log "ERROR: evidence snapshot incomplete for $arm q$qid: ${missing[*]}"
-            return 1
-        fi
+    fi
+    if (( ${#missing[@]} > 0 )); then
+        log "ERROR: evidence snapshot incomplete for $arm q$qid: ${missing[*]}"
+        return 1
     fi
     # Head-camera frames are large; symlink the full dir + copy a few keyframes.
     if [[ -d "$src/frames" ]]; then

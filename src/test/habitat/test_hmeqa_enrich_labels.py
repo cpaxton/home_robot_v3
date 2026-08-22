@@ -4,6 +4,7 @@
 
 from emet.habitat.hmeqa_enrich_labels import (
     HMEQA_PAPER_QUESTION_COUNT,
+    enrich_labels_for_dataset_question,
     enrich_labels_for_question,
     grapheqa_baseline_question_ids,
     hmeqa_paper_question_ids,
@@ -32,8 +33,6 @@ def test_bundled_enrich_labels_cover_paper_questions():
 
 def test_grapheqa_baseline_question_ids_match_enrich_episodes(tmp_path):
     """The 114 GraphEQA paper episodes map to CSV rows on the enrich scenes."""
-    import csv
-
     from emet.habitat.datasets import load_hmeqa_questions
 
     ids = grapheqa_baseline_question_ids()
@@ -48,3 +47,10 @@ def test_grapheqa_baseline_question_ids_match_enrich_episodes(tmp_path):
         assert questions[i].scene == ge_rows[eid].scene
         key = f"{eid}_{questions[i].scene}"
         assert key in table
+
+    first_id = ids[0]
+    first_key = f"0_{questions[first_id].scene}"
+    assert enrich_labels_for_dataset_question(first_id, questions[first_id].scene) == table[first_key]
+    selected = set(ids)
+    outside_id = next(q.index for q in questions if q.index not in selected)
+    assert enrich_labels_for_dataset_question(outside_id, questions[outside_id].scene) == ""

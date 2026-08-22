@@ -294,9 +294,7 @@ def test_room_timeline_ignores_unknown_and_formats_newest_first():
     assert mem.record_room_event(room="unknown", kind="stamp", step=1) is None
     assert mem.record_room_event(room="", kind="stamp", step=1) is None
     assert mem.record_room_event(room="kitchen", kind="stamp", step=1) is not None
-    assert mem.record_room_event(
-        room="kitchen", kind="verify_absent", step=3, phrase="clock"
-    ) is not None
+    assert mem.record_room_event(room="kitchen", kind="verify_absent", step=3, phrase="clock") is not None
     assert mem.record_room_event(room="bathroom", kind="coverage_closed", step=5) is not None
     hist = mem.format_room_history(max_chars=220, target_rooms=["bathroom", "bedroom"])
     assert hist.startswith("Room history:")

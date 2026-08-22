@@ -8,7 +8,7 @@ Field data (61 episodes) showed verified answers score ~86% but fire only ~13% o
 the time; everything else is a position-anchored forced guess (~35%). These fix the
 verification gate and ground unverified final answers:
 
-* single-view present-confirm: ``answerable + present + letter`` on ONE view
+* single-view present-confirm: ``answerable + present + semantic answer`` on ONE view
   confirms (was: phrase-token hit or two-view agreement required).
 * evidence-grounded Image 1: the final EQA pins the best VLM-assessed view as
   Image 1 when nothing was corroborated.
@@ -208,7 +208,7 @@ def test_evidence_image_off_keeps_diversified_pick():
     gm.select_obs_ids_for_verified_answer.assert_not_called()
 
 
-def test_grounded_v2_vlm_letter_and_image_share_observation(monkeypatch):
+def test_grounded_v2_vlm_answer_and_image_share_observation(monkeypatch):
     monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
     ex, gm = _executor(query_answer="", raw="")
     gm.last_eqa_model_raw = ""
@@ -219,19 +219,19 @@ def test_grounded_v2_vlm_letter_and_image_share_observation(monkeypatch):
             "present": True,
             "answerable": True,
             "need_more_views": False,
-            "suggested_answer": "B",
+            "suggested_answer": "On the toilet tank",
         },
         8: {
             "present": True,
             "answerable": False,
             "need_more_views": True,
-            "suggested_answer": "C",
+            "suggested_answer": "By the bathtub",
         },
     }
 
     out = ex._do_submit_answer()
 
-    assert out["answer"] == "B"
+    assert out["answer"] == "On the toilet tank"
     assert out["final_decision"]["evidence"]["obs_id"] == 5
     gm.select_obs_ids_for_verified_answer.assert_called_once_with(5, max_images=1)
     assert gm.last_eqa_obs_ids == [5]

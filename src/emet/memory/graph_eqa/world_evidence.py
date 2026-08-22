@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -63,9 +64,7 @@ class EntityRecord:
             entity_id=str(data["entity_id"]),
             identity_key=str(data.get("identity_key") or data["entity_id"]),
             place_id=str(data.get("place_id") or f"place_{data['entity_id']}"),
-            current_node_id=(
-                int(data["current_node_id"]) if data.get("current_node_id") is not None else None
-            ),
+            current_node_id=(int(data["current_node_id"]) if data.get("current_node_id") is not None else None),
             labels=tuple(str(x) for x in data.get("labels") or ()),
             xyz=_xyz(data.get("xyz")),
             first_seen_step=int(data.get("first_seen_step") or 0),
@@ -290,7 +289,7 @@ class WorldEvidenceStore:
             suffix = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
             entity_id = f"entity_{suffix}"
             if entity_id in self.entities and self.entities[entity_id].identity_key != key:
-                suffix = hashlib.sha1(f"{key}:{len(self.entities)}".encode("utf-8")).hexdigest()[:16]
+                suffix = hashlib.sha1(f"{key}:{len(self.entities)}".encode()).hexdigest()[:16]
                 entity_id = f"entity_{suffix}"
             place_id = f"place_{suffix}"
             record = EntityRecord(
@@ -471,10 +470,7 @@ class WorldEvidenceStore:
                 continue
             if event.predicate != "room_label":
                 continue
-            return (
-                event.source == source
-                and str(event.payload.get("room_name") or "") == room_name
-            )
+            return event.source == source and str(event.payload.get("room_name") or "") == room_name
         return False
 
     def update_room_hypotheses(
@@ -556,11 +552,7 @@ class WorldEvidenceStore:
                     room_id=best.room_id,
                     payload={"room_name": graph_name},
                 )
-                event_ids = (
-                    (*best.evidence_event_ids, event.event_id)
-                    if event is not None
-                    else best.evidence_event_ids
-                )
+                event_ids = (*best.evidence_event_ids, event.event_id) if event is not None else best.evidence_event_ids
                 best = replace(
                     best,
                     room_name=graph_name,
@@ -606,11 +598,7 @@ class WorldEvidenceStore:
             room_id=record.room_id,
             payload={"room_name": name},
         )
-        event_ids = (
-            (*record.evidence_event_ids, event.event_id)
-            if event is not None
-            else record.evidence_event_ids
-        )
+        event_ids = (*record.evidence_event_ids, event.event_id) if event is not None else record.evidence_event_ids
         # Keep higher-confidence graph evidence unless this source is at least as strong.
         if record.room_name == "unknown" or float(confidence) >= record.confidence:
             record = replace(
@@ -633,21 +621,12 @@ class WorldEvidenceStore:
         """Match frontier masks across refreshes, retaining split/merge lineage."""
         if not self.enabled:
             return []
-        prior_active = [
-            record for record in self.frontiers.values() if record.status == "active"
-        ]
+        prior_active = [record for record in self.frontiers.values() if record.status == "active"]
         used_ids: set[str] = set()
         seen_ids: set[str] = set()
         output: list[FrontierTrack] = []
         for component in components:
-            cells = tuple(
-                sorted(
-                    {
-                        (int(cell[0]), int(cell[1]))
-                        for cell in component.get("cells") or ()
-                    }
-                )
-            )
+            cells = tuple(sorted({(int(cell[0]), int(cell[1])) for cell in component.get("cells") or ()}))
             cell_set = set(cells)
             centroid = _xyz(component.get("centroid_xyz"))
             overlaps: list[tuple[float, float, FrontierTrack]] = []
@@ -657,8 +636,7 @@ class WorldEvidenceStore:
                 overlap = len(cell_set & prior_cells) / len(union) if union else 0.0
                 distance = float(
                     np.linalg.norm(
-                        np.asarray(centroid[:2], dtype=float)
-                        - np.asarray(prior.centroid_xyz[:2], dtype=float)
+                        np.asarray(centroid[:2], dtype=float) - np.asarray(prior.centroid_xyz[:2], dtype=float)
                     )
                 )
                 if overlap > 0.0 or distance <= 0.75:
@@ -674,12 +652,8 @@ class WorldEvidenceStore:
                 frontier_id = f"frontier_{self._next_frontier:06d}"
                 self._next_frontier += 1
                 revision = 1
-            support_view_ids = tuple(
-                str(x) for x in component.get("support_view_ids") or () if str(x)
-            )
-            attachment_ids = tuple(
-                str(x) for x in component.get("attachment_ids") or () if str(x)
-            )
+            support_view_ids = tuple(str(x) for x in component.get("support_view_ids") or () if str(x))
+            attachment_ids = tuple(str(x) for x in component.get("attachment_ids") or () if str(x))
             record = FrontierTrack(
                 frontier_id=frontier_id,
                 revision=revision,
@@ -738,11 +712,7 @@ class WorldEvidenceStore:
         for record in self.frontiers.values():
             if active_only and record.status != "active":
                 continue
-            distance = float(
-                np.linalg.norm(
-                    np.asarray(record.centroid_xyz[:2], dtype=float) - target
-                )
-            )
+            distance = float(np.linalg.norm(np.asarray(record.centroid_xyz[:2], dtype=float) - target))
             if distance <= float(max_dist_m) and distance < best_distance:
                 best, best_distance = record, distance
         return best
@@ -768,26 +738,24 @@ class WorldEvidenceStore:
             "entity_aliases": dict(self.entity_aliases),
         }
 
-    def save(self, directory: str | Path) -> Path:
+    def save(self, directory: str | Path, *, include_rgb: bool = True) -> Path:
+        """Save evidence metadata, optionally omitting view pixels for compact checkpoints."""
         root = Path(directory)
         root.mkdir(parents=True, exist_ok=True)
         views_dir = root / WORLD_EVIDENCE_VIEWS_DIR
-        views_dir.mkdir(exist_ok=True)
+        if views_dir.is_dir():
+            shutil.rmtree(views_dir)
+        if include_rgb:
+            views_dir.mkdir(exist_ok=True)
         data = self.to_dict()
         view_rows: list[dict[str, Any]] = []
         for record in self.views.values():
             rgb_file = None
-            if record.rgb is not None:
+            if include_rgb and record.rgb is not None:
                 rgb_file = f"{record.view_id}.png"
-                Image.fromarray(np.asarray(record.rgb, dtype=np.uint8), mode="RGB").save(
-                    views_dir / rgb_file
-                )
+                Image.fromarray(np.asarray(record.rgb, dtype=np.uint8), mode="RGB").save(views_dir / rgb_file)
             view_rows.append(
-                record.to_dict(
-                    rgb_file=(
-                        f"{WORLD_EVIDENCE_VIEWS_DIR}/{rgb_file}" if rgb_file is not None else None
-                    )
-                )
+                record.to_dict(rgb_file=(f"{WORLD_EVIDENCE_VIEWS_DIR}/{rgb_file}" if rgb_file is not None else None))
             )
         data["views"] = view_rows
         path = root / WORLD_EVIDENCE_FILENAME
@@ -823,16 +791,13 @@ class WorldEvidenceStore:
                 store._obs_current_view[record.obs_id] = record.view_id
         store.events = [EvidenceEvent.from_dict(row) for row in data.get("events") or ()]
         store.rooms = {
-            record.room_id: record
-            for record in (RoomHypothesis.from_dict(row) for row in data.get("rooms") or ())
+            record.room_id: record for record in (RoomHypothesis.from_dict(row) for row in data.get("rooms") or ())
         }
         store.frontiers = {
             record.frontier_id: record
             for record in (FrontierTrack.from_dict(row) for row in data.get("frontiers") or ())
         }
-        store.entity_aliases = {
-            str(key): str(value) for key, value in dict(data.get("entity_aliases") or {}).items()
-        }
+        store.entity_aliases = {str(key): str(value) for key, value in dict(data.get("entity_aliases") or {}).items()}
         next_ids = dict(data.get("next_ids") or {})
         store._next_view = max(int(next_ids.get("view") or 1), len(store.views) + 1)
         store._next_event = max(int(next_ids.get("event") or 1), len(store.events) + 1)

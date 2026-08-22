@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import numpy as np
@@ -110,6 +111,60 @@ def test_world_evidence_checkpoint_round_trip_preserves_ids_and_runtime(tmp_path
     assert restored.get_attempt_records()[0].view_id
     assert restored.get_room_events()[0]["room"] == "kitchen"
     assert np.array_equal(restored.get_observations()[0].rgb, np.full((4, 4, 3), 17, dtype=np.uint8))
+
+
+def test_graph_only_checkpoint_reloads_without_frame_or_view_pixels(tmp_path):
+    memory = _memory()
+    obs_id = memory.add_observation(
+        np.full((32, 32, 3), 91, dtype=np.uint8),
+        [1.0, 2.0, 0.5],
+        ["clock"],
+        viewer_xyz=[0.0, 2.0, 0.0],
+    )
+    memory.record_room_event(room="kitchen", kind="stamp", obs_id=obs_id, step=3)
+    node = memory.get_nodes()[0]
+    node.bbox_xyxy = (1, 2, 9, 10)
+    node.embedding = np.array([0.25, 0.75], dtype=np.float32)
+    node.nav_attempts = 3
+    node.nav_failures = 1
+    node.last_nav_note = "approach blocked"
+    node.last_nav_at_step = 6
+
+    path = tmp_path / "compact"
+    backend = GraphEQABackend(memory)
+    backend.save(str(path), final_step=5)
+    (path / "stale_from_prior_save.txt").write_text("must not survive", encoding="utf-8")
+    backend.save(
+        str(path),
+        final_step=7,
+        include_frames=False,
+        include_world_evidence_rgb=False,
+    )
+
+    restored = _memory()
+    restored_backend = GraphEQABackend(restored)
+    restored_backend.load(str(path))
+
+    assert not (path / "frames").exists()
+    assert not (path / "world_evidence_views").exists()
+    assert not (path / "stale_from_prior_save.txt").exists()
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["checkpoint_profile"] == "graph_only"
+    assert manifest["has_world_evidence_rgb"] is False
+    assert [node.labels for node in restored.get_nodes()] == [node.labels for node in memory.get_nodes()]
+    restored_node = restored.get_nodes()[0]
+    assert restored_node.bbox_xyxy == (1, 2, 9, 10)
+    np.testing.assert_allclose(restored_node.embedding, [0.25, 0.75])
+    assert restored_node.nav_attempts == 3
+    assert restored_node.nav_failures == 1
+    assert restored_node.last_nav_note == "approach blocked"
+    assert restored_node.last_nav_at_step == 6
+    assert restored.get_room_events()[0]["room"] == "kitchen"
+    assert restored.get_observations()[0].labels == ["clock"]
+    assert restored.get_observations()[0].rgb.shape == (1, 1, 3)
+    assert not restored._obs_usable_for_eqa_image(obs_id)
+    assert restored_backend.loaded_final_step == 7
+    assert restored_backend.loaded_has_voxel_pickle is False
 
 
 def test_se2_transforms_entities_places_and_views():

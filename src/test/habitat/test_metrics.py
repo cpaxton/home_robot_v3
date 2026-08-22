@@ -27,6 +27,21 @@ def test_grade_mcq_answer_letter():
     assert grade_mcq_answer("The lamp is off", "B", choices=["on", "off", "none", "broken"])
 
 
+def test_habitat_runner_maps_q11_semantic_answer_at_scoring_boundary():
+    import pytest
+
+    runner = pytest.importorskip("emet_habitat.runner")
+    choices = [
+        "Next to the dining table",
+        "Next to the TV",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+
+    assert runner._semantic_choice_letter("Next to the refrigerator", choices) == "D"
+    assert runner._semantic_choice_letter("Next to the", choices) == ""
+
+
 def test_on_the_place_choices_are_location_not_attribute():
     """Holdout q105: 'On the kitchen island' must not count as on/off attribute."""
     place = [
@@ -124,11 +139,7 @@ def test_extract_mcq_letter_from_raw_eqa_blank_answer_field():
 
 def test_location_mcq_abstains_on_visibility_no():
     """Q17-style: location choices but model answers visibility ``No`` → no letter."""
-    raw = (
-        "Reasoning:\nI do not see a woven basket.\n"
-        "Answer:\nNo\n"
-        "Confidence:\nTRUE\n"
-    )
+    raw = "Reasoning:\nI do not see a woven basket.\nAnswer:\nNo\nConfidence:\nTRUE\n"
     choices = [
         "In the bedroom",
         "On the table",
@@ -140,10 +151,14 @@ def test_location_mcq_abstains_on_visibility_no():
 
 
 def test_location_mcq_salvage_answer_overrides_visibility_no():
-    raw = (
-        "Answer:\nNo\nConfidence:\nTRUE\n"
-        "[salvage-location]\nanswer:\nD\n"
-    )
+    raw = """Answer:
+No
+Confidence:
+TRUE
+[salvage-location]
+answer:
+D
+"""
     choices = [
         "By the kitchen counter",
         "Between TV and living room sofas",

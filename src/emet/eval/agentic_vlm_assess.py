@@ -87,7 +87,7 @@ def _json_bool(value: Any, *, default: bool = False) -> bool:
 
 
 def _normalize_suggested_answer(value: Any) -> str | None:
-    """Normalize an explicit MCQ letter while preserving free-form choice text."""
+    """Preserve semantic choice text while accepting legacy letter-only replies."""
     text = str(value or "").strip()
     if not text:
         return None
@@ -175,7 +175,7 @@ def build_inventory_brief(
     """Neutral map/status context for VLM assess — no SigLIP/OWL verdicts.
 
     Detector scores guide *where* to navigate next (graph growth); they must not
-    appear here or they bias ``present`` / MCQ letters (e.g. ABSENT → "None").
+    appear here or they bias ``present`` / MCQ answers (e.g. ABSENT → "None").
     """
     labels = [str(x) for x in (graph_labels or []) if str(x).strip()][:12]
     parts = [
@@ -213,13 +213,14 @@ def assess_view_with_vlm(
             "  answerable: bool — can you confidently pick the MCQ answer from THIS view "
             "(and inventory)? For location/state questions, presence alone is not enough.\n"
             "  need_more_views: bool\n"
-            "  suggested_answer: MCQ letter A-D or null if not answerable\n"
+            "  suggested_answer: exact semantic option text without its A/B/C/D label, "
+            "or null if not answerable\n"
             "  reason: short explanation\n"
         )
     else:
         # Open-ended find / localize questions (OVMM find: "Where is the table?").
-        # There is no MCQ letter set, so answerable means the target is actually in
-        # view and localizable — not "can I pick A-D".
+        # There is no MCQ option set, so answerable means the target is actually in
+        # view and localizable.
         user = (
             f"Question:\n{q}\n\n"
             f"Target phrase (hint): {target or '(none)'}\n\n"

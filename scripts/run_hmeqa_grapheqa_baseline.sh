@@ -14,8 +14,7 @@
 #   static_graph + --no-hm3d-semantics    (no GT, GraphEQA-inspired baseline)
 #
 # Usage (prefer emet jobs):
-#   uv run emet jobs run --name hmeqa-grapheqa-baseline --need-mib 12000 -- \
-#     env EMET_ALLOW_SDPA_ATTN=1 ./scripts/run_hmeqa_grapheqa_baseline.sh
+#   EMET_ALLOW_SDPA_ATTN=1 uv run emet jobs run --name hmeqa-grapheqa-baseline --need-mib 12000 -- ./scripts/run_hmeqa_grapheqa_baseline.sh
 #
 # Env:
 #   METHODS    space-separated methods (default "dynagraph static_graph")
@@ -42,19 +41,29 @@ HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
 
+# Full substep RGB diagnostics produced ~42 GB per 114-episode arm. Preserve a
+# reloadable graph-only checkpoint and final maps by default; callers can opt
+# individual visual exports back in through the existing EMET_EVAL_* variables.
+export EMET_EVAL_EXPORT_COMPACT_MEMORY="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-1}"
+export EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB="${EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB:-0}"
+export EMET_EVAL_EXPORT_FRAMES="${EMET_EVAL_EXPORT_FRAMES:-0}"
+export EMET_EVAL_EXPORT_VIDEO="${EMET_EVAL_EXPORT_VIDEO:-0}"
+export EMET_EVAL_EXPORT_VIDEO_SUBSTEPS="${EMET_EVAL_EXPORT_VIDEO_SUBSTEPS:-0}"
+export EMET_EVAL_EXPORT_MAP_VIDEO="${EMET_EVAL_EXPORT_MAP_VIDEO:-0}"
+
 # --- disk preflight (same guard as paper113 runner) -------------------------
 _free_kb="$(df -Pk "$HOME/.cache/habitat_eqa" 2>/dev/null | awk 'NR==2{print $4}')"
 if [[ -z "${_free_kb:-}" ]]; then
-  echo "[$(date -Is)] WARNING: could not read free space for ~/.cache/habitat_eqa; continuing"
+    echo "[$(date -Is)] WARNING: could not read free space for ~/.cache/habitat_eqa; continuing"
 else
-  FREE_GB=$((_free_kb / 1024 / 1024))
-  if (( FREE_GB < NEED_FREE_GB )); then
-    echo "[$(date -Is)] ABORT: free disk under ~/.cache/habitat_eqa is ${FREE_GB} GB (< ${NEED_FREE_GB} GB)." >&2
-    echo "  Free space first, e.g.:" >&2
-    echo "    uv run python scripts/clean_episode_bundles.py --keep 2 --apply" >&2
-    exit 4
-  fi
-  echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
+    FREE_GB=$((_free_kb / 1024 / 1024))
+    if (( FREE_GB < NEED_FREE_GB )); then
+        echo "[$(date -Is)] ABORT: free disk under ~/.cache/habitat_eqa is ${FREE_GB} GB (< ${NEED_FREE_GB} GB)." >&2
+        echo "  Free space first, e.g.:" >&2
+        echo "    uv run python scripts/clean_episode_bundles.py --keep 2 --apply" >&2
+        exit 4
+    fi
+    echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
 fi
 
 # --- the ACTUAL GraphEQA paper episodes (114 rows) --------------------------
@@ -62,50 +71,65 @@ IDS="$(uv run python -c 'from emet.habitat.hmeqa_enrich_labels import grapheqa_b
 N="$(awk -F, '{print NF}' <<<"$IDS")"
 echo "$IDS" >"$OUT_DIR/IDS.txt"
 {
-  echo "run_id=$RUN_ID"
-  echo "methods=$METHODS"
-  echo "semantics=$SEMANTICS"
-  echo "n_episodes=$N"
-  git rev-parse --short HEAD
-  git rev-parse HEAD
+    echo "run_id=$RUN_ID"
+    echo "methods=$METHODS"
+    echo "semantics=$SEMANTICS"
+    echo "n_episodes=$N"
+    git rev-parse --short HEAD
+    git rev-parse HEAD
 } | tee "$OUT_DIR/META.txt"
 
 log() { echo "[$(date -Is)] $*"; }
 
 run_arm() {
-  local method="$1" sem="$2"
-  local flag tag
-  if [[ "$sem" == "on" ]]; then
-    flag="--use-hm3d-semantics"; tag="grapheqa_${RUN_ID}_${method}_gt"
-  else
-    flag="--no-hm3d-semantics"; tag="grapheqa_${RUN_ID}_${method}_nogt"
-  fi
-  local jsonl="$HOME/.cache/habitat_eqa/results/subset_${tag}_${FAMILY}.jsonl"
-  local logf="$OUT_DIR/${method}_${sem}.log"
-  log "=== grapheqa method=$method semantics=$sem tag=$tag n=$N ==="
-  NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
-  emet_kill_stale_eval_processes
-  timeout "$TIMEOUT" "$HAB" run-batch \
-    --method "$method" \
-    --question-ids "$IDS" \
-    --max-planning-steps 20 \
-    --max-movement-step 10 \
-    --eqa-vl-family "$FAMILY" \
-    --eqa-hf-model-id "$HF_ID" \
-    --device cuda \
-    --frontier-nodes \
-    --frontier-keyword-weight 2 \
-    --resume \
-    "$flag" \
-    --output "$jsonl" \
-    2>&1 | tee "$logf"
-  echo "$jsonl" >"$OUT_DIR/${method}_${sem}_jsonl.path"
+    local method="$1" sem="$2"
+    local flag tag
+    if [[ "$sem" == "on" ]]; then
+        flag="--use-hm3d-semantics"; tag="grapheqa_${RUN_ID}_${method}_gt"
+    else
+        flag="--no-hm3d-semantics"; tag="grapheqa_${RUN_ID}_${method}_nogt"
+    fi
+    local jsonl="$HOME/.cache/habitat_eqa/results/subset_${tag}_${FAMILY}.jsonl"
+    local logf="$OUT_DIR/${method}_${sem}.log"
+    log "=== grapheqa method=$method semantics=$sem tag=$tag n=$N ==="
+    NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
+    timeout "$TIMEOUT" "$HAB" run-batch \
+        --method "$method" \
+        --question-ids "$IDS" \
+        --max-planning-steps 20 \
+        --max-movement-step 10 \
+        --eqa-vl-family "$FAMILY" \
+        --eqa-hf-model-id "$HF_ID" \
+        --device cuda \
+        --frontier-nodes \
+        --frontier-keyword-weight 2 \
+        --resume \
+        --no-enrich-labels \
+        "$flag" \
+        --output "$jsonl" \
+        2>&1 | tee "$logf"
+    echo "$jsonl" >"$OUT_DIR/${method}_${sem}_jsonl.path"
+
+    # Keep compact checkpoints with the run output so cache retention can safely
+    # prune the much larger per-episode diagnostic directories.
+    local bundle_root="$HOME/.cache/habitat_eqa/episodes/$(basename "${jsonl%.jsonl}")"
+    local compact_out="$OUT_DIR/compact_memory/${method}_${sem}"
+    local compact_count=0
+    local checkpoint episode_name
+    for checkpoint in "$bundle_root"/q*/compact_memory; do
+        [[ -d "$checkpoint" ]] || continue
+        episode_name="$(basename "$(dirname "$checkpoint")")"
+        mkdir -p "$compact_out/$episode_name"
+        cp -a "$checkpoint/." "$compact_out/$episode_name/"
+        compact_count=$((compact_count + 1))
+    done
+    log "saved $compact_count compact graph memories → $compact_out"
 }
 
 for method in $METHODS; do
-  for sem in $SEMANTICS; do
-    run_arm "$method" "$sem"
-  done
+    for sem in $SEMANTICS; do
+        run_arm "$method" "$sem"
+    done
 done
 
 uv run python - <<PY | tee "$OUT_DIR/SUMMARY.txt"

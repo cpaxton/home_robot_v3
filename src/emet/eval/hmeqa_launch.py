@@ -29,6 +29,8 @@ DEFAULT_ROOM_POLICY = "canonical"
 DEFAULT_ROOM_TARGET_HINTS = True
 DEFAULT_INVESTIGATE_STAMP = False
 DEFAULT_ATTEMPT_LEDGER_MODE = "off"
+DEFAULT_USE_HM3D_SEMANTICS = False
+DEFAULT_USE_ENRICH_LABELS = False
 DEFAULT_VARIANT_ID = "legacy"
 
 DEFAULT_EQA_HF_MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
@@ -61,6 +63,8 @@ _ENV_SOURCE_PATHS = {
     "EMET_EQA_ROOM_STAMP_INVESTIGATE": ("variant.investigate_stamp",),
     "EMET_EQA_ATTEMPT_LEDGER_MODE": ("variant.attempt_ledger_mode",),
     "EMET_EQA_ATTEMPT_LEDGER": ("variant.attempt_ledger_mode",),
+    "EMET_HMEQA_USE_HM3D_SEMANTICS": ("evaluation.use_hm3d_semantics",),
+    "EMET_HMEQA_USE_ENRICH_LABELS": ("evaluation.use_enrich_labels",),
     "EMET_HMEQA_VARIANT_ID": ("variant.id",),
     "EQA_HF_MODEL_ID": ("model.hf_model_id", "model.requested_hf_model_id"),
     "EQA_VL_FAMILY": ("model.vl_family",),
@@ -180,6 +184,8 @@ def build_hmeqa_run_config(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    use_hm3d_semantics: bool = DEFAULT_USE_HM3D_SEMANTICS,
+    use_enrich_labels: bool = DEFAULT_USE_ENRICH_LABELS,
     decision_policy: str = DEFAULT_DECISION_POLICY,
     graph_evidence_mode: str = DEFAULT_GRAPH_EVIDENCE_MODE,
     room_history_mode: str = DEFAULT_ROOM_HISTORY_MODE,
@@ -245,6 +251,11 @@ def build_hmeqa_run_config(
             "agentic_verifier": _choice("agentic_verifier", agentic_verifier, _AGENTIC_VERIFIERS),
             "require_verified": _bool(require_verified, name="require_verified"),
             "agentic_router": _bool(agentic_router, name="agentic_router"),
+            "use_hm3d_semantics": _bool(
+                use_hm3d_semantics,
+                name="use_hm3d_semantics",
+            ),
+            "use_enrich_labels": _bool(use_enrich_labels, name="use_enrich_labels"),
             # HM-EQA run-episode currently has no seed option. Keep that explicit
             # instead of claiming a seed that the runner does not consume.
             "seed": normalized_seed,
@@ -293,6 +304,14 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
             agentic_verifier=str(evaluation["agentic_verifier"]),
             require_verified=_bool(evaluation["require_verified"], name="require_verified"),
             agentic_router=_bool(evaluation["agentic_router"], name="agentic_router"),
+            use_hm3d_semantics=_bool(
+                evaluation.get("use_hm3d_semantics", DEFAULT_USE_HM3D_SEMANTICS),
+                name="use_hm3d_semantics",
+            ),
+            use_enrich_labels=_bool(
+                evaluation.get("use_enrich_labels", DEFAULT_USE_ENRICH_LABELS),
+                name="use_enrich_labels",
+            ),
             decision_policy=str(variant["agentic_decision_policy"]),
             graph_evidence_mode=str(variant["graph_evidence_mode"]),
             room_history_mode=str(variant["room_history_mode"]),
@@ -536,6 +555,22 @@ def hmeqa_run_config_from_env(
             _env_value(env, "EMET_EQA_AGENTIC_ROUTER", evaluation["agentic_router"]),
             name="EMET_EQA_AGENTIC_ROUTER",
         ),
+        use_hm3d_semantics=_bool(
+            _env_value(
+                env,
+                "EMET_HMEQA_USE_HM3D_SEMANTICS",
+                evaluation["use_hm3d_semantics"],
+            ),
+            name="EMET_HMEQA_USE_HM3D_SEMANTICS",
+        ),
+        use_enrich_labels=_bool(
+            _env_value(
+                env,
+                "EMET_HMEQA_USE_ENRICH_LABELS",
+                evaluation["use_enrich_labels"],
+            ),
+            name="EMET_HMEQA_USE_ENRICH_LABELS",
+        ),
         decision_policy=str(
             _env_value(
                 env,
@@ -620,10 +655,11 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
         "EMET_EQA_ROOM_TARGET_HINTS": str(int(variant["room_target_hints"])),
         "EMET_EQA_ROOM_STAMP_INVESTIGATE": str(int(variant["investigate_stamp"])),
         "EMET_EQA_ATTEMPT_LEDGER_MODE": variant["attempt_ledger_mode"],
-        # Compatibility write gate until the mode-aware graph implementation lands:
-        # shadow and agent both collect rows; only the future state compiler decides
-        # whether those rows are visible to the policy.
+        # Shadow and agent both collect rows; router state renders them only in
+        # agent mode so collection can be audited without policy leakage.
         "EMET_EQA_ATTEMPT_LEDGER": str(int(variant["attempt_ledger_mode"] != "off")),
+        "EMET_HMEQA_USE_HM3D_SEMANTICS": str(int(evaluation["use_hm3d_semantics"])),
+        "EMET_HMEQA_USE_ENRICH_LABELS": str(int(evaluation["use_enrich_labels"])),
         "EMET_HMEQA_VARIANT_ID": variant["id"],
         "EQA_HF_MODEL_ID": str(model.get("hf_model_id") or ""),
         "EQA_VL_FAMILY": model["vl_family"],
@@ -745,6 +781,8 @@ def hmeqa_h2h_env_parts(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    use_hm3d_semantics: bool = DEFAULT_USE_HM3D_SEMANTICS,
+    use_enrich_labels: bool = DEFAULT_USE_ENRICH_LABELS,
     decision_policy: str = DEFAULT_DECISION_POLICY,
     graph_evidence_mode: str = DEFAULT_GRAPH_EVIDENCE_MODE,
     room_history_mode: str = DEFAULT_ROOM_HISTORY_MODE,
@@ -781,6 +819,8 @@ def hmeqa_h2h_env_parts(
             agentic_verifier=agentic_verifier,
             require_verified=require_verified,
             agentic_router=agentic_router,
+            use_hm3d_semantics=use_hm3d_semantics,
+            use_enrich_labels=use_enrich_labels,
             decision_policy=decision_policy,
             graph_evidence_mode=graph_evidence_mode,
             room_history_mode=room_history_mode,

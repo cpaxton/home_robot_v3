@@ -87,6 +87,8 @@ Useful flags:
 | `--export-video` / `--no-export-video` | on | Head-camera `episode_rgb.mp4` |
 | `--map-stride` | `0` | Save `maps/step_NNNN.png` every N planning steps (`0` = auto stride when map video on) |
 | `--habitat-perfect-nav` / `--no-habitat-perfect-nav` | on | Navmesh pathing vs voxel A* |
+| `--use-hm3d-semantics` / `--no-hm3d-semantics` | auto for direct Habitat CLI; off in `emet hmeqa` | Use GT-derived HM3D semantic labels |
+| `--enrich-labels` / `--no-enrich-labels` | off | Independently seed per-question GT-derived GraphEQA object hints |
 
 ## Debug artifacts (batch runs)
 
@@ -99,7 +101,7 @@ Each `run-batch --output …/my_run.jsonl` writes:
 | `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
 | `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
 
-Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Graph-memory episodes also write `attempt_ledger.json` and `room_events.json`; shadow/agent graph-evidence modes additionally write `world_evidence.json` and `world_evidence_views/`. H2H runs copy these evidence artifacts into each `OUT/bundles/<arm>_q<id>/` snapshot.
+Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Graph-memory episodes also write `attempt_ledger.json` and `room_events.json`; shadow/agent graph-evidence modes additionally write `world_evidence.json` and, when enabled, `world_evidence_views/`. Set `EMET_EVAL_EXPORT_COMPACT_MEMORY=1` to write a graph-only `compact_memory/` checkpoint with semantic graph/runtime/evidence metadata but no voxel map, dense frames, navigation pixels, or evidence-view pixels. It can be reloaded for semantic inspection; it cannot reproduce post-hoc visual verification. H2H runs copy these evidence and compact-memory artifacts into each `OUT/bundles/<arm>_q<id>/` snapshot and fail if a requested compact checkpoint is missing.
 
 With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `topdown_gt_navmesh.png`, `topdown_map_overlay.png`, `maps/overlay_step_*.png`, `topdown_exploration.mp4`, `obstacles_2d.npy`, `trajectory.jsonl`, `nav_attempts.jsonl` (includes navmesh `path_xy` when available), motion-paced `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
 
@@ -199,10 +201,10 @@ Full HM-EQA sweeps are GPU-heavy and not default CI.
 
 ## Episode flow
 
-1. Load question + init pose from CSVs  
-2. Open HM3D scene via `hm3d_scene_glb_path`  
-3. Spawn agent at init pose  
-4. Loop: observe → update voxel map / graph → plan → act  
-5. Grade multiple-choice answer vs `questions.csv` label  
+1. Load question + init pose from CSVs
+2. Open HM3D scene via `hm3d_scene_glb_path`
+3. Spawn agent at init pose
+4. Loop: observe → update voxel map / graph → plan → act
+5. Grade multiple-choice answer vs `questions.csv` label
 
 Metrics helpers live in `src/emet/habitat/metrics.py`.
