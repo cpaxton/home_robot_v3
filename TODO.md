@@ -3,11 +3,12 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-## HM-EQA graph tuning — parity baseline findings (PRIORITY — 2026-08-15)
+## HM-EQA graph tuning — count/location weak spots (PRIORITY — PR #124)
 
-The GraphEQA-parity baseline (114 real paper episodes, 4 arms, `fix/no-gt-semantics`,
-OUT `~/runs/emet/hmeqa_grapheqa/20260815_013914`) settled the GT-semantics question and
-surfaced a concrete tuning target. **Start here next.**
+Branch `feat/hmeqa-graph-tuning` (PR #124; base `fix/no-gt-semantics`, now **merged into
+main via #123 — rebase #124 onto main**). The GraphEQA-parity baseline (114 real paper
+episodes, 4 arms, OUT `~/runs/emet/hmeqa_grapheqa/20260815_013914`) settled the
+GT-semantics question and surfaced the tuning target. **Start here next.**
 
 **Results (no-GT vs GT, on the real paper episodes):**
 | Method | GT on | GT off |
@@ -23,29 +24,48 @@ surfaced a concrete tuning target. **Start here next.**
   controller). It is an ablation (our memory, merge off), not an independent baseline.
 - **Dynagraph memory delta is not a clean win**: −10.5 pp under GT, −1.8 pp no-GT.
 
-**The tuning lever — count (38–43%) and location (40–56%) are the weak spots in both
-arms; existence is 69–72%.** Failure modes:
-- [ ] **Count under-counts**: VLM eyeballs one image ("one basket", "no umbrellas")
-      instead of aggregating graph nodes. → **graph-aggregated counts** (count
-      label-matching nodes per room/equipment), not single-view. (No aggregation exists
-      today — `graph_memory` has no count-of-nodes helper.)
-- [ ] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
-      (graph_memory.py:3060) strips labels **only at that one `obs_id`**. A node created at
-      obs A that a closer look at obs B disproves **survives** → count inflation + location
-      confusion (e.g. stale "1 basket" nodes linger). Fix: on ABSENT retract, strip/remove
-      matching nodes across ALL obs (or mark `retracted` on the node so count/prompt skip it),
-      not just the current view. This is the "we're not removing things when we take a
-      closer look" issue.
+**Weak spots (both arms): count 38–43%, location 40–56%; existence 69–72%.**
+Failure modes:
+- [x] **Count under-counts → graph-aggregated count hint** (d882519a): SCENE_GRAPH now
+      emits count-of-label-matching nodes (was single-view eyeballing). **exp1 caveat**:
+      combined with the retraction change it regressed overall — dynagraph 49.1% vs
+      52.6%, static 52.6% vs 54.4% — count/location UP (+4–5 pp) but existence/state
+      DOWN (−7–12 pp). Count hint alone not yet validated; re-check on the count/clock
+      slice below.
+- [x] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
+      stripped labels **only at that one `obs_id`**, so a closer look that disproved a
+      node left it stale (count inflation + location confusion). Fixed in two steps:
+      strip ABSENT across all views (7566ab37), then **corroborated-only** — cross-view
+      strip only when ABSENT at 2+ distinct views (96f6d9a8, default
+      `strip_across_obs=False`), keeping the count/location gain without nuking
+      legitimately-seen nodes. Tests updated.
 - [ ] **Location room-mapping errors**: graph has the object at a position but the VLM
       maps it to the wrong option (trash can at (0.9,-0.8) → C not D). → stronger
       position→choice matching (distance to option landmarks) than
-      `_location_letter_from_*`.
+      `_location_letter_from_*`. **Still unsolved** — q11 probes below all fail.
 - [ ] **Recall misses**: target never entered the graph (q95/q183/q317/q385). →
       coverage-driven explore for unresolved targets.
+
+**Active validation runs (2026-08-19; machine froze mid-run, GPU now free):**
+- **count/clock slice** (v3 `feat/tamp-floor-experiments`, PR #120): 15 count/clock
+  qids, dynagraph, `scripts/run_hmeqa_countclock_slice.sh` with `EMET_ALLOW_SDPA_ATTN=1`
+  (no flash-attn on this box). **The Aug 15 "0/15" was a silent flash-attn failure, not
+  a real measurement.** Aug 19 re-run (RUN `~/runs/emet/hmeqa_countclock/20260819_022802`,
+  job `20260819_022652_ece872`): **5/15 done before the freeze** — q21/q28 OK, q12/32/33
+  ERR; died mid q43. The MULTIVIEW=1 arm (`20260819_022702_c3c900`) was gated behind
+  singleview and never started. **Resume with `--resume`** on
+  `countclock_20260819_022802_dynagraph_qwen3_vl.jsonl`, then run the MULTIVIEW arm.
+- **gre-q11 location probes** (v4 `feature/graph-room-evidence`, PR #115): q11
+  (trash-can location, gold D) still **0/1** across variants — `semantic` (pred A),
+  `invalid-obs-redirect` (pred B), `semantic-routerid` (pred A); `navredirect` crashed.
+  Location lever unsolved; next probe should target option-landmark distance matching,
+  not routing.
 
 **Data collection:** `HABITAT_EQA_EXPORT_GRAPH=1` already writes per-episode
 `graph.json` (node labels/xyz/room/confidence) via `export_graph_eqa_dir` — build an
 offline count/location failure-mode analyzer to A/B reasoning without re-running GPU.
+**TODO: record the exp1 numbers in `docs/experiments/habitat_eqa_results.md`
+(§ Lessons for tuning the graph) — currently they live only in commit 96f6d9a8.**
 Analysis/numbers: `docs/experiments/habitat_eqa_results.md` (§ GraphEQA-parity baseline,
 § Lessons for tuning the graph).
 
@@ -179,6 +199,20 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
+
+### Active PRs (2026-08-19)
+
+- **#124** `feat/hmeqa-graph-tuning` → `fix/no-gt-semantics` (this branch): graph tuning
+  (count hint + retraction). MERGEABLE, no review. **Actions**: rebase onto main (#123
+  merged); PR body is stale — still describes `strip_across_obs=True` default while HEAD
+  is corroborated-only.
+- **#120** `feat/tamp-floor-experiments` → `main`: RoboCasa floor pick/place + SigLIP-aware
+  VLM assess + **count/clock slice runner** (close-look crop → VLM-assess 2nd image,
+  MULTIVIEW consensus). MERGEABLE. Unblocks count/clock validation.
+- **#115** `feature/graph-room-evidence` → `main`: graph room timeline + agentic state card
+  + the gre-q11 location probes. **CONFLICTING** — rebase on main.
+- **#46** `feature/stretch-robocasa-robosuite` → `main`: DRAFT, unrelated (Stretch
+  RoboCasa/Robosuite port).
 
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
