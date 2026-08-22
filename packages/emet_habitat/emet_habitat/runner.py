@@ -378,9 +378,15 @@ def run_hmeqa_episode(
         agent._eqa_question = eqa_question
         agent.start()
         if agent.graph_memory is not None:
-            hints = enrich_labels_for_question(question_id, q.scene)
-            if hints:
-                agent.graph_memory.seed_object_hints(hints)
+            # GraphEQA per-question enrich labels are GT-derived object hints
+            # (bundled YAML keyed {question_id}_{scene}); only seed them when GT
+            # HM3D semantics are requested — a real-world agent has no such hints.
+            # (Currently the bundled scene IDs do not overlap the paper-113 episodes,
+            # so this is latent, but keep it gated so it can never leak.)
+            if use_hm3d_semantics:
+                hints = enrich_labels_for_question(question_id, q.scene)
+                if hints:
+                    agent.graph_memory.seed_object_hints(hints)
             agent.graph_memory.extract_relevant_objects(eqa_question)
         executor = EQAExecuter(agent)
         if rotate_in_place:

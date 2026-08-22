@@ -75,6 +75,7 @@ run_method() {
     --frontier-nodes \
     --frontier-keyword-weight 2 \
     --resume \
+    --no-hm3d-semantics \
     --output "$jsonl" \
     2>&1 | tee "$logf"
   echo "$jsonl" >"$OUT_DIR/${method}_jsonl.path"
