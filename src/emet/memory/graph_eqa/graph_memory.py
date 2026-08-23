@@ -535,6 +535,16 @@ def label_matches_relevant_object(obj: str, label: str) -> bool:
     return False
 
 
+def countable_primary_label_matches(obj: str, node: GraphNode) -> bool:
+    """Exact-count / PRESENT claims use detector-primary labels on instance nodes only."""
+    if not getattr(node, "countable_instance", False):
+        return False
+    labels = [str(l).strip() for l in (node.labels or []) if str(l).strip()]
+    if not labels:
+        return False
+    return label_matches_relevant_object(obj, labels[0])
+
+
 def _location_mcq_weak_tokens() -> frozenset[str]:
     return frozenset(
         {
@@ -922,6 +932,14 @@ class GraphEQAMemory:
         self._fallback_timestep: int = 0
         self.spatial_merge_m: float = 0.0
         self.staleness_horizon: int = 0
+        self.instance_ingest_stats: dict[str, int] = {
+            "proposed": 0,
+            "rejected_confidence": 0,
+            "rejected_support": 0,
+            "admitted": 0,
+            "merged": 0,
+            "created": 0,
+        }
         self.frontier_nodes_enabled: bool = True
         self._frontier_max_nodes: int = 12
         self._frontier_min_cluster_cells: int = 3
@@ -1777,7 +1795,10 @@ class GraphEQAMemory:
         identity_key = getattr(candidate, "identity_key", None)
         identity_key_norm = str(identity_key).strip() if identity_key is not None else ""
         identity_key_norm = identity_key_norm or None
-        countable_instance = bool(getattr(candidate, "countable_instance", False) or identity_key_norm)
+        semantic_only = bool(getattr(candidate, "semantic_only", False))
+        countable_instance = bool(
+            (getattr(candidate, "countable_instance", False) or identity_key_norm) and not semantic_only
+        )
         if embedding is not None:
             embedding = np.asarray(embedding, dtype=np.float32).reshape(-1).copy()
 
@@ -1805,12 +1826,27 @@ class GraphEQAMemory:
                     and str(existing.identity_key) != identity_key_norm
                 ):
                     break
+                if semantic_only and existing.countable_instance:
+                    break
+                if existing.countable_instance or countable_instance:
+                    from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
+
+                    primary = str(existing.labels[0]).strip() if existing.labels else label
+                    if not labels_compatible_for_dedup(label, primary):
+                        break
+                    merged_labels = sorted(
+                        {
+                            *[str(x).strip() for x in existing.labels if str(x).strip() and labels_compatible_for_dedup(str(x).strip(), primary)],
+                            label,
+                        }
+                    )
+                else:
+                    merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
                 sc = int(existing.support_count) + 1
                 new_xyz, covariance, history, changes, belief_confidence = self._position_update(
                     existing, xyz_a, step=step
                 )
-                merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
-                new_emb = embedding
+                new_emb = embedding if embedding is not None else existing.embedding
                 if embedding is not None and existing.embedding is not None:
                     a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
                     new_emb = (1.0 - a) * np.asarray(existing.embedding, dtype=np.float32) + a * embedding
@@ -4483,7 +4519,7 @@ class GraphEQAMemory:
         present_thresh = SIGLIP_PRESENT_THRESHOLD
         lines: list[str] = []
         for obj in self._confirmed_memory_phrases():
-            matches = [n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)]
+            matches = [n for n in object_nodes if countable_primary_label_matches(obj, n)]
             sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
@@ -5618,7 +5654,9 @@ class GraphEQAMemory:
                 or not node.countable_instance
             ):
                 continue
-            label_text = " ".join(node.labels or [])
+            label_text = str(node.labels[0]).strip() if node.labels else ""
+            if not label_text:
+                continue
             if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
                 matches.append(node)
         if not matches:

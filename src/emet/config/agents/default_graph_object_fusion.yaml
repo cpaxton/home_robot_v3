@@ -8,6 +8,9 @@ graph_object_fusion:
   embedding_blend_alpha: 0.35
   # Labels stay on nodes for display/EQA; false = merge by spatial+3D+embedding (recommended).
   require_label_match: false
+  require_label_match_for_instances: true
   max_candidates: 64
   match_xy_m: 0.55
   fallback_spatial_merge_xy_m: 0.45
+  instance_min_confidence: 0.12
+  instance_min_mask_points: 25

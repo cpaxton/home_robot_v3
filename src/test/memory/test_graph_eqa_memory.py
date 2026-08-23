@@ -1899,7 +1899,7 @@ def test_graph_count_hint_survives_prompt_budget_truncation():
         mem.add_observation(
             rgb,
             np.array([float(i), 0.0, 0.5]),
-            [f"item{i}", "umbrella"],
+            [f"umbrella", f"item{i}"],
             identity_key=f"test:umbrella:{i}",
             countable_instance=True,
         )
