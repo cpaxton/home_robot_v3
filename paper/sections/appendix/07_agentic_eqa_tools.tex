@@ -12,11 +12,11 @@ The model must reply with only:
 \begin{verbatim}
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 \end{verbatim}
-Rules encoded in the prompt: explore / navigate for candidate views; trust VLM assess over detector proposals; if a place was ABSENT / stalled / tried, do not re-navigate that \texttt{obs\_id}; one or two tool calls per turn.
+Rules encoded in the prompt: explore / navigate for candidate views; trust VLM assess over detector proposals; use the listed stable action cards and semantic outcome history rather than repeating unchanged work; one or two tool calls per turn.
 SigLIP/OWL are intentionally high-recall (high false positive) support for choosing where to look---not a precision oracle (Appendix~\ref{app:agentic_verify_gate}).
 
 \paragraph{State message (Investigate / Explore cards).}
-Each round appends question, budgets, graph counts, and split card lists: \textbf{Investigate} (graph / confirmed / SigLIP) with per-query \texttt{investigated=$N$}, closest approach, and recent station outcomes; \textbf{Explore} (frontiers, coverage only).
+Each round appends question, budgets, graph counts, and split card lists: \textbf{Investigate} (graph / confirmed / SigLIP) with per-query \texttt{investigated=$N$}, closest approach, and recent station outcomes; \textbf{Explore} (frontiers, coverage only). Grounded state schema v3 renders recent work as normalized intent, stable place/frontier/view identity, concrete approach/view variant, typed outcome, and material-progress reason; the mutable observation number is retained only as a trailing tool adapter.
 Retrieval only decides which cards fit in context ($K{=}6$ by default via \texttt{EMET\_EQA\_HYP\_RECALL\_K}); the router is not given a composite navigation-utility score.
 Visited frontier nodes are retired from the graph so they are not re-offered as frontiers.
 
@@ -49,15 +49,38 @@ axes. Strict complete variants are checked in as
 \texttt{hmeqa\_action\_history\_agent.yaml}; the run manifest records their
 effective values and SHA-256 source.
 
-To isolate this channel from the earlier bundled grounded-state comparison, we
-use a paired four-question diagnostic (\{6,11,12,47\}) in which both arms use
+\paragraph{Static-world semantic progress policy.}
+Action-history visibility is independent from the manifest-frozen
+\texttt{eqa.action\_progress\_mode} axis. \texttt{off} preserves the legacy
+candidate policy; \texttt{shadow} computes and traces counterfactual
+suppression decisions without changing cards or execution; and
+\texttt{enforce} omits an equivalent terminal/no-progress candidate before
+routing while its action-specific target state is unchanged. Equivalence uses
+stable semantic work plus the concrete investigate approach, immutable verify
+view and phrase, or material frontier geometry/goal. New approaches, views,
+target-local evidence, coverage/geometry, and partial navigation progress
+reopen work. Checked-in controls are
+\texttt{hmeqa\_action\_progress\_shadow.yaml} and
+\texttt{hmeqa\_action\_progress\_enforce.yaml}.
+
+This policy is not a permanent failed-action blacklist. Its first version is
+deliberately scoped to HM-EQA's mostly static scenes. In a dynamic embodied
+setting, target/environment change events, map revision, elapsed-time/TTL, and
+evidence staleness must invalidate or decay a suppression; a future scheduler
+may cool down or re-rank actions instead of removing them. We therefore keep
+the default \texttt{off} and treat the shadow/enforce comparison as a
+mechanism/efficiency diagnostic, not evidence for a general lifelong-memory
+policy.
+
+\paragraph{Earlier action-history visibility diagnostic (2026-08-23).}
+To isolate the visibility channel from the earlier bundled grounded-state
+comparison, we use a paired four-question diagnostic (\{6,11,12,47\}) in which both arms use
 \texttt{grounded\_v2} with agent-visible graph and room evidence, no investigate
 stamp, no HM3D semantic sensor, and no per-question enriched labels. Only
 \texttt{attempt\_ledger\_mode=shadow} versus \texttt{agent} changes. Eight
 episodes are still too small for an accuracy claim; the test is reported as
 router-state/process evidence.
 
-\paragraph{Four-question diagnostic result (2026-08-23).}
 At clean commit \texttt{63abd929}, both managed runs passed detached EGL probes,
 completed without native crashes, and published validated four-unit completion
 records. Shadow and agent-visible history both scored \textbf{3/4}, with the
@@ -72,6 +95,15 @@ router calls. Thus the visibility mechanism and shadow no-leakage control
 worked, but this small diagnostic does not support default enablement or scale.
 Frozen details:
 \texttt{paper/data/hmeqa\_agentic\_h2h/action\_history\_pair\_20260823.json}.
+A separate matched action-progress diagnostic on the same four questions
+(\texttt{shadow} versus \texttt{enforce}, ledger visibility held at
+\texttt{agent}) completed native-clean with schema-v4 manifests and gate traces.
+Shadow preserved behavior and matched the prior $3/4$ baseline (mean planning
+steps $35.25$); \texttt{enforce} regressed to $2/4$ with higher mean steps
+($43.25$) and did not fire explicit suppress dispositions on this slice. Keep
+\texttt{action\_progress\_mode} off by default; use \texttt{shadow} for
+diagnostics only. Frozen details:
+\texttt{paper/data/hmeqa\_agentic\_h2h/action\_progress\_pair\_20260823.json}.
 
 \subsection{Answer-mode tools}
 
@@ -105,6 +137,6 @@ When no question is provided (map-building explore), \texttt{submit\_answer} is 
 
 \subsection{Budgets and configuration}
 
-Typical knobs (YAML \texttt{eqa.*} / env overrides): max agentic rounds, max nav steps per episode (\texttt{agentic\_max\_nav\_steps}), hyp recall $K$ (\texttt{EMET\_EQA\_HYP\_RECALL\_K}), SigLIP verify similarity floor (\texttt{verify\_min\_sim}), action-history visibility (\texttt{attempt\_ledger\_mode}), and trace collection (\texttt{EMET\_EQA\_TRACE}).
+Typical knobs (YAML \texttt{eqa.*} / env overrides): max agentic rounds, max nav steps per episode (\texttt{agentic\_max\_nav\_steps}), hyp recall $K$ (\texttt{EMET\_EQA\_HYP\_RECALL\_K}), SigLIP verify similarity floor (\texttt{verify\_min\_sim}), action-history visibility (\texttt{attempt\_ledger\_mode}), static-world retry policy (\texttt{action\_progress\_mode}), and trace collection (\texttt{EMET\_EQA\_TRACE}).
 Habitat H2H entrypoint: \texttt{scripts/run\_hmeqa\_agentic\_h2h.sh} / \texttt{emet hmeqa h2h}.
 Episode review: \texttt{emet hmeqa inspect OUT --qid N}.

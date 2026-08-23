@@ -124,19 +124,39 @@ Canonical record:
       no-leakage pass, capability/efficiency do not. Keep it opt-in and do not
       scale; frozen summary is
       `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
-- [ ] Improve cross-round action memory before any new scale experiment. The
-      current hard guard catches exhausted `investigate(obs_id)` attempts only
-      after the router selects them, emits `NAV_LOOP_BLOCKED`, then redirects
-      to generic frontier exploration. Replace this with a pre-router,
-      deterministic action-equivalence/progress gate keyed by action + stable
-      target + approach/view/evidence revision (and pose cell where needed).
-      Filter or re-rank blocked actions before rendering the allowlist; permit a
-      retry only after material new evidence or geometry; cover verify and
-      frontier actions as well as investigate. Keep the durable ledger in
-      `shadow` by default and expose only a compact redirect reason. Add q11/q12
-      replay regressions and optimize total attempts/planning steps, not repeat
-      count alone. Concrete current traces:
-      `docs/attempt_ledger.md#what-the-memory-trace-looks-like`.
+- [x] Implement typed cross-round action memory and a benchmark-scoped
+      pre-router progress gate. Grounded state v3 now leads with semantic intent
+      + stable place/frontier/view identity rather than `r0`/`obs=15`, and
+      `action_history.py` defines deterministic work/equivalence keys, progress
+      tokens, typed outcomes, and one transient retry. The independent
+      manifest-frozen axis is `eqa.action_progress_mode=off|shadow|enforce`
+      (default off). Shadow leaves cards/execution unchanged; enforce omits
+      unchanged terminal/no-progress variants from the exact allowlist and
+      covers investigate aliases, explicit verifies, and frontiers; automatic
+      post-motion verifies are summarized by their parent action. Alternate
+      approaches, new views/evidence/geometry, and partial motion remain
+      eligible. Manifest schema v4 freezes the new axis, rejects legacy-policy
+      combinations, and validates matching summary/trace diagnostics before
+      completion. Exact q11/q12 trace-derived replay fixtures plus the 182-test
+      agent, 151-test lifecycle, and 134-test graph-memory CPU gates pass; see
+      `docs/attempt_ledger.md#static-world-action-progress-policy`.
+- [x] Finish reproducible paper tooling: expose the optional `latexmk` + TeX
+      Live bundle through `emet install paper`, `install.sh --paper`, and the
+      interactive install menu. The package simulation and 59 focused CLI tests
+      pass; documented Docker fallback built the current 38-page appendix/PDF.
+- [x] Run the managed static-policy comparison on `6,11,12,47` after CPU gates:
+      shadow job `20260823_155106_470fe6` scored **3/4**, mean steps **35.25**,
+      attempts **31**; enforce job `20260823_162608_ca49e0` scored **2/4**, mean
+      steps **43.25**, attempts **39**. Shadow matched the prior action-history
+      shadow baseline; enforce regressed on q47 and added dwell on q12 without
+      explicit suppress dispositions. Mechanism passes; do **not** scale enforce.
+      Frozen summary:
+      `paper/data/hmeqa_agentic_h2h/action_progress_pair_20260823.json`.
+      **Merge tooling** with defaults off (`action_progress_mode=off`).
+- [ ] Generalize suppression for dynamic worlds before enabling it as lifelong
+      memory. Target/environment change events, map revision, elapsed-time/TTL,
+      and evidence staleness must invalidate or decay suppression. Consider a
+      scheduler that cools down/re-ranks actions instead of removing them.
 - [ ] Keep the bundled A0→A1→A2 ladder, `2,76`, A3, rooms-11, holdout, and
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
@@ -178,9 +198,12 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
       agentic loops per episode (obj + recep). Options: `_fast_explore_lookaround` (2-pan) in the
       OVMM find path like run_dynagraph does, and cap recep rounds when the recep is the start
       receptable (already known).
-- [ ] **NavOutcome propagation**: `nav_outcome` is recorded in the agentic trace but not yet in
-      `NavAttemptResult` consumers (graph_memory `record_nav_attempt`, router state message). Expose
-      the enum string in the router "Recent actions" so the VLM can see reached-vs-progress-vs-blocked.
+- [x] **NavOutcome in router history**: typed recent actions now render the
+      motion enum alongside semantic target/outcome/progress, so the VLM can
+      distinguish reached vs progress vs blocked.
+- [ ] **NavOutcome in durable nav ledger**: propagate the enum through
+      `NavAttemptResult` / `graph_memory.record_nav_attempt` instead of relying
+      on status/note reconstruction in offline artifacts.
 
 ## Embodied agent planning (world model + tool calling + motion)
 

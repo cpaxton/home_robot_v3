@@ -4,9 +4,9 @@
 
 """Repeat-failure metrics over an :class:`AttemptRecord` ledger (Phase 4).
 
-A repeat is a non-ok attempt whose key matches a prior non-ok attempt:
-same ``action_kind`` and (``target_node_id`` if set, else ``obs_id``, else
-planar ``xyz`` within ``xyz_tol_m``).
+A repeat is a non-ok attempt whose key matches a prior non-ok attempt. Stable
+schema-v3 target/view identities take precedence over mutable node/observation
+adapters, with legacy fallbacks for older ledgers.
 """
 
 from __future__ import annotations
@@ -39,6 +39,9 @@ class RepeatFailureStats:
 
 def _key(rec: AttemptRecord, *, xyz_tol_m: float) -> tuple[Any, ...]:
     kind = rec.action_kind
+    if rec.target_id:
+        view_id = rec.view_id if kind == "verify" else ""
+        return (kind, rec.target_kind or "target", rec.target_id, view_id)
     if rec.target_node_id is not None:
         return (kind, "node", int(rec.target_node_id))
     if rec.obs_id is not None:

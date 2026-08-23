@@ -2199,7 +2199,7 @@ def test_investigate_records_place_inspect_on_card():
     assert "investigated=1" in msg
     assert "recent:" in msg
     assert "Recent actions:" in msg
-    assert any("investigate" in a and "obs=15" in a for a in ex._recent_actions)
+    assert any("action=investigate" in a and "adapter=15" in a for a in ex._recent_actions)
     assert any("verify=" in a for a in ex._recent_actions)
 
 
@@ -2225,18 +2225,22 @@ def test_state_message_includes_recent_action_history():
         },
     )
     ex._record_recent_action("explore_frontier", {"toward": "kitchen"}, {"ok": True})
-    # Internal tools must not pollute the ring buffer.
+    # Explicit verify is useful history; only internal graph/capture plumbing is omitted.
     ex._record_recent_action("verify_siglip", {}, {"ok": True, "status": "ABSENT"})
     ex._record_recent_action("inspect_graph", {}, {"ok": True})
 
-    assert len(ex._recent_actions) == 2
-    assert "r2 investigate obs=3 ap=1 verify=ABSENT closest=0.4m" in ex._recent_actions[0]
-    assert "explore_frontier toward='kitchen' ok" in ex._recent_actions[1]
+    assert len(ex._recent_actions) == 3
+    assert "round=3 action=investigate" in ex._recent_actions[0]
+    assert "approach=1" in ex._recent_actions[0]
+    assert "verify=ABSENT" in ex._recent_actions[0]
+    assert "adapter=3" in ex._recent_actions[0]
+    assert 'action=explore_frontier intent="kitchen"' in ex._recent_actions[1]
+    assert "action=verify_siglip" in ex._recent_actions[2]
 
     msg = build_state_message(ex)
     assert "Recent actions:" in msg
-    assert "investigate obs=3" in msg
-    assert "explore_frontier" in msg
+    assert "action=investigate" in msg
+    assert "action=explore_frontier" in msg
 
     for _i in range(RECENT_ACTIONS_K + 3):
         ex._record_recent_action("explore_frontier", {}, {"ok": True})

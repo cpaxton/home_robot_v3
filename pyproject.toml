@@ -255,9 +255,10 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
-# Optional system CLI tools (not on PyPI). Install: emet install gh
+# Optional system CLI tools (not on PyPI).
 [tool.emet.system-packages]
 gh = "gh"
+latexmk = "latexmk texlive-latex-extra texlive-bibtex-extra"
 
 [tool.pytest.ini_options]
 testpaths = ["src/test"]

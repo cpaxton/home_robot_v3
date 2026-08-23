@@ -25,10 +25,11 @@ from emet.habitat.config import default_habitat_eqa_data_dir, default_hm3d_scene
 from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, openai_base_for_host
 
 HMEQA_RUN_MANIFEST_SCHEMA = "emet.hmeqa.run_manifest"
-HMEQA_RUN_MANIFEST_VERSION = 3
-HMEQA_READABLE_RUN_MANIFEST_VERSIONS = frozenset({2, HMEQA_RUN_MANIFEST_VERSION})
+HMEQA_RUN_MANIFEST_VERSION = 4
+HMEQA_READABLE_RUN_MANIFEST_VERSIONS = frozenset({2, 3, HMEQA_RUN_MANIFEST_VERSION})
 HMEQA_VARIANT_CONFIG_SCHEMA = "emet.hmeqa.variant"
-HMEQA_VARIANT_CONFIG_VERSION = 1
+HMEQA_VARIANT_CONFIG_VERSION = 2
+HMEQA_READABLE_VARIANT_CONFIG_VERSIONS = frozenset({1, HMEQA_VARIANT_CONFIG_VERSION})
 
 DEFAULT_DECISION_POLICY = "legacy"
 DEFAULT_GRAPH_EVIDENCE_MODE = "off"
@@ -37,6 +38,7 @@ DEFAULT_ROOM_POLICY = "canonical"
 DEFAULT_ROOM_TARGET_HINTS = True
 DEFAULT_INVESTIGATE_STAMP = False
 DEFAULT_ATTEMPT_LEDGER_MODE = "off"
+DEFAULT_ACTION_PROGRESS_MODE = "off"
 DEFAULT_USE_HM3D_SEMANTICS = False
 DEFAULT_USE_ENRICH_LABELS = False
 DEFAULT_VARIANT_ID = "legacy"
@@ -110,6 +112,7 @@ _ARTIFACT_ENV_FIELDS = {
 
 _DECISION_POLICIES = frozenset({"legacy", "grounded_v2"})
 _VISIBILITY_MODES = frozenset({"off", "shadow", "agent"})
+_ACTION_PROGRESS_MODES = frozenset({"off", "shadow", "enforce"})
 _ROOM_POLICIES = frozenset({"canonical", "llm"})
 _AGENTIC_VERIFIERS = frozenset({"none", "owlv2", "yoloe"})
 _ARMS = frozenset({"classic", "agentic"})
@@ -129,6 +132,7 @@ _ENV_SOURCE_PATHS = {
     "EMET_EQA_ROOM_STAMP_INVESTIGATE": ("variant.investigate_stamp",),
     "EMET_EQA_ATTEMPT_LEDGER_MODE": ("variant.attempt_ledger_mode",),
     "EMET_EQA_ATTEMPT_LEDGER": ("variant.attempt_ledger_mode",),
+    "EMET_EQA_ACTION_PROGRESS_MODE": ("variant.action_progress_mode",),
     "EMET_HMEQA_USE_HM3D_SEMANTICS": ("evaluation.use_hm3d_semantics",),
     "EMET_HMEQA_USE_ENRICH_LABELS": ("evaluation.use_enrich_labels",),
     "EMET_HMEQA_VARIANT_ID": ("variant.id",),
@@ -160,6 +164,7 @@ _HMEQA_VARIANT_CONFIG_FIELDS = frozenset(
         "room_target_hints",
         "investigate_stamp",
         "attempt_ledger_mode",
+        "action_progress_mode",
     }
 )
 _HMEQA_NONCANONICAL_BEHAVIOR_ENV = frozenset(
@@ -227,39 +232,34 @@ def load_hmeqa_variant_config(
     allowed_root = {"schema", "schema_version", "description", "variant"}
     unknown_root = sorted(set(raw) - allowed_root)
     if unknown_root:
-        raise HmeqaRunManifestError(
-            f"unknown HM-EQA variant config fields in {full_path}: {', '.join(unknown_root)}"
-        )
+        raise HmeqaRunManifestError(f"unknown HM-EQA variant config fields in {full_path}: {', '.join(unknown_root)}")
     if raw.get("schema") != HMEQA_VARIANT_CONFIG_SCHEMA:
-        raise HmeqaRunManifestError(
-            f"HM-EQA variant config schema must be {HMEQA_VARIANT_CONFIG_SCHEMA!r}"
-        )
+        raise HmeqaRunManifestError(f"HM-EQA variant config schema must be {HMEQA_VARIANT_CONFIG_SCHEMA!r}")
     version = _positive_int("schema_version", raw.get("schema_version"))
-    if version != HMEQA_VARIANT_CONFIG_VERSION:
+    if version not in HMEQA_READABLE_VARIANT_CONFIG_VERSIONS:
         raise HmeqaRunManifestError(
             f"unsupported HM-EQA variant config version {version}; "
-            f"expected {HMEQA_VARIANT_CONFIG_VERSION}"
+            f"readable versions are {sorted(HMEQA_READABLE_VARIANT_CONFIG_VERSIONS)}"
         )
 
     variant_raw = raw.get("variant")
     if not isinstance(variant_raw, Mapping):
         raise HmeqaRunManifestError("HM-EQA variant config must contain a variant mapping")
-    unknown_variant = sorted(set(variant_raw) - _HMEQA_VARIANT_CONFIG_FIELDS)
-    missing_variant = sorted(_HMEQA_VARIANT_CONFIG_FIELDS - set(variant_raw))
+    expected_fields = (
+        _HMEQA_VARIANT_CONFIG_FIELDS
+        if version == HMEQA_VARIANT_CONFIG_VERSION
+        else _HMEQA_VARIANT_CONFIG_FIELDS - {"action_progress_mode"}
+    )
+    unknown_variant = sorted(set(variant_raw) - expected_fields)
+    missing_variant = sorted(expected_fields - set(variant_raw))
     if unknown_variant:
-        raise HmeqaRunManifestError(
-            f"unknown HM-EQA variant fields in {full_path}: {', '.join(unknown_variant)}"
-        )
+        raise HmeqaRunManifestError(f"unknown HM-EQA variant fields in {full_path}: {', '.join(unknown_variant)}")
     if missing_variant:
-        raise HmeqaRunManifestError(
-            f"missing HM-EQA variant fields in {full_path}: {', '.join(missing_variant)}"
-        )
+        raise HmeqaRunManifestError(f"missing HM-EQA variant fields in {full_path}: {', '.join(missing_variant)}")
 
     variant_id = str(variant_raw["id"] or "").strip()
     if not _VARIANT_ID_RE.fullmatch(variant_id):
-        raise HmeqaRunManifestError(
-            "variant.id must be 1-128 characters using letters, digits, '.', '_' or '-'"
-        )
+        raise HmeqaRunManifestError("variant.id must be 1-128 characters using letters, digits, '.', '_' or '-'")
     values = {
         "decision_policy": _choice(
             "variant.agentic_decision_policy",
@@ -294,8 +294,17 @@ def load_hmeqa_variant_config(
             variant_raw["attempt_ledger_mode"],
             _VISIBILITY_MODES,
         ),
+        "action_progress_mode": _choice(
+            "variant.action_progress_mode",
+            variant_raw.get("action_progress_mode", DEFAULT_ACTION_PROGRESS_MODE),
+            _ACTION_PROGRESS_MODES,
+        ),
         "variant_id": variant_id,
     }
+    if values["action_progress_mode"] != "off" and values["decision_policy"] != "grounded_v2":
+        raise HmeqaRunManifestError(
+            "variant.action_progress_mode shadow/enforce requires variant.agentic_decision_policy=grounded_v2"
+        )
     digest = hashlib.sha256(raw_bytes).hexdigest()
     source = f"variant_config:{full_path}#sha256:{digest}"
     return values, source
@@ -315,7 +324,7 @@ def _positive_int(name: str, value: Any, *, allow_zero: bool = False) -> int:
 def normalize_hmeqa_artifact_profile(
     profile: Mapping[str, Any] | None = None,
 ) -> dict[str, bool | int | float]:
-    """Return the complete artifact policy frozen into run-manifest schema v3."""
+    """Return the complete artifact policy frozen into run-manifest schema v3+."""
     supplied = dict(profile or {})
     unknown = sorted(set(supplied) - set(DEFAULT_HMEQA_ARTIFACT_PROFILE))
     if unknown:
@@ -454,6 +463,7 @@ def build_hmeqa_run_config(
     room_target_hints: bool = DEFAULT_ROOM_TARGET_HINTS,
     investigate_stamp: bool = DEFAULT_INVESTIGATE_STAMP,
     attempt_ledger_mode: str = DEFAULT_ATTEMPT_LEDGER_MODE,
+    action_progress_mode: str = DEFAULT_ACTION_PROGRESS_MODE,
     variant_id: str = DEFAULT_VARIANT_ID,
     eqa_hf_model_id: str | None = None,
     eqa_vl_family: str | None = None,
@@ -479,6 +489,18 @@ def build_hmeqa_run_config(
             "variant_id must start with an alphanumeric and contain only "
             "alphanumerics, '.', '_' or '-' (maximum 128 characters)"
         )
+    decision_policy_value = _choice(
+        "agentic_decision_policy",
+        decision_policy,
+        _DECISION_POLICIES,
+    )
+    action_progress_value = _choice(
+        "action_progress_mode",
+        action_progress_mode,
+        _ACTION_PROGRESS_MODES,
+    )
+    if action_progress_value != "off" and decision_policy_value != "grounded_v2":
+        raise HmeqaRunManifestError("action_progress_mode shadow/enforce requires agentic_decision_policy=grounded_v2")
 
     host_s = str(host or "").strip()
     endpoint = normalize_hmeqa_vl_endpoint(str(vl_endpoint or "").strip())
@@ -495,13 +517,14 @@ def build_hmeqa_run_config(
     return {
         "variant": {
             "id": variant,
-            "agentic_decision_policy": _choice("agentic_decision_policy", decision_policy, _DECISION_POLICIES),
+            "agentic_decision_policy": decision_policy_value,
             "graph_evidence_mode": _choice("graph_evidence_mode", graph_evidence_mode, _VISIBILITY_MODES),
             "room_history_mode": _choice("room_history_mode", room_history_mode, _VISIBILITY_MODES),
             "room_policy": _choice("room_policy", room_policy, _ROOM_POLICIES),
             "room_target_hints": _bool(room_target_hints, name="room_target_hints"),
             "investigate_stamp": _bool(investigate_stamp, name="investigate_stamp"),
             "attempt_ledger_mode": _choice("attempt_ledger_mode", attempt_ledger_mode, _VISIBILITY_MODES),
+            "action_progress_mode": action_progress_value,
         },
         "evaluation": {
             "arms": _csv_words("arms", arms, _ARMS),
@@ -582,6 +605,7 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
             room_target_hints=_bool(variant["room_target_hints"], name="room_target_hints"),
             investigate_stamp=_bool(variant["investigate_stamp"], name="investigate_stamp"),
             attempt_ledger_mode=str(variant["attempt_ledger_mode"]),
+            action_progress_mode=str(variant.get("action_progress_mode", DEFAULT_ACTION_PROGRESS_MODE)),
             variant_id=str(variant["id"]),
             eqa_hf_model_id=model.get("requested_hf_model_id") or model.get("hf_model_id"),
             eqa_vl_family=str(model["vl_family"]),
@@ -709,7 +733,7 @@ def load_hmeqa_run_manifest(
     *,
     require_resumable: bool = False,
 ) -> dict[str, Any]:
-    """Load a run manifest; schema v2 remains analysis-only."""
+    """Load a run manifest; schemas v2/v3 remain analysis-only."""
     path = Path(out_dir) / "run_manifest.json"
     if not path.is_file():
         raise HmeqaRunManifestError(
@@ -738,7 +762,7 @@ def load_hmeqa_run_manifest(
         raise HmeqaRunManifestError(
             f"cannot resume schema_version {version} HM-EQA output {out_dir}; "
             f"schema v{version} remains readable for analysis, but only v{HMEQA_RUN_MANIFEST_VERSION} "
-            "freezes the completion and artifact profile"
+            "freezes the completion, artifact, and action-progress profile"
         )
     return manifest
 
@@ -992,6 +1016,13 @@ def hmeqa_run_config_from_env(
             name="EMET_EQA_ROOM_STAMP_INVESTIGATE",
         ),
         attempt_ledger_mode=str(_env_value(env, "EMET_EQA_ATTEMPT_LEDGER_MODE", ledger_mode_default)),
+        action_progress_mode=str(
+            _env_value(
+                env,
+                "EMET_EQA_ACTION_PROGRESS_MODE",
+                variant.get("action_progress_mode", DEFAULT_ACTION_PROGRESS_MODE),
+            )
+        ),
         variant_id=str(_env_value(env, "EMET_HMEQA_VARIANT_ID", variant["id"])),
         eqa_hf_model_id=_env_value(
             env,
@@ -1057,6 +1088,7 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
         "EMET_EQA_ROOM_TARGET_HINTS": str(int(variant["room_target_hints"])),
         "EMET_EQA_ROOM_STAMP_INVESTIGATE": str(int(variant["investigate_stamp"])),
         "EMET_EQA_ATTEMPT_LEDGER_MODE": variant["attempt_ledger_mode"],
+        "EMET_EQA_ACTION_PROGRESS_MODE": variant["action_progress_mode"],
         # Shadow and agent both collect rows; router state renders them only in
         # agent mode so collection can be audited without policy leakage.
         "EMET_EQA_ATTEMPT_LEDGER": str(int(variant["attempt_ledger_mode"] != "off")),
@@ -1344,6 +1376,7 @@ def hmeqa_h2h_env_parts(
     room_target_hints: bool = DEFAULT_ROOM_TARGET_HINTS,
     investigate_stamp: bool = DEFAULT_INVESTIGATE_STAMP,
     attempt_ledger_mode: str = DEFAULT_ATTEMPT_LEDGER_MODE,
+    action_progress_mode: str = DEFAULT_ACTION_PROGRESS_MODE,
     variant_id: str = DEFAULT_VARIANT_ID,
     resume: bool = False,
     eqa_hf_model_id: str | None = None,
@@ -1383,6 +1416,7 @@ def hmeqa_h2h_env_parts(
             room_target_hints=room_target_hints,
             investigate_stamp=investigate_stamp,
             attempt_ledger_mode=attempt_ledger_mode,
+            action_progress_mode=action_progress_mode,
             variant_id=variant_id,
             eqa_hf_model_id=eqa_hf_model_id,
             eqa_vl_family=eqa_vl_family,

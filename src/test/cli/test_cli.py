@@ -208,6 +208,7 @@ def test_hmeqa_resume_help_lists_frozen_variant_flags():
         "--episode-timeout",
         "--max-planning-steps",
         "--max-movement-step",
+        "--action-progress-mode",
     ):
         assert option in result.stdout
 
@@ -239,6 +240,7 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     assert frozen["room_history_mode"] == "off"
     assert frozen["investigate_stamp"] is False
     assert frozen["attempt_ledger_mode"] == "off"
+    assert frozen["action_progress_mode"] == "off"
     assert frozen["variant_id"] == "legacy"
     assert frozen["use_hm3d_semantics"] is False
     assert frozen["use_enrich_labels"] is False
@@ -253,7 +255,7 @@ def test_hmeqa_h2h_loads_variant_config_beneath_explicit_flags(monkeypatch, tmp_
     config.write_text(
         """
 schema: emet.hmeqa.variant
-schema_version: 1
+schema_version: 2
 variant:
   id: action-history-shadow-v1
   agentic_decision_policy: grounded_v2
@@ -263,6 +265,7 @@ variant:
   room_target_hints: true
   investigate_stamp: false
   attempt_ledger_mode: shadow
+  action_progress_mode: "shadow"
 """.lstrip(),
         encoding="utf-8",
     )
@@ -289,6 +292,7 @@ variant:
     assert frozen["graph_evidence_mode"] == "agent"
     assert frozen["room_history_mode"] == "agent"
     assert frozen["attempt_ledger_mode"] == "agent"
+    assert frozen["action_progress_mode"] == "shadow"
     assert frozen["variant_id"] == "action-history-shadow-v1"
     sources = captured["config_sources"]
     assert sources["variant.agentic_decision_policy"].startswith("variant_config:")
@@ -307,6 +311,30 @@ variant:
     )
     assert resume_result.exit_code == 1
     assert "--variant-config is first-launch only" in resume_result.output
+
+
+def test_hmeqa_h2h_rejects_progress_mode_with_legacy_policy(tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--ids",
+            "11",
+            "--decision-policy",
+            "legacy",
+            "--action-progress-mode",
+            "shadow",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "requires agentic_decision_policy=grounded_v2" in result.output
 
 
 def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
@@ -333,6 +361,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
         room_target_hints=False,
         investigate_stamp=True,
         attempt_ledger_mode="shadow",
+        action_progress_mode="enforce",
         variant_id="grounded-shadow-r1",
         eqa_answer_max_new_tokens=512,
         episode_timeout_seconds=3600,
@@ -386,6 +415,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
     assert frozen["room_target_hints"] is False
     assert frozen["investigate_stamp"] is True
     assert frozen["attempt_ledger_mode"] == "shadow"
+    assert frozen["action_progress_mode"] == "enforce"
     assert frozen["variant_id"] == "grounded-shadow-r1"
     assert frozen["eqa_answer_max_new_tokens"] == 512
     assert frozen["episode_timeout"] == 3600
@@ -941,6 +971,20 @@ def test_install_full_help():
     assert result.returncode == 0
     assert "install" in result.stdout.lower()
     assert "--profile" in result.stdout
+    assert "--paper" in result.stdout
+    assert "--no-paper" in result.stdout
+
+
+def test_install_paper_help():
+    """emet install paper --help describes the local LaTeX toolchain."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "install", "paper", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "latexmk" in result.stdout.lower()
+    assert "--yes" in result.stdout
 
 
 def test_install_menu_help():

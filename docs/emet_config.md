@@ -71,6 +71,9 @@ mapping:
     # Answer VLM contract (also top-level eqa: in dynav_config.yaml):
     # answer_format: json   # default when prompt_variant is hmeqa/mcq; else labeled
     # merged_memory: true   # default on; paper HM-EQA dynagraph row pins false
+    # agentic_decision_policy: grounded_v2
+    # attempt_ledger_mode: agent        # off | shadow | agent
+    # action_progress_mode: shadow      # off | shadow | enforce; grounded_v2 only
 ```
 
 ### EQA answer prompt (`eqa` + `eqa_vl`)
@@ -81,6 +84,7 @@ mapping:
 | `eqa.answer_format` | `json` if hmeqa/mcq else `labeled` | Override with `EMET_EQA_ANSWER_FORMAT`. JSON object keys: `reasoning`, `answer`, `confidence`, `action`, `confidence_reasoning`; labeled `Reasoning:/Answer:/…` scrape remains as fallback. |
 | `eqa.merged_memory` | **on** | Fold CONFIRMED_MEMORY into `SCENE_GRAPH` lines. HM-EQA paper row pins `false` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). Env: `EMET_EQA_MERGED_MEMORY`. |
 | `eqa.attempt_ledger` | **off** | Opt-in action-outcome ledger on `GraphEQAMemory`. Accepts `true` / `false` or a dict: `enabled`, `max_records` (default `512`), `persist_absent_claims` (default `false`). When on, nav/tool/manip/verify outcomes append `AttemptRecord` rows alongside per-node `nav_attempts` / `nav_failures`. Env: `EMET_EQA_ATTEMPT_LEDGER`, `EMET_ATTEMPT_LEDGER_MAX`, `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT`. Reference: [attempt_ledger.md](attempt_ledger.md); plan: [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md). |
+| `eqa.action_progress_mode` | **off** | Static-world semantic retry policy: `shadow` records counterfactual decisions; `enforce` temporarily suppresses an unchanged equivalent action. Non-`off` modes require `eqa.agentic_decision_policy=grounded_v2`. Env: `EMET_EQA_ACTION_PROGRESS_MODE`. Reference: [attempt_ledger.md](attempt_ledger.md#static-world-action-progress-policy). |
 | `eqa_vl.eqa_prompt_max_tokens` | `2500` | Approximate text-token budget (char/4) for HISTORY + memory + SCENE_GRAPH. Truncation: oldest HISTORY → memory tail → edges → lowest-ranked node labels. `0` disables. Env: `EMET_EQA_PROMPT_MAX_TOKENS`. |
 | `eqa_vl.eqa_max_history` | `4` | Cap on prior iterations; each entry is a one-line **outcome** (`Iter: answer=… conf=… action=… salvage=… \| …`), not a raw VLM replay. |
 | `eqa_vl.include_image_descriptions` | `false` | Legacy label dump; when on, labels already on SCENE_GRAPH Image tags are omitted. |

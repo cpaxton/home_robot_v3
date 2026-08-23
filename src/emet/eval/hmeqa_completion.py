@@ -398,6 +398,63 @@ def _validate_world_evidence(root: Path, *, require_rgb_dir: bool) -> None:
             _require_file(root, relative.as_posix())
 
 
+def _validate_action_progress_diagnostics(root: Path, *, expected_mode: str) -> None:
+    summary = _load_json(
+        _require_file(root, "agentic_summary.json"),
+        expected=dict,
+    )
+    contract = summary.get("effective_state_contract")
+    if not isinstance(contract, Mapping):
+        raise HmeqaCompletionError("agentic_summary.json effective_state_contract must be an object")
+    actual_mode = str(contract.get("action_progress_mode") or "")
+    if actual_mode != expected_mode:
+        raise HmeqaCompletionError(
+            f"agentic_summary.json action_progress_mode {actual_mode!r} does not match frozen {expected_mode!r}"
+        )
+    if str(contract.get("decision_policy") or "") != "grounded_v2":
+        raise HmeqaCompletionError("action-progress diagnostics require decision_policy='grounded_v2'")
+
+    trace_rows = _validate_jsonl(
+        _require_file(root, "agentic_trace.jsonl"),
+        label="agentic_trace.jsonl",
+        require_row=True,
+    )
+    saw_gate_diagnostic = False
+    for index, row in enumerate(trace_rows):
+        if not isinstance(row, Mapping):
+            raise HmeqaCompletionError(f"agentic_trace.jsonl row {index + 1} must be an object")
+        if row.get("event") in {"router_call", "action_gate_snapshot"} and "action_gate_decisions" in row:
+            decisions = row["action_gate_decisions"]
+            if not isinstance(decisions, list) or any(
+                not isinstance(decision, Mapping) or not isinstance(decision.get("allowed"), bool)
+                for decision in decisions
+            ):
+                raise HmeqaCompletionError(
+                    f"agentic_trace.jsonl row {index + 1} action_gate_decisions "
+                    "must be a list of objects with boolean allowed"
+                )
+            saw_gate_diagnostic = True
+        if row.get("event") == "action_gate_dispatch":
+            row_mode = str(row.get("mode") or "")
+            if row_mode != expected_mode:
+                raise HmeqaCompletionError(
+                    f"agentic_trace.jsonl row {index + 1} gate mode "
+                    f"{row_mode!r} does not match frozen {expected_mode!r}"
+                )
+            decision = row.get("decision")
+            if decision is not None and (
+                not isinstance(decision, Mapping) or not isinstance(decision.get("allowed"), bool)
+            ):
+                raise HmeqaCompletionError(
+                    f"agentic_trace.jsonl row {index + 1} gate decision must contain boolean allowed"
+                )
+            if decision is None and not isinstance(row.get("allowed"), bool):
+                raise HmeqaCompletionError(f"agentic_trace.jsonl row {index + 1} gate dispatch is missing a decision")
+            saw_gate_diagnostic = True
+    if not saw_gate_diagnostic:
+        raise HmeqaCompletionError("agentic_trace.jsonl contains no action-progress gate diagnostic")
+
+
 def validate_snapshot_bundle(
     root: Path,
     *,
@@ -515,6 +572,12 @@ def validate_snapshot_bundle(
             rooms = _load_json(_require_file(bundle, "room_events.json"), expected=list)
             if any(not isinstance(item, Mapping) for item in rooms):
                 raise HmeqaCompletionError("room_events.json entries must be objects")
+        action_progress_mode = str(variant.get("action_progress_mode", "off"))
+        if action_progress_mode != "off":
+            _validate_action_progress_diagnostics(
+                bundle,
+                expected_mode=action_progress_mode,
+            )
 
 
 def _fsync_file(path: Path) -> None:

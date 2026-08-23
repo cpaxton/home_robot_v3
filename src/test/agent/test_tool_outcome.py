@@ -45,7 +45,14 @@ def test_maybe_record_tool_attempt_writes_when_ledger_on():
             status="ABSENT",
             note="not visible",
             tool="verify_siglip",
-            payload={"obs_id": 3, "phrase": "cup"},
+            payload={
+                "obs_id": 3,
+                "phrase": "cup",
+                "target_kind": "place",
+                "target_id": "place_cup",
+                "view_id": "view_cup_1",
+                "room": "kitchen",
+            },
         ),
         source="eqa",
     )
@@ -53,6 +60,10 @@ def test_maybe_record_tool_attempt_writes_when_ledger_on():
     assert len(rows) == 1
     assert rows[0].outcome == "absent"
     assert rows[0].phrase == "cup"
+    assert rows[0].target_kind == "place"
+    assert rows[0].target_id == "place_cup"
+    assert rows[0].view_id == "view_cup_1"
+    assert rows[0].room == "kitchen"
 
 
 def test_aim_arm_stub_records_closer_look(monkeypatch):
