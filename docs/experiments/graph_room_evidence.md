@@ -9,10 +9,12 @@
 
 > **Status (2026-08-23): no-go for scale.** The strongest clean pair still has
 > A2 grounded at 3/6 versus A1 shadow at 4/6, with more planning steps and
-> budget hits. The clean GT-free q11 repeat completed without a native failure
-> but scored 0/1: it never saw the trash can as present/answerable and exhausted
-> the eight-round budget into an `mcq_debias` answer. The direct-evidence gate
-> failed, so no A0/A1/A2 scale work should start.
+> budget hits. The final `b91059e5` integrity canary then produced two
+> native-clean q11 attempts; both failed to see the trash can directly,
+> exhausted all eight rounds, and answered A instead of D. The run also exposed
+> an over-strict best-effort object-crop completion check, now covered by a
+> CPU regression. The capability gate remains failed, so no A0/A1/A2 scale work
+> should start.
 
 ## Question and hypothesis
 
@@ -303,8 +305,9 @@ write both JSON and CSV.
 | GT-free q11 pre-fix sequence | complete, failed capability gate | 0/3 complete runs; infrastructure improved |
 | Post-fix q11 diagnostic | passed once, dirty | `gre_q11_a2_canary_d3ee32e8_20260822_175238`: 1/1, direct verified evidence, no salvage |
 | Clean q11 repeat | complete, failed capability gate | `gre_q11_a2_clean_81a2c689_20260823_003735`: 0/1; native-clean, but eight-round budget fallback after no present/answerable view |
+| PR #115 integrity q11 | complete, failed capability gate | job `20260823_081229_66d6e3`, OUT `gre_q11_a2_integrity_b91059e5_20260823_081204`: two native-clean attempts, both A vs D with no direct evidence; completion correctly stayed incomplete, but first exposed a best-effort object-crop policy bug |
 | Recovery correctness | CPU integrity gate complete | Managed lifecycle/completion and grounded-state/replay contracts pass 141 lifecycle, 182 agent-regression, 108 graph-memory/evidence, and 11 focused state/metadata tests; the separate full no-sim baseline still has three known unchanged map-rendering failures |
-| Next GPU work | q11 canary only | Run a detached 12-GiB EGL probe, then one fresh clean q11 A2 canary; require a validated completion marker plus direct answerable evidence before any repeat or baseline/treatment wave |
+| Next GPU work | blocked | Diagnose why grounded q11 repeatedly misses the kitchen trash-can evidence; do not launch the wider matrix until a CPU-testable search/state fix has a clean direct-evidence canary |
 
 ## Related
 

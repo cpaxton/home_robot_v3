@@ -97,10 +97,15 @@ Canonical record:
       182 agent-regression, 108 graph-memory/evidence, and 11 focused
       state/metadata tests pass. Keep the PR draft through the clean q11 GPU
       capability gate.
-- [ ] After the CPU gate is committed on a clean tree, run one detached
-      12-GiB EGL safe-start followed by a fresh q11 A2 canary. Require both a
-      validated `COMPLETE.json` bundle and direct present/answerable evidence;
-      a row, wrong-answer fallback, or budget exhaustion alone is not a pass.
+- [x] After the CPU gate, detached EGL probe `20260823_081023_d24734` passed,
+      then clean q11 A2 job `20260823_081229_66d6e3` ran two native-clean
+      attempts at `b91059e5`. Both exhausted eight rounds with no direct
+      trash-can evidence and answered A instead of D; the capability gate
+      remains failed.
+- [x] Fix the completion-policy bug exposed by that run: object-crop mosaics
+      are best-effort when an episode has no usable instance crops, so absence
+      is valid while any diagnostics-declared mosaic remains strictly checked.
+      The focused completion suite passes 12/12.
 - [ ] Keep A0→A1→A2 on `6,11,12,47` blocked. Only after a future clean q11
       canary passes may it proceed, followed by an A1/A2 hard-room pair on
       `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked until both process

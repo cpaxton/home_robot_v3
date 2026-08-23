@@ -197,6 +197,31 @@ def test_frozen_object_crop_artifact_is_validated_and_copied(tmp_path: Path) -> 
     assert (out / "bundles" / "classic_q7" / "dynagraph" / "crops_mosaic.png").is_file()
 
 
+def test_best_effort_object_crop_absence_does_not_block_completion(tmp_path: Path) -> None:
+    profile = _minimal_artifact_profile()
+    profile["export_object_crops"] = True
+    out, manifest = _prepare_run(tmp_path, artifact_profile=profile)
+    source = completion.expected_debug_bundle_dir(out, "classic", 7, manifest=manifest)
+    row = _episode_row(source)
+    _write_source_bundle(source, row)
+    (source / "diagnostics_manifest.json").write_text(
+        json.dumps({"episode_dir": str(source)}),
+        encoding="utf-8",
+    )
+    pending = _pending(out, row)
+
+    marker = completion.commit_pending_episode(
+        out,
+        arm="classic",
+        qid=7,
+        pending_path=pending,
+        exit_code=0,
+    )
+
+    assert marker["row"]["question_id"] == 7
+    assert completion.unit_is_complete(out, "classic", 7)
+
+
 def test_partial_or_multiple_json_objects_never_commit(tmp_path: Path) -> None:
     out, row, pending = _valid_candidate(tmp_path)
     pending.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n", encoding="utf-8")

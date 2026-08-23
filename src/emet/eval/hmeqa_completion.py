@@ -439,6 +439,7 @@ def validate_snapshot_bundle(
         "export_map_overlay",
         "export_map_video",
     )
+    diagnostics: Mapping[str, Any] = {}
     if any(bool(artifacts[name]) for name in diagnostic_outputs):
         diagnostics = _load_json(
             _require_file(bundle, "diagnostics_manifest.json"),
@@ -468,7 +469,10 @@ def validate_snapshot_bundle(
     if artifacts["export_video"]:
         path = _require_file(bundle, "episode_rgb.mp4")
         _validate_mp4(path, relative="episode_rgb.mp4")
-    if artifacts["export_object_crops"]:
+    # Object-crop export is explicitly best-effort: scenes without usable
+    # instance crops legitimately omit it. If the diagnostics inventory says
+    # it was produced, validate it strictly.
+    if diagnostics.get("object_crops_mosaic"):
         path = _require_file(bundle, "dynagraph/crops_mosaic.png")
         _validate_png(path, relative="dynagraph/crops_mosaic.png")
     if artifacts["export_compact_memory"]:
