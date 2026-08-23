@@ -86,6 +86,36 @@ def test_run_overnight_skips_done_holdout_and_resumes_bal32(tmp_path: Path, monk
     assert calls[0]["arms"] == "classic,agentic"
 
 
+def test_run_overnight_never_cleans_stale_processes_inside_job(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "overnight"
+    calls: list[dict[str, Any]] = []
+
+    def fake_h2h(out: Path, **kwargs: Any) -> int:
+        calls.append({"out": out, **kwargs})
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "DONE").write_text("ok\n", encoding="utf-8")
+        (out / "h2h_summary.json").write_text(
+            json.dumps(
+                {
+                    "classic": {"accuracy": 0.5, "n": 8, "correct": 4},
+                    "agentic": {"accuracy": 0.5, "n": 8, "correct": 4},
+                }
+            ),
+            encoding="utf-8",
+        )
+        return 0
+
+    monkeypatch.setattr(overnight, "_run_h2h", fake_h2h)
+    monkeypatch.setattr(overnight, "_summarize", lambda _out: None)
+    monkeypatch.setattr(overnight, "_status_note", lambda *a, **k: None)
+
+    rc = overnight.run_overnight(base=base, skip_bal32=True)
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0]["skip_kill_stale"] is True
+
+
 def test_run_overnight_skips_both_done_phases(tmp_path: Path, monkeypatch) -> None:
     base = tmp_path / "overnight"
     hold = base / "holdout8"

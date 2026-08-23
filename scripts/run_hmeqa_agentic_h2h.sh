@@ -16,7 +16,7 @@
 # Env:
 #   ARMS=classic,agentic   which arms to run (comma-separated)
 #   RESUME=1               skip finished per-qid jsonl; do not truncate arm logs/jsonl
-#   SKIP_KILL_STALE=1      skip gpu_preflight --kill-stale (keep live robot/agent jobs)
+#   SKIP_KILL_STALE=1      skip gpu_preflight --kill-stale (default; required for managed jobs)
 #   SKIP_GPU_WAIT=1        skip gpu_preflight --wait (e.g. NVML mismatch; Torch still sees CUDA)
 #   EGL_FAIL_ABORT=2       abort after this many consecutive Habitat EGL/CUDA-map failures
 #                          (0 = never). Pattern: WindowlessContext / unable to find CUDA device.
@@ -72,7 +72,7 @@ HOLDOUT_IDS="${HOLDOUT_IDS:-15,68,105,17}"
 TIMEOUT="${TIMEOUT:-7200}"
 ARMS="${ARMS:-classic,agentic}"
 RESUME="${RESUME:-0}"
-SKIP_KILL_STALE="${SKIP_KILL_STALE:-0}"
+SKIP_KILL_STALE="${SKIP_KILL_STALE:-1}"
 SKIP_GPU_WAIT="${SKIP_GPU_WAIT:-0}"
 EGL_FAIL_ABORT="${EGL_FAIL_ABORT:-2}"
 if [[ "${NATIVE_CRASH_ABORT:-}" == "1" ]]; then
@@ -131,7 +131,7 @@ else
     rm -f "$_MANIFEST_ENV_FILE"
     exit "$rc"
 fi
-unset EMET_HMEQA_RUN_CONFIG_JSON EMET_HMEQA_RUN_SOURCES_JSON
+unset EMET_HMEQA_MANIFEST_PREPARED EMET_HMEQA_RUN_CONFIG_JSON EMET_HMEQA_RUN_SOURCES_JSON
 
 # Perception/oracle axes are frozen into run_manifest.json. Defaults are GT-free.
 if [[ "${EMET_HMEQA_USE_HM3D_SEMANTICS:-0}" =~ ^(1|true|yes|on)$ ]]; then

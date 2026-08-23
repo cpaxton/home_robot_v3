@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 
 import pytest
@@ -86,6 +87,9 @@ def test_hmeqa_h2h_env_parts_local_keeps_hf_model_id():
     )
     joined = " ".join(parts)
     assert "EQA_HF_MODEL_ID=" in joined
+    assert "EMET_HMEQA_MANIFEST_PREPARED=1" in joined
+    assert "SKIP_KILL_STALE=1" in joined
+    assert "RESUME=1" not in parts
     assert hmeqa_h2h_vl_endpoint_from_env_parts(parts) is None
     assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" not in joined
     assert "EMET_EQA_ATTEMPT_LEDGER=1" not in joined
@@ -397,6 +401,50 @@ def test_direct_script_resume_reuses_frozen_variant(monkeypatch, tmp_path):
     assert manifest["config"]["variant"]["agentic_decision_policy"] == "grounded_v2"
     assert manifest["config"]["variant"]["room_history_mode"] == "agent"
     assert manifest["config"]["ids"]["question_ids"] == [2, 104]
+
+
+def test_launcher_prepared_manifest_validates_on_first_script_entry(monkeypatch, tmp_path):
+    config = _treatment_config()
+    git_state = _git_state()
+    created = prepare_hmeqa_run_manifest(
+        tmp_path,
+        project_root=tmp_path,
+        config=config,
+        resume=False,
+        git_state=git_state,
+        external_inputs=_external_inputs(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.hmeqa_launch.hmeqa_git_state",
+        lambda _project_root: git_state,
+    )
+    monkeypatch.setattr(
+        "emet.eval.hmeqa_launch.hmeqa_external_input_state",
+        lambda _config: _external_inputs(),
+    )
+
+    validated = prepare_hmeqa_run_manifest_from_env(
+        tmp_path,
+        project_root=tmp_path,
+        env={
+            "EMET_HMEQA_MANIFEST_PREPARED": "1",
+            "EMET_HMEQA_RUN_CONFIG_JSON": json.dumps(config),
+            "EMET_HMEQA_CONFIG_DIGEST": hmeqa_run_config_digest(config),
+        },
+        resume=False,
+    )
+
+    assert validated == created
+
+
+def test_launcher_prepared_manifest_flag_requires_manifest(tmp_path):
+    with pytest.raises(HmeqaRunManifestError, match="incomplete CLI-to-script handoff"):
+        prepare_hmeqa_run_manifest_from_env(
+            tmp_path,
+            project_root=tmp_path,
+            env={"EMET_HMEQA_MANIFEST_PREPARED": "1"},
+            resume=False,
+        )
 
 
 def test_direct_script_resume_allows_empty_new_overnight_phase(monkeypatch, tmp_path):

@@ -46,8 +46,9 @@ Canonical record:
 ### Capability gaps
 
 - [ ] q2: parse one target room and bind gray rug evidence to the shower.
-- [ ] q11: reproduce the new direct trash-can/refrigerator grounding from a
-      clean commit; the pre-fix sequence was 0/3 and the dirty diagnostic is 1/1.
+- [ ] q11: diagnose the clean-repeat regression. The dirty diagnostic was 1/1,
+      but clean HEAD `81a2c689` reached an initial kitchen view without seeing
+      the trash can, then exhausted eight rounds and answered by fallback.
 - [ ] q12: validate the new direct-image-over-graph precedence on a clean run;
       the prior grounded treatment trusted a graph undercount.
 - [ ] q76: enter and cover a bedroom instead of exhausting living-area frontiers.
@@ -77,14 +78,22 @@ Canonical record:
       `test_map_snapshot.py`. Those source files are unchanged from
       `origin/main`; fix or explicitly record that baseline separately, and do
       not describe the full suite as green.
-- [ ] Only then repeat the passing q11 A2 canary from the final clean PR head. First launch
-      `emet habitat safe-start`, require terminal `done` plus `Habitat EGL OK`,
-      then launch exactly one registered `emet jobs` experiment. Stop unless
-      q11 again reaches the kitchen and directly observes the relation without
-      plausibility or budget fallback.
-- [ ] If that passes, gate A0→A1→A2 on `6,11,12,47`, then repeat an A1/A2
-      hard-room pair on `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked
-      until both process and letter gates pass.
+- [x] Repeat the q11 A2 canary from clean PR HEAD `81a2c689` after detached
+      EGL probe `20260823_003909_ab5972` passed. Job
+      `20260823_004358_462498`, OUT
+      `~/runs/emet/gre_q11_a2_clean_81a2c689_20260823_003735`, completed
+      without a native failure but scored **0/1**: the first kitchen check and
+      every later view marked the trash can absent, then the eight-round budget
+      forced `mcq_debias` answer A instead of D at 55 planning steps. This
+      fails the direct-evidence gate; stop the scale ladder.
+- [x] Fix the first-launch CLI-to-script manifest handoff exposed by the
+      canary: the inner script now validates a launcher-prepared manifest
+      without switching episode semantics to resume. Managed H2H paths also
+      skip in-job stale-process cleanup.
+- [ ] Keep A0→A1→A2 on `6,11,12,47` blocked. Only after a future clean q11
+      canary passes may it proceed, followed by an A1/A2 hard-room pair on
+      `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked until both process
+      and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)

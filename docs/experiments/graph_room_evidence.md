@@ -7,11 +7,12 @@
 [agentic_scale.md](agentic_scale.md),
 [agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe)
 
-> **Status (2026-08-22): no-go for scale.** The strongest clean pair still has
+> **Status (2026-08-23): no-go for scale.** The strongest clean pair still has
 > A2 grounded at 3/6 versus A1 shadow at 4/6, with more planning steps and
-> budget hits. A post-fix, GT-free q11 canary passed 1/1 with direct evidence,
-> but it came from a manifest-recorded dirty tree. New scale work remains blocked
-> until the fixes are committed, the CPU suite passes, and q11 repeats cleanly.
+> budget hits. The clean GT-free q11 repeat completed without a native failure
+> but scored 0/1: it never saw the trash can as present/answerable and exhausted
+> the eight-round budget into an `mcq_debias` answer. The direct-evidence gate
+> failed, so no A0/A1/A2 scale work should start.
 
 ## Question and hypothesis
 
@@ -95,6 +96,13 @@ Other manifest-era results:
 | `gre_a2_grounded_imgfirst_20260814_171000` | `20260814_171004_86674a` | cancelled after two IDs; invalid comparison |
 | `gre_a2_grounded_imgfirst_postmain_20260815_011514` | `20260815_011843_f470c3` | dirty diagnostic, 3/6; no matched control |
 | `gre_q11_a2_canary_d3ee32e8_20260822_175238` | `20260822_175646_219c08` | dirty GT-free diagnostic, **1/1**; verified semantic D from direct obs 76, no salvage/native failure |
+| `gre_q11_a2_clean_81a2c689_20260823_003735` | `20260823_004358_462498` | clean GT-free repeat, **0/1**; no native failure, but all checks were absent/not-answerable and budget fallback produced A instead of D |
+
+The clean run's first registered launcher (`20260823_004111_23a7d7`) exited
+before Habitat because the inner script rejected the manifest just created by
+the outer CLI. The recorded job is the official same-OUT `emet hmeqa resume`;
+it preserved the clean manifest and produced the only episode row. The
+CLI-to-script prepared-manifest handoff is fixed in the follow-up commit.
 
 There is no clean same-commit A0/A1/A2 triplet. The principal A1/A2 manifests
 also predate explicit freezing of HM3D semantics and per-question enrich labels,
@@ -164,6 +172,8 @@ Run a fresh detached probe before every experimental job. Do not queue the next
 probe or experiment until the current job is terminal. Every experiment must
 remain under the host-wide `emet jobs run --gpu-exclusive` lock (the lock is
 automatic for GPU-like commands, but do not opt out with `--no-gpu-exclusive`).
+Managed H2H launches keep `SKIP_KILL_STALE=1`; stale-process cleanup belongs in
+preflight, never inside the live orchestrator holding that lock.
 
 Readiness:
 
@@ -270,8 +280,9 @@ write both JSON and CSV.
 | A2 grounded | **no-go** | `gre_a2_grounded_fae4b89c_20260814_160721`: 3/6, slower, more budget hits |
 | GT-free q11 pre-fix sequence | complete, failed capability gate | 0/3 complete runs; infrastructure improved |
 | Post-fix q11 diagnostic | passed once, dirty | `gre_q11_a2_canary_d3ee32e8_20260822_175238`: 1/1, direct verified evidence, no salvage |
+| Clean q11 repeat | complete, failed capability gate | `gre_q11_a2_clean_81a2c689_20260823_003735`: 0/1; native-clean, but eight-round budget fallback after no present/answerable view |
 | Recovery correctness | audit complete | Focused consistency tests/lint pass; full CPU gate has three known unchanged map-rendering baseline failures |
-| Next GPU work | blocked | One clean q11 repeat only after the commit and all CPU gates |
+| Next GPU work | blocked | Diagnose the clean q11 process regression before any further canary or scale run |
 
 ## Related
 

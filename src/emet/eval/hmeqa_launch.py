@@ -50,6 +50,7 @@ _ROOM_POLICIES = frozenset({"canonical", "llm"})
 _AGENTIC_VERIFIERS = frozenset({"none", "owlv2", "yoloe"})
 _ARMS = frozenset({"classic", "agentic"})
 _VARIANT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_HMEQA_MANIFEST_PREPARED_ENV = "EMET_HMEQA_MANIFEST_PREPARED"
 _ENV_SOURCE_PATHS = {
     "ARMS": ("evaluation.arms",),
     "HOLDOUT_IDS": ("ids.question_ids",),
@@ -874,11 +875,21 @@ def prepare_hmeqa_run_manifest_from_env(
     """Script entry: reuse frozen values, apply explicit env overrides, and validate."""
     environ = dict(os.environ if env is None else env)
     out = Path(out_dir)
+    launcher_prepared = _bool(
+        _env_value(environ, _HMEQA_MANIFEST_PREPARED_ENV, False),
+        name=_HMEQA_MANIFEST_PREPARED_ENV,
+    )
+    manifest_path = out / "run_manifest.json"
+    if launcher_prepared and not manifest_path.is_file():
+        raise HmeqaRunManifestError(
+            f"{_HMEQA_MANIFEST_PREPARED_ENV}=1 but {manifest_path} is missing; "
+            "refusing an incomplete CLI-to-script handoff"
+        )
     existing: dict[str, Any] | None = None
-    effective_resume = resume
-    if resume and (out / "run_manifest.json").is_file():
+    effective_resume = resume or launcher_prepared
+    if effective_resume and manifest_path.is_file():
         existing = load_hmeqa_run_manifest(out)
-    elif resume:
+    elif effective_resume:
         # The overnight orchestrator can mark a newly-created next phase RESUME=1
         # after an earlier phase completed. Permit only a truly empty H2H OUT;
         # historical partial/scored directories still fail closed.
@@ -1013,6 +1024,7 @@ def hmeqa_h2h_env_parts(
     parts = [
         "EMET_ALLOW_SDPA_ATTN=1",
         "EMET_EQA_TRACE=1",
+        "SKIP_KILL_STALE=1",
         f"COVERAGE_QIDS={coverage_qids}",
         f"EPISODE_COOLDOWN_SEC={int(cooldown)}",
         f"NATIVE_CRASH_POLICY={crash_policy}",
@@ -1023,6 +1035,7 @@ def hmeqa_h2h_env_parts(
         if value != "":
             parts.append(f"{key}={shlex.quote(value)}")
     config_json = json.dumps(config, sort_keys=True, separators=(",", ":"))
+    parts.append(f"{_HMEQA_MANIFEST_PREPARED_ENV}=1")
     parts.append(f"EMET_HMEQA_RUN_CONFIG_JSON={shlex.quote(config_json)}")
     if config_sources:
         sources_json = json.dumps(dict(config_sources), sort_keys=True, separators=(",", ":"))

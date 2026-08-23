@@ -278,7 +278,7 @@ def run_overnight(
             hold_out,
             ids=holdout_ids,
             arms="classic,agentic",
-            skip_kill_stale=False,
+            skip_kill_stale=True,
             resume=_has_scored_units(hold_out),
             **h2h_kwargs,
         )
