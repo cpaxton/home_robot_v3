@@ -65,7 +65,8 @@ harness:
       mcq_debias: false
       explore_when_uncovered: conservative
       siglip_grounding: true
-      use_instance_graph: false
+      # YoloE instance masks → bounds_3d + countable_instance for GRAPH_COUNT hints.
+      use_instance_graph: true
       manipulation_only: true
     static_graph:
       # GraphEQA-inspired static row: no merge/staleness, no Dynagraph extras.

@@ -87,6 +87,40 @@ def test_hm3d_instance_items_from_obs():
     assert "lamp" in labels or "bed" in labels
 
 
+
+def test_hm3d_instance_items_with_ids_keeps_same_label_instances():
+    scene = _FakeScene(
+        [
+            _FakeObject("lamp_5", "lamp"),
+            _FakeObject("lamp_6", "lamp"),
+        ]
+    )
+    labeler = Hm3dSemanticLabeler.from_semantic_scene(scene)
+    sem = np.zeros((4, 4), dtype=np.uint32)
+    sem[:, :2] = 5
+    sem[:, 2:] = 6
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((4, 4, 3), dtype=np.uint8),
+        depth=np.ones((4, 4), dtype=np.float32),
+        semantic=sem,
+        camera_K=np.eye(3),
+        camera_pose=np.eye(4),
+    )
+
+    items = hm3d_instance_items_from_obs(
+        labeler,
+        obs,
+        min_pixels=1,
+        with_instance_ids=True,
+    )
+
+    assert len(items) == 2
+    assert {item.identity_key for item in items} == {"hm3d:5", "hm3d:6"}
+    assert {item.label for item in items} == {"lamp"}
+
+
 @pytest.mark.parametrize(
     ("requested", "has_semantic_glb", "has_config", "expected"),
     [

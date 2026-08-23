@@ -39,6 +39,8 @@ def detection_dict_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
         bbox_xyxy=tuple(d["bbox_xyxy"]) if d.get("bbox_xyxy") is not None else None,
         bounds_3d=d.get("bounds_3d"),
         embedding=emb,
+        identity_key=d.get("identity_key"),
+        countable_instance=bool(d.get("countable_instance", d.get("instance_id") is not None)),
     )
 
 

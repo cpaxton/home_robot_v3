@@ -829,6 +829,24 @@ def test_retract_stem_claim_drops_hyp_keeps_place_node():
     assert any(int(n.obs_id) == int(oid) for n in mem._nodes)
 
 
+def test_retract_across_obs_strips_stale_cross_view_node():
+    """Explicit cross-view retraction strips stale labels but keeps place geometry."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    oid_a = mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl", "table"])
+    oid_b = mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa", "lamp"])
+    mem._relevant_objects = ["fruit bowl"]
+    mem._relevant_phrases = ["fruit bowl"]
+    # Explicit cross-view mode strips the stale node at obs A.
+    out = mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl", strip_across_obs=True)
+    assert out["ok"] is True
+    assert out["stripped_nodes"] >= 1
+    node_a = next(n for n in mem._nodes if int(n.obs_id) == int(oid_a) and not getattr(n, "is_viewpoint", False))
+    assert "fruit" not in str(node_a.labels).lower() and "bowl" not in str(node_a.labels).lower()
+    # Node itself survives (place geometry kept), but no longer advertises the object.
+    assert any(int(n.obs_id) == int(oid_a) for n in mem._nodes)
+
+
 def test_extract_relevant_objects_prefers_phrases():
     mem = GraphEQAMemory(
         defer_llm_clients=True,
@@ -872,6 +890,37 @@ def test_query_answer_injects_location_mcq_hint():
     mem.extract_relevant_objects(q)
     mem.query_answer(q)
     assert any(isinstance(c, str) and "LOCATION_MCQ" in c for c in captured["cmds"])
+
+
+def test_query_answer_injects_count_hint_as_prompt_hint():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured = {"cmds": None}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: graph count\nanswer: C\nconfidence: true\naction: none\nconfidence_reasoning: graph"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "umbrella",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["umbrella"],
+        identity_key="test:umbrella:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([2.0, 0.0, 0.5]),
+        ["umbrella"],
+        identity_key="test:umbrella:2",
+        countable_instance=True,
+    )
+    q = "How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:"
+    mem.query_answer(q)
+    assert any(isinstance(c, str) and "GRAPH_COUNT: 2" in c for c in captured["cmds"])
 
 
 def test_graph_covers_uses_phrase_not_every_token():
@@ -1429,7 +1478,14 @@ def test_graph_eqa_save_load_roundtrip():
         image_description_client=lambda x: "",
     )
     rgb = np.zeros((64, 64, 3), dtype=np.uint8)
-    mem.add_observation(rgb, np.array([1.0, 2.0, 0.5]), ["chair"], description="A wooden chair")
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 2.0, 0.5]),
+        ["chair"],
+        description="A wooden chair",
+        identity_key="test:chair:1",
+        countable_instance=True,
+    )
     mem.add_observation(rgb, np.array([1.1, 2.1, 0.5]), ["desk"])
     backend = GraphEQABackend(mem)
     with tempfile.TemporaryDirectory() as tmp:
@@ -1447,6 +1503,8 @@ def test_graph_eqa_save_load_roundtrip():
         n1 = next(n for n in nodes if n.node_id == 1)
         assert "chair" in n1.labels
         assert n1.description == "A wooden chair"
+        assert n1.identity_key == "test:chair:1"
+        assert n1.countable_instance is True
         o1 = next(o for o in obs if o.obs_id == 1)
         assert list(o1.xyz) == [1.0, 2.0, 0.5]
         assert o1.labels == ["chair"]
@@ -1638,3 +1696,236 @@ def test_alternate_nav_target_skips_failed_frontier_obs():
     assert alt is not None
     assert abs(float(alt[0]) - 4.0) < 1e-6
     assert abs(float(alt[1]) - 5.0) < 1e-6
+
+
+def test_graph_count_hint_aggregates_label_matching_nodes():
+    """Count MCQs get a graph-aggregated node count hint (not single-view eyeballing)."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    for index in range(3):
+        mem.add_observation(
+            rgb,
+            np.array([float(index), 0.0, 0.5]),
+            ["umbrella"],
+            identity_key=f"test:umbrella:{index}",
+            countable_instance=True,
+        )
+    mem.add_observation(
+        rgb,
+        np.array([4.0, 0.0, 0.5]),
+        ["vase"],
+        identity_key="test:vase:1",
+        countable_instance=True,
+    )
+    mem._relevant_objects = ["umbrella"]
+    q = "How many umbrellas are there in the ceramic vase? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 3" in hint, hint
+    assert "labels: umbrella, umbrella, umbrella" in hint, hint
+    # Non-count question -> no hint.
+    assert mem._graph_count_hint("Where is the umbrella? A) Kitchen B) Bathroom C) Bedroom D) Hall. Answer:") == ""
+
+
+def test_graph_count_hint_matches_target_phrase_not_stem_tokens():
+    """Count hint must not over-count via contextual stem words ("dining", "sofa")."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["chair"],
+        identity_key="test:chair:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([3.0, 3.0, 0.5]),
+        ["dining table"],
+        identity_key="test:table:1",
+        countable_instance=True,
+    )
+    q = "How many chairs are in the dining room? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 1" in hint, hint
+    assert "dining table" not in hint, hint
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["red pillow"],
+        identity_key="test:pillow:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([1.5, 1.5, 0.5]),
+        ["sofa"],
+        identity_key="test:sofa:1",
+        countable_instance=True,
+    )
+    q = "How many red pillows did I leave on the living room sofa? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 1" in hint, hint
+
+
+def test_graph_count_hint_uses_stable_identity_not_distance():
+    """Repeated observations collapse by identity while nearby instances stay distinct."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["chair"],
+        identity_key="hm3d:chair:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([3.0, 0.0, 0.5]),
+        ["chair"],
+        identity_key="hm3d:chair:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([0.2, 0.0, 0.5]),
+        ["chair"],
+        identity_key="hm3d:chair:2",
+        countable_instance=True,
+    )
+    q = "How many chairs are there? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 2" in hint, hint
+    assert len([node for node in mem.get_nodes() if node.countable_instance]) == 2
+
+
+def test_graph_count_hint_omits_label_only_evidence():
+    """A frame-summary label cannot be presented as an exact instance count."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["umbrella"])
+    q = "How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:"
+    assert mem._graph_count_hint(q) == ""
+
+
+def test_graph_count_hint_matches_bedside_table_nightstand_alias():
+    """Bedside-table count questions should match nightstand instance nodes."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["nightstand"],
+        identity_key="test:nightstand:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([1.5, 0.0, 0.5]),
+        ["nightstand"],
+        identity_key="test:nightstand:2",
+        countable_instance=True,
+    )
+    q = (
+        "How many bedside tables are there in the bedroom? "
+        "A) One B) Two C) Three D) Four. Answer:"
+    )
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 2" in hint, hint
+
+
+def test_graph_count_hint_collapses_nearby_duplicate_instances():
+    """Missed graph merges should not inflate GRAPH_COUNT via spatial collapse."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    for node_id, xy in ((1, (0.0, 0.0)), (2, (0.2, 0.1)), (3, (2.0, 0.0))):
+        mem.add_observation(
+            rgb,
+            np.array([xy[0], xy[1], 0.5]),
+            ["chair"],
+            identity_key=f"test:chair:{node_id}",
+            countable_instance=True,
+        )
+    q = "How many chairs are there? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 2" in hint, hint
+
+
+def test_graph_count_hint_handles_plural_forms_and_boundaries():
+    """Count matching handles irregular plurals without substring false positives."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["shelf"],
+        identity_key="test:shelf:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 0.0, 0.5]),
+        ["cart"],
+        identity_key="test:cart:1",
+        countable_instance=True,
+    )
+    q = "How many shelves are there? A) One B) Two C) Three D) Four. Answer:"
+    assert "GRAPH_COUNT: 1" in mem._graph_count_hint(q)
+    q = "How many lamps are there? A) One B) Two C) Three D) Four. Answer:"
+    assert mem._graph_count_hint(q) == ""
+
+
+def test_graph_count_hint_preserves_counted_bowl_noun():
+    """``bowl`` is a valid counted object, not always a quantity wrapper."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["bowl"],
+        identity_key="test:bowl:1",
+        countable_instance=True,
+    )
+    q = "How many bowls are there? A) One B) Two C) Three D) Four. Answer:"
+    assert "GRAPH_COUNT: 1" in mem._graph_count_hint(q)
+
+
+def test_graph_count_hint_survives_prompt_budget_truncation():
+    """GRAPH_COUNT is a protected tail line and is never truncated by the token budget."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    for i in range(10):
+        mem.add_observation(
+            rgb,
+            np.array([float(i), 0.0, 0.5]),
+            [f"item{i}", "umbrella"],
+            identity_key=f"test:umbrella:{i}",
+            countable_instance=True,
+        )
+    mem._relevant_objects = ["umbrella"]
+    q = "How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert hint
+    parts = GraphEQAMemory.build_eqa_prompt_text(
+        question_line="Question: " + q,
+        graph_str="SCENE_GRAPH: sorted\n" + "\n".join(f"  - Item {i}" for i in range(10)) + "\n" + hint,
+        img_desc_str="Attached images: none",
+        max_tokens=120,
+    )
+    blob = "\n".join(str(p) for p in parts if isinstance(p, str))
+    assert "GRAPH_COUNT" in blob, blob
+
+
+def test_retract_default_is_obs_local_not_cross_obs():
+    """Default retract keeps other views' nodes (one weak glance shouldn't delete
+    a node seen elsewhere — cross-obs stripping is opt-in / corroborated only)."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    oid_a = mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl", "table"])
+    oid_b = mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa", "lamp"])
+    mem._relevant_objects = ["fruit bowl"]
+    mem._relevant_phrases = ["fruit bowl"]
+    mem.retract_phrase_claim_at_obs(int(oid_b), "fruit bowl")  # strip_across_obs defaults False
+    node_a = next(n for n in mem._nodes if int(n.obs_id) == int(oid_a) and not getattr(n, "is_viewpoint", False))
+    assert "bowl" in str(node_a.labels).lower()  # still advertises at obs A

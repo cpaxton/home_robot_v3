@@ -288,6 +288,26 @@ def test_build_eqa_prompt_text_truncates_history_first():
     assert len(iters) < len(history)
 
 
+def test_build_eqa_prompt_text_preserves_graph_count_after_merged_tail_trim():
+    graph = (
+        "SCENE_GRAPH:\n"
+        "Node 1: umbrella at (0.00, 0.00, 0.50) [Image 1]\n"
+        "CONFIRMED_MEMORY (present):\n"
+        + "\n".join(f"- remembered fact {i} " + ("x" * 80) for i in range(8))
+        + "\nRooms: unknown\n"
+        "GRAPH_COUNT: 1 distinct object node(s) in the scene graph match 'umbrellas'"
+    )
+    parts = GraphEQAMemory.build_eqa_prompt_text(
+        question_line="Question: How many umbrellas?",
+        graph_str=graph,
+        img_desc_str="Attached images: none",
+        max_tokens=80,
+    )
+    joined = "\n".join(parts)
+    assert "GRAPH_COUNT: 1" in joined
+    assert GraphEQAMemory.estimate_eqa_prompt_tokens(joined) <= 80
+
+
 def test_parse_answer_json_and_labeled_fallback():
     mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
     raw = (

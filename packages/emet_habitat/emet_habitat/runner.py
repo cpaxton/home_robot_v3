@@ -271,7 +271,8 @@ def _make_controller(
         raise RuntimeError("HM3D semantics were requested but the simulator did not enable them")
     # HM3D semantic sensor supplies graph labels; reserve VLM for EQA queries only.
     graph_perception = use_real_vlm and not hm3d_sem
-    # Habitat: depth voxel map for nav only — no SigLIP/YoloE reload per episode.
+    # When harness enables use_instance_graph, GraphEQAController loads YoloE via
+    # use_instance_memory even if manipulation_only (nav-only Habitat stacks).
     common = {
         "robot": robot,
         "parameters": params,

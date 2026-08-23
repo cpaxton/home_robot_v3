@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# HM-EQA count/clock slice runner (validates close-look crop on the weak classes).
+# HM-EQA count/clock slice runner (close-look crop + graph count hint on weak classes).
 #
-# Runs the 15 count/clock paper-113 questions through the v3 emet-habitat harness
-# (this checkout has the dense_siglip_argmax_crop -> VLM-assess 2nd-image path).
-# Baseline for comparison: dynagraph pre-close-look (95/113 partial): count 23%,
-# clock 20%.
+# Runs the 15 count/clock paper-113 questions through emet-habitat (dynagraph).
+# Use after count-hint v2 (PR #124); baseline dynagraph pre-close-look (95/113 partial):
+# count 23%, clock 20%. Aug 22 pre-fix slice: 6/15 (40%).
 #
 # Env:
 #   METHODS        space-separated methods (default "dynagraph")
@@ -15,6 +14,10 @@
 #   CLOSE_LOOK     "0" -> EMET_EQA_AGENTIC_CLOSE_LOOK=0, pre-close-look baseline (default 1)
 #   MULTIVIEW      "1" -> EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1 (default 0)
 #   RESUME         "0" -> overwrite the arm jsonl instead of resuming (default 1)
+#
+# Usage (prefer emet jobs — serializes on ~/runs/emet/gpu.lock):
+#   uv run emet jobs run --name countclock-postfix --need-mib 12000 -- \
+    #     env EMET_ALLOW_SDPA_ATTN=1 RESUME=0 ./scripts/run_hmeqa_countclock_slice.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -92,6 +95,7 @@ for method in $METHODS; do
         --eqa-vl-family "$FAMILY" \
         --eqa-hf-model-id "$HF_ID" \
         --device cuda \
+        --no-hm3d-semantics \
         --frontier-nodes \
         --frontier-keyword-weight 2 \
         --output "$jsonl" \

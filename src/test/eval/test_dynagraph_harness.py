@@ -29,6 +29,8 @@ def test_habitat_eqa_harness_profile_and_flags():
     assert flags["mcq_debias"] is False
     assert flags["explore_when_uncovered"] == "conservative"
     assert flags["siglip_grounding"] is True
+    opts = harness_controller_options("habitat_eqa", "dynagraph")
+    assert opts.get("use_instance_graph") is True
 
 
 def test_habitat_eqa_dynagraph_pins_unmerged_memory():
