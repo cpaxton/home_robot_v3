@@ -310,6 +310,25 @@ _COUNT_WORD_ALIASES: dict[str, frozenset[str]] = {
     "recycle": frozenset({"trash", "garbage", "rubbish", "waste", "bin"}),
     "bin": frozenset({"trash", "garbage", "rubbish", "waste", "recycle", "can"}),
     "can": frozenset({"bin"}),
+    "nightstand": frozenset({"bedside"}),
+    "bedside": frozenset({"nightstand"}),
+    "stool": frozenset({"stools", "barstool", "barstools"}),
+    "stools": frozenset({"stool", "barstool", "barstools"}),
+    "barstool": frozenset({"stool", "stools", "bar", "barstools"}),
+    "barstools": frozenset({"stool", "stools", "barstool"}),
+    "mat": frozenset({"mats", "rug", "rugs", "doormat"}),
+    "mats": frozenset({"mat", "rug", "rugs", "doormat"}),
+    "rug": frozenset({"mat", "mats", "rugs", "doormat"}),
+    "lamp": frozenset({"lamps", "light", "lights"}),
+    "lamps": frozenset({"lamp", "light", "lights"}),
+    "pillow": frozenset({"pillows", "cushion", "cushions"}),
+    "pillows": frozenset({"pillow", "cushion", "cushions"}),
+}
+_COUNT_PHRASE_ALIASES: dict[tuple[str, ...], tuple[tuple[str, ...], ...]] = {
+    ("bedside", "tables"): (("nightstand",), ("bedside", "table")),
+    ("bedside", "table"): (("nightstand",),),
+    ("bar", "stools"): (("stool",), ("stools",), ("barstool",), ("barstools",)),
+    ("bar", "stool"): (("stool",), ("stools",)),
 }
 _COUNT_ROOM_PHRASES = (
     "living room",
@@ -407,6 +426,28 @@ def _count_word_matches(target: str, label: str) -> bool:
         for form in _count_word_forms(alias)
     }
     return bool(target_aliases & label_forms)
+
+
+def _collapse_count_nodes_spatially(
+    nodes: list["GraphNode"],
+    *,
+    min_xy_m: float = 0.65,
+) -> list["GraphNode"]:
+    """Collapse duplicate instance nodes that missed graph merge (same label, nearby XY)."""
+    if len(nodes) <= 1 or min_xy_m <= 0.0:
+        return list(nodes)
+    ranked = sorted(nodes, key=lambda node: (-int(node.support_count), int(node.node_id)))
+    kept: list[GraphNode] = []
+    for node in ranked:
+        nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)[:2]
+        if any(
+            float(np.linalg.norm(nxy - np.asarray(kept_node.xyz, dtype=np.float64).reshape(3)[:2]))
+            < min_xy_m
+            for kept_node in kept
+        ):
+            continue
+        kept.append(node)
+    return kept
 
 
 def _count_phrase_matches(target_tokens: tuple[str, ...], label: str) -> bool:
@@ -4964,6 +5005,7 @@ class GraphEQAMemory:
             return ""
 
         matches: list[GraphNode] = []
+        target_phrases = [target.tokens, *_COUNT_PHRASE_ALIASES.get(target.tokens, ())]
         for node in self._nodes:
             if (
                 node.is_frontier
@@ -4972,7 +5014,8 @@ class GraphEQAMemory:
                 or not node.countable_instance
             ):
                 continue
-            if _count_phrase_matches(target.tokens, " ".join(node.labels or [])):
+            label_text = " ".join(node.labels or [])
+            if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
                 matches.append(node)
         if not matches:
             return ""
@@ -5000,7 +5043,7 @@ class GraphEQAMemory:
         for node in matches:
             key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
             unique.setdefault(key, node)
-        matches = list(unique.values())
+        matches = _collapse_count_nodes_spatially(list(unique.values()))
         return (
             f"GRAPH_COUNT: {len(matches)} distinct object node(s) in the scene graph "
             f"match '{target.phrase}' (labels: {', '.join(str(node.labels[0]) for node in matches[:4])}"

@@ -1778,6 +1778,49 @@ def test_graph_count_hint_omits_label_only_evidence():
     assert mem._graph_count_hint(q) == ""
 
 
+def test_graph_count_hint_matches_bedside_table_nightstand_alias():
+    """Bedside-table count questions should match nightstand instance nodes."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["nightstand"],
+        identity_key="test:nightstand:1",
+        countable_instance=True,
+    )
+    mem.add_observation(
+        rgb,
+        np.array([1.5, 0.0, 0.5]),
+        ["nightstand"],
+        identity_key="test:nightstand:2",
+        countable_instance=True,
+    )
+    q = (
+        "How many bedside tables are there in the bedroom? "
+        "A) One B) Two C) Three D) Four. Answer:"
+    )
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 2" in hint, hint
+
+
+def test_graph_count_hint_collapses_nearby_duplicate_instances():
+    """Missed graph merges should not inflate GRAPH_COUNT via spatial collapse."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    for node_id, xy in ((1, (0.0, 0.0)), (2, (0.2, 0.1)), (3, (2.0, 0.0))):
+        mem.add_observation(
+            rgb,
+            np.array([xy[0], xy[1], 0.5]),
+            ["chair"],
+            identity_key=f"test:chair:{node_id}",
+            countable_instance=True,
+        )
+    q = "How many chairs are there? A) One B) Two C) Three D) Four. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 2" in hint, hint
+
+
 def test_graph_count_hint_handles_plural_forms_and_boundaries():
     """Count matching handles irregular plurals without substring false positives."""
     mem = GraphEQAMemory(defer_llm_clients=True)

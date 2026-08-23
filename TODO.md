@@ -37,8 +37,10 @@ Failure modes:
       collapse (missed-merge guard); (3) `countable_instance` + `identity_key` so only
       instance-level evidence counts; (4) `GRAPH_COUNT` protected from prompt-budget
       truncation; (5) corroborated retract uses `has_absent_retraction_at_other_view`.
-      **Validation:** fresh count/clock slice queued from v2 (`run_hmeqa_countclock_slice.sh`,
-      `RESUME=0`) — compare to Aug 22 pre-fix 6/15 (40%).
+      **Validation:** Aug 23 post-fix slice still 6/15 (40%) — GRAPH_COUNT never fired
+      (`use_instance_graph: false` + label-only VLM nodes). **Next:** enable instance graph
+      for `habitat_eqa`, spatial count dedup, bedside-table aliases, `--no-hm3d-semantics`
+      on count/clock runner; re-run queued as `countclock-instance-v3`.
 - [x] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
       stripped labels **only at that one `obs_id`**, so a closer look that disproved a
       node left it stale (count inflation + location confusion). Fixed in two steps:
@@ -58,10 +60,12 @@ runs were concurrent-experiment freezes, now guarded):**
 - **count/clock slice — prior** (v3, pre count-hint v2): Aug 22 resume completed **6/15
   (40%)** (`countclock_20260819_022802_dynagraph_qwen3_vl.jsonl`) — OK q21/q28/q47/q60/
   q78/q88; ERR q12/q32/q33/q43/q48/q51/q84/q86/q93.
-- **count/clock slice — post count-hint v2** (v2 `feat/hmeqa-graph-tuning`, PR #124):
-  `emet jobs run` + `scripts/run_hmeqa_countclock_slice.sh`, `RESUME=0`,
-  `EMET_ALLOW_SDPA_ATTN=1`. Queued behind PR #115 q11 integrity job (GPU flock).
-  MULTIVIEW=1 arm still pending after singleview result.
+- **count/clock slice — post count-hint v2** (v2, `2f9983af`): **6/15 (40%)** — same as
+  pre-fix; GRAPH_COUNT inert (no `countable_instance` on Habitat path). OUT
+  `~/runs/emet/hmeqa_countclock/20260823_082321/`.
+- **count/clock slice — instance graph + aliases** (v2, pending): `use_instance_graph:
+  true` for `habitat_eqa`, `--no-hm3d-semantics`, spatial count dedup; job
+  `countclock-instance-v3`.
 - **gre-q11 location probes** (v4 `feature/graph-room-evidence`, PR #115): q11
   (trash-can location, gold D) still **0/1** across variants — `semantic` (pred A),
   `invalid-obs-redirect` (pred B), `semantic-routerid` (pred A); `navredirect` crashed.

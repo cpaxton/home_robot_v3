@@ -95,6 +95,7 @@ for method in $METHODS; do
         --eqa-vl-family "$FAMILY" \
         --eqa-hf-model-id "$HF_ID" \
         --device cuda \
+        --no-hm3d-semantics \
         --frontier-nodes \
         --frontier-keyword-weight 2 \
         --output "$jsonl" \
