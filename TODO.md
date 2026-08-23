@@ -95,8 +95,10 @@ Canonical record:
       graph-state contracts and image-free clean/dirty replay regressions.
       **PR #115 CPU integrity gates: complete** — 141 lifecycle/completion,
       182 agent-regression, 108 graph-memory/evidence, and 11 focused
-      state/metadata tests pass. Keep the PR draft through the clean q11 GPU
-      capability gate.
+      state/metadata tests pass. The PR stayed draft through the clean q11 and
+      action-history GPU diagnostics. Their capability result is negative, but
+      the treatment remains opt-in, so that result does not block merging the
+      audited state/lifecycle infrastructure.
 - [x] After the CPU gate, detached EGL probe `20260823_081023_d24734` passed,
       then clean q11 A2 job `20260823_081229_66d6e3` ran two native-clean
       attempts at `b91059e5`. Both exhausted eight rounds with no direct
@@ -122,6 +124,19 @@ Canonical record:
       no-leakage pass, capability/efficiency do not. Keep it opt-in and do not
       scale; frozen summary is
       `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
+- [ ] Improve cross-round action memory before any new scale experiment. The
+      current hard guard catches exhausted `investigate(obs_id)` attempts only
+      after the router selects them, emits `NAV_LOOP_BLOCKED`, then redirects
+      to generic frontier exploration. Replace this with a pre-router,
+      deterministic action-equivalence/progress gate keyed by action + stable
+      target + approach/view/evidence revision (and pose cell where needed).
+      Filter or re-rank blocked actions before rendering the allowlist; permit a
+      retry only after material new evidence or geometry; cover verify and
+      frontier actions as well as investigate. Keep the durable ledger in
+      `shadow` by default and expose only a compact redirect reason. Add q11/q12
+      replay regressions and optimize total attempts/planning steps, not repeat
+      count alone. Concrete current traces:
+      `docs/attempt_ledger.md#what-the-memory-trace-looks-like`.
 - [ ] Keep the bundled A0→A1→A2 ladder, `2,76`, A3, rooms-11, holdout, and
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.

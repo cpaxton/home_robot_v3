@@ -82,8 +82,10 @@ Paper rows (`holdout4_summary.json`, `holdout8_summary.json`) unchanged; cite th
 `{6,11,12,47}`. Both arms used `grounded_v2` with graph/room evidence visible;
 only dedicated attempt history was shadowed or exposed. Both scored 3/4. Visible
 history reduced repeat-failure rows 6→4, but raised attempts 31→37 and mean
-planning steps 35.25→39.25. This validates the config/no-leakage mechanism, not
-an accuracy gain or a scale decision.
+planning steps 35.25→39.25. All three dedicated sections (recent actions,
+persisted loop flags, and global attempts) were non-empty in 10/14 treatment
+router calls and empty in all 12 shadow calls. This validates the
+config/no-leakage mechanism, not an accuracy gain or a scale decision.
 
 ## Balanced-32 replication evidence (Aug 2026, agentic only)
 

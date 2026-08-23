@@ -43,12 +43,72 @@ controlled by their own axes; this switch does not erase internal safety state.
 
 The 2026-08-23 matched four-question diagnostic validated this manipulation:
 all 12 shadow router states were policy-clean, while 10/14 treatment states
-contained recent/global attempts. Both scored 3/4; visible history reduced
-repeat-failure rows 6→4 but increased attempts 31→37 and mean planning steps
-35.25→39.25. The mode remains opt-in. See
+contained recent actions, persisted loop flags, and global attempts. Both
+scored 3/4; visible history reduced repeat-failure rows 6→4 but increased
+attempts 31→37 and mean planning steps 35.25→39.25. The mode remains opt-in. See
 [graph_room_evidence.md](experiments/graph_room_evidence.md#focused-action-history-isolation-2026-08-23)
 and the frozen
 [`action_history_pair_20260823.json`](../paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json).
+
+### What the memory trace looks like
+
+There are three related representations:
+
+1. `attempt_ledger.json` stores structured durable rows.
+2. `agentic_trace.jsonl` records the compact state rendered for each router call.
+3. The executor keeps a hard, question-local navigation guard even in `shadow`
+   mode; visibility is not the safety mechanism.
+
+For example, q11's second agent-visible router call at clean commit `63abd929`
+contained:
+
+```text
+Recent action outcomes:
+- r0 investigate obs=15 ap=0 verify=ABSENT closest=0.4m
+Loop flags:
+- obs=15 visits=1 status=STALLED_NAV_LOOP
+Places:
+- ... obs_adapter=15 ... attempts=navigate:ok:ok,verify:absent:ABSENT,
+  verify:absent:vlm_absent ...
+Room events (latest first):
+- ... room=kitchen kind=verify_absent phrase=silver trash can obs_adapter=15 ...
+Global attempts (latest first):
+- world_step=21 action=verify outcome=absent status=vlm_absent ... obs_adapter=15
+- world_step=13 action=verify outcome=absent status=ABSENT ... obs_adapter=15
+- world_step=13 action=navigate outcome=ok status=ok ... obs_adapter=15
+```
+
+By round six, the same run showed why prompt-visible history is not itself a
+complete repeat policy:
+
+```text
+Recent action outcomes:
+- r4 explore_frontier ... ok
+- r4 investigate obs=15 fail=NAV_LOOP_BLOCKED
+- r3 explore_frontier ... ok
+- r2 explore_frontier ok
+- r1 explore_frontier ... ok
+- r1 investigate obs=15 fail=NAV_LOOP_BLOCKED
+Loop flags:
+- obs=15 visits=1 status=NAV_LOOP_BLOCKED
+- obs=15 visits=1 status=NAV_LOOP_BLOCKED
+- obs=15 visits=1 status=STALLED_NAV_LOOP
+```
+
+The matching `shadow` call still collected the ledger and ran the hard guard,
+but rendered `Recent action outcomes`, `Loop flags`, per-place `attempts`, and
+`Global attempts` as `none`.
+
+Today, a successful navigation that produces no new observation is verified
+once and marked `STALLED_NAV_LOOP`. A later exhausted selection of that
+observation returns `NAV_LOOP_BLOCKED`, then the executor redirects the rejected
+selection to `explore_frontier`. This prevents an identical place navigation
+from executing forever, but it is post-selection and mostly keyed by
+`obs_id`/approach exhaustion. It does not yet define general action equivalence
+or material progress for repeated verifies, frontiers, or semantically
+equivalent targets. All ten non-initial treatment router calls retained a loop
+flag, so dumping these flags into every prompt is too blunt to be the long-term
+memory policy.
 
 ### Env
 
@@ -122,9 +182,11 @@ See [emet_config.md](emet_config.md) and [environment_variables.md](environment_
 | `phrase` | Text query when relevant |
 | `source` | `chat` \| `eqa` \| `unknown` |
 | `question_id` | Optional episode question id |
-| `room` | Canonical room label when known (**schema v2**); empty on v1 imports |
+| `room` | Canonical room label when known (introduced in schema v2); empty on v1 imports |
+| `target_kind` / `target_id` / `view_id` | Stable graph identities (schema v3) |
 
-Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records` (default 512). Export `schema_version` is **2**.
+Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records`
+(default 512). The current export `schema_version` is **3**.
 
 ### Room timeline (graph history)
 

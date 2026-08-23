@@ -137,7 +137,7 @@
       "router_calls": 14,
       "router_calls_with_recent_actions": 10,
       "router_calls_with_global_attempts": 10,
-      "router_calls_with_loop_flags": 0,
+      "router_calls_with_loop_flags": 10,
       "per_question": {
         "6": {
           "predicted_letter": "B",
@@ -228,5 +228,5 @@
     "planning_steps": "planning_steps from each scored HM-EQA episode row",
     "router_visibility": "counts over router_call state_text rows in agentic_trace.jsonl"
   },
-  "interpretation": "The mechanism and no-leakage control passed. Agent-visible history reduced repeat-failure rows from 6 to 4, mainly by shifting q11 from investigation to exploration, but did not change any predicted letter, did not fix q11, increased total attempts from 31 to 37, and increased mean planning steps from 35.25 to 39.25 because q12 needed two extra rounds. This n=4 diagnostic does not support default enablement or scale."
+  "interpretation": "The mechanism and no-leakage control passed. All 10 non-initial treatment router calls exposed recent actions, persisted loop flags, and global attempts. Agent-visible history reduced repeat-failure rows from 6 to 4, mainly by shifting q11 from investigation to exploration, but did not change any predicted letter, did not fix q11, increased total attempts from 31 to 37, and increased mean planning steps from 35.25 to 39.25 because q12 needed two extra rounds. This n=4 diagnostic does not support default enablement or scale."
 }

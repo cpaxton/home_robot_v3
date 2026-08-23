@@ -177,9 +177,9 @@ only effective variant deltas are ID and `attempt_ledger_mode`.
 
 The visibility manipulation worked. All 12 shadow router states rendered recent
 actions, loop flags, and global attempts as empty, and no mirrored attempt event
-leaked through bulk evidence. In the treatment, recent actions and global
-attempts were non-empty in 10/14 router calls (the first call of each episode
-correctly had no history); no navigation-loop flag fired in either variant.
+leaked through bulk evidence. In the treatment, recent actions, persisted loop
+flags, and global attempts were all non-empty in 10/14 router calls (the first
+call of each episode correctly had no history).
 
 Interpretation is mixed and not promotable: visible history changed q11's search
 mix and reduced the predefined repeat-failure count, but it did not change any
@@ -187,6 +187,15 @@ letter, did not solve q11, added six ledger attempts overall, and made q12
 slower. Keep the switch documented and opt-in; do not scale from this n=4
 diagnostic. Frozen summary:
 `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
+
+The actual q11/q12 traces also clarify the remaining memory problem. The
+executor already marks a no-new-observation arrival as `STALLED_NAV_LOOP`,
+rejects a later exhausted selection as `NAV_LOOP_BLOCKED`, and redirects that
+rejected selection to `explore_frontier`. This guard is deterministic but
+post-selection and mostly observation-specific; the blocked card can still be
+proposed before the redirect, and the fallback does not reason about whether a
+frontier or verify action is equivalent to prior work or produced material new
+evidence. See [the concrete trace excerpts](../attempt_ledger.md#what-the-memory-trace-looks-like).
 
 Per-question findings:
 

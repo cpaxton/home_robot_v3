@@ -66,10 +66,11 @@ increased from 35.25 (shadow) to 39.25 (agent-visible), with one budget hit in
 each arm. The predefined ledger repeat-failure count fell from $6$ to $4$
 (q11: $5\!\rightarrow\!3$), but total ledger attempts rose from $31$ to $37$
 and q12 required two extra decision rounds / 16 extra planning steps. All 12
-shadow router states kept the dedicated history sections empty; recent actions
-and global attempts were non-empty in 10/14 treatment router calls. Thus the
-visibility mechanism and shadow no-leakage control worked, but this small
-diagnostic does not support default enablement or scale. Frozen details:
+shadow router states kept the dedicated history sections empty; recent actions,
+persisted loop flags, and global attempts were non-empty in 10/14 treatment
+router calls. Thus the visibility mechanism and shadow no-leakage control
+worked, but this small diagnostic does not support default enablement or scale.
+Frozen details:
 \texttt{paper/data/hmeqa\_agentic\_h2h/action\_history\_pair\_20260823.json}.
 
 \subsection{Answer-mode tools}
