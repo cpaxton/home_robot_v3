@@ -93,6 +93,44 @@ def test_jobs_run_id_from_output():
     assert _jobs_run_id_from_output("only-id\n") == "only-id"
 
 
+def test_parse_job_start_epoch():
+    import time as _time
+
+    from emet.cli import _parse_job_start_epoch
+
+    assert _parse_job_start_epoch(None, None) is None
+    now = _time.time()
+    delay = _parse_job_start_epoch(30, None)
+    assert delay is not None and 1790 < delay - now < 1810
+
+    import datetime
+
+    future = datetime.datetime.now() + datetime.timedelta(hours=4)
+    at = _parse_job_start_epoch(None, future.strftime("%Y-%m-%d %H:%M"))
+    assert at is not None and abs(at - future.timestamp()) < 120
+
+    try:
+        _parse_job_start_epoch(10, "2030-01-01 00:00")
+    except ValueError as exc:
+        assert "mutually exclusive" in str(exc)
+    else:
+        raise AssertionError("expected mutual-exclusion error")
+
+    try:
+        _parse_job_start_epoch(None, "2020-01-01 00:00")
+    except ValueError as exc:
+        assert "not in the future" in str(exc)
+    else:
+        raise AssertionError("expected past-time error")
+
+    try:
+        _parse_job_start_epoch(None, "not-a-time")
+    except ValueError as exc:
+        assert "cannot parse" in str(exc)
+    else:
+        raise AssertionError("expected parse error")
+
+
 def test_hmeqa_group_help():
     """emet hmeqa --help lists H2H helpers."""
     result = subprocess.run(
@@ -271,7 +309,7 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     assert marker.read_text(encoding="utf-8") == "ok"
     wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "jobs register --job-id" in wrapper
-    assert wrapper.index("jobs register --job-id") < wrapper.index("jobs update \"$JOB_ID\" --status running")
+    assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
 
 
 def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):

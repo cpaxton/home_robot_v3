@@ -470,10 +470,7 @@ def serve(
         if use_vl and resolved_port == 8000:
             resolved_port = DEFAULT_VL_SERVE_PORT
         resolved = resolve_serve_device(llm_device)
-        click.echo(
-            f"emet serve llm: llm={resolved_llm} device={resolved} "
-            f"bind={llm_host}:{resolved_port} vl={use_vl}"
-        )
+        click.echo(f"emet serve llm: llm={resolved_llm} device={resolved} bind={llm_host}:{resolved_port} vl={use_vl}")
         serve_openai_llm(
             llm=resolved_llm,
             host=llm_host,
@@ -927,6 +924,39 @@ def _jobs_run_id_from_output(stdout: str | None) -> str | None:
         return None
     lines = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
     return lines[-1] if lines else None
+
+
+def _parse_job_start_epoch(delay_minutes: float | None, at_time: str | None) -> float | None:
+    """Return a wall-clock start epoch for ``emet jobs run`` scheduling, or None.
+
+    ``--delay-minutes`` is relative to submission; ``--at`` accepts local wall time
+    (``YYYY-MM-DD HH:MM`` or ISO ``YYYY-MM-DDTHH:MM[:SS]``). Raises ``ValueError``
+    when both are set, the time is unparsable, or ``--at`` is not in the future.
+    """
+    from datetime import datetime
+
+    if delay_minutes is not None and at_time:
+        raise ValueError("--delay-minutes and --at are mutually exclusive")
+    if delay_minutes is not None:
+        if float(delay_minutes) < 0:
+            raise ValueError("--delay-minutes must be >= 0")
+        return time.time() + float(delay_minutes) * 60.0
+    if not at_time:
+        return None
+    raw = str(at_time).strip()
+    parsed: datetime | None = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
+        try:
+            parsed = datetime.strptime(raw, fmt)
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        raise ValueError(f"cannot parse --at={raw!r} (use 'YYYY-MM-DD HH:MM' or ISO)")
+    epoch = float(parsed.timestamp())
+    if epoch <= time.time():
+        raise ValueError(f"--at={raw!r} is not in the future")
+    return epoch
 
 
 def _timestamp() -> str:
@@ -1715,6 +1745,18 @@ def jobs_update(
     help="Wait for these PIDs before starting (repeatable).",
 )
 @click.option(
+    "--delay-minutes",
+    type=float,
+    default=None,
+    help="Wait this many minutes after submission before starting the command.",
+)
+@click.option(
+    "--at",
+    "at_time",
+    default=None,
+    help='Start at local wall time, e.g. "2026-08-23 12:00" or ISO 2026-08-23T12:00:00.',
+)
+@click.option(
     "--need-mib",
     type=int,
     default=None,
@@ -1738,6 +1780,8 @@ def jobs_run(
     description: str | None,
     out_dir: str | None,
     wait_pid: tuple[int, ...],
+    delay_minutes: float | None,
+    at_time: str | None,
     need_mib: int | None,
     cpu_safe: bool | None,
     gpu_exclusive: bool | None,
@@ -1772,10 +1816,17 @@ def jobs_run(
 
     wait_pids = list(wait_pid)
     if use_gpu_excl:
-        for extra in active_gpu_job_pids():
+        for extra in active_gpu_job_pids(include_unmanaged=True):
             if extra not in wait_pids:
                 wait_pids.append(extra)
                 click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
+
+    start_epoch: float | None = None
+    try:
+        start_epoch = _parse_job_start_epoch(delay_minutes, at_time)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
 
     job_id = new_job_id()
     click.echo(f"prepared    {job_id}", err=True)
@@ -1784,6 +1835,12 @@ def jobs_run(
         click.echo(f"why         {str(description).strip()}", err=True)
     click.echo(f"out_dir     {out}", err=True)
     click.echo(f"log         {log_path}", err=True)
+    if start_epoch is not None:
+        click.echo(
+            f"schedule    start at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_epoch))} "
+            f"(in {max(0, int(start_epoch - time.time()))}s)",
+            err=True,
+        )
 
     wrapper = out / "job_wrapper.sh"
     register_args = [
@@ -1809,6 +1866,18 @@ def jobs_run(
     for wpid in wait_pids:
         register_args.extend(["--wait-pid", str(int(wpid))])
     register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
+    schedule_block = ""
+    if start_epoch is not None:
+        schedule_block = (
+            'NOW="$(date +%s)"\n'
+            f'TARGET_EPOCH="{int(start_epoch)}"\n'
+            'if [ "$NOW" -lt "$TARGET_EPOCH" ]; then\n'
+            '  echo "scheduled: waiting $((TARGET_EPOCH - NOW))s until '
+            f"$(date -d @{int(start_epoch)} '+%Y-%m-%d %H:%M:%S')\"\n"
+            '  while [ "$(date +%s)" -lt "$TARGET_EPOCH" ]; do sleep 30; done\n'
+            '  echo "scheduled: start time reached"\n'
+            "fi\n"
+        )
     wait_lines = ""
     for wpid in wait_pids:
         wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
@@ -1835,6 +1904,7 @@ def jobs_run(
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
         f"{register_line}"
+        f"{schedule_block}"
         f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"
@@ -1879,13 +1949,9 @@ def jobs_run(
         from emet.utils.process_tree import terminate_process_tree
 
         terminate_process_tree(proc, grace_s=1.0)
-        raise click.ClickException(
-            f"detached supervisor failed to register job {job_id}; see {log_path}"
-        )
+        raise click.ClickException(f"detached supervisor failed to register job {job_id}; see {log_path}")
     if job.pid != proc.pid:
-        raise click.ClickException(
-            f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})"
-        )
+        raise click.ClickException(f"job {job_id} registered unexpected supervisor pid {job.pid} (spawned {proc.pid})")
     click.echo(f"registered  {job_id}", err=True)
     click.echo(f"pid         {proc.pid}", err=True)
     click.echo(job_id)
@@ -3360,9 +3426,7 @@ def _llm_targets_from_host(
         if vl_url is not None and vl_url.strip() != "":
             vl_target = vl_url
         elif resolved:
-            vl_target = openai_base_for_host(
-                resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
-            )
+            vl_target = openai_base_for_host(resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT)
         else:
             env = (os.environ.get("EMET_VL_ENDPOINT") or os.environ.get("EMET_OPENAI_BASE_URL") or "").strip()
             vl_target = env or None
