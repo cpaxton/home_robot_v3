@@ -34,13 +34,26 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 `full_episodes.yaml` has episodes with `floor_object: true`: the harness drops the GT object to the floor (`drop_object_to_floor`, z ≈ 0.02 m) before the pick phase, so the robot must **pick something off the floor** (or just find it while exploring) to complete the task. See the [experiment plan](../../docs/plans/2026-08-13_agent_mcts_tamp.md) and runner:
 
 ```bash
-# Floor-only TAMP suite (uses each episode's mcts/sim/skip mode)
+# Fast agent integration (~5–8 min; rby1 MCTS, dynagraph only):
+uv run python scripts/eval_tamp_floor.py --smoke
+
+# Floor-only TAMP suite (uses each episode's mcts/sim/skip mode; overnight)
 NEED_MIB=8000 uv run emet jobs run --name tamp-floor-suite --need-mib 8000 -- \
-  uv run python scripts/eval_tamp_floor.py
+  uv run python scripts/eval_tamp_floor.py --backend dynagraph
 uv run python scripts/eval_tamp_floor.py --manip-mode sim    # override: teleport reference
 ```
 
-Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic), `robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport references), `robocasa_floor_find_only_explore` (find-only, explore the room).
+Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic; use for the
+optional targeted OVMM smoke),
+`robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport
+references; Stretch agentic find is slow due to head sweeps),
+`robocasa_floor_find_only_explore` (find-only explore; very slow on Stretch).
+
+The TAMP agent-tools gate's default `PROFILE=smoke` is the faster rby1 CHAT
+kinematic contract test; run this floor smoke explicitly when changing
+find-phase/OVMM behavior. `PROFILE=full` runs the four-episode matrix. See
+[`scripts/run_tamp_agent_tools_gate.sh`](../scripts/run_tamp_agent_tools_gate.sh) and
+[`docs/plans/2026-08-22_tamp_agent_tools.md`](../plans/2026-08-22_tamp_agent_tools.md).
 
 ### OVMM `--manip-mode` ≠ chat `agent.manip_mode`
 

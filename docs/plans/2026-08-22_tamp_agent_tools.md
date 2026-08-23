@@ -1,7 +1,7 @@
 # TAMP agent tools
 
 **Date:** 2026-08-22
-**Status:** Implemented offline path; managed simulator acceptance remains.
+**Status:** Offline gate green; managed simulator gate partially green (see below).
 
 ## Scope
 
@@ -94,17 +94,60 @@ to `skip`.
 ### Managed simulator gate
 
 Run GPU/simulator checks only after `emet eval status`/`diagnose` and through
-`emet jobs`:
+`emet jobs`. Orchestrator: [`scripts/run_tamp_agent_tools_gate.sh`](../../scripts/run_tamp_agent_tools_gate.sh).
 
-1. MolmoSpaces iTHOR + rby1 kinematic CHAT plan/execute smoke.
-2. Stretch teleport control.
-3. RoboCasa floor suite with per-episode `mcts`, `sim`, and `skip` modes.
-4. Compare `find_object_success`, `pick_success`, `place_success`, and
-   `ovmm_full_partial`; report attach/release flakes separately from planning
-   failures.
+```bash
+uv run emet eval recover --need-mib 12000
+# Routine agent-contract smoke (~2–5 min; rby1 + simulated kinematic base snap):
+uv run emet jobs run --name tamp-agent-tools-gate --need-mib 12000 --gpu-exclusive -- \
+  ./scripts/run_tamp_agent_tools_gate.sh
+# Overnight / paper matrix (1–2 h; full RoboCasa floor suite incl. Stretch):
+PROFILE=full uv run emet jobs run --name tamp-agent-tools-gate-full --need-mib 12000 --gpu-exclusive -- \
+  ./scripts/run_tamp_agent_tools_gate.sh
+# or queue with status log + native scheduling:
+./scripts/schedule_tamp_agent_tools_gate.sh
+# PROFILE=full DELAY_MIN=120 ./scripts/schedule_tamp_agent_tools_gate.sh
+```
+
+**Optional OVMM check** (single rby1 MCTS floor episode, ~5–8 min; avoids Stretch
+head sweeps that take 15–45 s each in agentic find):
+
+```bash
+uv run python scripts/eval_tamp_floor.py --smoke
+```
+
+Queue when another GPU job is live (`--delay-minutes` / `--at` sleep inside the
+supervisor; `--gpu-exclusive` waits for unmanaged MuJoCo/VLM servers too). Dry-run
+quoting smoke (no sim): `DRY_RUN=1 ./scripts/run_tamp_agent_tools_gate.sh`.
+
+| Profile | Items | Typical wall time |
+|---------|-------|-------------------|
+| `smoke` (default) | **kinematic**: rby1 CHAT `scene_tasks` → plan → execute | ~2–5 min |
+| `full` | chat, kinematic, stretch, **floor** (4 RoboCasa floor episodes) | 1–2 h |
+
+The routine test drives the actual CHAT tools, semantic task/plan handles,
+guarded live-scene validation, rby1 IK/grasp/place, and a measured GT object
+displacement. `EMET_SIM_NAV_TELEPORT=1` makes its simulated base approaches
+instantaneous; it deliberately does **not** measure real navigation latency or
+Stretch camera coverage. Those belong in the optional OVMM test or full profile.
+
+| # | Item | Status (2026-08-23) |
+|---|------|---------------------|
+| 1 | MolmoSpaces iTHOR + rby1 **CHAT** `scene_tasks` → plan → execute (teleport) | **Green** (job `20260823_003208_1379d8`, displacement 2.21 m) |
+| 2 | MolmoSpaces iTHOR + rby1 **kinematic** CHAT `scene_tasks` → plan → execute (semantic handles + IK) | **Green** (job `20260823_152854_4c7766`; 81 s sim run; displacement 2.2144 m; placement error 0.0200 m) |
+| 3 | Stretch **teleport** control (`plan_pick_place` → `execute_pick_place_plan`) | **Green** (job `20260823_013540_64c74f`, displacement 0.10 m) |
+| 4 | RoboCasa **floor-smoke** (`eval_tamp_floor.py --smoke`, rby1 MCTS) | Optional targeted OVMM check |
+| 4b | RoboCasa **floor** suite (4 episodes; Stretch + find-only explore) | `PROFILE=full` only |
+| 5 | Compare `find_object_success`, `pick_success`, `place_success`, `ovmm_full_partial` | After item 4 |
+
+**Note:** The first scheduled gate (`20260823_025938_6a1aa2`) failed items 1–2
+immediately because `run_item` used `bash -c "$*"` (word-split JSON and object
+names). Fixed: `run_item` now executes `"$@"` and supports `DRY_RUN=1`.
 
 ## Related entry points
 
+- Managed gate: [`scripts/run_tamp_agent_tools_gate.sh`](../../scripts/run_tamp_agent_tools_gate.sh),
+  scheduler: [`scripts/schedule_tamp_agent_tools_gate.sh`](../../scripts/schedule_tamp_agent_tools_gate.sh)
 - CHAT contract: [`docs/AGENT_RUN.md`](../AGENT_RUN.md)
 - Full OVMM controls: [`docs/ovmm_full_benchmark.md`](../ovmm_full_benchmark.md)
 - Semantic metadata extraction:

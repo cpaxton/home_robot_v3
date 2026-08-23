@@ -331,8 +331,15 @@ Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs
       including configured `floor_z_m` and find-only controls.
 - [x] Add offline regressions for semantic grounding, CHAT schemas/dispatch,
       selected-receptacle scoring, floor setup, and close-look crop limits.
-- [ ] Run the documented managed MolmoSpaces+rby1 kinematic smoke and Stretch
-      control after GPU preflight.
+- [x] **Stretch teleport CHAT control** (manual): job `20260823_013540_64c74f`,
+      displacement 0.10 m (`plan_pick_place` → `execute_pick_place_plan`).
+- [x] **MolmoSpaces CHAT `scene_tasks` smoke** (manual, teleport): job
+      `20260823_003208_1379d8`, `object_filter=bowl` → `task:1` pick bowl,
+      displacement 2.21 m.
+- [ ] **Managed gate green** (`scripts/run_tamp_agent_tools_gate.sh` via
+      `emet jobs` or `./scripts/schedule_tamp_agent_tools_gate.sh`): MolmoSpaces
+      **kinematic** CHAT item + RoboCasa floor suite. CHAT `scene_tasks` teleport
+      and Stretch control are green manually; gate quoting bug fixed 2026-08-23.
 
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
@@ -344,10 +351,16 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [x] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: fixed — Stretch path propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (and declines confirmation → False).
 
 ### Real tests (not yet green on every machine)
-- [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
+- [x] **MolmoSpaces ithor + rby1 CHAT tool chain** (`scene_tasks` → plan → execute,
+      teleport): green 2026-08-23 (`20260823_003208_1379d8`).
+- [ ] **MolmoSpaces ithor + rby1 kinematic** CHAT `plan_pick_place` item in the
+      managed gate (direct kinematic executor path; distinct from teleport CHAT).
 - [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
 - [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
-- [ ] **Robocasa / Stretch** pick-place smoke with and without `--visual-servo` to lock the teleport-vs-servo behavior.
+- [x] **Stretch teleport** CHAT plan/execute (`default_table_stretch.yaml`): green
+      2026-08-23 (`20260823_013540_64c74f`).
+- [ ] **Robocasa / Stretch visual-servo** pick-place smoke (`--visual-servo`) to
+      lock teleport-vs-servo behavior on hardware path.
 - [ ] **CI / overnight**: mark or gate the above under `RUN_MOLMOSPACES_TESTS` / sim markers so agents use `emet test --no-sim` for the offline pack only.
 
 ### Motion / grasp quality

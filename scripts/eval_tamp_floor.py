@@ -19,7 +19,15 @@ Prefer running this as an ``emet jobs`` job (never block an agent turn on sim)::
   NEED_MIB=8000 uv run emet jobs run --name tamp-floor-suite --need-mib 8000 -- \\
     uv run python scripts/eval_tamp_floor.py
 
-Results: JSONL under --output-dir (default ~/runs/emet/tamp_floor).
+Results: JSON under --output-dir (default ~/runs/emet/tamp_floor).
+
+Smoke (fast agent integration check, ~5–8 min on rby1 — no Stretch head sweeps)::
+
+  uv run python scripts/eval_tamp_floor.py --smoke
+
+Full matrix (overnight / paper; includes slow Stretch + find-only explore episodes)::
+
+  uv run python scripts/eval_tamp_floor.py --backend dynagraph
 """
 
 from __future__ import annotations
@@ -30,6 +38,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_EPISODES = REPO / "configs" / "ovmm" / "full_episodes.yaml"
+# Galaxea rby1 kinematic MCTS — fast enough for routine gates (~5 min). Avoid Stretch
+# in agentic OVMM smokes: head sweeps are 15–45s each vs ~1–2s on rby1/sourccey.
+SMOKE_FLOOR_EPISODE_ID = "robocasa_rby1_floor_to_counter_mcts"
 
 from emet.eval.ovmm_batch import MANIP_MODES, OvmmBatchOptions, run_ovmm_batch
 
@@ -60,16 +71,33 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", type=str, default="configs/ovmm/benchmark.yaml")
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help=(
+            f"Fast gate: single dynagraph episode {SMOKE_FLOOR_EPISODE_ID!r} "
+            "(rby1 MCTS floor pick; no Stretch agentic sweeps)."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = _parse_args()
+    episode_ids = list(args.episode_ids) if args.episode_ids else None
+    backends = list(args.backends) if args.backends else ["dynagraph"]
+    if args.smoke:
+        if episode_ids and episode_ids != [SMOKE_FLOOR_EPISODE_ID]:
+            raise SystemExit(
+                f"--smoke fixes episode to {SMOKE_FLOOR_EPISODE_ID!r}; do not also pass --episode-id {episode_ids!r}"
+            )
+        episode_ids = [SMOKE_FLOOR_EPISODE_ID]
+        backends = ["dynagraph"]
     opts = OvmmBatchOptions(
         episodes=args.episodes,
-        backends=args.backends or ["dynagraph", "ground_truth"],
+        backends=backends,
         tiers=args.tier,
-        episode_ids=args.episode_ids,
+        episode_ids=episode_ids,
         floor_only=not args.all_episodes,
         merge_xy_m=None,
         staleness_horizon=None,
