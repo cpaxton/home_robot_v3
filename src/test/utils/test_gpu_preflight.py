@@ -46,6 +46,26 @@ def test_wait_gpu_stable_succeeds(monkeypatch):
     assert len(logs) >= 2
 
 
+def test_wait_gpu_stable_default_is_bounded(monkeypatch):
+    monkeypatch.setenv("GPU_WAIT_MAX_ROUNDS", "2")
+    monkeypatch.setattr(gp, "gpu_free_mib", lambda: 0)
+    sleeps: list[float] = []
+    logs: list[str] = []
+
+    assert (
+        gp.wait_gpu_stable(
+            12000,
+            stable_checks=1,
+            interval_s=0.01,
+            sleep_fn=sleeps.append,
+            log=logs.append,
+        )
+        is False
+    )
+    assert len(logs) == 2
+    assert len(sleeps) == 2
+
+
 def test_protected_pids_includes_self():
     assert os.getpid() in gp.protected_pids()
 

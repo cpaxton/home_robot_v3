@@ -1712,10 +1712,24 @@ def jobs_update(
     help="Wait for these PIDs before starting (repeatable).",
 )
 @click.option(
+    "--wait-timeout-sec",
+    type=click.FloatRange(min=0.0),
+    default=21600.0,
+    show_default=True,
+    help="Total timeout for explicit --wait-pid prerequisites.",
+)
+@click.option(
     "--need-mib",
     type=int,
     default=None,
     help="If set, run emet eval wait before the command.",
+)
+@click.option(
+    "--gpu-wait-max-rounds",
+    type=click.IntRange(min=1),
+    default=120,
+    show_default=True,
+    help="Maximum free-VRAM checks before the job fails.",
 )
 @click.option(
     "--cpu-safe/--no-cpu-safe",
@@ -1727,6 +1741,12 @@ def jobs_update(
     default=None,
     help="Hold the host-wide GPU lock (default: on for --need-mib or GPU-like commands).",
 )
+@click.option(
+    "--lock-timeout-sec",
+    type=click.FloatRange(min=0.0),
+    default=None,
+    help="Exclusive-lock timeout (default: EMET_GPU_LOCK_TIMEOUT or 21600).",
+)
 @click.option("--foreground", is_flag=True, help="Run in foreground (no nohup).")
 @click.pass_context
 def jobs_run(
@@ -1735,9 +1755,12 @@ def jobs_run(
     description: str | None,
     out_dir: str | None,
     wait_pid: tuple[int, ...],
+    wait_timeout_sec: float,
     need_mib: int | None,
+    gpu_wait_max_rounds: int,
     cpu_safe: bool | None,
     gpu_exclusive: bool | None,
+    lock_timeout_sec: float | None,
     foreground: bool,
 ) -> None:
     """Start a detached supervisor that registers and runs a managed job.
@@ -1753,7 +1776,6 @@ def jobs_run(
     import shlex
 
     from emet.utils.job_registry import (
-        active_gpu_job_pids,
         command_looks_like_gpu_job,
         gpu_lock_path,
         load_job,
@@ -1778,11 +1800,19 @@ def jobs_run(
     use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else auto_gpu_job
 
     wait_pids = list(wait_pid)
-    if use_gpu_excl:
-        for extra in active_gpu_job_pids():
-            if extra not in wait_pids:
-                wait_pids.append(extra)
-                click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
+    lock_timeout = lock_timeout_sec
+    if lock_timeout is None:
+        raw_timeout = os.environ.get("EMET_GPU_LOCK_TIMEOUT", "").strip()
+        try:
+            lock_timeout = float(raw_timeout) if raw_timeout else 21600.0
+        except ValueError as exc:
+            raise click.ClickException(f"invalid EMET_GPU_LOCK_TIMEOUT={raw_timeout!r}") from exc
+        if lock_timeout < 0:
+            click.echo(
+                "warning: unbounded EMET_GPU_LOCK_TIMEOUT is no longer supported; using 21600 seconds",
+                err=True,
+            )
+            lock_timeout = 21600.0
 
     job_id = new_job_id()
     click.echo(f"prepared    {job_id}", err=True)
@@ -1817,23 +1847,36 @@ def jobs_run(
         register_args.extend(["--wait-pid", str(int(wpid))])
     register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
     wait_lines = ""
-    for wpid in wait_pids:
-        wait_lines += (
+    if wait_pids:
+        wait_lines = (
             'pid_is_running() { local stat; stat="$(ps -o stat= -p "$1" 2>/dev/null || true)"; '
             '[[ -n "$stat" && "$stat" != Z* ]]; }\n'
-            f"while pid_is_running {int(wpid)}; do sleep 15; done\n"
+            f"WAIT_PID_DEADLINE=$((SECONDS + {max(0, int(wait_timeout_sec))}))\n"
+            "for WAIT_PID in " + " ".join(str(int(wpid)) for wpid in wait_pids) + "; do\n"
+            '  while pid_is_running "$WAIT_PID"; do\n'
+            "    if (( SECONDS >= WAIT_PID_DEADLINE )); then\n"
+            '      echo "ERROR: timed out waiting for explicit prerequisite pid $WAIT_PID" >&2\n'
+            '      "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "explicit wait-pid timeout $WAIT_PID" >/dev/null 2>&1 || true\n'
+            "      exit 4\n"
+            "    fi\n"
+            "    sleep 1\n"
+            "  done\n"
+            "done\n"
         )
     need_block = ""
     if need_mib is not None:
         need_block = (
-            f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)}\n'
+            f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)} '
+            f"--max-rounds {int(gpu_wait_max_rounds)}\n"
             f'"$EMET_BIN" eval status || true\n'
         )
     gpu_lock_block = ""
     if use_gpu_excl:
         default_lock = shlex.quote(str(gpu_lock_path()))
+        timeout = shlex.quote(str(float(lock_timeout)))
         gpu_lock_block = (
-            'GPU_LOCK_FILE="${EMET_GPU_LOCK:-${EMET_GPU_LOCK_FILE:-' + default_lock + '}}"\n'
+            "GPU_LOCK_FILE=" + default_lock + "\n"
             "if ! command -v flock >/dev/null 2>&1; then\n"
             '  echo "ERROR: gpu-exclusive jobs require the flock utility" >&2\n'
             '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
@@ -1849,11 +1892,7 @@ def jobs_run(
             'exec 9>"$GPU_LOCK_FILE"\n'
             'echo "waiting for exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
             "_lock_rc=0\n"
-            'if [[ -z "${EMET_GPU_LOCK_TIMEOUT:-}" || "${EMET_GPU_LOCK_TIMEOUT}" == "-1" ]]; then\n'
-            "  flock -x 9 || _lock_rc=$?\n"
-            "else\n"
-            '  flock -w "$EMET_GPU_LOCK_TIMEOUT" 9 || _lock_rc=$?\n'
-            "fi\n"
+            "flock -w " + timeout + " -x 9 || _lock_rc=$?\n"
             'if [[ "$_lock_rc" -ne 0 ]]; then\n'
             '  echo "ERROR: timed out waiting for GPU lock: $GPU_LOCK_FILE" >&2\n'
             '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
@@ -1862,7 +1901,6 @@ def jobs_run(
             "fi\n"
             'export EMET_GPU_LOCK="$GPU_LOCK_FILE"\n'
             'export EMET_GPU_LOCK_FILE="$GPU_LOCK_FILE"\n'
-            "export EMET_GPU_LOCK_HELD=1\n"
             'echo "acquired exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
         )
     cpu_block = ""
@@ -2054,11 +2092,21 @@ def eval_check(need_mib: int | None) -> None:
     default=None,
     help="Minimum free VRAM in MiB (default: NEED_MIB or 12000).",
 )
-def eval_wait(need_mib: int | None) -> None:
+@click.option(
+    "--max-rounds",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum checks (default: GPU_WAIT_MAX_ROUNDS or 120).",
+)
+def eval_wait(need_mib: int | None, max_rounds: int | None) -> None:
     """Wait for consecutive stable free-VRAM reads (``gpu_preflight.sh --wait``)."""
     from emet.utils.gpu_preflight import wait_gpu_stable
 
-    ok = wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True))
+    ok = wait_gpu_stable(
+        need_mib,
+        max_rounds=max_rounds,
+        log=lambda m: click.echo(m, err=True),
+    )
     if not ok:
         click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
         sys.exit(1)
@@ -2170,7 +2218,13 @@ def eval_affinity(as_json: bool, do_apply: bool, pid: int | None, fail_open: boo
     is_flag=True,
     help="Only status+diagnose; do not block on free VRAM.",
 )
-def eval_recover(need_mib: int | None, skip_wait: bool) -> None:
+@click.option(
+    "--max-rounds",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum checks (default: GPU_WAIT_MAX_ROUNDS or 120).",
+)
+def eval_recover(need_mib: int | None, skip_wait: bool, max_rounds: int | None) -> None:
     """One-shot recovery gate after agent death / host reboot / failed HM-EQA job."""
     from emet.eval.harness import affinity_summary_dict
     from emet.utils.gpu_preflight import (
@@ -2193,7 +2247,11 @@ def eval_recover(need_mib: int | None, skip_wait: bool) -> None:
         sys.exit(1)
     if skip_wait:
         return
-    if not wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True)):
+    if not wait_gpu_stable(
+        need_mib,
+        max_rounds=max_rounds,
+        log=lambda m: click.echo(m, err=True),
+    ):
         click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
         sys.exit(1)
     click.echo("recover: GPU ready — next: emet hmeqa resume  (or emet jobs)")
@@ -2751,19 +2809,14 @@ def _hmeqa_launch(
     config_sources: dict[str, str] | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
-    import shlex
-
     from emet.eval.hmeqa_launch import (
         HmeqaRunManifestError,
         build_hmeqa_run_config,
-        hmeqa_h2h_env_parts,
-        hmeqa_h2h_vl_endpoint_from_env_parts,
         load_hmeqa_run_manifest,
         prepare_hmeqa_run_manifest,
     )
 
     root = _project_root()
-    script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
     values = dict(frozen_values)
     arms = str(values["arms"])
     ids = str(values["holdout_ids"])
@@ -2813,22 +2866,7 @@ def _hmeqa_launch(
     except HmeqaRunManifestError as exc:
         raise click.ClickException(str(exc)) from exc
     run_config = manifest["config"]
-    env_parts = hmeqa_h2h_env_parts(
-        arms=arms,
-        ids=ids,
-        coverage_qids=coverage_qids,
-        cooldown=cooldown,
-        crash_policy=crash_policy,
-        streak_abort=streak_abort,
-        agentic_verifier=values["agentic_verifier"],
-        require_verified=values["require_verified"],
-        agentic_router=values["agentic_router"],
-        resume=resume,
-        run_config=run_config,
-        config_sources=config_sources,
-    )
-    vl_ep = hmeqa_h2h_vl_endpoint_from_env_parts(env_parts)
-    inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
+    vl_ep = str(run_config["model"].get("vl_endpoint") or "")
     # Re-enter CLI so jobs run applies mutex/affinity wrapper.
     cmd = [
         sys.executable,
@@ -2847,7 +2885,27 @@ def _hmeqa_launch(
         cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
-    cmd.extend(["--", "bash", "-lc", inner])
+    cmd.extend(
+        [
+            "--",
+            sys.executable,
+            "-m",
+            "emet.eval.hmeqa_launch",
+            "run-child",
+            "--out",
+            str(out),
+            "--resume",
+            str(int(resume)),
+            "--coverage-qids",
+            coverage_qids,
+            "--cooldown",
+            str(int(cooldown)),
+            "--crash-policy",
+            crash_policy,
+            "--streak-abort",
+            str(int(streak_abort)),
+        ]
+    )
     click.echo(
         f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms} "
         f"variant={run_config['variant']['id']} digest={manifest['config_digest']}",
@@ -2863,7 +2921,7 @@ def _hmeqa_launch(
 
 @hmeqa_group.command("h2h", short_help="Launch classic vs agentic H2H via emet jobs")
 @click.argument("out_dir", required=False)
-@click.option("--resume", is_flag=True, help="Skip non-empty per-qid jsonl.")
+@click.option("--resume", is_flag=True, help="Skip hash-validated COMPLETE markers.")
 @click.option("--arms", default="classic,agentic", show_default=True)
 @click.option(
     "--ids",
@@ -3151,8 +3209,6 @@ def hmeqa_overnight(
     Pause with ``emet jobs cancel JOB_ID``. Resume by re-running this command with
     the same ``--base`` (skips ``DONE`` phases; keeps scored per-qid jsonl).
     """
-    import shlex
-
     from emet.eval.harness import DEFAULT_BAL32_IDS, DEFAULT_HOLDOUT8_IDS
     from emet.eval.hmeqa_overnight import run_overnight
 
@@ -3170,9 +3226,12 @@ def hmeqa_overnight(
     ids_h = holdout_ids or os.environ.get("HOLDOUT8_IDS", "").strip() or DEFAULT_HOLDOUT8_IDS
     ids_b = bal32_ids or os.environ.get("BAL32_IDS", "").strip() or DEFAULT_BAL32_IDS
 
-    # Already under a job (shim / outer jobs run) — do not nest.
-    if os.environ.get("EMET_JOB_ID", "").strip():
-        click.echo(f"overnight in-process (EMET_JOB_ID set): BASE={base}", err=True)
+    # Already under a verified live job supervisor — do not nest.
+    from emet.utils.job_registry import validated_current_job_id
+
+    managed_job_id = validated_current_job_id()
+    if managed_job_id:
+        click.echo(f"overnight in-process (managed job {managed_job_id}): BASE={base}", err=True)
         rc = run_overnight(
             base=base,
             holdout_ids=ids_h,
@@ -3241,7 +3300,7 @@ def hmeqa_overnight(
         cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
-    cmd.extend(["--", "bash", "-lc", " ".join(shlex.quote(p) for p in inner_parts)])
+    cmd.extend(["--", *inner_parts])
     click.echo(f"launching overnight via emet jobs: BASE={base}", err=True)
     rc = subprocess.call(cmd, cwd=str(root))
     sys.exit(rc)

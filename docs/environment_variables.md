@@ -76,11 +76,11 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_HMEQA_VARIANT_ID` | `emet hmeqa` / H2H script | Stable A/B label (default `legacy`) written to `run_manifest.json` and inherited by episodes. Also `eqa.variant_id`. |
 | `EMET_HMEQA_USE_HM3D_SEMANTICS` | `emet hmeqa` / H2H script | Frozen GT-oracle axis: use HM3D semantic sensor labels (`1`) or GT-free perception (`0`, default). CLI: `--use-hm3d-semantics` / `--no-hm3d-semantics`. |
 | `EMET_HMEQA_USE_ENRICH_LABELS` | `emet hmeqa` / H2H script | Frozen, independent GT-oracle axis: seed per-question GraphEQA object hints (`1`) or not (`0`, default). CLI: `--enrich-labels` / `--no-enrich-labels`. |
-| `EMET_HMEQA_CONFIG_DIGEST` | `emet hmeqa` / H2H script | Internal deterministic SHA-256 of frozen axes, model, budgets, arms, and question IDs. Resume validates it; do not hand-edit. |
+| `EMET_HMEQA_CONFIG_DIGEST` | `emet hmeqa` / H2H script | Internal deterministic SHA-256 of frozen axes, model, budgets, arms, question IDs, and artifact profile. Resume validates it; do not hand-edit. |
 | `EMET_HMEQA_MANIFEST_PREPARED` | `emet hmeqa` → H2H script | Internal CLI-to-script handoff marker. The script validates the manifest already created or checked by the CLI without changing episode resume semantics, then unsets the marker. |
 | `EMET_HMEQA_RUN_CONFIG_JSON` | `emet hmeqa` → H2H script | Internal canonical frozen-config handoff to the managed job. The script unsets it after validating/writing `run_manifest.json`. |
 | `EMET_HMEQA_RUN_SOURCES_JSON` | `emet hmeqa` → H2H script | Internal map of effective config paths to their source (`command_line`, config/default, or preset). Stored in the first manifest, then unset. |
-| `SKIP_KILL_STALE` | H2H / overnight scripts | Defaults to `1`. Managed jobs must keep it enabled so a live orchestrator never runs stale-process cleanup from inside its host-wide GPU lock; perform preflight before launch instead. |
+| `EMET_HMEQA_ENV_SANITIZED` | H2H internal launcher | Internal recursion guard set only after rebuilding the H2H child environment from the frozen allowlist. Do not set it manually; doing so bypasses the direct-script sanitizing re-exec. |
 | `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT` | `GraphEQAMemory.clear_retracted_nav_claims` | When `1`, keep close-look ABSENT claim blacklists across questions (ledger rows always persist when the ledger is on). Default **off**. Also `eqa.attempt_ledger.persist_absent_claims`. |
 | `EMET_ATTEMPT_LEDGER_MAX` | `GraphEQAMemory` | Cap on stored `AttemptRecord` rows (default `512`). Also `eqa.attempt_ledger.max_records`. |
 | `EMET_EQA_AGENTIC_MCQ_DEBIAS` | `AgenticEQAExecutor` | Default **on**. Unverified forced answers (budget exhaustion) run the letter-free debias (`vote_mcq_letter`: freeform + ≤2 rotation votes) before the ladder, fixing the last-option (D) bias seen in the trace audit. `0` restores the raw EQA letter. Also `eqa.agentic_mcq_debias`. |
@@ -119,14 +119,16 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `NEED_MIB` | `emet eval check/wait`, `scripts/gpu_preflight.sh` | Min free VRAM (MiB) (default `12000`). |
 | `GPU_STABLE_CHECKS` | `emet eval wait` | Consecutive passing free-VRAM reads (default `3`). |
 | `GPU_WAIT_INTERVAL` | `emet eval wait` | Seconds between reads (default `30`). |
+| `GPU_WAIT_MAX_ROUNDS` | `emet eval wait`, `emet eval recover`, `emet jobs run --gpu-wait-max-rounds` | Maximum failed polling rounds (default `120`); timeout returns failure instead of waiting forever. CLI: `--max-rounds` / `--gpu-wait-max-rounds`. |
 | `GPU_SETTLE_SEC` | `emet eval kill-stale` | Sleep after pattern kills (default `15`). |
 | `GPU_KILL_STALE` | `emet_gpu_between_steps` | Set `0` to skip process cleanup between overnight phases. |
 | `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
 | `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
 | `EMET_GPU_LOCK` | `emet jobs run --gpu-exclusive`, direct H2H script | Canonical host-wide `flock` path held for the full exclusive job lifetime (default `~/runs/emet/gpu.lock`; shared with v2/v3 launchers). |
 | `EMET_GPU_LOCK_FILE` | `emet jobs run --gpu-exclusive`, direct H2H script | Compatibility alias for `EMET_GPU_LOCK` when the canonical variable is unset. |
-| `EMET_GPU_LOCK_TIMEOUT` | `emet jobs run --gpu-exclusive` | Lock wait timeout in seconds (default `-1`, wait indefinitely); a timed-out job fails without starting its command. |
-| `EMET_JOB_ID` | smoke/queue scripts | If set by `emet jobs run`, scripts heartbeat via `emet jobs update` (and skip creating a new registry entry). Also write `OUT/progress.json` for ETA even without a job id. |
+| `EMET_GPU_LOCK_FD` | Nested managed H2H internal launcher | Informational descriptor number exported only after FD 9 is verified against the canonical lock inode and lock ownership. Ambient values are not trusted; do not set this manually. |
+| `EMET_GPU_LOCK_TIMEOUT` | `emet jobs run --gpu-exclusive`, direct H2H script | Lock wait timeout in seconds (default `21600`, six hours); a timed-out job fails without starting its command. CLI: `--lock-timeout-sec`. |
+| `EMET_JOB_ID` | smoke/queue scripts | Set by `emet jobs run`; nested H2H preserves it only when the registry record is live and its PID is the current process or an ancestor. Scripts heartbeat the validated job. Also write `OUT/progress.json` for ETA without a job id. |
 | `EGL_FAIL_ABORT` | `scripts/run_hmeqa_agentic_h2h.sh` / `emet hmeqa` | Abort after N consecutive Habitat EGL/CUDA-map failures (`WindowlessContext` / `unable to find CUDA device`). Default `2`; `0` = never. |
 | `NATIVE_CRASH_POLICY` | H2H / `emet hmeqa --crash-policy` | `skip` (default): settle + retry + continue; `abort`: stop batch on first native crash. |
 | `NATIVE_CRASH_ABORT` | H2H (deprecated) | `1` → same as `NATIVE_CRASH_POLICY=abort`. |

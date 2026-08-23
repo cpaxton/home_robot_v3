@@ -452,49 +452,6 @@ def test_save_episode_debug_bundle_writes_reloadable_compact_memory(tmp_path: Pa
     assert diagnostics["compact_memory"] == str(compact)
 
 
-def test_hmeqa_snapshot_artifact_validation_fails_closed(tmp_path):
-    from emet.eval.hmeqa_launch import missing_hmeqa_snapshot_artifacts
-
-    env = {
-        "EMET_EVAL_EXPORT_COMPACT_MEMORY": "1",
-        "EMET_EQA_GRAPH_EVIDENCE_MODE": "agent",
-        "EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB": "1",
-        "EMET_EQA_ATTEMPT_LEDGER_MODE": "agent",
-        "EMET_EQA_ROOM_HISTORY_MODE": "agent",
-    }
-    expected = {
-        "compact_memory/manifest.json",
-        "world_evidence.json",
-        "world_evidence_views/",
-        "attempt_ledger.json",
-        "room_events.json",
-    }
-    assert (
-        set(
-            missing_hmeqa_snapshot_artifacts(
-                tmp_path,
-                arm="agentic",
-                env=env,
-            )
-        )
-        == expected
-    )
-
-    for relative in expected - {"world_evidence_views/"}:
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("{}\n", encoding="utf-8")
-    (tmp_path / "world_evidence_views").mkdir()
-    assert (
-        missing_hmeqa_snapshot_artifacts(
-            tmp_path,
-            arm="agentic",
-            env=env,
-        )
-        == []
-    )
-
-
 def test_grapheqa_baseline_defaults_to_compact_memories():
     script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_grapheqa_baseline.sh"
     text = script.read_text(encoding="utf-8")

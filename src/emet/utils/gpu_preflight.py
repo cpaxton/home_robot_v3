@@ -21,6 +21,7 @@ from pathlib import Path
 DEFAULT_NEED_MIB = 12000
 DEFAULT_STABLE_CHECKS = 3
 DEFAULT_WAIT_INTERVAL_S = 30.0
+DEFAULT_WAIT_MAX_ROUNDS = 120
 DEFAULT_SETTLE_S = 15.0
 
 # Patterns matched against full process command lines (pgrep -f / ps args).
@@ -76,6 +77,13 @@ def env_wait_interval_s(default: float = DEFAULT_WAIT_INTERVAL_S) -> float:
     if not raw:
         return float(default)
     return float(raw)
+
+
+def env_wait_max_rounds(default: int = DEFAULT_WAIT_MAX_ROUNDS) -> int:
+    raw = os.environ.get("GPU_WAIT_MAX_ROUNDS", "").strip()
+    if not raw:
+        return int(default)
+    return max(1, int(raw))
 
 
 def _run_nvidia_smi(args: Sequence[str]) -> str | None:
@@ -457,16 +465,17 @@ def wait_gpu_stable(
     sleep_fn: Callable[[float], None] | None = None,
     max_rounds: int | None = None,
 ) -> bool:
-    """Wait until free VRAM stays >= need for ``stable_checks`` consecutive reads."""
+    """Wait boundedly until free VRAM stays above the requested threshold."""
     need = env_need_mib() if need_mib is None else int(need_mib)
     checks = env_stable_checks() if stable_checks is None else int(stable_checks)
     interval = env_wait_interval_s() if interval_s is None else float(interval_s)
+    round_limit = env_wait_max_rounds() if max_rounds is None else max(0, int(max_rounds))
     _log = log or (lambda m: print(m, flush=True))
     _sleep = sleep_fn or time.sleep
     ok = 0
     rounds = 0
     while ok < checks:
-        if max_rounds is not None and rounds >= max_rounds:
+        if rounds >= round_limit:
             return False
         free = gpu_free_mib()
         if free >= need:

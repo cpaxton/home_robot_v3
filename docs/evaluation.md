@@ -187,14 +187,14 @@ uv run emet jobs cancel JOB_ID
 uv run emet jobs                 # confirm no unmanaged emet-habitat orphans
 uv run emet eval status          # GPU should clear (~no compute apps)
 
-# Resume the full holdout→bal32 ladder (skips DONE phases; RESUME=1 on partial H2H):
+# Resume the full holdout→bal32 ladder (skips only validated JSON DONE phases):
 uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_<stamp> --job-name hmeqa-overnight
 
 # Or resume only the bal-32 / holdout H2H OUT:
 uv run emet hmeqa resume ~/runs/emet/hmeqa_overnight_<stamp>/bal32 --preset paper-router
 ```
 
-Do **not** re-run overnight with a **new** `--base` if you want to keep scored episodes. Mid-episode cancel leaves an empty `*_qN.jsonl`; resume retries those. Prefer `emet jobs cancel` over raw `kill` / `emet eval kill-stale` while a managed job is the thing you want to stop. Details: [cli.md](cli.md#emet-jobs-queued--running-eval-experiments), [cli.md](cli.md#emet-hmeqa-hm-eqa-h2h).
+Do **not** re-run overnight with a **new** `--base` if you want to keep committed episodes. Mid-episode cancel leaves a pending/partial row; resume retries it. Non-empty row files are not completion authority: only hash-validated per-unit `COMPLETE.json` markers count, and `DONE` is validated JSON bound to all expected markers and the aggregate hash. Prefer `emet jobs cancel` over raw `kill` / `emet eval kill-stale` while a managed job is the thing you want to stop. Details: [cli.md](cli.md#emet-jobs-queued--running-eval-experiments), [cli.md](cli.md#emet-hmeqa-hm-eqa-h2h).
 
 `kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 
@@ -202,8 +202,10 @@ Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segmen
 
 `emet jobs run` defaults `--gpu-exclusive` on when `--need-mib` is supplied or the
 command/name looks like a GPU experiment, and holds the canonical
-`EMET_GPU_LOCK` (`~/runs/emet/gpu.lock`) until the command exits. This closes simultaneous managed
-launches across sibling checkouts; do not opt out with `--no-gpu-exclusive` for
+`EMET_GPU_LOCK` (`~/runs/emet/gpu.lock`) until the command exits. `flock` is the
+serialization authority: exclusive launches do not implicitly wait on active GPU
+PIDs, while explicit `--wait-pid`, lock, and GPU polling waits are finite. This
+closes simultaneous managed launches across sibling checkouts; do not opt out with `--no-gpu-exclusive` for
 Habitat/VLM/MuJoCo work.
 
 **Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and deep eval on **separate nights** (see below).

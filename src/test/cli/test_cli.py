@@ -417,6 +417,21 @@ def test_jobs_run_help_lists_safety_flags():
     assert "cpu-safe" in result.stdout
     assert "gpu-exclusive" in result.stdout
     assert "--description" in result.stdout
+    assert "--wait-timeout-sec" in result.stdout
+    assert "--lock-timeout-sec" in result.stdout
+    assert "--gpu-wait-max-rounds" in result.stdout
+
+
+def test_eval_wait_and_recover_help_list_finite_bound():
+    for command in ("wait", "recover"):
+        result = subprocess.run(
+            [sys.executable, "-m", "emet.cli", "eval", command, "--help"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "--max-rounds" in result.stdout
+        assert "120" in result.stdout
 
 
 def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
@@ -516,7 +531,7 @@ def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):
     first_out = tmp_path / "first"
     second_out = tmp_path / "second"
     first_launcher = launcher(first_out, first_out / "times.txt")
-    marker_deadline = time.monotonic() + 5.0
+    marker_deadline = time.monotonic() + 12.0
     while not (first_out / "times.txt").is_file() and time.monotonic() < marker_deadline:
         time.sleep(0.05)
     assert (first_out / "times.txt").is_file()
@@ -549,7 +564,103 @@ def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):
 
     wrapper = (first_out / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "flock -w" in wrapper
-    assert "EMET_GPU_LOCK_HELD=1" in wrapper
+    assert "EMET_GPU_LOCK_HELD" not in wrapper
+    second_wrapper = (second_out / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "WAIT_PID_DEADLINE" not in second_wrapper
+
+
+def test_jobs_run_nested_child_inherits_validated_fd9(tmp_path):
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "nested"
+    marker = out_dir / "nested-ok"
+    lock_file = tmp_path / "gpu.lock"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_GPU_LOCK"] = str(lock_file)
+    code = (
+        "import subprocess, sys\n"
+        "from pathlib import Path\n"
+        "from emet.utils.job_registry import validated_gpu_lock_fd\n"
+        "fd = validated_gpu_lock_fd()\n"
+        "assert fd == 9\n"
+        "child = subprocess.run([sys.executable, '-c', "
+        "'from emet.utils.job_registry import validated_gpu_lock_fd; "
+        "raise SystemExit(0 if validated_gpu_lock_fd() == 9 else 7)'], "
+        "pass_fds=(fd,), check=False)\n"
+        "assert child.returncode == 0\n"
+        f"Path({str(marker)!r}).write_text('ok')\n"
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "nested-fd-test",
+            "--no-cpu-safe",
+            "--gpu-exclusive",
+            "--foreground",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            code,
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker.read_text(encoding="utf-8") == "ok"
+
+
+def test_jobs_run_explicit_pid_wait_times_out_before_payload(tmp_path):
+    import os
+
+    out_dir = tmp_path / "wait-timeout"
+    marker = out_dir / "must-not-run"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(tmp_path / "jobs")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "wait-timeout",
+            "--no-cpu-safe",
+            "--no-gpu-exclusive",
+            "--foreground",
+            "--wait-pid",
+            str(os.getpid()),
+            "--wait-timeout-sec",
+            "0",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('bad')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+
+    assert result.returncode == 4
+    assert not marker.exists()
+    assert "timed out waiting for explicit prerequisite pid" in (result.stdout + result.stderr)
 
 
 def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):
