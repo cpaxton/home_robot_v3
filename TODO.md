@@ -38,10 +38,13 @@ Failure modes:
       collapse (missed-merge guard); (3) `countable_instance` + `identity_key` so only
       instance-level evidence counts; (4) `GRAPH_COUNT` protected from prompt-budget
       truncation; (5) corroborated retract uses `has_absent_retraction_at_other_view`.
-      **Validation:** Aug 23 post-fix slice still 6/15 (40%) — GRAPH_COUNT never fired
-      (`use_instance_graph: false` + label-only VLM nodes). **Next:** enable instance graph
-      for `habitat_eqa`, spatial count dedup, bedside-table aliases, `--no-hm3d-semantics`
-      on count/clock runner; re-run queued as `countclock-instance-v3`.
+      **Validation:** Aug 23 count/clock slices (`run_hmeqa_countclock_slice.sh`, `RESUME=0`,
+      `--no-hm3d-semantics`): v2 **6/15 (40%)**, broken v3 **3/15** (cli syntax at tail),
+      post-merge **`2f4b4d4f` 7/15 (47%)** — best so far (+q43/q86/q93, −q60/q78 vs Aug 22).
+      Count subset flat **4/10**; clock **3/5**. **GRAPH_COUNT still inert** — harness
+      `use_instance_graph: true` is not enough: Habitat `manipulation_only: true` forces
+      `detection_model=None` in `controller_dynamem.py`, so YoloE never loads. **Next code
+      fix before another slice:** load instance detector when `use_instance_graph` on Habitat.
 - [x] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
       stripped labels **only at that one `obs_id`**, so a closer look that disproved a
       node left it stale (count inflation + location confusion). Fixed in two steps:
@@ -61,17 +64,13 @@ runs were concurrent-experiment freezes, now guarded):**
 - **count/clock slice — prior** (v3, pre count-hint v2): Aug 22 resume completed **6/15
   (40%)** (`countclock_20260819_022802_dynagraph_qwen3_vl.jsonl`) — OK q21/q28/q47/q60/
   q78/q88; ERR q12/q32/q33/q43/q48/q51/q84/q86/q93.
-- **count/clock slice — post count-hint v2** (v2, `2f9983af`): **6/15 (40%)** — same as
-  pre-fix; GRAPH_COUNT inert (no `countable_instance` on Habitat path). OUT
-  `~/runs/emet/hmeqa_countclock/20260823_082321/`.
-- **count/clock slice — instance graph + aliases** (v2, pending): `use_instance_graph:
-  true` for `habitat_eqa`, `--no-hm3d-semantics`, spatial count dedup; job
-  `countclock-instance-v3`.
-- **gre-q11 location probes** (v4 `feature/graph-room-evidence`, PR #115): q11
-  (trash-can location, gold D) still **0/1** across variants — `semantic` (pred A),
-  `invalid-obs-redirect` (pred B), `semantic-routerid` (pred A); `navredirect` crashed.
-  Location lever unsolved; next probe should target option-landmark distance matching,
-  not routing.
+- **count/clock slice — post-merge** (`2f4b4d4f`, job `20260823_100431_f5a6dc`): **7/15 (47%)**
+  OUT `~/runs/emet/hmeqa_countclock/20260823_100542/` — OK q21/q28/q43/q47/q86/q88/q93.
+  GRAPH_COUNT not observed in bundles; gains are exploration/VLM variance, not count hint.
+- **count/clock slice — instance graph (broken wrapper)** (`0f8fb443`): **3/15 (20%)** —
+  episodes completed but job failed on post-merge `cli.py` syntax; ignore as primary signal.
+- **gre-q11 location probes** (now on **main** via #115; was v4): see grounded graph section
+  below. Location lever still separate from count tuning on this PR.
 
 **Concurrency freeze guard (2026-08-22):** the two freezes (Aug 19 + Aug 22 `cc-singleview-resume`)
 were concurrent GPU experiments. The `cc-singleview-resume` wrapper had `eval wait` but no
@@ -361,15 +360,15 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 
 ### Active PRs (2026-08-19)
 
-- **#124** `feat/hmeqa-graph-tuning` → `fix/no-gt-semantics` (this branch): graph tuning
-  (count hint + retraction). MERGEABLE, no review. **Actions**: rebase onto main (#123
-  merged); PR body is stale — still describes `strip_across_obs=True` default while HEAD
-  is corroborated-only.
+- **#124** `feat/hmeqa-graph-tuning` → `main`: graph tuning (corroborated retract, count
+  hint v2, instance-graph harness, count/clock runner). **Merged main (#115)** at
+  `2f4b4d4f`. Count/clock best **7/15 (47%)** on merge rerun; GRAPH_COUNT blocked on
+  `manipulation_only` → no YoloE. **Next:** wire instance detector for Habitat, then
+  re-slice.
 - **#120** `feat/tamp-floor-experiments` → `main`: RoboCasa floor pick/place + SigLIP-aware
-  VLM assess + **count/clock slice runner** (close-look crop → VLM-assess 2nd image,
-  MULTIVIEW consensus). MERGEABLE. Unblocks count/clock validation.
-- **#115** `feature/graph-room-evidence` → `main`: graph room timeline + agentic state card
-  + the gre-q11 location probes. **CONFLICTING** — rebase on main.
+  VLM assess + count/clock slice runner (now also in v2 `scripts/`). MERGEABLE.
+- **#115** → **merged to main** (`9a77be37`): grounded graph room-evidence / auditable
+  manifests. Location work continues on main, not this PR.
 - **#46** `feature/stretch-robocasa-robosuite` → `main`: DRAFT, unrelated (Stretch
   RoboCasa/Robosuite port).
 
