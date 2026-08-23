@@ -52,11 +52,20 @@ _HMEQA_MCQ_EXAMPLE = """
                 B) Between TV and living room sofas
                 C) Next to the dining table
                 D) Next to the living room armchairs
-                CONFIRMED_MEMORY: woven basket: PRESENT — 1 graph node(s) at (-6.5, 3.6)
+                CONFIRMED_MEMORY: woven basket: PRESENT — graph nodes: woven basket [Image 2] at (-6.5, 3.6); list length is not a count; verify in attached images
                 SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
                 IMAGE: <2 RGB frames>
             Output:
-                {"reasoning": "CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "Graph memory confirms the basket near the armchairs."}
+                {"reasoning": "Image 2 shows the basket next to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "The basket is visible next to the armchairs in Image 2."}
+
+        Example (count — count from images; detector class names are not the answer):
+            Input:
+                Question: How many table lamps are there in the bedroom?
+                A) Three B) Four C) One D) Two
+                CONFIRMED_MEMORY: table lamps: PRESENT — graph nodes: [Image 3] at (4.8, 5.1); [Image 4] at (3.1, 5.0); list length is not a count; verify in attached images
+                IMAGE: <2 RGB frames of bedside lamps>
+            Output:
+                {"reasoning": "Images 3 and 4 each show one bedside lamp.", "answer": "Two", "confidence": true, "action": "", "confidence_reasoning": "Two close views of table lamps, not furniture."}
 """
 
 _HMEQA_FORMAT_OVERRIDE = """

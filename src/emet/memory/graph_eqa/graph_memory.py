@@ -434,10 +434,10 @@ def _count_word_matches(target: str, label: str) -> bool:
 
 
 def _collapse_count_nodes_spatially(
-    nodes: list["GraphNode"],
+    nodes: list[GraphNode],
     *,
     min_xy_m: float = 0.65,
-) -> list["GraphNode"]:
+) -> list[GraphNode]:
     """Collapse duplicate instance nodes that missed graph merge (same label, nearby XY)."""
     if len(nodes) <= 1 or min_xy_m <= 0.0:
         return list(nodes)
@@ -543,6 +543,41 @@ def countable_primary_label_matches(obj: str, node: GraphNode) -> bool:
     if not labels:
         return False
     return label_matches_relevant_object(obj, labels[0])
+
+
+def node_display_name(node: GraphNode, *, max_len: int = 120) -> str:
+    """Close-look Qwen name when present; otherwise detector / VLM labels."""
+    looked = str(getattr(node, "close_look_label", None) or "").strip()
+    if looked:
+        return looked if len(looked) <= max_len else looked[: max_len - 3] + "..."
+    labels = [str(lab).strip() for lab in (getattr(node, "labels", None) or []) if str(lab).strip()]
+    if getattr(node, "is_viewpoint", False):
+        s = ", ".join(labels) if labels else "view"
+    elif getattr(node, "is_frontier", False):
+        s = ", ".join(labels) if labels else "frontier"
+    else:
+        s = ", ".join(labels) if labels else "object"
+    return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
+
+def format_graph_node_candidates(nodes: list[GraphNode], *, max_nodes: int = 6) -> str:
+    """Point at views; use a close-look Qwen label when we have one, never YoloE vocab."""
+    bits: list[str] = []
+    for node in nodes[:max_nodes]:
+        xyz = np.asarray(node.xyz, dtype=np.float64).reshape(-1)
+        loc = f"[Image {int(node.obs_id)}] at ({float(xyz[0]):.1f}, {float(xyz[1]):.1f})"
+        looked = str(getattr(node, "close_look_label", None) or "").strip()
+        if looked:
+            bits.append(f"{looked} {loc}")
+        else:
+            bits.append(loc)
+    suffix = " …" if len(nodes) > max_nodes else ""
+    return "; ".join(bits) + suffix
+
+
+_GRAPH_CANDIDATE_COUNT_DISCLAIMER = (
+    "list length is not a count; verify in attached images"
+)
 
 
 def _location_mcq_weak_tokens() -> frozenset[str]:
@@ -768,6 +803,8 @@ class GraphNode:
     # True only when this node came from instance-level evidence. Label-only
     # frame summaries are not safe inputs for exact count hints.
     countable_instance: bool = False
+    # Qwen caption after a close look / vlm_assess. Preferred over detector class names.
+    close_look_label: str | None = None
     change_events: list[dict[str, Any]] = field(default_factory=list)
     expected_absence_count: int = 0
     last_absence_step: int = -1
@@ -1060,6 +1097,34 @@ class GraphEQAMemory:
     def attempt_summary_for_obs(self, obs_id: int, *, max_bits: int = 4) -> str:
         """Newest-first compact attempt tags for place cards / diagnostics."""
         return summary_bits_for_obs(self._attempt_records, int(obs_id), max_bits=max_bits)
+
+    def record_close_look_label(self, obs_id: int, label: str) -> None:
+        """Store a Qwen close-look / vlm_assess name on graph nodes for this view.
+
+        Tags object nodes whose candidate image is ``obs_id``, and objects linked
+        ``seen_from`` a viewpoint with that observation id (fusion may have moved
+        the node's own ``obs_id`` to an earlier frame).
+        """
+        text = str(label or "").strip()
+        if not text:
+            return
+        oid = int(obs_id)
+        clipped = text[:80]
+        vp_ids = {
+            int(node.node_id)
+            for node in self._nodes
+            if node.is_viewpoint and int(node.obs_id) == oid
+        }
+        seen_from_ids: set[int] = set()
+        for src, dst, rel in self._edges:
+            if rel == "seen_from" and int(dst) in vp_ids:
+                seen_from_ids.add(int(src))
+        for idx, node in enumerate(self._nodes):
+            if node.is_frontier or node.is_viewpoint:
+                continue
+            if int(node.obs_id) != oid and int(node.node_id) not in seen_from_ids:
+                continue
+            self._nodes[idx] = replace(node, close_look_label=clipped)
 
     def set_graph_timestep(self, step: int) -> None:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
@@ -1702,6 +1767,7 @@ class GraphEQAMemory:
                         else existing.identity_key or identity_key_norm
                     ),
                     countable_instance=bool(existing.countable_instance or countable_instance),
+                    close_look_label=existing.close_look_label,
                 )
                 # Keep the graph node's candidate image in sync with this revisit.
                 self.refresh_observation_candidate(
@@ -1882,6 +1948,7 @@ class GraphEQAMemory:
                     belief_confidence=belief_confidence,
                     identity_key=identity_key_norm or existing.identity_key,
                     countable_instance=bool(existing.countable_instance or countable_instance),
+                    close_look_label=existing.close_look_label,
                 )
                 self.refresh_observation_candidate(
                     int(existing.obs_id),
@@ -2000,6 +2067,7 @@ class GraphEQAMemory:
             belief_confidence=belief_confidence,
             identity_key=dst.identity_key or src.identity_key,
             countable_instance=bool(dst.countable_instance or src.countable_instance),
+            close_look_label=dst.close_look_label or src.close_look_label,
         )
         for o in self._observations:
             if int(o.obs_id) == int(dst.obs_id):
@@ -3298,9 +3366,8 @@ class GraphEQAMemory:
         """
         lines = []
 
-        def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
-            s = ", ".join(labels) if labels else "object"
-            return s if len(s) <= max_len else s[: max_len - 3] + "..."
+        def _prompt_labels(node: GraphNode, max_len: int = 120) -> str:
+            return node_display_name(node, max_len=max_len)
 
         if max_object_nodes is not None and max_object_nodes > 0 and self._spatial_rag_enabled():
             from emet.memory.graph_eqa.spatial_rag import (
@@ -3406,7 +3473,7 @@ class GraphEQAMemory:
                             if neighbors:
                                 near_bits = []
                                 for n, dist in neighbors:
-                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    lab = node_display_name(n)
                                     near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                                 nearest_by_phrase[phrase] = (
                                     int(kept[0]),
@@ -3419,9 +3486,11 @@ class GraphEQAMemory:
                         matches_nodes = sorted(
                             (n for n in self._nodes if int(n.node_id) in set(ids)),
                             key=lambda n: int(n.node_id),
-                        )[:4]
-                        positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches_nodes)
-                        parts = [f"{len(ids)} graph node(s) at {positions}"]
+                        )
+                        parts = [
+                            "graph nodes: " + format_graph_node_candidates(matches_nodes, max_nodes=4),
+                            _GRAPH_CANDIDATE_COUNT_DISCLAIMER,
+                        ]
                         anchor = matches_nodes[0] if matches_nodes else None
                         if anchor is not None:
                             neighbors = self._nearest_object_neighbors(
@@ -3433,7 +3502,7 @@ class GraphEQAMemory:
                             if neighbors:
                                 near_bits = []
                                 for n, dist in neighbors:
-                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    lab = node_display_name(n)
                                     near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                                 parts.append("nearest: " + "; ".join(near_bits))
                         tail_lines.append(
@@ -3458,7 +3527,7 @@ class GraphEQAMemory:
                     tail_lines.append(f"- {phrase}: not observed during exploration")
 
         for n in nodes_for_prompt:
-            lbl = _prompt_labels(n.labels)
+            lbl = _prompt_labels(n)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
             if n.is_frontier:
                 kind = "Frontier"
@@ -3550,7 +3619,7 @@ class GraphEQAMemory:
         def visit(node: GraphNode, depth: int) -> None:
             pref = indent * (depth + 1)
             x, y, z = float(node.xyz[0]), float(node.xyz[1]), float(node.xyz[2])
-            lbl = ", ".join(node.labels) if node.labels else "object"
+            lbl = node_display_name(node)
             line = f"{pref}[{node.node_id}] {lbl}  at ({x:.2f}, {y:.2f}, {z:.2f})"
             if node.description:
                 d = node.description
@@ -4520,11 +4589,17 @@ class GraphEQAMemory:
         lines: list[str] = []
         for obj in self._confirmed_memory_phrases():
             matches = [n for n in object_nodes if countable_primary_label_matches(obj, n)]
+            if not matches:
+                matches = [
+                    n
+                    for n in object_nodes
+                    if any(label_matches_relevant_object(obj, lab) for lab in (n.labels or []))
+                ]
             sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
-                positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches[:4])
-                parts.append(f"{len(matches)} graph node(s) at {positions}")
+                parts.append("graph nodes: " + format_graph_node_candidates(matches, max_nodes=6))
+                parts.append(_GRAPH_CANDIDATE_COUNT_DISCLAIMER)
             sig_present = sig is not None and float(sig[0]) >= present_thresh
             if sig is not None:
                 sim, xyz = float(sig[0]), sig[1]
@@ -4563,7 +4638,7 @@ class GraphEQAMemory:
                 if neighbors:
                     near_bits = []
                     for n, dist in neighbors:
-                        lab = ", ".join(n.labels) if n.labels else "object"
+                        lab = node_display_name(n)
                         near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                     parts.append("nearest: " + "; ".join(near_bits))
             # Compact attempt-ledger tags for matched obs ids (opt-in; empty when off).
@@ -4583,9 +4658,11 @@ class GraphEQAMemory:
             return ""
         header = (
             "CONFIRMED_MEMORY (PRESENT = graph-grounded only; CANDIDATE/weak SigLIP are "
-            "navigation hints — not presence or absence; if images contradict memory, "
-            "trust the images and keep exploring; for location MCQs, prefer option "
-            "landmarks visible in Image 1 over nearest-furniture guesses):"
+            "navigation hints — not presence or absence; listed graph nodes are views "
+            "[Image N], with a close-look Qwen name only when one exists — not detector "
+            "class names and not an exact count; if images contradict memory, trust the "
+            "images and keep exploring; for location MCQs, prefer option landmarks "
+            "visible in Image 1 over nearest-furniture guesses):"
         )
         return header + "\n" + "\n".join(lines)
 
@@ -5621,7 +5698,7 @@ class GraphEQAMemory:
         return None
 
     def _graph_count_hint(self, question: str) -> str:
-        """Return an exact count hint only from stable instance evidence."""
+        """List instance candidates for count MCQs; never assert an exact integer."""
         try:
             from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
 
@@ -5686,12 +5763,11 @@ class GraphEQAMemory:
             key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
             unique.setdefault(key, node)
         matches = _collapse_count_nodes_spatially(list(unique.values()))
+        labeled = format_graph_node_candidates(matches, max_nodes=6)
         return (
-            f"GRAPH_COUNT: {len(matches)} distinct object node(s) in the scene graph "
-            f"match '{target.phrase}' (labels: {', '.join(str(node.labels[0]) for node in matches[:4])}"
-            f"{' …' if len(matches) > 4 else ''});{scope_note} answer the count from the graph, "
-            "not a single image. Graph nodes are grounded; count only nodes with the "
-            "target label."
+            f"GRAPH_COUNT: candidate views for '{target.phrase}' "
+            f"(close-look Qwen names when available, otherwise Image ids; not an exact count): {labeled}."
+            f"{scope_note} Count from attached images; do not use this list length as the answer."
         )
 
     def query_answer(

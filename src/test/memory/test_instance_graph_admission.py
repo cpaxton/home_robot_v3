@@ -138,3 +138,84 @@ def test_countable_primary_label_matches_ignores_secondary_labels():
     node = [n for n in mem.get_nodes() if not n.is_viewpoint][0]
     assert countable_primary_label_matches("table lamp", node) is False
     assert countable_primary_label_matches("bathroom stall", node) is True
+
+
+def test_confirmed_memory_lists_views_without_detector_class_names():
+    """q86: do not advertise YoloE 'lamp'/'table' strings or a memory integer."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb, np.array([4.82, 5.08, 2.46]), ["lamp"], countable_instance=True, identity_key="lamp:1"
+    )
+    mem.add_observation(
+        rgb, np.array([3.09, 5.02, 1.03]), ["lamp"], countable_instance=True, identity_key="lamp:2"
+    )
+    mem.add_observation(
+        rgb, np.array([4.68, 2.90, -0.11]), ["table"], countable_instance=True, identity_key="table:1"
+    )
+    mem.add_observation(
+        rgb, np.array([5.80, 2.91, -0.12]), ["table"], countable_instance=True, identity_key="table:2"
+    )
+    mem._relevant_objects = ["table lamps"]
+    mem._relevant_phrases = ["table lamps"]
+    summary = mem._relevant_memory_summary()
+    assert "[Image 1] at (4.8, 5.1)" in summary
+    assert "[Image 2] at (3.1, 5.0)" in summary
+    assert "lamp at" not in summary.split("nearest:")[0]
+    assert "table at" not in summary.split("nearest:")[0]
+    assert "4 graph node(s)" not in summary
+    assert "list length is not a count" in summary
+    mem.record_close_look_label(1, "table lamp")
+    looked = mem._relevant_memory_summary()
+    assert "table lamp [Image 1] at (4.8, 5.1)" in looked
+    q = "How many table lamps are there in the bedroom? A) Three B) Four C) One D) Two. Answer:"
+    hint = mem._graph_count_hint(q)
+    assert "GRAPH_COUNT: 4" not in hint
+    if hint:
+        assert "not an exact count" in hint
+        assert "do not use this list length as the answer" in hint
+
+
+def test_scene_graph_uses_close_look_label():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["lamp"], countable_instance=True)
+    mem.record_close_look_label(1, "table lamp")
+    graph = mem.to_string()
+    assert "table lamp" in graph
+    from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty
+
+    pretty = format_scene_graph_pretty(mem)
+    assert "table lamp" in pretty
+    from emet.visualization.rerun import graph_node_primary_label
+
+    obj = next(n for n in mem.get_nodes() if not n.is_viewpoint and not n.is_frontier)
+    assert graph_node_primary_label(obj) == "table lamp"
+
+
+def test_close_look_label_tags_seen_from_object():
+    """Fusion may keep an earlier obs_id; close look still stamps the seen object."""
+    from emet.memory.graph_eqa.graph_memory import GraphNode
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 0.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        viewer_xyz=np.array([0.0, 0.0, 0.0]),
+    )
+    obj = next(n for n in mem.get_nodes() if not n.is_viewpoint and not n.is_frontier)
+    vp = GraphNode(
+        node_id=max(int(n.node_id) for n in mem.get_nodes()) + 1,
+        labels=["view img 9"],
+        xyz=np.array([0.2, 0.0, 0.0]),
+        obs_id=9,
+        is_viewpoint=True,
+    )
+    mem._nodes.append(vp)
+    mem._edges.append((int(obj.node_id), int(vp.node_id), "seen_from"))
+    mem.record_close_look_label(9, "bedside lamp")
+    stamped = next(n for n in mem.get_nodes() if int(n.node_id) == int(obj.node_id))
+    assert stamped.close_look_label == "bedside lamp"

@@ -295,7 +295,9 @@ def test_build_eqa_prompt_text_preserves_graph_count_after_merged_tail_trim():
         "CONFIRMED_MEMORY (present):\n"
         + "\n".join(f"- remembered fact {i} " + ("x" * 80) for i in range(8))
         + "\nRooms: unknown\n"
-        "GRAPH_COUNT: 1 distinct object node(s) in the scene graph match 'umbrellas'"
+        "GRAPH_COUNT: candidate views for 'umbrellas' "
+        "(close-look Qwen names when available, otherwise Image ids; not an exact count): "
+        "[Image 1] at (0.0, 0.0)."
     )
     parts = GraphEQAMemory.build_eqa_prompt_text(
         question_line="Question: How many umbrellas?",
@@ -304,7 +306,8 @@ def test_build_eqa_prompt_text_preserves_graph_count_after_merged_tail_trim():
         max_tokens=80,
     )
     joined = "\n".join(parts)
-    assert "GRAPH_COUNT: 1" in joined
+    assert "GRAPH_COUNT:" in joined
+    assert "GRAPH_COUNT: 1" not in joined
     assert GraphEQAMemory.estimate_eqa_prompt_tokens(joined) <= 80
 
 

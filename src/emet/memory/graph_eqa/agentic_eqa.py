@@ -3549,6 +3549,14 @@ class AgenticEQAExecutor:
             "close_look": bool(close_look_crop is not None),
             "close_look_views": close_look_views,
         }
+        if (
+            gm is not None
+            and bool(assessment.present)
+            and hasattr(gm, "record_close_look_label")
+        ):
+            looked = str(phrase or self._target_phrase or "").strip()
+            if looked:
+                gm.record_close_look_label(oid, looked)
         _logger.info(
             "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s close_look_views=%d",
             oid,
