@@ -320,6 +320,11 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 
 Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs/plans/2026-08-22_tamp_agent_tools.md).
 
+**Merge posture (PR #120):** safe to land — CHAT/TAMP infrastructure is additive;
+paper HM-EQA / OVMM-find defaults unchanged. Routine acceptance is the fast
+**`PROFILE=smoke`** gate (~1–2 min). OVMM floor perf and Stretch agentic sweeps
+are explicit follow-up (`PROFILE=full`, `eval_tamp_floor.py`).
+
 - [x] Keep semantic CHAT task references separate from private simulator
       `*_gt_body` grounding; select and retain the actual receptacle.
 - [x] Expose plan-first `plan_pick_place` and
@@ -336,10 +341,29 @@ Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs
 - [x] **MolmoSpaces CHAT `scene_tasks` smoke** (manual, teleport): job
       `20260823_003208_1379d8`, `object_filter=bowl` → `task:1` pick bowl,
       displacement 2.21 m.
-- [ ] **Managed gate green** (`scripts/run_tamp_agent_tools_gate.sh` via
-      `emet jobs` or `./scripts/schedule_tamp_agent_tools_gate.sh`): MolmoSpaces
-      **kinematic** CHAT item + RoboCasa floor suite. CHAT `scene_tasks` teleport
-      and Stretch control are green manually; gate quoting bug fixed 2026-08-23.
+- [x] **Managed smoke gate green** (`PROFILE=smoke`, default): rby1 CHAT
+      `scene_tasks` → plan → execute through live tools + kinematic base snap.
+      Job `20260823_152854_4c7766`: 81 s sim, displacement 2.21 m, placement
+      error 0.02 m. Gate quoting bug fixed 2026-08-23 (`run_item` uses `"$@"`).
+
+### Next (OVMM perf / coverage — not blocking merge)
+
+- [ ] **`PROFILE=full` gate once** (`chat kinematic stretch floor`, ~1–2 h):
+      `./scripts/run_tamp_agent_tools_gate.sh` with `PROFILE=full` via `emet jobs`.
+      Stretch agentic head sweeps and the 4-episode RoboCasa floor matrix belong
+      here, not in routine smoke.
+- [ ] **OVMM floor smoke** (`eval_tamp_floor.py --smoke`): single rby1 MCTS
+      dynagraph episode (~5–8 min). Use when changing agentic find / SigLIP /
+      floor scoring — not the default PR gate.
+- [ ] **Dynagraph floor find quality**: Stretch head sweeps dominate wall time
+      (15–45 s/sweep vs ~1–2 s on rby1). For routine agent tests prefer rby1 +
+      `EMET_SIM_NAV_TELEPORT=1`; improve OVMM explore/verify separately.
+- [ ] **rby1 MCTS place flake**: kinematic pick succeeds but place attach/release
+      can fail (partial 0.75 in floor runs). Teleport refs score 1.0 — gap is
+      arm place, not find/pick.
+- [ ] **SigLIP floor validate rerun** (optional): `eval_tamp_floor.py --backend
+      dynagraph` GPU-exclusive; compare find/partial vs pre-fix table (see DeWorldSG
+      section below).
 
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
@@ -353,8 +377,8 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 ### Real tests (not yet green on every machine)
 - [x] **MolmoSpaces ithor + rby1 CHAT tool chain** (`scene_tasks` → plan → execute,
       teleport): green 2026-08-23 (`20260823_003208_1379d8`).
-- [ ] **MolmoSpaces ithor + rby1 kinematic** CHAT `plan_pick_place` item in the
-      managed gate (direct kinematic executor path; distinct from teleport CHAT).
+- [x] **MolmoSpaces ithor + rby1 kinematic** CHAT `scene_tasks` → plan → execute
+      in managed smoke gate (`PROFILE=smoke`): green 2026-08-23 (`20260823_152854_4c7766`).
 - [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
 - [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
 - [x] **Stretch teleport** CHAT plan/execute (`default_table_stretch.yaml`): green
