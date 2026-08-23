@@ -120,9 +120,7 @@ class DynamemTaskExecutor:
         self._manip_collision = resolve_agent_manip_collision(config_mode=self._manip_collision)
         self._manip_planner = resolve_agent_manip_planner(config_mode=self._manip_planner)
         self.memory_backend = normalize_memory_backend(memory_backend)
-        self.embodied_agent = coerce_embodied_agent_for_memory_backend(
-            embodied_agent, self.memory_backend
-        )
+        self.embodied_agent = coerce_embodied_agent_for_memory_backend(embodied_agent, self.memory_backend)
         # If there is no GPU, we have to use CPU
         if not torch.cuda.is_available():
             print("Setting up to use CPU as there is no GPU!")

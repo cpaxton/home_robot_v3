@@ -103,11 +103,7 @@ def _score_detector(
 ) -> list[dict[str, Any]]:
     import torch
 
-    detector = (
-        OwlV2PresenceDetector(device=device)
-        if backend == "owlv2"
-        else YoloEPresenceDetector(device=device)
-    )
+    detector = OwlV2PresenceDetector(device=device) if backend == "owlv2" else YoloEPresenceDetector(device=device)
     output: list[dict[str, Any]] = []
     for row in rows:
         rgb = _load_rgb(row["rgb_path"])

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Compare fixed VLM sweep runs vs paper baseline and pre-fix sweep."""
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ def main() -> int:
     qslice = range(args.q_start, args.q_end + 1)
     base = load_jsonl(out_dir / "graph_eqa_gemma3_paper_q0-112.jsonl")
     bc, bn = acc(base, qslice)
-    print(f"Paper baseline Q{args.q_start}-{args.q_end}: {bc}/{bn} ({100*bc/bn:.1f}%)\n")
+    print(f"Paper baseline Q{args.q_start}-{args.q_end}: {bc}/{bn} ({100 * bc / bn:.1f}%)\n")
     print(f"{'slug':<16} {'pre-fix':>10} {'fixed':>10} {'model':<30}")
     print("-" * 72)
     for slug in SLUGS:

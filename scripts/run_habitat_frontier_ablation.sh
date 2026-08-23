@@ -27,34 +27,34 @@ MAX_MOVEMENT="${MAX_MOVEMENT:-10}"
 ARM="${ARM:-all}"
 
 run_arm() {
-  local tag="$1"
-  shift
-  local jsonl="${OUT}/ablation_${tag}_${FAMILY}_q${QSTART}-${QEND}.jsonl"
-  local log="${OUT}/ablation_${tag}_${FAMILY}_q${QSTART}-${QEND}.log"
-  echo "=== ablation arm: ${tag} ==="
-  echo "  output: ${jsonl}"
-  "$HAB" run-batch \
-    --method "$METHOD" \
-    --question-start "$QSTART" \
-    --question-end "$QEND" \
-    --paper-subset \
-    --max-planning-steps "$MAX_PLANNING" \
-    --max-movement-step "$MAX_MOVEMENT" \
-    --eqa-vl-family "$FAMILY" \
-    --eqa-hf-model-id "$HF_ID" \
-    --device cuda \
-    --resume \
-    --output "$jsonl" \
-    "$@" \
-    2>&1 | tee "$log"
+    local tag="$1"
+    shift
+    local jsonl="${OUT}/ablation_${tag}_${FAMILY}_q${QSTART}-${QEND}.jsonl"
+    local log="${OUT}/ablation_${tag}_${FAMILY}_q${QSTART}-${QEND}.log"
+    echo "=== ablation arm: ${tag} ==="
+    echo "  output: ${jsonl}"
+    "$HAB" run-batch \
+        --method "$METHOD" \
+        --question-start "$QSTART" \
+        --question-end "$QEND" \
+        --paper-subset \
+        --max-planning-steps "$MAX_PLANNING" \
+        --max-movement-step "$MAX_MOVEMENT" \
+        --eqa-vl-family "$FAMILY" \
+        --eqa-hf-model-id "$HF_ID" \
+        --device cuda \
+        --resume \
+        --output "$jsonl" \
+        "$@" \
+        2>&1 | tee "$log"
 }
 
 maybe_run() {
-  local name="$1"
-  shift
-  if [[ "$ARM" == "all" || "$ARM" == "$name" ]]; then
-    run_arm "$name" "$@"
-  fi
+    local name="$1"
+    shift
+    if [[ "$ARM" == "all" || "$ARM" == "$name" ]]; then
+        run_arm "$name" "$@"
+    fi
 }
 
 maybe_run "fluid" --no-frontier-nodes --frontier-keyword-weight 0

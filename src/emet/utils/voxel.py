@@ -328,9 +328,7 @@ class VoxelizedPointcloud:
             else:
                 depth_is_valid = depth_is_valid.detach().cpu().bool()
             if depth_is_valid.shape != depth.shape:
-                raise ValueError(
-                    f"depth_is_valid shape {tuple(depth_is_valid.shape)} != depth {tuple(depth.shape)}"
-                )
+                raise ValueError(f"depth_is_valid shape {tuple(depth_is_valid.shape)} != depth {tuple(depth.shape)}")
 
         pts_cpu = self._points.detach().cpu()
         # project_points returns (u=col, v=row); keep float for neighborhood sampling.
@@ -368,21 +366,13 @@ class VoxelizedPointcloud:
                 if depth_is_valid is not None:
                     valid = depth_is_valid[rr, cc]
                 else:
-                    valid = (
-                        torch.isfinite(d)
-                        & (d >= 0.01)
-                        & (d <= max_depth_f)
-                    )
+                    valid = torch.isfinite(d) & (d >= 0.01) & (d <= max_depth_f)
                 # Invalid / non-finite → no carve.
                 # Depth at or nearer than the stored point (± margin) means the surface is
                 # still there (or occluded) — never free-space evidence.
                 # Only a reading strictly past the point supports carving.
                 supports_free = (
-                    valid
-                    & torch.isfinite(d)
-                    & (d >= 0.01)
-                    & (d <= max_depth_f)
-                    & (d > (proj_depth[idx] + margin))
+                    valid & torch.isfinite(d) & (d >= 0.01) & (d <= max_depth_f) & (d > (proj_depth[idx] + margin))
                 )
                 free_evidence = free_evidence & supports_free
 

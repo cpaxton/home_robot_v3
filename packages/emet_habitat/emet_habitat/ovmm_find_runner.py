@@ -15,6 +15,7 @@ from typing import Any, Literal
 import yaml
 
 from emet.core.parameters import get_parameters
+from emet.eval.benchmark_dynagraph import apply_habitat_ovmm_find_parameters
 from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsConfig,
     EpisodeDiagnosticsRecorder,
@@ -26,7 +27,6 @@ from emet.eval.episode_diagnostics import (
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
-    apply_backend_parameters,
     collect_scaling_diagnostics,
     compute_find_phase_metrics,
     create_find_phase_agent,
@@ -37,7 +37,6 @@ from emet.eval.ovmm_find_phase import (
     run_mapping_protocol,
     set_find_phase_run_seed,
 )
-from emet.eval.benchmark_dynagraph import apply_habitat_ovmm_find_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import load_scene_init_poses
 from emet.habitat.episode_debug import default_episodes_root
@@ -283,11 +282,7 @@ def run_habitat_find_phase_episode(
             **scaling,
         }
         if debug_run_tag:
-            bundle_dir = (
-                default_episodes_root()
-                / debug_run_tag
-                / f"ovmm_{episode.id}_{run_cfg.backend}"
-            )
+            bundle_dir = default_episodes_root() / debug_run_tag / f"ovmm_{episode.id}_{run_cfg.backend}"
             manifest = flush_episode_diagnostics(bundle_dir, agent, diag_recorder)
             result["debug_bundle_dir"] = str(bundle_dir)
             if manifest.get("topdown_map"):

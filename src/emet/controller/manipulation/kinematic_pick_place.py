@@ -568,8 +568,7 @@ class KinematicPickPlaceExecutor:
         recep_body = scored[0][2]
         recep_pos = np.asarray(pl[recep_body]["pos"], dtype=np.float64).reshape(3)
         logger.info(
-            f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} "
-            f"(n_receps={len(receps)})"
+            f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} (n_receps={len(receps)})"
         )
         if approach_base:
             self._approach_xy(recep_pos[:2])

@@ -81,8 +81,8 @@ def main() -> int:
         for p in dirs:
             sz = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
             total += sz
-            print(f"{sz/1e9:8.2f} GB  {p.name}")
-        print(f"total: {total/1e9:.2f} GB across {len(dirs)} bundles")
+            print(f"{sz / 1e9:8.2f} GB  {p.name}")
+        print(f"total: {total / 1e9:.2f} GB across {len(dirs)} bundles")
         return 0
 
     now = time.time()
@@ -114,12 +114,14 @@ def main() -> int:
         sz = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
         freed += sz
         if args.apply:
-            print(f"DELETE {sz/1e9:7.2f} GB  {p.name}  ({why})")
+            print(f"DELETE {sz / 1e9:7.2f} GB  {p.name}  ({why})")
             shutil.rmtree(p, ignore_errors=True)
         else:
-            print(f"would   {sz/1e9:7.2f} GB  {p.name}  ({why})")
-    print(f"freed: {freed/1e9:.2f} GB  ({len(doomed)} bundles)  "
-          f"[{'APPLIED' if args.apply else 'dry-run; use --apply to delete'}]")
+            print(f"would   {sz / 1e9:7.2f} GB  {p.name}  ({why})")
+    print(
+        f"freed: {freed / 1e9:.2f} GB  ({len(doomed)} bundles)  "
+        f"[{'APPLIED' if args.apply else 'dry-run; use --apply to delete'}]"
+    )
     print(f"kept {len(kept)} bundles; results/*.jsonl untouched.")
     return 0
 

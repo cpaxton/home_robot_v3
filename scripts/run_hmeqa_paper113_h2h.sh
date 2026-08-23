@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Full GraphEQA-paper HM-EQA set (113 questions, indices 0–112) head-to-head.
-# Prefer nohup overnight; one method at a time (GPU preflight).
+# Historical emet HM-EQA q0–112 slice (113 questions) head-to-head.
+# This is not the released GraphEQA semantic-filtered 114-row selection.
+# Launch through ``emet jobs``; one method at a time (GPU preflight).
 #
 # Usage:
-#   nohup ./scripts/run_hmeqa_paper113_h2h.sh >> ~/runs/emet/hmeqa_paper113/nohup.log 2>&1 &
+#   uv run emet jobs run --name hmeqa-legacy113 --need-mib 12000 -- \
+    #     ./scripts/run_hmeqa_paper113_h2h.sh
 #
 # Env:
 #   METHODS   space-separated methods (default: "static_graph dynagraph")
@@ -33,56 +35,56 @@ HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
 # mid-run on a full disk (2026-08-14: /tmp filled, dill import died).
 _free_kb="$(df -Pk "$HOME/.cache/habitat_eqa" 2>/dev/null | awk 'NR==2{print $4}')"
 if [[ -z "${_free_kb:-}" ]]; then
-  echo "[$(date -Is)] WARNING: could not read free space for ~/.cache/habitat_eqa; continuing"
+    echo "[$(date -Is)] WARNING: could not read free space for ~/.cache/habitat_eqa; continuing"
 else
-  FREE_GB=$((_free_kb / 1024 / 1024))
-  if (( FREE_GB < NEED_FREE_GB )); then
-    echo "[$(date -Is)] ABORT: free disk under ~/.cache/habitat_eqa is ${FREE_GB} GB (< ${NEED_FREE_GB} GB)." >&2
-    echo "  A full-113 sweep writes GB of episode bundles per method." >&2
-    echo "  Free space first, e.g.:" >&2
-    echo "    uv run python scripts/clean_episode_bundles.py --keep 2 --apply" >&2
-    echo "  or set NEED_FREE_GB to a smaller floor to override." >&2
-    exit 4
-  fi
-  echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
+    FREE_GB=$((_free_kb / 1024 / 1024))
+    if (( FREE_GB < NEED_FREE_GB )); then
+        echo "[$(date -Is)] ABORT: free disk under ~/.cache/habitat_eqa is ${FREE_GB} GB (< ${NEED_FREE_GB} GB)." >&2
+        echo "  A full-113 sweep writes GB of episode bundles per method." >&2
+        echo "  Free space first, e.g.:" >&2
+        echo "    uv run python scripts/clean_episode_bundles.py --keep 2 --apply" >&2
+        echo "  or set NEED_FREE_GB to a smaller floor to override." >&2
+        exit 4
+    fi
+    echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
 fi
 
 {
-  echo "run_id=$RUN_ID"
-  echo "methods=$METHODS"
-  git rev-parse --short HEAD
-  git rev-parse HEAD
+    echo "run_id=$RUN_ID"
+    echo "methods=$METHODS"
+    git rev-parse --short HEAD
+    git rev-parse HEAD
 } | tee "$OUT_DIR/META.txt"
 
 log() { echo "[$(date -Is)] $*"; }
 
 run_method() {
-  local method="$1"
-  local tag="paper113_${RUN_ID}_${method}"
-  local jsonl="$HOME/.cache/habitat_eqa/results/subset_${tag}_${FAMILY}.jsonl"
-  local logf="$OUT_DIR/${method}.log"
-  log "=== paper113 method=$method tag=$tag ==="
-  NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
-  emet_kill_stale_eval_processes
-  timeout "$TIMEOUT" "$HAB" run-batch \
-    --method "$method" \
-    --paper-subset \
-    --max-planning-steps 20 \
-    --max-movement-step 10 \
-    --eqa-vl-family "$FAMILY" \
-    --eqa-hf-model-id "$HF_ID" \
-    --device cuda \
-    --frontier-nodes \
-    --frontier-keyword-weight 2 \
-    --resume \
-    --no-hm3d-semantics \
-    --output "$jsonl" \
-    2>&1 | tee "$logf"
-  echo "$jsonl" >"$OUT_DIR/${method}_jsonl.path"
+    local method="$1"
+    local tag="paper113_${RUN_ID}_${method}"
+    local jsonl="$HOME/.cache/habitat_eqa/results/subset_${tag}_${FAMILY}.jsonl"
+    local logf="$OUT_DIR/${method}.log"
+    log "=== paper113 method=$method tag=$tag ==="
+    NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
+    emet_kill_stale_eval_processes
+    timeout "$TIMEOUT" "$HAB" run-batch \
+        --method "$method" \
+        --paper-subset \
+        --max-planning-steps 20 \
+        --max-movement-step 10 \
+        --eqa-vl-family "$FAMILY" \
+        --eqa-hf-model-id "$HF_ID" \
+        --device cuda \
+        --frontier-nodes \
+        --frontier-keyword-weight 2 \
+        --resume \
+        --no-hm3d-semantics \
+        --output "$jsonl" \
+        2>&1 | tee "$logf"
+    echo "$jsonl" >"$OUT_DIR/${method}_jsonl.path"
 }
 
 for method in $METHODS; do
-  run_method "$method"
+    run_method "$method"
 done
 
 uv run python - <<PY | tee "$OUT_DIR/SUMMARY.txt"

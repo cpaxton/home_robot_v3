@@ -393,9 +393,7 @@ def test_resolve_dynav_config_yaml_innate_mars_and_stretch():
 
     assert resolve_dynav_config_yaml("innate_mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
     assert resolve_dynav_config_yaml("innate-mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
-    assert (
-        resolve_dynav_config_yaml("innate_mars", "dynav_innate_mars.yaml") == "dynav_innate_mars.yaml"
-    )
+    assert resolve_dynav_config_yaml("innate_mars", "dynav_innate_mars.yaml") == "dynav_innate_mars.yaml"
     assert resolve_dynav_config_yaml("stretch", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
 
 

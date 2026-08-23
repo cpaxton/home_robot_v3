@@ -54,9 +54,7 @@ def _write_peak(trace: Path, out: Path) -> tuple[int, int]:
     peak = max(rows, key=lambda r: int(r["used_mib"]))
     used = int(peak["used_mib"])
     free = int(peak["free_mib"])
-    out.write_text(
-        f"used_mib={used}\nfree_mib={free}\nt_sec={peak['t_sec']}\nsamples={len(rows)}\n"
-    )
+    out.write_text(f"used_mib={used}\nfree_mib={free}\nt_sec={peak['t_sec']}\nsamples={len(rows)}\n")
     print(
         f"PEAK_VRAM used={used} MiB free={free} MiB at t={peak['t_sec']}s n={len(rows)}",
         flush=True,
@@ -95,9 +93,7 @@ def main() -> int:
             f.write(msg + "\n")
 
     stop = threading.Event()
-    sampler = threading.Thread(
-        target=_sample_loop, args=(out / "vram_trace.csv", stop), daemon=True
-    )
+    sampler = threading.Thread(target=_sample_loop, args=(out / "vram_trace.csv", stop), daemon=True)
     sampler.start()
     t0 = time.time()
     model = None
@@ -171,9 +167,7 @@ def main() -> int:
                 return_dict=True,
                 return_tensors="pt",
             )
-            inputs = {
-                k: v.to("cuda") if hasattr(v, "to") else v for k, v in inputs.items()
-            }
+            inputs = {k: v.to("cuda") if hasattr(v, "to") else v for k, v in inputs.items()}
             with torch.inference_mode():
                 out_ids = model.generate(**inputs, max_new_tokens=8)
             trim = out_ids[:, inputs["input_ids"].shape[-1] :]

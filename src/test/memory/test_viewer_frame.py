@@ -10,7 +10,6 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
 from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
 

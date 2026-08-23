@@ -401,7 +401,9 @@ def _skip_vlm_label_extract(parameters: Parameters | dict | None) -> bool:
         return True
     if parameters is None:
         return False
-    block = parameters.get("graph_eqa_extract") if not isinstance(parameters, dict) else parameters.get("graph_eqa_extract")
+    block = (
+        parameters.get("graph_eqa_extract") if not isinstance(parameters, dict) else parameters.get("graph_eqa_extract")
+    )
     if isinstance(block, dict) and block.get("enabled") is False:
         return True
     return False

@@ -14,6 +14,10 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -36,6 +40,12 @@ from emet.memory.format import (
     load_memory,
     save_memory,
 )
+from emet.memory.graph_eqa.world_evidence import (
+    WORLD_EVIDENCE_FILENAME,
+    WorldEvidenceStore,
+)
+
+GRAPH_RUNTIME_FILENAME = "graph_runtime.json"
 
 
 def _to_numpy(x: Any) -> Any:
@@ -416,6 +426,18 @@ class GraphEQABackend(MemoryBackend):
             change_events=list(getattr(n, "change_events", []) or []),
             expected_absence_count=int(getattr(n, "expected_absence_count", 0)),
             last_absence_step=int(getattr(n, "last_absence_step", -1)),
+            bbox_xyxy=([int(x) for x in n.bbox_xyxy] if getattr(n, "bbox_xyxy", None) is not None else None),
+            frontier_cell_count=int(getattr(n, "frontier_cell_count", 0)),
+            frontier_keyword_score=float(getattr(n, "frontier_keyword_score", 0.0)),
+            embedding=(
+                np.asarray(n.embedding, dtype=np.float32).reshape(-1).tolist()
+                if getattr(n, "embedding", None) is not None
+                else None
+            ),
+            nav_attempts=int(getattr(n, "nav_attempts", 0)),
+            nav_failures=int(getattr(n, "nav_failures", 0)),
+            last_nav_note=getattr(n, "last_nav_note", None),
+            last_nav_at_step=int(getattr(n, "last_nav_at_step", 0)),
             **extra,
         )
 
@@ -427,12 +449,73 @@ class GraphEQABackend(MemoryBackend):
         sim_object_placements: dict[str, Any] | None = None,
         final_step: int | None = None,
         save_voxel_pickle: bool = False,
+        include_frames: bool = True,
+        include_world_evidence_rgb: bool = True,
+    ) -> None:
+        """Stage a complete checkpoint, then replace the destination as one tree."""
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() and not target.is_dir():
+            raise NotADirectoryError(f"GraphEQA checkpoint path is not a directory: {target}")
+        staged = Path(
+            tempfile.mkdtemp(
+                prefix=f".{target.name}.staged-",
+                dir=target.parent,
+            )
+        )
+        backup: Path | None = None
+        try:
+            self._save_directory(
+                str(staged),
+                ground_truth_mode=ground_truth_mode,
+                sim_object_placements=sim_object_placements,
+                final_step=final_step,
+                save_voxel_pickle=save_voxel_pickle,
+                include_frames=include_frames,
+                include_world_evidence_rgb=include_world_evidence_rgb,
+            )
+            if target.exists():
+                backup = Path(
+                    tempfile.mkdtemp(
+                        prefix=f".{target.name}.backup-",
+                        dir=target.parent,
+                    )
+                )
+                backup.rmdir()
+                os.replace(target, backup)
+            os.replace(staged, target)
+            if backup is not None:
+                shutil.rmtree(backup)
+                backup = None
+        except Exception:
+            if backup is not None and backup.exists() and not target.exists():
+                os.replace(backup, target)
+                backup = None
+            raise
+        finally:
+            if staged.exists():
+                shutil.rmtree(staged)
+            if backup is not None and backup.exists() and target.exists():
+                shutil.rmtree(backup)
+
+    def _save_directory(
+        self,
+        path: str,
+        *,
+        ground_truth_mode: bool = False,
+        sim_object_placements: dict[str, Any] | None = None,
+        final_step: int | None = None,
+        save_voxel_pickle: bool = False,
+        include_frames: bool = True,
+        include_world_evidence_rgb: bool = True,
     ) -> None:
         """Save to common directory format (graph + full voxel frame history when ``voxel_map`` is set).
 
         ``final_step`` records the controller observation count so a reloaded graph resumes
         the staleness clock instead of restarting at 0. ``save_voxel_pickle`` additionally
         writes ``voxel_map.pkl`` (full DynaMem voxel state) for lifelong checkpoint resume.
+        Set ``include_frames=False`` and ``include_world_evidence_rgb=False`` for a
+        reloadable graph-only checkpoint without dense voxel history or view pixels.
         """
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -447,21 +530,9 @@ class GraphEQABackend(MemoryBackend):
                     id1=e[0],
                     id2=e[1],
                     relation=e[2],
-                    confidence=(
-                        float(relation_beliefs[e].confidence)
-                        if e in relation_beliefs
-                        else None
-                    ),
-                    last_evidence_step=(
-                        int(relation_beliefs[e].last_evidence_step)
-                        if e in relation_beliefs
-                        else None
-                    ),
-                    contradiction_count=(
-                        int(relation_beliefs[e].contradiction_count)
-                        if e in relation_beliefs
-                        else 0
-                    ),
+                    confidence=(float(relation_beliefs[e].confidence) if e in relation_beliefs else None),
+                    last_evidence_step=(int(relation_beliefs[e].last_evidence_step) if e in relation_beliefs else None),
+                    contradiction_count=(int(relation_beliefs[e].contradiction_count) if e in relation_beliefs else 0),
                 )
                 for e in edges
             ],
@@ -472,7 +543,9 @@ class GraphEQABackend(MemoryBackend):
             self._voxel_map.write_to_pickle(str(dir_path / VOXEL_PICKLE_FILENAME))
             wrote_voxel_pickle = True
         frames: list[FrameBlob]
-        if self._voxel_map is not None:
+        if not include_frames:
+            frames = []
+        elif self._voxel_map is not None:
             frames = frame_blobs_from_voxel_map(self._voxel_map)
         else:
             frames = []
@@ -498,21 +571,70 @@ class GraphEQABackend(MemoryBackend):
                 )
 
         has_sim_gt = bool(sim_object_placements)
+        world_store = getattr(self._graph, "world_evidence", None)
+        has_world_evidence = bool(
+            isinstance(world_store, WorldEvidenceStore)
+            and world_store.enabled
+            and (world_store.entities or world_store.views or world_store.events)
+        )
+        has_world_evidence_rgb = bool(
+            include_world_evidence_rgb
+            and has_world_evidence
+            and any(isinstance(getattr(view, "rgb", None), np.ndarray) for view in world_store.views.values())
+        )
         state = MemoryState(
             point_cloud=None,
             frames=frames,
             graph=graph_blob,
             manifest=MemoryManifest(
                 backend="graph_eqa",
+                description=(
+                    "GraphEQA graph-only checkpoint (frame and evidence RGB omitted)"
+                    if not include_frames and not include_world_evidence_rgb
+                    else None
+                ),
                 has_point_cloud=False,
                 ground_truth_mode=ground_truth_mode,
                 has_sim_gt=has_sim_gt,
                 sim_gt_placements_file=SIM_GT_PLACEMENTS_FILENAME if has_sim_gt else None,
                 final_step=int(final_step) if final_step is not None else None,
                 has_voxel_pickle=wrote_voxel_pickle,
+                has_world_evidence=has_world_evidence,
+                has_world_evidence_rgb=has_world_evidence_rgb,
+                checkpoint_profile="full" if include_frames else "graph_only",
             ),
         )
         save_memory(state, str(dir_path))
+        if has_world_evidence:
+            world_store.save(dir_path, include_rgb=include_world_evidence_rgb)
+        runtime = {
+            "schema_version": 1,
+            "next_obs_id": int(getattr(self._graph, "_next_obs_id", 1)),
+            "obs_revisions": {
+                str(key): int(value) for key, value in dict(getattr(self._graph, "_obs_revisions", {}) or {}).items()
+            },
+            "attempt_ledger": list(self._graph.export_attempt_ledger()),
+            "room_events": list(getattr(self._graph, "_room_events", []) or []),
+            "retracted_nav_claims": [
+                [int(obs_id), str(phrase)]
+                for obs_id, phrase in sorted(getattr(self._graph, "_retracted_nav_claims", set()) or set())
+            ],
+            "navigation_samples": [
+                {
+                    "xyz": np.asarray(sample.xyz, dtype=float).reshape(-1)[:3].tolist(),
+                    "base_xyz": (
+                        np.asarray(sample.base_xyz, dtype=float).reshape(-1)[:3].tolist()
+                        if sample.base_xyz is not None
+                        else None
+                    ),
+                }
+                for sample in list(getattr(self._graph, "_nav_samples", []) or [])
+            ],
+        }
+        (dir_path / GRAPH_RUNTIME_FILENAME).write_text(
+            json.dumps(runtime, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
     def load(self, path: str) -> None:
         """Load from common directory format.
@@ -537,14 +659,16 @@ class GraphEQABackend(MemoryBackend):
             if state.manifest is not None and state.manifest.final_step is not None
             else None
         )
+        self.loaded_has_voxel_pickle = bool(state.manifest is not None and state.manifest.has_voxel_pickle)
+        self.loaded_checkpoint_profile = (
+            str(state.manifest.checkpoint_profile) if state.manifest is not None else "full"
+        )
         if state.graph is None:
             return
 
         def _node_from_view(n: GraphNodeView) -> GraphNode:
             extent_half = (
-                np.asarray(n.extent_half, dtype=np.float64).reshape(-1)[:3]
-                if getattr(n, "extent_half", None)
-                else None
+                np.asarray(n.extent_half, dtype=np.float64).reshape(-1)[:3] if getattr(n, "extent_half", None) else None
             )
             bounds_3d = None
             if getattr(n, "bounds", None):
@@ -585,14 +709,20 @@ class GraphEQABackend(MemoryBackend):
                 identity_key=getattr(n, "identity_key", None),
                 countable_instance=bool(getattr(n, "countable_instance", False)),
                 change_events=list(getattr(n, "change_events", None) or []),
-                expected_absence_count=int(
-                    getattr(n, "expected_absence_count", 0) or 0
-                ),
+                expected_absence_count=int(getattr(n, "expected_absence_count", 0) or 0),
                 last_absence_step=int(
-                    getattr(n, "last_absence_step", -1)
-                    if getattr(n, "last_absence_step", None) is not None
-                    else -1
+                    getattr(n, "last_absence_step", -1) if getattr(n, "last_absence_step", None) is not None else -1
                 ),
+                bbox_xyxy=(tuple(int(x) for x in n.bbox_xyxy) if getattr(n, "bbox_xyxy", None) is not None else None),
+                frontier_cell_count=int(getattr(n, "frontier_cell_count", 0) or 0),
+                frontier_keyword_score=float(getattr(n, "frontier_keyword_score", 0.0) or 0.0),
+                embedding=(
+                    np.asarray(n.embedding, dtype=np.float32) if getattr(n, "embedding", None) is not None else None
+                ),
+                nav_attempts=int(getattr(n, "nav_attempts", 0) or 0),
+                nav_failures=int(getattr(n, "nav_failures", 0) or 0),
+                last_nav_note=getattr(n, "last_nav_note", None),
+                last_nav_at_step=int(getattr(n, "last_nav_at_step", 0) or 0),
             )
 
         self._graph._nodes = [_node_from_view(n) for n in state.graph.nodes]
@@ -608,32 +738,110 @@ class GraphEQABackend(MemoryBackend):
             )
             for edge in state.graph.edges
         }
-        self._graph._change_events = [
-            dict(event)
-            for node in self._graph._nodes
-            for event in node.change_events
-        ]
-        self._graph._observations = []
-        for i, fr in enumerate(state.frames):
-            xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-            if fr.world_xyz is not None and fr.world_xyz.size >= 3:
-                xyz = np.ravel(fr.world_xyz)[:3]
-            labels = (fr.info or {}).get("labels", [])
-            description = (fr.info or {}).get("description") if fr.info else None
-            rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
-            self._graph._observations.append(
-                GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels, description=description)
+        self._graph._change_events = [dict(event) for node in self._graph._nodes for event in node.change_events]
+        configured_world = getattr(self._graph, "world_evidence", None)
+        configured_mode = getattr(configured_world, "mode", "shadow")
+        configured_session_id = getattr(configured_world, "session_id", "")
+        world_path = path_obj / WORLD_EVIDENCE_FILENAME
+        if bool(state.manifest.has_world_evidence) and world_path.is_file():
+            self._graph.world_evidence = WorldEvidenceStore.load(
+                path_obj,
+                mode=configured_mode,
             )
-        self._graph._next_obs_id = (
+        else:
+            self._graph.world_evidence = WorldEvidenceStore(
+                mode=configured_mode,
+                session_id=configured_session_id,
+            )
+        self._graph._observations = []
+        self._graph._nav_samples = []
+        world_store = getattr(self._graph, "world_evidence", None)
+        if isinstance(world_store, WorldEvidenceStore) and world_store.views:
+            current_views = [
+                record
+                for record in world_store.views.values()
+                if world_store.view_id_for_obs(record.obs_id) == record.view_id
+            ]
+            for record in sorted(current_views, key=lambda item: item.obs_id):
+                rgb = np.asarray(record.rgb).copy() if record.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
+                self._graph._observations.append(
+                    GraphObservation(
+                        obs_id=int(record.obs_id),
+                        rgb=rgb,
+                        xyz=np.asarray(record.object_xyz, dtype=np.float64),
+                        labels=list(record.labels),
+                        description=record.description or None,
+                        viewer_xyz=(
+                            np.asarray(record.base_pose_world, dtype=np.float64)
+                            if record.base_pose_world is not None
+                            else None
+                        ),
+                    )
+                )
+        else:
+            for i, fr in enumerate(state.frames):
+                xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+                if fr.world_xyz is not None and fr.world_xyz.size >= 3:
+                    xyz = np.ravel(fr.world_xyz)[:3]
+                labels = (fr.info or {}).get("labels", [])
+                description = (fr.info or {}).get("description") if fr.info else None
+                rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
+                self._graph._observations.append(
+                    GraphObservation(
+                        obs_id=i + 1,
+                        rgb=rgb,
+                        xyz=xyz,
+                        labels=labels,
+                        description=description,
+                    )
+                )
+        runtime_path = path_obj / GRAPH_RUNTIME_FILENAME
+        runtime: dict[str, Any] = {}
+        if runtime_path.is_file():
+            runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+        self._graph._obs_revisions = {
+            int(key): int(value) for key, value in dict(runtime.get("obs_revisions") or {}).items()
+        }
+        if not self._graph._obs_revisions and isinstance(world_store, WorldEvidenceStore):
+            for record in world_store.views.values():
+                self._graph._obs_revisions[record.obs_id] = max(
+                    self._graph._obs_revisions.get(record.obs_id, 0),
+                    int(record.revision),
+                )
+        computed_next = (
             max(
                 max((n.obs_id for n in self._graph._nodes), default=0),
-                len(self._graph._observations),
+                max((o.obs_id for o in self._graph._observations), default=0),
             )
             + 1
         )
+        self._graph._next_obs_id = max(
+            int(runtime.get("next_obs_id") or computed_next),
+            computed_next,
+        )
+        if runtime:
+            self._graph.import_attempt_ledger(
+                list(runtime.get("attempt_ledger") or []),
+                replace=True,
+            )
+            self._graph._room_events = [dict(row) for row in runtime.get("room_events") or []]
+            self._graph._retracted_nav_claims = {
+                (int(row[0]), str(row[1]))
+                for row in runtime.get("retracted_nav_claims") or []
+                if isinstance(row, list) and len(row) >= 2
+            }
+        else:
+            self._graph.import_attempt_ledger([], replace=True)
+            self._graph._room_events = []
+            self._graph._retracted_nav_claims = set()
         self._graph._rebuild_viewpoint_index()
         if self.loaded_final_step is not None:
             self._graph.set_graph_timestep(self.loaded_final_step)
+        self._graph._reindex_world_entities()
+        if isinstance(world_store, WorldEvidenceStore) and world_store.enabled and not world_store.views:
+            for obs in self._graph._observations:
+                self._graph._obs_revisions.setdefault(int(obs.obs_id), 1)
+                self._graph._record_world_view_for_obs(int(obs.obs_id))
 
     def supports_save_load(self) -> bool:
         return True

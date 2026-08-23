@@ -69,9 +69,7 @@ def resolve_ovmm_sweep_preset_path(name_or_path: str | Path) -> Path:
     try:
         return Path(resolve_config_yaml_path(f"{SWEEPS_DIR}/{stem}.yaml")).resolve()
     except FileNotFoundError as exc:
-        raise FileNotFoundError(
-            f"OVMM sweep preset not found: {name_or_path} (tried {local})"
-        ) from exc
+        raise FileNotFoundError(f"OVMM sweep preset not found: {name_or_path} (tried {local})") from exc
 
 
 def load_ovmm_sweep_preset(name_or_path: str | Path = DEFAULT_PRESET) -> dict[str, Any]:
@@ -403,8 +401,7 @@ def aggregate_ovmm_rates(
         f"mean_partial={mp:.3f} skipped={bind_fail}"
     )
     print(
-        f"FULL: n={nf} full_success={fs}/{nf} ({100 * fs / max(nf, 1):.0f}%) "
-        f"mean_partial={fmp:.3f} skipped={full_bind}"
+        f"FULL: n={nf} full_success={fs}/{nf} ({100 * fs / max(nf, 1):.0f}%) mean_partial={fmp:.3f} skipped={full_bind}"
     )
     print(f"Wrote {rates_path}")
     return rates

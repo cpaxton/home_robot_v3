@@ -9,7 +9,6 @@
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -55,9 +54,7 @@ def get_nn_ratio_similarity(points1, points2, voxel_size=0.05, delta_nn=0.15):
 
     tree = KDTree(voxel2)
     # Query the nearest neighbors for each point in voxel1
-    distances, _ = tree.query(
-        voxel1, k=1
-    )  # Find the closest point in voxel2 for each point in voxel1
+    distances, _ = tree.query(voxel1, k=1)  # Find the closest point in voxel2 for each point in voxel1
     # Count how many points in voxel1 have a nearest neighbor within delta_nn
     valid_points = np.sum(distances <= delta_nn)
     # Compute the geometric similarity
@@ -68,8 +65,8 @@ def get_nn_ratio_similarity(points1, points2, voxel_size=0.05, delta_nn=0.15):
 
 
 def get_bbox_similarity(
-    bounds1: Union[Tensor, List[Tensor]],
-    bounds2: Union[Tensor, List[Tensor]],
+    bounds1: Tensor | list[Tensor],
+    bounds2: Tensor | list[Tensor],
     overlap_eps: float = 1e-6,
     mode: Bbox3dOverlapMethodEnum = Bbox3dOverlapMethodEnum.ONE_SIDED_IOU,
 ) -> Tensor:
@@ -132,9 +129,7 @@ def dot_product_similarity(feats1, feats2, normalize=True):
 
 
 # Geometry-based matching
-def find_global_instance_by_pointcloud_overlap(
-    self, env_id: int, local_instance_view_id: int
-) -> Optional[int]:
+def find_global_instance_by_pointcloud_overlap(self, env_id: int, local_instance_view_id: int) -> int | None:
     """
     Find the global instance ID that has the most overlapping points in the point cloud
     with the local instance identified by `local_instance_id` in the environment specified by `env_id`.
@@ -161,9 +156,7 @@ def find_global_instance_by_pointcloud_overlap(
     TODO:
         - Optimize by having global instances store a voxelized point cloud to keep the number of points manageable.
     """
-    raise NotImplementedError(
-        "Placeholder pending correct implementation of geometry based matching"
-    )
+    raise NotImplementedError("Placeholder pending correct implementation of geometry based matching")
     # get instance view
     instance_view = self.get_local_instance_view(env_id, local_instance_view_id)
     volume1 = box3d_volume_from_bounds(instance_view.bounds)
@@ -195,8 +188,8 @@ def get_similarity(
     instance_bounds2: Tensor,
     visual_embedding1: Tensor,
     visual_embedding2: Tensor,
-    text_embedding1: Optional[Tensor] = None,
-    text_embedding2: Optional[Tensor] = None,
+    text_embedding1: Tensor | None = None,
+    text_embedding2: Tensor | None = None,
     view_matching_config: ViewMatchingConfig = ViewMatchingConfig(),
     verbose: bool = False,
 ):
@@ -204,7 +197,7 @@ def get_similarity(
     # BBox similarity
     if view_matching_config.box_match_mode == Bbox3dOverlapMethodEnum.NN_RATIO:
         # In this case, instead of instance_bounds, instance pointcloud will be passed
-        overlap_similarity: Union[List[float], Tensor] = []
+        overlap_similarity: list[float] | Tensor = []
         for pointcloud2 in instance_bounds2:
             nn_ratio_similarity = get_nn_ratio_similarity(instance_bounds1, pointcloud2)
             overlap_similarity.append(nn_ratio_similarity)

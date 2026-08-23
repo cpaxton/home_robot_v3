@@ -9,8 +9,8 @@ Trace audit (12q merged-memory probe, 2026-08-01) findings these fix:
 * q2  early unverified auto-submit (2 rounds, budget left) → no-early-unverified hold.
 * q84 time question explored 7 frontiers with zero close looks → close-look
   classifier + station look_around redirect.
-* Wrong unverified forced letters were overwhelmingly the last MCQ option (D)
-  → letter-free debias (``vote_mcq_letter``) on the forced-answer ladder.
+* Wrong unverified forced choices were overwhelmingly the last MCQ option
+  → semantic debias voting on the forced-answer ladder.
 """
 
 from __future__ import annotations
@@ -49,38 +49,42 @@ def _executor(question: str, *, query_answer: str = "", raw: str = "", **kwargs)
 # --- (1) mcq debias on the forced-answer ladder -------------------------------
 
 
-def test_forced_debias_replaces_lettered_eq_answer():
-    """A last-option EQA letter must not survive the forced path when debias wins."""
+def test_forced_debias_replaces_eq_answer_with_semantic_choice():
+    """A last-option EQA answer must not survive the forced path when debias wins."""
     ex, gm = _executor(Q_WHERE, raw="\n".join(["Answer:", "D) On the windowsill", ""]), mcq_debias=True)
     gm.vote_mcq_letter = MagicMock(return_value="B")
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "B"
+    assert out["answer"] == "On the toilet tank"
     assert out["answer_provenance"] == "mcq_debias"
+    assert out["final_decision"]["answer"] == "On the toilet tank"
+    assert out["final_decision"]["choice_index"] == 1
+    assert out["final_decision"]["source"] == "mcq_debias"
     gm.vote_mcq_letter.assert_called_once()
     row = [r for r in ex._trace_rows if r.get("tool") == "forced_answer"][0]
-    assert row["raw_eqa_letter"] == "D"
+    assert row["raw_eqa_answer"] == "D) On the windowsill"
+    assert row["raw_eqa_choice_index"] == 3
 
 
 def test_forced_debias_fills_uniform_prior_hole():
-    """Unknown from the EQA: the debias letter replaces the SHA-1 hash prior."""
+    """Unknown from the EQA: the debias choice replaces the SHA-1 hash prior."""
     ex, gm = _executor(Q_WHERE, raw="Answer:\nUnknown\n", mcq_debias=True)
     gm.vote_mcq_letter = MagicMock(return_value="A")
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "A"
+    assert out["answer"] == "Above the sink"
     assert out["answer_provenance"] == "mcq_debias"
 
 
-def test_forced_debias_off_keeps_eq_letter():
-    """``mcq_debias=False`` preserves the raw EQA letter (A/B parity)."""
+def test_forced_debias_off_keeps_eq_answer():
+    """``mcq_debias=False`` preserves the raw EQA choice (A/B parity)."""
     ex, gm = _executor(Q_WHERE, raw="\n".join(["Answer:", "D) On the windowsill", ""]), mcq_debias=False)
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] == "D"
+    assert out["answer"] == "On the windowsill"
     assert out["answer_provenance"] == "eqa_answer"
     gm.vote_mcq_letter.assert_not_called()
 
@@ -92,7 +96,7 @@ def test_forced_debias_failure_falls_back_to_ladder():
 
     out = ex._forced_answer_fallback(reason="budget exhausted without VLM answerable")
 
-    assert out["answer"] in "ABCD"
+    assert out["answer"] in {"Above the sink", "On the toilet tank", "By the bathtub", "On the windowsill"}
     assert out["answer_provenance"] == "uniform_prior"
 
 

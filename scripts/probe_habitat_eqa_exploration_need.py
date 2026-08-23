@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+
+from emet_habitat.robot_client import HabitatRobotClient
+from emet_habitat.runner import _apply_method_parameters, _configure_habitat_nav, _make_controller
+from emet_habitat.simulator import HabitatEQASimulator
 
 from emet.core.parameters import get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-from emet_habitat.robot_client import HabitatRobotClient
-from emet_habitat.runner import _apply_method_parameters, _configure_habitat_nav, _make_controller
-from emet_habitat.simulator import HabitatEQASimulator
 
 
 def probe_question(question_id: int, *, method: str = "dynagraph") -> dict:
@@ -95,10 +95,7 @@ def main() -> None:
     print(f"Probed {len(rows)} questions ({args.method})")
     print(f"\nNeeds navigation ({len(needs)}) — good exploration demos:")
     for r in needs:
-        print(
-            f"  Q{r['question_id']:02d} scene={r['scene']} "
-            f"nodes={r['graph_nodes']} frontiers={r['frontier_nodes']}"
-        )
+        print(f"  Q{r['question_id']:02d} scene={r['scene']} nodes={r['graph_nodes']} frontiers={r['frontier_nodes']}")
     print(f"\nConfident graph coverage after spin ({len(immediate)}) — poor movement demos:")
     for r in immediate:
         print(f"  Q{r['question_id']:02d} scene={r['scene']} nodes={r['graph_nodes']}")

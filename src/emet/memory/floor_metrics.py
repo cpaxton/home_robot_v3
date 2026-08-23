@@ -182,38 +182,23 @@ def format_floor_metrics_summary(metrics: dict[str, Any]) -> str:
     res = metrics.get("grid_resolution_m", 0.05)
     robot = metrics.get("robot")
     prefix = f"robot={robot!r} " if robot else ""
-    lines = [
-        (
-            f"{prefix}explored floor: {cells} cells, {area:.3f} m² "
-            f"(grid_resolution={res:.3f} m/cell)"
-        )
-    ]
+    lines = [(f"{prefix}explored floor: {cells} cells, {area:.3f} m² (grid_resolution={res:.3f} m/cell)")]
     free_cells = metrics.get("free_floor_cell_count")
     free_area = metrics.get("free_floor_area_m2")
     if free_cells is not None and free_area is not None:
-        lines.append(
-            f"free floor (explored ∩ ¬obstacle): {free_cells} cells, {float(free_area):.3f} m²"
-        )
+        lines.append(f"free floor (explored ∩ ¬obstacle): {free_cells} cells, {float(free_area):.3f} m²")
     spawn = metrics.get("spawn_floor_map") or {}
     if spawn.get("scene_walkable_area_m2") is not None:
         sa = float(spawn["scene_walkable_area_m2"])
         sc = spawn.get("scene_walkable_cell_count", "?")
-        lines.append(
-            f"spawner scene walkable map: {sc} cells, {sa:.3f} m² "
-            f"(grid={spawn.get('grid_resolution_m')} m)"
-        )
+        lines.append(f"spawner scene walkable map: {sc} cells, {sa:.3f} m² (grid={spawn.get('grid_resolution_m')} m)")
     if spawn.get("spawn_walkable_area_m2") is not None:
         sa = float(spawn["spawn_walkable_area_m2"])
         sc = spawn.get("spawn_walkable_cell_count", "?")
-        lines.append(
-            f"spawner walkable map: {sc} cells, {sa:.3f} m² "
-            f"(clip_eroded={spawn.get('clip_eroded_area_m2')})"
-        )
+        lines.append(f"spawner walkable map: {sc} cells, {sa:.3f} m² (clip_eroded={spawn.get('clip_eroded_area_m2')})")
         vs = explored_vs_spawn_summary(metrics)
         if "explored_fraction_of_scene_walkable" in vs:
-            lines.append(
-                f"explored / scene walkable: {100.0 * vs['explored_fraction_of_scene_walkable']:.1f}%"
-            )
+            lines.append(f"explored / scene walkable: {100.0 * vs['explored_fraction_of_scene_walkable']:.1f}%")
         elif "explored_fraction_of_spawn" in vs:
             lines.append(f"explored / spawn walkable: {100.0 * vs['explored_fraction_of_spawn']:.1f}%")
     return "\n".join(lines)

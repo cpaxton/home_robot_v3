@@ -409,8 +409,8 @@ def test_equipment_gate_obeys_config_value():
         "A) Above the sink B) Next to the refrigerator C) Near the stove D) On the wall opposite the windows. Answer:"
     )
     _r, answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
-    # Gate off -> the equipment guess D overrides the confident VLM letter A.
-    assert mem.last_eqa_parsed[1].strip().upper() == "D"
+    # Gate off -> the equipment guess overrides the confident VLM answer.
+    assert mem.last_eqa_parsed[1].strip().lower() == "on the wall opposite the windows"
     assert "[memory-location]" in (mem.last_eqa_raw or "")
 
 
@@ -443,25 +443,26 @@ def test_memory_location_does_not_override_vlm_choice_text():
     )
     _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
     assert "[memory-location]" not in (mem.last_eqa_raw or "")
-    assert mem.last_eqa_parsed[1].strip().upper() == "C"
-    assert "[choice-text]" in (mem.last_eqa_raw or "")
+    assert mem.last_eqa_parsed[1].strip().lower() == "the room with the blue curtains."
+    assert "[choice-text]" not in (mem.last_eqa_raw or "")
 
 
-def test_unknown_answer_triggers_letter_salvage():
-    """Attribute/holdout q65 regression: answer Unknown must salvage a letter."""
+def test_unknown_answer_triggers_semantic_salvage():
+    """Attribute/holdout q65 regression: answer Unknown gets a semantic re-ask."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     calls = {"n": 0}
+    prompts: list[str] = []
 
     def _client(cmds, **_kw):
         calls["n"] += 1
+        prompts.append(next(c for c in cmds if isinstance(c, str)))
         if calls["n"] == 1:
             return (
                 "Caption:\nAC on ceiling.\nReasoning:\ncannot tell.\n"
                 "Answer:\nUnknown\nConfidence:\nFALSE\nAction:\n1\n"
                 "Confidence_reasoning:\nno status visible\n"
             )
-        # Salvage turn — terse letter only.
-        return "A"
+        return "On"
 
     mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "ac")
     mem.memory_summary_enabled = True
@@ -472,7 +473,37 @@ def test_unknown_answer_triggers_letter_salvage():
     _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
     assert calls["n"] >= 2
     assert "[salvage]" in (mem.last_eqa_raw or "")
-    assert mem.last_eqa_parsed[1].strip().upper() == "A"
+    assert mem.last_eqa_parsed[1].strip() == "On"
+    assert "exact text of the best option" in prompts[1]
+    assert "ONLY a single letter" not in prompts[1]
+
+
+def test_count_none_answer_stays_confident_without_salvage():
+    """A semantic count option ``None`` is an answer, not an abstention."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(_cmds, **_kw):
+        calls["n"] += 1
+        return (
+            "Reasoning:\nNo bedside tables are visible.\n"
+            "Answer:\nNone\nConfidence:\nTRUE\nAction:\n\n"
+            "Confidence_reasoning:\nThe room is fully visible.\n"
+        )
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "bed")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["bed"])
+    mem._relevant_phrases = ["bed"]
+    mem._relevant_objects = ["bed"]
+    question = "How many bedside tables are there? A) Three B) One C) None D) Two. Answer:"
+
+    _reasoning, answer, confidence, _cr, _pt, _imgs = mem.query_answer(question)
+
+    assert calls["n"] == 1
+    assert answer.lower() == "none"
+    assert confidence is True
+    assert "[salvage]" not in (mem.last_eqa_raw or "")
 
 
 def test_location_unknown_does_not_salvage_letter():
@@ -508,7 +539,7 @@ def test_location_unknown_does_not_salvage_letter():
     assert mem.last_eqa_action_obs_id is not None
 
 
-def test_location_truncated_stream_salvages_letter():
+def test_location_truncated_stream_salvages_semantic_answer():
     """Dogfood q104/q105: a stream cut off before ``answer:`` must be re-asked.
 
     Distinct from an explicit ``Answer: Unknown`` (which stays Unknown): here the
@@ -525,7 +556,7 @@ def test_location_truncated_stream_salvages_letter():
                 "Caption:\nImage 1 shows an outdoor area with a brick path, door, "
                 "doormat, glass door, greenery, outdoor furniture, pool, potted plant,"
             )
-        return "D"
+        return "In the living area near the fireplace"
 
     mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "wall")
     mem.memory_summary_enabled = True
@@ -540,7 +571,7 @@ def test_location_truncated_stream_salvages_letter():
     _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
     assert calls["n"] >= 2
     assert "[salvage]" in (mem.last_eqa_raw or "")
-    assert mem.last_eqa_parsed[1].strip().upper() == "D"
+    assert mem.last_eqa_parsed[1].strip() == "In the living area near the fireplace"
     # Recovery must come from the VLM re-ask, never from nearest-furniture geometry.
     assert "[memory-location]" not in (mem.last_eqa_raw or "")
 
@@ -964,8 +995,8 @@ def test_query_answer_records_pregate_confidence_when_gated():
     assert mem.last_eqa_model_confident is True
 
 
-def test_query_answer_salvages_letter_on_caption_runaway():
-    """When the main output never emits answer:, a terse retry recovers the letter."""
+def test_query_answer_salvages_semantic_text_on_caption_runaway():
+    """When the main output never emits answer:, a terse retry recovers option text."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     calls = {"n": 0}
 
@@ -974,7 +1005,7 @@ def test_query_answer_salvages_letter_on_caption_runaway():
         if calls["n"] == 1:
             # Runaway: captions only, no answer field.
             return "caption:\n" + "\n".join(f"Image {i} shows a wall." for i in range(1, 40))
-        return "B"
+        return "No"
 
     mem = GraphEQAMemory(
         eqa_client=fake_eqa,
@@ -984,7 +1015,7 @@ def test_query_answer_salvages_letter_on_caption_runaway():
     mem._relevant_objects = ["wall"]
     _r, _a, _c, _cr, _t, _imgs = mem.query_answer("Is the wall blue? A) Yes B) No")
     assert calls["n"] == 2
-    assert "answer:\nb" in mem.last_eqa_raw.lower()
+    assert "answer:\nno" in mem.last_eqa_raw.lower()
 
 
 def test_select_relevant_obs_ids_diversifies_views():

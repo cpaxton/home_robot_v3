@@ -81,13 +81,9 @@ def format_sqa3d_episode_line(episode: SQA3DEpisodeMetrics) -> str:
     graph = ""
     if episode.graph_nodes:
         graph = (
-            f" graph={episode.graph_object_nodes}obj/"
-            f"{episode.graph_viewpoint_nodes}vp/{episode.graph_frontier_nodes}fr"
+            f" graph={episode.graph_object_nodes}obj/{episode.graph_viewpoint_nodes}vp/{episode.graph_frontier_nodes}fr"
         )
-    return (
-        f"question_id={episode.question_id} {tag}{graph} "
-        f"predicted={pred!r} gold={episode.gold_answers}"
-    )
+    return f"question_id={episode.question_id} {tag}{graph} predicted={pred!r} gold={episode.gold_answers}"
 
 
 def summarize_sqa3d_episodes(episodes: list[SQA3DEpisodeMetrics]) -> dict[str, float]:

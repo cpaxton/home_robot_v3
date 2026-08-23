@@ -31,10 +31,11 @@ def _planar_yaw(forward: np.ndarray) -> float:
 
 
 def test_body_up_stays_world_vertical_with_sensor_pitch() -> None:
+    from emet_habitat.simulator import HabitatEQASimulator
+
     from emet.habitat.config import default_hm3d_scene_dir
     from emet.habitat.coordinates import _rotation_matrix_from_agent_rotation
     from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-    from emet_habitat.simulator import HabitatEQASimulator
 
     q = get_question(load_hmeqa_questions(None), question_id=17)
     init_pose = load_scene_init_poses(None)[(q.scene, q.floor)]
@@ -51,9 +52,10 @@ def test_body_up_stays_world_vertical_with_sensor_pitch() -> None:
 
 
 def test_turn_left_changes_planar_yaw_by_action_amount() -> None:
+    from emet_habitat.simulator import HabitatEQASimulator
+
     from emet.habitat.config import default_hm3d_scene_dir
     from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-    from emet_habitat.simulator import HabitatEQASimulator
 
     q = get_question(load_hmeqa_questions(None), question_id=17)
     init_pose = load_scene_init_poses(None)[(q.scene, q.floor)]

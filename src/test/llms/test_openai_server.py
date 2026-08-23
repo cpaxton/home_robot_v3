@@ -192,9 +192,7 @@ def test_http_chat_completions_roundtrip() -> None:
 
         req = urllib.request.Request(
             f"http://127.0.0.1:{port}/v1/chat/completions",
-            data=json.dumps(
-                {"model": "fake", "messages": [{"role": "user", "content": "hi"}]}
-            ).encode(),
+            data=json.dumps({"model": "fake", "messages": [{"role": "user", "content": "hi"}]}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )

@@ -135,8 +135,7 @@ def get_memory_backend(
     if is_static_graph_backend(key) or key == STATIC_GRAPH:
         if graph_memory is None:
             raise ValueError(
-                f"get_memory_backend(name={name!r}) requires graph_memory "
-                f"(canonical id: {STATIC_GRAPH!r})"
+                f"get_memory_backend(name={name!r}) requires graph_memory (canonical id: {STATIC_GRAPH!r})"
             )
         from emet.memory.adapters import GraphEQABackend
 
@@ -151,8 +150,8 @@ def get_memory_backend(
         if scene_graph is None:
             raise ValueError("get_memory_backend(name='scene_graph') requires scene_graph")
         from emet.memory.adapters import SceneGraphBackend
+
         return SceneGraphBackend(scene_graph, text_encoder=text_encoder)
     raise ValueError(
-        f"Unknown memory backend: {name!r}. "
-        f"Use 'dynamem', '{STATIC_GRAPH}' (alias graph_eqa), 'svm', or 'scene_graph'."
+        f"Unknown memory backend: {name!r}. Use 'dynamem', '{STATIC_GRAPH}' (alias graph_eqa), 'svm', or 'scene_graph'."
     )

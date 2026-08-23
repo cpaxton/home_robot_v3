@@ -473,11 +473,7 @@ def run_ovmm_manip_phases(
         action_kind="pick",
         success=pick_ok,
         phrase=object_query,
-        status_code=(
-            "ok"
-            if pick_ok
-            else ("controller_failed" if not pick_controller_ok else "pick_gt_miss")
-        ),
+        status_code=("ok" if pick_ok else ("controller_failed" if not pick_controller_ok else "pick_gt_miss")),
         note=f"attempt pick controller_ok={pick_controller_ok}",
     )
 
@@ -505,11 +501,7 @@ def run_ovmm_manip_phases(
         action_kind="place",
         success=place_ok,
         phrase=episode.goal_recep,
-        status_code=(
-            "ok"
-            if place_ok
-            else ("controller_failed" if not place_controller_ok else "place_gt_miss")
-        ),
+        status_code=("ok" if place_ok else ("controller_failed" if not place_controller_ok else "place_gt_miss")),
         note=f"attempt place controller_ok={place_controller_ok}",
     )
     manip_wall_s = time.monotonic() - t_manip0

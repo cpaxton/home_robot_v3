@@ -46,6 +46,26 @@ def test_wait_gpu_stable_succeeds(monkeypatch):
     assert len(logs) >= 2
 
 
+def test_wait_gpu_stable_default_is_bounded(monkeypatch):
+    monkeypatch.setenv("GPU_WAIT_MAX_ROUNDS", "2")
+    monkeypatch.setattr(gp, "gpu_free_mib", lambda: 0)
+    sleeps: list[float] = []
+    logs: list[str] = []
+
+    assert (
+        gp.wait_gpu_stable(
+            12000,
+            stable_checks=1,
+            interval_s=0.01,
+            sleep_fn=sleeps.append,
+            log=logs.append,
+        )
+        is False
+    )
+    assert len(logs) == 2
+    assert len(sleeps) == 2
+
+
 def test_protected_pids_includes_self():
     assert os.getpid() in gp.protected_pids()
 
@@ -110,9 +130,7 @@ def test_habitat_egl_error_in_text():
         "Platform::WindowlessEglApplication::tryCreateContext(): "
         "unable to find CUDA device 0 among 2 EGL devices in total"
     )
-    assert gp.habitat_egl_error_in_text(
-        "WindowlessContext: Unable to create windowless context"
-    )
+    assert gp.habitat_egl_error_in_text("WindowlessContext: Unable to create windowless context")
     assert not gp.habitat_egl_error_in_text("episode finished correctly")
 
 
@@ -184,12 +202,16 @@ def test_clean_bundles_keeps_unique_and_newest_runs(tmp_path):
     now = time.time()
     # One unique ad-hoc bundle + two sweep runs (old + new).
     u = root / "cli_episode_q0000"
-    u.mkdir(); (u / "f").write_bytes(b"x")
+    u.mkdir()
+    (u / "f").write_bytes(b"x")
     os.utime(u, (now - 3 * 86400, now - 3 * 86400))
-    for stem, age in [("subset_paper113_20260801_100000", now - 5 * 86400),
-                      ("subset_paper113_20260813_100000", now - 1 * 86400)]:
+    for stem, age in [
+        ("subset_paper113_20260801_100000", now - 5 * 86400),
+        ("subset_paper113_20260813_100000", now - 1 * 86400),
+    ]:
         d = root / f"{stem}_dynagraph_qwen3_vl"
-        d.mkdir(); (d / "f").write_bytes(b"x")
+        d.mkdir()
+        (d / "f").write_bytes(b"x")
         os.utime(d, (age, age))
     out = gp.clean_episode_bundles(keep=1, root=root, apply=True)
     remaining = sorted(p.name for p in root.iterdir())

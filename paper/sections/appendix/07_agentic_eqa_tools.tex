@@ -35,7 +35,43 @@ Chasing station obs along a patio (e.g.\ q105) burned the nav budget with zero \
 
 \paragraph{Prefer explore after close ABSENT.}
 After a close approach that returns detector/VLM \texttt{ABSENT}, the executor sets \texttt{\_prefer\_explore} and forces one \texttt{explore\_frontier} (state nudge + fallback + run-loop redirect) instead of immediately re-investigating another nearby card.
-State also surfaces a short \textbf{Recent actions} history so the router sees prior ABSENT / explore outcomes within the episode.
+When action history is agent-visible, state also surfaces a short \textbf{Recent actions} history so the router sees prior ABSENT / explore outcomes within the episode.
+
+\paragraph{Configurable action-history visibility.}
+For \texttt{grounded\_v2}, \texttt{eqa.attempt\_ledger\_mode} is a three-way,
+manifest-frozen control: \texttt{off} neither persists dedicated attempt rows nor
+renders action history; \texttt{shadow} persists the same rows and artifacts but
+hides them from the router; and \texttt{agent} exposes recent action outcomes,
+navigation-loop flags, per-place attempt summaries/failure risk, and global
+attempt rows. Room history and live approach affordances remain separate state
+axes. Strict complete variants are checked in as
+\texttt{configs/benchmarks/hmeqa\_action\_history\_shadow.yaml} and
+\texttt{hmeqa\_action\_history\_agent.yaml}; the run manifest records their
+effective values and SHA-256 source.
+
+To isolate this channel from the earlier bundled grounded-state comparison, we
+use a paired four-question diagnostic (\{6,11,12,47\}) in which both arms use
+\texttt{grounded\_v2} with agent-visible graph and room evidence, no investigate
+stamp, no HM3D semantic sensor, and no per-question enriched labels. Only
+\texttt{attempt\_ledger\_mode=shadow} versus \texttt{agent} changes. Eight
+episodes are still too small for an accuracy claim; the test is reported as
+router-state/process evidence.
+
+\paragraph{Four-question diagnostic result (2026-08-23).}
+At clean commit \texttt{63abd929}, both managed runs passed detached EGL probes,
+completed without native crashes, and published validated four-unit completion
+records. Shadow and agent-visible history both scored \textbf{3/4}, with the
+same per-question letters (q6 B, q11 A, q12 D, q47 A). Mean planning steps
+increased from 35.25 (shadow) to 39.25 (agent-visible), with one budget hit in
+each arm. The predefined ledger repeat-failure count fell from $6$ to $4$
+(q11: $5\!\rightarrow\!3$), but total ledger attempts rose from $31$ to $37$
+and q12 required two extra decision rounds / 16 extra planning steps. All 12
+shadow router states kept the dedicated history sections empty; recent actions,
+persisted loop flags, and global attempts were non-empty in 10/14 treatment
+router calls. Thus the visibility mechanism and shadow no-leakage control
+worked, but this small diagnostic does not support default enablement or scale.
+Frozen details:
+\texttt{paper/data/hmeqa\_agentic\_h2h/action\_history\_pair\_20260823.json}.
 
 \subsection{Answer-mode tools}
 
@@ -69,6 +105,6 @@ When no question is provided (map-building explore), \texttt{submit\_answer} is 
 
 \subsection{Budgets and configuration}
 
-Typical knobs (YAML \texttt{eqa.*} / env overrides): max agentic rounds, max nav steps per episode (\texttt{agentic\_max\_nav\_steps}), hyp recall $K$ (\texttt{EMET\_EQA\_HYP\_RECALL\_K}), SigLIP verify similarity floor (\texttt{verify\_min\_sim}), and trace collection (\texttt{EMET\_EQA\_TRACE}).
+Typical knobs (YAML \texttt{eqa.*} / env overrides): max agentic rounds, max nav steps per episode (\texttt{agentic\_max\_nav\_steps}), hyp recall $K$ (\texttt{EMET\_EQA\_HYP\_RECALL\_K}), SigLIP verify similarity floor (\texttt{verify\_min\_sim}), action-history visibility (\texttt{attempt\_ledger\_mode}), and trace collection (\texttt{EMET\_EQA\_TRACE}).
 Habitat H2H entrypoint: \texttt{scripts/run\_hmeqa\_agentic\_h2h.sh} / \texttt{emet hmeqa h2h}.
 Episode review: \texttt{emet hmeqa inspect OUT --qid N}.

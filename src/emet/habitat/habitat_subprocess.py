@@ -9,7 +9,6 @@ from __future__ import annotations
 import atexit
 import signal
 import subprocess
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -125,9 +124,7 @@ def spawn_habitat_server_subprocess(
     )
     cmd = build_habitat_wrapper_command(argv)
     if cmd is None:
-        raise RuntimeError(
-            "Habitat wrapper not found. From the project root run: ./scripts/install_habitat.sh"
-        )
+        raise RuntimeError("Habitat wrapper not found. From the project root run: ./scripts/install_habitat.sh")
     env = dict(__import__("os").environ)
     ensure_habitat_eqa_data_dir_env(env)
     from emet.utils.process_tree import popen_session

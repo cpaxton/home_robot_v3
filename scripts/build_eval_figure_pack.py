@@ -183,29 +183,15 @@ def _track_has_data(track_summary: dict) -> bool:
 
 def _investigate_status(summary: dict) -> tuple[str, bool]:
     hmeqa_acc = [
-        v.get("accuracy", 0.0)
-        for v in summary.get("hmeqa", {}).get("methods", {}).values()
-        if isinstance(v, dict)
+        v.get("accuracy", 0.0) for v in summary.get("hmeqa", {}).get("methods", {}).values() if isinstance(v, dict)
     ]
     ovmm_any_success = [
-        (
-            v.get("find_object_success", 0) > 0
-            or v.get("find_recep_success", 0) > 0
-            or v.get("partial_success", 0) > 0
-        )
+        (v.get("find_object_success", 0) > 0 or v.get("find_recep_success", 0) > 0 or v.get("partial_success", 0) > 0)
         for v in summary.get("ovmm", {}).get("backends", {}).values()
         if isinstance(v, dict)
     ]
-    sqa3d_em = [
-        v.get("em@1", 0.0)
-        for v in summary.get("sqa3d", {}).get("methods", {}).values()
-        if isinstance(v, dict)
-    ]
-    investigate = not (
-        any(a > 0 for a in hmeqa_acc)
-        or any(ovmm_any_success)
-        or any(e > 0 for e in sqa3d_em)
-    )
+    sqa3d_em = [v.get("em@1", 0.0) for v in summary.get("sqa3d", {}).get("methods", {}).values() if isinstance(v, dict)]
+    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_any_success) or any(e > 0 for e in sqa3d_em))
     return ("INVESTIGATE" if investigate else "OK", investigate)
 
 
@@ -227,8 +213,7 @@ def build_summary(
             fallback = _summarize_hmeqa(_find_hmeqa_jsonls(artifact_tag, results_root))
             if _track_has_data(fallback):
                 print(
-                    f"WARNING: no HM-EQA files for run_id={run_id!r}; "
-                    f"using artifact_tag={artifact_tag!r}",
+                    f"WARNING: no HM-EQA files for run_id={run_id!r}; using artifact_tag={artifact_tag!r}",
                     file=sys.stderr,
                 )
                 hmeqa = fallback
@@ -236,8 +221,7 @@ def build_summary(
             fallback = _summarize_ovmm(artifact_tag, ovmm_root)
             if _track_has_data(fallback):
                 print(
-                    f"WARNING: no OVMM files for run_id={run_id!r}; "
-                    f"using artifact_tag={artifact_tag!r}",
+                    f"WARNING: no OVMM files for run_id={run_id!r}; using artifact_tag={artifact_tag!r}",
                     file=sys.stderr,
                 )
                 ovmm = fallback
@@ -245,8 +229,7 @@ def build_summary(
             fallback = _summarize_sqa3d(artifact_tag, sqa3d_root)
             if _track_has_data(fallback):
                 print(
-                    f"WARNING: no SQA3D files for run_id={run_id!r}; "
-                    f"using artifact_tag={artifact_tag!r}",
+                    f"WARNING: no SQA3D files for run_id={run_id!r}; using artifact_tag={artifact_tag!r}",
                     file=sys.stderr,
                 )
                 sqa3d = fallback
@@ -268,9 +251,7 @@ def write_summary_csv(summary: dict, path: Path) -> None:
     csv_lines = ["track,method,n,success_metric,value"]
     for method, stats in summary.get("hmeqa", {}).get("methods", {}).items():
         if isinstance(stats, dict):
-            csv_lines.append(
-                f"hmeqa,{method},{stats.get('n', 0)},accuracy,{stats.get('accuracy', 0.0):.4f}"
-            )
+            csv_lines.append(f"hmeqa,{method},{stats.get('n', 0)},accuracy,{stats.get('accuracy', 0.0):.4f}")
     for backend, stats in summary.get("ovmm", {}).get("backends", {}).items():
         if isinstance(stats, dict):
             n = stats.get("n", 0) or 1
@@ -285,9 +266,7 @@ def write_summary_csv(summary: dict, path: Path) -> None:
                 csv_lines.append(f"ovmm,{backend},{n},{metric},{rate:.4f}")
     for method, stats in summary.get("sqa3d", {}).get("methods", {}).items():
         if isinstance(stats, dict):
-            csv_lines.append(
-                f"sqa3d,{method},{stats.get('n', 0)},em@1,{stats.get('em@1', 0.0):.4f}"
-            )
+            csv_lines.append(f"sqa3d,{method},{stats.get('n', 0)},em@1,{stats.get('em@1', 0.0):.4f}")
     path.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
 
 
@@ -305,11 +284,7 @@ def _print_ovmm_digest(ovmm_summary: dict) -> None:
         recep = stats.get("find_recep_success_rate", 0.0)
         both = stats.get("find_both_success_rate", 0.0)
         obj_only = stats.get("find_object_only_rate", 0.0)
-        print(
-            f"  {backend}: n={n} "
-            f"FindObj={obj:.0%} FindRec={recep:.0%} "
-            f"both={both:.0%} object_only={obj_only:.0%}"
-        )
+        print(f"  {backend}: n={n} FindObj={obj:.0%} FindRec={recep:.0%} both={both:.0%} object_only={obj_only:.0%}")
 
 
 def _plot_ovmm_success_bars(ovmm_summary: dict, out_dir: Path) -> Path | None:

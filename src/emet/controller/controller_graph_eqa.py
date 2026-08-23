@@ -134,7 +134,12 @@ class GraphEQAController(DynamemController):
             backend.load(graph_memory_input_path)
             voxel_pickle = Path(graph_memory_input_path) / VOXEL_PICKLE_FILENAME
             vm = getattr(self, "voxel_map", None)
-            if voxel_pickle.exists() and vm is not None and hasattr(vm, "read_from_pickle"):
+            if (
+                bool(getattr(backend, "loaded_has_voxel_pickle", False))
+                and voxel_pickle.exists()
+                and vm is not None
+                and hasattr(vm, "read_from_pickle")
+            ):
                 vm.read_from_pickle(voxel_pickle)
             # Resume the staleness clock from the checkpoint so maintain() does not
             # immediately prune reloaded nodes (lifelong checkpoint resume).
@@ -823,6 +828,7 @@ class GraphEQAController(DynamemController):
         *,
         max_movement_step: int = 5,
         allow_navigation: bool = True,
+        trace_meta: dict[str, Any] | None = None,
     ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory.
 
@@ -836,8 +842,24 @@ class GraphEQAController(DynamemController):
         """
         from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
 
+        effective_trace_meta = dict(getattr(self, "_eqa_trace_meta", None) or {})
+        effective_trace_meta.update(dict(trace_meta or {}))
+        if self.graph_memory is not None and effective_trace_meta:
+            question_id = effective_trace_meta.get("question_id")
+            if question_id is None:
+                question_id = effective_trace_meta.get("qid")
+            session_id = effective_trace_meta.get("session_id")
+            if session_id is None:
+                session_id = effective_trace_meta.get("episode_id")
+            bind_context = getattr(self.graph_memory, "bind_episode_context", None)
+            if callable(bind_context):
+                bind_context(question_id=question_id, session_id=session_id)
         if agentic_verify_enabled(self):
-            return run_agentic_eqa(self, question)
+            return run_agentic_eqa(
+                self,
+                question,
+                trace_meta=effective_trace_meta,
+            )
 
         import time as _time
 

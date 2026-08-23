@@ -61,9 +61,7 @@ class ProcTHORMap:
             raise ValueError("room map not available")
         room_id = self.room_names_to_id[room_key]
         free_points_px = np.argwhere(self.occupancy)
-        free_points_px = free_points_px[
-            self._room_map[free_points_px[:, 0], free_points_px[:, 1]] == room_id
-        ]
+        free_points_px = free_points_px[self._room_map[free_points_px[:, 0], free_points_px[:, 1]] == room_id]
         return self.pos_px_to_m(free_points_px)
 
     @single_or_batch

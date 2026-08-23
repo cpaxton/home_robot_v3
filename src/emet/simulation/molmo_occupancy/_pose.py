@@ -7,9 +7,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-def pos_quat_to_pose_mat(
-    pos: np.ndarray | list, quat: np.ndarray | list | None = None
-) -> np.ndarray:
+def pos_quat_to_pose_mat(pos: np.ndarray | list, quat: np.ndarray | list | None = None) -> np.ndarray:
     if quat is None:
         assert len(pos) == 7
         quat = pos[3:7]

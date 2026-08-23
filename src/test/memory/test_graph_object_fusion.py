@@ -34,10 +34,13 @@ def _fixtures_dir() -> Path:
 
 
 def test_bounds_3d_iou_disjoint():
-    assert bounds_3d_iou(
-        {"min": [0, 0, 0], "max": [1, 1, 1]},
-        {"min": [2, 0, 0], "max": [3, 1, 1]},
-    ) == 0.0
+    assert (
+        bounds_3d_iou(
+            {"min": [0, 0, 0], "max": [1, 1, 1]},
+            {"min": [2, 0, 0], "max": [3, 1, 1]},
+        )
+        == 0.0
+    )
 
 
 def test_cosine_identical():

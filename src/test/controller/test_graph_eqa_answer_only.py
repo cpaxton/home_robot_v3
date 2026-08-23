@@ -75,8 +75,8 @@ def test_agentic_verify_defaults_off_for_discord_herman():
 
 def test_run_eqa_uses_classic_path_when_agentic_off(monkeypatch):
     """GraphEQAController.run_eqa must not enter agentic loop by default."""
-    from emet.controller.controller_graph_eqa import GraphEQAController
     import emet.memory.graph_eqa.agentic_eqa as agentic_eqa
+    from emet.controller.controller_graph_eqa import GraphEQAController
 
     agent = _make_agent()
     agent.parameters = {"eqa": {"agentic_verify": False}}
@@ -136,9 +136,7 @@ def test_run_eqa_single_step_allows_nav_when_enabled():
     from emet.controller.controller_graph_eqa import GraphEQAController
 
     agent = _make_agent()
-    one_iter = MagicMock(
-        return_value=("near the counter", "near the counter", [], True)
-    )
+    one_iter = MagicMock(return_value=("near the counter", "near the counter", [], True))
     agent.run_eqa_one_iter = one_iter
     GraphEQAController.run_eqa(
         agent,

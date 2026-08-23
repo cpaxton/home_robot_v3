@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from emet.core.parameters import get_parameters
 from emet.eval.benchmark_dynagraph import (
-    apply_dynagraph_harness,
     apply_habitat_eqa_method_parameters,
     apply_ovmm_backend_dynagraph,
     apply_sqa3d_dynagraph,

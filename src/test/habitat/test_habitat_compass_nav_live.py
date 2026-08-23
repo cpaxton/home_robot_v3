@@ -19,10 +19,11 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_compass_heading_matches_move_forward_live() -> None:
-    from emet.habitat.config import default_hm3d_scene_dir
-    from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
     from emet_habitat.robot_client import HabitatRobotClient
     from emet_habitat.simulator import HabitatEQASimulator
+
+    from emet.habitat.config import default_hm3d_scene_dir
+    from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 
     questions = load_hmeqa_questions(None)
     q = get_question(questions, question_id=14)

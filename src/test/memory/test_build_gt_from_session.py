@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """GT scene JSON from live sim_object_placements."""
 
 from __future__ import annotations

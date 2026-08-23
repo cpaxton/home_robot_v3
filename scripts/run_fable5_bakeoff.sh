@@ -24,8 +24,8 @@ LOCK_FILE="$HOME/.cache/habitat_eqa/overnight.lock"
 
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
-  echo "Another overnight eval holds $LOCK_FILE — exiting." | tee -a "$MAIN_LOG"
-  exit 1
+    echo "Another overnight eval holds $LOCK_FILE — exiting." | tee -a "$MAIN_LOG"
+    exit 1
 fi
 
 INTERVAL="${INTERVAL:-30}"
@@ -47,7 +47,7 @@ IDS_BALANCED="${IDS_BALANCED:-2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,32,33,34
 log() { echo "[$(date -Is)] $*" | tee -a "$MAIN_LOG"; }
 
 count_completed() {
-  uv run python - <<'PY' "$1"
+    uv run python - <<'PY' "$1"
 import json, sys
 from pathlib import Path
 from emet.habitat.metrics import episode_run_completed
@@ -60,7 +60,7 @@ PY
 }
 
 count_correct() {
-  uv run python - <<'PY' "$1"
+    uv run python - <<'PY' "$1"
 import json, sys
 from pathlib import Path
 from emet.habitat.metrics import episode_run_completed
@@ -80,41 +80,41 @@ PY
 n_ids() { awk -F, '{print NF}' <<<"$1"; }
 
 wait_for_gpu() {
-  local need_mib="$1" ok=0 free
-  while :; do
-    if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
-      log "GLOBAL deadline during GPU wait (need=${need_mib}MiB)"; return 2
-    fi
-    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
-    if [ "${free:-0}" -ge "$need_mib" ]; then ok=$((ok + 1)); else ok=0; fi
-    log "GPU free=${free}MiB need=${need_mib} stable=${ok}/${STABLE}"
-    [ "$ok" -ge "$STABLE" ] && return 0
-    sleep "$INTERVAL"
-  done
+    local need_mib="$1" ok=0 free
+    while :; do
+        if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
+            log "GLOBAL deadline during GPU wait (need=${need_mib}MiB)"; return 2
+        fi
+        free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
+        if [ "${free:-0}" -ge "$need_mib" ]; then ok=$((ok + 1)); else ok=0; fi
+        log "GPU free=${free}MiB need=${need_mib} stable=${ok}/${STABLE}"
+        [ "$ok" -ge "$STABLE" ] && return 0
+        sleep "$INTERVAL"
+    done
 }
 
 run_phase() {
-  local phase_name="$1" family="$2" hf_id="$3" ids="$4" tag="$5"
-  if [[ ",${SKIP_PHASES:-}," == *",$phase_name,"* ]]; then
-    log "SKIP phase $phase_name"; return 0
-  fi
-  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_${family}.jsonl"
-  local phase_log="$LOG_DIR/${phase_name}.log"
-  local n_target
-  n_target=$(n_ids "$ids")
-  log "=== PHASE $phase_name: family=$family hf_id=$hf_id tag=$tag n=$n_target ==="
-  while [ "$(count_completed "$results")" -lt "$n_target" ]; do
-    if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
-      log "GLOBAL deadline — stopping $phase_name at $(count_completed "$results")/$n_target"
-      return 2
+    local phase_name="$1" family="$2" hf_id="$3" ids="$4" tag="$5"
+    if [[ ",${SKIP_PHASES:-}," == *",$phase_name,"* ]]; then
+        log "SKIP phase $phase_name"; return 0
     fi
-    if ! wait_for_gpu "$NEED_MIB"; then return 2; fi
-    log "launch $phase_name attempt (done=$(count_completed "$results")/$n_target)"
-    TAG="$tag" IDS="$ids" METHOD=dynagraph TIMEOUT="$TIMEOUT" FAMILY="$family" HF_ID="$hf_id" \
-      ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$phase_log" "$MAIN_LOG" || true
-    sleep 10
-  done
-  log "PHASE $phase_name COMPLETE $(count_completed "$results")/$n_target correct=$(count_correct "$results")"
+    local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_${family}.jsonl"
+    local phase_log="$LOG_DIR/${phase_name}.log"
+    local n_target
+    n_target=$(n_ids "$ids")
+    log "=== PHASE $phase_name: family=$family hf_id=$hf_id tag=$tag n=$n_target ==="
+    while [ "$(count_completed "$results")" -lt "$n_target" ]; do
+        if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
+            log "GLOBAL deadline — stopping $phase_name at $(count_completed "$results")/$n_target"
+            return 2
+        fi
+        if ! wait_for_gpu "$NEED_MIB"; then return 2; fi
+        log "launch $phase_name attempt (done=$(count_completed "$results")/$n_target)"
+        TAG="$tag" IDS="$ids" METHOD=dynagraph TIMEOUT="$TIMEOUT" FAMILY="$family" HF_ID="$hf_id" \
+            ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$phase_log" "$MAIN_LOG" || true
+        sleep 10
+    done
+    log "PHASE $phase_name COMPLETE $(count_completed "$results")/$n_target correct=$(count_correct "$results")"
 }
 
 log "############ FABLE5 BAKEOFF START run_id=$RUN_ID deadline=${DEADLINE_H}h ############"
@@ -125,42 +125,42 @@ CAND_FAMILY=(qwen3_5 qwen3_vl gemma4 qwen2_5_vl)
 CAND_HF=("Qwen/Qwen3.5-9B" "Qwen/Qwen3-VL-8B-Instruct" "google/gemma-4-E4B-it" "Qwen/Qwen2.5-VL-3B-Instruct")
 
 for i in "${!CAND_PHASES[@]}"; do
-  run_phase "${CAND_PHASES[$i]}" "${CAND_FAMILY[$i]}" "${CAND_HF[$i]}" \
-    "$IDS_CANONICAL" "fable5_bake_${CAND_PHASES[$i]}" || true
+    run_phase "${CAND_PHASES[$i]}" "${CAND_FAMILY[$i]}" "${CAND_HF[$i]}" \
+        "$IDS_CANONICAL" "fable5_bake_${CAND_PHASES[$i]}" || true
 done
 
 # Winner: max correct on canonical-8; ties resolved by candidate order.
 WINNER_IDX=-1
 BEST=-1
 for i in "${!CAND_PHASES[@]}"; do
-  results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_${CAND_PHASES[$i]}_${CAND_FAMILY[$i]}.jsonl"
-  c=$(count_correct "$results")
-  log "candidate ${CAND_PHASES[$i]}: correct=$c"
-  if [ "$c" -gt "$BEST" ]; then BEST="$c"; WINNER_IDX="$i"; fi
+    results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_${CAND_PHASES[$i]}_${CAND_FAMILY[$i]}.jsonl"
+    c=$(count_correct "$results")
+    log "candidate ${CAND_PHASES[$i]}: correct=$c"
+    if [ "$c" -gt "$BEST" ]; then BEST="$c"; WINNER_IDX="$i"; fi
 done
 
 if [ -n "${WINNER_FAMILY:-}" ] && [ -n "${WINNER_HF:-}" ]; then
-  W_FAMILY="$WINNER_FAMILY"; W_HF="$WINNER_HF"; W_NAME="override"
+    W_FAMILY="$WINNER_FAMILY"; W_HF="$WINNER_HF"; W_NAME="override"
 elif [ "$WINNER_IDX" -ge 0 ]; then
-  W_FAMILY="${CAND_FAMILY[$WINNER_IDX]}"; W_HF="${CAND_HF[$WINNER_IDX]}"; W_NAME="${CAND_PHASES[$WINNER_IDX]}"
+    W_FAMILY="${CAND_FAMILY[$WINNER_IDX]}"; W_HF="${CAND_HF[$WINNER_IDX]}"; W_NAME="${CAND_PHASES[$WINNER_IDX]}"
 else
-  log "No winner determined — skipping bal32."; W_FAMILY=""; W_HF=""; W_NAME=""
+    log "No winner determined — skipping bal32."; W_FAMILY=""; W_HF=""; W_NAME=""
 fi
 
 if [ -n "$W_FAMILY" ]; then
-  log "WINNER: $W_NAME ($W_FAMILY / $W_HF) with $BEST/8 — promoting to balanced-32"
-  run_phase "winner_bal32" "$W_FAMILY" "$W_HF" "$IDS_BALANCED" "fable5_bake_winner_bal32" || true
+    log "WINNER: $W_NAME ($W_FAMILY / $W_HF) with $BEST/8 — promoting to balanced-32"
+    run_phase "winner_bal32" "$W_FAMILY" "$W_HF" "$IDS_BALANCED" "fable5_bake_winner_bal32" || true
 fi
 
 log "############ SUMMARY ############"
 {
-  for i in "${!CAND_PHASES[@]}"; do
-    results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_${CAND_PHASES[$i]}_${CAND_FAMILY[$i]}.jsonl"
-    echo "canonical8 ${CAND_PHASES[$i]} (${CAND_HF[$i]}): $(count_correct "$results")/$(count_completed "$results")"
-  done
-  if [ -n "$W_FAMILY" ]; then
-    results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_winner_bal32_${W_FAMILY}.jsonl"
-    echo "balanced32 winner=$W_NAME: $(count_correct "$results")/$(count_completed "$results")"
-  fi
+    for i in "${!CAND_PHASES[@]}"; do
+        results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_${CAND_PHASES[$i]}_${CAND_FAMILY[$i]}.jsonl"
+        echo "canonical8 ${CAND_PHASES[$i]} (${CAND_HF[$i]}): $(count_correct "$results")/$(count_completed "$results")"
+    done
+    if [ -n "$W_FAMILY" ]; then
+        results="$HOME/.cache/habitat_eqa/results/subset_fable5_bake_winner_bal32_${W_FAMILY}.jsonl"
+        echo "balanced32 winner=$W_NAME: $(count_correct "$results")/$(count_completed "$results")"
+    fi
 } | tee "$LOG_DIR/summary.txt" | tee -a "$MAIN_LOG"
 log "############ FABLE5 BAKEOFF END ############"

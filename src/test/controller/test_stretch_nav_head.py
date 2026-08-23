@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Stretch nav / look_front head pose should be room-scale, not floor-staring."""
 
 from __future__ import annotations

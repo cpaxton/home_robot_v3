@@ -12,20 +12,20 @@ exec > >(tee -a "$LOG") 2>&1
 echo "[$(date -Is)] waiting for fast sweep: ${FAST_JSONL} (20 lines)"
 
 while true; do
-  lines=0
-  if [[ -f "$FAST_JSONL" ]]; then
-    lines=$(wc -l < "$FAST_JSONL" | tr -d ' ')
-  fi
-  if [[ "$lines" -ge 20 ]] && ! pgrep -f "frontier_v2_gemma4_q0-19_p10m5" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 60
+    lines=0
+    if [[ -f "$FAST_JSONL" ]]; then
+        lines=$(wc -l < "$FAST_JSONL" | tr -d ' ')
+    fi
+    if [[ "$lines" -ge 20 ]] && ! pgrep -f "frontier_v2_gemma4_q0-19_p10m5" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 60
 done
 
 echo "[$(date -Is)] fast sweep done (${lines} lines). Summarizing..."
 python3 "${ROOT}/scripts/summarize_habitat_run.py" \
-  "${OUT}/graph_eqa_gemma3_paper_q0-112.jsonl" \
-  "$FAST_JSONL" || true
+    "${OUT}/graph_eqa_gemma3_paper_q0-112.jsonl" \
+    "$FAST_JSONL" || true
 
 sleep 15
 cd "$ROOT"

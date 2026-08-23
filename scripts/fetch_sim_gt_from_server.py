@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Write GT scene JSON from a running sim's ``emet_session.sim_object_placements``."""
 
 from __future__ import annotations

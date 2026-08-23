@@ -29,70 +29,70 @@
     <!-- Robot only — lighting/floor come from scene_environment.xml when merged, or innate_mars_visual_extras.xml for view-mujoco. -->
     <body name="base_root" pos="0 0 0">
       <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
-      
+
       <!-- First, translation along the x-axis -->
       <joint name="base_x" type="slide" axis="1 0 0" damping="5"/>
-      
+
       <body name="base_x" pos="0 0 0">
         <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
         <!-- Then, translation along the y-axis -->
         <joint name="base_y" type="slide" axis="0 1 0" damping="5"/>
-        
+
         <body name="base_y" pos="0 0 0">
           <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
           <!-- Finally, apply yaw rotation -->
           <joint name="base_yaw" type="hinge" axis="0 0 1" damping="5"/>
-          
+
           <!-- Base link and the rest of the arm -->
           <body name="base_link" pos="0 0 0">
             <inertial pos="0 0 0" mass="0.89" diaginertia="0.001 0.001 0.001"/>
             <geom name="base_geom" class="visual" type="mesh" mesh="base_mesh" material="matt_black" euler="-1.5708 0 0"/>
-            <camera name="camera_base" pos="0.0197 0 0.19663" 
+            <camera name="camera_base" pos="0.0197 0 0.19663"
                     quat="0.5416752 0.4545195 -0.4545195 -0.5416752" mode="fixed" fovy="80"/>
 
             <body name="link1" pos="0.086 -0.05285 0.04025">
               <inertial pos="0 0 0" mass="0.065" diaginertia="0.0001 0.0001 0.0001"/>
               <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-3.14 3.14" damping="5"/>
               <geom name="link1_geom" class="visual" type="mesh" mesh="link1_mesh" material="bright_orange"/>
-              
+
               <body name="link2" pos="0 0 0.04425">
                 <inertial pos="0 0 0" mass="0.080" diaginertia="0.0001 0.0001 0.0001"/>
                 <joint name="joint2" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
                 <geom name="link2_geom" class="visual" type="mesh" mesh="link2_mesh" material="matt_black"/>
-                
+
                 <body name="link3" pos="0.02825 0 0.12125">
                   <inertial pos="0 0 0" mass="0.055" diaginertia="0.0001 0.0001 0.0001"/>
                   <joint name="joint3" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
                   <geom name="link3_geom" class="visual" type="mesh" mesh="link3_mesh" material="bright_orange"/>
-                  
+
                   <body name="link4" pos="0.1375 0 0.0045">
                     <inertial pos="0 0 0" mass="0.022" diaginertia="0.00005 0.00005 0.00005"/>
                     <joint name="joint4" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
                     <geom name="link4_geom" class="visual" type="mesh" mesh="link4_mesh" material="matt_black"/>
-                    
+
                     <body name="link5" pos="0.019 0 0">
                       <inertial pos="0 0 0" mass="0.050" diaginertia="0.00005 0.00005 0.00005"/>
                       <joint name="joint5" type="hinge" axis="1 0 0" limited="true" range="-3.14 3.14" damping="5"/>
                       <geom name="link5_geom" class="visual" type="mesh" mesh="link5_mesh" material="bright_orange"/>
-                      
+
                       <body name="link61" pos="0.044 -0.0092 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
                         <geom name="link61_geom" class="visual" type="mesh" mesh="link61_mesh" material="matt_black"/>
                       </body>
-                      
+
                       <body name="link62" pos="0.044 0.0091 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6M" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
                         <geom name="link62_geom" class="visual" type="mesh" mesh="link62_mesh" material="matt_black"/>
                       </body>
-                      
+
                       <!-- Add End Effector -->
                       <body name="ee_link" pos="0.091838 0 0">
                         <inertial pos="0 0 0" mass="0.001" diaginertia="0.00001 0.00001 0.00001"/>
                         <geom name="ee_geom" class="visual" type="sphere" size="0.005" material="bright_orange"/>
                       </body>
-                      
+
                       <!-- URDF ``fixed_arm_camera_link`` pitch on **link5 Y** (body ``quat``). Camera ``quat`` matches
                            head stereo: same optical→MuJoCo mapping relative to the (pitched) ``arm_camera_link``,
                            then **Rz(π)** in camera frame (image upright / 180°). ``pos`` shifts 1 cm along optical
@@ -148,7 +148,7 @@
     <exclude name="ex_link5_link61" body1="link5" body2="link61"/>
     <exclude name="ex_link5_link62" body1="link5" body2="link62"/>
   </contact>
-  
+
   <!-- Gripper mimic: URDF joint6M has axis (0,0,-1) and mimic multiplier -1 → q6M = -q6 -->
   <equality>
     <joint name="gripper_gear" joint1="joint6" joint2="joint6M" polycoef="0 -1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001"/>
@@ -159,7 +159,7 @@
     <velocity joint="base_x" kv="100"/>
     <velocity joint="base_y" kv="100"/>
     <velocity joint="base_yaw" kv="100"/>
-    
+
     <!-- Position control actuators for the arm joints -->
     <position joint="joint1" kp="1000"/>
     <position joint="joint2" kp="1000"/>

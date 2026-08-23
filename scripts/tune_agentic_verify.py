@@ -36,9 +36,7 @@ def main() -> int:
     report = tune_from_traces(traces)
     best = report.get("best_threshold") or {}
     knee = report.get("budget_knee") or {}
-    print(
-        f"traces={len(traces)} verify={report['n_verify_rows']} summaries={report['n_summary_rows']}"
-    )
+    print(f"traces={len(traces)} verify={report['n_verify_rows']} summaries={report['n_summary_rows']}")
     if best:
         print(
             f"best_threshold={best.get('threshold')} "

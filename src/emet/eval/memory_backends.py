@@ -66,10 +66,7 @@ def _warn_alias(legacy: str, canonical: str, *, kind: str) -> None:
     if key in _warned_aliases:
         return
     _warned_aliases.add(key)
-    logger.warning(
-        f"Deprecated {kind} {legacy!r} → use {canonical!r} "
-        f"(legacy alias accepted for compatibility)"
-    )
+    logger.warning(f"Deprecated {kind} {legacy!r} → use {canonical!r} (legacy alias accepted for compatibility)")
 
 
 def normalize_benchmark_backend(name: str | None, *, warn: bool = True) -> str:
@@ -90,8 +87,7 @@ def normalize_hmeqa_method(method: str | None, *, warn: bool = True) -> str:
     canonical = normalize_benchmark_backend(method, warn=warn)
     if canonical not in HMEQA_METHODS:
         raise ValueError(
-            f"Unknown HM-EQA method {method!r}; use one of {HMEQA_METHODS} "
-            f"(legacy alias: graph_eqa → static_graph)"
+            f"Unknown HM-EQA method {method!r}; use one of {HMEQA_METHODS} (legacy alias: graph_eqa → static_graph)"
         )
     return canonical
 

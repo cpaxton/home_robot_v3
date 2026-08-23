@@ -65,10 +65,7 @@ def graph_node_breakdown(graph_memory: Any | None) -> dict[str, int]:
 def format_graph_node_breakdown(graph_memory: Any | None) -> str:
     """Compact status line: ``graph 11 obj / 12 vp / 1 fr (24 total)``."""
     b = graph_node_breakdown(graph_memory)
-    return (
-        f"graph {b['object']} obj / {b['viewpoint']} vp / {b['frontier']} fr "
-        f"({b['total']} total)"
-    )
+    return f"graph {b['object']} obj / {b['viewpoint']} vp / {b['frontier']} fr ({b['total']} total)"
 
 
 def format_graph_size_report(graph_memory: Any | None, *, verbose: bool = True) -> str:
@@ -82,10 +79,7 @@ def format_graph_size_report(graph_memory: Any | None, *, verbose: bool = True) 
         f"({h['n_total']} total), {h['n_obs']} obs"
     )
     if int(h["n_object"]) > 0:
-        line += (
-            f", singleton={float(h['singleton_frac']):.0%}, "
-            f"mean_support={float(h['mean_support']):.1f}"
-        )
+        line += f", singleton={float(h['singleton_frac']):.0%}, mean_support={float(h['mean_support']):.1f}"
     if verbose and h.get("top_labels"):
         tops = ", ".join(f"{t['label']}×{t['count']}" for t in h["top_labels"][:5])
         line += f"; top: {tops}"
@@ -227,11 +221,7 @@ def graph_health_from_checkpoint_nodes(
     """Health metrics from exported ``graph.json`` node dicts (dynamic-explore cycles)."""
     frontier = sum(1 for n in nodes if n.get("is_frontier"))
     viewpoint = sum(1 for n in nodes if n.get("is_viewpoint"))
-    objects = [
-        n
-        for n in nodes
-        if not n.get("is_frontier") and not n.get("is_viewpoint")
-    ]
+    objects = [n for n in nodes if not n.get("is_frontier") and not n.get("is_viewpoint")]
     supports = [max(1, int(n.get("support_count", 1) or 1)) for n in objects]
     labels: list[str] = []
     for n in objects:

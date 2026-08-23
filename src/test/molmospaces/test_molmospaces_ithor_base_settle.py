@@ -104,9 +104,7 @@ def test_ithor_train_indices_base_flat_after_physics_settle():
             )
             assert placed is not None, f"index {idx}: find_molmospaces_freejoint_xyz returned None"
             x, y, z = placed
-            assert molmospaces_spawn.write_freejoint_base_xyzw(
-                m, d, base_body_name="base_link", x=x, y=y, z=float(z)
-            )
+            assert molmospaces_spawn.write_freejoint_base_xyzw(m, d, base_body_name="base_link", x=x, y=y, z=float(z))
             mujoco.mj_forward(m, d)
             q0 = _base_freejoint_quat_wxyz(m, d, "base_link")
             z0 = _body_z_axis_world(m, d, "base_link")
@@ -120,7 +118,9 @@ def test_ithor_train_indices_base_flat_after_physics_settle():
             q1 = _base_freejoint_quat_wxyz(m, d, "base_link")
             z1 = _body_z_axis_world(m, d, "base_link")
             ang = _quat_angle_deg(q0, q1)
-            assert ang <= max_deg, f"index {idx}: orientation drift {ang:.2f}° > {max_deg}° (settle_steps={settle_steps})"
+            assert ang <= max_deg, (
+                f"index {idx}: orientation drift {ang:.2f}° > {max_deg}° (settle_steps={settle_steps})"
+            )
             assert float(z1[2]) >= min_up_dot, f"index {idx}: base not upright after settle (z·ê_z={z1[2]:.3f})"
         finally:
             merged.unlink(missing_ok=True)

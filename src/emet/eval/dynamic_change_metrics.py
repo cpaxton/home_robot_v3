@@ -39,9 +39,7 @@ def score_hidden_relocations(
             if old_distance > match_radius_m:
                 continue
             new_distance = (
-                _distance(event_new, move.get("verified_pos", move.get("pos")))
-                if event_new is not None
-                else 0.0
+                _distance(event_new, move.get("verified_pos", move.get("pos"))) if event_new is not None else 0.0
             )
             score = old_distance + new_distance
             if best is None or score < best[0]:
@@ -55,9 +53,7 @@ def score_hidden_relocations(
         if event.get("step") is not None and move.get("step") is not None:
             delays.append(max(0.0, float(event["step"]) - float(move["step"])))
         if event_new is not None:
-            relocation_errors.append(
-                _distance(event_new, move.get("verified_pos", move.get("pos")))
-            )
+            relocation_errors.append(_distance(event_new, move.get("verified_pos", move.get("pos"))))
     precision = len(event_matches) / len(events) if events else 0.0
     recall = len(move_matches) / len(moves) if moves else 0.0
     return {
@@ -68,14 +64,8 @@ def score_hidden_relocations(
         "missed_relocations": len(moves) - len(move_matches),
         "detection_precision": precision,
         "detection_recall": recall,
-        "mean_detection_delay_steps": (
-            sum(delays) / len(delays) if delays else None
-        ),
-        "mean_relocation_error_m": (
-            sum(relocation_errors) / len(relocation_errors)
-            if relocation_errors
-            else None
-        ),
+        "mean_detection_delay_steps": (sum(delays) / len(delays) if delays else None),
+        "mean_relocation_error_m": (sum(relocation_errors) / len(relocation_errors) if relocation_errors else None),
     }
 
 
@@ -96,9 +86,7 @@ def stale_memory_half_life(
         if before == after:
             return float(x[index])
         alpha = (before - target) / (before - after)
-        return float(x[index - 1]) + alpha * (
-            float(x[index]) - float(x[index - 1])
-        )
+        return float(x[index - 1]) + alpha * (float(x[index]) - float(x[index - 1]))
     return math.inf
 
 

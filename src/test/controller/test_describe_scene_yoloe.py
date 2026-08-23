@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from emet.controller.controller_dynamem import DynamemController, _DESCRIBE_SCENE_YOLOE_LABELS
+from emet.controller.controller_dynamem import _DESCRIBE_SCENE_YOLOE_LABELS, DynamemController
 
 
 def _agent(**params: object) -> DynamemController:
@@ -35,9 +35,7 @@ def test_describe_scene_combines_memory_and_vlm():
     vm = SimpleNamespace(image_description_client=MagicMock(), eqa_client=None)
     agent.get_voxel_map = lambda: vm
     agent._describe_scene_vlm = MagicMock(return_value="From my head camera: a table and a chair.")
-    agent._describe_scene_from_memory = MagicMock(
-        return_value="From my map/scene graph I also know about: cup."
-    )
+    agent._describe_scene_from_memory = MagicMock(return_value="From my map/scene graph I also know about: cup.")
     agent._describe_scene_yoloe = MagicMock(return_value="From my head camera I can make out: inhaler.")
     text = agent.describe_head_camera_scene_text()
     # Caption first, then graph grounding.
@@ -51,9 +49,7 @@ def test_describe_scene_combines_memory_and_vlm():
 def test_describe_scene_uses_memory_when_no_vlm():
     agent = _agent()
     agent._describe_scene_vlm = MagicMock(return_value=None)
-    agent._describe_scene_from_memory = MagicMock(
-        return_value="From my map/scene graph I also know about: sofa."
-    )
+    agent._describe_scene_from_memory = MagicMock(return_value="From my map/scene graph I also know about: sofa.")
     text = agent.describe_head_camera_scene_text(graph_memory=object())
     assert "sofa" in text
     assert "scene graph" in text.lower() or "map" in text.lower()
@@ -80,9 +76,7 @@ def test_describe_scene_fallback_without_vlm_or_memory():
 def test_describe_scene_skips_explore_when_memory_works():
     agent = _agent()
     agent._describe_scene_vlm = MagicMock(return_value=None)
-    agent._describe_scene_from_memory = MagicMock(
-        return_value="From my map/scene graph I also know about: sofa."
-    )
+    agent._describe_scene_from_memory = MagicMock(return_value="From my map/scene graph I also know about: sofa.")
     agent.look_around = MagicMock()
     agent.run_exploration = MagicMock()
     text = agent.describe_head_camera_scene_text()
@@ -120,6 +114,7 @@ def test_pick_interesting_scene_image_falls_back_to_live():
     assert label is None
     assert image is not None
     np.testing.assert_array_equal(image, live)
+
 
 def test_describe_scene_yoloe_fallback_only_when_enabled():
     agent = _agent(

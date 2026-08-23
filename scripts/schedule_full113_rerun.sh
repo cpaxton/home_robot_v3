@@ -25,15 +25,15 @@ log() { echo "[$(date -Iseconds)] $*"; }
 
 # --- target ----------------------------------------------------------------
 if [[ -n "${TARGET:-}" ]]; then
-  TARGET_STR="$TARGET"
+    TARGET_STR="$TARGET"
 else
-  TARGET_STR="$(date -d "+${DELAY_H} hours" '+%Y-%m-%d %H:%M')"
+    TARGET_STR="$(date -d "+${DELAY_H} hours" '+%Y-%m-%d %H:%M')"
 fi
 TARGET_EPOCH="$(date -d "$TARGET_STR" +%s)"
 NOW="$(date +%s)"
 if [[ "$TARGET_EPOCH" -le "$NOW" ]]; then
-  log "FATAL: target '$TARGET_STR' (epoch $TARGET_EPOCH) is not in the future (now=$NOW). Refusing to launch early."
-  exit 3
+    log "FATAL: target '$TARGET_STR' (epoch $TARGET_EPOCH) is not in the future (now=$NOW). Refusing to launch early."
+    exit 3
 fi
 SECS=$((TARGET_EPOCH - NOW))
 log "scheduled full-113 launch at $TARGET_STR (now=$(date); sleeping ${SECS}s ≈ $((SECS / 3600))h $((SECS % 3600 / 60))m)"
@@ -44,10 +44,10 @@ log "target time reached; starting launch sequence"
 uv run emet habitat safe-start
 log "safe-start submitted; waiting for EGL probe to finish"
 for _ in $(seq 1 90); do
-  if ! uv run emet jobs 2>/dev/null | grep -q "habitat-egl"; then
-    break
-  fi
-  sleep 15
+    if ! uv run emet jobs 2>/dev/null | grep -q "habitat-egl"; then
+        break
+    fi
+    sleep 15
 done
 sleep 20  # settle
 
@@ -55,11 +55,11 @@ sleep 20  # settle
 NAME="hmeqa-paper113-${OUT_TAG}"
 log "launching full-113 re-run as emet jobs '$NAME' (methods=$METHODS)"
 uv run emet jobs run \
-  --name "$NAME" \
-  -d "Full-113 HM-EQA re-run with location_override_equip_gate fix default-on (merged #116); confirms offline-verified 52.2/44.2" \
-  --need-mib 12000 \
-  -- \
-  env EMET_ALLOW_SDPA_ATTN=1 METHODS="$METHODS" HF_ID=Qwen/Qwen3-VL-8B-Instruct \
-  ./scripts/run_hmeqa_paper113_h2h.sh
+    --name "$NAME" \
+    -d "Full-113 HM-EQA re-run with location_override_equip_gate fix default-on (merged #116); confirms offline-verified 52.2/44.2" \
+    --need-mib 12000 \
+    -- \
+    env EMET_ALLOW_SDPA_ATTN=1 METHODS="$METHODS" HF_ID=Qwen/Qwen3-VL-8B-Instruct \
+    ./scripts/run_hmeqa_paper113_h2h.sh
 
 log "full-113 re-run launched"

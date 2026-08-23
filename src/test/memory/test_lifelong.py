@@ -505,8 +505,8 @@ def test_lifelong_legacy_dual_dir_ignored_under_dynagraph(tmp_path):
     """Old checkpoints with both graphs: dynagraph load restores graph.json and skips OV."""
     from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph, SceneGraphNode
     from emet.memory.format import OPEN_VOCAB_SCENE_GRAPH_DIR
-    from emet.memory.lifelong import load_lifelong_checkpoint, save_open_vocab_scene_graph_sidecar
     from emet.memory.headless_export import export_graph_eqa_dir
+    from emet.memory.lifelong import load_lifelong_checkpoint, save_open_vocab_scene_graph_sidecar
 
     gm = _make_memory()
     gm.set_graph_timestep(2)

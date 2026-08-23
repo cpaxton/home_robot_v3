@@ -105,10 +105,7 @@ def normalize_deploy_robot(robot: str | None) -> str | None:
         return _ROBOT_ALIASES[key]
     if key in _DEPLOY_SPECS:
         return key
-    raise SystemExit(
-        f"Unsupported deploy robot {robot!r}. Use: stretch, innate_mars "
-        f"(aliases: hello_stretch, mars)."
-    )
+    raise SystemExit(f"Unsupported deploy robot {robot!r}. Use: stretch, innate_mars (aliases: hello_stretch, mars).")
 
 
 def get_deploy_spec(robot: str) -> DeployRobotSpec:
@@ -477,11 +474,7 @@ def deploy(
     remote_ws_src = f"{remote_ws}/src"
     remote_bridge = f"{remote_ws_src}/{spec.bridge_pkg}"
     ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws}/install/setup.bash"
-    robot_reqs = (
-        root / "configs" / "robots" / spec.requirements_basename
-        if spec.requirements_basename
-        else None
-    )
+    robot_reqs = root / "configs" / "robots" / spec.requirements_basename if spec.requirements_basename else None
     da3_reqs = root / "configs" / "robots" / "innate_mars_da3_requirements.txt"
     emet_src = root / "src" / "emet"
 
@@ -551,10 +544,7 @@ def deploy(
     )
 
     print(f"Building ROS2 workspace on robot (colcon build --packages-select {spec.bridge_pkg})...")
-    build_cmd = (
-        f"bash -lc '{ros_setup} && cd {remote_ws} && "
-        f"colcon build --packages-select {spec.bridge_pkg}'"
-    )
+    build_cmd = f"bash -lc '{ros_setup} && cd {remote_ws} && colcon build --packages-select {spec.bridge_pkg}'"
     _ssh_run(host, user, password, build_cmd, use_paramiko)
 
     print("Verifying bridge imports emet_core on robot...")

@@ -17,6 +17,7 @@ from emet.habitat.hm3d_semantics import (
     Hm3dSemanticLabeler,
     hm3d_annotated_scene_dataset_config,
     hm3d_semantic_glb_for_basis,
+    resolve_hm3d_semantics_enabled,
 )
 
 
@@ -56,10 +57,13 @@ class HabitatEQASimulator:
         train_root = hm3d_train_root or scene_glb.parent.parent
         hm3d_data_root = train_root.parent.parent.parent
         split = train_root.name
-        has_semantic_assets = hm3d_semantic_glb_for_basis(scene_glb).is_file()
-        want_semantics = has_semantic_assets if use_hm3d_semantics is None else bool(use_hm3d_semantics)
+        semantic_glb = hm3d_semantic_glb_for_basis(scene_glb)
         annotated_cfg = hm3d_annotated_scene_dataset_config(hm3d_data_root, split=split)
-        self._use_semantics = want_semantics and annotated_cfg is not None
+        self._use_semantics = resolve_hm3d_semantics_enabled(
+            use_hm3d_semantics,
+            semantic_glb=semantic_glb,
+            annotated_config=annotated_cfg,
+        )
 
         sim_cfg = habitat_sim.SimulatorConfiguration()
         sim_cfg.scene_id = str(scene_glb)
@@ -183,8 +187,7 @@ class HabitatEQASimulator:
             },
             "navmesh_snapped": bool(
                 np.linalg.norm(
-                    np.asarray([pose.x, pose.y, pose.z], dtype=np.float64)
-                    - np.asarray(position, dtype=np.float64)
+                    np.asarray([pose.x, pose.y, pose.z], dtype=np.float64) - np.asarray(position, dtype=np.float64)
                 )
                 > 1e-4
             ),

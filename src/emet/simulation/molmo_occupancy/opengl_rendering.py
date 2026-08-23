@@ -36,9 +36,7 @@ from emet.simulation.molmo_occupancy.abstract_renderer import MjAbstractRenderer
 from emet.simulation.molmo_occupancy.mj_model_bindings import MjModelBindings
 
 
-def prepare_locals_for_super(
-    local_vars, args_name="args", kwargs_name="kwargs", ignore_kwargs=False
-):
+def prepare_locals_for_super(local_vars, args_name="args", kwargs_name="kwargs", ignore_kwargs=False):
     assert args_name not in local_vars, f"`prepare_locals_for_super` does not support {args_name}."
     new_locals = {k: v for k, v in local_vars.items() if k != "self" and "__" not in k}
     if kwargs_name in new_locals:
@@ -64,9 +62,7 @@ class MjOpenGLRenderer(MjAbstractRenderer):
         model: MjModel | None = None,
         **kwargs: Any,
     ) -> None:
-        assert model_bindings is not None or model is not None, (
-            "model_bindings or model must be provided"
-        )
+        assert model_bindings is not None or model is not None, "model_bindings or model must be provided"
         """Initializes a new `Renderer`.
 
         Args:
@@ -292,9 +288,7 @@ class MjOpenGLRenderer(MjAbstractRenderer):
             visible_segids = np.array([g.segid + 1 for g in visible_geoms], np.int32)
             visible_objid = np.array([g.objid for g in visible_geoms], np.int32)
             visible_objtype = np.array([g.objtype for g in visible_geoms], np.int32)
-            visible_bodyid = np.array(
-                [self.geomid_to_bodyid(g.objid) for g in visible_geoms], np.int32
-            )
+            visible_bodyid = np.array([self.geomid_to_bodyid(g.objid) for g in visible_geoms], np.int32)
 
             # Only set values for valid segment IDs that are within bounds
             valid_mask = (visible_segids >= 0) & (visible_segids < segid2output.shape[0])
@@ -394,9 +388,7 @@ class MjOpenGLRenderer(MjAbstractRenderer):
                 if camera_id == -1:
                     raise ValueError(f'The camera "{camera}" does not exist.')
             if camera_id < -1 or camera_id >= self.model.ncam:
-                raise ValueError(
-                    f"The camera id {camera_id} is out of range [-1, {self.model.ncam})."
-                )
+                raise ValueError(f"The camera id {camera_id} is out of range [-1, {self.model.ncam}).")
 
             # Render camera.
             camera = MjvCamera()
@@ -519,9 +511,7 @@ class MultithreadOpenGLRenderer(MultithreadRenderer):
                 (idx, (self.namespace if add_namespace else "") + camera, data, mode)
             )
 
-        idx_render_tuples = [
-            self.render_output_queue.get(block=True) for _ in range(len(self.env.mj_models))
-        ]
+        idx_render_tuples = [self.render_output_queue.get(block=True) for _ in range(len(self.env.mj_models))]
 
         idx_render_tuples.sort(key=lambda x: x[0])
         self.render_outputs = [img for _, img in idx_render_tuples]

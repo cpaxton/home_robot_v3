@@ -369,9 +369,7 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
             "ground_truth",
             None,
         ):
-            raise click.UsageError(
-                "--no-sensor-perception and --no-instance-graph apply to static_graph/dynagraph."
-            )
+            raise click.UsageError("--no-sensor-perception and --no-instance-graph apply to static_graph/dynagraph.")
         if run.compare_to_gt and resolved_backend != "dynagraph":
             raise click.UsageError("--compare-to-gt requires --backend dynagraph.")
         if resolved_backend is None and not run.cameras_only and not is_localhost_host(host):

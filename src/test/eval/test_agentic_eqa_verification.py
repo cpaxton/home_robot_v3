@@ -53,6 +53,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from emet.controller.habitat_nav import NavOutcome
+
 
 def _has_attr_path(mod_name: str, attr: str) -> bool:
     try:
@@ -69,13 +71,6 @@ def _require_agentic():
 
     if not hasattr(GraphEQAMemory, "hypothesize_nav_targets"):
         pytest.skip("GraphEQAMemory.hypothesize_nav_targets not implemented")
-
-
-def _nav_outcome(finished: bool):
-    """NavOutcome for navigate_to_target_pose mocks (post-NavOutcome API)."""
-    from emet.controller.habitat_nav import NavOutcome
-
-    return NavOutcome.REACHED if finished else NavOutcome.STUCK
 
 
 def _require_vram_split():
@@ -137,6 +132,19 @@ def test_H2_vram_prep_warms_then_releases_siglip():
     assert gm._obs_siglip_features
 
 
+def test_agentic_executor_consumes_manifest_budget_environment(monkeypatch):
+    from emet.memory.graph_eqa.agentic_eqa import build_agentic_eqa_executor
+
+    monkeypatch.setenv("EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS", "5")
+    monkeypatch.setenv("EMET_EQA_AGENTIC_MAX_NAV_STEPS", "4")
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_max_tool_rounds": 8, "agentic_max_nav_steps": 8}}
+    with patch("emet.eval.dynagraph_vram.warm_siglip_confirmed_memory"):
+        executor = build_agentic_eqa_executor(agent, "Where is the chair?")
+    assert executor.max_rounds == 5
+    assert executor.max_nav_steps == 4
+
+
 def test_H3_answer_only_skips_nav():
     """H3: allow_navigation=False → no navigate_to_target_pose / look_around."""
     from emet.controller.controller_graph_eqa import GraphEQAController
@@ -164,7 +172,7 @@ def test_H3_answer_only_skips_nav():
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
     agent.planner = MagicMock()
     agent._planning_base_xyt = lambda xyt: xyt
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.rerun_visualizer = MagicMock()
     agent.space = MagicMock()
     agent.voxel_map = MagicMock()
@@ -285,7 +293,7 @@ def test_A3_agentic_loop_nav_before_answer():
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return _nav_outcome(True)
+        return NavOutcome.REACHED
 
     def _update(*_a, **_k):
         order.append("update")
@@ -356,7 +364,7 @@ def test_follow_eqa_action_after_unknown_submit():
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return _nav_outcome(True)
+        return NavOutcome.REACHED
 
     def _update(*_a, **_k):
         order.append("update")
@@ -415,7 +423,7 @@ def test_unknown_without_action_obs_explores():
     agent.robot = MagicMock()
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
     agent.robot.get_observation.return_value = None
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.update = MagicMock()
     agent.run_exploration = MagicMock(return_value=True)
     agent._siglip_guided_frontier = MagicMock(return_value=None)
@@ -790,7 +798,7 @@ def test_T2_router_parses_and_dispatches_nav():
     gm.eqa_client = client
     gm._navigation_waypoint_for_obs.return_value = np.array([1.0, 2.0, 0.0])
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
 
     ex = AgenticEQAExecutor(agent, "Where is the sink?", max_rounds=3, max_nav_steps=2)
     calls, picked_by, meta = ex._route_tool_calls()
@@ -860,7 +868,7 @@ def test_T4_router_env_off_fallback_only(monkeypatch):
 
     def _nav(*_a, **_k):
         order.append("nav")
-        return _nav_outcome(True)
+        return NavOutcome.REACHED
 
     def _verify(*_a, **_k):
         order.append("verify")
@@ -1256,10 +1264,15 @@ def test_presence_without_answerability_does_not_auto_submit(monkeypatch):
 
     out = ex._tool_submit_answer("")
     assert out.get("ok") is True
-    # Evidence never established answerability, so the letter is a forced best guess
+    # Evidence never established answerability, so this is forced option text
     # carrying its provenance and a low calibrated confidence — not a silent Unknown.
     assert out.get("answer_provenance") == "uniform_prior"
-    assert out.get("answer") in {"A", "B", "C", "D"}
+    assert out.get("answer") in {
+        "By the kitchen counter",
+        "Between TV and living room sofas",
+        "Next to the dining table",
+        "Next to the living room armchairs",
+    }
     assert float(out.get("answer_confidence")) <= 0.5
     forced = [row for row in ex._trace_rows if row.get("tool") == "forced_answer"]
     assert len(forced) == 1
@@ -1497,7 +1510,7 @@ def test_answerable_deferred_without_phrase_hit(monkeypatch):
         present = True
         answerable = True
         need_more_views = False
-        suggested_answer = "B"
+        suggested_answer = "living room"
         reason = "clock on wall"
         raw = "{}"
 
@@ -1513,7 +1526,13 @@ def test_answerable_deferred_without_phrase_hit(monkeypatch):
         lambda **k: "brief",
     )
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock? A) kitchen B) bedroom C) office D) garage", router=False, collect_trace=True, single_view_confirm=False)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+        single_view_confirm=False,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1523,7 +1542,8 @@ def test_answerable_deferred_without_phrase_hit(monkeypatch):
     assert ex._evidence_policy.state == AgenticState.REPLAN
     assert any(r.get("event") == "answerable_deferred" for r in ex._trace_rows)
     msg = build_state_message(ex)
-    assert "pending_answer=B" in msg
+    assert "pending_answer=living room" in msg
+    assert "pending_answer=B" not in msg
 
 
 def test_answerable_two_view_agree_unlocks(monkeypatch):
@@ -1578,7 +1598,13 @@ def test_answerable_two_view_agree_unlocks(monkeypatch):
 
     gm.verify_phrase_at_obs.side_effect = lambda phrase, obs_id, **k: _verify_ret(int(obs_id))
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock? A) kitchen B) bedroom C) office D) garage", router=False, collect_trace=True, single_view_confirm=False)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+        single_view_confirm=False,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1587,6 +1613,8 @@ def test_answerable_two_view_agree_unlocks(monkeypatch):
     ex._tool_verify_siglip("clock", 11)
     assert ex._verified is True
     assert ex._evidence_policy.state == AgenticState.ANSWER
+    assert ex._confirmed_answer_evidence is not None
+    assert (ex._confirmed_answer_evidence.letter, ex._confirmed_answer_evidence.obs_id) == ("B", 11)
     assert any(r.get("event") == "answerable_confirmed" and r.get("reason") == "two_view_agree" for r in ex._trace_rows)
 
 
@@ -1631,7 +1659,12 @@ def test_need_more_views_blocks_unlock(monkeypatch):
         lambda **k: "brief",
     )
 
-    ex = AgenticEQAExecutor(agent, "Where is the clock? A) kitchen B) bedroom C) office D) garage", router=False, collect_trace=True)
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the clock? A) kitchen B) living room C) bedroom D) bathroom",
+        router=False,
+        collect_trace=True,
+    )
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "clock"
     ex._tool_verify_siglip("clock", 9)
@@ -1668,14 +1701,14 @@ def test_submit_keeps_qwen_letter_when_query_echoes_xyz():
     )
     ex._verified = True
     ex._verified_obs_id = 1
-    ex._last_vlm_assess = {"present": True, "suggested_answer": "C"}
+    ex._last_vlm_assess = {"present": True, "suggested_answer": "Next to the bed"}
     out = ex._do_submit_answer()
-    assert out["answer"] == "C"
+    assert out["answer"] == "Next to the bed"
     submit = next(r for r in ex._trace_rows if r.get("tool") == "submit_answer")
     assert submit["answer_source"] == "vlm_suggested"
 
-    out2 = ex._do_submit_answer(prefer_answer="D")
-    assert out2["answer"] == "D"
+    out2 = ex._do_submit_answer(prefer_answer="Kitchen")
+    assert out2["answer"] == "Kitchen"
 
 
 def test_vlm_assess_unlocks_verified_submit_gate(monkeypatch):
@@ -1792,7 +1825,7 @@ def test_capture_rejects_non_advancing_obs():
 
 
 def test_sync_scored_answer_appends_agentic_submit_for_habitat_scoring():
-    """Habitat scores last_eqa_raw — agentic letter must win over salvage."""
+    """Agentic sync preserves option text while Habitat still resolves choice D."""
     _require_agentic()
     from emet.habitat.metrics import extract_mcq_letter_from_raw_eqa
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticEQAResult
@@ -1811,8 +1844,8 @@ def test_sync_scored_answer_appends_agentic_submit_for_habitat_scoring():
         collect_trace=True,
     )
     result = AgenticEQAResult(
-        discord_text="Answer:D",
-        answer="D",
+        discord_text="Answer:2",
+        answer="2",
         confidence=True,
         relevant_images=[],
         tool_log=["submit_answer"],
@@ -1826,13 +1859,16 @@ def test_sync_scored_answer_appends_agentic_submit_for_habitat_scoring():
     )
     ex._sync_scored_answer_to_graph_memory(result, {"answer_source": "vlm_suggested"})
     assert "[agentic_submit]" in gm.last_eqa_raw
-    assert gm.last_eqa_parsed[1] == "D"
+    assert gm.last_eqa_parsed[1] == "2"
     letter = extract_mcq_letter_from_raw_eqa(
         gm.last_eqa_raw,
         ["1", "3", "4", "2"],
     )
     assert letter == "D"
-    assert any(r.get("event") == "sync_scored_answer" for r in ex._trace_rows)
+    sync = next(r for r in ex._trace_rows if r.get("event") == "sync_scored_answer")
+    assert sync["answer_text"] == "2"
+    assert sync["choice_index"] == 3
+    assert "letter" not in sync
 
 
 def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
@@ -1855,7 +1891,7 @@ def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
         return_value=VerifyResult(status="ABSENT", sim=0.05, obs_id=16, phrase="wall clock", ok=False)
     )
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.update = MagicMock()  # never advances obs id
     agent.robot = None
@@ -1992,6 +2028,8 @@ def test_router_prompt_has_no_score_prefer_or_obs7_demo():
     assert "investigate" in prompt
     assert 'navigate_to_obs", "arguments": {"obs_id": 7}' not in prompt
     assert "highest-score" not in prompt
+    assert "exact semantic option text" in prompt
+    assert "Pass MCQ letter" not in prompt
     assert "obs_id=3" in prompt
 
     ex._hypotheses = [
@@ -2018,6 +2056,27 @@ def test_router_prompt_has_no_score_prefer_or_obs7_demo():
     assert "source=frontier" in msg
     assert "#1 best" not in msg
     assert "score=" not in msg.split("Investigate", 1)[-1]
+    ex._pending_answerable = {
+        "letter": "D",
+        "answer_text": "Next to the refrigerator",
+        "present": True,
+    }
+    pending_msg = build_state_message(ex)
+    assert "pending_answer=Next to the refrigerator" in pending_msg
+    assert "pending_answer=D" not in pending_msg
+
+
+def test_visible_event_ids_do_not_match_longer_prefixes():
+    from emet.memory.graph_eqa.agentic_tools import _visible_event_ids
+
+    snapshot = MagicMock()
+    snapshot.evidence = [
+        MagicMock(event_id="event_1"),
+        MagicMock(event_id="event_10"),
+    ]
+    state_text = "- event_id=event_10 step=4 positive entity:trash_can"
+
+    assert _visible_event_ids(snapshot, state_text) == ("event_10",)
 
 
 def test_hyp_recall_diversifies_graph_and_frontier():
@@ -2087,7 +2146,7 @@ def test_investigate_records_place_inspect_on_card():
     )
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.update = MagicMock()
     agent.robot = MagicMock()
@@ -2413,7 +2472,16 @@ def test_stamp_room_after_investigate_updates_graph_and_estimate():
     # Local evidence only: obs labels (not hyp.phrase / labels_near_obs).
     gm._observations = [MagicMock(obs_id=3, labels=["toilet", "bath mat"])]
 
-    def _stamp(xy, room, protect_indoor_from_outdoor=True, corroborating_labels=None):
+    def _stamp(
+        xy,
+        room,
+        protect_indoor_from_outdoor=True,
+        corroborating_labels=None,
+        source="router_vlm",
+        source_view_id=None,
+        agent_round=None,
+        pose_round=None,
+    ):
         from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
 
         gm._room_clusters = stamp_room_at_xy(
@@ -2833,7 +2901,7 @@ def test_navigate_rejects_obs_not_in_evidence():
 
     agent = MagicMock()
     agent.graph_memory = MagicMock()
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.graph_memory._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 0.0]))
     ex = AgenticEQAExecutor(agent, question="Where is the sink?", max_rounds=4, router=False)
     ex._hypotheses = [
@@ -2849,6 +2917,110 @@ def test_navigate_rejects_obs_not_in_evidence():
     assert out["ok"] is False
     assert out.get("status") == "OBS_NOT_IN_EVIDENCE"
     assert agent.navigate_to_target_pose.call_count == 0
+
+
+def test_handle_tool_rejects_place_id_without_crashing():
+    """Router place keys are not numeric evidence-card ids."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    ex = AgenticEQAExecutor(agent, question="Where is the sink?", max_rounds=4, router=False)
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen sink",
+            obs_id=13,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            score=1.0,
+            source="graph",
+        )
+    ]
+
+    out = ex.handle_tool("investigate", {"obs_id": "place_ca28f3f9493f"})
+
+    assert out["ok"] is False
+    assert out["status"] == "OBS_NOT_IN_EVIDENCE"
+    assert out["obs_id"] == "place_ca28f3f9493f"
+    assert out["listed_obs_ids"] == [13]
+
+
+def test_grounded_router_redirects_invalid_obs_to_listed_hypothesis(monkeypatch):
+    """A stale router id must not consume every grounded-v2 round unchanged."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    ex = AgenticEQAExecutor(
+        agent,
+        question="Where is the trash can?",
+        max_rounds=8,
+        max_nav_steps=8,
+        router=True,
+        collect_trace=True,
+    )
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="refrigerator",
+            obs_id=13,
+            xyz=np.array([1.0, 2.0, 0.5]),
+            score=1.0,
+            source="graph",
+        )
+    ]
+    rejected = {
+        "ok": False,
+        "status": "OBS_NOT_IN_EVIDENCE",
+        "obs_id": 20,
+        "listed_obs_ids": [13],
+    }
+
+    with patch.object(ex, "handle_tool", return_value={"ok": True}) as handle:
+        assert ex._recover_failed_router_motion(tool="investigate", out=rejected) is True
+
+    handle.assert_called_once_with("investigate", {"obs_id": 13})
+    redirect = next(row for row in ex._trace_rows if row.get("event") == "nav_loop_redirect")
+    assert redirect["from_obs_id"] == 20
+    assert redirect["status"] == "OBS_NOT_IN_EVIDENCE"
+    assert redirect["to_obs_id"] == 13
+
+
+def test_grounded_router_redirects_blocked_place_to_frontier(monkeypatch):
+    """A grounded router must not spend every round on one exhausted place."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    monkeypatch.setenv("EMET_EQA_AGENTIC_DECISION_POLICY", "grounded_v2")
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    ex = AgenticEQAExecutor(
+        agent,
+        question="Where is the trash can?",
+        max_rounds=8,
+        max_nav_steps=8,
+        router=True,
+        collect_trace=True,
+    )
+    rejected = {
+        "ok": False,
+        "status": "NAV_LOOP_BLOCKED",
+        "obs_id": 1,
+    }
+
+    with patch.object(ex, "handle_tool", return_value={"ok": True}) as handle:
+        assert ex._recover_failed_router_motion(tool="investigate", out=rejected) is True
+
+    handle.assert_called_once_with("explore_frontier", {"toward": ex.query_text})
+    redirect = next(row for row in ex._trace_rows if row.get("event") == "nav_loop_redirect")
+    assert redirect["from_obs_id"] == 1
+    assert redirect["status"] == "NAV_LOOP_BLOCKED"
+    assert redirect["to"] == "explore_frontier"
 
 
 def test_visited_frontier_retired_from_graph():
@@ -2918,10 +3090,10 @@ def test_visited_frontier_retired_from_graph():
     assert "obs_id=3" in msg
 
 
-def test_nav_failed_allows_retry_until_approaches_exhausted():
-    """Transient planner misses rotate approach samples; block only when exhausted."""
+def test_consecutive_nav_failures_block_after_retry_limit():
+    """Planner misses rotate approaches until the anti-thrashing limit is reached."""
     _require_agentic()
-    from emet.memory.graph_eqa.agentic_eqa import PLACE_APPROACH_SAMPLES, AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_eqa import NAV_CONSECUTIVE_FAIL_LIMIT, AgenticEQAExecutor
     from emet.memory.graph_eqa.graph_memory import NavHypothesis
 
     agent = MagicMock()
@@ -2935,7 +3107,7 @@ def test_nav_failed_allows_retry_until_approaches_exhausted():
     gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
     gm.record_nav_attempt = MagicMock()
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(False))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.STUCK)
     agent.update = MagicMock()
     agent.robot = None
 
@@ -2957,20 +3129,17 @@ def test_nav_failed_allows_retry_until_approaches_exhausted():
         )
     ]
     targets = []
-    for _ in range(PLACE_APPROACH_SAMPLES):
+    for _ in range(NAV_CONSECUTIVE_FAIL_LIMIT):
         out = ex._tool_navigate_to_obs(7)
-        if out.get("status") == "NAV_LOOP_BLOCKED":
-            break
         assert out["ok"] is False
+        assert out.get("status") != "NAV_LOOP_BLOCKED"
         targets.append(out.get("approach_index"))
-    # Nav failures accumulate a consecutive-fail streak; once the streak limit is
-    # hit the obs is blocked unreachable (approaches no longer re-rotated forever).
-    assert len(targets) >= 1
-    assert targets == list(range(len(targets)))
+    assert targets == list(range(NAV_CONSECUTIVE_FAIL_LIMIT))
     assert ex._hypothesis_nav_blocked(7)
     blocked = ex._tool_navigate_to_obs(7)
     assert blocked.get("status") == "NAV_LOOP_BLOCKED"
     assert blocked.get("ok") is False
+    assert agent.navigate_to_target_pose.call_count == NAV_CONSECUTIVE_FAIL_LIMIT
 
 
 def test_investigate_samples_new_approach_after_close_absent():
@@ -2997,7 +3166,7 @@ def test_investigate_samples_new_approach_after_close_absent():
     gm.record_nav_attempt = MagicMock()
     gm._observation_by_id = MagicMock(return_value=gm._observations[0])
     gm._obs_is_frontier = MagicMock(return_value=False)
-    agent.navigate_to_target_pose = MagicMock(return_value=_nav_outcome(True))
+    agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     agent.look_around = MagicMock()
     agent.robot = MagicMock()
     agent.robot.get_base_pose = MagicMock(return_value=np.array([-16.8, -1.0, 0.0]))

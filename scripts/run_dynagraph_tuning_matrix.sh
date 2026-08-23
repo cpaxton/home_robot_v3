@@ -34,40 +34,40 @@ echo "[$(date -Is)] ========== DYNAGRAPH TUNING MATRIX run_id=${RUN_ID} ========
 echo "arms=${ARMS}" | tee -a "$SUMMARY"
 
 arm_flags() {
-  local arm="$1"
-  case "$arm" in
-    baseline)
-      echo ""
-      ;;
-    no_debias)
-      echo "--no-mcq-debias"
-      ;;
-    no_memory)
-      echo "--no-memory-summary"
-      ;;
-    no_explore)
-      echo "--explore-when-uncovered off"
-      ;;
-    graph_eqa_like)
-      echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
-      ;;
-    all_off)
-      echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
-      ;;
-    *)
-      echo "unknown arm ${arm}" >&2
-      return 1
-      ;;
-  esac
+    local arm="$1"
+    case "$arm" in
+        baseline)
+            echo ""
+            ;;
+        no_debias)
+            echo "--no-mcq-debias"
+            ;;
+        no_memory)
+            echo "--no-memory-summary"
+            ;;
+        no_explore)
+            echo "--explore-when-uncovered off"
+            ;;
+        graph_eqa_like)
+            echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
+            ;;
+        all_off)
+            echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
+            ;;
+        *)
+            echo "unknown arm ${arm}" >&2
+            return 1
+            ;;
+    esac
 }
 
 score_jsonl() {
-  local jsonl="$1"
-  if [[ ! -f "$jsonl" ]]; then
-    echo "0/0"
-    return
-  fi
-  uv run python - <<PY
+    local jsonl="$1"
+    if [[ ! -f "$jsonl" ]]; then
+        echo "0/0"
+        return
+    fi
+    uv run python - <<PY
 import json
 from pathlib import Path
 p = Path("${jsonl}")
@@ -78,45 +78,45 @@ PY
 }
 
 run_slice() {
-  local arm="$1"
-  local slice="$2"
-  local ids="$3"
-  local extra
-  extra="$(arm_flags "$arm")"
-  local tag="${RUN_ID}_${arm}_${slice}"
-  local jsonl="${OUT}/subset_${tag}_${FAMILY}.jsonl"
-  local log="${OUT}/subset_${tag}_${FAMILY}.log"
-  echo "[$(date -Is)] arm=${arm} slice=${slice} ids=${ids}" | tee -a "$SUMMARY"
-  emet_kill_stale_eval_processes || true
-  NEED_MIB="${NEED_MIB:-12000}" emet_gpu_wait_mib || true
-  # shellcheck disable=SC2086
-  timeout "${TIMEOUT}" "$HAB" run-batch \
-    --method "$METHOD" \
-    --question-ids "$ids" \
-    --max-planning-steps 20 \
-    --max-movement-step 10 \
-    --eqa-vl-family "$FAMILY" \
-    --eqa-hf-model-id "$HF_ID" \
-    --device cuda \
-    --frontier-nodes \
-    --frontier-keyword-weight 2 \
-    --resume \
-    $extra \
-    --output "$jsonl" \
-    2>&1 | tee "$log" || true
-  emet_kill_stale_eval_processes || true
-  local score
-  score="$(score_jsonl "$jsonl")"
-  echo "  ${slice}: ${score} -> ${jsonl}" | tee -a "$SUMMARY"
-  cp -f "$jsonl" "${LOG_ROOT}/${arm}_${slice}.jsonl" 2>/dev/null || true
+    local arm="$1"
+    local slice="$2"
+    local ids="$3"
+    local extra
+    extra="$(arm_flags "$arm")"
+    local tag="${RUN_ID}_${arm}_${slice}"
+    local jsonl="${OUT}/subset_${tag}_${FAMILY}.jsonl"
+    local log="${OUT}/subset_${tag}_${FAMILY}.log"
+    echo "[$(date -Is)] arm=${arm} slice=${slice} ids=${ids}" | tee -a "$SUMMARY"
+    emet_kill_stale_eval_processes || true
+    NEED_MIB="${NEED_MIB:-12000}" emet_gpu_wait_mib || true
+    # shellcheck disable=SC2086
+    timeout "${TIMEOUT}" "$HAB" run-batch \
+        --method "$METHOD" \
+        --question-ids "$ids" \
+        --max-planning-steps 20 \
+        --max-movement-step 10 \
+        --eqa-vl-family "$FAMILY" \
+        --eqa-hf-model-id "$HF_ID" \
+        --device cuda \
+        --frontier-nodes \
+        --frontier-keyword-weight 2 \
+        --resume \
+        $extra \
+        --output "$jsonl" \
+        2>&1 | tee "$log" || true
+    emet_kill_stale_eval_processes || true
+    local score
+    score="$(score_jsonl "$jsonl")"
+    echo "  ${slice}: ${score} -> ${jsonl}" | tee -a "$SUMMARY"
+    cp -f "$jsonl" "${LOG_ROOT}/${arm}_${slice}.jsonl" 2>/dev/null || true
 }
 
 IFS=',' read -ra ARM_LIST <<< "$ARMS"
 for arm in "${ARM_LIST[@]}"; do
-  arm="$(echo "$arm" | xargs)"
-  [[ -z "$arm" ]] && continue
-  run_slice "$arm" holdout8 "$HOLDOUT_IDS"
-  run_slice "$arm" canonical8 "$CANONICAL_IDS"
+    arm="$(echo "$arm" | xargs)"
+    [[ -z "$arm" ]] && continue
+    run_slice "$arm" holdout8 "$HOLDOUT_IDS"
+    run_slice "$arm" canonical8 "$CANONICAL_IDS"
 done
 
 echo "[$(date -Is)] ========== DYNAGRAPH TUNING MATRIX END ==========" | tee -a "$SUMMARY"

@@ -37,10 +37,13 @@ def test_hidden_relocation_metrics():
 def test_stale_half_life_and_change_answer_accuracy():
     assert stale_memory_half_life([8, 6, 4, 2], steps=[0, 2, 4, 6]) == 4.0
     assert math.isinf(stale_memory_half_life([8, 7, 6]))
-    assert change_conditioned_answer_accuracy(
-        [
-            {"change_expected": True, "answer_correct": True},
-            {"change_expected": True, "answer_correct": False},
-            {"change_expected": False, "answer_correct": False},
-        ]
-    ) == 0.5
+    assert (
+        change_conditioned_answer_accuracy(
+            [
+                {"change_expected": True, "answer_correct": True},
+                {"change_expected": True, "answer_correct": False},
+                {"change_expected": False, "answer_correct": False},
+            ]
+        )
+        == 0.5
+    )

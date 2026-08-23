@@ -52,6 +52,7 @@ def test_upward_ray_detects_open_void_beside_slab_scene():
     d_hit = upward_ray_hit_distance(m, d, 0.0, 0.0, 0.12)
     assert d_hit is not None and d_hit >= 0.15
 
+
 SLAB_GROUND_NAME = """<?xml version="1.0"?>
 <mujoco model="slab_ground">
   <worldbody>
@@ -83,9 +84,7 @@ def test_find_molmospaces_freejoint_xyz_accepts_robot_key():
     m = mujoco.MjModel.from_xml_string(SLAB_OVER_ORIGIN)
     d = mujoco.MjData(m)
     mujoco.mj_forward(m, d)
-    molmospaces_spawn.find_molmospaces_freejoint_xyz(
-        m, d, base_body_name="base_link", robot_key="rby1"
-    )
+    molmospaces_spawn.find_molmospaces_freejoint_xyz(m, d, base_body_name="base_link", robot_key="rby1")
 
 
 def test_want_molmospaces_autoplace_off():
@@ -273,9 +272,7 @@ def test_settle_free_base_z_lowers_foot_near_floor_on_open_plane():
         max_steps=500,
     )
     assert z_done is not None
-    assert molmospaces_spawn.write_freejoint_base_xyzw(
-        m, d, base_body_name="base_link", x=x, y=y, z=float(z_done)
-    )
+    assert molmospaces_spawn.write_freejoint_base_xyzw(m, d, base_body_name="base_link", x=x, y=y, z=float(z_done))
     mujoco.mj_forward(m, d)
     zb = molmospaces_spawn._min_robot_collision_geom_bottom_z(m, d, rb)  # noqa: SLF001
     assert zb is not None
@@ -384,9 +381,7 @@ def test_restore_freejoint_base_from_model_qpos0_after_spawn_search_hoist():
             qadr = int(m.jnt_qposadr[j])
             break
     assert qadr is not None
-    assert molmospaces_spawn.write_freejoint_base_xyzw(
-        m, d, base_body_name="base_link", x=1.0, y=-2.0, z=88.0
-    )
+    assert molmospaces_spawn.write_freejoint_base_xyzw(m, d, base_body_name="base_link", x=1.0, y=-2.0, z=88.0)
     mujoco.mj_forward(m, d)
     assert molmospaces_spawn.restore_freejoint_base_from_model_qpos0(m, d, base_body_name="base_link")
     np.testing.assert_allclose(d.qpos[qadr : qadr + 7], m.qpos0[qadr : qadr + 7], rtol=0, atol=1e-9)
@@ -402,9 +397,7 @@ def test_find_molmospaces_freejoint_xyz_finds_valid_pose_in_walled_room():
     )
     assert out is not None
     x, y, z = out
-    assert molmospaces_spawn.write_freejoint_base_xyzw(
-        m, d, base_body_name="base_link", x=x, y=y, z=float(z)
-    )
+    assert molmospaces_spawn.write_freejoint_base_xyzw(m, d, base_body_name="base_link", x=x, y=y, z=float(z))
     mujoco.mj_forward(m, d)
     bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
     rb = molmospaces_spawn._bodies_descending_from(m, bid)  # noqa: SLF001
@@ -465,9 +458,7 @@ def test_find_molmospaces_freejoint_on_installed_ithor_if_available():
         assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
             m, d, base_body_name="base_link", placed=out
         )
-        assert molmospaces_spawn.write_freejoint_base_xyzw(
-            m, d, base_body_name="base_link", x=x, y=y, z=float(z)
-        )
+        assert molmospaces_spawn.write_freejoint_base_xyzw(m, d, base_body_name="base_link", x=x, y=y, z=float(z))
         mujoco.mj_forward(m, d)
         worst = molmospaces_spawn.worst_robot_nonfloor_contact_dist(
             m, d, base_body_name="base_link", floor_geom_name="floor"

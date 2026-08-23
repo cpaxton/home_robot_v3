@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -18,16 +18,16 @@ def _norm_label(s: str) -> str:
 
 def nearest_gt_for_node(
     node: GraphNode,
-    placements: Dict[str, Any],
+    placements: dict[str, Any],
     max_dist_xy: float = 1.2,
-) -> Optional[Tuple[str, float, np.ndarray]]:
+) -> tuple[str, float, np.ndarray] | None:
     """
     Find best-matching placement entry by label substring and xy distance.
 
     ``placements`` matches robocasa ``object_placements_info``:
     ``body_name -> {cat, pos, quat}`` with ``pos`` shape (3,).
     """
-    best: Optional[Tuple[str, float, np.ndarray]] = None
+    best: tuple[str, float, np.ndarray] | None = None
     node_text = " ".join(_norm_label(l) for l in node.labels)
     nxy = np.asarray(node.xyz[:2], dtype=np.float64)
 
@@ -50,8 +50,8 @@ def nearest_gt_for_node(
 
 
 def compare_graph_to_placements_report(
-    nodes: List[GraphNode],
-    object_placements_info: Dict[str, Any],
+    nodes: list[GraphNode],
+    object_placements_info: dict[str, Any],
     max_dist_xy: float = 1.2,
 ) -> str:
     """Printable report: each graph node vs nearest GT placement (if any)."""
@@ -90,8 +90,8 @@ def _label_matches(node_label: str, gt_label: str) -> bool:
 
 
 def score_nodes_vs_gt(
-    nodes: List[GraphNode],
-    gt_objects: List[Any],
+    nodes: list[GraphNode],
+    gt_objects: list[Any],
     *,
     match_xy_m: float = 0.55,
     require_label_match: bool = True,

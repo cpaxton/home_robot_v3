@@ -110,9 +110,7 @@ class MultithreadRenderer(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def process_request(
-        renderer: MjAbstractRenderer, request: Any, output_queue: Queue, **kwargs
-    ) -> NoReturn:
+    def process_request(renderer: MjAbstractRenderer, request: Any, output_queue: Queue, **kwargs) -> NoReturn:
         raise NotImplementedError
 
     @staticmethod
@@ -129,18 +127,14 @@ class MultithreadRenderer(abc.ABC):
     ) -> None:
         renderer = renderer_cls(model_bindings=model_bindings, device_id=device, **kwargs)
 
-        print(
-            f"Rendering thread started with renderer {renderer_cls.__name__} for model {id(model_bindings.model)}"
-        )
+        print(f"Rendering thread started with renderer {renderer_cls.__name__} for model {id(model_bindings.model)}")
         process_request_kwargs = process_request_kwargs or {}
         try:
             while True:
                 request = input_queue.get(block=True, timeout=timeout)
 
                 if request == RENDERING_COMPLETE:
-                    print(
-                        f"Rendering thread for model {id(model_bindings.model)} received RENDERING_COMPLETE"
-                    )
+                    print(f"Rendering thread for model {id(model_bindings.model)} received RENDERING_COMPLETE")
                     break
 
                 process_request_callback(renderer, request, output_queue, **process_request_kwargs)

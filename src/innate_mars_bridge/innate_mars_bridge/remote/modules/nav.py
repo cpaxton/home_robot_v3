@@ -41,8 +41,7 @@ class MarsNavigationClient:
         self._action_client = ActionClient(self._ros, NavigateToPose, NAVIGATE_TO_POSE_ACTION)
         if not self._action_client.wait_for_server(timeout_sec=2.0):
             self._ros.get_logger().warning(
-                f"Nav2 action {NAVIGATE_TO_POSE_ACTION!r} not available; "
-                "ensure maurice_nav is in navigation mode."
+                f"Nav2 action {NAVIGATE_TO_POSE_ACTION!r} not available; ensure maurice_nav is in navigation mode."
             )
 
     def _ensure_spin_client(self):
@@ -54,8 +53,7 @@ class MarsNavigationClient:
         self._spin_client = ActionClient(self._ros, Spin, SPIN_ACTION)
         if not self._spin_client.wait_for_server(timeout_sec=2.0):
             self._ros.get_logger().warning(
-                f"Nav2 action {SPIN_ACTION!r} not available; "
-                "yaw-only goals will fall back to NavigateToPose."
+                f"Nav2 action {SPIN_ACTION!r} not available; yaw-only goals will fall back to NavigateToPose."
             )
 
     def at_goal(self) -> bool:

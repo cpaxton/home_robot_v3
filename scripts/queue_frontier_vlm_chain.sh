@@ -12,14 +12,14 @@ exec > >(tee -a "$LOG") 2>&1
 echo "[$(date -Is)] chain: waiting for gemma4 frontier_v2 sweep to finish (${GEMMA_JSONL})"
 
 while true; do
-  lines=0
-  if [[ -f "$GEMMA_JSONL" ]]; then
-    lines=$(wc -l < "$GEMMA_JSONL" | tr -d ' ')
-  fi
-  if [[ "$lines" -ge 20 ]] && ! pgrep -f "frontier_v2_gemma4_q0-19" >/dev/null 2>&1 && ! pgrep -f "emet-habitat run-batch.*frontier_v2_gemma4" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 60
+    lines=0
+    if [[ -f "$GEMMA_JSONL" ]]; then
+        lines=$(wc -l < "$GEMMA_JSONL" | tr -d ' ')
+    fi
+    if [[ "$lines" -ge 20 ]] && ! pgrep -f "frontier_v2_gemma4_q0-19" >/dev/null 2>&1 && ! pgrep -f "emet-habitat run-batch.*frontier_v2_gemma4" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 60
 done
 
 echo "[$(date -Is)] gemma4 sweep done (${lines} lines). Sleeping 15s for VRAM..."

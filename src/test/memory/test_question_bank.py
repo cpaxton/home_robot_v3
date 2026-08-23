@@ -17,7 +17,5 @@ def test_load_all_environments():
 
 
 def test_score_partial_tokens_fails():
-    scored = score_eqa_results(
-        [{"question": "colors?", "answer": "red only", "expected_tokens": ["red", "blue"]}]
-    )
+    scored = score_eqa_results([{"question": "colors?", "answer": "red only", "expected_tokens": ["red", "blue"]}])
     assert scored["accuracy"] == 0.0

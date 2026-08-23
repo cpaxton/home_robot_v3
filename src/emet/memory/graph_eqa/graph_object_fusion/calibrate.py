@@ -15,8 +15,8 @@ import numpy as np
 
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
-from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
 from emet.memory.graph_eqa.graph_object_fusion.evaluate import score_fused_graph_vs_gt
+from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
 
 
 def load_calibration_frames_jsonl(path: str | Path) -> list[dict[str, Any]]:

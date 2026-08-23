@@ -22,10 +22,7 @@ from emet.eval.episode_video import (
 
 def test_write_rgb_sequence_mp4_creates_file(tmp_path: Path) -> None:
     pytest.importorskip("cv2")
-    frames = [
-        np.full((32, 48, 3), fill, dtype=np.uint8)
-        for fill in ([40, 80, 120], [50, 90, 130], [60, 100, 140])
-    ]
+    frames = [np.full((32, 48, 3), fill, dtype=np.uint8) for fill in ([40, 80, 120], [50, 90, 130], [60, 100, 140])]
     out = write_rgb_sequence_mp4(frames, tmp_path / "clip.mp4", fps=4.0)
     assert out.is_file()
     assert out.stat().st_size > 64
@@ -74,12 +71,10 @@ def test_write_episode_mp4_from_metadata_motion_paced(tmp_path: Path) -> None:
     frames_dir = tmp_path / "frames"
     frames_dir.mkdir()
     for i, color in enumerate([30, 60, 90]):
-        Image.fromarray(np.full((16, 16, 3), color, dtype=np.uint8)).save(
-            frames_dir / f"rgb_{i:04d}.png"
-        )
+        Image.fromarray(np.full((16, 16, 3), color, dtype=np.uint8)).save(frames_dir / f"rgb_{i:04d}.png")
     meta = tmp_path / "metadata.jsonl"
     with meta.open("w") as fh:
-        for i, (x, color) in enumerate([(0.0, 30), (0.5, 60), (1.0, 90)]):
+        for i, (x, _color) in enumerate([(0.0, 30), (0.5, 60), (1.0, 90)]):
             fh.write(
                 json.dumps(
                     {

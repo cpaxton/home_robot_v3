@@ -14,7 +14,7 @@ from typing import Any
 
 import draccus
 
-from emet.config.rerun_config import _env_truthy, resolve_rerun_bool
+from emet.config.rerun_config import resolve_rerun_bool
 from emet.core.parameters import Parameters
 from emet.utils.logger import configure_mapping_session_logging
 

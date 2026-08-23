@@ -94,7 +94,9 @@ log = Logger(__name__)
     help="Device for inference. Use 'cpu' to test without GPU (slow).",
 )
 @click.option("--voice", is_flag=True, help="Use voice input (Whisper).")
-@click.option("--max-tokens", default=256, type=int, help="Max new tokens per reply (default: 256; keep low for tool JSON).")
+@click.option(
+    "--max-tokens", default=256, type=int, help="Max new tokens per reply (default: 256; keep low for tool JSON)."
+)
 @click.option(
     "--robot-ip",
     "--robot_ip",
@@ -718,8 +720,7 @@ def main(
     )
     if sim_cli_used and not start_sim:
         raise click.UsageError(
-            "MuJoCo sim-only flags (--scene, --split, --sim-seed, etc.) require --start-sim "
-            "(not --start-habitat)."
+            "MuJoCo sim-only flags (--scene, --split, --sim-seed, etc.) require --start-sim (not --start-habitat)."
         )
 
     if not offline and cmd_list:
@@ -861,9 +862,7 @@ def main(
             )
             robot = "stretch"
             log.info("Habitat ZMQ server is up; connecting agent as stretch.")
-        log.info(
-            f"Robot backend: {robot} (from --robot or config `{config_path}`; must match the ZMQ server)."
-        )
+        log.info(f"Robot backend: {robot} (from --robot or config `{config_path}`; must match the ZMQ server).")
         try:
             run_agent_with_robot(
                 robot_ip=robot_effective,

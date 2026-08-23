@@ -80,6 +80,16 @@ def resolve_episode_diagnostics_config(
         export_video=_bool("export_video", "EMET_EVAL_EXPORT_VIDEO", True),
         export_object_crops=_bool("export_object_crops", "EMET_EVAL_EXPORT_OBJECT_CROPS", True),
         export_full_graph=_bool("export_full_graph", "EMET_EVAL_EXPORT_GRAPH", False),
+        export_compact_memory=_bool(
+            "export_compact_memory",
+            "EMET_EVAL_EXPORT_COMPACT_MEMORY",
+            False,
+        ),
+        export_world_evidence_rgb=_bool(
+            "export_world_evidence_rgb",
+            "EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB",
+            True,
+        ),
         export_voxel_history=_bool("export_voxel_history", "EMET_EVAL_EXPORT_VOXEL_HISTORY", False),
         export_voxel_pickle=_bool("export_voxel_pickle", "EMET_EVAL_EXPORT_VOXEL_PICKLE", False),
         max_map_side=_int("max_map_side", "EMET_EVAL_MAP_MAX_SIDE", 1280, min_val=256),

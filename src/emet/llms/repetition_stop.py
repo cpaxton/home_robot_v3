@@ -107,9 +107,7 @@ class RepetitionStop(StoppingCriteria):
         return False
 
 
-def repetition_stopping_criteria(
-    prompt_len: int, *, max_period: int = 6, reps: int = 5
-) -> StoppingCriteriaList:
+def repetition_stopping_criteria(prompt_len: int, *, max_period: int = 6, reps: int = 5) -> StoppingCriteriaList:
     """``StoppingCriteriaList`` with decode progress + :class:`RepetitionStop` for ``model.generate``."""
     return StoppingCriteriaList(
         [

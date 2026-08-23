@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Live Habitat nav smoke: compare navmesh vs voxel A* on one HM-EQA scene."""
 
 from __future__ import annotations
@@ -8,15 +12,15 @@ import math
 import sys
 
 import numpy as np
+from emet_habitat.robot_client import HabitatRobotClient
+from emet_habitat.runner import _configure_habitat_nav
+from emet_habitat.simulator import HabitatEQASimulator
 
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.habitat_nav import habitat_navmesh_navigate
 from emet.core.parameters import get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-from emet_habitat.robot_client import HabitatRobotClient
-from emet_habitat.runner import _configure_habitat_nav
-from emet_habitat.simulator import HabitatEQASimulator
 
 
 def _pose_dist(a: np.ndarray, b: np.ndarray) -> float:

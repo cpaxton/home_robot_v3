@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -198,7 +197,7 @@ def render_markdown(data: dict[str, Any]) -> str:
         "",
         f"**Run ID:** `{data['run_id']}`  ",
         f"**Habitat tuning matrix:** `{data['tuning_run_id']}`  ",
-        f"**VLM:** Qwen3-VL-8B-Instruct (`qwen3_vl`)  ",
+        "**VLM:** Qwen3-VL-8B-Instruct (`qwen3_vl`)  ",
         "",
         "## Habitat HM-EQA — dynagraph ablation (tuning matrix)",
         "",
@@ -322,7 +321,7 @@ def render_markdown(data: dict[str, Any]) -> str:
             "| OVMM backend bars | `ovmm_findobj_findrec.png` (after OVMM leg) |",
             "| LaTeX table snippet | `../tables/representative_sample.tex` |",
             "",
-            f"Monitor run: `tail -f ~/runs/emet/representative_sample/nohup.log`",
+            "Monitor run: `tail -f ~/runs/emet/representative_sample/nohup.log`",
             "",
         ]
     )
@@ -346,7 +345,7 @@ def render_latex_snippet(data: dict[str, Any]) -> str:
     if h.get("n"):
         lines.append(
             f"    HM-EQA holdout-8 & dynagraph ({best_arm}) & {h['n']} & "
-            f"{h['correct']}/{h['n']} ({100*h['correct']/h['n']:.0f}\\%) \\\\"
+            f"{h['correct']}/{h['n']} ({100 * h['correct'] / h['n']:.0f}\\%) \\\\"
         )
     ge = data["hmeqa_rep"]["methods"].get("graph_eqa_holdout8_ref") or data["hmeqa_rep"]["methods"].get(
         "graph_eqa_holdout8", {}
@@ -354,7 +353,7 @@ def render_latex_snippet(data: dict[str, Any]) -> str:
     if ge.get("n"):
         lines.append(
             f"    HM-EQA holdout-8 & graph\\_eqa & {ge['n']} & "
-            f"{ge['correct']}/{ge['n']} ({100*ge['correct']/ge['n']:.0f}\\%) \\\\"
+            f"{ge['correct']}/{ge['n']} ({100 * ge['correct'] / ge['n']:.0f}\\%) \\\\"
         )
 
     s0 = data["ovmm_sim"]["tiers"].get("s0", {})
@@ -362,16 +361,10 @@ def render_latex_snippet(data: dict[str, Any]) -> str:
         if backend not in s0:
             continue
         st = s0[backend]
-        lines.append(
-            f"    OVMM S0 & {backend} & {st['n']} & "
-            f"FindRec {100*st['find_recep_rate']:.0f}\\% \\\\"
-        )
+        lines.append(f"    OVMM S0 & {backend} & {st['n']} & FindRec {100 * st['find_recep_rate']:.0f}\\% \\\\")
 
     for method, st in data["sqa3d"]["methods"].items():
-        lines.append(
-            f"    SQA3D val & {method} & {st['n']} & "
-            f"EM@1 {100*st['em@1']:.0f}\\% \\\\"
-        )
+        lines.append(f"    SQA3D val & {method} & {st['n']} & EM@1 {100 * st['em@1']:.0f}\\% \\\\")
 
     lines.append("    \\bottomrule")
     lines.append("  \\end{tabular}")

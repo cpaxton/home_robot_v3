@@ -149,9 +149,7 @@ def render_bundle(
         if gt_nav is None and scene_id:
             pf = _load_pathfinder(scene_id)
             floor_y = _floor_y_from_bundle(bundle_dir)
-            gt_nav = rasterize_habitat_navmesh_grid(
-                pf, explored.shape, go, res, floor_y=floor_y
-            )
+            gt_nav = rasterize_habitat_navmesh_grid(pf, explored.shape, go, res, floor_y=floor_y)
         overlay = snapshot_eval_overlay_from_voxel_map(
             vm,
             robot_xy,

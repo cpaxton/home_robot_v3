@@ -17,9 +17,7 @@ __all__ = [
 ]
 
 
-def apply_pinhole_pixel_ops(
-    image: np.ndarray, ops: tuple[str, ...] | list[str]
-) -> np.ndarray:
+def apply_pinhole_pixel_ops(image: np.ndarray, ops: tuple[str, ...] | list[str]) -> np.ndarray:
     """Apply the same ``np.flipud`` / ``np.rot90`` sequence to an HxW or HxW? array."""
     out = np.asarray(image)
     for op in ops:

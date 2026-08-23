@@ -1,8 +1,9 @@
 # Action-outcome ledger (agent world model)
 
-**Branch:** `feature/agent-world-model`  
-**Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)  
-**Status:** Phases 1–3 landed (default **off**); Phase 4 metric helpers landed; GPU deltas vs pinned baselines still open.
+**Branch:** `feature/graph-room-evidence`
+**Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)
+**Status:** Phases 1–4 landed (default **off**); a manifest-locked action-history
+visibility A/B is available for HM-EQA.
 
 The scene graph already answers “what is where?”. The **attempt ledger** adds “what did we try, and how did it go?” so CHAT tools, agentic EQA, and OVMM manip paths can avoid repeating failed nav / verify / pick / place / closer-look actions.
 
@@ -14,7 +15,7 @@ This page is the **operator and developer reference**. The plan doc is the desig
 
 | Invariant | Detail |
 |-----------|--------|
-| **Default off** | No ledger rows unless `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is enabled. |
+| **Default off** | No durable `AttemptRecord` rows or dedicated action-history section unless the ledger is enabled. World-evidence provenance may still mirror tool outcomes, but grounded state filters those events unless mode is `agent`. |
 | **Pinned configs unchanged** | [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) does not enable the ledger. |
 | **EQA tool names frozen** | `investigate`, `explore_frontier`, `verify_siglip`, `submit_answer`, … stay stable for traces. |
 | **`eqa.agentic_verify` default** | Still **false**; ledger does not turn on the agentic loop. |
@@ -24,14 +25,102 @@ This page is the **operator and developer reference**. The plan doc is the desig
 
 ## Enable
 
+### Grounded Graph Agent visibility modes
+
+`eqa.attempt_ledger_mode` is the paper-facing switch:
+
+| Mode | Collect durable rows | Expose dedicated action history to `grounded_v2` |
+|------|----------------------|--------------------------------------------------|
+| `off` (default) | no | no |
+| `shadow` | yes | no |
+| `agent` | yes | yes |
+
+`agent` exposes recent action outcomes, navigation-loop flags, per-place attempt
+summaries/failure risk, global attempt rows, and their mirrored provenance events.
+`shadow` writes the same ledger and bundle artifact but leaves those channels out
+of the router state. Room timeline and live approach-affordance fields remain
+controlled by their own axes; this switch does not erase internal safety state.
+
+The 2026-08-23 matched four-question diagnostic validated this manipulation:
+all 12 shadow router states were policy-clean, while 10/14 treatment states
+contained recent actions, persisted loop flags, and global attempts. Both
+scored 3/4; visible history reduced repeat-failure rows 6→4 but increased
+attempts 31→37 and mean planning steps 35.25→39.25. The mode remains opt-in. See
+[graph_room_evidence.md](experiments/graph_room_evidence.md#focused-action-history-isolation-2026-08-23)
+and the frozen
+[`action_history_pair_20260823.json`](../paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json).
+
+### What the memory trace looks like
+
+There are three related representations:
+
+1. `attempt_ledger.json` stores structured durable rows.
+2. `agentic_trace.jsonl` records the compact state rendered for each router call.
+3. The executor keeps a hard, question-local navigation guard even in `shadow`
+   mode; visibility is not the safety mechanism.
+
+For example, q11's second agent-visible router call at clean commit `63abd929`
+contained:
+
+```text
+Recent action outcomes:
+- r0 investigate obs=15 ap=0 verify=ABSENT closest=0.4m
+Loop flags:
+- obs=15 visits=1 status=STALLED_NAV_LOOP
+Places:
+- ... obs_adapter=15 ... attempts=navigate:ok:ok,verify:absent:ABSENT,
+  verify:absent:vlm_absent ...
+Room events (latest first):
+- ... room=kitchen kind=verify_absent phrase=silver trash can obs_adapter=15 ...
+Global attempts (latest first):
+- world_step=21 action=verify outcome=absent status=vlm_absent ... obs_adapter=15
+- world_step=13 action=verify outcome=absent status=ABSENT ... obs_adapter=15
+- world_step=13 action=navigate outcome=ok status=ok ... obs_adapter=15
+```
+
+By round six, the same run showed why prompt-visible history is not itself a
+complete repeat policy:
+
+```text
+Recent action outcomes:
+- r4 explore_frontier ... ok
+- r4 investigate obs=15 fail=NAV_LOOP_BLOCKED
+- r3 explore_frontier ... ok
+- r2 explore_frontier ok
+- r1 explore_frontier ... ok
+- r1 investigate obs=15 fail=NAV_LOOP_BLOCKED
+Loop flags:
+- obs=15 visits=1 status=NAV_LOOP_BLOCKED
+- obs=15 visits=1 status=NAV_LOOP_BLOCKED
+- obs=15 visits=1 status=STALLED_NAV_LOOP
+```
+
+The matching `shadow` call still collected the ledger and ran the hard guard,
+but rendered `Recent action outcomes`, `Loop flags`, per-place `attempts`, and
+`Global attempts` as `none`.
+
+Today, a successful navigation that produces no new observation is verified
+once and marked `STALLED_NAV_LOOP`. A later exhausted selection of that
+observation returns `NAV_LOOP_BLOCKED`, then the executor redirects the rejected
+selection to `explore_frontier`. This prevents an identical place navigation
+from executing forever, but it is post-selection and mostly keyed by
+`obs_id`/approach exhaustion. It does not yet define general action equivalence
+or material progress for repeated verifies, frontiers, or semantically
+equivalent targets. All ten non-initial treatment router calls retained a loop
+flag, so dumping these flags into every prompt is too blunt to be the long-term
+memory policy.
+
 ### Env
 
 ```bash
-export EMET_EQA_ATTEMPT_LEDGER=1
+export EMET_EQA_ATTEMPT_LEDGER_MODE=agent  # off | shadow | agent
 # optional:
 export EMET_ATTEMPT_LEDGER_MAX=512
 export EMET_ATTEMPT_LEDGER_PERSIST_ABSENT=0   # keep ABSENT claim blacklist across questions
 ```
+
+`EMET_EQA_ATTEMPT_LEDGER=1` remains the legacy boolean write gate. HM-EQA
+derives it from the selected mode (`shadow` and `agent` both write).
 
 ### YAML
 
@@ -39,20 +128,40 @@ Under `eqa:` (mapping / dynav config) or unified `mapping.eqa` / top-level `eqa:
 
 ```yaml
 eqa:
-  attempt_ledger: true
-  # or:
-  # attempt_ledger:
-  #   enabled: true
-  #   max_records: 512
-  #   persist_absent_claims: false
+  attempt_ledger_mode: agent  # off | shadow | agent
+```
+
+The lower-level boolean/mapping form remains available for non-HM-EQA writers:
+
+```yaml
+eqa:
+  attempt_ledger:
+    enabled: true
+    max_records: 512
+    persist_absent_claims: false
 ```
 
 CLI override example:
 
 ```bash
 uv run emet run agent --set eqa.attempt_ledger=true
-# Habitat / dynagraph: same --set / EMET_* env as other EQA knobs
 ```
+
+For a frozen HM-EQA comparison, use the checked-in complete variant files:
+
+```bash
+uv run emet hmeqa h2h OUT_SHADOW \
+  --variant-config configs/benchmarks/hmeqa_action_history_shadow.yaml \
+  --preset paper-router --arms agentic --ids 6,11,12,47
+uv run emet hmeqa h2h OUT_AGENT \
+  --variant-config configs/benchmarks/hmeqa_action_history_agent.yaml \
+  --preset paper-router --arms agentic --ids 6,11,12,47
+```
+
+The loader rejects missing or unknown variant axes. Explicit CLI variant flags
+win over the file; the effective values plus the variant file path and SHA-256
+source label are frozen in `run_manifest.json`. Resume reuses that manifest
+rather than re-reading a mutable config.
 
 See [emet_config.md](emet_config.md) and [environment_variables.md](environment_variables.md).
 
@@ -73,20 +182,38 @@ See [emet_config.md](emet_config.md) and [environment_variables.md](environment_
 | `phrase` | Text query when relevant |
 | `source` | `chat` \| `eqa` \| `unknown` |
 | `question_id` | Optional episode question id |
+| `room` | Canonical room label when known (introduced in schema v2); empty on v1 imports |
+| `target_kind` / `target_id` / `view_id` | Stable graph identities (schema v3) |
 
-Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records` (default 512).
+Stored on `GraphEQAMemory` (`_attempt_records`), capped by `max_records`
+(default 512). The current export `schema_version` is **3**.
+
+### Room timeline (graph history)
+
+Separate from classic EQA prompt `HISTORY:` (answer-iteration scrap). `GraphEQAMemory` keeps a capped `_room_events` list (`stamp`, `verify_absent`, `coverage_closed`, …) with `step` + `room`. It survives room-cluster rebuilds, clears on new agentic episode / `clear_eqa_working_memory`, and is **not** gated on the ledger opt-in.
+
+| Method | Role |
+|--------|------|
+| `record_room_event(...)` | Append when room is a known label (never invents `unknown`) |
+| `format_room_history(...)` | Newest-first compact line for agentic `build_state_message` |
+| `clear_room_events()` | Drop timeline |
+
+Agentic writers: investigate room-stamp → `stamp`; close ABSENT retract → `verify_absent` (+ ledger `room=` when on); place coverage → `closed` → `coverage_closed`. **Do not** enable investigate stamps on paper-router by default (letter regression). For A/Bs, set `EMET_EQA_ROOM_STAMP_INVESTIGATE=1` / `EMET_EQA_ATTEMPT_LEDGER=1` explicitly — see [experiments/graph_room_evidence.md](experiments/graph_room_evidence.md). This is **agent-visible memory**, not a nav/escape latch.
+
+**Experiment ladder:** [experiments/graph_room_evidence.md](experiments/graph_room_evidence.md) (smoke → rooms probe → wrong-room dwell metrics → optional scale).
 
 ### API on `GraphEQAMemory`
 
 | Method | Role |
 |--------|------|
-| `record_attempt(...)` | Append one row (no-op when ledger off, unless `force=True`) |
+| `record_attempt(...)` | Append one row (no-op when ledger off, unless `force=True`); optional `room=` |
 | `get_attempt_records()` | Ordered list (oldest first) |
 | `export_attempt_ledger()` / `import_attempt_ledger(...)` | Serialize / restore |
 | `clear_attempt_ledger()` | Drop rows |
 | `attempt_summary_for_obs(obs_id)` | Compact `[attempts: …]` bits for place cards |
 | `set_attempt_ledger_question_id(...)` | Tag subsequent rows with a question id |
 | `record_nav_attempt(...)` | Always updates node counters; dual-writes a `navigate` row when ledger on |
+| `record_room_event` / `format_room_history` | Room-scoped timeline (see above) |
 
 Helpers:
 

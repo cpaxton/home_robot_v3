@@ -47,7 +47,7 @@ def recompute_sim(text_feat: list[float] | None, img_feat: list[float] | None) -
         return None
     if len(text_feat) != len(img_feat):
         return None
-    return float(sum(a * b for a, b in zip(text_feat, img_feat)))
+    return float(sum(a * b for a, b in zip(text_feat, img_feat, strict=True)))
 
 
 def evaluate_threshold(
@@ -126,10 +126,7 @@ def sweep_verify_channels(
     return {
         channel: [
             evaluate_threshold(verify, threshold, score_key=channel)
-            for threshold in (
-                thresholds
-                or [round(0.08 + 0.005 * i, 3) for i in range(15)]
-            )
+            for threshold in (thresholds or [round(0.08 + 0.005 * i, 3) for i in range(15)])
         ]
         for channel in channels
         if any(row.get(channel) is not None for row in verify)
@@ -234,9 +231,7 @@ def nav_distance_report(traces: list[dict[str, Any]]) -> dict[str, Any]:
     n_fail = len(navs) - n_ok
     present_after = 0
     for vr in verifies:
-        if vr.get("decision") == "PRESENT" or (
-            vr.get("sim") is not None and float(vr["sim"]) >= 0.12
-        ):
+        if vr.get("decision") == "PRESENT" or (vr.get("sim") is not None and float(vr["sim"]) >= 0.12):
             present_after += 1
     return {
         "n_nav": len(navs),

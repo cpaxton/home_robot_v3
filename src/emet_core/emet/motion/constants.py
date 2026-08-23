@@ -48,7 +48,7 @@ def _ensure_stretch_urdf(urdf_path: str) -> str:
 
     logger.info("Generating default stretch.urdf from stretch_urdf package -> %s", urdf_path)
 
-    with open(src_urdf, "r") as f:
+    with open(src_urdf) as f:
         urdf_text = f.read()
 
     for match in re.finditer(r'filename="(.+?)"', urdf_text):
