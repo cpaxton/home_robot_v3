@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,40 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 DIAGNOSTICS_MANIFEST = "diagnostics_manifest.json"
+
+_MANAGED_DIAGNOSTIC_FILES = (
+    "trajectory.jsonl",
+    "metadata.jsonl",
+    "topdown_map.png",
+    "topdown_rooms.png",
+    "topdown_gt_navmesh.png",
+    "topdown_map_overlay.png",
+    "topdown_exploration.mp4",
+    "episode_rgb.mp4",
+    "obstacles_2d.npy",
+    "explored_2d.npy",
+    "grid_meta.json",
+    "observations_history.jsonl",
+    "voxel_debug.pkl",
+    "spawn_record.json",
+    "floor_metrics.json",
+    "floor_area.jsonl",
+    "floor_area_growth.png",
+    "nav_attempts.jsonl",
+    DIAGNOSTICS_MANIFEST,
+)
+
+
+def _clear_managed_diagnostic_outputs(root: Path) -> None:
+    """Prevent artifacts from an older run surviving in a reused episode path."""
+    for name in _MANAGED_DIAGNOSTIC_FILES:
+        (root / name).unlink(missing_ok=True)
+    for name in ("frames", "images", "maps", "graph_checkpoint"):
+        path = root / name
+        if path.is_dir():
+            shutil.rmtree(path)
+    crop = root / "dynagraph" / "crops_mosaic.png"
+    crop.unlink(missing_ok=True)
 
 
 def _env_truthy(name: str, default: bool = False) -> bool:
@@ -103,6 +138,8 @@ class EpisodeDiagnosticsConfig:
     export_video: bool = True
     export_object_crops: bool = True
     export_full_graph: bool = False
+    export_compact_memory: bool = False
+    export_world_evidence_rgb: bool = True
     export_voxel_history: bool = False
     export_voxel_pickle: bool = False
     max_map_side: int = 1280
@@ -156,14 +193,15 @@ class EpisodeDiagnosticsRecorder:
     def record_from_agent(self, agent: Any) -> None:
         rgb = None
         pose = robot_xy_from_agent(agent)
-        robot = getattr(agent, "robot", None)
-        if robot is not None and hasattr(robot, "get_observation"):
-            try:
-                obs = robot.get_observation()
-                if obs is not None and getattr(obs, "rgb", None) is not None:
-                    rgb = np.asarray(obs.rgb)
-            except Exception as exc:
-                logger.warning(f"diagnostics RGB fetch failed: {exc}")
+        if self.cfg.export_rgb_frames or self.cfg.export_video:
+            robot = getattr(agent, "robot", None)
+            if robot is not None and hasattr(robot, "get_observation"):
+                try:
+                    obs = robot.get_observation()
+                    if obs is not None and getattr(obs, "rgb", None) is not None:
+                        rgb = np.asarray(obs.rgb)
+                except Exception as exc:
+                    logger.warning(f"diagnostics RGB fetch failed: {exc}")
         self.record_step(rgb=rgb, pose=pose, agent=agent, capture_map_stride=True)
         self._planning_step += 1
 
@@ -208,6 +246,7 @@ class EpisodeDiagnosticsRecorder:
     def flush(self, episode_dir: Path | str, agent: Any | None = None) -> dict[str, Any]:
         root = Path(episode_dir)
         root.mkdir(parents=True, exist_ok=True)
+        _clear_managed_diagnostic_outputs(root)
         manifest: dict[str, Any] = {"episode_dir": str(root.resolve())}
 
         if self.cfg.export_trajectory and self._frames:
@@ -651,10 +690,14 @@ def flush_episode_diagnostics(
             recorder.cfg.export_obstacle_grids,
             recorder.cfg.export_object_crops,
             recorder.cfg.export_full_graph,
+            recorder.cfg.export_compact_memory,
             recorder.cfg.export_voxel_history,
             recorder.cfg.export_voxel_pickle,
         )
     ):
+        root = Path(episode_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        _clear_managed_diagnostic_outputs(root)
         return {}
     return recorder.flush(episode_dir, agent=agent)
 
@@ -1001,29 +1044,6 @@ def _write_episode_mp4(root: Path, *, cfg: EpisodeDiagnosticsConfig) -> Path | N
     if not meta_path.is_file():
         return None
     try:
-        images_dir = root / "images"
-        frames = root / "frames"
-        if not images_dir.is_dir() and frames.is_dir():
-            images_dir.mkdir(exist_ok=True)
-            rows_out: list[str] = []
-            for line in meta_path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                img = str(row.get("image", ""))
-                if img.startswith("frames/"):
-                    src = root / img
-                    dst_name = Path(img).name.replace("rgb_", "frame_")
-                    dst = images_dir / dst_name
-                    if src.is_file() and not dst.exists():
-                        import shutil
-
-                        shutil.copy2(src, dst)
-                    row = dict(row)
-                    row["image"] = f"images/{dst_name}"
-                rows_out.append(json.dumps(row))
-            meta_path.write_text("\n".join(rows_out) + "\n", encoding="utf-8")
-
         from emet.eval.episode_video import write_episode_mp4_from_metadata
 
         return write_episode_mp4_from_metadata(

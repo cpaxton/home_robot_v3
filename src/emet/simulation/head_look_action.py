@@ -70,9 +70,7 @@ def apply_head_to_robosuite(
         # joint_head sim hinge +base X: stereo lk ~ -world Y, so Stretch tilt pitches nod (URDF hinge differs).
         if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
             return 1
-        logger.debug(
-            "head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt
-        )
+        logger.debug("head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt)
         return 0
 
     logger.debug("head_to: no head_pan/head_tilt and no rby1/galaxea mapping for spec %r; ignored", spec.name)

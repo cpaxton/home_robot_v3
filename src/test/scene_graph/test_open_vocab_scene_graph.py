@@ -263,6 +263,7 @@ class TestSceneGraphBackend:
     def _try_import_backend(self):
         try:
             from emet.memory.adapters import SceneGraphBackend
+
             self.SceneGraphBackend = SceneGraphBackend
         except ImportError:
             pytest.skip("emet.memory.adapters not importable (missing pinocchio/hppfcl)")

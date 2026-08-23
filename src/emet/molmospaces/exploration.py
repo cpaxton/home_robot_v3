@@ -185,9 +185,7 @@ class MolmoExploreSession:
                 if self._step_idx == 1:
                     _emit_progress(f"first frame saved (saved_frames={self.writer.frame_count})")
                 elif self._step_idx % 10 == 0:
-                    _emit_progress(
-                        f"step {self._step_idx} / {int(steps)} (saved_frames={self.writer.frame_count})"
-                    )
+                    _emit_progress(f"step {self._step_idx} / {int(steps)} (saved_frames={self.writer.frame_count})")
 
                 elapsed = time.monotonic() - t0
                 if elapsed < dt:

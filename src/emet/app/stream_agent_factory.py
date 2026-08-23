@@ -540,9 +540,7 @@ def _map_stats(agent: Any, *, dynav_resolved: str) -> dict[str, Any]:
 
 def _graph_node_counts(graph_memory: Any) -> dict[str, int]:
     nodes = graph_memory.get_nodes()
-    object_n = sum(
-        1 for n in nodes if not n.is_viewpoint and not getattr(n, "is_frontier", False)
-    )
+    object_n = sum(1 for n in nodes if not n.is_viewpoint and not getattr(n, "is_frontier", False))
     frontier_n = sum(1 for n in nodes if getattr(n, "is_frontier", False))
     viewpoint_n = sum(1 for n in nodes if n.is_viewpoint)
     total = len(nodes)

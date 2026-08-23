@@ -1,4 +1,4 @@
-% File: corl_2026.sty 
+% File: corl_2026.sty
 %
 % Latex templates for the Conference on Robot Learning (CoRL)
 %
@@ -10,7 +10,7 @@
 %	       Main changes:
 %	       - The abstract is more compact compared to NeurIPS/ICML
 %	       - References are by default using natbib with squared numbers (e.g., [1])
-%	       - DOI fields from the bibtex are automatically converted to hyperlinks 
+%	       - DOI fields from the bibtex are automatically converted to hyperlinks
 %	       to the corresponding page
 %	       - acknowledgments are now a command, and the corresponding subsubsection is
 %	       automatically included only in the final version
@@ -27,7 +27,7 @@
 % 2026/01/10 - Slightly modified for CoRL 2026 by Yoonchang Sung (yoonchang.sung@ntu.edu.sg)
 %
 % TODO: nohyperref is not working at the moment
-% 
+%
 
 \NeedsTeXFormat{LaTeX2e}
 
@@ -120,7 +120,7 @@
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
+%
 
 % fonts
 \renewcommand{\rmdefault}{ptm}
@@ -129,10 +129,10 @@
 % Create acknowledgments -- only if the option 'final' is activated
 \providecommand{\acknowledgments}{}
 \renewcommand{\acknowledgments}[1]{%
-\if@conferencefinal% 
+\if@conferencefinal%
 \subsubsection*{Acknowledgments} #1
 \fi
-\if@preprinttype% 
+\if@preprinttype%
 \subsubsection*{Acknowledgments} #1
 \fi
 }

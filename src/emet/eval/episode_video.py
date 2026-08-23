@@ -36,7 +36,9 @@ def pose_motion_repeat_count(
     dx = float(nxt[0]) - float(prev[0])
     dz = float(nxt[1]) - float(prev[1])
     dist = math.hypot(dx, dz)
-    dtheta = abs(normalize_yaw_delta(float(prev[2]) if len(prev) >= 3 else 0.0, float(nxt[2]) if len(nxt) >= 3 else 0.0))
+    dtheta = abs(
+        normalize_yaw_delta(float(prev[2]) if len(prev) >= 3 else 0.0, float(nxt[2]) if len(nxt) >= 3 else 0.0)
+    )
     mpr = max(0.05, float(meters_per_repeat))
     rpr = max(0.05, float(radians_per_repeat))
     by_dist = int(math.ceil(dist / mpr)) if dist > 1e-4 else 1
@@ -94,9 +96,9 @@ def build_motion_paced_rgb_frames(
             if dist >= float(crossfade_teleport_m) and crossfade_steps > 0:
                 for step in range(1, crossfade_steps + 1):
                     alpha = step / float(crossfade_steps + 1)
-                    blend = (
-                        (1.0 - alpha) * prev_rgb.astype(np.float32) + alpha * rgb.astype(np.float32)
-                    ).astype(np.uint8)
+                    blend = ((1.0 - alpha) * prev_rgb.astype(np.float32) + alpha * rgb.astype(np.float32)).astype(
+                        np.uint8
+                    )
                     out.append(blend)
 
         repeats = pose_motion_repeat_count(

@@ -13,9 +13,7 @@ def test_selective_metrics_and_balanced_gate():
         [
             {
                 "tool": "inspect_graph",
-                "hypotheses": [
-                    {"answerability_gain": 0.8, "belief_reduction": 0.2}
-                ],
+                "hypotheses": [{"answerability_gain": 0.8, "belief_reduction": 0.2}],
             },
             {
                 "tool": "verify_siglip",

@@ -29,12 +29,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-# Cap BLAS threads before scipy/numpy workers spawn — otherwise pytest
-# subprocesses that fork after this module loads can SIGSEGV (OpenBLAS).
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
+def _limit_blas_threads() -> None:
+    """Limit BLAS threads for the standalone analysis process only."""
+    for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ.setdefault(name, "1")
 
 
 def _wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float | None, float | None]:
@@ -281,6 +280,7 @@ def _print_report(result: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _limit_blas_threads()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "out_dir",

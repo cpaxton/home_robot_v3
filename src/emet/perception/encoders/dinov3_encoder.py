@@ -7,7 +7,6 @@
 # DINOv3 encoder for dense visual features (geometry/appearance, not text-aligned).
 # Used alongside SigLIP for dual-embedding scene graph objects.
 
-from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -39,7 +38,7 @@ class Dinov3Encoder(BaseImageTextEncoder):
     def __init__(
         self,
         version: str = "vitb16",
-        device: Optional[str] = None,
+        device: str | None = None,
         normalize: bool = True,
     ) -> None:
         if device is None:
@@ -50,9 +49,7 @@ class Dinov3Encoder(BaseImageTextEncoder):
 
         model_name = DINOV3_MODELS.get(version)
         if model_name is None:
-            raise ValueError(
-                f"Unknown DINOv3 version '{version}'. Choose from: {list(DINOV3_MODELS.keys())}"
-            )
+            raise ValueError(f"Unknown DINOv3 version '{version}'. Choose from: {list(DINOV3_MODELS.keys())}")
 
         from transformers import AutoImageProcessor, AutoModel
 
@@ -65,7 +62,7 @@ class Dinov3Encoder(BaseImageTextEncoder):
     @torch.no_grad()
     def encode_image(
         self,
-        image: Union[torch.Tensor, np.ndarray],
+        image: torch.Tensor | np.ndarray,
         **kwargs,
     ) -> Tensor:
         """Encode an image to a single pooled feature vector.
@@ -88,8 +85,8 @@ class Dinov3Encoder(BaseImageTextEncoder):
     @torch.no_grad()
     def encode_image_dense(
         self,
-        image: Union[torch.Tensor, np.ndarray],
-        output_shape: Optional[tuple] = None,
+        image: torch.Tensor | np.ndarray,
+        output_shape: tuple | None = None,
     ) -> Tensor:
         """Extract dense per-patch features, optionally interpolated to output_shape.
 
@@ -136,7 +133,7 @@ class Dinov3Encoder(BaseImageTextEncoder):
         """Cosine similarity (meaningful only between two image embeddings)."""
         return torch.cosine_similarity(image, text, dim=-1)
 
-    def _prepare_image(self, image: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+    def _prepare_image(self, image: torch.Tensor | np.ndarray) -> np.ndarray:
         if isinstance(image, torch.Tensor):
             image = image.detach().cpu().numpy()
         if image.ndim == 3 and image.shape[0] in (1, 3):

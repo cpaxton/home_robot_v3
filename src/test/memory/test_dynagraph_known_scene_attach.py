@@ -48,8 +48,7 @@ def test_known_scene_instance_items_attach_as_object_nodes():
             ("blue box", np.array([-0.01, -0.56, 0.6], dtype=float), (8, 1, 14, 6)),
         ],
         dedup_skips=lambda label, xyz: any(
-            labels_compatible_for_dedup(label, str(n.labels[0]))
-            and float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < 0.4
+            labels_compatible_for_dedup(label, str(n.labels[0])) and float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < 0.4
             for n in mem.get_nodes()
             if n.labels and not n.is_viewpoint and not n.is_frontier
         ),

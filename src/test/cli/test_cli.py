@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 def test_cli_help():
@@ -71,6 +72,40 @@ def test_habitat_group_help_lists_safe_start():
     assert "info" in result.stdout
 
 
+def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
+    from types import SimpleNamespace
+
+    from click.testing import CliRunner
+
+    project_root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
+    from emet_habitat import cli as habitat_cli
+    from emet_habitat import runner as habitat_runner
+    from emet_habitat.cli import main as habitat_main
+
+    result = CliRunner().invoke(habitat_main, ["run-episode", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--eqa-vl-quantization" in result.output
+    params = {param.name: param.default for param in habitat_main.commands["run-episode"].params}
+    assert params["max_planning_steps"] == 20
+    assert params["rotate_in_place"] is True
+    assert params["eqa_vl_quantization"] is None
+
+    captured = {}
+    monkeypatch.setattr(
+        habitat_runner,
+        "run_hmeqa_episode",
+        lambda **kwargs: captured.update(kwargs) or SimpleNamespace(to_dict=lambda: {}),
+    )
+    monkeypatch.setattr(habitat_cli, "summarize_episodes", lambda _rows: {})
+    result = CliRunner().invoke(
+        habitat_main,
+        ["run-episode", "--mock-llm", "--eqa-vl-quantization", "int8"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["eqa_vl_quantization"] == "int8"
+
+
 def test_habitat_safe_start_help():
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "habitat", "safe-start", "--help"],
@@ -121,6 +156,8 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "agentic-verifier" in result.stdout
     assert "require-verified" in result.stdout
     assert "agentic-router" in result.stdout
+    assert "--use-hm3d-semantics" in result.stdout
+    assert "--enrich-labels" in result.stdout
     assert "paper-router" in result.stdout
     assert "eqa-hf-model-id" in result.stdout
     assert "eqa-vl-family" in result.stdout
@@ -128,9 +165,233 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "--host" in result.stdout
     assert "--vl-endpoint" in result.stdout
     assert "--vl-port" in result.stdout
+    assert "--decision-policy" in result.stdout
+    assert "grounded_v2" in result.stdout
+    assert "--graph-evidence-mode" in result.stdout
+    assert "--room-history-mode" in result.stdout
+    assert "--room-policy" in result.stdout
+    assert "--room-target-hints" in result.stdout
+    assert "--investigate-stamp" in result.stdout
+    assert "--attempt-ledger-mode" in result.stdout
+    assert "--variant-id" in result.stdout
+    assert "--variant-config" in result.stdout
+    assert "--episode-timeout" in result.stdout
+    assert "--max-planning-steps" in result.stdout
+    assert "--max-movement-step" in result.stdout
     # Paper-router / Click default is Qwen-first (none), OWL opt-in only.
     assert "none" in result.stdout
     assert "owlv2" in result.stdout
+
+
+def test_hmeqa_resume_help_lists_frozen_variant_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "resume", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    for option in (
+        "--decision-policy",
+        "--use-hm3d-semantics",
+        "--enrich-labels",
+        "--graph-evidence-mode",
+        "--room-history-mode",
+        "--room-policy",
+        "--room-target-hints",
+        "--investigate-stamp",
+        "--attempt-ledger-mode",
+        "--variant-id",
+        "--eqa-hf-model-id",
+        "--eqa-vl-family",
+        "--eqa-vl-quantization",
+        "--eqa-answer-max-new-tokens",
+        "--episode-timeout",
+        "--max-planning-steps",
+        "--max-movement-step",
+    ):
+        assert option in result.stdout
+
+
+def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path),
+            "--ids",
+            "2,104",
+            "--preset",
+            "paper-router",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["agentic_router"] is True
+    assert frozen["decision_policy"] == "legacy"
+    assert frozen["graph_evidence_mode"] == "off"
+    assert frozen["room_history_mode"] == "off"
+    assert frozen["investigate_stamp"] is False
+    assert frozen["attempt_ledger_mode"] == "off"
+    assert frozen["variant_id"] == "legacy"
+    assert frozen["use_hm3d_semantics"] is False
+    assert frozen["use_enrich_labels"] is False
+
+
+def test_hmeqa_h2h_loads_variant_config_beneath_explicit_flags(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    config = tmp_path / "variant.yaml"
+    config.write_text(
+        """
+schema: emet.hmeqa.variant
+schema_version: 1
+variant:
+  id: action-history-shadow-v1
+  agentic_decision_policy: grounded_v2
+  graph_evidence_mode: agent
+  room_history_mode: agent
+  room_policy: canonical
+  room_target_hints: true
+  investigate_stamp: false
+  attempt_ledger_mode: shadow
+""".lstrip(),
+        encoding="utf-8",
+    )
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--ids",
+            "6,11",
+            "--variant-config",
+            str(config),
+            "--attempt-ledger-mode",
+            "agent",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["decision_policy"] == "grounded_v2"
+    assert frozen["graph_evidence_mode"] == "agent"
+    assert frozen["room_history_mode"] == "agent"
+    assert frozen["attempt_ledger_mode"] == "agent"
+    assert frozen["variant_id"] == "action-history-shadow-v1"
+    sources = captured["config_sources"]
+    assert sources["variant.agentic_decision_policy"].startswith("variant_config:")
+    assert sources["variant.attempt_ledger_mode"] == "command_line"
+
+    resume_result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--resume",
+            "--variant-config",
+            str(config),
+        ],
+    )
+    assert resume_result.exit_code == 1
+    assert "--variant-config is first-launch only" in resume_result.output
+
+
+def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
+    monkeypatch,
+    tmp_path,
+):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+    from emet.eval.hmeqa_launch import build_hmeqa_run_config, prepare_hmeqa_run_manifest
+
+    config = build_hmeqa_run_config(
+        arms="agentic",
+        ids="2,104",
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        use_hm3d_semantics=True,
+        use_enrich_labels=True,
+        decision_policy="grounded_v2",
+        graph_evidence_mode="shadow",
+        room_history_mode="agent",
+        room_policy="llm",
+        room_target_hints=False,
+        investigate_stamp=True,
+        attempt_ledger_mode="shadow",
+        variant_id="grounded-shadow-r1",
+        eqa_answer_max_new_tokens=512,
+        episode_timeout_seconds=3600,
+        max_planning_steps=12,
+        max_movement_step=6,
+        data_dir="/datasets/hmeqa",
+        hm3d_root="/datasets/hm3d/train",
+    )
+    prepare_hmeqa_run_manifest(
+        tmp_path,
+        project_root=tmp_path,
+        config=config,
+        sources={"variant.id": "command_line"},
+        resume=False,
+        git_state={
+            "commit": "a" * 40,
+            "dirty": False,
+            "dirty_digest": None,
+            "status": [],
+        },
+        external_inputs={
+            "data_dir": "/datasets/hmeqa",
+            "questions": {
+                "path": "/datasets/hmeqa/questions.csv",
+                "sha256": "sha256:questions",
+            },
+            "scene_init_poses": {
+                "path": "/datasets/hmeqa/scene_init_poses.csv",
+                "sha256": "sha256:poses",
+            },
+            "hm3d_root": "/datasets/hm3d/train",
+        },
+    )
+
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        ["hmeqa", "resume", str(tmp_path), "--cooldown", "7"],
+    )
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["arms"] == "agentic"
+    assert frozen["holdout_ids"] == "2,104"
+    assert frozen["decision_policy"] == "grounded_v2"
+    assert frozen["graph_evidence_mode"] == "shadow"
+    assert frozen["room_history_mode"] == "agent"
+    assert frozen["room_policy"] == "llm"
+    assert frozen["use_hm3d_semantics"] is True
+    assert frozen["use_enrich_labels"] is True
+    assert frozen["room_target_hints"] is False
+    assert frozen["investigate_stamp"] is True
+    assert frozen["attempt_ledger_mode"] == "shadow"
+    assert frozen["variant_id"] == "grounded-shadow-r1"
+    assert frozen["eqa_answer_max_new_tokens"] == 512
+    assert frozen["episode_timeout"] == 3600
+    assert frozen["max_planning_steps"] == 12
+    assert frozen["max_movement_step"] == 6
+    assert captured["cooldown"] == 7
 
 
 def test_hmeqa_overnight_help():
@@ -222,6 +483,21 @@ def test_jobs_run_help_lists_safety_flags():
     assert "cpu-safe" in result.stdout
     assert "gpu-exclusive" in result.stdout
     assert "--description" in result.stdout
+    assert "--wait-timeout-sec" in result.stdout
+    assert "--lock-timeout-sec" in result.stdout
+    assert "--gpu-wait-max-rounds" in result.stdout
+
+
+def test_eval_wait_and_recover_help_list_finite_bound():
+    for command in ("wait", "recover"):
+        result = subprocess.run(
+            [sys.executable, "-m", "emet.cli", "eval", command, "--help"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "--max-rounds" in result.stdout
+        assert "120" in result.stdout
 
 
 def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
@@ -271,7 +547,186 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     assert marker.read_text(encoding="utf-8") == "ok"
     wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "jobs register --job-id" in wrapper
-    assert wrapper.index("jobs register --job-id") < wrapper.index("jobs update \"$JOB_ID\" --status running")
+    assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
+
+
+def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    lock_file = tmp_path / "gpu-exclusive.lock"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_GPU_LOCK"] = str(lock_file)
+    env["EMET_GPU_LOCK_FILE"] = str(lock_file)
+
+    def launcher(out_dir: Path, marker: Path) -> subprocess.Popen:
+        code = (
+            "import time\n"
+            "from pathlib import Path\n"
+            f"p = Path({str(marker)!r})\n"
+            "start = time.time()\n"
+            "p.write_text(f'{start}\\n')\n"
+            "time.sleep(2.0)\n"
+            "p.write_text(f'{start}\\n{time.time()}\\n')\n"
+        )
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "emet.cli",
+                "jobs",
+                "run",
+                "--name",
+                f"lock-{out_dir.name}",
+                "--no-cpu-safe",
+                "--gpu-exclusive",
+                "--out-dir",
+                str(out_dir),
+                "--",
+                sys.executable,
+                "-c",
+                code,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
+    first_out = tmp_path / "first"
+    second_out = tmp_path / "second"
+    first_launcher = launcher(first_out, first_out / "times.txt")
+    marker_deadline = time.monotonic() + 12.0
+    while not (first_out / "times.txt").is_file() and time.monotonic() < marker_deadline:
+        time.sleep(0.05)
+    assert (first_out / "times.txt").is_file()
+
+    second_launcher = launcher(second_out, second_out / "times.txt")
+    first_stdout, first_stderr = first_launcher.communicate(timeout=20)
+    assert first_launcher.returncode == 0, first_stderr
+    first_id = first_stdout.strip().splitlines()[-1]
+    second_stdout, second_stderr = second_launcher.communicate(timeout=20)
+    assert second_launcher.returncode == 0, second_stderr
+    second_id = second_stdout.strip().splitlines()[-1]
+
+    def wait_for_terminal(job_id: str) -> dict:
+        record_path = jobs_dir / f"{job_id}.json"
+        deadline = time.monotonic() + 15.0
+        record = {}
+        while time.monotonic() < deadline:
+            if record_path.is_file():
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+                if record.get("status") in {"done", "failed"}:
+                    return record
+            time.sleep(0.05)
+        return record
+
+    assert wait_for_terminal(first_id).get("status") == "done"
+    assert wait_for_terminal(second_id).get("status") == "done"
+    first_start, first_end = (float(value) for value in (first_out / "times.txt").read_text().splitlines())
+    second_start, _second_end = (float(value) for value in (second_out / "times.txt").read_text().splitlines())
+    assert second_start >= first_end - 0.05
+
+    wrapper = (first_out / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "flock -w" in wrapper
+    assert "EMET_GPU_LOCK_HELD" not in wrapper
+    second_wrapper = (second_out / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "WAIT_PID_DEADLINE" not in second_wrapper
+
+
+def test_jobs_run_nested_child_inherits_validated_fd9(tmp_path):
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "nested"
+    marker = out_dir / "nested-ok"
+    lock_file = tmp_path / "gpu.lock"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_GPU_LOCK"] = str(lock_file)
+    code = (
+        "import subprocess, sys\n"
+        "from pathlib import Path\n"
+        "from emet.utils.job_registry import validated_gpu_lock_fd\n"
+        "fd = validated_gpu_lock_fd()\n"
+        "assert fd == 9\n"
+        "child = subprocess.run([sys.executable, '-c', "
+        "'from emet.utils.job_registry import validated_gpu_lock_fd; "
+        "raise SystemExit(0 if validated_gpu_lock_fd() == 9 else 7)'], "
+        "pass_fds=(fd,), check=False)\n"
+        "assert child.returncode == 0\n"
+        f"Path({str(marker)!r}).write_text('ok')\n"
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "nested-fd-test",
+            "--no-cpu-safe",
+            "--gpu-exclusive",
+            "--foreground",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            code,
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker.read_text(encoding="utf-8") == "ok"
+
+
+def test_jobs_run_explicit_pid_wait_times_out_before_payload(tmp_path):
+    import os
+
+    out_dir = tmp_path / "wait-timeout"
+    marker = out_dir / "must-not-run"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(tmp_path / "jobs")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "wait-timeout",
+            "--no-cpu-safe",
+            "--no-gpu-exclusive",
+            "--foreground",
+            "--wait-pid",
+            str(os.getpid()),
+            "--wait-timeout-sec",
+            "0",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('bad')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+
+    assert result.returncode == 4
+    assert not marker.exists()
+    assert "timed out waiting for explicit prerequisite pid" in (result.stdout + result.stderr)
 
 
 def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):

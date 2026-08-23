@@ -87,9 +87,7 @@ def test_graph_health_metrics_singletons_and_prompt():
 def test_classify_graph_failure_blowup_and_empty():
     assert classify_graph_failure({"n_object": 0, "n_obs": 0}) == "empty_graph"
     assert classify_graph_failure({"n_object": 250, "singleton_frac": 0.1}) == "blowup"
-    assert (
-        classify_graph_failure({"n_object": 20, "singleton_frac": 0.9}) == "fragmentation"
-    )
+    assert classify_graph_failure({"n_object": 20, "singleton_frac": 0.9}) == "fragmentation"
 
 
 def test_graph_health_from_checkpoint_nodes():

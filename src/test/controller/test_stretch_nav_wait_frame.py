@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import numpy as np
+from src.test.controller import make_zmq_test_client
 
 from emet.controller.zmq_client import StretchZmqClient
 from emet.utils.geometry import nav_xyt_to_world_xyt
-from src.test.controller import make_zmq_test_client
 
 
 def test_get_base_pose_world_composes_navigation_origin(monkeypatch):

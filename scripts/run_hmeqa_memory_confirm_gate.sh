@@ -25,9 +25,9 @@ RUN_ANNOTATED37="${RUN_ANNOTATED37:-1}"
 RUN_PAPER113="${RUN_PAPER113:-1}"
 
 {
-  echo "run_id=$RUN_ID"
-  echo "ids_gate=$IDS_GATE"
-  git rev-parse --short HEAD
+    echo "run_id=$RUN_ID"
+    echo "ids_gate=$IDS_GATE"
+    git rev-parse --short HEAD
 } | tee "$OUT_DIR/META.txt"
 
 log() { echo "[$(date -Is)] $*"; }
@@ -36,7 +36,7 @@ log "=== memory-confirm gate (dynagraph) n=$(awk -F, '{print NF}' <<<"$IDS_GATE"
 NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
 emet_kill_stale_eval_processes
 TAG="memory_confirm_gate_${RUN_ID}" IDS="$IDS_GATE" METHOD=dynagraph TIMEOUT="$TIMEOUT" \
-  ./scripts/run_habitat_iter_subset.sh 2>&1 | tee "$OUT_DIR/gate_dynagraph.log"
+    ./scripts/run_habitat_iter_subset.sh 2>&1 | tee "$OUT_DIR/gate_dynagraph.log"
 
 uv run python - <<PY | tee "$OUT_DIR/GATE_SUMMARY.json"
 import json
@@ -83,15 +83,15 @@ print(json.dumps(out, indent=2))
 PY
 
 if [[ "$RUN_ANNOTATED37" == "1" ]]; then
-  log "=== chaining annotated37 h2h ==="
-  RUN_ID="ann37_after_gate_${RUN_ID}" OUT_DIR="$OUT_DIR/annotated37" \
-    ./scripts/run_hmeqa_annotated37_h2h.sh 2>&1 | tee -a "$OUT_DIR/chain.log"
+    log "=== chaining annotated37 h2h ==="
+    RUN_ID="ann37_after_gate_${RUN_ID}" OUT_DIR="$OUT_DIR/annotated37" \
+        ./scripts/run_hmeqa_annotated37_h2h.sh 2>&1 | tee -a "$OUT_DIR/chain.log"
 fi
 
 if [[ "$RUN_PAPER113" == "1" ]]; then
-  log "=== chaining paper113 h2h ==="
-  RUN_ID="p113_after_gate_${RUN_ID}" OUT_DIR="$OUT_DIR/paper113" \
-    ./scripts/run_hmeqa_paper113_h2h.sh 2>&1 | tee -a "$OUT_DIR/chain.log"
+    log "=== chaining paper113 h2h ==="
+    RUN_ID="p113_after_gate_${RUN_ID}" OUT_DIR="$OUT_DIR/paper113" \
+        ./scripts/run_hmeqa_paper113_h2h.sh 2>&1 | tee -a "$OUT_DIR/chain.log"
 fi
 
 log "DONE memory-confirm gate chain → $OUT_DIR"

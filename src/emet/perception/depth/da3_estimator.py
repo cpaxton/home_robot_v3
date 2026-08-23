@@ -94,6 +94,7 @@ def _stub_gsplat_if_missing() -> None:
     """
     try:
         import gsplat  # noqa: F401
+
         return
     except ImportError:
         pass
@@ -102,9 +103,7 @@ def _stub_gsplat_if_missing() -> None:
     stub = types.ModuleType("gsplat")
 
     def rasterization(*_a: Any, **_k: Any) -> Any:
-        raise RuntimeError(
-            "gsplat is not installed; Depth Anything 3 Gaussian splatting export is unavailable."
-        )
+        raise RuntimeError("gsplat is not installed; Depth Anything 3 Gaussian splatting export is unavailable.")
 
     stub.rasterization = rasterization  # type: ignore[attr-defined]
     sys.modules["gsplat"] = stub
@@ -164,11 +163,7 @@ class DA3DepthEstimator:
             logger.warning("DA3: torch.compile failed (%s); using eager inference.", e)
 
     def _model_inference(self, **kwargs: Any) -> Any:
-        use_cuda_amp = (
-            self._use_amp
-            and str(self._device).startswith("cuda")
-            and torch.cuda.is_available()
-        )
+        use_cuda_amp = self._use_amp and str(self._device).startswith("cuda") and torch.cuda.is_available()
         if use_cuda_amp:
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 return self._model.inference(**kwargs)

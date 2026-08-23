@@ -10,8 +10,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
@@ -29,9 +29,9 @@ class InstanceView:
         mask: Tensor,
         bbox_xyxy: Tensor,
         cam_to_world: Tensor,
-        embedding: Optional[Tensor] = None,
+        embedding: Tensor | None = None,
         score: float = 1.0,
-        bounds: Optional[Tensor] = None,
+        bounds: Tensor | None = None,
         timestep: int = 0,
     ):
         self.cropped_image = cropped_image  # (H_crop, W_crop, 3) uint8 or float
@@ -67,7 +67,7 @@ class Instance:
         self,
         instance_id: int,
         global_id: int,
-        category_id: Union[Tensor, int] = -1,
+        category_id: Tensor | int = -1,
         score: float = 1.0,
     ):
         self.id = instance_id
@@ -77,12 +77,12 @@ class Instance:
         self.category_id = category_id
         self.score = score
 
-        self.instance_views: List[InstanceView] = []
-        self.point_cloud: Optional[Tensor] = None  # (N, 3) world xyz
-        self.point_cloud_rgb: Optional[Tensor] = None  # (N, 3) colors
-        self.bounds: Optional[Tensor] = None  # (3, 2) axis-aligned bbox [min, max]
+        self.instance_views: list[InstanceView] = []
+        self.point_cloud: Tensor | None = None  # (N, 3) world xyz
+        self.point_cloud_rgb: Tensor | None = None  # (N, 3) colors
+        self.bounds: Tensor | None = None  # (3, 2) axis-aligned bbox [min, max]
 
-        self._embedding_cache: Optional[Tensor] = None
+        self._embedding_cache: Tensor | None = None
 
     def add_view(self, view: InstanceView) -> None:
         """Add an observation of this instance."""
@@ -119,9 +119,7 @@ class Instance:
         dists = np.linalg.norm(pc - xyz, axis=1)
         return pc[np.argmin(dists)]
 
-    def get_image_embedding(
-        self, aggregation_method: str = "mean", normalize: bool = True
-    ) -> Tensor:
+    def get_image_embedding(self, aggregation_method: str = "mean", normalize: bool = True) -> Tensor:
         """Aggregate visual embeddings across all views."""
         embeddings = [v.embedding for v in self.instance_views if v.embedding is not None]
         if not embeddings:
@@ -137,7 +135,7 @@ class Instance:
             result = result / (result.norm(dim=-1, keepdim=True) + 1e-8)
         return result
 
-    def show_best_view(self, title: Optional[str] = None) -> None:
+    def show_best_view(self, title: str | None = None) -> None:
         """Display the best view using matplotlib."""
         import matplotlib.pyplot as plt
 
@@ -153,9 +151,7 @@ class Instance:
     def update_bounds(self) -> None:
         """Recompute axis-aligned bounding box from point cloud."""
         if self.point_cloud is not None and self.point_cloud.shape[0] > 0:
-            self.bounds = torch.stack(
-                [self.point_cloud.min(dim=0).values, self.point_cloud.max(dim=0).values], dim=1
-            )
+            self.bounds = torch.stack([self.point_cloud.min(dim=0).values, self.point_cloud.max(dim=0).values], dim=1)
 
     def __repr__(self) -> str:
         n_views = len(self.instance_views)
@@ -188,14 +184,18 @@ class InstanceMemory:
         min_instance_height: float = 0.1,
         max_instance_height: float = 1.8,
         min_percent_for_instance_view: float = 0.2,
-        open_vocab_cat_map_file: Optional[str] = None,
+        open_vocab_cat_map_file: str | None = None,
         use_visual_feat: bool = False,
     ):
         self.num_envs = num_envs
         self.encoder = encoder
         self.du_scale = du_scale
         self.instance_association = instance_association
-        self.mask_cropped_instances = mask_cropped_instances.lower() in ("true", "1", "yes") if isinstance(mask_cropped_instances, str) else bool(mask_cropped_instances)
+        self.mask_cropped_instances = (
+            mask_cropped_instances.lower() in ("true", "1", "yes")
+            if isinstance(mask_cropped_instances, str)
+            else bool(mask_cropped_instances)
+        )
         self.min_pixels_for_instance_view = min_pixels_for_instance_view
         self.min_instance_thickness = min_instance_thickness
         self.min_instance_vol = min_instance_vol
@@ -206,16 +206,14 @@ class InstanceMemory:
         self.use_visual_feat = use_visual_feat
 
         self._next_global_id = 0
-        self.instances: Dict[int, Dict[int, Instance]] = {}
+        self.instances: dict[int, dict[int, Instance]] = {}
         self.reset()
 
     def reset(self) -> None:
         """Clear all tracked instances."""
         self.instances = {env_id: {} for env_id in range(self.num_envs)}
         self._next_global_id = 0
-        self._unassociated: Dict[int, List[_PendingInstance]] = {
-            env_id: [] for env_id in range(self.num_envs)
-        }
+        self._unassociated: dict[int, list[_PendingInstance]] = {env_id: [] for env_id in range(self.num_envs)}
 
     def _allocate_global_id(self) -> int:
         gid = self._next_global_id
@@ -229,11 +227,11 @@ class InstanceMemory:
         point_cloud: Tensor,
         image: Tensor,
         cam_to_world: Tensor,
-        instance_classes: Optional[Tensor] = None,
-        instance_scores: Optional[Tensor] = None,
-        background_instance_labels: Optional[List[int]] = None,
-        valid_points: Optional[Tensor] = None,
-        pose: Optional[Tensor] = None,
+        instance_classes: Tensor | None = None,
+        instance_scores: Tensor | None = None,
+        background_instance_labels: list[int] | None = None,
+        valid_points: Tensor | None = None,
+        pose: Tensor | None = None,
     ) -> None:
         """Process a single frame's instance segmentation and stage for association.
 
@@ -380,9 +378,7 @@ class InstanceMemory:
                     if inst.point_cloud is not None and p.point_cloud is not None:
                         inst.point_cloud = torch.cat([inst.point_cloud, p.point_cloud], dim=0)
                         if inst.point_cloud_rgb is not None and p.point_cloud_rgb is not None:
-                            inst.point_cloud_rgb = torch.cat(
-                                [inst.point_cloud_rgb, p.point_cloud_rgb], dim=0
-                            )
+                            inst.point_cloud_rgb = torch.cat([inst.point_cloud_rgb, p.point_cloud_rgb], dim=0)
                     elif p.point_cloud is not None:
                         inst.point_cloud = p.point_cloud
                         inst.point_cloud_rgb = p.point_cloud_rgb
@@ -435,11 +431,11 @@ class InstanceMemory:
         for gid in to_remove:
             instances.pop(gid, None)
 
-    def pop_global_instance(self, env_id: int, global_instance_id: int) -> Optional[Instance]:
+    def pop_global_instance(self, env_id: int, global_instance_id: int) -> Instance | None:
         """Remove and return an instance by global ID."""
         return self.instances.get(env_id, {}).pop(global_instance_id, None)
 
-    def get_all_instances(self, env_id: int = 0) -> List[Instance]:
+    def get_all_instances(self, env_id: int = 0) -> list[Instance]:
         return list(self.instances.get(env_id, {}).values())
 
 
@@ -449,11 +445,11 @@ class _PendingInstance:
 
     local_id: int
     view: InstanceView
-    point_cloud: Optional[Tensor]
-    point_cloud_rgb: Optional[Tensor]
+    point_cloud: Tensor | None
+    point_cloud_rgb: Tensor | None
     category_id: Tensor
     score: float
-    bounds: Optional[Tensor]
+    bounds: Tensor | None
 
 
 def _bbox3d_iou(bounds_a: Tensor, bounds_b: Tensor) -> float:

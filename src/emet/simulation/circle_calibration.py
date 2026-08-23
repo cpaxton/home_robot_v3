@@ -29,9 +29,7 @@ NUM_POLES = 14
 POLE_PAINT_RGBA = (0.92, 0.12, 0.08)
 
 
-def circle_from_3_points(
-    p1: np.ndarray, p2: np.ndarray, p3: np.ndarray
-) -> tuple[np.ndarray, float] | None:
+def circle_from_3_points(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> tuple[np.ndarray, float] | None:
     """Circumcircle of three 2D points; None if nearly colinear."""
     ax, ay = float(p1[0]), float(p1[1])
     bx, by = float(p2[0]), float(p2[1])

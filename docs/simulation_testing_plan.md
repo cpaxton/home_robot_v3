@@ -4,7 +4,7 @@ Canonical **sequential smoke battery** for embodied sim + Habitat before multi-d
 
 **Orchestrator:** [`scripts/run_simulation_smoke_battery.sh`](../scripts/run_simulation_smoke_battery.sh)
 
-**Paper:** `paper/sections/04_experiments.tex` (subsection *Simulation smoke battery*).  
+**Paper:** `paper/sections/04_experiments.tex` (subsection *Simulation smoke battery*).
 **Related:** [evaluation.md](evaluation.md), [experiments/cross_track_smoke.md](experiments/cross_track_smoke.md), [paper_benchmarks.md](paper_benchmarks.md).
 
 ---
@@ -13,7 +13,7 @@ Canonical **sequential smoke battery** for embodied sim + Habitat before multi-d
 
 | # | Track | Environment | Harness | Pass criterion |
 |---|-------|-------------|---------|----------------|
-| 1 | **Habitat EQA** | HM3D / HM-EQA | `.venv-habitat/bin/emet-habitat run-episode` | Episode completes; MCQ letter emitted; optional map export |
+| 1 | **Habitat EQA** | HM3D / HM-EQA | `.venv-habitat/bin/emet-habitat run-episode` | Episode completes; semantic answer resolves to an MCQ choice at scoring; optional map export |
 | 2 | **Habitat OVMM** | HM3D proxy | `.venv-habitat/bin/emet-habitat run-ovmm-find-episode` | `find_partial_success > 0` (GT backend smoke) |
 | 3 | **Robocasa search** | Robocasa S1 | `eval_ovmm_find_phases.py` | OVMM FindObj/FindRec on kitchen (`robocasa_pp_s1`) |
 | 4 | **MolmoSpaces / iTHOR search** | MolmoSpaces S2 | `eval_ovmm_find_phases.py` | OVMM find-phase on iTHOR train idx 0 |

@@ -334,7 +334,6 @@ def test_connection_profile_config_path(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert "agent_innate_mars.yaml" in r.output
 
 
-
 def test_cli_eqa_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
     """Explicit --eqa wins over agent.eqa=false in config."""
     from emet.app import run_agent as ra

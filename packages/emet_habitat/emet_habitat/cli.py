@@ -12,6 +12,7 @@ from pathlib import Path
 
 import click
 
+from emet.core.parameters import Parameters
 from emet.habitat.config import (
     default_habitat_eqa_data_dir,
     default_hm3d_scene_dir,
@@ -22,7 +23,6 @@ from emet.habitat.datasets import load_hmeqa_questions
 from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage
 from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
-from emet.core.parameters import Parameters
 
 
 @click.group()
@@ -103,6 +103,11 @@ def _eqa_cli_options(fn):
             help="EQA VLM family: qwen3_vl, qwen3_5, qwen2_5_vl, gemma4, internvl (default: dynav_config.yaml eqa.vl_family)",
         ),
         click.option("--eqa-hf-model-id", default=None, help="Override HF model id (e.g. OpenGVLab/InternVL3-14B-hf)"),
+        click.option(
+            "--eqa-vl-quantization",
+            default=None,
+            help="Override EQA VLM quantization (for example int4 or none).",
+        ),
         click.option("--device", default="cuda", help="VLM device (cuda, cpu, mps)"),
     ]
     for opt in reversed(opts):
@@ -235,6 +240,12 @@ def _diagnostics_cli_options(fn):
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
+@click.option(
+    "--enrich-labels/--no-enrich-labels",
+    "use_enrich_labels",
+    default=False,
+    help="Seed GraphEQA per-question GT object hints (separate oracle axis; default off)",
+)
 @_frontier_cli_options
 @_habitat_nav_cli_options
 @_eqa_cli_options
@@ -254,8 +265,10 @@ def run_episode(
     rotate_in_place: bool,
     extra_instruction: str | None,
     use_hm3d_semantics: bool | None,
+    use_enrich_labels: bool,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    eqa_vl_quantization: str | None,
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
@@ -293,8 +306,10 @@ def run_episode(
             init_poses_path=init_poses_path,
             rotate_in_place=rotate_in_place,
             use_hm3d_semantics=use_hm3d_semantics,
+            use_enrich_labels=use_enrich_labels,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            eqa_vl_quantization=eqa_vl_quantization,
             device=device,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
@@ -335,12 +350,15 @@ def run_episode(
     "--question-end",
     default=-1,
     type=int,
-    help=f"Inclusive; -1 = last question in CSV (paper subset: 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
+    help=f"Inclusive; -1 = last question in CSV (legacy fixed slice: 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
 )
 @click.option(
     "--paper-subset/--all-questions",
     default=True,
-    help=f"Limit to GraphEQA HM-EQA paper questions (indices 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
+    help=(
+        f"Limit to the historical emet q0–{HMEQA_PAPER_QUESTION_COUNT - 1} slice; "
+        "this is not GraphEQA's semantic-filtered HM-EQA set"
+    ),
 )
 @click.option(
     "--question-ids",
@@ -358,6 +376,12 @@ def run_episode(
     "--use-hm3d-semantics/--no-hm3d-semantics",
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
+)
+@click.option(
+    "--enrich-labels/--no-enrich-labels",
+    "use_enrich_labels",
+    default=False,
+    help="Seed GraphEQA per-question GT object hints (separate oracle axis; default off)",
 )
 @_frontier_cli_options
 @_habitat_nav_cli_options
@@ -378,8 +402,10 @@ def run_batch(
     data_dir: Path | None,
     output: Path,
     use_hm3d_semantics: bool | None,
+    use_enrich_labels: bool,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    eqa_vl_quantization: str | None,
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
@@ -392,7 +418,7 @@ def run_batch(
     explore_when_uncovered: str | None,
     debug_run_tag: str | None = None,
 ) -> None:
-    """Run a slice of HM-EQA (GraphEQA paper: 113 questions; default method=static_graph)."""
+    """Run an HM-EQA slice (default: historical q0–112; method=static_graph)."""
     from emet_habitat.runner import run_hmeqa_batch
 
     questions_path = (data_dir / "questions.csv") if data_dir else None
@@ -424,8 +450,10 @@ def run_batch(
             init_poses_path=init_poses_path,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            eqa_vl_quantization=eqa_vl_quantization,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
+            use_enrich_labels=use_enrich_labels,
             output_jsonl=output,
             resume=resume,
             frontier_nodes_enabled=frontier_nodes,
@@ -439,7 +467,7 @@ def run_batch(
             export_video=export_video,
             map_stride=map_stride,
         )
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
     summary = summarize_episodes(metrics)
@@ -461,6 +489,12 @@ def run_batch(
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
+@click.option(
+    "--enrich-labels/--no-enrich-labels",
+    "use_enrich_labels",
+    default=False,
+    help="Seed GraphEQA per-question GT object hints (separate oracle axis; default off)",
+)
 @_eqa_cli_options
 def compare_batch(
     question_start: int,
@@ -472,8 +506,10 @@ def compare_batch(
     data_dir: Path | None,
     output: Path | None,
     use_hm3d_semantics: bool | None,
+    use_enrich_labels: bool,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    eqa_vl_quantization: str | None,
     device: str,
 ) -> None:
     """Run static_graph and dynagraph on the same questions; print side-by-side summary.
@@ -501,8 +537,10 @@ def compare_batch(
             init_poses_path=init_poses_path,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            eqa_vl_quantization=eqa_vl_quantization,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
+            use_enrich_labels=use_enrich_labels,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -603,9 +641,13 @@ def run_ovmm_find_episode(
 @click.option("--warmup-updates", default=5, type=int)
 @click.option("--seed", default=0, type=int)
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
-@click.option("--output-dir", type=click.Path(path_type=Path), default=None, help="Write frontier_explore.json + trajectory")
+@click.option(
+    "--output-dir", type=click.Path(path_type=Path), default=None, help="Write frontier_explore.json + trajectory"
+)
 @click.option("--rotate-in-place/--no-rotate-in-place", default=True)
-@click.option("--no-frontier-nodes", is_flag=True, default=False, help="Disable graph frontier nodes (voxel sample only)")
+@click.option(
+    "--no-frontier-nodes", is_flag=True, default=False, help="Disable graph frontier nodes (voxel sample only)"
+)
 def explore_frontiers(
     question_id: int,
     scene_id: str | None,

@@ -45,7 +45,7 @@ For each robot, the script:
 4. Wipes **`graph/`** before each run so stale **`floor_metrics.json`** cannot mask failures
 5. Writes a combined report to **`/tmp/dynagraph_e2e_compare/comparison_report.json`**
 
-Implementation: [`src/test/app/run_dynagraph_multi_robot_e2e.py`](../src/test/app/run_dynagraph_multi_robot_e2e.py).  
+Implementation: [`src/test/app/run_dynagraph_multi_robot_e2e.py`](../src/test/app/run_dynagraph_multi_robot_e2e.py).
 Metrics helpers: [`src/emet/memory/floor_metrics.py`](../src/emet/memory/floor_metrics.py).
 
 ## Where to find results

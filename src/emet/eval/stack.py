@@ -116,15 +116,13 @@ def build_memory_agent(
             from emet.controller.controller_dynagraph import DynagraphController
 
             logger.info(
-                f"build_memory_agent: dynagraph harness={harness_key} "
-                f"instance_graph={inst} sensor={sens} eqa={eqa}"
+                f"build_memory_agent: dynagraph harness={harness_key} instance_graph={inst} sensor={sens} eqa={eqa}"
             )
             return DynagraphController(**common)
         from emet.controller.controller_graph_eqa import GraphEQAController
 
         logger.info(
-            f"build_memory_agent: static_graph harness={harness_key} "
-            f"instance_graph={inst} sensor={sens} eqa={eqa}"
+            f"build_memory_agent: static_graph harness={harness_key} instance_graph={inst} sensor={sens} eqa={eqa}"
         )
         return GraphEQAController(**common)
 

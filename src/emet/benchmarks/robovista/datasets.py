@@ -107,9 +107,7 @@ def load_robovista(
         try:
             from datasets import load_dataset
         except ImportError as exc:
-            raise ImportError(
-                "RoboVista requires the `datasets` package. Install with: uv sync"
-            ) from exc
+            raise ImportError("RoboVista requires the `datasets` package. Install with: uv sync") from exc
         ds = load_dataset(hf_id, split=split)
         rows = ds
 

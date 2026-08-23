@@ -108,8 +108,7 @@ def test_find_robocasa_freejoint_with_hint_stretch():
         f"xy=({x:.3f},{y:.3f}) d_hint={d_hint:.3f}m"
     )
     assert d_hint >= 0.35, (
-        f"expected open-floor move away from counter hint (>=0.35 m), got d_hint={d_hint:.3f}m "
-        f"xy=({x:.3f},{y:.3f})"
+        f"expected open-floor move away from counter hint (>=0.35 m), got d_hint={d_hint:.3f}m xy=({x:.3f},{y:.3f})"
     )
 
 

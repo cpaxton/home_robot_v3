@@ -20,6 +20,16 @@ LETTERS = "ABCD"
 PLACEHOLDER_RE = re.compile(r"do not choose", re.IGNORECASE)
 
 
+def is_placeholder_choice(choice: str) -> bool:
+    """Return whether a benchmark option is an explicit non-answer placeholder."""
+    return bool(PLACEHOLDER_RE.search(str(choice or "")))
+
+
+def valid_choice_indices(choices: list[str]) -> list[int]:
+    """Indices that may be selected by a fallback policy."""
+    return [idx for idx, choice in enumerate(choices) if not is_placeholder_choice(choice)]
+
+
 def rotated_choice_order(n_choices: int, rotation: int) -> list[int]:
     """Original-choice index shown at each letter position for a cyclic rotation."""
     return [(i + rotation) % n_choices for i in range(n_choices)]
@@ -61,7 +71,7 @@ def tally_choice_votes(
     to a uniform split) and ``None`` is returned so the caller keeps its main answer.
     """
     counted = Counter(
-        v for v in votes if v is not None and 0 <= v < len(choices) and not PLACEHOLDER_RE.search(choices[v])
+        v for v in votes if v is not None and 0 <= v < len(choices) and not is_placeholder_choice(choices[v])
     )
     if not counted:
         return None
@@ -94,7 +104,7 @@ def match_freeform_to_choice(answer: str, choices: list[str]) -> int | None:
         return None
     scores: list[tuple[float, int]] = []
     for idx, choice in enumerate(choices[:4]):
-        if PLACEHOLDER_RE.search(choice or ""):
+        if is_placeholder_choice(choice):
             continue
         ct = _norm_tokens(choice)
         if not ct:
@@ -112,3 +122,19 @@ def match_freeform_to_choice(answer: str, choices: list[str]) -> int | None:
     if best >= 0.34 and best - second >= 0.15:
         return best_idx
     return None
+
+
+def answer_is_unknownish(answer: str, choices: list[str] | None = None) -> bool:
+    """Treat ``None`` as a count answer when valid; keep abstention sentinels unknown.
+
+    HM-EQA count questions legitimately use option text ``None``. By contrast,
+    ``Unknown`` and ``N/A`` remain abstentions even when a benchmark includes
+    them as fallback choices, so they should still trigger semantic salvage.
+    """
+    text = str(answer or "").strip()
+    if not text:
+        return True
+    normalized = text.lower()
+    if normalized == "none" and choices and match_freeform_to_choice(text, choices) is not None:
+        return False
+    return normalized in {"unknown", "none", "n/a", "na"} or "frontier" in normalized

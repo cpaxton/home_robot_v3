@@ -43,27 +43,12 @@ def episode_policy_metrics(
     )
     abstained = any(_is_tool_result(row, "abstain_unverified") for row in trace)
     fused = [row for row in verifies if row.get("fused_verified")]
-    accepted = bool(
-        submit
-        and submit.get("verified")
-        and submit.get("answerable", True)
-        and not abstained
-    )
+    accepted = bool(submit and submit.get("verified") and submit.get("answerable", True) and not abstained)
     correct = metrics.get("correct")
-    visible_labels = [
-        bool(row["gt_in_view"])
-        for row in verifies
-        if row.get("gt_in_view") is not None
-    ]
-    false_confirmations = sum(
-        bool(row.get("fused_verified")) and row.get("gt_in_view") is False
-        for row in verifies
-    )
+    visible_labels = [bool(row["gt_in_view"]) for row in verifies if row.get("gt_in_view") is not None]
+    false_confirmations = sum(bool(row.get("fused_verified")) and row.get("gt_in_view") is False for row in verifies)
     nav_rows = [
-        row
-        for row in trace
-        if _is_tool_result(row, "navigate_to_obs")
-        or _is_tool_result(row, "explore_frontier")
+        row for row in trace if _is_tool_result(row, "navigate_to_obs") or _is_tool_result(row, "explore_frontier")
     ]
     path_length = sum(float(row.get("nav_dist_m") or 0.0) for row in nav_rows)
     hypotheses = [
@@ -73,14 +58,11 @@ def episode_policy_metrics(
         for hypothesis in (row.get("hypotheses") or [])
     ]
     gains = [
-        float(hypothesis.get("answerability_gain", 0.0))
-        + float(hypothesis.get("belief_reduction", 0.0))
+        float(hypothesis.get("answerability_gain", 0.0)) + float(hypothesis.get("belief_reduction", 0.0))
         for hypothesis in hypotheses
     ]
     forced_submit = bool(
-        submit is not None
-        and not abstained
-        and (not submit.get("verified") or submit.get("answerable") is False)
+        submit is not None and not abstained and (not submit.get("verified") or submit.get("answerable") is False)
     )
     return {
         "question_id": metrics.get("question_id"),
@@ -97,12 +79,8 @@ def episode_policy_metrics(
         "false_confirmations": false_confirmations,
         "navigation_steps": len(nav_rows),
         "path_length_m": path_length,
-        "hypotheses_tried": len(
-            {row.get("obs_id") for row in verifies if row.get("obs_id") is not None}
-        ),
-        "mean_candidate_information_gain": (
-            sum(gains) / len(gains) if gains else None
-        ),
+        "hypotheses_tried": len({row.get("obs_id") for row in verifies if row.get("obs_id") is not None}),
+        "mean_candidate_information_gain": (sum(gains) / len(gains) if gains else None),
     }
 
 
@@ -110,65 +88,29 @@ def summarize_policy_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
     labeled = [row for row in rows if row.get("correct") is not None]
     accepted = [row for row in labeled if row.get("accepted")]
     verified = [row for row in rows if row.get("verified_answer")]
-    visible = [
-        row for row in rows if row.get("target_visible_at_any_verify") is not None
-    ]
+    visible = [row for row in rows if row.get("target_visible_at_any_verify") is not None]
     false_confirmations = sum(int(row.get("false_confirmations") or 0) for row in rows)
     total_fused = sum(int(row.get("n_fused_verifies") or 0) for row in rows)
     return {
         "n_episodes": len(rows),
-        "answer_accuracy": (
-            sum(bool(row["correct"]) for row in labeled) / len(labeled)
-            if labeled
-            else None
-        ),
+        "answer_accuracy": (sum(bool(row["correct"]) for row in labeled) / len(labeled) if labeled else None),
         "coverage": len(accepted) / len(labeled) if labeled else None,
-        "selective_accuracy": (
-            sum(bool(row["correct"]) for row in accepted) / len(accepted)
-            if accepted
-            else None
-        ),
-        "selective_risk": (
-            1.0
-            - sum(bool(row["correct"]) for row in accepted) / len(accepted)
-            if accepted
-            else None
-        ),
+        "selective_accuracy": (sum(bool(row["correct"]) for row in accepted) / len(accepted) if accepted else None),
+        "selective_risk": (1.0 - sum(bool(row["correct"]) for row in accepted) / len(accepted) if accepted else None),
         "verified_answer_rate": len(verified) / len(rows) if rows else 0.0,
-        "verified_precision": (
-            (total_fused - false_confirmations) / total_fused
-            if total_fused
-            else None
-        ),
+        "verified_precision": ((total_fused - false_confirmations) / total_fused if total_fused else None),
         "target_visibility_at_verify": (
-            sum(bool(row["target_visible_at_any_verify"]) for row in visible)
-            / len(visible)
-            if visible
-            else None
+            sum(bool(row["target_visible_at_any_verify"]) for row in visible) / len(visible) if visible else None
         ),
-        "abstention_rate": (
-            sum(bool(row.get("abstained")) for row in rows) / len(rows)
-            if rows
-            else 0.0
-        ),
-        "false_confirmation_rate": (
-            false_confirmations / total_fused if total_fused else None
-        ),
+        "abstention_rate": (sum(bool(row.get("abstained")) for row in rows) / len(rows) if rows else 0.0),
+        "false_confirmation_rate": (false_confirmations / total_fused if total_fused else None),
         "forced_submits": sum(bool(row.get("forced_submit")) for row in rows),
         "mean_navigation_steps": (
-            sum(float(row.get("navigation_steps", 0)) for row in rows) / len(rows)
-            if rows
-            else 0.0
+            sum(float(row.get("navigation_steps", 0)) for row in rows) / len(rows) if rows else 0.0
         ),
-        "mean_path_length_m": (
-            sum(float(row.get("path_length_m", 0.0)) for row in rows) / len(rows)
-            if rows
-            else 0.0
-        ),
+        "mean_path_length_m": (sum(float(row.get("path_length_m", 0.0)) for row in rows) / len(rows) if rows else 0.0),
         "mean_hypotheses_tried": (
-            sum(float(row.get("hypotheses_tried", 0)) for row in rows) / len(rows)
-            if rows
-            else 0.0
+            sum(float(row.get("hypotheses_tried", 0)) for row in rows) / len(rows) if rows else 0.0
         ),
     }
 

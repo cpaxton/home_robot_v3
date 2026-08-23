@@ -81,6 +81,17 @@ eqa:
   agentic_max_tool_rounds: 8
   agentic_max_nav_steps: 8
   agentic_verify_min_sim: 0.28
+  # Versioned Grounded Graph Agent rollout axes. Defaults preserve the legacy
+  # decision path; HM-EQA freezes these in run_manifest.json for same-commit A/Bs.
+  agentic_decision_policy: "legacy"  # legacy | grounded_v2
+  graph_evidence_mode: "off"  # off | shadow | agent
+  room_history_mode: "off"  # off | shadow | agent
+  room_target_hints: true
+  room_stamp_investigate: false
+  # off=no durable rows/history; shadow=collect but hide; agent=expose grounded
+  # recent outcomes, loop flags, per-place summaries, and global attempt rows.
+  attempt_ledger_mode: "off"  # off | shadow | agent
+  variant_id: "legacy"
   # Action-outcome ledger — default off (paper pins unchanged). EMET_EQA_ATTEMPT_LEDGER=1.
   # Docs: docs/attempt_ledger.md
   # attempt_ledger: false

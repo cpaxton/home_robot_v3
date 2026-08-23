@@ -21,6 +21,7 @@ from pathlib import Path
 DEFAULT_NEED_MIB = 12000
 DEFAULT_STABLE_CHECKS = 3
 DEFAULT_WAIT_INTERVAL_S = 30.0
+DEFAULT_WAIT_MAX_ROUNDS = 120
 DEFAULT_SETTLE_S = 15.0
 
 # Patterns matched against full process command lines (pgrep -f / ps args).
@@ -76,6 +77,13 @@ def env_wait_interval_s(default: float = DEFAULT_WAIT_INTERVAL_S) -> float:
     if not raw:
         return float(default)
     return float(raw)
+
+
+def env_wait_max_rounds(default: int = DEFAULT_WAIT_MAX_ROUNDS) -> int:
+    raw = os.environ.get("GPU_WAIT_MAX_ROUNDS", "").strip()
+    if not raw:
+        return int(default)
+    return max(1, int(raw))
 
 
 def _run_nvidia_smi(args: Sequence[str]) -> str | None:
@@ -280,9 +288,7 @@ def kill_stale_eval_processes(
     signaled = 0
     for pattern in patterns:
         pids = _pgrep_f(pattern)
-        signaled += kill_matching_pids(
-            pids, protected=prot, log=_log, escalate_s=escalate_s
-        )
+        signaled += kill_matching_pids(pids, protected=prot, log=_log, escalate_s=escalate_s)
     settle = env_settle_s() if settle_s is None else float(settle_s)
     if settle > 0:
         _sleep(settle)
@@ -291,9 +297,7 @@ def kill_stale_eval_processes(
         seen: set[int] = set()
         for app in list_compute_apps():
             cmd = _process_args(app.pid)
-            if not (
-                _GPU_CMD_HINT.search(cmd) or _GPU_CMD_HINT.search(app.process_name)
-            ):
+            if not (_GPU_CMD_HINT.search(cmd) or _GPU_CMD_HINT.search(app.process_name)):
                 continue
             if app.pid in seen or app.pid in prot:
                 continue
@@ -363,8 +367,7 @@ def recent_emet_segfault_hint() -> str | None:
     hits = [
         ln.strip()
         for ln in blob.splitlines()
-        if re.search(r"segfault|invalid opcode", ln, re.IGNORECASE)
-        and re.search(r"\b(emet|python)", ln, re.IGNORECASE)
+        if re.search(r"segfault|invalid opcode", ln, re.IGNORECASE) and re.search(r"\b(emet|python)", ln, re.IGNORECASE)
     ]
     if not hits:
         return None
@@ -430,8 +433,7 @@ def diagnose_eval_environment(
         )
     else:
         lines.append(
-            "Segfault scan: no recent emet/python segfault in dmesg "
-            "(or dmesg unavailable without privileges)."
+            "Segfault scan: no recent emet/python segfault in dmesg (or dmesg unavailable without privileges)."
         )
 
     lines.append(
@@ -463,16 +465,17 @@ def wait_gpu_stable(
     sleep_fn: Callable[[float], None] | None = None,
     max_rounds: int | None = None,
 ) -> bool:
-    """Wait until free VRAM stays >= need for ``stable_checks`` consecutive reads."""
+    """Wait boundedly until free VRAM stays above the requested threshold."""
     need = env_need_mib() if need_mib is None else int(need_mib)
     checks = env_stable_checks() if stable_checks is None else int(stable_checks)
     interval = env_wait_interval_s() if interval_s is None else float(interval_s)
+    round_limit = env_wait_max_rounds() if max_rounds is None else max(0, int(max_rounds))
     _log = log or (lambda m: print(m, flush=True))
     _sleep = sleep_fn or time.sleep
     ok = 0
     rounds = 0
     while ok < checks:
-        if max_rounds is not None and rounds >= max_rounds:
+        if rounds >= round_limit:
             return False
         free = gpu_free_mib()
         if free >= need:
@@ -488,6 +491,7 @@ def wait_gpu_stable(
 
 
 # --- disk preflight (episode debug bundles) --------------------------------
+
 
 def _episodes_root() -> Path | None:
     try:
@@ -528,8 +532,7 @@ def disk_status_lines(episodes_root: Path | None = None) -> list[str]:
         if root.is_dir():
             bundles = [p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
             total = sum(_dir_gb(p) for p in bundles)
-            lines.append(f"episode bundles: {len(bundles)} dirs, {total:.1f} GB "
-                         f"(clean with: emet eval clean-bundles)")
+            lines.append(f"episode bundles: {len(bundles)} dirs, {total:.1f} GB (clean with: emet eval clean-bundles)")
     return lines
 
 
@@ -620,9 +623,7 @@ def clean_episode_bundles(
         else:
             out.append(f"would   {sz:7.2f} GB  {p.name}  ({why})")
     out.append(
-        f"freed: {freed:.2f} GB ({len(doomed)} bundles) "
-        f"[{'APPLIED' if apply else 'dry-run; use --apply to delete'}]"
+        f"freed: {freed:.2f} GB ({len(doomed)} bundles) [{'APPLIED' if apply else 'dry-run; use --apply to delete'}]"
     )
     out.append(f"kept {len(dirs) - len(doomed)} bundles; results/*.jsonl untouched.")
     return out
-

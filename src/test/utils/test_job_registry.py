@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 
 from emet.utils import job_registry as jr
@@ -59,6 +60,56 @@ def test_looks_like_gpu_job_and_active_pids(tmp_path, monkeypatch):
     pids = jr.active_gpu_job_pids()
     assert os.getpid() in pids
     assert jr.active_gpu_job_pids(exclude_job_id=gpu.id) == []
+
+
+def test_command_gpu_heuristic_covers_hmeqa_without_need_mib():
+    assert jr.command_looks_like_gpu_job("countclock-recovery", "emet-habitat run-batch")
+    assert jr.command_looks_like_gpu_job("hmeqa-failset", "scripts/run_hmeqa_agentic_h2h.sh OUT")
+    assert not jr.command_looks_like_gpu_job("docs-build", "make docs")
+
+
+def test_gpu_lock_path_matches_shared_launcher_contract(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMET_GPU_LOCK", raising=False)
+    monkeypatch.delenv("EMET_GPU_LOCK_FILE", raising=False)
+    assert jr.gpu_lock_path().name == "gpu.lock"
+
+    alias = tmp_path / "alias.lock"
+    monkeypatch.setenv("EMET_GPU_LOCK_FILE", str(alias))
+    assert jr.gpu_lock_path() == alias
+
+    canonical = tmp_path / "canonical.lock"
+    monkeypatch.setenv("EMET_GPU_LOCK", str(canonical))
+    assert jr.gpu_lock_path() == canonical
+
+
+def test_gpu_lock_fd_validation_uses_canonical_inode(tmp_path, monkeypatch):
+    canonical = tmp_path / "gpu.lock"
+    canonical.touch()
+    alias = tmp_path / "gpu-alias.lock"
+    alias.symlink_to(canonical)
+    monkeypatch.setenv("EMET_GPU_LOCK", str(alias))
+    fd = os.open(canonical, os.O_WRONLY)
+    other = os.open(tmp_path / "other.lock", os.O_WRONLY | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert jr.gpu_lock_path() == canonical
+        assert jr.gpu_lock_fd_matches(fd)
+        assert jr.validated_gpu_lock_fd(fd) == fd
+        assert not jr.gpu_lock_fd_matches(other)
+        assert jr.validated_gpu_lock_fd(other) is None
+    finally:
+        os.close(other)
+        os.close(fd)
+
+
+def test_validated_current_job_id_requires_live_ancestor(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    valid = jr.register_job(name="managed", status="running", pid=os.getpid())
+    unrelated = jr.register_job(name="spoofed", status="running", pid=999999991)
+
+    assert jr.validated_current_job_id(valid.id) == valid.id
+    assert jr.validated_current_job_id(unrelated.id) is None
+    assert jr.validated_current_job_id("missing") is None
 
 
 def test_format_job_row_columns():

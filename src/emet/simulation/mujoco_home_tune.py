@@ -197,15 +197,11 @@ def build_tune_model(
         configure_kinematic_tune(model)
         logs.append("Kinematic sandbox: gravity/contact/actuation disabled.")
     mujoco.mj_forward(model, data)
-    _apply_initial_pose(
-        model, data, initial_pose=initial_pose, base_body_name=base_body_name, logs=logs
-    )
+    _apply_initial_pose(model, data, initial_pose=initial_pose, base_body_name=base_body_name, logs=logs)
     if freejoint_qpos_qvel_addrs(model, base_body_name) is not None:
         _hoist_free_base_z(model, data, base_body_name=base_body_name, z_world=tune_base_z)
         logs.append(f"Hoisted base free joint to z={tune_base_z:g} m for tuning.")
-        model, data = _freeze_base_at_current_world_pose(
-            spec, model, data, base_body_name=base_body_name
-        )
+        model, data = _freeze_base_at_current_world_pose(spec, model, data, base_body_name=base_body_name)
         if kinematic:
             configure_kinematic_tune(model)
         logs.append(
@@ -269,10 +265,7 @@ def run_tune_home_gui(
         out.write(ln + "\n")
     if initial_pose != "default":
         snap = format_key_ctrl_attr(model, data)
-        out.write(
-            "Initial ctrl snapshot after setup: "
-            f"{snap[:120]}{'…' if len(snap) > 120 else ''}\n"
-        )
+        out.write(f"Initial ctrl snapshot after setup: {snap[:120]}{'…' if len(snap) > 120 else ''}\n")
 
     if kinematic:
         out.write(
@@ -298,7 +291,7 @@ def main() -> None:
     import argparse
 
     p = argparse.ArgumentParser(
-        description="Interactive MuJoCo home-pose tuning; prints <key name=\"home\" ctrl=\"...\"/> on exit.",
+        description='Interactive MuJoCo home-pose tuning; prints <key name="home" ctrl="..."/> on exit.',
         epilog="See docs/simulation_modules.md",
     )
     p.add_argument("mjcf", type=Path, help="Robot or merged scene MJCF path.")

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Compare HM-EQA JSONL runs (accuracy, Q0-19 slice, per-question deltas)."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 
@@ -83,7 +86,9 @@ def main() -> int:
     print(f"\ncandidate gains vs baseline: {gains}")
     print(f"candidate losses vs baseline: {losses}")
     if cn and bn:
-        print(f"\nverdict: {'IMPROVED' if cpct > bpct else 'FLAT/REGRESSED' if cpct < bpct else 'TIE'} on Q{args.q_start}-{args.q_end}")
+        print(
+            f"\nverdict: {'IMPROVED' if cpct > bpct else 'FLAT/REGRESSED' if cpct < bpct else 'TIE'} on Q{args.q_start}-{args.q_end}"
+        )
     return 0
 
 

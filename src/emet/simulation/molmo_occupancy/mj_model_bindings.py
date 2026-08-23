@@ -97,9 +97,7 @@ class MjModelBindings:
             )
 
             def key_to_nkey(key: str) -> str:
-                return {"actuator": "nu", "joint": "njnt", "camera": "ncam", "equality": "neq"}.get(
-                    key, f"n{key}"
-                )
+                return {"actuator": "nu", "joint": "njnt", "camera": "ncam", "equality": "neq"}.get(key, f"n{key}")
 
             def key_to_short_key(key: str) -> str:
                 return {"joint": "jnt", "camera": "cam", "equality": "eq"}.get(key, f"{key}")

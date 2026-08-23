@@ -115,13 +115,9 @@ def robovista_run_batch(
     from emet.benchmarks.robovista.runner import default_output_dir, run_robovista_batch
 
     if not mock_llm and eqa_vl_family is None and eqa_hf_model_id is None:
-        raise click.UsageError(
-            "Provide --eqa-vl-family and/or --eqa-hf-model-id, or pass --mock-llm."
-        )
+        raise click.UsageError("Provide --eqa-vl-family and/or --eqa-hf-model-id, or pass --mock-llm.")
 
-    out = output_dir or default_output_dir(
-        datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    )
+    out = output_dir or default_output_dir(datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"))
     summary = run_robovista_batch(
         domains=domains or None,
         ability_types=ability_types or None,

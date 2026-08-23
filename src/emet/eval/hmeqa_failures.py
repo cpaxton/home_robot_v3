@@ -15,16 +15,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-
-from emet.eval.hmeqa_significance import load_arm_rows, load_from_summary, paired_rows
+from emet.eval.hmeqa_significance import _limit_blas_threads, load_arm_rows, load_from_summary, paired_rows
 
 
 def _jsonl_rows(path: Path) -> list[dict[str, Any]]:
@@ -139,9 +134,7 @@ def classify_pair(
     a_ok = bool(agentic.get("correct"))
     c_pred = str(classic.get("predicted_answer") or "").strip()
     a_pred = str(agentic.get("predicted_answer") or "").strip()
-    gold = str(
-        classic.get("gold_answer_letter") or agentic.get("gold_answer_letter") or ""
-    ).strip().upper()
+    gold = str(classic.get("gold_answer_letter") or agentic.get("gold_answer_letter") or "").strip().upper()
     question = str(agentic.get("question") or classic.get("question") or "")
     pair_kind = (
         "both_correct"
@@ -180,16 +173,11 @@ def classify_pair(
         reasons.append("empty/unknown scored pred")
     elif not a_ok and suggested and suggested.upper()[:1] == gold and a_pred.upper()[:1] != gold:
         bucket = "scored_vs_submit_mismatch"
-        reasons.append(
-            f"assess/submit suggested {suggested[:1].upper()} but scored {a_pred[:1].upper() or '?'}"
-        )
+        reasons.append(f"assess/submit suggested {suggested[:1].upper()} but scored {a_pred[:1].upper() or '?'}")
     elif not a_ok and submit_final and submit_final.upper()[:1] == gold and a_pred.upper()[:1] != gold:
         bucket = "scored_vs_submit_mismatch"
         reasons.append(f"submit final {submit_final[:1].upper()} but scored {a_pred[:1].upper()}")
-    elif not a_ok and (
-        bool(verify.get("fused_verified"))
-        and str(verify.get("decision") or "").upper() == "ABSENT"
-    ):
+    elif not a_ok and (bool(verify.get("fused_verified")) and str(verify.get("decision") or "").upper() == "ABSENT"):
         bucket = "false_fused_verify"
         reasons.append("fused_verified with ABSENT decision")
     elif not a_ok and phrase_ok is False:
@@ -291,6 +279,7 @@ def _print_report(report: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _limit_blas_threads()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("out_dir", type=Path, nargs="?", default=None)
     ap.add_argument("--from-summary", type=Path, default=None)

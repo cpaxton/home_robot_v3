@@ -39,6 +39,16 @@ def test_resolve_env_overrides_yaml(monkeypatch):
     assert cfg.export_map_video is False
 
 
+def test_resolve_compact_memory_env(monkeypatch):
+    monkeypatch.setenv("EMET_EVAL_EXPORT_COMPACT_MEMORY", "1")
+    monkeypatch.setenv("EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB", "0")
+
+    cfg = resolve_episode_diagnostics_config()
+
+    assert cfg.export_compact_memory is True
+    assert cfg.export_world_evidence_rgb is False
+
+
 def test_resolve_cli_overrides_env(monkeypatch):
     monkeypatch.setenv("EMET_EVAL_EXPORT_VIDEO", "0")
     cfg = resolve_episode_diagnostics_config({"eval": {"export_video": False}}, export_video=True)
@@ -64,9 +74,7 @@ def test_from_env_accepts_parameters():
 
 
 def test_resolve_video_motion_paced_from_yaml():
-    cfg = resolve_episode_diagnostics_config(
-        {"eval": {"video_motion_paced": False, "export_video_substeps": False}}
-    )
+    cfg = resolve_episode_diagnostics_config({"eval": {"video_motion_paced": False, "export_video_substeps": False}})
     assert cfg.video_motion_paced is False
     assert cfg.export_video_substeps is False
     assert cfg.video_meters_per_frame == 0.25

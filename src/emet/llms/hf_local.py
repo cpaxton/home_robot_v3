@@ -69,9 +69,7 @@ def resolve_pretrained_source(model_id: str, *, prefer_local: bool | None = None
         )
         if not any(os.path.exists(os.path.join(path, name)) for name in markers):
             if force_local:
-                raise FileNotFoundError(
-                    f"HF cache for {mid!r} at {path} is incomplete (no processor/weights markers)"
-                )
+                raise FileNotFoundError(f"HF cache for {mid!r} at {path} is incomplete (no processor/weights markers)")
             return mid, {}
         return path, {"local_files_only": True}
     except Exception:

@@ -11,8 +11,9 @@ local geometry is ``coverage=closed`` and further orbits are low value.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -274,11 +275,14 @@ def sample_annulus_approach_xy(
 
 def make_grid_converters(
     voxel_map: Any,
-) -> tuple[
-    Callable[[float, float], tuple[int, int] | None],
-    Callable[[int, int], tuple[float, float] | None],
-    float,
-] | None:
+) -> (
+    tuple[
+        Callable[[float, float], tuple[int, int] | None],
+        Callable[[int, int], tuple[float, float] | None],
+        float,
+    ]
+    | None
+):
     """Build xy↔ij helpers from a voxel map (returns None if unavailable)."""
     if voxel_map is None or not hasattr(voxel_map, "xy_to_grid_coords"):
         return None

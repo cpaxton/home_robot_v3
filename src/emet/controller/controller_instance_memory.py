@@ -1343,9 +1343,7 @@ class InstanceMemoryController(BaseController):
         goal_emb = self.encode_text(goal)
         ranked_matches = []
         for i, instance in enumerate(instances):
-            emb = instance.get_image_embedding(
-                aggregation_method="mean", normalize=self.normalize_embeddings
-            )
+            emb = instance.get_image_embedding(aggregation_method="mean", normalize=self.normalize_embeddings)
             # Pickles / incomplete instance views can yield None (or a list of Nones).
             if emb is None or not isinstance(emb, torch.Tensor):
                 continue

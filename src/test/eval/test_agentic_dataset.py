@@ -4,7 +4,7 @@ import json
 
 import numpy as np
 
-from emet.eval.agentic_dataset import mine_evidence_dataset, mine_episode_records, scene_split
+from emet.eval.agentic_dataset import mine_episode_records, mine_evidence_dataset, scene_split
 from emet.habitat.hm3d_semantics import Hm3dSemanticLabeler
 
 
@@ -57,9 +57,7 @@ def test_mine_records_uses_prefix_only_and_view_labels(tmp_path):
         },
         {"tool": "submit_answer", "round": 2, "verified": True},
     ]
-    (episode / "agentic_trace.jsonl").write_text(
-        "".join(json.dumps(row) + "\n" for row in rows)
-    )
+    (episode / "agentic_trace.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     mined = mine_episode_records(episode)
     verify = next(record for record in mined if record.action_taken == "verify_siglip")
     assert verify.prior_verifies == []

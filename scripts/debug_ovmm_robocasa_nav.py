@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 # Debug robocasa find-phase nav failure: is the robot's A* start navigable?
 #
 # Boots the robocasa sim the find-phase uses, runs the mapping protocol
@@ -45,7 +49,7 @@ def main() -> int:
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.eval.ovmm_find_phase import run_mapping_protocol
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
-    from emet.utils.process_tree import popen_session, terminate_process_tree
+    from emet.utils.process_tree import popen_session
 
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO / "src") + os.pathsep + env.get("PYTHONPATH", "")
@@ -73,7 +77,6 @@ def main() -> int:
         time.sleep(20.0)
 
         from emet.app.robot_cli import create_robot_client_from_cli
-        from emet.controller.controller_dynamem import DynamemController
         from emet.core.parameters import get_parameters
         from emet.eval.ovmm_find_phase import create_find_phase_agent
 
@@ -110,25 +113,35 @@ def main() -> int:
         if vm is not None:
             visited = getattr(vm, "_visited", None)
             if visited is not None:
-                print(f"visited cells={int((visited > 0).sum())} "
-                      f"visited_norm={float((visited > 0).float().mean()):.5f}", file=sys.stderr)
+                print(
+                    f"visited cells={int((visited > 0).sum())} visited_norm={float((visited > 0).float().mean()):.5f}",
+                    file=sys.stderr,
+                )
             obs, exp = vm.get_2d_map()
             obs_np = np.asarray(obs)
             exp_np = np.asarray(exp)
-            print(f"map shape={obs_np.shape} explored_cells={int(exp_np.sum())} "
-                  f"obstacle_cells={int(obs_np.sum())} explored_frac={float(exp_np.mean()):.4f}", file=sys.stderr)
+            print(
+                f"map shape={obs_np.shape} explored_cells={int(exp_np.sum())} "
+                f"obstacle_cells={int(obs_np.sum())} explored_frac={float(exp_np.mean()):.4f}",
+                file=sys.stderr,
+            )
             if world_xy is not None:
                 i, j = planner.to_pt((float(world_xy[0]), float(world_xy[1])))
-                print(f"base grid cell=({i},{j}) explored={bool(exp_np[i, j])} "
-                      f"obstacle={bool(obs_np[i, j])}", file=sys.stderr)
+                print(
+                    f"base grid cell=({i},{j}) explored={bool(exp_np[i, j])} obstacle={bool(obs_np[i, j])}",
+                    file=sys.stderr,
+                )
                 if visited is not None:
-                    print(f"base cell visited={bool((visited[i, j] > 0))}", file=sys.stderr)
+                    print(f"base cell visited={bool(visited[i, j] > 0)}", file=sys.stderr)
                 reachable = planner.get_reachable_points((i, j))
                 print(f"reachable_points from base cell={len(reachable)}", file=sys.stderr)
                 clear = getattr(planner, "_clearance_m", None)
                 if clear is not None:
-                    print(f"clearance at base cell={float(clear[i, j]):.3f} "
-                          f"min_req={getattr(planner, 'min_clearance_m', None)}", file=sys.stderr)
+                    print(
+                        f"clearance at base cell={float(clear[i, j]):.3f} "
+                        f"min_req={getattr(planner, 'min_clearance_m', None)}",
+                        file=sys.stderr,
+                    )
         else:
             print("no voxel_map on agent", file=sys.stderr)
         return 0

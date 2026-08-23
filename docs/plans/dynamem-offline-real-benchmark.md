@@ -1,6 +1,6 @@
 # DynaMem offline real-data benchmarks (plan)
 
-**Branch:** `feature/dynamem-offline-real-benchmark`  
+**Branch:** `feature/dynamem-offline-real-benchmark`
 **Status:** SQA3D embodied harness **done** on this branch; DynaMem `emet eval-dynamem` still TBD.
 
 **User preference:** offline **replay** benchmarks are fine when episode files already exist (no live robot / no re-scan).
@@ -64,12 +64,12 @@ From DynaMem §evaluation (cited in `paper/sections/02_background.tex`): offline
 
 ## Recommended path (replay-first)
 
-1. **`emet eval-dynamem`** on existing `logs/memory_*` or any `MemoryState` dir with `point_cloud.npz`  
-   - Load map → `localize_text(query)` → compare to GT in `queries.json` (manual labels) or `sim_object_placements.json` when present.  
+1. **`emet eval-dynamem`** on existing `logs/memory_*` or any `MemoryState` dir with `point_cloud.npz`
+   - Load map → `localize_text(query)` → compare to GT in `queries.json` (manual labels) or `sim_object_placements.json` when present.
    - Mirror metrics from `eval-dynagraph` GT block: XY error, success @ 0.25/0.5/1.0 m.
 
-2. **Check in one small sim fixture** (optional, for CI)  
-   - Generate via short sim explore + save; store under `src/test/fixtures/episodes/dynamem_default_table/` (git-lfs if > few MB).  
+2. **Check in one small sim fixture** (optional, for CI)
+   - Generate via short sim explore + save; store under `src/test/fixtures/episodes/dynamem_default_table/` (git-lfs if > few MB).
    - Ship `queries.json` with known object names (e.g. red cylinder / robocasa apple).
 
 3. **Legacy pickle replay** — same harness, entrypoint `read_from_pickle` instead of `backend.load`.

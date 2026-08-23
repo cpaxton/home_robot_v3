@@ -185,7 +185,6 @@ def run_frontier_exploration(
 
             if target is not None:
                 nav_attempts += 1
-                start = agent._planning_base_xyt(pose)
                 nav_res = habitat_navmesh_navigate(
                     robot,
                     target[:2],
@@ -238,14 +237,10 @@ def run_frontier_exploration(
 
     total_travel = 0.0
     if len(step_log) >= 2:
-        for a, b in zip(step_log, step_log[1:]):
-            total_travel += float(
-                math.hypot(b.pose_xyt[0] - a.pose_xyt[0], b.pose_xyt[1] - a.pose_xyt[1])
-            )
+        for a, b in zip(step_log, step_log[1:], strict=False):
+            total_travel += float(math.hypot(b.pose_xyt[0] - a.pose_xyt[0], b.pose_xyt[1] - a.pose_xyt[1]))
     elif len(step_log) == 1 and poses:
-        total_travel = float(
-            math.hypot(step_log[0].pose_xyt[0] - poses[0][0], step_log[0].pose_xyt[1] - poses[0][1])
-        )
+        total_travel = float(math.hypot(step_log[0].pose_xyt[0] - poses[0][0], step_log[0].pose_xyt[1] - poses[0][1]))
 
     result = FrontierExploreResult(
         scene=str(scene_id),

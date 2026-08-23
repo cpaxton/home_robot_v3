@@ -10,6 +10,8 @@ export_rgb_frames: true
 export_video: true
 export_object_crops: true
 export_full_graph: false
+export_compact_memory: false
+export_world_evidence_rgb: true
 export_voxel_history: false
 export_voxel_pickle: false
 max_map_side: 1280

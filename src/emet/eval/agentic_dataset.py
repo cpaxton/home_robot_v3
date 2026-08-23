@@ -251,12 +251,10 @@ def mine_evidence_dataset(
         "n_records": len(records),
         "n_view_labeled": labeled,
         "records_by_split": {
-            split: sum(1 for record in records if record.split == split)
-            for split in sorted(scenes_by_split)
+            split: sum(1 for record in records if record.split == split) for split in sorted(scenes_by_split)
         },
         "scenes_by_split": {
-            split: sorted(scene for scene in scenes if scene)
-            for split, scenes in sorted(scenes_by_split.items())
+            split: sorted(scene for scene in scenes if scene) for split, scenes in sorted(scenes_by_split.items())
         },
         "scene_leakage": leakage,
     }

@@ -20,17 +20,16 @@ import torch
 from emet.agent.tools import get_tools
 from emet.mapping.voxel.voxel_dynamem import _apply_map_boundary_2d, _map_boundary_config
 from emet.visualization.map_snapshot import (
+    _dedupe_trajectory_xyt,
     build_map_stats,
     discord_share_map_rgb,
     eval_topdown_map_rgb,
     format_navigation_report,
-    overlay_trajectory_on_map_rgb,
     render_topdown_map_rgb,
     share_topdown_map_rgb,
     snapshot_eval_from_voxel_map,
     snapshot_from_voxel_map,
     world_xy_to_grid_ij,
-    _dedupe_trajectory_xyt,
 )
 
 
@@ -177,8 +176,9 @@ def test_snapshot_base_on_explored_when_robot_xy_matches_visited():
 
 
 def test_robot_base_xy_prefers_controller_world_frame():
-    from emet.agent.tools import _robot_base_xy
     from unittest.mock import MagicMock
+
+    from emet.agent.tools import _robot_base_xy
 
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)
@@ -198,7 +198,7 @@ def test_format_navigation_report_explore_flag():
     assert "failure" in s
 
 
-def test_snapshot_from_voxel_map_fake_crops_to_explored():
+def test_snapshot_from_voxel_map_crops_and_makes_readable():
     class FakeVM:
         grid_origin = np.array([0.0, 0.0, 0.0])
         grid_resolution = 0.1
@@ -217,7 +217,8 @@ def test_snapshot_from_voxel_map_fake_crops_to_explored():
     assert img is not None
     assert img_share is img
     assert stats["map_nonempty"]
-    assert img.shape[0] < full.shape[0] or img.shape[1] < full.shape[1]
+    assert img.shape == (512, 512, 3)
+    assert full.shape == (128, 128, 3)
 
 
 def test_map_boundary_config_defaults():
@@ -242,14 +243,15 @@ def test_apply_map_boundary_2d_marks_edge_when_enabled():
     assert not obs[20, 20].item()
 
 
-def test_share_topdown_map_crops_large_grid_to_explored_patch():
+def test_share_topdown_map_crops_and_upscales_patch():
     obs = np.zeros((128, 128), dtype=bool)
     exp = np.zeros((128, 128), dtype=bool)
     exp[50:60, 50:60] = True
     go = np.array([0.0, 0.0])
     full = render_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=None)
     cropped = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
-    assert cropped.shape[0] < full.shape[0] or cropped.shape[1] < full.shape[1]
+    assert cropped.shape == (512, 512, 3)
+    assert full.shape == (128, 128, 3)
     assert np.array_equal(cropped, discord_share_map_rgb(obs, exp, go, 0.1, None, max_side=640))
 
 
@@ -259,7 +261,7 @@ def test_eval_topdown_map_masks_unexplored_margin_white():
     exp[50:60, 50:60] = True
     obs[55, 55] = True
     go = np.array([0.0, 0.0])
-    share = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
+    share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
     eval_map = eval_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640, min_map_side=0, margin_cells=16)
     assert eval_map.shape[0] >= 10
     white = np.all(eval_map == np.uint8([248, 248, 248]), axis=-1)

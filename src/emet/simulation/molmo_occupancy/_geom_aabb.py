@@ -18,9 +18,7 @@ def body_pose(data: mujoco.MjData, body_id: int) -> np.ndarray:
     return trf
 
 
-def mesh_aabb(
-    model: mujoco.MjModel, data: mujoco.MjData, geom_id: int
-) -> tuple[np.ndarray, np.ndarray]:
+def mesh_aabb(model: mujoco.MjModel, data: mujoco.MjData, geom_id: int) -> tuple[np.ndarray, np.ndarray]:
     assert model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_MESH.value
     mesh_id = model.geom_dataid[geom_id]
     vertadr = model.mesh_vertadr[mesh_id]

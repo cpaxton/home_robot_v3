@@ -88,9 +88,7 @@ def push_scene_map(
     """
     rid = (repo_id or default_hf_repo_id() or "").strip()
     if not rid:
-        raise ValueError(
-            f"Set {_ENV_HF_REPO} (e.g. org/emet-scene-maps) before pushing scene maps"
-        )
+        raise ValueError(f"Set {_ENV_HF_REPO} (e.g. org/emet-scene-maps) before pushing scene maps")
     src_dir = Path(src) if src is not None else scene_cache_dir(key)
     if not has_cached_map(src_dir):
         raise FileNotFoundError(f"incomplete scene cache at {src_dir} (need manifest + voxel pickle)")

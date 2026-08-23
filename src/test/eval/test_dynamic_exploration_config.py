@@ -259,4 +259,3 @@ def test_set_named_joint_qpos_on_tiny_mjcf():
     # Free joints and unknown joints are rejected.
     assert not set_named_joint_qpos(model, data, "ball_free", 0.5)
     assert not set_named_joint_qpos(model, data, "no_such_joint", 0.5)
-

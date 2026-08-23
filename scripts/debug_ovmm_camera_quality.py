@@ -114,7 +114,9 @@ def main() -> int:
         for i in range(max(1, int(args.poses))):
             # Rotate +x in place each step so we capture genuinely different views.
             try:
-                robot.move_base_to([0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0)
+                robot.move_base_to(
+                    [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0
+                )
             except Exception as e:
                 print(f"pose {i}: move failed: {e}", file=sys.stderr)
             time.sleep(1.0)
@@ -190,12 +192,16 @@ def main() -> int:
             mean_std = float(np.mean([r["std"] for r in results]))
             mean_val = float(np.mean([r["mean"] for r in results]))
             black = float(np.mean([r["frac_black"] for r in results]))
-            depth0 = float(
-                np.mean([r.get("depth_frac_zero", float("nan")) for r in results if "depth_frac_zero" in r])
-            ) if any("depth_frac_zero" in r for r in results) else float("nan")
-            dc = float(
-                np.mean([r.get("depth_center", float("nan")) for r in results if "depth_center" in r])
-            ) if any("depth_center" in r for r in results) else float("nan")
+            depth0 = (
+                float(np.mean([r.get("depth_frac_zero", float("nan")) for r in results if "depth_frac_zero" in r]))
+                if any("depth_frac_zero" in r for r in results)
+                else float("nan")
+            )
+            dc = (
+                float(np.mean([r.get("depth_center", float("nan")) for r in results if "depth_center" in r]))
+                if any("depth_center" in r for r in results)
+                else float("nan")
+            )
             print(
                 f"\nAVG mean={mean_val:.1f} std={mean_std:.1f} black_frac={black:.3f} "
                 f"grad={float(np.mean([r['grad_mean'] for r in results])):.3f}"

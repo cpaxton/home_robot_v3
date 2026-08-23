@@ -2,11 +2,11 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""EQA system prompt for HM-EQA multiple-choice (A–D) questions in Habitat.
+"""EQA system prompt for HM-EQA multiple-choice questions in Habitat.
 
 The decode budget, not the reasoning, was the binding constraint here. In the
 2026-07-29 bal-32 run 31 of 32 answer generations ran into the 256-token cap and 21
-never emitted ``answer:`` at all, so a terse re-ask had to salvage the letter. The
+never emitted ``answer:`` at all, so a terse re-ask had to salvage the answer. The
 cause was the caption: it took ~40% of the generated text on average (88% on q2) to
 re-list IMAGE_DESCRIPTIONS that were already in the prompt.
 
@@ -15,18 +15,20 @@ an override after the examples and still got a full caption block using 48% of t
 output, because the shared :data:`EQA_PROMPT` asks for a caption once and demonstrates
 one five times. So the caption is removed at the source with
 :func:`without_caption`, and HM-EQA answers use a JSON contract (same shape as the
-chat/router tool JSON) so field scrape cannot lose the letter to mid-stream truncation.
+chat/router tool JSON) so field scrape cannot lose the semantic answer to truncation.
 """
 
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT, without_caption
 
 _HMEQA_HEADER = """
         HM-EQA questions are multiple-choice. The question text includes options A, B, C, and D.
-        Your final answer must be exactly one letter: A, B, C, or D (not yes/no prose).
+        Answer with the meaning of the selected option, not its A/B/C/D label.
         Reply with ONLY a single JSON object (no markdown fences, no caption field) with keys:
-        reasoning (string), answer (one letter A–D), confidence (boolean), action (image id string or ""),
+        reasoning (string), answer (short semantic answer text), confidence (boolean),
+        action (image id string or ""),
         confidence_reasoning (string).
-        Never leave "answer" blank. If uncertain, still output your best-guess letter and set
+        Copy the selected option text into "answer" without its letter label. Never leave
+        "answer" blank. If uncertain, still give your best semantic answer and set
         "confidence" to false.
 """
 
@@ -41,7 +43,7 @@ _HMEQA_MCQ_EXAMPLE = """
                 SCENE_GRAPH: Node 3: floor lamp at (1.2, -0.4) [Image 1]
                 IMAGE: <2 RGB frames>
             Output:
-                {"reasoning": "Image 1 shows the floor lamp with a glowing shade, so the lamp is on.", "answer": "A", "confidence": true, "action": "", "confidence_reasoning": "The lit lamp is clearly visible in Image 1."}
+                {"reasoning": "Image 1 shows the floor lamp with a glowing shade, so the lamp is on.", "answer": "The lamp is on.", "confidence": true, "action": "", "confidence_reasoning": "The lit lamp is clearly visible in Image 1."}
 
         Example (visibility + location — pick WHERE, not yes/no):
             Input:
@@ -54,7 +56,7 @@ _HMEQA_MCQ_EXAMPLE = """
                 SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
                 IMAGE: <2 RGB frames>
             Output:
-                {"reasoning": "CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.", "answer": "D", "confidence": true, "action": "", "confidence_reasoning": "Graph memory confirms the basket; option D matches that area."}
+                {"reasoning": "CONFIRMED_MEMORY puts the basket near (-6.5, 3.6), closest to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "Graph memory confirms the basket near the armchairs."}
 """
 
 _HMEQA_FORMAT_OVERRIDE = """
@@ -63,9 +65,9 @@ _HMEQA_FORMAT_OVERRIDE = """
         1. Do NOT write a caption field or Caption: block. Your first token continues a JSON object.
         2. "reasoning" is at most three sentences. Do not re-list objects from the attached RGB
            frames, and do not copy scene-graph coordinates unless they decide the answer.
-           Cite an Image N or SCENE_GRAPH node only when it decides the letter.
-        3. "answer" is exactly one letter, A, B, C, or D. Emit it before elaborating further.
-           Never leave it blank.
+           Cite an Image N or SCENE_GRAPH node only when it decides the answer.
+        3. "answer" is the exact semantic option text without an A/B/C/D label.
+           Emit it before elaborating further and never leave it blank.
         4. "confidence" is true or false. "action" is an image id or "". "confidence_reasoning"
            is one short sentence.
 

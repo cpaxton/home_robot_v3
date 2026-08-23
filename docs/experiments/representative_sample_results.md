@@ -1,8 +1,8 @@
 # Representative cross-benchmark sample
 
-**Run ID:** `rep_sample_20260706`  
-**Habitat tuning matrix:** `dynagraph_tune_20260706_110513`  
-**VLM:** Qwen3-VL-8B-Instruct (`qwen3_vl`)  
+**Run ID:** `rep_sample_20260706`
+**Habitat tuning matrix:** `dynagraph_tune_20260706_110513`
+**VLM:** Qwen3-VL-8B-Instruct (`qwen3_vl`)
 
 ## Habitat HM-EQA — dynagraph ablation (tuning matrix)
 

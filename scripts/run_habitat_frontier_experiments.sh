@@ -16,7 +16,7 @@ MAX_MOVEMENT="${MAX_MOVEMENT:-10}"
 RUN_SUFFIX="${RUN_SUFFIX:-}"
 EXTRA=()
 if [[ -n "$HF_ID" ]]; then
-  EXTRA+=(--eqa-hf-model-id "$HF_ID")
+    EXTRA+=(--eqa-hf-model-id "$HF_ID")
 fi
 
 TAG="frontier_v2_${FAMILY}_q${QSTART}-${QEND}${RUN_SUFFIX}"
@@ -30,15 +30,15 @@ echo "  log:      ${LOG}"
 echo "  episodes: ${HOME}/.cache/habitat_eqa/episodes/${TAG}/"
 
 exec "$HAB" run-batch \
-  --method "$METHOD" \
-  --question-start "$QSTART" \
-  --question-end "$QEND" \
-  --paper-subset \
-  --max-planning-steps "$MAX_PLANNING" \
-  --max-movement-step "$MAX_MOVEMENT" \
-  --eqa-vl-family "$FAMILY" \
-  --device cuda \
-  --resume \
-  --output "$JSONL" \
-  "${EXTRA[@]}" \
-  2>&1 | tee "$LOG"
+    --method "$METHOD" \
+    --question-start "$QSTART" \
+    --question-end "$QEND" \
+    --paper-subset \
+    --max-planning-steps "$MAX_PLANNING" \
+    --max-movement-step "$MAX_MOVEMENT" \
+    --eqa-vl-family "$FAMILY" \
+    --device cuda \
+    --resume \
+    --output "$JSONL" \
+    "${EXTRA[@]}" \
+    2>&1 | tee "$LOG"

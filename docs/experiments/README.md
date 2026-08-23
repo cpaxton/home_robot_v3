@@ -11,6 +11,7 @@ GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [REA
 | HM-EQA vs GraphEQA paper numbers | [habitat_eqa_results.md](habitat_eqa_results.md) |
 | HM-EQA how-to (CLI flags) | [habitat/usage.md](../habitat/usage.md) · [habitat_eqa.md](habitat_eqa.md) |
 | Agentic HM-EQA approach | [agentic_qwen_context.md](agentic_qwen_context.md#approach-current) |
+| Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
@@ -43,7 +44,7 @@ uv run emet hmeqa overnight
 # resume: uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_… --job-name hmeqa-overnight
 uv run emet hmeqa h2h --out ~/runs/emet/hmeqa_probe --ids 15,68,105,17
 
-# Full GraphEQA-paper 113 (both methods; prefer emet jobs)
+# Historical q0–112 slice (both methods; prefer emet jobs)
 uv run emet jobs run --name hmeqa-paper113 --need-mib 12000 -- \
   ./scripts/run_hmeqa_paper113_h2h.sh
 # Or single method:

@@ -11,8 +11,9 @@ emit compact REGION blocks for Qwen.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -115,11 +116,7 @@ def expand_neighbors(
 ) -> list[Any]:
     """Union of seeds and planar neighbors within ``radius_m``."""
     by_id = {int(getattr(n, "node_id", i)): n for i, n in enumerate(nodes)}
-    objects = [
-        n
-        for n in nodes
-        if not getattr(n, "is_frontier", False) and not getattr(n, "is_viewpoint", False)
-    ]
+    objects = [n for n in nodes if not getattr(n, "is_frontier", False) and not getattr(n, "is_viewpoint", False)]
     kept: dict[int, Any] = {}
     for seed in seeds:
         sid = int(getattr(seed, "node_id", -1))
@@ -277,11 +274,7 @@ def select_spatial_regions(
         keywords=keywords,
     )
     kept = {nid for r in regions for nid in r.node_ids}
-    frontiers = [
-        n
-        for n in nodes
-        if getattr(n, "is_frontier", False)
-    ]
+    frontiers = [n for n in nodes if getattr(n, "is_frontier", False)]
     # Prefer keyword-scored frontiers
     frontiers_scored = sorted(
         frontiers,
@@ -316,17 +309,12 @@ def format_regions_for_prompt(
         near = f"Image {r.image_ids[0]}" if r.image_ids else "no image"
         lines.append(f"REGION {r.region_id} (near {near}): {label_str}")
         imgs = ", ".join(str(i) for i in r.image_ids) if r.image_ids else "-"
-        lines.append(
-            f"  anchor ({r.anchor_xy[0]:.2f}, {r.anchor_xy[1]:.2f}); images: {imgs}"
-        )
+        lines.append(f"  anchor ({r.anchor_xy[0]:.2f}, {r.anchor_xy[1]:.2f}); images: {imgs}")
     for n in result.frontier_nodes:
         lbl = ", ".join(_label_list(n)) or "frontier"
         xy = _xy(n)
         oid = int(getattr(n, "obs_id", -1) or -1)
-        lines.append(
-            f"Frontier {getattr(n, 'node_id', '?')}: {lbl} at ({xy[0]:.2f}, {xy[1]:.2f}) "
-            f"[Image {oid}]"
-        )
+        lines.append(f"Frontier {getattr(n, 'node_id', '?')}: {lbl} at ({xy[0]:.2f}, {xy[1]:.2f}) [Image {oid}]")
     return "\n".join(lines)
 
 

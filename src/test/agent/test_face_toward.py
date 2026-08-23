@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 import pytest
 
 from emet.agent.face_toward import signed_yaw_delta_rad, yaw_to_face_xy

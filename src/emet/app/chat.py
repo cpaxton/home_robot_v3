@@ -67,10 +67,7 @@ def _build_vl_client(vl_endpoint: str, *, max_tokens: int = 512):
     "--llm",
     default="gemma",
     show_default=True,
-    help=(
-        "LLM key or openai@http://host:port/v1[#model]. "
-        f"Common: {', '.join(sorted(get_llm_choices())[:8])}…"
-    ),
+    help=(f"LLM key or openai@http://host:port/v1[#model]. Common: {', '.join(sorted(get_llm_choices())[:8])}…"),
 )
 @click.option(
     "--prompt",
@@ -163,9 +160,7 @@ def main(
             if specs is not None:
                 ep = specs[1]
             else:
-                raise click.UsageError(
-                    "--vl needs --vl-endpoint, EMET_VL_ENDPOINT, or --host / EMET_LLM_HOST"
-                )
+                raise click.UsageError("--vl needs --vl-endpoint, EMET_VL_ENDPOINT, or --host / EMET_LLM_HOST")
         client: Any = _build_vl_client(ep, max_tokens=max_tokens)
         prompt_builder = None
         click.echo(colored(f"VL client: {ep}", "cyan"))

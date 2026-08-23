@@ -171,11 +171,7 @@ def _openai_messages_to_multimodal(
             continue
         if role == "system":
             if isinstance(content, list):
-                texts = [
-                    str(b.get("text") or "")
-                    for b in content
-                    if isinstance(b, dict) and b.get("type") == "text"
-                ]
+                texts = [str(b.get("text") or "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 system = "\n".join(t for t in texts if t) or system
             else:
                 system = str(content) if not system else system
@@ -225,9 +221,7 @@ def generate_chat(
     mt = int(max_tokens or getattr(client, "max_tokens", 512) or 512)
 
     if has_images or isinstance(client, AbstractVLLMClient) or hasattr(client, "generate_multimodal"):
-        if has_images and not (
-            isinstance(client, AbstractVLLMClient) or hasattr(client, "generate_multimodal")
-        ):
+        if has_images and not (isinstance(client, AbstractVLLMClient) or hasattr(client, "generate_multimodal")):
             raise ValueError(
                 "Request includes images but the loaded server model is text-only. "
                 "Restart with ``emet serve llm --vl`` (multimodal VLM)."
@@ -252,9 +246,7 @@ def generate_chat(
         template_kwargs: dict[str, Any] = {}
         if getattr(client, "_version", None) == "3.5":
             template_kwargs["enable_thinking"] = False
-        text = tokenizer.apply_chat_template(
-            chat, tokenize=False, add_generation_prompt=True, **template_kwargs
-        )
+        text = tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True, **template_kwargs)
         # Avoid importing transformers.GenerationConfig here — on Jetson aarch64 that
         # pull can load sklearn/libgomp and hit "cannot allocate memory in static TLS block".
         pipe_kwargs: dict[str, Any] = {"max_new_tokens": mt}
@@ -318,9 +310,7 @@ class LLMServeState:
         from emet.llms import get_llm_client
 
         kind = "VLM" if self.multimodal else "LLM"
-        logger.info(
-            f"Loading {kind} {self.llm_key!r} on device={self.device} (max_tokens={self.max_tokens})"
-        )
+        logger.info(f"Loading {kind} {self.llm_key!r} on device={self.device} (max_tokens={self.max_tokens})")
         kwargs: dict[str, Any] = {
             "device": self.device,
             "max_tokens": self.max_tokens,
@@ -553,9 +543,7 @@ def serve_openai_llm(
         f"model={llm_key} device={resolved} multimodal={multimodal}"
     )
     if multimodal:
-        logger.info(
-            f"Remote VL clients: mapping.eqa.vl_endpoint: openai@http://<this-host>:{serve_port}/v1"
-        )
+        logger.info(f"Remote VL clients: mapping.eqa.vl_endpoint: openai@http://<this-host>:{serve_port}/v1")
     else:
         logger.info(f"Clients: export EMET_OPENAI_BASE_URL=http://<this-host>:{serve_port}/v1")
     try:

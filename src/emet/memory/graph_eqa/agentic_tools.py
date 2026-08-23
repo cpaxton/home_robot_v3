@@ -12,6 +12,7 @@ through one proven JSON format instead of ad-hoc regex.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from emet.agent.skills import AgentMode, build_skill_pack
@@ -42,7 +43,8 @@ _EQA_RULES_ANSWERABILITY = (
     "- Questions needing a CLOSE LOOK (reading a clock/display/label, counting,\n"
     "  on/off or open/closed state, fine detail) prefer investigate(obs_id) or\n"
     "  look_around over explore_frontier.\n"
-    "- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.\n"
+    "- Pass the exact semantic option text (without its A/B/C/D label) in "
+    "submit_answer.arguments.answer when answerable.\n"
     "- One or two tool calls per turn.\n"
 )
 
@@ -79,7 +81,7 @@ _EQA_FORMAT_BLOCK_CANONICAL = (
     "State: Question about dining chairs; Investigate dining-table card room=kitchen available\n"
     '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}\n'
     "State: VLM assess answerable=true (vlm_answerable); place card corroborated\n"
-    '{"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}\n'
+    '{"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "Next to the sofa"}}], "message": ""}\n'
     "State: Investigate (none); Explore frontiers available\n"
     '{"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
 )
@@ -110,7 +112,7 @@ _EQA_FORMAT_BLOCK_LLM = (
     + "- After a close look where VLM assess says present=false, prefer explore_frontier\n"
     "  once to grow coverage, then investigate remaining Question-relevant place cards\n"
     "  (do not explore forever).\n"
-    '- in_target_area=false means leave OR look closer at a listed Investigate card that\n'
+    "- in_target_area=false means leave OR look closer at a listed Investigate card that\n"
     '  could answer the Question — never "explore_frontier only" while place cards exist.\n'
     + _EQA_RULES_ANSWERABILITY
     + "\n"
@@ -127,11 +129,27 @@ _EQA_FORMAT_BLOCK_LLM = (
     '"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 12}}], "message": ""}\n'
     "State: VLM assess answerable=true (vlm_answerable); place card corroborated\n"
     '{"current_room": "open living area", "in_target_area": true, '
-    '"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}\n'
+    '"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "Next to the sofa"}}], "message": ""}\n'
     "State: Investigate (none); Explore frontiers available\n"
     '{"current_room": "unknown", "in_target_area": false, '
     '"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
 )
+
+_EQA_FORMAT_BLOCK_GROUNDED = """\
+# Response format
+Respond with ONLY a JSON object (no other text):
+{"current_room": "<short place phrase>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}], "message": ""}
+
+Rules:
+- Report the robot's current room from attached images and the state evidence.
+- Treat room labels, misses, history, costs, information gain, and failure risk as
+  uncertain evidence. They do not require any particular action.
+- investigate(obs_id) accepts only a listed place obs_adapter ID.
+- explore_frontier may use a listed frontier_id; omit it to let navigation select.
+- submit_answer is a proposal and must be supported by visible positive evidence.
+- SigLIP scores and absence are retrieval evidence, not final answer proof.
+- Choose one valid action. The executor applies valid choices unchanged.
+- Do not output reasoning."""
 
 # Back-compat alias (canonical).
 _EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
@@ -281,14 +299,42 @@ def question_implies_indoor(question: str) -> bool:
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
     """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
     submode = getattr(executor, "mode", "answer")
-    return build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    tools = build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
+        for tool in tools:
+            if tool.name == "explore_frontier":
+                tool.description = (
+                    "Navigate toward one active frontier to gather new scene evidence. "
+                    "Optional frontier_id selects a listed stable frontier; optional toward "
+                    "is a semantic ranking phrase when no ID is supplied."
+                )
+                properties = dict(tool.parameters.get("properties", {}))
+                properties["frontier_id"] = {
+                    "type": "string",
+                    "description": "Optional stable frontier_id listed in the current state.",
+                }
+                tool.parameters = {**tool.parameters, "properties": properties}
+            elif tool.name == "investigate":
+                tool.description = (
+                    "Navigate to a listed place obs_adapter ID and capture a closer view. "
+                    "Optional approach_index selects a distinct bearing."
+                )
+    return tools
 
 
-def build_graph_eqa_system_prompt(tools: list[Tool], *, room_policy: str = "canonical") -> str:
+def build_graph_eqa_system_prompt(
+    tools: list[Tool],
+    *,
+    room_policy: str = "canonical",
+    decision_policy: str = "legacy",
+) -> str:
     """Fixed routing system prompt (identity + tools + format). Keep byte-stable per mode."""
     tools_block = get_tool_descriptions_for_prompt(tools)
     policy = str(room_policy or "canonical").strip().lower()
-    fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
+    if str(decision_policy or "legacy").strip().lower() == "grounded_v2":
+        fmt = _EQA_FORMAT_BLOCK_GROUNDED
+    else:
+        fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
     return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}"
 
 
@@ -298,8 +344,36 @@ def _graph_stats_line(gm: Any) -> str:
     return format_graph_size_report(gm, verbose=False)
 
 
+def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
+    """Compatibility helper for exact event rows that survived rendering."""
+    return tuple(event.event_id for event in snapshot.evidence if f"event_id={event.event_id} " in state_text)
+
+
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
+    if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
+        from emet.memory.graph_eqa.agentic_state import (
+            compile_agent_state,
+            render_agent_state,
+            rendered_state_allowlists,
+        )
+
+        snapshot = compile_agent_state(executor)
+        text = render_agent_state(
+            snapshot,
+            max_chars=int(getattr(executor, "agent_state_max_chars", 6000)),
+        )
+        allowlists = rendered_state_allowlists(snapshot, text)
+        snapshot = replace(
+            snapshot,
+            visible_place_ids=allowlists["place_ids"],
+            visible_place_obs_ids=allowlists["place_obs_ids"],
+            visible_frontier_ids=allowlists["frontier_ids"],
+            visible_event_ids=allowlists["event_ids"],
+        )
+        executor._last_agent_state_snapshot = snapshot
+        return text
+
     from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES
     from emet.memory.graph_eqa.room_clusters import room_leave_needed
 
@@ -317,7 +391,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         if callable(room_fn):
             try:
                 xyt = None
-                robot_fn = getattr(executor, "_robot_xyt", None)
+                robot_fn = getattr(executor, "_robot_xyt_world", None)
                 if callable(robot_fn):
                     xyt = robot_fn()
                 graph_room = coerce_room_label(room_fn(xyt), room_policy=policy)
@@ -347,6 +421,18 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 rooms_line = ""
             if isinstance(rooms_line, str) and rooms_line.strip():
                 lines.append(rooms_line)
+        hist_fn = getattr(gm, "format_room_history", None)
+        if getattr(executor, "room_history_mode", "off") == "agent" and callable(hist_fn):
+            try:
+                from emet.memory.graph_eqa.room_clusters import question_target_rooms
+
+                targets = sorted(question_target_rooms(str(getattr(executor, "question", "") or "")))
+                hist_line = hist_fn(max_chars=220, target_rooms=targets)
+            except Exception as e:
+                _logger.warning(f"room history for router state failed: {e}")
+                hist_line = ""
+            if isinstance(hist_line, str) and hist_line.strip():
+                lines.append(hist_line.strip())
         used_spatial = False
         if getattr(gm, "_spatial_rag_enabled", lambda: False)():
             try:
@@ -402,9 +488,16 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     )
     pending = getattr(executor, "_pending_answerable", None) or None
     if pending and not getattr(executor, "_verified", False):
-        letter = str(pending.get("letter") or "").strip() or "?"
+        answer_text = str(pending.get("answer_text") or "").strip()
+        if len(answer_text) == 1 and answer_text.upper() in "ABCDE":
+            answer_text = ""
+        if not answer_text:
+            choice_text = getattr(executor, "_choice_text_for_letter", None)
+            if callable(choice_text):
+                answer_text = str(choice_text(pending.get("letter")) or "").strip()
+        answer_text = answer_text or "?"
         lines.append(
-            f"pending_answer={letter} (need confirm — re-investigate another view or "
+            f"pending_answer={answer_text} (need confirm — re-investigate another view or "
             "wait for phrase corroboration; do not submit yet)"
         )
     if getattr(executor, "_close_look_required", False):
@@ -496,7 +589,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 bits += f" [tried: {tried}]"
             # Enrich with graph-memory attempt ledger when present (opt-in).
             gm = executor.graph_memory
-            if gm is not None and hasattr(gm, "attempt_summary_for_obs"):
+            if (
+                getattr(executor, "attempt_ledger_mode", "off") == "agent"
+                and gm is not None
+                and hasattr(gm, "attempt_summary_for_obs")
+            ):
                 ledger_bits = gm.attempt_summary_for_obs(oid)
                 if ledger_bits:
                     bits += f" [attempts: {ledger_bits}]"

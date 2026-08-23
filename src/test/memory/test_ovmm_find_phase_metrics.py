@@ -92,9 +92,7 @@ def test_resolve_object_query_uses_episode_language_not_gt_cat():
         goal_recep="cab",
         object_gt_body="obj_main",
     )
-    assert (
-        resolve_object_query(ep_jar, {"obj_main": {"cat": "milk", "pos": [0, 0, 0]}}) == "jar"
-    )
+    assert resolve_object_query(ep_jar, {"obj_main": {"cat": "milk", "pos": [0, 0, 0]}}) == "jar"
 
 
 def test_resolve_object_query_stub_falls_back_to_gt_cat():
@@ -109,10 +107,7 @@ def test_resolve_object_query_stub_falls_back_to_gt_cat():
         goal_recep="cab",
         object_gt_body="obj_main",
     )
-    assert (
-        resolve_object_query(ep, {"obj_main": {"cat": "marshmallow", "pos": [0, 0, 0]}})
-        == "marshmallow"
-    )
+    assert resolve_object_query(ep, {"obj_main": {"cat": "marshmallow", "pos": [0, 0, 0]}}) == "marshmallow"
 
 
 def test_pick_find_object_prefers_start_recep():
@@ -484,12 +479,8 @@ def test_run_episode_find_phase_includes_timing_fields(
                             return_value=MagicMock(),
                         ):
                             with patch("emet.utils.port_utils.kill_processes_on_port"):
-                                with patch(
-                                    "emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder"
-                                ):
-                                    with patch(
-                                        "emet.perception.detection.yoloe.get_shared_yoloe_perception"
-                                    ):
+                                with patch("emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder"):
+                                    with patch("emet.perception.detection.yoloe.get_shared_yoloe_perception"):
                                         result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):

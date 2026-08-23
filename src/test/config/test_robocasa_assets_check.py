@@ -118,8 +118,7 @@ def test_sync_cabinet_panels_and_handles(tmp_path: Path):
     (panel / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
     (handle / "model.xml").write_text("<mujoco/>\n", encoding="utf-8")
     (reg / "cabinet.yaml").write_text(
-        "default:\n  texture: textures/flat/white.png\n"
-        "CabinetDoorPanel047:\n  panel_type: slab\n",
+        "default:\n  texture: textures/flat/white.png\nCabinetDoorPanel047:\n  panel_type: slab\n",
         encoding="utf-8",
     )
     assert sync_lightwheel_registry(pkg) >= 2

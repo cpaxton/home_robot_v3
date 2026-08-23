@@ -48,9 +48,7 @@ def wait_for_vl_worker(
     last_error = "worker did not respond"
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            raise RuntimeError(
-                f"managed VL worker exited with code {proc.returncode}: {last_error}"
-            )
+            raise RuntimeError(f"managed VL worker exited with code {proc.returncode}: {last_error}")
         try:
             with urllib.request.urlopen(_health_url(port), timeout=2.0) as response:
                 payload = json.loads(response.read().decode("utf-8"))

@@ -135,9 +135,7 @@ def test_generate_ids_with_prefix_guard_falls_back_on_error(_mock_dbg):
 
     client.model.generate = _gen
     with patch("emet.llms.qwen3_vl_client.clone_past_key_values", return_value=past):
-        out, used = client._generate_ids_with_prefix_guard(
-            full, max_new_tokens=8, past_key_values=past, prefix_len=3
-        )
+        out, used = client._generate_ids_with_prefix_guard(full, max_new_tokens=8, past_key_values=past, prefix_len=3)
     assert used is False
     assert client.cache_system_prefix is False
     assert out.shape[-1] == 6

@@ -10,7 +10,7 @@ Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving emet
 | [vlm_bakeoff.md](vlm_bakeoff.md) | VLM model bake-off reproduction (canonical-6, balanced-31) |
 | [troubleshooting.md](troubleshooting.md) | Common errors (missing GLB, unauthorized download, wrong paths) |
 
-**Engineering plan:** [docs/plans/HABITAT_EQA_HARNESS.md](../plans/HABITAT_EQA_HARNESS.md)  
+**Engineering plan:** [docs/plans/HABITAT_EQA_HARNESS.md](../plans/HABITAT_EQA_HARNESS.md)
 **Results log:** [docs/experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md)
 
 ## Quick start
@@ -53,10 +53,10 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d example
 
 ## Architecture (short)
 
-1. **HabitatEQASimulator** — load HM3D `.basis.glb`, RGB-D agent  
-2. **HabitatRobotClient** — `AbstractRobotClient` shim (`get_observation`, `move_base_to`, …)  
-3. **GraphEQAController / DynagraphController** — emet memory stack (unchanged)  
-4. **EQAExecuter** — `run_eqa` loop + multiple-choice grading  
+1. **HabitatEQASimulator** — load HM3D `.basis.glb`, RGB-D agent
+2. **HabitatRobotClient** — `AbstractRobotClient` shim (`get_observation`, `move_base_to`, …)
+3. **GraphEQAController / DynagraphController** — emet memory stack (unchanged)
+4. **EQAExecuter** — `run_eqa` loop + multiple-choice grading
 
 ### HabitatRobotClient notes
 

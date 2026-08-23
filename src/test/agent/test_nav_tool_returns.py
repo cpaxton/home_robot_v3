@@ -18,9 +18,7 @@ from emet.agent.tools import (
 def test_format_nav_outcome_heads():
     assert "cancelled" in format_nav_outcome_head("user_cancelled", ok=False, verb="Find").lower()
     assert "aborted" in format_nav_outcome_head("aborted_waypoint_timeout", ok=False, verb="Explore").lower()
-    assert "rejected_low_clearance" in format_nav_outcome_head(
-        "rejected_low_clearance", ok=False, verb="Find"
-    )
+    assert "rejected_low_clearance" in format_nav_outcome_head("rejected_low_clearance", ok=False, verb="Find")
     assert format_nav_outcome_head(None, ok=True, verb="Find") == "Find finished."
 
 

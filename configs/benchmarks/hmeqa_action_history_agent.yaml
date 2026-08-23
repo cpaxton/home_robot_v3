@@ -1,0 +1,18 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+schema: emet.hmeqa.variant
+schema_version: 1
+description: >-
+  Grounded Graph Agent treatment: expose dedicated cross-round action outcomes,
+  loop flags, and attempt summaries to the router.
+variant:
+  id: action-history-agent-v1
+  agentic_decision_policy: grounded_v2
+  graph_evidence_mode: agent
+  room_history_mode: agent
+  room_policy: canonical
+  room_target_hints: true
+  investigate_stamp: false
+  attempt_ledger_mode: agent

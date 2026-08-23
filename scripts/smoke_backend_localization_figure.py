@@ -341,9 +341,7 @@ def run_backend_on_session(
 
         zmq_session = robot.get_emet_session()
         placements = read_sim_object_placements(zmq_session)
-        memory = get_memory_backend_for_agent(
-            agent, profile_backend if backend != "vlm_only" else "static_graph"
-        )
+        memory = get_memory_backend_for_agent(agent, profile_backend if backend != "vlm_only" else "static_graph")
         vm = getattr(agent, "voxel_map", None)
 
         prefer_voxel = backend == "dynamem"

@@ -56,9 +56,7 @@ def test_plant_mixed_grasps_puts_decoys_first():
     assert poses[0].asset_id.startswith("decoy")
     assert poses[-1].asset_id == "reachable_topdown"
     # top_down_grasp_T adds the 0.02 m approach z-offset (grasp frame +Z into object).
-    np.testing.assert_allclose(
-        poses[-1].position, np.array([0.1, -0.5, 0.82]), atol=1e-9
-    )
+    np.testing.assert_allclose(poses[-1].position, np.array([0.1, -0.5, 0.82]), atol=1e-9)
 
 
 def test_rank_grasps_skips_infeasible_picks_reachable():

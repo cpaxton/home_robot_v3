@@ -8,6 +8,7 @@ import numpy as np
 
 from emet.memory.graph_eqa import GraphEQAMemory
 from emet.memory.graph_eqa.mcq_debias import (
+    answer_is_unknownish,
     extract_single_letter,
     format_rotated_question,
     letter_to_original_index,
@@ -86,6 +87,19 @@ def test_match_freeform_to_choice():
     assert match_freeform_to_choice("I cannot tell from here", loc) is None
 
 
+def test_match_q11_semantic_answer_to_refrigerator_choice():
+    choices = [
+        "Next to the dining table",
+        "Next to the sofa",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+
+    assert match_freeform_to_choice("Next to the refrigerator", choices) == 3
+    assert match_freeform_to_choice("It is next to the refrigerator.", choices) == 3
+    assert match_freeform_to_choice("Next to the", choices) is None
+
+
 def test_match_freeform_to_choice_yes_no_and_placeholders():
     yn = ["(Do not choose this option)", "No", "Yes", "(Do not choose this option)"]
     assert match_freeform_to_choice("No, the blanket is not folded.", yn) == 1
@@ -97,6 +111,16 @@ def test_match_freeform_to_choice_yes_no_and_placeholders():
 def test_match_freeform_to_choice_times():
     assert match_freeform_to_choice("It looks like 1-3pm.", CHOICES) == 0
     assert match_freeform_to_choice("morning, around 7-9am", CHOICES) == 1
+
+
+def test_answer_unknownish_distinguishes_count_none_from_abstention():
+    counts = ["Three", "One", "None", "Two"]
+    states = ["On", "Off", "Unknown", "(Do not choose this option)"]
+
+    assert not answer_is_unknownish("None", counts)
+    assert answer_is_unknownish("None")
+    assert answer_is_unknownish("Unknown", states)
+    assert answer_is_unknownish("N/A", states)
 
 
 class _BiasedClient:
@@ -112,11 +136,7 @@ class _BiasedClient:
         self.calls.append(prompt)
         if "few words" in prompt:
             return self.freeform_reply
-        for letter in "ABCD":
-            marker = f"{letter}) {self.gold_text}"
-            if marker in prompt:
-                return letter
-        return "B"
+        return self.gold_text if self.gold_text in prompt else "unclear"
 
 
 def _memory_with_obs(client):
@@ -140,7 +160,7 @@ def test_vote_mcq_letter_freeform_short_circuits():
 
 
 def test_vote_mcq_letter_recovers_gold_a_via_rotations():
-    """Unhelpful free-form falls back to rotation voting; content majority maps to A."""
+    """Unhelpful free-form falls back to semantic rotation voting."""
     client = _BiasedClient(gold_text="1-3pm")
     mem = _memory_with_obs(client)
     letter = mem.vote_mcq_letter("What time is it now?", CHOICES)
@@ -150,10 +170,11 @@ def test_vote_mcq_letter_recovers_gold_a_via_rotations():
     assert mem.last_mcq_debias["freeform_match"] is None
     assert mem.last_mcq_debias["votes"] == ["A", "A", "A", "A"]
     assert mem.last_mcq_debias["prior"] == "B"
+    assert all("Do not output an option letter" in prompt for prompt in client.calls[1:])
 
 
-def test_vote_mcq_letter_position_locked_returns_empty():
-    """Position-locked replies (always 'B') un-rotate to a 4-way split: no override."""
+def test_vote_mcq_letter_ignores_legacy_letter_only_replies():
+    """A semantic re-ask does not reinterpret bare letter tokens as answer text."""
 
     class _PositionLocked:
         def __call__(self, commands):

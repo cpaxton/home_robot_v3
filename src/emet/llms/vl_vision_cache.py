@@ -40,7 +40,9 @@ class VisionPrefixCache:
         self._store.move_to_end(key)
         return entry
 
-    def put(self, key: str, *, past_key_values: Any = None, prefix_token_len: int = 0, image_embeds: Any = None) -> None:
+    def put(
+        self, key: str, *, past_key_values: Any = None, prefix_token_len: int = 0, image_embeds: Any = None
+    ) -> None:
         self._store[key] = VisionPrefixCacheEntry(
             past_key_values=past_key_values,
             prefix_token_len=int(prefix_token_len),

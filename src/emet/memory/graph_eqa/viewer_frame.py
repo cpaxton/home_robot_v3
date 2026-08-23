@@ -22,11 +22,11 @@ def viewer_xyz_world_from_observation(
     floor_z: float = 0.0,
 ) -> np.ndarray | None:
     """
-    Robot base ``(x, y, z)`` in the same world frame as fused depth / ``camera_pose``.
+      Robot base ``(x, y, z)`` in the same world frame as fused depth / ``camera_pose``.
 
-    Uses ``gps`` + ``compass`` + ``navigation_origin_xyt`` (same as DynaMem ``base_xyt`` and
-  Rerun ``world/robot``). Raw :meth:`robot.get_base_pose` is episode-relative on Robocasa sim and
-    must not be used alone for graph viewpoint nodes.
+      Uses ``gps`` + ``compass`` + ``navigation_origin_xyt`` (same as DynaMem ``base_xyt`` and
+    Rerun ``world/robot``). Raw :meth:`robot.get_base_pose` is episode-relative on Robocasa sim and
+      must not be used alone for graph viewpoint nodes.
     """
     if obs is not None:
         gps = getattr(obs, "gps", None)

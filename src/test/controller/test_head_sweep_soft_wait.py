@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Head-sweep soft wait: exit on near-goal / settled creep, not full joint settle."""
 
 from __future__ import annotations

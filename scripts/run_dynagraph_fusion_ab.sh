@@ -12,33 +12,33 @@ export EMET_ZMQ_STARTUP_TIMEOUT="${EMET_ZMQ_STARTUP_TIMEOUT:-120}"
 export EMET_SIM_NAV_TELEPORT=1
 
 run_arm() {
-  local tag="$1"
-  local fusion_yaml="$2"
-  local out="$BASE/$tag"
-  mkdir -p "$out"
-  uv run emet kill-mujoco-server --all 2>/dev/null || true
-  sleep 2
-  uv run emet serve mujoco --use-robocasa --robot "$ROBOT" --headless --seed "$SEED" \
-    >"$out/server.log" 2>&1 &
-  local spid=$!
-  trap "kill $spid 2>/dev/null || true" EXIT
-  for _ in $(seq 1 90); do
-    if grep -qE "Server running|RobosuiteZmqServer started" "$out/server.log" 2>/dev/null; then
-      break
-    fi
+    local tag="$1"
+    local fusion_yaml="$2"
+    local out="$BASE/$tag"
+    mkdir -p "$out"
+    uv run emet kill-mujoco-server --all 2>/dev/null || true
     sleep 2
-  done
-  sleep 8
-  uv run emet run dynagraph \
-    --robot "$ROBOT" \
-    --dynav-config dynav_config.yaml \
-    --graph-fusion-config "$fusion_yaml" \
-    --explore-loop --explore-max-iters "$ITERS" \
-    --no-rerun --cpu-only \
-    --export "$out/episode" 2>&1 | tee "$out/dynagraph.log" || true
-  kill "$spid" 2>/dev/null || true
-  trap - EXIT
-  uv run emet eval-dynagraph --episode "$out/episode" -o "$out/dynagraph_eval.json"
+    uv run emet serve mujoco --use-robocasa --robot "$ROBOT" --headless --seed "$SEED" \
+        >"$out/server.log" 2>&1 &
+    local spid=$!
+    trap "kill $spid 2>/dev/null || true" EXIT
+    for _ in $(seq 1 90); do
+        if grep -qE "Server running|RobosuiteZmqServer started" "$out/server.log" 2>/dev/null; then
+            break
+        fi
+        sleep 2
+    done
+    sleep 8
+    uv run emet run dynagraph \
+        --robot "$ROBOT" \
+        --dynav-config dynav_config.yaml \
+        --graph-fusion-config "$fusion_yaml" \
+        --explore-loop --explore-max-iters "$ITERS" \
+        --no-rerun --cpu-only \
+        --export "$out/episode" 2>&1 | tee "$out/dynagraph.log" || true
+    kill "$spid" 2>/dev/null || true
+    trap - EXIT
+    uv run emet eval-dynagraph --episode "$out/episode" -o "$out/dynagraph_eval.json"
 }
 
 mkdir -p "$BASE"

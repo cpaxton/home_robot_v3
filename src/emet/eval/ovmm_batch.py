@@ -54,7 +54,9 @@ class OvmmBatchOptions:
     full: bool = False
 
 
-def filter_episodes(episodes: list[Any], *, tiers: Sequence[str] | None, episode_ids: Sequence[str] | None) -> list[Any]:
+def filter_episodes(
+    episodes: list[Any], *, tiers: Sequence[str] | None, episode_ids: Sequence[str] | None
+) -> list[Any]:
     out = episodes
     if tiers:
         tier_set = {t.strip() for t in tiers}
@@ -133,8 +135,7 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
     stride = max(1, int(opts.port_stride))
     manip = str(opts.manip_mode) if opts.full else "skip"
     agentic_requested = not opts.oneshot_localize and any(
-        opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"}
-        for backend in backends
+        opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"} for backend in backends
     )
     worker = None
     if agentic_requested and _configured_vl_endpoint() is None:

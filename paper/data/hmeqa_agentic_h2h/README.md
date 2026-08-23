@@ -28,6 +28,7 @@ Full write-up: `docs/experiments/agentic_scale.md`.
 | `balanced32_router_off_agentic_archive.json` | n=32 prior matched H2H | archive — classic 9/32, agentic **11/32**, router off |
 | `balanced32_overnight_replicate.json` | n=32 replicate | complete — classic **10/32**, agentic **12/32** (router off) |
 | `failset104105_summary.json` | q104/q105 infra regression | failfix5 fixed `n_object`/empty-pred; letters still wrong |
+| `action_history_pair_20260823.json` | n=4 grounded action-history visibility pair | complete diagnostic — 3/4 both; agent-visible history reduced repeat rows but increased mean steps |
 | `coverage_panel_metrics.json` | coverage figure metrics | holdout-8 |
 | `manifest.json` | IDs, harness, run dirs | |
 
@@ -38,7 +39,7 @@ Full write-up: `docs/experiments/agentic_scale.md`.
 | Classic | 9/32 | 28.1% | 48.7 | router-off matched H2H (`bal32r2`, commit `8c9a388`) |
 | Agentic | **16/32** | **50.0%** | **32.7** | paper-router on + station-filter / explore-after-ABSENT (`hmeqa_bal32_explore_20260727_215036`, `e7d0eb20`) |
 
-Cross-policy McNemar p≈0.092 (n.s. at α=0.05); Wilcoxon on steps p≈1.8e-5 (agentic cheaper).  
+Cross-policy McNemar p≈0.092 (n.s. at α=0.05); Wilcoxon on steps p≈1.8e-5 (agentic cheaper).
 **Not** a same-commit matched H2H — do not treat McNemar as a clean paired A/B.
 
 Prior matched H2H agentic (router off): **11/32** archived in `balanced32_router_off_agentic_archive.json`.
@@ -74,6 +75,17 @@ These are **not** the paper's holdout-4 slice (`{15,68,105,17}`); they exercise 
 | `hmeqa_agentic_h2h_20260805_094149` | 1/4 (25%) |
 
 Paper rows (`holdout4_summary.json`, `holdout8_summary.json`) unchanged; cite the 25–100% spread only as run-to-run variance on letter accuracy, with mean planning steps as the more stable claim.
+
+## Grounded action-history visibility diagnostic (2026-08-23)
+
+`action_history_pair_20260823.json` records a clean same-commit pair on
+`{6,11,12,47}`. Both arms used `grounded_v2` with graph/room evidence visible;
+only dedicated attempt history was shadowed or exposed. Both scored 3/4. Visible
+history reduced repeat-failure rows 6→4, but raised attempts 31→37 and mean
+planning steps 35.25→39.25. All three dedicated sections (recent actions,
+persisted loop flags, and global attempts) were non-empty in 10/14 treatment
+router calls and empty in all 12 shadow calls. This validates the
+config/no-leakage mechanism, not an accuracy gain or a scale decision.
 
 ## Balanced-32 replication evidence (Aug 2026, agentic only)
 

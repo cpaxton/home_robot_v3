@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
+from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
 from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphObjectFusion
-from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
 
 
 def _fake_obs(rgb_shape=(4, 4, 3)):

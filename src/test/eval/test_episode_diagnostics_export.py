@@ -119,6 +119,43 @@ def test_flush_writes_map_video_when_stride_snapshots(tmp_path: Path) -> None:
     assert manifest.get("topdown_exploration_mp4")
 
 
+def test_rgb_video_reuses_frames_without_duplicate_images_dir(tmp_path: Path) -> None:
+    pytest.importorskip("cv2")
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=False,
+            export_obstacle_grids=False,
+            export_trajectory=True,
+            export_rgb_frames=True,
+            export_video=True,
+            export_object_crops=False,
+            export_gt_navmesh_map=False,
+            export_map_overlay=False,
+            export_map_video=False,
+        )
+    )
+    rec.record_step(
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        pose=(0.0, 0.0, 0.0),
+        agent=None,
+        step_idx=0,
+    )
+    rec.record_step(
+        rgb=np.full((8, 8, 3), 255, dtype=np.uint8),
+        pose=(0.1, 0.0, 0.0),
+        agent=None,
+        step_idx=1,
+    )
+
+    manifest = flush_episode_diagnostics(tmp_path, None, rec)
+
+    assert (tmp_path / "frames" / "rgb_0000.png").is_file()
+    assert (tmp_path / "episode_rgb.mp4").is_file()
+    assert not (tmp_path / "images").exists()
+    assert "frames/rgb_0000.png" in (tmp_path / "metadata.jsonl").read_text(encoding="utf-8")
+    assert manifest["episode_rgb_mp4"].endswith("episode_rgb.mp4")
+
+
 def test_config_from_env_defaults_on() -> None:
     cfg = EpisodeDiagnosticsConfig.from_env()
     assert cfg.export_map is True
@@ -181,3 +218,34 @@ def test_record_habitat_substep_dedupes_identical_frames() -> None:
     rec.record_habitat_substep(rgb=rgb, pose=pose)
     rec.record_habitat_substep(rgb=rgb.copy(), pose=pose)
     assert len(rec._frames) == 1
+
+
+def test_disabled_diagnostics_remove_stale_managed_outputs(tmp_path: Path) -> None:
+    (tmp_path / "frames").mkdir()
+    (tmp_path / "frames" / "rgb_0000.png").write_bytes(b"stale")
+    (tmp_path / "images").mkdir()
+    (tmp_path / "images" / "frame_0000.png").write_bytes(b"stale")
+    (tmp_path / "topdown_map.png").write_bytes(b"stale")
+    (tmp_path / "unrelated.txt").write_text("keep", encoding="utf-8")
+
+    recorder = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=False,
+            export_map_video=False,
+            export_video=False,
+            export_rgb_frames=False,
+            export_trajectory=False,
+            export_obstacle_grids=False,
+            export_object_crops=False,
+            export_full_graph=False,
+            export_compact_memory=False,
+            export_voxel_history=False,
+            export_voxel_pickle=False,
+        )
+    )
+    assert flush_episode_diagnostics(tmp_path, None, recorder) == {}
+
+    assert not (tmp_path / "frames").exists()
+    assert not (tmp_path / "images").exists()
+    assert not (tmp_path / "topdown_map.png").exists()
+    assert (tmp_path / "unrelated.txt").read_text(encoding="utf-8") == "keep"

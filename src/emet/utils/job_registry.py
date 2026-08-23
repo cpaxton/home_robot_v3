@@ -10,10 +10,12 @@ and cancels them. Unmanaged eval processes can still be discovered via
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import time
 import uuid
@@ -164,10 +166,98 @@ _GPU_JOB_HINT = re.compile(
 )
 
 
+def gpu_lock_path() -> Path:
+    """Return the host-wide lock used by exclusive GPU jobs."""
+    raw = os.environ.get("EMET_GPU_LOCK", "").strip() or os.environ.get("EMET_GPU_LOCK_FILE", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve(strict=False)
+    return (Path.home() / "runs" / "emet" / "gpu.lock").resolve(strict=False)
+
+
+def gpu_lock_fd_matches(fd: int = 9, *, lock_path: str | Path | None = None) -> bool:
+    """Return whether *fd* and the canonical GPU lock path name the same file."""
+    path = Path(lock_path).expanduser().resolve(strict=False) if lock_path is not None else gpu_lock_path()
+    try:
+        fd_stat = os.fstat(int(fd))
+        path_stat = path.stat()
+    except (OSError, ValueError):
+        return False
+    return (
+        stat.S_ISREG(fd_stat.st_mode)
+        and stat.S_ISREG(path_stat.st_mode)
+        and (fd_stat.st_dev, fd_stat.st_ino) == (path_stat.st_dev, path_stat.st_ino)
+    )
+
+
+def validated_gpu_lock_fd(fd: int = 9, *, lock_path: str | Path | None = None) -> int | None:
+    """Validate (and non-blockingly assert) an inherited exclusive GPU lock.
+
+    Path flags such as ``EMET_GPU_LOCK_HELD`` are not authority. The descriptor
+    must identify the canonical lock inode, and ``flock(LOCK_EX|LOCK_NB)`` must
+    succeed. Re-locking an inherited open-file description is a no-op; an
+    unrelated descriptor cannot bypass a lock held by another process.
+    """
+    if not gpu_lock_fd_matches(fd, lock_path=lock_path):
+        return None
+    try:
+        fcntl.flock(int(fd), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError, ValueError):
+        return None
+    return int(fd)
+
+
+def _ancestor_pids(pid: int | None = None) -> set[int]:
+    current = int(pid or os.getpid())
+    ancestors: set[int] = set()
+    for _ in range(64):
+        if current <= 0 or current in ancestors:
+            break
+        ancestors.add(current)
+        try:
+            status = Path(f"/proc/{current}/status").read_text(encoding="utf-8")
+        except OSError:
+            break
+        parent = 0
+        for line in status.splitlines():
+            if line.startswith("PPid:"):
+                try:
+                    parent = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    parent = 0
+                break
+        current = parent
+    return ancestors
+
+
+def validated_current_job_id(
+    job_id: str | None = None,
+    *,
+    pid: int | None = None,
+) -> str | None:
+    """Return a managed job id only when its live supervisor is an ancestor."""
+    candidate = str(job_id if job_id is not None else os.environ.get("EMET_JOB_ID", "")).strip()
+    if not candidate:
+        return None
+    job = load_job(candidate)
+    if (
+        job is None
+        or job.status not in {"queued", "waiting", "running"}
+        or job.pid is None
+        or not pid_alive(job.pid)
+        or int(job.pid) not in _ancestor_pids(pid)
+    ):
+        return None
+    return candidate
+
+
+def command_looks_like_gpu_job(name: str, cmd: str) -> bool:
+    """Heuristically identify experiment commands that share the workstation GPU."""
+    return bool(_GPU_JOB_HINT.search(f"{name} {cmd}"))
+
+
 def looks_like_gpu_job(job: JobRecord) -> bool:
     """Heuristic: Habitat/VLM/MuJoCo/HM-EQA-style commands share one GPU."""
-    blob = f"{job.name} {job.cmd}"
-    return bool(_GPU_JOB_HINT.search(blob))
+    return command_looks_like_gpu_job(job.name, job.cmd)
 
 
 def active_gpu_job_pids(*, exclude_job_id: str | None = None) -> list[int]:

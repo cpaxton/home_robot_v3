@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Print accuracy table for habitat VLM sweep JSONL runs vs paper baseline."""
 
 from __future__ import annotations
@@ -36,11 +40,7 @@ def acc(rows: dict[int, dict], qids: range) -> tuple[int, int, float, int]:
         return 0, 0, 0.0, 0
     n = len(items)
     c = sum(1 for r in items if r.get("correct"))
-    oom = sum(
-        1
-        for r in items
-        if "cuda out of memory" in str(r.get("predicted_answer", "")).lower()
-    )
+    oom = sum(1 for r in items if "cuda out of memory" in str(r.get("predicted_answer", "")).lower())
     err = sum(1 for r in items if str(r.get("error", "")).strip())
     return c, n, 100.0 * c / n, oom, err
 
@@ -55,11 +55,7 @@ def main() -> int:
 
     out_dir = args.results_dir.expanduser()
     qslice = range(args.q_start, args.q_end + 1)
-    baseline_path = (
-        args.baseline.expanduser()
-        if args.baseline
-        else out_dir / "graph_eqa_gemma3_paper_q0-112.jsonl"
-    )
+    baseline_path = args.baseline.expanduser() if args.baseline else out_dir / "graph_eqa_gemma3_paper_q0-112.jsonl"
     base = load_jsonl(baseline_path)
     bc, bn, bpct, _, _ = acc(base, qslice)
 

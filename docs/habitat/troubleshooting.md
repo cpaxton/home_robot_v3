@@ -45,7 +45,7 @@ Symptom: `emet habitat info` shows only **37/113** (or similar) questions with s
 
 **Two different causes:**
 
-1. **Semantics pack not downloaded** — train has ~800 meshes but 0–few `*.semantic.glb` files.  
+1. **Semantics pack not downloaded** — train has ~800 meshes but 0–few `*.semantic.glb` files.
    **Fix:** fetch the HM3D-Semantics split (same Matterport tokens as train):
 
    ```bash
@@ -78,13 +78,13 @@ cat ~/.cache/habitat_eqa/hm3d/hm3d-train-habitat.tar
 
 **Fix:**
 
-1. **Profile → Settings → Developer Tools** ([link](https://my.matterport.com/settings/account/devtools))  
-2. Scroll to **Habitat dataset** → confirm access is approved (request if pending)  
-3. Create a **new** API token after approval  
-4. Set **both** env vars:  
-   `export MATTERPORT_USERNAME='<token-id>'`  
-   `export MATTERPORT_PASSWORD='<token-secret>'`  
-5. `rm -f ~/.cache/habitat_eqa/hm3d/hm3d-*-habitat.tar`  
+1. **Profile → Settings → Developer Tools** ([link](https://my.matterport.com/settings/account/devtools))
+2. Scroll to **Habitat dataset** → confirm access is approved (request if pending)
+3. Create a **new** API token after approval
+4. Set **both** env vars:
+   `export MATTERPORT_USERNAME='<token-id>'`
+   `export MATTERPORT_PASSWORD='<token-secret>'`
+5. `rm -f ~/.cache/habitat_eqa/hm3d/hm3d-*-habitat.tar`
 6. Retry `uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d minival` then `train`
 
 See [data.md — Matterport credentials](data.md#matterport-credentials-hm3d-train--val--minival).
@@ -111,7 +111,7 @@ Or set `HABITAT_EQA_DATA_DIR` to a directory that already contains the CSVs.
 
 ## Still stuck?
 
-1. `uv run emet habitat info`  
-2. `uv run python scripts/download_habitat_eqa_data.py --instructions`  
-3. `.venv-habitat/bin/python -c "import habitat_sim; print(habitat_sim.__version__)"`  
+1. `uv run emet habitat info`
+2. `uv run python scripts/download_habitat_eqa_data.py --instructions`
+3. `.venv-habitat/bin/python -c "import habitat_sim; print(habitat_sim.__version__)"`
 4. Open an issue with the full error, output of `verify-question`, and whether train or example split was downloaded (do **not** paste API tokens).

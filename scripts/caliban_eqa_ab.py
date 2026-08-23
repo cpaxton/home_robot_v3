@@ -84,10 +84,7 @@ def main() -> int:
     print("--- summary ---")
     for name, r in results.items():
         ok = r["answer"].upper() in {"A", "B", "C", "D"}
-        print(
-            f"{name}: raw={r['raw']!r} -> answer={r['answer']!r} "
-            f"confidence={r['confidence']} recoverable={ok}"
-        )
+        print(f"{name}: raw={r['raw']!r} -> answer={r['answer']!r} confidence={r['confidence']} recoverable={ok}")
     print("--- round-trip check: choices parse ---")
     print(parse_mcq_choices_from_question(qline))
     OUT_PATH.write_text(json.dumps(results, indent=2) + "\n")
