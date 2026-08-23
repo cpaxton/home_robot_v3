@@ -157,14 +157,28 @@ class Hm3dSemanticLabeler:
         }
 
 
+@dataclass(frozen=True)
+class Hm3dInstanceItem:
+    """One HM3D semantic instance with a scene-stable identity."""
+
+    label: str
+    xyz: np.ndarray
+    identity_key: str
+
+
 def hm3d_instance_items_from_obs(
     labeler: Hm3dSemanticLabeler,
     obs,
     *,
     max_instances: int = 8,
     min_pixels: int = 120,
-) -> list[tuple[str, np.ndarray]]:
-    """Per-instance (label, world xyz) for object-centric graph nodes."""
+    with_instance_ids: bool = False,
+) -> list[tuple[str, np.ndarray] | Hm3dInstanceItem]:
+    """Per-instance graph rows, optionally carrying scene-stable semantic IDs.
+
+    The legacy two-tuple return remains the default. The identity-carrying mode is
+    used by GraphEQA so two same-category instances in one frame remain distinct.
+    """
     if obs.semantic is None or obs.depth is None or obs.camera_pose is None:
         return []
     sem = np.asarray(obs.semantic)
@@ -183,20 +197,23 @@ def hm3d_instance_items_from_obs(
     flat_sem = sem.reshape(-1)
     flat_valid = valid.reshape(-1)
     counts = Counter(int(v) for v, ok in zip(flat_sem, flat_valid, strict=False) if ok and int(v) > 0)
-    items: list[tuple[str, np.ndarray]] = []
+    items: list[tuple[str, np.ndarray] | Hm3dInstanceItem] = []
     seen_labels: set[str] = set()
     for inst_id, count in counts.most_common():
         if count < min_pixels:
             break
         label = labeler.instance_to_label.get(inst_id)
-        if not label or label in seen_labels:
+        if not label or (not with_instance_ids and label in seen_labels):
             continue
         mask = flat_valid & (flat_sem == inst_id)
         sel = flat_pts[mask]
         if sel.shape[0] < min_pixels:
             continue
         xyz = np.median(sel, axis=0).astype(np.float64)
-        items.append((label, xyz))
+        if with_instance_ids:
+            items.append(Hm3dInstanceItem(label, xyz, f"hm3d:{int(inst_id)}"))
+        else:
+            items.append((label, xyz))
         seen_labels.add(label)
         if len(items) >= max_instances:
             break

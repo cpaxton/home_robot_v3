@@ -16,15 +16,15 @@ from emet.memory.graph_eqa.graph_object_fusion.calibrate import (
     score_fused_nodes_vs_gt,
 )
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
+from emet.memory.graph_eqa.graph_object_fusion.evaluate import (
+    associate_detections_to_gt,
+    score_detections_vs_gt,
+)
 from emet.memory.graph_eqa.graph_object_fusion.fusion import (
     GraphDetectionCandidate,
     GraphObjectFusion,
     bounds_3d_iou,
     cosine_similarity_np,
-)
-from emet.memory.graph_eqa.graph_object_fusion.evaluate import (
-    associate_detections_to_gt,
-    score_detections_vs_gt,
 )
 from emet.memory.graph_eqa.mujoco_align import score_nodes_vs_gt
 
@@ -59,6 +59,51 @@ def test_fusion_merges_duplicate_detections():
     objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
     assert len(objs) == 1
     assert objs[0].support_count >= 2
+
+
+def test_fusion_preserves_distinct_stable_instance_ids():
+    cfg = GraphObjectFusionConfig(enabled=True, spatial_merge_xy_m=0.5, embedding_min_cosine=0.0)
+    fusion = GraphObjectFusion(cfg)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.0
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+
+    fusion.apply_detection(
+        mem,
+        rgb,
+        GraphDetectionCandidate(
+            label="lamp",
+            xyz=np.array([1.0, 0.0, 0.5]),
+            identity_key="hm3d:lamp:1",
+            countable_instance=True,
+        ),
+    )
+    fusion.apply_detection(
+        mem,
+        rgb,
+        GraphDetectionCandidate(
+            label="lamp",
+            xyz=np.array([1.05, 0.0, 0.5]),
+            identity_key="hm3d:lamp:2",
+            countable_instance=True,
+        ),
+    )
+    fusion.apply_detection(
+        mem,
+        rgb,
+        GraphDetectionCandidate(
+            label="lamp",
+            xyz=np.array([4.0, 0.0, 0.5]),
+            identity_key="hm3d:lamp:1",
+            countable_instance=True,
+        ),
+    )
+
+    objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
+    assert len(objs) == 2
+    assert {n.identity_key for n in objs} == {"hm3d:lamp:1", "hm3d:lamp:2"}
+    first = next(n for n in objs if n.identity_key == "hm3d:lamp:1")
+    assert first.support_count >= 2
 
 
 def test_iou_merge_overlapping_bounds_far_centroids():

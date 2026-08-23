@@ -238,6 +238,33 @@ _QUESTION_VERB_FILLERS = frozenset(
     }
 )
 
+# Count-MCQ target extraction ("How many <target> …"). The match key must be the
+# noun phrase right after "How many", not every stem token — "How many chairs are
+# in the dining room?" otherwise matches a dining-table node via "dining".
+_COUNT_TARGET_BOUNDARY_RE = re.compile(
+    r"\b(?:are|is|was|were|am|did|do|does|can|could|"
+    r"have|has|had|i|you|it|we|they|there|at|on|in|by|for|with|"
+    r"under|over|next|left|put|placed|leave|behind|above|below|near|"
+    r"beside|around|inside|outside|standing|sitting|hanging)\b|\?",
+    re.IGNORECASE,
+)
+# Quantity wrappers that are not the object being counted ("sets of utensils").
+_COUNT_QUANTITY_WRAPPERS = frozenset(
+    {
+        "set",
+        "sets",
+        "piece",
+        "pieces",
+        "pair",
+        "pairs",
+        "couple",
+        "bunch",
+        "lot",
+        "lots",
+        "number",
+    }
+)
+
 
 def question_stem_for_keywords(question: str) -> str:
     """Return the object stem of an HM-EQA question (no MCQ options / ``Answer:``).
@@ -256,6 +283,146 @@ def question_stem_for_keywords(question: str) -> str:
     if "?" in text:
         text = text.split("?", 1)[0]
     return text.strip()
+
+
+@dataclass(frozen=True)
+class CountTarget:
+    """A parsed count-MCQ target and optional grounded scope."""
+
+    tokens: tuple[str, ...]
+    scope_tokens: tuple[str, ...] = ()
+
+    @property
+    def phrase(self) -> str:
+        return " ".join(self.tokens)
+
+    @property
+    def scope_phrase(self) -> str:
+        return " ".join(self.scope_tokens)
+
+
+_COUNT_LEADING_WORDS = frozenset({"a", "an", "the", "of", "some"})
+_COUNT_WORD_ALIASES: dict[str, frozenset[str]] = {
+    "trash": frozenset({"garbage", "rubbish", "waste", "recycle", "bin"}),
+    "garbage": frozenset({"trash", "rubbish", "waste", "recycle", "bin"}),
+    "rubbish": frozenset({"trash", "garbage", "waste", "recycle", "bin"}),
+    "waste": frozenset({"trash", "garbage", "rubbish", "recycle", "bin"}),
+    "recycle": frozenset({"trash", "garbage", "rubbish", "waste", "bin"}),
+    "bin": frozenset({"trash", "garbage", "rubbish", "waste", "recycle", "can"}),
+    "can": frozenset({"bin"}),
+}
+_COUNT_ROOM_PHRASES = (
+    "living room",
+    "dining room",
+    "bedroom",
+    "bathroom",
+    "kitchen",
+    "hallway",
+    "office",
+    "garage",
+    "sunroom",
+)
+_COUNT_SCOPE_PREPOSITION_RE = re.compile(
+    r"\b(?:in|inside|within|at|on|near|by|under|over|next\s+to|beside|behind|"
+    r"above|below|around)\s+(?:the\s+)?(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _count_tokens(text: str) -> list[str]:
+    """Tokenize count targets/scopes without allowing punctuation into matches."""
+    return re.findall(r"[a-z0-9]+", (text or "").lower())
+
+
+def _strip_count_wrappers(tokens: list[str]) -> list[str]:
+    """Drop quantity wrappers while preserving valid counted nouns such as ``bowl``."""
+    out = list(tokens)
+    while out and out[0] in _COUNT_LEADING_WORDS:
+        out.pop(0)
+    if len(out) >= 2 and out[0] in _COUNT_QUANTITY_WRAPPERS and out[1] == "of":
+        out = out[2:]
+        while out and out[0] in _COUNT_LEADING_WORDS:
+            out.pop(0)
+    return out
+
+
+def _count_room_scope_tokens(text: str) -> tuple[str, ...]:
+    normalized = re.sub(r"[_-]+", " ", (text or "").lower())
+    for phrase in sorted(_COUNT_ROOM_PHRASES, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(phrase)}\b", normalized):
+            return tuple(phrase.split())
+    return ()
+
+
+def _count_target_from_stem(stem: str) -> CountTarget | None:
+    """Parse common count stems and retain any trailing room scope separately."""
+    match = re.search(
+        r"\bhow\s+many\b(?P<rest>.*)$|"
+        r"\b(?:number|count)\s+of\s+(?P<rest_alt>.*)$",
+        stem or "",
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    rest = (match.group("rest") or match.group("rest_alt") or "").strip()
+    boundary = _COUNT_TARGET_BOUNDARY_RE.search(rest)
+    target_text = rest[: boundary.start()] if boundary is not None else rest
+    tail = rest[boundary.start() :] if boundary is not None else ""
+    tokens = _strip_count_wrappers(_count_tokens(target_text))
+    if not tokens:
+        return None
+    scope_tokens: tuple[str, ...] = ()
+    scope = _COUNT_SCOPE_PREPOSITION_RE.search(tail)
+    if scope is not None:
+        scope_tokens = _count_room_scope_tokens(scope.group(1))
+    return CountTarget(tokens=tuple(tokens), scope_tokens=scope_tokens)
+
+
+def _count_word_forms(token: str) -> set[str]:
+    """Return conservative singular/plural forms for a count-label token."""
+    word = str(token or "").lower()
+    forms = {word}
+    if word.endswith("ies") and len(word) > 4:
+        forms.add(word[:-3] + "y")
+    if word.endswith("ves") and len(word) > 4:
+        # Covers both ``shelves`` → ``shelf`` and ``knives`` → ``knife``.
+        forms.add(word[:-3] + "f")
+        forms.add(word[:-3] + "fe")
+    if word.endswith(("ches", "shes", "xes", "zes", "ses")) and len(word) > 3:
+        forms.add(word[:-2])
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        forms.add(word[:-1])
+    return {form for form in forms if form}
+
+
+def _count_word_matches(target: str, label: str) -> bool:
+    """Match whole label tokens, never substrings such as ``art`` in ``cart``."""
+    target_forms = _count_word_forms(target)
+    label_forms = _count_word_forms(label)
+    if target_forms & label_forms:
+        return True
+    target_aliases = {
+        form
+        for alias in _COUNT_WORD_ALIASES.get(str(target or "").lower(), ())
+        for form in _count_word_forms(alias)
+    }
+    return bool(target_aliases & label_forms)
+
+
+def _count_phrase_matches(target_tokens: tuple[str, ...], label: str) -> bool:
+    label_tokens = re.findall(r"[a-z0-9]+", (label or "").lower())
+    if not label_tokens or not target_tokens:
+        return False
+    if len(target_tokens) == 1:
+        return any(_count_word_matches(target_tokens[0], token) for token in label_tokens)
+    width = len(target_tokens)
+    return any(
+        all(
+            _count_word_matches(target, label_token)
+            for target, label_token in zip(target_tokens, label_tokens[i : i + width], strict=True)
+        )
+        for i in range(len(label_tokens) - width + 1)
+    )
 
 
 def heuristic_relevant_phrases(question: str, *, max_phrases: int = 4) -> list[str]:
@@ -542,6 +709,9 @@ class GraphNode:
     position_covariance: np.ndarray | None = None
     position_history: list[dict[str, Any]] = field(default_factory=list)
     identity_key: str | None = None
+    # True only when this node came from instance-level evidence. Label-only
+    # frame summaries are not safe inputs for exact count hints.
+    countable_instance: bool = False
     change_events: list[dict[str, Any]] = field(default_factory=list)
     expected_absence_count: int = 0
     last_absence_step: int = -1
@@ -708,6 +878,9 @@ class GraphEQAMemory:
         # (obs_id, normalized_phrase) claims retracted after close+ABSENT verify —
         # keep the place node, but stop offering that stem-object hyp card.
         self._retracted_nav_claims: set[tuple[int, str]] = set()
+        # Distinct view IDs that produced ABSENT evidence; separate from the place
+        # IDs above because one place can be verified from multiple fresh stations.
+        self._retraction_evidence_views: set[tuple[int, str]] = set()
         # Action-outcome ledger (opt-in via eqa.attempt_ledger / EMET_EQA_ATTEMPT_LEDGER).
         # When off, record_nav_attempt keeps updating GraphNode counters only.
         self._attempt_records: list[AttemptRecord] = []
@@ -1153,6 +1326,8 @@ class GraphEQAMemory:
         viewer_xyz: np.ndarray | None = None,
         bbox_xyxy: tuple[int, int, int, int] | None = None,
         extent_half: np.ndarray | None = None,
+        identity_key: str | None = None,
+        countable_instance: bool = False,
     ) -> int:
         """
         Add one observation to the graph: create a node and update edges.
@@ -1164,6 +1339,8 @@ class GraphEQAMemory:
             description: optional text description of the scene (e.g. from VLM)
             viewer_xyz: optional (3,) robot base or head-camera position in world frame when captured
             bbox_xyxy: optional (x0, y0, x1, y1) crop in ``rgb`` for this object (instance mask bbox)
+            identity_key: optional stable identity for this detected instance
+            countable_instance: whether this observation is safe for exact count hints
 
         Returns:
             obs_id: 1-based observation id (used as image id in EQA).
@@ -1179,6 +1356,8 @@ class GraphEQAMemory:
         if not labels_norm:
             labels_norm = ["object"]
         primary = labels_norm[0].lower()
+        identity_key_norm = str(identity_key).strip() if identity_key is not None else ""
+        identity_key_norm = identity_key_norm or None
 
         bbox_i: tuple[int, int, int, int] | None = None
         if bbox_xyxy is not None:
@@ -1186,50 +1365,70 @@ class GraphEQAMemory:
             if len(b) == 4:
                 bbox_i = (b[0], b[1], b[2], b[3])
 
-        if self.spatial_merge_m > 0:
+        if self.spatial_merge_m > 0 or identity_key_norm is not None:
             from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
 
             for idx, existing in enumerate(self._nodes):
                 if existing.is_viewpoint or existing.is_frontier or is_ground_truth_node(existing):
                     continue
+                existing_key = str(existing.identity_key).strip() if existing.identity_key else None
+                same_identity = identity_key_norm is not None and existing_key == identity_key_norm
                 el = [str(x).strip() for x in existing.labels if str(x).strip()]
-                if not el or not labels_compatible_for_dedup(primary, el[0]):
+                if not same_identity and (not el or not labels_compatible_for_dedup(primary, el[0])):
+                    continue
+                if (
+                    identity_key_norm is not None
+                    and existing.countable_instance
+                    and existing_key is not None
+                    and not same_identity
+                ):
                     continue
                 ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
-                if float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m:
-                    sc = int(existing.support_count) + 1
-                    new_xyz, covariance, history, changes, belief_confidence = self._position_update(
-                        existing, xyz_a, step=step
-                    )
-                    merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
-                    new_desc = description if description else existing.description
-                    merged_bbox = bbox_i if bbox_i is not None else existing.bbox_xyxy
-                    self._nodes[idx] = replace(
-                        existing,
-                        xyz=new_xyz,
-                        labels=merged_labels,
-                        last_seen=step,
-                        support_count=sc,
-                        description=new_desc,
-                        bbox_xyxy=merged_bbox,
-                        position_covariance=covariance,
-                        position_history=history,
-                        change_events=changes,
-                        belief_confidence=belief_confidence,
-                    )
-                    # Keep the graph node's candidate image in sync with this revisit.
-                    self.refresh_observation_candidate(
-                        int(existing.obs_id),
-                        rgb,
-                        xyz=new_xyz,
-                        labels=merged_labels,
-                        description=new_desc if new_desc else None,
-                        viewer_xyz=viewer_a,
-                    )
-                    if viewer_a is not None:
-                        self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
-                    self._update_edges()
-                    return int(existing.obs_id)
+                spatial_match = (
+                    self.spatial_merge_m > 0
+                    and float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m
+                )
+                if not same_identity and not spatial_match:
+                    continue
+                sc = int(existing.support_count) + 1
+                new_xyz, covariance, history, changes, belief_confidence = self._position_update(
+                    existing, xyz_a, step=step
+                )
+                merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
+                new_desc = description if description else existing.description
+                merged_bbox = bbox_i if bbox_i is not None else existing.bbox_xyxy
+                self._nodes[idx] = replace(
+                    existing,
+                    xyz=new_xyz,
+                    labels=merged_labels,
+                    last_seen=step,
+                    support_count=sc,
+                    description=new_desc,
+                    bbox_xyxy=merged_bbox,
+                    position_covariance=covariance,
+                    position_history=history,
+                    change_events=changes,
+                    belief_confidence=belief_confidence,
+                    identity_key=(
+                        identity_key_norm
+                        if identity_key_norm is not None and countable_instance
+                        else existing.identity_key or identity_key_norm
+                    ),
+                    countable_instance=bool(existing.countable_instance or countable_instance),
+                )
+                # Keep the graph node's candidate image in sync with this revisit.
+                self.refresh_observation_candidate(
+                    int(existing.obs_id),
+                    rgb,
+                    xyz=new_xyz,
+                    labels=merged_labels,
+                    description=new_desc if new_desc else None,
+                    viewer_xyz=viewer_a,
+                )
+                if viewer_a is not None:
+                    self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
+                self._update_edges()
+                return int(existing.obs_id)
 
         obs_id = self._next_obs_id
         self._next_obs_id += 1
@@ -1257,10 +1456,14 @@ class GraphEQAMemory:
                 }
             ],
             identity_key=(
-                description[len(GT_BODY_DESC_PREFIX) :]
-                if isinstance(description, str) and description.startswith(GT_BODY_DESC_PREFIX)
-                else f"{re.sub(r'[^a-z0-9]+', '-', primary).strip('-')}:{obs_id}"
+                identity_key_norm
+                or (
+                    description[len(GT_BODY_DESC_PREFIX) :]
+                    if isinstance(description, str) and description.startswith(GT_BODY_DESC_PREFIX)
+                    else f"{re.sub(r'[^a-z0-9]+', '-', primary).strip('-')}:{obs_id}"
+                )
             ),
+            countable_instance=bool(countable_instance),
         )
         self._nodes.append(node)
         self._observations.append(
@@ -1301,6 +1504,10 @@ class GraphEQAMemory:
         bbox_xyxy = getattr(candidate, "bbox_xyxy", None)
         bounds_3d = getattr(candidate, "bounds_3d", None)
         embedding = getattr(candidate, "embedding", None)
+        identity_key = getattr(candidate, "identity_key", None)
+        identity_key_norm = str(identity_key).strip() if identity_key is not None else ""
+        identity_key_norm = identity_key_norm or None
+        countable_instance = bool(getattr(candidate, "countable_instance", False) or identity_key_norm)
         if embedding is not None:
             embedding = np.asarray(embedding, dtype=np.float32).reshape(-1).copy()
 
@@ -1320,6 +1527,13 @@ class GraphEQAMemory:
                 if int(existing.node_id) != int(merge_into_node_id):
                     continue
                 if existing.is_viewpoint:
+                    break
+                if (
+                    identity_key_norm is not None
+                    and existing.countable_instance
+                    and existing.identity_key
+                    and str(existing.identity_key) != identity_key_norm
+                ):
                     break
                 sc = int(existing.support_count) + 1
                 new_xyz, covariance, history, changes, belief_confidence = self._position_update(
@@ -1360,6 +1574,8 @@ class GraphEQAMemory:
                     position_history=history,
                     change_events=changes,
                     belief_confidence=belief_confidence,
+                    identity_key=identity_key_norm or existing.identity_key,
+                    countable_instance=bool(existing.countable_instance or countable_instance),
                 )
                 self.refresh_observation_candidate(
                     int(existing.obs_id),
@@ -1379,6 +1595,8 @@ class GraphEQAMemory:
             [label],
             viewer_xyz=viewer_a,
             bbox_xyxy=bbox_i,
+            identity_key=identity_key_norm,
+            countable_instance=countable_instance,
         )
         for idx, n in enumerate(self._nodes):
             if int(n.obs_id) == int(obs_id) and not n.is_viewpoint:
@@ -1403,6 +1621,14 @@ class GraphEQAMemory:
         if src is None or dst is None:
             return False
         if src.is_viewpoint or dst.is_viewpoint or src.is_frontier or dst.is_frontier:
+            return False
+        if (
+            src.countable_instance
+            and dst.countable_instance
+            and src.identity_key
+            and dst.identity_key
+            and str(src.identity_key) != str(dst.identity_key)
+        ):
             return False
 
         sc_src = int(src.support_count)
@@ -1466,6 +1692,8 @@ class GraphEQAMemory:
             position_history=history,
             change_events=changes,
             belief_confidence=belief_confidence,
+            identity_key=dst.identity_key or src.identity_key,
+            countable_instance=bool(dst.countable_instance or src.countable_instance),
         )
         for o in self._observations:
             if int(o.obs_id) == int(dst.obs_id):
@@ -3061,6 +3289,7 @@ class GraphEQAMemory:
         *,
         strip_matching_labels: bool = True,
         strip_across_obs: bool = False,
+        evidence_obs_id: int | None = None,
     ) -> dict[str, Any]:
         """Stop offering a disproved stem-object claim without deleting the place.
 
@@ -3069,10 +3298,15 @@ class GraphEQAMemory:
         the observation / node. Location-MCQ *place* landmarks should not call this
         for the place name itself (the island is real; only the object was missing).
 
-        ``strip_across_obs`` (default True): a closer look at one view disproving the
-        object should strip the label from nodes at OTHER views too — otherwise a stale
-        node created at an earlier obs survives and inflates count / confuses location
-        ("we're not removing things when we take a closer look").
+        ``strip_across_obs`` (default False): cross-view stripping is opt-in and
+        corroborated-only — a closer look at one view disproving the object should NOT
+        strip the label from nodes at OTHER views unless ABSENT is corroborated at 2+
+        distinct views (callers that prove corroboration pass True). One weak glance
+        must not delete a node seen elsewhere (exp1 regression fix).
+
+        ``evidence_obs_id`` identifies the fresh view that produced ABSENT. It may
+        differ from ``obs_id``, which remains the navigation/place claim being
+        retracted.
         """
         oid = int(obs_id)
         key_phrase = str(phrase or "").strip().lower()
@@ -3081,6 +3315,10 @@ class GraphEQAMemory:
         if not hasattr(self, "_retracted_nav_claims"):
             self._retracted_nav_claims = set()
         self._retracted_nav_claims.add((oid, key_phrase))
+        if not hasattr(self, "_retraction_evidence_views"):
+            self._retraction_evidence_views = set()
+        evidence_oid = oid if evidence_obs_id is None else int(evidence_obs_id)
+        self._retraction_evidence_views.add((evidence_oid, key_phrase))
         stripped_obs = 0
         stripped_nodes = 0
         if strip_matching_labels:
@@ -3120,10 +3358,21 @@ class GraphEQAMemory:
             "ok": True,
             "obs_id": oid,
             "phrase": key_phrase,
+            "evidence_obs_id": evidence_oid,
             "stripped_obs": stripped_obs,
             "stripped_nodes": stripped_nodes,
             "n_retracted": len(self._retracted_nav_claims),
         }
+
+    def has_absent_retraction_at_other_view(self, phrase: str, evidence_obs_id: int) -> bool:
+        """Return whether the phrase was already ABSENT at a different evidence view."""
+        key_phrase = str(phrase or "").strip().lower()
+        evidence_oid = int(evidence_obs_id)
+        views = getattr(self, "_retraction_evidence_views", None) or set()
+        return any(
+            int(view_id) != evidence_oid and str(view_phrase).strip().lower() == key_phrase
+            for view_id, view_phrase in views
+        )
 
     def clear_retracted_nav_claims(self) -> None:
         """Drop claim blacklist (e.g. new question).
@@ -3135,6 +3384,7 @@ class GraphEQAMemory:
         if self.persist_absent_claims:
             return
         self._retracted_nav_claims = set()
+        self._retraction_evidence_views = set()
 
     def retire_frontier_near_xy(
         self,
@@ -3912,7 +4162,7 @@ class GraphEQAMemory:
         tail_lines: list[str] = []
         in_tail = False
         for line in lines:
-            if in_tail or line.startswith("CONFIRMED_MEMORY") or line.startswith("Rooms:"):
+            if in_tail or line.startswith(("CONFIRMED_MEMORY", "Rooms:", "GRAPH_COUNT")):
                 in_tail = True
                 tail_lines.append(line)
                 continue
@@ -4007,9 +4257,19 @@ class GraphEQAMemory:
                 for n_tail in (4, 2, 0):
                     head = g_lines[: idx + (0 if n_tail == 0 else 1)]
                     tail = [] if n_tail == 0 else g_lines[idx + 1 : idx + 1 + n_tail]
-                    # Keep Rooms: line if present after the tail.
-                    rooms = [ln for ln in g_lines[idx + 1 :] if ln.startswith("Rooms:")]
-                    graph_try = "\n".join(head + tail + rooms)
+                    # Keep Rooms: and GRAPH_COUNT lines even when the preceding
+                    # merged-memory tail is trimmed.
+                    protected = [
+                        ln
+                        for ln in g_lines[idx + 1 :]
+                        if ln.startswith(("Rooms:", "GRAPH_COUNT"))
+                    ]
+                    tail = [
+                        ln
+                        for ln in tail
+                        if not ln.startswith(("Rooms:", "GRAPH_COUNT"))
+                    ]
+                    graph_try = "\n".join(head + tail + protected)
                     if _tok(_parts(history, mem, graph_try)) <= max_tok:
                         graph = graph_try
                         return _parts(history, mem, graph)
@@ -4025,7 +4285,11 @@ class GraphEQAMemory:
         n_nodes = sum(
             1
             for ln in body_lines
-            if ln and not ln.startswith("  ") and not ln.startswith("CONFIRMED_MEMORY") and not ln.startswith("Rooms:")
+            if (
+                ln
+                and not ln.startswith("  ")
+                and not ln.startswith(("CONFIRMED_MEMORY", "Rooms:", "GRAPH_COUNT"))
+            )
         )
         for keep in list(range(max(0, n_nodes - 1), -1, -1)):
             graph_try = cls._truncate_scene_graph_text(graph, drop_edges=True, max_node_lines=keep)
@@ -4676,13 +4940,7 @@ class GraphEQAMemory:
         return None
 
     def _graph_count_hint(self, question: str) -> str:
-        """Graph-aggregated count hint for count MCQs ("How many X?").
-
-        Count questions are answered poorly by single-view VLM eyeballing. This counts
-        label-matching object nodes (non-frontier, non-viewpoint) in the graph and
-        returns a compact hint line so the answer VLM aggregates over the graph instead
-        of one image. Returns "" when the question is not a count MCQ or nothing matches.
-        """
+        """Return an exact count hint only from stable instance evidence."""
         try:
             from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
 
@@ -4691,36 +4949,62 @@ class GraphEQAMemory:
                 return ""
         except Exception:
             return ""
-        # Target phrase: stem keywords (exclude MCQ option text / filler).
-        stem = question_stem_for_keywords(question or "")
-        tokens = [
-            t
-            for t in (stem or "").lower().split()
-            if len(t) > 2 and t not in _QUESTION_STOPWORDS
-        ]
-        if not tokens:
+
+        target = _count_target_from_stem(question_stem_for_keywords(question or ""))
+        if target is None:
+            # Anaphoric questions such as "I saw several lamps. How many are there?"
+            # need the already extracted phrase rather than a bare stem token.
+            for phrase in list(self._relevant_phrases) + list(self._relevant_objects or []):
+                tokens = _strip_count_wrappers(_count_tokens(phrase))
+                tokens = [token for token in tokens if token not in _QUESTION_STOPWORDS]
+                if tokens:
+                    target = CountTarget(tokens=tuple(tokens))
+                    break
+        if target is None:
             return ""
 
-        def _match(lbls: str, tok: str) -> bool:
-            # Substring plus singular/plural root so "umbrella" matches "umbrellas" etc.
-            if tok in lbls:
-                return True
-            root = tok[:-2] if tok.endswith("es") else (tok[:-1] if tok.endswith("s") else tok)
-            return len(root) > 3 and root in lbls
-
-        matched: list[GraphNode] = []
-        for n in self._nodes:
-            if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
+        matches: list[GraphNode] = []
+        for node in self._nodes:
+            if (
+                node.is_frontier
+                or node.is_viewpoint
+                or is_ground_truth_node(node)
+                or not node.countable_instance
+            ):
                 continue
-            lbls = " ".join(str(x) for x in (n.labels or [])).lower()
-            if any(_match(lbls, t) for t in tokens):
-                matched.append(n)
-        if not matched:
+            if _count_phrase_matches(target.tokens, " ".join(node.labels or [])):
+                matches.append(node)
+        if not matches:
             return ""
+
+        scope_note = ""
+        if target.scope_tokens:
+            room_by_id = self._node_room_by_id()
+            if room_by_id and all(int(node.node_id) in room_by_id for node in matches):
+                matches = [
+                    node
+                    for node in matches
+                    if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
+                ]
+                if not matches:
+                    return ""
+            else:
+                scope_note = (
+                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
+                    "this is a scene-wide observed count."
+                )
+
+        # A stable identity can be represented by several graph nodes after a
+        # checkpoint/replay. Collapse those records without guessing from distance.
+        unique: dict[str, GraphNode] = {}
+        for node in matches:
+            key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
+            unique.setdefault(key, node)
+        matches = list(unique.values())
         return (
-            f"GRAPH_COUNT: {len(matched)} object node(s) in the scene graph match "
-            f"'{stem.strip()}' (labels: {', '.join(str(n.labels[0]) for n in matched[:4])}"
-            f"{' …' if len(matched) > 4 else ''}); answer the count from the graph, "
+            f"GRAPH_COUNT: {len(matches)} distinct object node(s) in the scene graph "
+            f"match '{target.phrase}' (labels: {', '.join(str(node.labels[0]) for node in matches[:4])}"
+            f"{' …' if len(matches) > 4 else ''});{scope_note} answer the count from the graph, "
             "not a single image. Graph nodes are grounded; count only nodes with the "
             "target label."
         )
@@ -4821,11 +5105,7 @@ class GraphEQAMemory:
             record_prompt_count=True,
             merge_confirmed=merge_confirmed,
         )
-        # Count MCQs: inject the graph-aggregated node count so the answer VLM counts
-        # over the graph instead of a single image (count questions under-score ~38-43%).
         count_hint = self._graph_count_hint(question)
-        if count_hint:
-            graph_str = f"{graph_str.rstrip()}\n{count_hint}"
         # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
         # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
@@ -4872,6 +5152,8 @@ class GraphEQAMemory:
             )
 
         extra_hints: list[str] = []
+        if count_hint:
+            extra_hints.append(count_hint)
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
             extra_hints.append(self._visibility_location_mcq_hint(parsed_choices))
         # Attribute/state questions: answer from images; do not inject memory priors.

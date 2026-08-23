@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
+
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
 
@@ -20,6 +20,8 @@ class GraphDetectionCandidate:
     bbox_xyxy: tuple[int, int, int, int] | None = None
     bounds_3d: dict[str, list[float]] | None = None
     embedding: np.ndarray | None = None
+    identity_key: str | None = None
+    countable_instance: bool = False
 
 
 def bounds_3d_from_points(points: np.ndarray) -> dict[str, list[float]]:
@@ -69,6 +71,14 @@ class GraphObjectFusion:
     def __init__(self, config: GraphObjectFusionConfig | None = None):
         self.config = config or GraphObjectFusionConfig()
 
+    @staticmethod
+    def _identity_compatible(node: GraphNode, candidate: GraphDetectionCandidate) -> bool:
+        candidate_key = str(candidate.identity_key).strip() if candidate.identity_key else None
+        node_key = str(node.identity_key).strip() if node.identity_key else None
+        if candidate_key is None or not node.countable_instance or node_key is None:
+            return True
+        return candidate_key == node_key
+
     def _label_match(self, node: GraphNode, label: str) -> bool:
         if not self.config.require_label_match:
             return True
@@ -111,8 +121,21 @@ class GraphObjectFusion:
         best_score = -1.0
         cfg = self.config
 
+        if candidate.identity_key:
+            identity_key = str(candidate.identity_key).strip()
+            for node in graph_memory.get_nodes():
+                if (
+                    not node.is_viewpoint
+                    and not node.is_frontier
+                    and node.countable_instance
+                    and str(node.identity_key or "").strip() == identity_key
+                ):
+                    return node
+
         for node in graph_memory.get_nodes():
             if node.is_viewpoint:
+                continue
+            if not self._identity_compatible(node, candidate):
                 continue
             if not self._label_match(node, candidate.label):
                 continue
@@ -144,6 +167,8 @@ class GraphObjectFusion:
         for node in graph_memory.get_nodes():
             if node.is_viewpoint or node.bounds_3d is None:
                 continue
+            if not self._identity_compatible(node, candidate):
+                continue
             if not self._label_match(node, candidate.label):
                 continue
             iou = bounds_3d_iou(candidate.bounds_3d, node.bounds_3d)
@@ -166,6 +191,8 @@ class GraphObjectFusion:
         best_dxy = float("inf")
         for node in graph_memory.get_nodes():
             if node.is_viewpoint:
+                continue
+            if not self._identity_compatible(node, candidate):
                 continue
             if not self._label_match(node, candidate.label):
                 continue
@@ -217,6 +244,14 @@ class GraphObjectFusion:
                 continue
             for b in objs[i + 1 :]:
                 if int(b.node_id) in drop:
+                    continue
+                if (
+                    a.countable_instance
+                    and b.countable_instance
+                    and a.identity_key
+                    and b.identity_key
+                    and str(a.identity_key) != str(b.identity_key)
+                ):
                     continue
                 if bounds_3d_iou(a.bounds_3d, b.bounds_3d) < thr:
                     continue

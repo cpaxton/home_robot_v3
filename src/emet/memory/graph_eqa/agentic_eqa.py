@@ -1460,23 +1460,46 @@ class AgenticEQAExecutor:
         # Cross-view strip only when ABSENT is corroborated at 2+ distinct views
         # (one weak glance shouldn't delete a node seen elsewhere — that regressed
         # existence/state in the graph-tuning experiment). Strip at THIS obs always.
-        n_prior = 0
-        retracted = getattr(gm, "_retracted_nav_claims", None) or set()
-        key = phrase.strip().lower()
-        for (rid, rphrase) in list(retracted):
-            if int(rid) != int(obs_id) and str(rphrase or "").strip().lower() == key:
-                n_prior += 1
-        out = gm.retract_phrase_claim_at_obs(
-            int(obs_id),
-            phrase,
-            strip_across_obs=n_prior >= 1,
-        )
+        try:
+            evidence_obs_id = int(verify_out.get("obs_id"))
+        except (TypeError, ValueError):
+            evidence_obs_id = int(obs_id)
+        corroboration_fn = getattr(gm, "has_absent_retraction_at_other_view", None)
+        if callable(corroboration_fn):
+            corroborated = corroboration_fn(phrase, evidence_obs_id)
+            cross_view = corroborated if isinstance(corroborated, bool) else False
+        else:
+            # Compatibility for older graph-memory implementations.
+            retracted = getattr(gm, "_retracted_nav_claims", None) or set()
+            key = phrase.strip().lower()
+            cross_view = any(
+                int(rid) != int(evidence_obs_id)
+                and str(rphrase or "").strip().lower() == key
+                for rid, rphrase in list(retracted)
+            )
+        try:
+            out = gm.retract_phrase_claim_at_obs(
+                int(obs_id),
+                phrase,
+                strip_across_obs=cross_view,
+                evidence_obs_id=evidence_obs_id,
+            )
+        except TypeError:
+            # Older graph-memory implementations do not expose the evidence-view
+            # keyword, but still support the original obs-local/cross-view flag.
+            out = gm.retract_phrase_claim_at_obs(
+                int(obs_id),
+                phrase,
+                strip_across_obs=cross_view,
+            )
         self._append_trace(
             {
                 "event": "retract_claim",
                 "obs_id": int(obs_id),
+                "evidence_obs_id": evidence_obs_id,
                 "phrase": str(out.get("phrase") or phrase),
                 "closest_m": float(closest_m),
+                "strip_across_obs": cross_view,
                 **{k: out.get(k) for k in ("stripped_obs", "stripped_nodes", "ok")},
             }
         )
