@@ -190,6 +190,12 @@ def _attempt_bits(graph_memory: Any, obs_id: int) -> tuple[tuple[str, ...], floa
     return bits, risk
 
 
+def _is_attempt_event(event: Any) -> bool:
+    """Return whether a world-evidence event mirrors an action-attempt row."""
+    payload = dict(getattr(event, "payload", None) or {})
+    return "outcome" in payload and "status_code" in payload
+
+
 def _approach_bearings(record: Any, anchor_xyz: Any) -> tuple[float, ...]:
     anchor = np.asarray(anchor_xyz, dtype=float).reshape(-1)[:2]
     out: list[float] = []
@@ -535,7 +541,8 @@ def compile_agent_state(
         candidates = [
             event
             for event in world.events
-            if not evidence_question_id or event.question_id in {None, evidence_question_id}
+            if (not evidence_question_id or event.question_id in {None, evidence_question_id})
+            and (agent_attempts or not _is_attempt_event(event))
         ]
         for event in candidates[-int(max_events) :]:
             payload = dict(event.payload or {})
@@ -583,9 +590,13 @@ def compile_agent_state(
         except ImportError:
             target_rooms = ()
 
-    loop_flags = tuple(
-        f"obs={item.get('obs_id')} visits={item.get('visits')} status={item.get('status')}"
-        for item in list(getattr(executor, "_nav_loop_flags", None) or ())[-4:]
+    loop_flags = (
+        tuple(
+            f"obs={item.get('obs_id')} visits={item.get('visits')} status={item.get('status')}"
+            for item in list(getattr(executor, "_nav_loop_flags", None) or ())[-4:]
+        )
+        if agent_attempts
+        else ()
     )
     pending = dict(getattr(executor, "_pending_answerable", None) or {})
     pending_answer = str(pending.get("answer_text") or "").strip()
@@ -638,7 +649,11 @@ def compile_agent_state(
         room_events=tuple(room_events),
         attempts=tuple(attempts),
         evidence=tuple(evidence),
-        recent_actions=tuple(str(x) for x in list(getattr(executor, "_recent_actions", None) or ())[-8:]),
+        recent_actions=(
+            tuple(str(x) for x in list(getattr(executor, "_recent_actions", None) or ())[-8:])
+            if agent_attempts
+            else ()
+        ),
         loop_flags=loop_flags,
         metadata={
             "decision_policy": str(getattr(executor, "decision_policy", "legacy")),

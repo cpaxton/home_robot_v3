@@ -24,11 +24,53 @@ from emet.eval.hmeqa_launch import (
     hmeqa_run_config_digest,
     hmeqa_run_config_from_env,
     load_hmeqa_run_manifest,
+    load_hmeqa_variant_config,
     normalize_hmeqa_vl_endpoint,
     prepare_hmeqa_run_manifest,
     prepare_hmeqa_run_manifest_from_env,
     validate_hmeqa_runtime_environment,
 )
+
+
+def test_load_hmeqa_variant_config_is_strict_and_digest_pinned(tmp_path):
+    config = tmp_path / "history.yaml"
+    config.write_text(
+        """
+schema: emet.hmeqa.variant
+schema_version: 1
+description: paired history treatment
+variant:
+  id: action-history-agent-v1
+  agentic_decision_policy: grounded_v2
+  graph_evidence_mode: agent
+  room_history_mode: agent
+  room_policy: canonical
+  room_target_hints: true
+  investigate_stamp: false
+  attempt_ledger_mode: agent
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    values, source = load_hmeqa_variant_config(config)
+    assert values == {
+        "decision_policy": "grounded_v2",
+        "graph_evidence_mode": "agent",
+        "room_history_mode": "agent",
+        "room_policy": "canonical",
+        "room_target_hints": True,
+        "investigate_stamp": False,
+        "attempt_ledger_mode": "agent",
+        "variant_id": "action-history-agent-v1",
+    }
+    assert source.startswith(f"variant_config:{config.resolve()}#sha256:")
+
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("  attempt_ledger_mode: agent\n", ""),
+        encoding="utf-8",
+    )
+    with pytest.raises(HmeqaRunManifestError, match="missing HM-EQA variant fields.*attempt_ledger_mode"):
+        load_hmeqa_variant_config(config)
 
 
 def test_normalize_hmeqa_vl_endpoint_variants():

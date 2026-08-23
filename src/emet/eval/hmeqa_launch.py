@@ -19,12 +19,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from emet.habitat.config import default_habitat_eqa_data_dir, default_hm3d_scene_dir
 from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, openai_base_for_host
 
 HMEQA_RUN_MANIFEST_SCHEMA = "emet.hmeqa.run_manifest"
 HMEQA_RUN_MANIFEST_VERSION = 3
 HMEQA_READABLE_RUN_MANIFEST_VERSIONS = frozenset({2, HMEQA_RUN_MANIFEST_VERSION})
+HMEQA_VARIANT_CONFIG_SCHEMA = "emet.hmeqa.variant"
+HMEQA_VARIANT_CONFIG_VERSION = 1
 
 DEFAULT_DECISION_POLICY = "legacy"
 DEFAULT_GRAPH_EVIDENCE_MODE = "off"
@@ -146,6 +150,18 @@ _ENV_SOURCE_PATHS = {
     **{env_name: (f"artifacts.{field}",) for env_name, field in _ARTIFACT_ENV_FIELDS.items()},
 }
 _HMEQA_RUNTIME_ONLY_ENV = frozenset({"EMET_EQA_TRACE"})
+_HMEQA_VARIANT_CONFIG_FIELDS = frozenset(
+    {
+        "id",
+        "agentic_decision_policy",
+        "graph_evidence_mode",
+        "room_history_mode",
+        "room_policy",
+        "room_target_hints",
+        "investigate_stamp",
+        "attempt_ledger_mode",
+    }
+)
 _HMEQA_NONCANONICAL_BEHAVIOR_ENV = frozenset(
     {
         "EMET_ATTEMPT_LEDGER_MAX",
@@ -193,6 +209,96 @@ def _bool(value: Any, *, name: str) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise HmeqaRunManifestError(f"{name} must be a boolean; got {value!r}")
+
+
+def load_hmeqa_variant_config(
+    path: str | os.PathLike[str],
+) -> tuple[dict[str, Any], str]:
+    """Load one strict, complete HMEQA variant and return CLI-shaped values."""
+    full_path = Path(path).expanduser().resolve()
+    try:
+        raw_bytes = full_path.read_bytes()
+        raw = yaml.safe_load(raw_bytes) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise HmeqaRunManifestError(f"cannot load HM-EQA variant config {full_path}: {exc}") from exc
+    if not isinstance(raw, Mapping):
+        raise HmeqaRunManifestError(f"HM-EQA variant config {full_path} must contain a mapping")
+
+    allowed_root = {"schema", "schema_version", "description", "variant"}
+    unknown_root = sorted(set(raw) - allowed_root)
+    if unknown_root:
+        raise HmeqaRunManifestError(
+            f"unknown HM-EQA variant config fields in {full_path}: {', '.join(unknown_root)}"
+        )
+    if raw.get("schema") != HMEQA_VARIANT_CONFIG_SCHEMA:
+        raise HmeqaRunManifestError(
+            f"HM-EQA variant config schema must be {HMEQA_VARIANT_CONFIG_SCHEMA!r}"
+        )
+    version = _positive_int("schema_version", raw.get("schema_version"))
+    if version != HMEQA_VARIANT_CONFIG_VERSION:
+        raise HmeqaRunManifestError(
+            f"unsupported HM-EQA variant config version {version}; "
+            f"expected {HMEQA_VARIANT_CONFIG_VERSION}"
+        )
+
+    variant_raw = raw.get("variant")
+    if not isinstance(variant_raw, Mapping):
+        raise HmeqaRunManifestError("HM-EQA variant config must contain a variant mapping")
+    unknown_variant = sorted(set(variant_raw) - _HMEQA_VARIANT_CONFIG_FIELDS)
+    missing_variant = sorted(_HMEQA_VARIANT_CONFIG_FIELDS - set(variant_raw))
+    if unknown_variant:
+        raise HmeqaRunManifestError(
+            f"unknown HM-EQA variant fields in {full_path}: {', '.join(unknown_variant)}"
+        )
+    if missing_variant:
+        raise HmeqaRunManifestError(
+            f"missing HM-EQA variant fields in {full_path}: {', '.join(missing_variant)}"
+        )
+
+    variant_id = str(variant_raw["id"] or "").strip()
+    if not _VARIANT_ID_RE.fullmatch(variant_id):
+        raise HmeqaRunManifestError(
+            "variant.id must be 1-128 characters using letters, digits, '.', '_' or '-'"
+        )
+    values = {
+        "decision_policy": _choice(
+            "variant.agentic_decision_policy",
+            variant_raw["agentic_decision_policy"],
+            _DECISION_POLICIES,
+        ),
+        "graph_evidence_mode": _choice(
+            "variant.graph_evidence_mode",
+            variant_raw["graph_evidence_mode"],
+            _VISIBILITY_MODES,
+        ),
+        "room_history_mode": _choice(
+            "variant.room_history_mode",
+            variant_raw["room_history_mode"],
+            _VISIBILITY_MODES,
+        ),
+        "room_policy": _choice(
+            "variant.room_policy",
+            variant_raw["room_policy"],
+            _ROOM_POLICIES,
+        ),
+        "room_target_hints": _bool(
+            variant_raw["room_target_hints"],
+            name="variant.room_target_hints",
+        ),
+        "investigate_stamp": _bool(
+            variant_raw["investigate_stamp"],
+            name="variant.investigate_stamp",
+        ),
+        "attempt_ledger_mode": _choice(
+            "variant.attempt_ledger_mode",
+            variant_raw["attempt_ledger_mode"],
+            _VISIBILITY_MODES,
+        ),
+        "variant_id": variant_id,
+    }
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    source = f"variant_config:{full_path}#sha256:{digest}"
+    return values, source
 
 
 def _positive_int(name: str, value: Any, *, allow_zero: bool = False) -> int:

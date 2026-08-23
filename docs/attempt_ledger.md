@@ -1,8 +1,9 @@
 # Action-outcome ledger (agent world model)
 
-**Branch:** `feature/agent-world-model`
+**Branch:** `feature/graph-room-evidence`
 **Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)
-**Status:** Phases 1–3 landed (default **off**); Phase 4 metric helpers landed; GPU deltas vs pinned baselines still open.
+**Status:** Phases 1–4 landed (default **off**); a manifest-locked action-history
+visibility A/B is available for HM-EQA.
 
 The scene graph already answers “what is where?”. The **attempt ledger** adds “what did we try, and how did it go?” so CHAT tools, agentic EQA, and OVMM manip paths can avoid repeating failed nav / verify / pick / place / closer-look actions.
 
@@ -14,7 +15,7 @@ This page is the **operator and developer reference**. The plan doc is the desig
 
 | Invariant | Detail |
 |-----------|--------|
-| **Default off** | No ledger rows unless `eqa.attempt_ledger` / `EMET_EQA_ATTEMPT_LEDGER` is enabled. |
+| **Default off** | No durable `AttemptRecord` rows or dedicated action-history section unless the ledger is enabled. World-evidence provenance may still mirror tool outcomes, but grounded state filters those events unless mode is `agent`. |
 | **Pinned configs unchanged** | [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) does not enable the ledger. |
 | **EQA tool names frozen** | `investigate`, `explore_frontier`, `verify_siglip`, `submit_answer`, … stay stable for traces. |
 | **`eqa.agentic_verify` default** | Still **false**; ledger does not turn on the agentic loop. |
@@ -24,14 +25,33 @@ This page is the **operator and developer reference**. The plan doc is the desig
 
 ## Enable
 
+### Grounded Graph Agent visibility modes
+
+`eqa.attempt_ledger_mode` is the paper-facing switch:
+
+| Mode | Collect durable rows | Expose dedicated action history to `grounded_v2` |
+|------|----------------------|--------------------------------------------------|
+| `off` (default) | no | no |
+| `shadow` | yes | no |
+| `agent` | yes | yes |
+
+`agent` exposes recent action outcomes, navigation-loop flags, per-place attempt
+summaries/failure risk, global attempt rows, and their mirrored provenance events.
+`shadow` writes the same ledger and bundle artifact but leaves those channels out
+of the router state. Room timeline and live approach-affordance fields remain
+controlled by their own axes; this switch does not erase internal safety state.
+
 ### Env
 
 ```bash
-export EMET_EQA_ATTEMPT_LEDGER=1
+export EMET_EQA_ATTEMPT_LEDGER_MODE=agent  # off | shadow | agent
 # optional:
 export EMET_ATTEMPT_LEDGER_MAX=512
 export EMET_ATTEMPT_LEDGER_PERSIST_ABSENT=0   # keep ABSENT claim blacklist across questions
 ```
+
+`EMET_EQA_ATTEMPT_LEDGER=1` remains the legacy boolean write gate. HM-EQA
+derives it from the selected mode (`shadow` and `agent` both write).
 
 ### YAML
 
@@ -39,20 +59,40 @@ Under `eqa:` (mapping / dynav config) or unified `mapping.eqa` / top-level `eqa:
 
 ```yaml
 eqa:
-  attempt_ledger: true
-  # or:
-  # attempt_ledger:
-  #   enabled: true
-  #   max_records: 512
-  #   persist_absent_claims: false
+  attempt_ledger_mode: agent  # off | shadow | agent
+```
+
+The lower-level boolean/mapping form remains available for non-HM-EQA writers:
+
+```yaml
+eqa:
+  attempt_ledger:
+    enabled: true
+    max_records: 512
+    persist_absent_claims: false
 ```
 
 CLI override example:
 
 ```bash
 uv run emet run agent --set eqa.attempt_ledger=true
-# Habitat / dynagraph: same --set / EMET_* env as other EQA knobs
 ```
+
+For a frozen HM-EQA comparison, use the checked-in complete variant files:
+
+```bash
+uv run emet hmeqa h2h OUT_SHADOW \
+  --variant-config configs/benchmarks/hmeqa_action_history_shadow.yaml \
+  --preset paper-router --arms agentic --ids 6,11,12,47
+uv run emet hmeqa h2h OUT_AGENT \
+  --variant-config configs/benchmarks/hmeqa_action_history_agent.yaml \
+  --preset paper-router --arms agentic --ids 6,11,12,47
+```
+
+The loader rejects missing or unknown variant axes. Explicit CLI variant flags
+win over the file; the effective values plus the variant file path and SHA-256
+source label are frozen in `run_manifest.json`. Resume reuses that manifest
+rather than re-reading a mutable config.
 
 See [emet_config.md](emet_config.md) and [environment_variables.md](environment_variables.md).
 

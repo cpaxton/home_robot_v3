@@ -3,7 +3,7 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-## Grounded graph room-evidence A/B — diagnostics complete; no-go for scale (2026-08-22)
+## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
 Canonical record:
 [docs/experiments/graph_room_evidence.md](docs/experiments/graph_room_evidence.md).
@@ -106,10 +106,18 @@ Canonical record:
       are best-effort when an episode has no usable instance crops, so absence
       is valid while any diagnostics-declared mosaic remains strictly checked.
       The focused completion suite passes 12/12.
-- [ ] Keep A0→A1→A2 on `6,11,12,47` blocked. Only after a future clean q11
-      canary passes may it proceed, followed by an A1/A2 hard-room pair on
-      `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked until both process
-      and letter gates pass.
+- [x] Add a strict config-file choice for dedicated grounded action history.
+      `configs/benchmarks/hmeqa_action_history_{shadow,agent}.yaml` hold
+      decision/graph/room/oracle axes fixed; only ledger visibility and variant
+      ID differ. Shadow now filters recent outcomes, loop flags, global/place
+      attempts, and mirrored attempt events from policy state while retaining
+      auditable rows. Focused tests and the paper/docs protocol pass.
+- [ ] Run the user-authorized, history-only pair on `6,11,12,47`: shadow first,
+      then agent-visible, one managed job at a time after a detached safe-start.
+      This eight-episode diagnostic is an explicit exception to the failed q11
+      capability ladder; it is not A0/A1/A2 promotion or scale evidence.
+- [ ] Keep the bundled A0→A1→A2 ladder, `2,76`, A3, rooms-11, holdout, and
+      bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)

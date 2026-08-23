@@ -2788,6 +2788,31 @@ def _hmeqa_config_sources(ctx: click.Context, *, preset: str | None) -> dict[str
     return result
 
 
+def _hmeqa_apply_variant_config(
+    ctx: click.Context,
+    *,
+    path: Path | None,
+    values: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Apply a strict variant file beneath explicit CLI flags."""
+    if path is None:
+        return dict(values), {}
+    from emet.eval.hmeqa_launch import HmeqaRunManifestError, load_hmeqa_variant_config
+
+    try:
+        configured, source = load_hmeqa_variant_config(path)
+    except HmeqaRunManifestError as exc:
+        raise click.ClickException(str(exc)) from exc
+    result = dict(values)
+    source_overrides: dict[str, str] = {}
+    for parameter, value in configured.items():
+        if ctx.get_parameter_source(parameter) is not ParameterSource.DEFAULT:
+            continue
+        result[parameter] = value
+        source_overrides[_HMEQA_FROZEN_PARAMETER_PATHS[parameter]] = source
+    return result, source_overrides
+
+
 def _hmeqa_frozen_values(local_values: dict[str, Any]) -> dict[str, Any]:
     """Select only manifest-frozen callback values from ``locals()``."""
     return {name: local_values[name] for name in _HMEQA_FROZEN_PARAMETER_PATHS}
@@ -2946,6 +2971,15 @@ def _hmeqa_launch(
     help="Under skip: abort after N consecutive native crashes (0=never).",
 )
 @_hmeqa_frozen_options
+@click.option(
+    "--variant-config",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Strict YAML file for the complete variant axes. Explicit variant flags override "
+        "the file; effective values and the file digest are frozen in run_manifest.json."
+    ),
+)
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option(
     "--description",
@@ -2990,6 +3024,7 @@ def hmeqa_h2h(
     host: str | None,
     vl_endpoint: str | None,
     vl_port: int | None,
+    variant_config: Path | None,
     job_name: str,
     description: str | None,
     need_mib: int,
@@ -2997,6 +3032,10 @@ def hmeqa_h2h(
 ) -> None:
     from emet.eval.harness import DEFAULT_BAL32_IDS
 
+    if resume and variant_config is not None:
+        raise click.ClickException(
+            "--variant-config is first-launch only; resume reuses the frozen run manifest"
+        )
     if out_dir:
         out = Path(out_dir).expanduser().resolve()
     else:
@@ -3004,7 +3043,11 @@ def hmeqa_h2h(
         out = Path.home() / "runs" / "emet" / f"hmeqa_agentic_h2h_{stamp}"
     out.mkdir(parents=True, exist_ok=True)
 
-    frozen = _hmeqa_frozen_values(locals())
+    frozen, variant_sources = _hmeqa_apply_variant_config(
+        ctx,
+        path=variant_config,
+        values=_hmeqa_frozen_values(locals()),
+    )
     if resume:
         frozen = _hmeqa_reuse_frozen_defaults(ctx, out=out, values=frozen)
     (
@@ -3019,6 +3062,8 @@ def hmeqa_h2h(
         agentic_router=frozen["agentic_router"],
     )
     frozen["holdout_ids"] = frozen["holdout_ids"] or DEFAULT_BAL32_IDS
+    config_sources = _hmeqa_config_sources(ctx, preset=preset)
+    config_sources.update(variant_sources)
     _hmeqa_launch(
         out=out,
         resume=resume,
@@ -3031,7 +3076,7 @@ def hmeqa_h2h(
         need_mib=need_mib,
         foreground=foreground,
         description=description,
-        config_sources=_hmeqa_config_sources(ctx, preset=preset),
+        config_sources=config_sources,
     )
 
 

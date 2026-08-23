@@ -552,6 +552,54 @@ def test_typed_snapshot_has_conflicts_clocks_ids_and_referential_history():
     assert snapshot.attempts[0].view_id in memory.world_evidence.views
 
 
+def test_attempt_mode_cleanly_gates_grounded_action_history():
+    memory = _agent_memory()
+    memory.bind_episode_context(question_id=11, session_id="history-ablation")
+    memory.record_attempt(
+        action_kind="navigate",
+        outcome="failed",
+        status_code="no_path",
+        note="blocked route",
+        step=3,
+        source="eqa",
+    )
+    common = {
+        "graph_memory": memory,
+        "graph_evidence_mode": "agent",
+        "room_history_mode": "agent",
+        "question": "What is beside the table?",
+        "_question_id": "11",
+        "_session_id": "history-ablation",
+        "_round": 2,
+        "_hypotheses": (),
+        "_recent_actions": ("navigate obs=7 -> failed:no_path",),
+        "_nav_loop_flags": ({"obs_id": 7, "visits": 2, "status": "no_path"},),
+        "room_target_hints": False,
+    }
+
+    shadow = compile_agent_state(
+        SimpleNamespace(**common, attempt_ledger_mode="shadow"),
+    )
+    shadow_text = render_agent_state(shadow, max_chars=6000)
+    assert shadow.attempts == ()
+    assert shadow.recent_actions == ()
+    assert shadow.loop_flags == ()
+    assert all(event.predicate != "navigate" for event in shadow.evidence)
+    assert "failed:no_path" not in shadow_text
+    assert "blocked route" not in shadow_text
+
+    agent = compile_agent_state(
+        SimpleNamespace(**common, attempt_ledger_mode="agent"),
+    )
+    agent_text = render_agent_state(agent, max_chars=6000)
+    assert agent.attempts[0].status_code == "no_path"
+    assert agent.recent_actions == ("navigate obs=7 -> failed:no_path",)
+    assert agent.loop_flags == ("obs=7 visits=2 status=no_path",)
+    assert any(event.predicate == "navigate" for event in agent.evidence)
+    assert "failed:no_path" in agent_text
+    assert "blocked route" in agent_text
+
+
 def test_replay_fused_confirmation_survives_raw_absent_and_invalidates_on_revision():
     replay = _replay()
     dirty = replay["cases"]["dirty_obs76"]

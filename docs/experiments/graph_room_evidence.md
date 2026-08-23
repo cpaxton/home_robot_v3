@@ -110,6 +110,53 @@ There is no clean same-commit A0/A1/A2 triplet. The principal A1/A2 manifests
 also predate explicit freezing of HM3D semantics and per-question enrich labels,
 so they do not establish a GT-free perception result.
 
+### Focused action-history isolation (2026-08-23)
+
+The A1/A2 comparison above changed the decision implementation, graph evidence,
+room history, and action history together. Based on review feedback, we are
+running one narrower diagnostic pair with `grounded_v2`, graph evidence
+`agent`, and room history `agent` held fixed. Only
+`attempt_ledger_mode=shadow|agent` changes:
+
+| Variant config | Dedicated action-history visibility | IDs |
+|----------------|-------------------------------------|-----|
+| `configs/benchmarks/hmeqa_action_history_shadow.yaml` | hidden; ledger still collected | `6,11,12,47` |
+| `configs/benchmarks/hmeqa_action_history_agent.yaml` | recent outcomes, loop flags, place/global attempts visible | `6,11,12,47` |
+
+This is eight total episodes, slightly larger than the q11 canary but still an
+exploratory process test—not a paper accuracy estimate and not authorization
+for holdout/balanced-32 scale. The strict variant loader requires all eight axes;
+the manifest records effective values plus the config path and SHA-256 source.
+The two checked-in files differ only in variant ID, ledger mode, and description.
+
+```bash
+IDS=6,11,12,47
+uv run emet hmeqa h2h "$OUT_SHADOW" \
+  --variant-config configs/benchmarks/hmeqa_action_history_shadow.yaml \
+  --preset paper-router --arms agentic --ids "$IDS" \
+  --no-hm3d-semantics --no-enrich-labels \
+  --eqa-hf-model-id Qwen/Qwen3-VL-8B-Instruct \
+  --eqa-vl-family qwen3_vl --eqa-vl-quantization int4 \
+  --eqa-answer-max-new-tokens 384 --episode-timeout 7200 \
+  --max-planning-steps 20 --max-movement-step 10 \
+  --job-name hmeqa-history-shadow
+uv run emet hmeqa h2h "$OUT_AGENT" \
+  --variant-config configs/benchmarks/hmeqa_action_history_agent.yaml \
+  --preset paper-router --arms agentic --ids "$IDS" \
+  --no-hm3d-semantics --no-enrich-labels \
+  --eqa-hf-model-id Qwen/Qwen3-VL-8B-Instruct \
+  --eqa-vl-family qwen3_vl --eqa-vl-quantization int4 \
+  --eqa-answer-max-new-tokens 384 --episode-timeout 7200 \
+  --max-planning-steps 20 --max-movement-step 10 \
+  --job-name hmeqa-history-agent
+```
+
+Before comparing outcomes, require native-clean jobs, complete markers, matching
+git/input/model/budget/oracle fields, a policy-clean shadow trace, and a manifest
+diff limited to the declared variant fields. Report paired letter, planning-step,
+budget-hit, repeated-action, and per-ID trace deltas. Results are added here and
+in the paper's Agentic EQA tools appendix only after both jobs finish.
+
 Per-question findings:
 
 - **q2:** target parsing admitted bathroom and bedroom, suppressing mismatch

@@ -174,6 +174,7 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "--investigate-stamp" in result.stdout
     assert "--attempt-ledger-mode" in result.stdout
     assert "--variant-id" in result.stdout
+    assert "--variant-config" in result.stdout
     assert "--episode-timeout" in result.stdout
     assert "--max-planning-steps" in result.stdout
     assert "--max-movement-step" in result.stdout
@@ -241,6 +242,71 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     assert frozen["variant_id"] == "legacy"
     assert frozen["use_hm3d_semantics"] is False
     assert frozen["use_enrich_labels"] is False
+
+
+def test_hmeqa_h2h_loads_variant_config_beneath_explicit_flags(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    config = tmp_path / "variant.yaml"
+    config.write_text(
+        """
+schema: emet.hmeqa.variant
+schema_version: 1
+variant:
+  id: action-history-shadow-v1
+  agentic_decision_policy: grounded_v2
+  graph_evidence_mode: agent
+  room_history_mode: agent
+  room_policy: canonical
+  room_target_hints: true
+  investigate_stamp: false
+  attempt_ledger_mode: shadow
+""".lstrip(),
+        encoding="utf-8",
+    )
+    captured = {}
+    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--ids",
+            "6,11",
+            "--variant-config",
+            str(config),
+            "--attempt-ledger-mode",
+            "agent",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    frozen = captured["frozen_values"]
+    assert frozen["decision_policy"] == "grounded_v2"
+    assert frozen["graph_evidence_mode"] == "agent"
+    assert frozen["room_history_mode"] == "agent"
+    assert frozen["attempt_ledger_mode"] == "agent"
+    assert frozen["variant_id"] == "action-history-shadow-v1"
+    sources = captured["config_sources"]
+    assert sources["variant.agentic_decision_policy"].startswith("variant_config:")
+    assert sources["variant.attempt_ledger_mode"] == "command_line"
+
+    resume_result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--resume",
+            "--variant-config",
+            str(config),
+        ],
+    )
+    assert resume_result.exit_code == 1
+    assert "--variant-config is first-launch only" in resume_result.output
 
 
 def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
