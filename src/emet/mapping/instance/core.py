@@ -15,7 +15,6 @@
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Union
 
 import cv2
 import numpy as np
@@ -43,23 +42,23 @@ class InstanceView:
     text_description: str = None
     """text description about the instance"""
     # View info
-    cropped_image: Optional[Tensor] = None
+    cropped_image: Tensor | None = None
     """ cropped_image: cropped image of instance in the current image"""
-    embedding: Optional[Tensor] = None
+    embedding: Tensor | None = None
     """ embedding: embedding of instance in the current image """
     mask: Tensor = None
     """ mask: mask of instance in the current (uncropped) image """
-    image_instance_id: Optional[int] = None
+    image_instance_id: int | None = None
     """ID of this instance in the image"""
-    visual_feat: Optional[Tensor] = None
+    visual_feat: Tensor | None = None
     """ visual_feat: features of instance capturing visual information only (e.g., dinov2) """
 
     # Detection info
-    global_instance_id: Optional[int] = None
+    global_instance_id: int | None = None
     """ID of this instance in the scene (across views)"""
-    category_id: Optional[int] = None
+    category_id: int | None = None
     """category_id: category id of instance in the current image"""
-    score: Optional[float] = None
+    score: float | None = None
     """score: confidence of the detection (used for NMS)"""
 
     # 3D info (rename point_cloud to points_3d?)
@@ -88,7 +87,7 @@ class InstanceView:
         assert backend in ["folder"], backend
         self._show_folder(self, **backend_kwargs)
 
-    def _show_folder(self, folder_path: Union[Path, str]):
+    def _show_folder(self, folder_path: Path | str):
         import os
 
         import cv2
@@ -134,7 +133,7 @@ class Instance:
     """point_cloud_features: aggregated point cloud features for the instance """
     bounds: Tensor = None
     """ 3 x 2 mins and maxes """
-    instance_views: List[InstanceView] = field(default_factory=list)
+    instance_views: list[InstanceView] = field(default_factory=list)
     """List of all instance views"""
     score: float = None
     """Confidence score of bbox detection"""
@@ -153,9 +152,7 @@ class Instance:
             return None
         return int(self.category_id)
 
-    def get_image_embedding(
-        self, aggregation_method="max", normalize: bool = True, use_visual_feat: bool = False
-    ):
+    def get_image_embedding(self, aggregation_method="max", normalize: bool = True, use_visual_feat: bool = False):
         """Get the combined image embedding across all views"""
         if use_visual_feat:
             view_embeddings = [view.visual_feat for view in self.instance_views]
@@ -172,9 +169,7 @@ class Instance:
         elif aggregation_method == "mean":
             emb = view_embeddings.mean(dim=0)
         else:
-            raise RuntimeError(
-                f"Unsupported aggregation method {aggregation_method}. Options: max, mean."
-            )
+            raise RuntimeError(f"Unsupported aggregation method {aggregation_method}. Options: max, mean.")
         if normalize:
             emb = emb / emb.norm(dim=-1, keepdim=True)
 
@@ -239,7 +234,7 @@ class Instance:
         idx = dists.argmin()
         return self.point_cloud[idx]
 
-    def show_best_view(self, metric: str = "area", title: Optional[str] = None) -> None:
+    def show_best_view(self, metric: str = "area", title: str | None = None) -> None:
         """Show the best view of the instance"""
         best_view = self.get_best_view(metric=metric)
         image = best_view.get_image()
@@ -285,9 +280,7 @@ class Instance:
                     len(self.instance_views) + 1
                 )
             else:
-                raise NotImplementedError(
-                    f'Unknown score_aggregation_method "{self.score_aggregation_method}"'
-                )
+                raise NotImplementedError(f'Unknown score_aggregation_method "{self.score_aggregation_method}"')
 
             # add instance view to global instance
             # do this last because we use the current length for computing average score above
@@ -319,14 +312,14 @@ class Instance:
         features = [self.point_cloud_rgb] if self.point_cloud_rgb is not None else None
         ptc = Pointclouds(points=[self.point_cloud], features=features)
 
-        _default_plot_args = dict(
-            xaxis={"backgroundcolor": "rgb(230, 200, 200)"},
-            yaxis={"backgroundcolor": "rgb(200, 230, 200)"},
-            zaxis={"backgroundcolor": "rgb(200, 200, 230)"},
-            axis_args=AxisArgs(showgrid=True),
-            pointcloud_marker_size=3,
-            pointcloud_max_points=200_000,
-        )
+        _default_plot_args = {
+            "xaxis": {"backgroundcolor": "rgb(230, 200, 200)"},
+            "yaxis": {"backgroundcolor": "rgb(200, 230, 200)"},
+            "zaxis": {"backgroundcolor": "rgb(200, 200, 230)"},
+            "axis_args": AxisArgs(showgrid=True),
+            "pointcloud_marker_size": 3,
+            "pointcloud_max_points": 200_000,
+        }
         fig = plot_scene_with_bboxes(
             plots={
                 f"Name {self.name}: (category: {self.category_id}) -- {len(self.instance_views)} views": {
@@ -363,17 +356,10 @@ class Instance:
                 ax = axarr
             cropped_image_np = torch.from_numpy(view.cropped_image.detach().cpu().numpy())
             mask_np = torch.from_numpy(view.mask.detach().cpu().numpy())
-            if (
-                mask_np.shape[0] != cropped_image_np.shape[0]
-                or mask_np.shape[1] != cropped_image_np.shape[1]
-            ):
-                mask_np = mask_np[
-                    view.bbox[0, 0] : view.bbox[1, 0], view.bbox[0, 1] : view.bbox[1, 1]
-                ]
-            display_im = cropped_image_np * mask_out_opacity + (1 - mask_out_opacity) * (
-                cropped_image_np * (mask_np)
-            )
-            ax.imshow((display_im))
+            if mask_np.shape[0] != cropped_image_np.shape[0] or mask_np.shape[1] != cropped_image_np.shape[1]:
+                mask_np = mask_np[view.bbox[0, 0] : view.bbox[1, 0], view.bbox[0, 1] : view.bbox[1, 1]]
+            display_im = cropped_image_np * mask_out_opacity + (1 - mask_out_opacity) * (cropped_image_np * (mask_np))
+            ax.imshow(display_im)
             ax.set_title(f"View {i}")
 
         # Remove any empty subplots

@@ -12,38 +12,38 @@ mkdir -p "$OUT"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
 preflight() {
-  NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
+    NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
 }
 
 run_explore() {
-  local episode="$1" backend="$2" k="$3" mapping="$4" tag="$5"
-  preflight
-  log "START $tag"
-  local args=(
-    --phase explore
-    --episode-id "$episode"
-    --backend "$backend"
-    --mapping-mode "$mapping"
-    --output-dir "$OUT/phase1"
-  )
-  if [[ "$mapping" == "explore" ]]; then
-    args+=(--explore-max-iters "$k")
-  fi
-  uv run python scripts/eval_dynamic_exploration.py "${args[@]}" \
-    2>&1 | tee -a "$OUT/phase1_${tag}.log"
-  log "DONE $tag"
+    local episode="$1" backend="$2" k="$3" mapping="$4" tag="$5"
+    preflight
+    log "START $tag"
+    local args=(
+        --phase explore
+        --episode-id "$episode"
+        --backend "$backend"
+        --mapping-mode "$mapping"
+        --output-dir "$OUT/phase1"
+    )
+    if [[ "$mapping" == "explore" ]]; then
+        args+=(--explore-max-iters "$k")
+    fi
+    uv run python scripts/eval_dynamic_exploration.py "${args[@]}" \
+        2>&1 | tee -a "$OUT/phase1_${tag}.log"
+    log "DONE $tag"
 }
 
 run_world_change() {
-  local backend="$1"
-  preflight
-  log "START world-change_$backend"
-  uv run python scripts/eval_dynamic_exploration.py \
-    --phase world-change --episode-id robocasa_seed0_world_change \
-    --backend "$backend" \
-    --output-dir "$OUT/phase2" \
-    2>&1 | tee -a "$OUT/phase2_${backend}.log"
-  log "DONE world-change_$backend"
+    local backend="$1"
+    preflight
+    log "START world-change_$backend"
+    uv run python scripts/eval_dynamic_exploration.py \
+        --phase world-change --episode-id robocasa_seed0_world_change \
+        --backend "$backend" \
+        --output-dir "$OUT/phase2" \
+        2>&1 | tee -a "$OUT/phase2_${backend}.log"
+    log "DONE world-change_$backend"
 }
 
 log "OUT=$OUT"

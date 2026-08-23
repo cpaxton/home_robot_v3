@@ -180,8 +180,8 @@ def suppress_hf_hub_http_logging() -> None:
 def configure_mapping_session_logging(*, verbose: bool = False) -> None:
     """Reduce DA3 / Hugging Face terminal noise during ``emet stream`` mapping loops.
 
-    Honors ``EMET_STREAM_VERBOSE=1`` and ``--verbose`` on ``emet stream``. DA3 uses
-  ``DA3_LOG_LEVEL`` (default INFO in upstream); we set WARN unless verbose.
+      Honors ``EMET_STREAM_VERBOSE=1`` and ``--verbose`` on ``emet stream``. DA3 uses
+    ``DA3_LOG_LEVEL`` (default INFO in upstream); we set WARN unless verbose.
     """
     if verbose or os.environ.get("EMET_STREAM_VERBOSE", "").strip().lower() in ("1", "true", "yes"):
         return

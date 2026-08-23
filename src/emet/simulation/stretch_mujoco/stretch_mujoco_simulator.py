@@ -585,9 +585,7 @@ class StretchMujocoSimulator:
         """
         with self._command_lock:
             command = self.data_proxies.get_command()
-            command.set_scene_joint(
-                CommandSetJoint(joint=str(joint), value=float(value), trigger=True, ok=False)
-            )
+            command.set_scene_joint(CommandSetJoint(joint=str(joint), value=float(value), trigger=True, ok=False))
             self.data_proxies.set_command(command)
         if not wait:
             return None

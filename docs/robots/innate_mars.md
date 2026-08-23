@@ -112,14 +112,14 @@ Use **`emet preview-cameras`** (see [CLI: preview-cameras](../cli.md#emet-previe
 
 Three separate ideas get mixed if we “just copy” TF into MJCF:
 
-1. **MuJoCo’s camera convention**  
+1. **MuJoCo’s camera convention**
    A MuJoCo ``<camera>`` always looks down its body **−Z**. ROS / REP-103 optical frames use **+Z** forward, **X** right, **Y** down. Every sim camera therefore needs a **fixed** rotation (quaternion in MJCF) that is *not* optional decoration—it is the bridge between optical conventions and MuJoCo.
 
-2. **What the URDF actually specifies**  
-   - **Head:** ``maurice.urdf`` gives (a) stereo mount origins on ``head`` and (b) per-eye **``fixed_*_camera_optical_frame``** joints with ``rpy="-1.5708 0 -1.5708"`` so **+Z** optical points along **+head X**. That is correct for ROS drivers, but the merged Emet table scene is laid out so that **useful sim gaze** is roughly **−world Y**. MJCF therefore applies an extra **yaw in the head frame** on the **optics** (and a matching **yaw** on the mount **xyz** so the lenses stay in plausible places and ``mj_ray`` clears ``head_geom``).  
+2. **What the URDF actually specifies**
+   - **Head:** ``maurice.urdf`` gives (a) stereo mount origins on ``head`` and (b) per-eye **``fixed_*_camera_optical_frame``** joints with ``rpy="-1.5708 0 -1.5708"`` so **+Z** optical points along **+head X**. That is correct for ROS drivers, but the merged Emet table scene is laid out so that **useful sim gaze** is roughly **−world Y**. MJCF therefore applies an extra **yaw in the head frame** on the **optics** (and a matching **yaw** on the mount **xyz** so the lenses stay in plausible places and ``mj_ray`` clears ``head_geom``).
    - **Wrist:** The URDF only has ``fixed_arm_camera_link`` with the same **``xyz``** and **pitch on Y** as in MJCF; there is **no** arm optical link. MJCF adds the **optical→MuJoCo** quaternion **in the pitched link frame** only—**not** the head stereo’s extra **``R_z``** table correction, because that correction is specific to how the head sits on ``base_link`` and how we want binocular rays in the room.
 
-3. **Sim-only tuning (wrist)**  
+3. **Sim-only tuning (wrist)**
    Near-geometry clipping and pixel **up** vs downstream expectations are **renderer** concerns. The **1 cm** offset and **180°** roll on ``camera_arm`` fix self-clipping / frustum scraping against wrist visuals and align the bitmap with **``flipud``** + intrinsics; they are **not** claims about hardware CAD.
 
 So: **link origins and arm pitch match the URDF**; **head stereo numbers are URDF geometry plus deliberate MJCF yaw for the merged scene**; **wrist camera is URDF kinematics plus standard optical mapping and small MJCF-only offsets**.

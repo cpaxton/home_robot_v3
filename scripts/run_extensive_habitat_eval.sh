@@ -24,25 +24,25 @@ BL_TAG="${BL_TAG:-postmerge_graph_eqa}"
 LOG="${LOG:-/tmp/postmerge_habitat_eval.log}"
 
 wait_for_gpu() {
-  local ok=0 free now deadline=$(( $(date +%s) + MAX_WAIT_MIN * 60 ))
-  while :; do
-    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
-    now=$(date +%H:%M:%S)
-    if [ "${free:-0}" -ge "$NEED_MIB" ]; then ok=$((ok+1)); else ok=0; fi
-    echo "[$now] free=${free}MiB need=${NEED_MIB} stable=${ok}/${STABLE}" | tee -a "$LOG"
-    [ "$ok" -ge "$STABLE" ] && return 0
-    [ "$(date +%s)" -ge "$deadline" ] && return 2
-    sleep "$INTERVAL"
-  done
+    local ok=0 free now deadline=$(( $(date +%s) + MAX_WAIT_MIN * 60 ))
+    while :; do
+        free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
+        now=$(date +%H:%M:%S)
+        if [ "${free:-0}" -ge "$NEED_MIB" ]; then ok=$((ok+1)); else ok=0; fi
+        echo "[$now] free=${free}MiB need=${NEED_MIB} stable=${ok}/${STABLE}" | tee -a "$LOG"
+        [ "$ok" -ge "$STABLE" ] && return 0
+        [ "$(date +%s)" -ge "$deadline" ] && return 2
+        sleep "$INTERVAL"
+    done
 }
 
 run_phase() {
-  local method="$1" tag="$2"
-  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
-  local n_target
-  n_target=$(awk -F, '{print NF}' <<<"$IDS")
-  count_done() {
-    uv run python - <<'PY' "$results" "$n_target"
+    local method="$1" tag="$2"
+    local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
+    local n_target
+    n_target=$(awk -F, '{print NF}' <<<"$IDS")
+    count_done() {
+        uv run python - <<'PY' "$results" "$n_target"
 import json, sys
 from pathlib import Path
 from emet.habitat.metrics import episode_run_completed
@@ -55,18 +55,18 @@ rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
 done = sum(1 for r in rows if episode_run_completed(r))
 print(done)
 PY
-  }
-  while [ "$(count_done)" -lt "$n_target" ]; do
-    if ! wait_for_gpu; then
-      echo "GPU wait timeout before $method phase" | tee -a "$LOG"
-      return 2
-    fi
-    echo "=== launching $method (tag=$tag) ===" | tee -a "$LOG"
-    TAG="$tag" IDS="$IDS" METHOD="$method" TIMEOUT="$TIMEOUT" \
-      ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$LOG" || true
-    sleep 5
-  done
-  echo "=== $method done: $results ===" | tee -a "$LOG"
+    }
+    while [ "$(count_done)" -lt "$n_target" ]; do
+        if ! wait_for_gpu; then
+            echo "GPU wait timeout before $method phase" | tee -a "$LOG"
+            return 2
+        fi
+        echo "=== launching $method (tag=$tag) ===" | tee -a "$LOG"
+        TAG="$tag" IDS="$IDS" METHOD="$method" TIMEOUT="$TIMEOUT" \
+            ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$LOG" || true
+        sleep 5
+    done
+    echo "=== $method done: $results ===" | tee -a "$LOG"
 }
 
 echo "############ EXTENSIVE EVAL START $(date -Is) ############" | tee "$LOG"

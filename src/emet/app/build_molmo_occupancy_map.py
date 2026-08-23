@@ -35,9 +35,7 @@ def run_build(
         raise FileNotFoundError(str(mjcf))
     out_dir = (output_dir or mjcf.parent).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    th = iTHORMap.from_mj_model_path(
-        str(mjcf), camera=None, agent_radius=float(agent_radius), px_per_m=int(px_per_m)
-    )
+    th = iTHORMap.from_mj_model_path(str(mjcf), camera=None, agent_radius=float(agent_radius), px_per_m=int(px_per_m))
     png = out_dir / "occupancy.png"
     th.save(str(png))
     meta = {

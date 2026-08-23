@@ -169,7 +169,7 @@ uv run emet jobs                 # list + progress/ETA columns
 uv run emet jobs status JOB_ID   # detail + derived ETA
 uv run emet jobs cancel JOB_ID   # pause/stop one managed job (then resume via overnight --base / hmeqa resume)
 
-# Launch (prefer over bare nohup):
+# Launch (prefer over bare nohup; GPU-like commands acquire the host-wide lock):
 uv run emet jobs run --name my-eval --need-mib 12000 -- ./scripts/…
 
 # Bash helpers still work (delegate to emet eval):
@@ -199,6 +199,12 @@ Do **not** re-run overnight with a **new** `--base` if you want to keep scored e
 `kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 
 Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segments:True` when scripts call `emet_export_pytorch_alloc`.
+
+`emet jobs run` defaults `--gpu-exclusive` on when `--need-mib` is supplied or the
+command/name looks like a GPU experiment, and holds the canonical
+`EMET_GPU_LOCK` (`~/runs/emet/gpu.lock`) until the command exits. This closes simultaneous managed
+launches across sibling checkouts; do not opt out with `--no-gpu-exclusive` for
+Habitat/VLM/MuJoCo work.
 
 **Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and deep eval on **separate nights** (see below).
 

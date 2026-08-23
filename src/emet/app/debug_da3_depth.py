@@ -88,9 +88,13 @@ def _depth_to_world_points(
     show_default=True,
     help="Hugging Face repo id. DA3-SMALL is faster for stereo; DA3METRIC-LARGE is heavier.",
 )
-@click.option("--process-res", default=378, type=int, show_default=True, help="Internal DA3 resolution (smaller = faster).")
+@click.option(
+    "--process-res", default=378, type=int, show_default=True, help="Internal DA3 resolution (smaller = faster)."
+)
 @click.option("--hz", default=5.0, type=float, show_default=True, help="Poll rate (frames per second cap).")
-@click.option("--stride", default=10, type=int, show_default=True, help="Point-cloud pixel stride (larger = fewer points).")
+@click.option(
+    "--stride", default=10, type=int, show_default=True, help="Point-cloud pixel stride (larger = fewer points)."
+)
 @click.option("--max-frames", default=0, type=int, help="Stop after N frames (0 = until Ctrl+C).")
 @click.option("--cpu-only", is_flag=True, help="Force DA3 on CPU.")
 @click.option(
@@ -201,8 +205,7 @@ def main(
         rr.serve(open_browser=not os.environ.get("RERUN_HEADLESS", "").strip())
         host = os.environ.get("RERUN_SERVE_HOST", "127.0.0.1")
         click.echo(
-            f"Rerun web: http://{host}:9090?url=ws://{host}:9877 "
-            "(set RERUN_HEADLESS=1 to skip opening a browser)"
+            f"Rerun web: http://{host}:9090?url=ws://{host}:9877 (set RERUN_HEADLESS=1 to skip opening a browser)"
         )
 
     est: DA3DepthEstimator | None = None
@@ -292,11 +295,15 @@ def main(
                 rr.log("da3/depth_colormap", rr.Image(dvis))
                 finite = depth[np.isfinite(depth) & (depth > 1e-6)]
                 stats = (
-                    float(np.min(finite)),
-                    float(np.max(finite)),
-                    float(np.mean(finite)),
-                    float(np.median(finite)),
-                ) if finite.size else (0.0, 0.0, 0.0, 0.0)
+                    (
+                        float(np.min(finite)),
+                        float(np.max(finite)),
+                        float(np.mean(finite)),
+                        float(np.median(finite)),
+                    )
+                    if finite.size
+                    else (0.0, 0.0, 0.0, 0.0)
+                )
                 click.echo(
                     f"frame {frame}: depth min/max/mean/median = {stats[0]:.3f} / {stats[1]:.3f} / "
                     f"{stats[2]:.3f} / {stats[3]:.3f} m | valid px {int(finite.size)}/{depth.size}"

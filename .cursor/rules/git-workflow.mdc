@@ -20,7 +20,7 @@ When the user wants latest `main` on their branch (e.g. “merge main”, “upd
 3. `git merge origin/main` (or rebase only if the user explicitly requests rebase).
 4. Resolve conflicts on the **feature branch**, commit, then push **only that branch**: `git push origin <feature-branch>`.
 
-**Wrong:** checkout `main`, merge feature into `main`, push `main`.  
+**Wrong:** checkout `main`, merge feature into `main`, push `main`.
 **Right:** checkout feature, merge `origin/main` into feature, push feature.
 
 ## Commits and pushes

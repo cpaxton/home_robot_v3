@@ -1,4 +1,4 @@
-# GT-semantics removal + full-113 re-analysis (2026-08-15)
+# GT-semantics removal + legacy-113 re-analysis (2026-08-22)
 
 Branch `fix/no-gt-semantics`. Goal: make HM-EQA reflect real-world perception —
 no ground-truth HM3D semantics — and re-read the full-113 numbers.
@@ -18,11 +18,12 @@ no ground-truth HM3D semantics — and re-read the full-113 numbers.
 ## Changes
 
 - **`scripts/run_hmeqa_paper113_h2h.sh`**: pass `--no-hm3d-semantics` so the semantic
-  sensor is off for all 113 scenes (consistent, no GT perception).
+  sensor is off for all 113 rows in the historical q0–112 slice (consistent, no GT
+  perception).
   `use_hm3d_semantics=False → _use_semantics=False → no Hm3dSemanticLabeler`.
-- **`packages/emet_habitat/emet_habitat/runner.py`**: gate `enrich_labels_for_question`
-  behind `use_hm3d_semantics` — GT object hints are only seeded when GT semantics are
-  requested (latent leak closed even if scene IDs ever align).
+- **`packages/emet_habitat/emet_habitat/runner.py`**: expose enrich labels as an
+  independent, default-off oracle axis. `--use-hm3d-semantics` does not enable
+  per-question hints; they require the separate `--enrich-labels` switch.
 
 ## Re-analysis (2026-08-14 fixed run, both override gates on)
 
@@ -41,9 +42,9 @@ static_graph with no GT information** — the honest Dynagraph-memory claim.
    `--no-hm3d-semantics` in the runner. The pooled number blended two perception
    stacks; stratification showed GT scenes score higher (both methods benefit).
 2. **GT enrich-label seeding (latent leak)** — bundled per-question object hints
-   seeded unconditionally at episode start. Currently inert (the bundled scene IDs
-   `0_00006-HkseAnWCgqk` do not overlap the paper-113 episode scenes
-   `0_00004-VqCaAuuoeWk`; overlap = 0/113), but gated now so it can never fire.
+   were seeded unconditionally at episode start. They are now independently
+   default-off and use the upstream semantic-filtered ordinal mapping only when
+   `--enrich-labels` is explicit.
 3. **Pooled memory delta (+1.8 pp) is masked by semantics unevenness** — the GT-free
    +3.9 pp is the defensible number; quote that, not the pooled delta, for the
    memory-vs-baseline claim.
@@ -56,7 +57,9 @@ GT-free subset (76) is our best estimate until that re-run.
 
 ## Prior art note
 
-The GraphEQA paper uses **full HM3D GT semantics** (→ Hydra 3DSGs). Removing them
-from our stack is *more* conservative than the prior art on the perception channel —
-we compare GT-free vs their GT-full. If we want a semantics-matched comparison we'd
-enable them for both (per the annotated-semantics slice, ~37 scenes).
+The GraphEQA HM-EQA implementation filters the 500-row CSV to semantic-annotated
+scenes and constructs Hydra 3DSGs; its bundled enrich sequence has **114** rows.
+The separate **113** count in the paper is the OpenEQA HM3D subset, not this HM-EQA
+selection. Removing GT semantics from our stack is more conservative on the
+perception channel. A semantics-matched comparison should use the validated
+114-row filtered mapping and explicit GT-on/off arms.

@@ -2,7 +2,6 @@
 # All rights reserved.
 
 import numpy as np
-
 from innate_mars_bridge.joint_layout import (
     INNATE_MARS_JOINT_NAMES,
     pack_innate_mars_joint_positions,

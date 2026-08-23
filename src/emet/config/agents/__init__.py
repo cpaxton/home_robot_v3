@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -25,8 +25,8 @@ AGENT_CONFIGS = {
 
 def load_agent_config(
     name: str = "default_scene_graph",
-    overrides: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Load an agent configuration by name or file path.
 
     Args:
@@ -51,7 +51,7 @@ def load_agent_config(
     return cfg
 
 
-def _apply_overrides(cfg: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     """Apply dotted-key overrides to a nested dict."""
     cfg = copy.deepcopy(cfg)
     for key, value in overrides.items():

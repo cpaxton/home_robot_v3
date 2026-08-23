@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Dynagraph benchmark smoke: default table, Robocasa, MolmoSpaces (CI-friendly tiers)."""
 
 from __future__ import annotations
@@ -9,7 +13,6 @@ import os
 import shutil
 import socket
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -82,9 +85,7 @@ def _serve_and_run(
     log_path = export_dir.parent / log_name
     _kill_servers()
     with open(log_path, "w", encoding="utf-8") as log_f:
-        server = subprocess.Popen(
-            server_cmd, cwd=REPO, stdout=log_f, stderr=subprocess.STDOUT, text=True
-        )
+        server = subprocess.Popen(server_cmd, cwd=REPO, stdout=log_f, stderr=subprocess.STDOUT, text=True)
     try:
         if not _wait_port(SEND_PORT, SERVER_WAIT_S):
             tail = log_path.read_text(encoding="utf-8", errors="replace")[-3000:]

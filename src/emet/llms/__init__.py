@@ -146,8 +146,7 @@ def validate_llm_client_type(client_type: str) -> str:
         if c.lower() == low:
             return c
     raise ValueError(
-        f"Unknown LLM {client_type!r}. Use a registry key, 'openai', or "
-        f"'openai@http://host:port/v1[#model]'."
+        f"Unknown LLM {client_type!r}. Use a registry key, 'openai', or 'openai@http://host:port/v1[#model]'."
     )
 
 
@@ -171,7 +170,7 @@ def get_llm_choices():
 
     qwen35_vlm = [f"qwen35-vlm-{s}" for s in ("0.8B", "2B", "4B", "9B", "27B")]
     return sorted(
-        set(["gemma", "llama", "openai", "qwen25", "gemma4b", "gemma1b"])
+        {"gemma", "llama", "openai", "qwen25", "gemma4b", "gemma1b"}
         | set(get_qwen_variants())
         | set(get_qwen35_variants())
         | set(QWEN_VL_PRESETS.keys())

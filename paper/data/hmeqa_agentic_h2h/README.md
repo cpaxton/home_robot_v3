@@ -38,7 +38,7 @@ Full write-up: `docs/experiments/agentic_scale.md`.
 | Classic | 9/32 | 28.1% | 48.7 | router-off matched H2H (`bal32r2`, commit `8c9a388`) |
 | Agentic | **16/32** | **50.0%** | **32.7** | paper-router on + station-filter / explore-after-ABSENT (`hmeqa_bal32_explore_20260727_215036`, `e7d0eb20`) |
 
-Cross-policy McNemar p≈0.092 (n.s. at α=0.05); Wilcoxon on steps p≈1.8e-5 (agentic cheaper).  
+Cross-policy McNemar p≈0.092 (n.s. at α=0.05); Wilcoxon on steps p≈1.8e-5 (agentic cheaper).
 **Not** a same-commit matched H2H — do not treat McNemar as a clean paired A/B.
 
 Prior matched H2H agentic (router off): **11/32** archived in `balanced32_router_off_agentic_archive.json`.

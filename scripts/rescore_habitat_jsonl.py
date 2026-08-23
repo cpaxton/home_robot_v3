@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Re-grade Habitat EQA JSONL with fixed MCQ parsing (no blank/spurious-A)."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 
 from emet.habitat.metrics import (

@@ -11,20 +11,20 @@ LOG="$RUN_DIR/holdout4_explore_off_qwen3_vl.log"
 : >"$LOG"
 EMET_HABITAT="${EMET_HABITAT:-$ROOT/.venv-habitat/bin/emet-habitat}"
 for qid in 15 68 105 17; do
-  echo "===== question $qid $(date -Is) =====" | tee -a "$LOG"
-  ep_out="$RUN_DIR/holdout4_q${qid}.jsonl"
-  : >"$ep_out"
-  "$EMET_HABITAT" run-episode \
-    --question-id "$qid" \
-    --method dynagraph \
-    --explore-when-uncovered off \
-    --no-mcq-debias \
-    --memory-summary \
-    --output "$ep_out" \
-    >>"$LOG" 2>&1 || echo "episode $qid failed exit=$?" | tee -a "$LOG"
-  if [[ -s "$ep_out" ]]; then
-    cat "$ep_out" >>"$OUT"
-  fi
+    echo "===== question $qid $(date -Is) =====" | tee -a "$LOG"
+    ep_out="$RUN_DIR/holdout4_q${qid}.jsonl"
+    : >"$ep_out"
+    "$EMET_HABITAT" run-episode \
+        --question-id "$qid" \
+        --method dynagraph \
+        --explore-when-uncovered off \
+        --no-mcq-debias \
+        --memory-summary \
+        --output "$ep_out" \
+        >>"$LOG" 2>&1 || echo "episode $qid failed exit=$?" | tee -a "$LOG"
+    if [[ -s "$ep_out" ]]; then
+        cat "$ep_out" >>"$OUT"
+    fi
 done
 echo "===== ALL DONE $(date -Is) =====" | tee -a "$LOG"
 python3 - "$OUT" <<'PY' | tee -a "$LOG"

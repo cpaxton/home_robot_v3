@@ -14,7 +14,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -29,7 +28,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2):
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -51,9 +50,7 @@ def test_scene_graph_default_mujoco():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -101,9 +98,7 @@ def test_scene_graph_default_mujoco():
 
         # Get the scene graph
         sg = sg_processor.scene_graph
-        assert sg.num_objects >= 1, (
-            f"Expected at least 1 object in scene graph after spin, got {sg.num_objects}"
-        )
+        assert sg.num_objects >= 1, f"Expected at least 1 object in scene graph after spin, got {sg.num_objects}"
 
         # Check that objects have point clouds
         for node in sg.nodes.values():

@@ -15,8 +15,8 @@
 import os
 import shutil
 import timeit
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
 
 import cv2
 import numpy as np
@@ -56,12 +56,12 @@ class InstanceMemory:
     timesteps: list of timesteps
     """
 
-    images: List[Tensor] = []
-    instances: List[Dict[int, Instance]] = []
-    point_cloud: List[Tensor] = []
-    unprocessed_views: List[Dict[int, InstanceView]] = []
-    local_id_to_global_id_map: List[Dict[int, int]] = []
-    timesteps: List[int] = []
+    images: list[Tensor] = []
+    instances: list[dict[int, Instance]] = []
+    point_cloud: list[Tensor] = []
+    unprocessed_views: list[dict[int, InstanceView]] = []
+    local_id_to_global_id_map: list[dict[int, int]] = []
+    timesteps: list[int] = []
 
     def __len__(self):
         """Figure out how many things we have found"""
@@ -87,7 +87,7 @@ class InstanceMemory:
         instance_view_score_aggregation_mode="max",
         min_pixels_for_instance_view=100,
         min_percent_for_instance_view=0.2,
-        log_dir: Optional[str] = "instances",
+        log_dir: str | None = "instances",
         log_dir_overwrite_ok: bool = False,
         view_matching_config: ViewMatchingConfig = ViewMatchingConfig(),
         mask_cropped_instances: bool = True,
@@ -100,7 +100,7 @@ class InstanceMemory:
         min_instance_points: int = 1500,
         use_visual_feat: bool = False,
         open_vocab_cat_map_file: str = None,
-        encoder: Optional[BaseImageTextEncoder] = None,
+        encoder: BaseImageTextEncoder | None = None,
         captioner=None,
         save_original_image: bool = False,
     ):
@@ -183,17 +183,15 @@ class InstanceMemory:
         """
         return self.instances[env_id][global_instance_id]
 
-    def get_instances(self, env_id: int = 0) -> List[Instance]:
+    def get_instances(self, env_id: int = 0) -> list[Instance]:
         """Returns a list of all global instances for a single environment"""
         global_instance_ids = self.get_global_instance_ids(env_id)
         if len(global_instance_ids) == 0:
             return []
-        global_instances = self.get_instances_by_ids(
-            env_id=env_id, global_instance_idxs=global_instance_ids
-        )
+        global_instances = self.get_instances_by_ids(env_id=env_id, global_instance_idxs=global_instance_ids)
         return global_instances
 
-    def get_global_instance_ids(self, env_id: int) -> List[int]:
+    def get_global_instance_ids(self, env_id: int) -> list[int]:
         """
         Get the list of global instance IDs associated with a given environment ID.
 
@@ -205,9 +203,7 @@ class InstanceMemory:
         """
         return list(self.instances[env_id].keys())
 
-    def get_instances_by_ids(
-        self, env_id: int, global_instance_idxs: Optional[Sequence[int]] = None
-    ) -> List[Instance]:
+    def get_instances_by_ids(self, env_id: int, global_instance_idxs: Sequence[int] | None = None) -> list[Instance]:
         """
         Retrieve a list of instances for a given environment ID. If instance indexes are specified, only instances
         with those indexes will be returned.
@@ -224,9 +220,7 @@ class InstanceMemory:
             return list(self.instances[env_id].values())
         return [self.instances[env_id][g_id] for g_id in global_instance_idxs]
 
-    def pop_global_instance(
-        self, env_id: int, global_instance_id: int, skip_reindex: bool = False
-    ) -> Instance:
+    def pop_global_instance(self, env_id: int, global_instance_id: int, skip_reindex: bool = False) -> Instance:
         """
         Remove and return an instance given an environment ID and a global instance ID. Optionally skip reindexing of
         global instance IDs.
@@ -244,7 +238,7 @@ class InstanceMemory:
             self.reindex_global_instances(env_id=env_id)
         return instance
 
-    def reindex_global_instances(self, env_id: int) -> Dict[int, Instance]:
+    def reindex_global_instances(self, env_id: int) -> dict[int, Instance]:
         """
         Reindex the global instance IDs within a specified environment. This is typically used after removing an instance
         to ensure that the global instance IDs are contiguous. Mutates self.instances.
@@ -259,15 +253,13 @@ class InstanceMemory:
             self.instances[env_id] = {}
             return self.instances[env_id]
 
-        ids, instances = zip(*self.instances[env_id].items())
+        ids, instances = zip(*self.instances[env_id].items(), strict=True)
         new_ids = range(len(ids))
-        new_env_instances = dict(zip(new_ids, instances))
+        new_env_instances = dict(zip(new_ids, instances, strict=True))
         self.instances[env_id] = new_env_instances
         return self.instances[env_id]
 
-    def get_ids_to_instances(
-        self, env_id: int, category_id: Optional[int] = None
-    ) -> Dict[int, Instance]:
+    def get_ids_to_instances(self, env_id: int, category_id: int | None = None) -> dict[int, Instance]:
         """
         Retrieve a Dict of IDs -> global instances for a given environment. If category_id is specified,
         only instances matching that category will be returned.
@@ -284,10 +276,8 @@ class InstanceMemory:
         global_instance_ids = self.get_global_instance_ids(env_id)
         if len(global_instance_ids) == 0:
             return {}
-        global_instances = self.get_instances_by_ids(
-            env_id=env_id, global_instance_idxs=global_instance_ids
-        )
-        return_dict = {gid: inst for gid, inst in zip(global_instance_ids, global_instances)}
+        global_instances = self.get_instances_by_ids(env_id=env_id, global_instance_idxs=global_instance_ids)
+        return_dict = dict(zip(global_instance_ids, global_instances, strict=True))
         if category_id is not None:
             return_dict = {gid: g for gid, g in return_dict.items() if g.category_id == category_id}
         return return_dict
@@ -316,20 +306,14 @@ class InstanceMemory:
         """
         for env_id in range(self.num_envs):
             for local_instance_id, instance_view in self.unprocessed_views[env_id].items():
-                match_category_id = (
-                    instance_view.category_id if self.view_matching_config.within_class else None
-                )
+                match_category_id = instance_view.category_id if self.view_matching_config.within_class else None
                 # image_array = np.array(instance_view.cropped_image, dtype=np.uint8)
                 # image_debug = Image.fromarray(image_array)
                 # image_debug.show()
-                global_ids_to_instances = self.get_ids_to_instances(
-                    env_id, category_id=match_category_id
-                )
+                global_ids_to_instances = self.get_ids_to_instances(env_id, category_id=match_category_id)
                 if len(global_ids_to_instances) == 0:
                     # Create new global instance
-                    self.add_view_to_instance(
-                        env_id, local_instance_id, len(self.instances[env_id])
-                    )
+                    self.add_view_to_instance(env_id, local_instance_id, len(self.instances[env_id]))
                     continue
                 global_instance_ids, global_bounds, global_embedding = zip(
                     *[
@@ -343,17 +327,15 @@ class InstanceMemory:
                             ),
                         )  # Slow since we concatenate all global vectors each time for each image instance
                         for inst_id, instance in global_ids_to_instances.items()
-                    ]
+                    ],
+                    strict=True,
                 )
 
                 # Similarity config
                 if self.view_matching_config.box_match_mode == Bbox3dOverlapMethodEnum.NN_RATIO:
                     # To avoid having too many arguments, here we directly send pointcloud through instance bounds attr to get_similarity
                     # So this setting is following the idea of concept graphs (https://concept-graphs.github.io) to compute nn ratio as overlap similarity
-                    point_clouds = [
-                        instance.point_cloud
-                        for inst_id, instance in global_ids_to_instances.items()
-                    ]
+                    point_clouds = [instance.point_cloud for inst_id, instance in global_ids_to_instances.items()]
                     similarity = get_similarity(
                         instance_bounds1=instance_view.point_cloud,
                         instance_bounds2=point_clouds,
@@ -379,8 +361,7 @@ class InstanceMemory:
                     )
                 max_similarity, matched_idx = similarity.max(dim=1)
                 total_weight = (
-                    self.view_matching_config.visual_similarity_weight
-                    + self.view_matching_config.box_overlap_weight
+                    self.view_matching_config.visual_similarity_weight + self.view_matching_config.box_overlap_weight
                 )
                 max_similarity = max_similarity / total_weight
 
@@ -462,9 +443,7 @@ class InstanceMemory:
                 if self.category_id_to_category_name is None
                 else self.category_id_to_category_name[cat_id]
             )
-            instance_write_path = os.path.join(
-                self.log_dir, f"{global_instance_id}_{category_name}.png"
-            )
+            instance_write_path = os.path.join(self.log_dir, f"{global_instance_id}_{category_name}.png")
             os.makedirs(instance_write_path, exist_ok=True)
 
             step = instance_view.timestep
@@ -494,9 +473,9 @@ class InstanceMemory:
         instance_channels: Tensor,
         point_cloud: Tensor,
         image: Tensor,
-        cam_to_world: Optional[Tensor] = None,
-        semantic_channels: Optional[Tensor] = None,
-        pose: Optional[Tensor] = None,
+        cam_to_world: Tensor | None = None,
+        semantic_channels: Tensor | None = None,
+        pose: Tensor | None = None,
     ):
         """
         Process instance information across environments and associate instance views with global instances.
@@ -566,18 +545,16 @@ class InstanceMemory:
         """
         Filter out background predictions using CLIP embeddings.
         """
-        background_classes = (["wall", "ceiling", "floor", "others"],)
-        clip_threshold = 1
-        img_embeddings = embedding.unsqueeze(0)
-        class_embeddings = torch.cat(
-            [self.encoder.encode_text(bgc) for bgc in background_classes]
-        ).to(cropped_image.device)
-        img_embeddings /= img_embeddings.norm(dim=-1, keepdim=True)
+        _background_classes = (["wall", "ceiling", "floor", "others"],)
+        _clip_threshold = 1
+        _img_embeddings = embedding.unsqueeze(0)
+        _class_embeddings = torch.cat([self.encoder.encode_text(bgc) for bgc in _background_classes]).to(
+            cropped_image.device
+        )
+        _img_embeddings /= _img_embeddings.norm(dim=-1, keepdim=True)
 
     def get_open_vocab_labels(self, cropped_image):
-        img_embeddings = (
-            self.encoder.encode_image(cropped_image).to(cropped_image.device).unsqueeze(0)
-        )
+        img_embeddings = self.encoder.encode_image(cropped_image).to(cropped_image.device).unsqueeze(0)
         class_embeddings = torch.cat([self.encoder.encode_text(ovc) for ovc in self.open_vocab]).to(
             cropped_image.device
         )
@@ -592,14 +569,14 @@ class InstanceMemory:
         instance_seg: Tensor,
         point_cloud: Tensor,
         image: Tensor,
-        cam_to_world: Optional[Tensor] = None,
-        instance_classes: Optional[Tensor] = None,
-        instance_scores: Optional[Tensor] = None,
-        semantic_seg: Optional[torch.Tensor] = None,
-        background_class_labels: List[int] = [0],
-        background_instance_labels: List[int] = [0],
-        valid_points: Optional[Tensor] = None,
-        pose: Optional[Tensor] = None,
+        cam_to_world: Tensor | None = None,
+        instance_classes: Tensor | None = None,
+        instance_scores: Tensor | None = None,
+        semantic_seg: torch.Tensor | None = None,
+        background_class_labels: list[int] | None = None,
+        background_instance_labels: list[int] | None = None,
+        valid_points: Tensor | None = None,
+        pose: Tensor | None = None,
         verbose: bool = False,
     ):
         """
@@ -632,11 +609,13 @@ class InstanceMemory:
         Debugging:
             If the `debug_visualize` flag is enabled, cropped images and visualization data are saved to disk.
         """
+        if background_class_labels is None:
+            background_class_labels = [0]
+        if background_instance_labels is None:
+            background_instance_labels = [0]
         # create a dict for mapping instance ids to categories
         instance_id_to_category_id = {}
-        assert (
-            image.shape[0] == 3
-        ), "Ensure that RGB images are channels-first and in the right format."
+        assert image.shape[0] == 3, "Ensure that RGB images are channels-first and in the right format."
 
         self.unprocessed_views[env_id] = {}
         # self.local_id_to_global_id_map[env_id] = {}
@@ -652,9 +631,7 @@ class InstanceMemory:
             if self.images[env_id] is None:
                 self.images[env_id] = image.unsqueeze(0).detach().cpu()
             else:
-                self.images[env_id] = torch.cat(
-                    [self.images[env_id], image.unsqueeze(0).detach().cpu()], dim=0
-                )
+                self.images[env_id] = torch.cat([self.images[env_id], image.unsqueeze(0).detach().cpu()], dim=0)
             if self.point_cloud[env_id] is None:
                 self.point_cloud[env_id] = point_cloud.unsqueeze(0).detach().cpu()
             else:
@@ -667,9 +644,7 @@ class InstanceMemory:
         if valid_points is None:
             valid_points = torch.full_like(image[0], True, dtype=torch.bool, device=image.device)
         if self.du_scale != 1:
-            valid_points_downsampled = interpolate_image(
-                valid_points, scale_factor=1 / self.du_scale
-            )
+            valid_points_downsampled = interpolate_image(valid_points, scale_factor=1 / self.du_scale)
         else:
             valid_points_downsampled = valid_points
 
@@ -690,9 +665,7 @@ class InstanceMemory:
             if instance_classes is not None:
                 category_id = instance_classes[instance_id]
             elif semantic_seg is not None:
-                assert (
-                    instance_classes is None
-                ), "cannot pass in both instance classes and semantic seg"
+                assert instance_classes is None, "cannot pass in both instance classes and semantic seg"
                 # get semantic category
                 category_id = semantic_seg[instance_mask].unique()
                 category_id = category_id[0].item()
@@ -721,9 +694,7 @@ class InstanceMemory:
 
             # TODO: If we use du_scale, we should apply this at the beginning to speed things up
             if self.du_scale != 1:
-                instance_mask_downsampled = self._interpolate_image(
-                    instance_mask, scale_factor=1 / self.du_scale
-                )
+                instance_mask_downsampled = self._interpolate_image(instance_mask, scale_factor=1 / self.du_scale)
                 image_downsampled = self._interpolate_image(image, scale_factor=1 / self.du_scale)
             else:
                 instance_mask_downsampled = instance_mask
@@ -763,15 +734,12 @@ class InstanceMemory:
                 and cropped_image.shape[0] * cropped_image.shape[1] > self.min_instance_points
                 and cropped_image.shape[2] == 3
             ):
-
                 # Compute semantic image features (e.g. SigLIP or CLIP)
                 embedding = self.encoder.encode_image(cropped_image).to(cropped_image.device)
 
                 # Get a separate set of visual, not semantic, features
                 if hasattr(self.encoder, "get_visual_feat"):
-                    visual_feat = self.encoder.get_visual_feat(cropped_image).to(
-                        cropped_image.device
-                    )
+                    visual_feat = self.encoder.get_visual_feat(cropped_image).to(cropped_image.device)
                 else:
                     visual_feat = None
             else:
@@ -833,9 +801,7 @@ class InstanceMemory:
                     if self.captioner is not None:
                         # ViT_GPT2 and GiT captioners take image of shape (H, W, C)
                         # They also require the image to be scaled up cropped_image's pixel values within [0, 256)
-                        text_description = self.captioner.caption_image(
-                            cropped_image.to(dtype=torch.uint8)
-                        )
+                        text_description = self.captioner.caption_image(cropped_image.to(dtype=torch.uint8))
                     else:
                         text_description = None
                     if self.save_original_image:
@@ -855,7 +821,7 @@ class InstanceMemory:
                         score=score,
                         bounds=bounds,  # .cpu().numpy(),
                         pose=pose,
-                        text_description=text_description
+                        text_description=text_description,
                         # open_vocab_label=open_vocab_label,
                     )
                     # append instance view to list of instance views
@@ -869,9 +835,9 @@ class InstanceMemory:
             t1 = timeit.default_timer()
             if verbose:
                 if added:
-                    print(f"Added Instance {instance_id} took {t1-t0} seconds")
+                    print(f"Added Instance {instance_id} took {t1 - t0} seconds")
                 else:
-                    print(f"Skipped Instance {instance_id} took {t1-t0} seconds")
+                    print(f"Skipped Instance {instance_id} took {t1 - t0} seconds")
 
         # This timestep should be passable (e.g. for Spot we have a Datetime object)
         self.timesteps[env_id] += 1
@@ -911,7 +877,7 @@ class InstanceMemory:
         )
         return cropped_image
 
-    def save(self, save_dir: Union[Path, str], env_id: int):
+    def save(self, save_dir: Path | str, env_id: int):
         pass
 
         # if self.debug_visualize:
@@ -920,10 +886,10 @@ class InstanceMemory:
     def global_box_compression_and_nms(
         self,
         env_id: int,
-        nms_thresh: Optional[float] = None,
-        instance_box_compression_drop_prop: Optional[float] = None,
-        instance_box_compression_resolution: Optional[float] = None,
-    ) -> List[Instance]:
+        nms_thresh: float | None = None,
+        instance_box_compression_drop_prop: float | None = None,
+        instance_box_compression_resolution: float | None = None,
+    ) -> list[Instance]:
 
         if nms_thresh is None:
             nms_thresh = self.global_box_nms_thresh
@@ -959,7 +925,7 @@ class InstanceMemory:
     def global_instance_nms(
         self,
         env_id: int,
-        nms_iou_thresh: Optional[float] = None,
+        nms_iou_thresh: float | None = None,
         within_category: bool = True,
     ) -> None:
         """
@@ -990,9 +956,7 @@ class InstanceMemory:
             nms_iou_thresh = self.global_box_nms_thresh
         assert 0.0 < nms_iou_thresh and nms_iou_thresh <= 1.0, nms_iou_thresh
         if within_category:
-            categories = torch.tensor(
-                [inst.category_id for inst in self.get_instances_by_ids(env_id)]
-            ).unique()
+            categories = torch.tensor([inst.category_id for inst in self.get_instances_by_ids(env_id)]).unique()
             for category_id in categories:
                 category_id = int(category_id)
                 ids_to_instances = self.get_ids_to_instances(env_id, category_id=category_id)
@@ -1079,7 +1043,6 @@ def box3d_sub_box_suppression(bounds: Tensor, confidence_score: Tensor, iou_thre
     keep = []
     assignments = {}
     while len(order) > 0:
-
         idx = order[-1]  # Highest confidence (S)
 
         # push S in filtered predictions list

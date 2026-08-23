@@ -59,12 +59,25 @@ Canonical record:
 - [x] Freeze and push the reviewed GT-free implementation at `f8ceaa49`
       (`--no-hm3d-semantics`, `--no-enrich-labels`) in PR #115. The focused
       suite, `agent-regression`, and pre-commit pass.
+- [x] Finish the consistency audit: apply quantization/tool/nav budgets at
+      runtime, reject unfrozen policy environment, hash the small dataset
+      inputs, fail closed when requested semantic assets are unavailable, and
+      make generic batch resume parity-safe. Focused audit tests pass; keep PR
+      #115 draft until the separate CPU baseline gate is resolved.
+- [x] Close the simultaneous-launch race: `emet jobs run` now auto-detects
+      GPU-like experiment commands and holds a host-wide flock for the full
+      job lifetime; zombie supervisor PIDs no longer stall queued jobs.
+- [x] Keep benchmark identities explicit: q0–112 is the historical emet
+      113-row slice; the upstream GraphEQA HM-EQA semantic-filtered enrich
+      sequence has 114 rows. Do not call either mapping authoritative without
+      naming which one is used.
 - [ ] Close the CPU baseline gate before another GPU run. The full no-sim run
-      has 1827 passes and four failures: the worker test passes after unsetting
-      inherited `OMP_NUM_THREADS=1`, while three map-rendering failures are in
-      files unchanged from `origin/main`. Fix or explicitly record that baseline
-      separately; do not describe the full suite as green.
-- [ ] Only then repeat the passing q11 A2 canary from `f8ceaa49`. First launch
+      has three failures after isolating BLAS thread settings: the trajectory
+      color and two crop-size assertions in `test_map_grid.py` /
+      `test_map_snapshot.py`. Those source files are unchanged from
+      `origin/main`; fix or explicitly record that baseline separately, and do
+      not describe the full suite as green.
+- [ ] Only then repeat the passing q11 A2 canary from the final clean PR head. First launch
       `emet habitat safe-start`, require terminal `done` plus `Habitat EGL OK`,
       then launch exactly one registered `emet jobs` experiment. Stop unless
       q11 again reaches the kitchen and directly observes the relation without

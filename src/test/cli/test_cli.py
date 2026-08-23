@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 def test_cli_help():
@@ -69,6 +70,40 @@ def test_habitat_group_help_lists_safe_start():
     assert "safe-start" in result.stdout
     assert "egl-probe" in result.stdout
     assert "info" in result.stdout
+
+
+def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
+    from types import SimpleNamespace
+
+    from click.testing import CliRunner
+
+    project_root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
+    from emet_habitat import cli as habitat_cli
+    from emet_habitat import runner as habitat_runner
+    from emet_habitat.cli import main as habitat_main
+
+    result = CliRunner().invoke(habitat_main, ["run-episode", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--eqa-vl-quantization" in result.output
+    params = {param.name: param.default for param in habitat_main.commands["run-episode"].params}
+    assert params["max_planning_steps"] == 20
+    assert params["rotate_in_place"] is True
+    assert params["eqa_vl_quantization"] is None
+
+    captured = {}
+    monkeypatch.setattr(
+        habitat_runner,
+        "run_hmeqa_episode",
+        lambda **kwargs: captured.update(kwargs) or SimpleNamespace(to_dict=lambda: {}),
+    )
+    monkeypatch.setattr(habitat_cli, "summarize_episodes", lambda _rows: {})
+    result = CliRunner().invoke(
+        habitat_main,
+        ["run-episode", "--mock-llm", "--eqa-vl-quantization", "int8"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["eqa_vl_quantization"] == "int8"
 
 
 def test_habitat_safe_start_help():
@@ -237,6 +272,8 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
         episode_timeout_seconds=3600,
         max_planning_steps=12,
         max_movement_step=6,
+        data_dir="/datasets/hmeqa",
+        hm3d_root="/datasets/hm3d/train",
     )
     prepare_hmeqa_run_manifest(
         tmp_path,
@@ -249,6 +286,18 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
             "dirty": False,
             "dirty_digest": None,
             "status": [],
+        },
+        external_inputs={
+            "data_dir": "/datasets/hmeqa",
+            "questions": {
+                "path": "/datasets/hmeqa/questions.csv",
+                "sha256": "sha256:questions",
+            },
+            "scene_init_poses": {
+                "path": "/datasets/hmeqa/scene_init_poses.csv",
+                "sha256": "sha256:poses",
+            },
+            "hm3d_root": "/datasets/hm3d/train",
         },
     )
 
@@ -418,6 +467,89 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "jobs register --job-id" in wrapper
     assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
+
+
+def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    lock_file = tmp_path / "gpu-exclusive.lock"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_GPU_LOCK"] = str(lock_file)
+    env["EMET_GPU_LOCK_FILE"] = str(lock_file)
+
+    def launcher(out_dir: Path, marker: Path) -> subprocess.Popen:
+        code = (
+            "import time\n"
+            "from pathlib import Path\n"
+            f"p = Path({str(marker)!r})\n"
+            "start = time.time()\n"
+            "p.write_text(f'{start}\\n')\n"
+            "time.sleep(2.0)\n"
+            "p.write_text(f'{start}\\n{time.time()}\\n')\n"
+        )
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "emet.cli",
+                "jobs",
+                "run",
+                "--name",
+                f"lock-{out_dir.name}",
+                "--no-cpu-safe",
+                "--gpu-exclusive",
+                "--out-dir",
+                str(out_dir),
+                "--",
+                sys.executable,
+                "-c",
+                code,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
+    first_out = tmp_path / "first"
+    second_out = tmp_path / "second"
+    first_launcher = launcher(first_out, first_out / "times.txt")
+    marker_deadline = time.monotonic() + 5.0
+    while not (first_out / "times.txt").is_file() and time.monotonic() < marker_deadline:
+        time.sleep(0.05)
+    assert (first_out / "times.txt").is_file()
+
+    second_launcher = launcher(second_out, second_out / "times.txt")
+    first_stdout, first_stderr = first_launcher.communicate(timeout=20)
+    assert first_launcher.returncode == 0, first_stderr
+    first_id = first_stdout.strip().splitlines()[-1]
+    second_stdout, second_stderr = second_launcher.communicate(timeout=20)
+    assert second_launcher.returncode == 0, second_stderr
+    second_id = second_stdout.strip().splitlines()[-1]
+
+    def wait_for_terminal(job_id: str) -> dict:
+        record_path = jobs_dir / f"{job_id}.json"
+        deadline = time.monotonic() + 15.0
+        record = {}
+        while time.monotonic() < deadline:
+            if record_path.is_file():
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+                if record.get("status") in {"done", "failed"}:
+                    return record
+            time.sleep(0.05)
+        return record
+
+    assert wait_for_terminal(first_id).get("status") == "done"
+    assert wait_for_terminal(second_id).get("status") == "done"
+    first_start, first_end = (float(value) for value in (first_out / "times.txt").read_text().splitlines())
+    second_start, _second_end = (float(value) for value in (second_out / "times.txt").read_text().splitlines())
+    assert second_start >= first_end - 0.05
+
+    wrapper = (first_out / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "flock -w" in wrapper
+    assert "EMET_GPU_LOCK_HELD=1" in wrapper
 
 
 def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):

@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -92,9 +91,7 @@ def _analyze_points(
         "n_points": int(pts.shape[0]),
         "n_floor_points": int(floor_pts.shape[0]),
         "floor_normal": [float(x) for x in normal],
-        "floor_normal_tilt_deg": float(
-            math.degrees(math.acos(max(-1.0, min(1.0, abs(float(normal[2]))))))
-        ),
+        "floor_normal_tilt_deg": float(math.degrees(math.acos(max(-1.0, min(1.0, abs(float(normal[2]))))))),
         "floor_fit_residual_m": residual,
         "median_height_m": float(np.median(heights)),
         "pcd_centroid_xy": [float(centroid_xy[0]), float(centroid_xy[1])],
@@ -183,10 +180,11 @@ def analyze_bundle(bundle_dir: Path) -> dict[str, Any]:
 
 
 def run_live_spin(*, question_id: int, turns: int, out_dir: Path) -> dict[str, Any]:
-    from emet.habitat.config import default_hm3d_scene_dir
-    from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
     from emet_habitat.observations import habitat_rgb_depth_to_observations
     from emet_habitat.simulator import HabitatEQASimulator
+
+    from emet.habitat.config import default_hm3d_scene_dir
+    from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 
     out_dir.mkdir(parents=True, exist_ok=True)
     q = get_question(load_hmeqa_questions(None), question_id=question_id)
@@ -249,7 +247,7 @@ def run_live_spin(*, question_id: int, turns: int, out_dir: Path) -> dict[str, A
     _capture("init")
     for i in range(turns):
         sim.step("turn_left")
-        _capture(f"turn_{i+1}")
+        _capture(f"turn_{i + 1}")
 
     if all_pts:
         _write_ply(out_dir / "spin_pointcloud.ply", np.vstack(all_pts), np.vstack(all_cols))

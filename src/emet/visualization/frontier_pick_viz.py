@@ -212,9 +212,7 @@ def _draw_star(rgb: np.ndarray, ri: int, rj: int, *, radius: int = 7) -> None:
             for a in range(n):
                 x1, y1 = tips[a]
                 x2, y2 = tips[(a + 1) % n]
-                if ((y1 > y) != (y2 > y)) and (
-                    x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-12) + x1
-                ):
+                if ((y1 > y) != (y2 > y)) and (x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-12) + x1):
                     inside = not inside
             if not inside:
                 continue
@@ -497,9 +495,7 @@ def make_long_motion_demo_steps(
             best = pool[int(np.argmax(d))]
             ti, tj = int(best[0]), int(best[1])
             chosen_xy = cell_to_xy(ti, tj)
-            dist_m = float(
-                np.hypot(chosen_xy[0] - robot_xy[0], chosen_xy[1] - robot_xy[1])
-            )
+            dist_m = float(np.hypot(chosen_xy[0] - robot_xy[0], chosen_xy[1] - robot_xy[1]))
 
         history.append(chosen_xy)
         steps.append(

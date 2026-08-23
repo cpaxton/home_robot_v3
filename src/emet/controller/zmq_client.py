@@ -2148,9 +2148,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     )
                     if value is None
                 ]
-                logger.info(
-                    f"Waiting for ZMQ startup streams ({t1 - t0:.1f}s): missing {', '.join(missing)}"
-                )
+                logger.info(f"Waiting for ZMQ startup streams ({t1 - t0:.1f}s): missing {', '.join(missing)}")
                 next_progress_log = t1 + 5.0
             if t1 - t0 > startup_timeout:
                 logger.error(

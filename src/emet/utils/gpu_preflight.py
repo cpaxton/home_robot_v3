@@ -280,9 +280,7 @@ def kill_stale_eval_processes(
     signaled = 0
     for pattern in patterns:
         pids = _pgrep_f(pattern)
-        signaled += kill_matching_pids(
-            pids, protected=prot, log=_log, escalate_s=escalate_s
-        )
+        signaled += kill_matching_pids(pids, protected=prot, log=_log, escalate_s=escalate_s)
     settle = env_settle_s() if settle_s is None else float(settle_s)
     if settle > 0:
         _sleep(settle)
@@ -291,9 +289,7 @@ def kill_stale_eval_processes(
         seen: set[int] = set()
         for app in list_compute_apps():
             cmd = _process_args(app.pid)
-            if not (
-                _GPU_CMD_HINT.search(cmd) or _GPU_CMD_HINT.search(app.process_name)
-            ):
+            if not (_GPU_CMD_HINT.search(cmd) or _GPU_CMD_HINT.search(app.process_name)):
                 continue
             if app.pid in seen or app.pid in prot:
                 continue
@@ -363,8 +359,7 @@ def recent_emet_segfault_hint() -> str | None:
     hits = [
         ln.strip()
         for ln in blob.splitlines()
-        if re.search(r"segfault|invalid opcode", ln, re.IGNORECASE)
-        and re.search(r"\b(emet|python)", ln, re.IGNORECASE)
+        if re.search(r"segfault|invalid opcode", ln, re.IGNORECASE) and re.search(r"\b(emet|python)", ln, re.IGNORECASE)
     ]
     if not hits:
         return None
@@ -430,8 +425,7 @@ def diagnose_eval_environment(
         )
     else:
         lines.append(
-            "Segfault scan: no recent emet/python segfault in dmesg "
-            "(or dmesg unavailable without privileges)."
+            "Segfault scan: no recent emet/python segfault in dmesg (or dmesg unavailable without privileges)."
         )
 
     lines.append(
@@ -489,6 +483,7 @@ def wait_gpu_stable(
 
 # --- disk preflight (episode debug bundles) --------------------------------
 
+
 def _episodes_root() -> Path | None:
     try:
         from emet.habitat.episode_debug import default_episodes_root
@@ -528,8 +523,7 @@ def disk_status_lines(episodes_root: Path | None = None) -> list[str]:
         if root.is_dir():
             bundles = [p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
             total = sum(_dir_gb(p) for p in bundles)
-            lines.append(f"episode bundles: {len(bundles)} dirs, {total:.1f} GB "
-                         f"(clean with: emet eval clean-bundles)")
+            lines.append(f"episode bundles: {len(bundles)} dirs, {total:.1f} GB (clean with: emet eval clean-bundles)")
     return lines
 
 
@@ -620,9 +614,7 @@ def clean_episode_bundles(
         else:
             out.append(f"would   {sz:7.2f} GB  {p.name}  ({why})")
     out.append(
-        f"freed: {freed:.2f} GB ({len(doomed)} bundles) "
-        f"[{'APPLIED' if apply else 'dry-run; use --apply to delete'}]"
+        f"freed: {freed:.2f} GB ({len(doomed)} bundles) [{'APPLIED' if apply else 'dry-run; use --apply to delete'}]"
     )
     out.append(f"kept {len(dirs) - len(doomed)} bundles; results/*.jsonl untouched.")
     return out
-

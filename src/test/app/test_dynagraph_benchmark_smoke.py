@@ -30,10 +30,7 @@ def test_graph_stats_from_report_text():
 
 
 def test_question_bank_load():
-    bank_path = (
-        Path(__file__).resolve().parents[2]
-        / "emet/config/benchmarks/dynagraph_questions.yaml"
-    )
+    bank_path = Path(__file__).resolve().parents[2] / "emet/config/benchmarks/dynagraph_questions.yaml"
     bank = load_question_bank(bank_path, env_filter="default_table")
     assert len(bank) >= 2
     assert bank[0]["expected_tokens"]
@@ -53,14 +50,11 @@ def test_score_eqa_results_tokens():
 
 
 def test_dynagraph_eval_on_fixture_gt_snippet():
-    from emet.memory.graph_eqa.dynagraph_eval import compute_dynagraph_eval
 
     # Minimal: only tests import + empty dir handling would fail; use fusion fixture eval path
-    gt = json.loads(
-        (Path(__file__).resolve().parents[1] / "fixtures/gt_robocasa_seed0_snippet.json").read_text()
-    )
-    from emet.memory.graph_eqa.graph_object_fusion.evaluate import score_detections_vs_gt
+    gt = json.loads((Path(__file__).resolve().parents[1] / "fixtures/gt_robocasa_seed0_snippet.json").read_text())
     from emet.memory.graph_eqa.graph_object_fusion.calibrate import load_calibration_frames_jsonl
+    from emet.memory.graph_eqa.graph_object_fusion.evaluate import score_detections_vs_gt
 
     frames = load_calibration_frames_jsonl(
         Path(__file__).resolve().parents[1] / "fixtures/calibration_frames_snippet.jsonl"

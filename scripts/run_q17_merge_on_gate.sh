@@ -20,8 +20,8 @@ LOG="$GATE_ROOT/gate.log"
 : >"$LOG"
 
 if [[ ! -x "$EMET_HABITAT" ]]; then
-  echo "Missing emet-habitat at $EMET_HABITAT (run ./scripts/install_habitat.sh)" | tee -a "$LOG"
-  exit 1
+    echo "Missing emet-habitat at $EMET_HABITAT (run ./scripts/install_habitat.sh)" | tee -a "$LOG"
+    exit 1
 fi
 
 echo "===== Q17 merge-on gate $(date -Is) =====" | tee -a "$LOG"
@@ -32,17 +32,17 @@ NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait >>"$LOG" 2>&1
 
 TRIALS=3
 for i in $(seq 1 "$TRIALS"); do
-  tag="q17_gate_t${i}"
-  ep_out="$GATE_ROOT/${tag}.jsonl"
-  ep_log="$GATE_ROOT/${tag}.log"
-  : >"$ep_out"
-  echo "===== trial $i/$TRIALS tag=$tag $(date -Is) =====" | tee -a "$LOG"
-  "$EMET_HABITAT" run-episode \
-    --question-id 17 \
-    --method dynagraph \
-    --output "$ep_out" \
-    >>"$ep_log" 2>&1 || echo "trial $i failed exit=$?" | tee -a "$LOG"
-  cat "$ep_log" >>"$LOG"
+    tag="q17_gate_t${i}"
+    ep_out="$GATE_ROOT/${tag}.jsonl"
+    ep_log="$GATE_ROOT/${tag}.log"
+    : >"$ep_out"
+    echo "===== trial $i/$TRIALS tag=$tag $(date -Is) =====" | tee -a "$LOG"
+    "$EMET_HABITAT" run-episode \
+        --question-id 17 \
+        --method dynagraph \
+        --output "$ep_out" \
+        >>"$ep_log" 2>&1 || echo "trial $i failed exit=$?" | tee -a "$LOG"
+    cat "$ep_log" >>"$LOG"
 done
 
 python3 - "$GATE_ROOT" "$SUMMARY" <<'PY' | tee -a "$LOG"

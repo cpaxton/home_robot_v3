@@ -57,9 +57,7 @@ def apply_llm_host(
     if not resolved:
         return None
     text_base = openai_base_for_host(resolved, port)
-    vl_base = openai_base_for_host(
-        resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT
-    )
+    vl_base = openai_base_for_host(resolved, vl_port if vl_port is not None else DEFAULT_VL_PORT)
     os.environ["EMET_LLM_HOST"] = resolved
     os.environ["EMET_OPENAI_BASE_URL"] = text_base
     os.environ["EMET_VL_ENDPOINT"] = f"openai@{vl_base}"

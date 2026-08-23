@@ -35,6 +35,8 @@
 #   EPISODE_COOLDOWN_SEC=20  sleep + sync between episodes (0 disables). Reduces
 #                          stacked Habitat/VLM teardown pressure that can hard-freeze.
 #   EPISODE_GPU_WAIT=1     re-run gpu_preflight --wait between episodes (default 1).
+#   EMET_GPU_LOCK=…        shared host-wide flock path (default ~/runs/emet/gpu.lock).
+#   EMET_GPU_LOCK_TIMEOUT=-1  flock wait in seconds (-1 = wait indefinitely).
 #   EMET_EQA_AGENTIC_ROUTER=0|1  honor for agentic arm (default 0). paper-router /
 #                          emet hmeqa overnight pass 1; do not hardcode over the env.
 #   EMET_EQA_AGENTIC_VERIFIER / EMET_EQA_AGENTIC_REQUIRE_VERIFIED  passed through.
@@ -48,7 +50,7 @@
 #   EMET_EVAL_EXPORT_COMPACT_MEMORY=0|1  compact graph/runtime checkpoint (default 1)
 #   EMET_HMEQA_VARIANT_ID=legacy  explicit A/B label; all are frozen in run_manifest.json.
 #   EQA_HF_MODEL_ID / EQA_VL_FAMILY / EQA_VL_QUANTIZATION  → emet-habitat
-#                          --eqa-hf-model-id / --eqa-vl-family / (quant via config env).
+#                          --eqa-hf-model-id / --eqa-vl-family / --eqa-vl-quantization.
 #                          Used for larger-VLM ladder (e.g. Qwen3-VL-32B-Instruct).
 #   HMEQA_MAX_PLANNING_STEPS=20 / HMEQA_MAX_MOVEMENT_STEP=10  frozen episode budgets.
 #
@@ -148,9 +150,8 @@ fi
 if [[ -n "$EQA_HF_MODEL_ID" ]]; then
     EQA_EXTRA_ARGS+=(--eqa-hf-model-id "$EQA_HF_MODEL_ID")
 fi
-# Quantization is usually int4 via dynav defaults; expose for documentation / future CLI.
 if [[ -n "$EQA_VL_QUANTIZATION" ]]; then
-    log "NOTE: EQA_VL_QUANTIZATION=$EQA_VL_QUANTIZATION (set eqa.vl_quantization via EMET_CONFIG/--set if needed; run-episode has no dedicated flag)"
+    EQA_EXTRA_ARGS+=(--eqa-vl-quantization "$EQA_VL_QUANTIZATION")
 fi
 if [[ ${#EQA_EXTRA_ARGS[@]} -gt 0 ]]; then
     log "EQA model overrides: ${EQA_EXTRA_ARGS[*]}"
@@ -158,6 +159,46 @@ fi
 
 status_open "$OUT" "hmeqa-h2h"
 STATUS_RESUME_CMD="uv run emet eval recover --need-mib 12000 && uv run emet hmeqa resume $OUT"
+
+acquire_gpu_lock() {
+    local lock_file="${EMET_GPU_LOCK:-${EMET_GPU_LOCK_FILE:-$HOME/runs/emet/gpu.lock}}"
+    local inherited_fd9
+    inherited_fd9="$(readlink "/proc/$$/fd/9" 2>/dev/null || true)"
+    if [[ "$inherited_fd9" == "$lock_file" ]]; then
+        log "GPU exclusive lock inherited from emet jobs: $lock_file"
+        return 0
+    fi
+    if ! command -v flock >/dev/null 2>&1; then
+        status_close BLOCKED "flock is required for direct H2H launches" \
+            "install util-linux/flock or launch through uv run emet jobs run"
+        exit 2
+    fi
+    if ! mkdir -p "$(dirname "$lock_file")"; then
+        status_close BLOCKED "cannot create GPU lock directory for $lock_file" \
+            "set EMET_GPU_LOCK to a writable absolute path and resume"
+        exit 2
+    fi
+    exec 9>"$lock_file"
+    log "waiting for exclusive GPU lock: $lock_file"
+    local lock_rc=0
+    if [[ -z "${EMET_GPU_LOCK_TIMEOUT:-}" || "${EMET_GPU_LOCK_TIMEOUT}" == "-1" ]]; then
+        flock -x 9 || lock_rc=$?
+    else
+        flock -w "$EMET_GPU_LOCK_TIMEOUT" 9 || lock_rc=$?
+    fi
+    if [[ "$lock_rc" -ne 0 ]]; then
+        log "ERROR: timed out waiting for the GPU lock: $lock_file"
+        status_close BLOCKED "GPU lock wait timed out; refusing to overlap direct H2H" \
+            "wait for the owner to finish, then resume $OUT"
+        exit 2
+    fi
+    export EMET_GPU_LOCK_FILE="$lock_file"
+    export EMET_GPU_LOCK="$lock_file"
+    export EMET_GPU_LOCK_HELD=1
+    log "GPU exclusive lock acquired directly: $lock_file"
+}
+
+acquire_gpu_lock
 
 apply_eval_cpu_affinity() {
     if [[ "$EMET_SKIP_CPU_AFFINITY" == "1" ]]; then
@@ -380,6 +421,23 @@ update_eval_progress(
     fi
 }
 
+snapshot_missing_artifacts() {
+    uv run python - "$1" "$2" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+from emet.eval.hmeqa_launch import missing_hmeqa_snapshot_artifacts
+
+for artifact in missing_hmeqa_snapshot_artifacts(
+    Path(sys.argv[1]),
+    arm=sys.argv[2],
+    env=os.environ,
+):
+    print(artifact)
+PY
+}
+
 snapshot_bundle() {
     # Copy map artifacts out of the shared Habitat cache so H2H arms do not overwrite.
     local arm="$1"
@@ -401,8 +459,8 @@ snapshot_bundle() {
         src="$HOME/.cache/habitat_eqa/episodes/h2h_${arm}_q$(printf '%04d' "$qid")_$(basename "$OUT")/q$(printf '%04d' "$qid")_dynagraph"
     fi
     if [[ ! -d "$src" ]]; then
-        log "WARN: no bundle to snapshot for $arm q$qid"
-        return 0
+        log "ERROR: no episode bundle to snapshot for scored $arm q$qid"
+        return 1
     fi
     rm -rf "$dst"
     mkdir -p "$dst"
@@ -419,25 +477,14 @@ snapshot_bundle() {
     [[ -d "$src/world_evidence_views" ]] && rm -rf "$dst/world_evidence_views" && cp -a "$src/world_evidence_views" "$dst/world_evidence_views"
     [[ -d "$src/compact_memory" ]] && rm -rf "$dst/compact_memory" && cp -a "$src/compact_memory" "$dst/compact_memory"
     local missing=()
-    local compact="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-0}"
-    if [[ "${compact,,}" =~ ^(1|true|yes|on)$ ]]; then
-        [[ -s "$dst/compact_memory/manifest.json" ]] || missing+=("compact_memory/manifest.json")
+    local missing_output
+    if ! missing_output="$(snapshot_missing_artifacts "$dst" "$arm")"; then
+        log "ERROR: could not validate evidence snapshot for $arm q$qid"
+        return 1
     fi
-    if [[ "$arm" == "agentic" ]]; then
-        if [[ "${EMET_EQA_GRAPH_EVIDENCE_MODE:-off}" != "off" ]]; then
-            [[ -s "$dst/world_evidence.json" ]] || missing+=("world_evidence.json")
-            local evidence_rgb="${EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB:-1}"
-            if [[ ! "${evidence_rgb,,}" =~ ^(0|false|no|off)$ ]]; then
-                [[ -d "$dst/world_evidence_views" ]] || missing+=("world_evidence_views/")
-            fi
-        fi
-        if [[ "${EMET_EQA_ATTEMPT_LEDGER_MODE:-off}" != "off" ]]; then
-            [[ -s "$dst/attempt_ledger.json" ]] || missing+=("attempt_ledger.json")
-        fi
-        if [[ "${EMET_EQA_ROOM_HISTORY_MODE:-off}" != "off" ]]; then
-            [[ -s "$dst/room_events.json" ]] || missing+=("room_events.json")
-        fi
-    fi
+    while IFS= read -r artifact; do
+        [[ -n "$artifact" ]] && missing+=("$artifact")
+    done <<<"$missing_output"
     if (( ${#missing[@]} > 0 )); then
         log "ERROR: evidence snapshot incomplete for $arm q$qid: ${missing[*]}"
         return 1

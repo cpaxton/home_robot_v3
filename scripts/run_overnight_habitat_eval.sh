@@ -25,8 +25,8 @@ LOCK_FILE="$HOME/.cache/habitat_eqa/overnight.lock"
 
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
-  echo "Another overnight eval holds $LOCK_FILE — exiting." | tee -a "$MAIN_LOG"
-  exit 1
+    echo "Another overnight eval holds $LOCK_FILE — exiting." | tee -a "$MAIN_LOG"
+    exit 1
 fi
 
 INTERVAL="${INTERVAL:-30}"
@@ -46,8 +46,8 @@ RUN_ANNOTATED37="${RUN_ANNOTATED37:-1}"
 log() { echo "[$(date -Is)] $*" | tee -a "$MAIN_LOG"; }
 
 count_completed() {
-  local results="$1"
-  uv run python - <<'PY' "$results"
+    local results="$1"
+    uv run python - <<'PY' "$results"
 import json, sys
 from pathlib import Path
 from emet.habitat.metrics import episode_run_completed
@@ -63,67 +63,67 @@ PY
 n_ids() { awk -F, '{print NF}' <<<"$1"; }
 
 wait_for_gpu() {
-  local need_mib="$1"
-  local ok=0 free
-  while :; do
-    if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
-      log "GLOBAL deadline reached during GPU wait (need=${need_mib}MiB)"
-      return 2
-    fi
-    free=$(emet_gpu_free_mib)
-    if [ "${free:-0}" -ge "$need_mib" ]; then
-      ok=$((ok + 1))
-    else
-      ok=0
-    fi
-    log "GPU free=${free}MiB need=${need_mib} stable=${ok}/${STABLE}"
-    [ "$ok" -ge "$STABLE" ] && return 0
-    sleep "$INTERVAL"
-  done
+    local need_mib="$1"
+    local ok=0 free
+    while :; do
+        if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
+            log "GLOBAL deadline reached during GPU wait (need=${need_mib}MiB)"
+            return 2
+        fi
+        free=$(emet_gpu_free_mib)
+        if [ "${free:-0}" -ge "$need_mib" ]; then
+            ok=$((ok + 1))
+        else
+            ok=0
+        fi
+        log "GPU free=${free}MiB need=${need_mib} stable=${ok}/${STABLE}"
+        [ "$ok" -ge "$STABLE" ] && return 0
+        sleep "$INTERVAL"
+    done
 }
 
 run_phase() {
-  local phase_name="$1"
-  local method="$2"
-  local ids="$3"
-  local tag="$4"
-  local need_mib="$5"
+    local phase_name="$1"
+    local method="$2"
+    local ids="$3"
+    local tag="$4"
+    local need_mib="$5"
 
-  if [[ ",${SKIP_PHASES:-}," == *",$phase_name,"* ]]; then
-    log "SKIP phase $phase_name (SKIP_PHASES)"
-    return 0
-  fi
-
-  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
-  local phase_log="$LOG_DIR/${phase_name}.log"
-  local n_target
-  n_target=$(n_ids "$ids")
-
-  log "=== PHASE $phase_name: method=$method tag=$tag n=$n_target need_gpu=${need_mib}MiB ==="
-  log "  results=$results"
-  log "  log=$phase_log"
-
-  emet_kill_stale_eval_processes
-
-  while [ "$(count_completed "$results")" -lt "$n_target" ]; do
-    if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
-      log "GLOBAL deadline — stopping phase $phase_name at $(count_completed "$results")/$n_target"
-      return 2
+    if [[ ",${SKIP_PHASES:-}," == *",$phase_name,"* ]]; then
+        log "SKIP phase $phase_name (SKIP_PHASES)"
+        return 0
     fi
-    if ! wait_for_gpu "$need_mib"; then
-      return 2
-    fi
-    log "launch $phase_name attempt (done=$(count_completed "$results")/$n_target)"
-    TAG="$tag" IDS="$ids" METHOD="$method" TIMEOUT="$TIMEOUT" \
-      ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$phase_log" "$MAIN_LOG" || true
-    sleep 10
-  done
-  log "PHASE $phase_name COMPLETE $(count_completed "$results")/$n_target"
+
+    local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
+    local phase_log="$LOG_DIR/${phase_name}.log"
+    local n_target
+    n_target=$(n_ids "$ids")
+
+    log "=== PHASE $phase_name: method=$method tag=$tag n=$n_target need_gpu=${need_mib}MiB ==="
+    log "  results=$results"
+    log "  log=$phase_log"
+
+    emet_kill_stale_eval_processes
+
+    while [ "$(count_completed "$results")" -lt "$n_target" ]; do
+        if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
+            log "GLOBAL deadline — stopping phase $phase_name at $(count_completed "$results")/$n_target"
+            return 2
+        fi
+        if ! wait_for_gpu "$need_mib"; then
+            return 2
+        fi
+        log "launch $phase_name attempt (done=$(count_completed "$results")/$n_target)"
+        TAG="$tag" IDS="$ids" METHOD="$method" TIMEOUT="$TIMEOUT" \
+            ./scripts/run_habitat_iter_subset.sh 2>&1 | tee -a "$phase_log" "$MAIN_LOG" || true
+        sleep 10
+    done
+    log "PHASE $phase_name COMPLETE $(count_completed "$results")/$n_target"
 }
 
 write_summary() {
-  local out="$LOG_DIR/summary.txt"
-  RUN_ID="$RUN_ID" LOG_DIR="$LOG_DIR" uv run python - <<PY >"$out"
+    local out="$LOG_DIR/summary.txt"
+    RUN_ID="$RUN_ID" LOG_DIR="$LOG_DIR" uv run python - <<PY >"$out"
 import json
 import os
 from collections import Counter
@@ -200,7 +200,7 @@ if dg_rows and bl_rows:
         agree = sum(1 for q in ids if dg[q]["correct"] == bl[q]["correct"])
         print(f"balanced32 head-to-head ({len(ids)} common): dynagraph {d_ok}/{len(ids)}  baseline {b_ok}/{len(ids)}  agree {agree}/{len(ids)}")
 PY
-  cat "$out" | tee -a "$MAIN_LOG"
+    cat "$out" | tee -a "$MAIN_LOG"
 }
 
 # Write manifest
@@ -238,10 +238,10 @@ run_phase "paper20_graph_eqa" graph_eqa "$IDS_PAPER20" "${PREFIX}_paper20_graph_
 run_phase "paper20_dynagraph" dynagraph "$IDS_PAPER20" "${PREFIX}_paper20_dynagraph" "$NEED_DYNAGRAPH" || true
 
 if [[ "$RUN_ANNOTATED37" == "1" && -n "${IDS_ANNOTATED37}" ]]; then
-  run_phase "annotated37_graph_eqa" graph_eqa "$IDS_ANNOTATED37" "${PREFIX}_annotated37_graph_eqa" "$NEED_BASELINE" || true
-  run_phase "annotated37_dynagraph" dynagraph "$IDS_ANNOTATED37" "${PREFIX}_annotated37_dynagraph" "$NEED_DYNAGRAPH" || true
+    run_phase "annotated37_graph_eqa" graph_eqa "$IDS_ANNOTATED37" "${PREFIX}_annotated37_graph_eqa" "$NEED_BASELINE" || true
+    run_phase "annotated37_dynagraph" dynagraph "$IDS_ANNOTATED37" "${PREFIX}_annotated37_dynagraph" "$NEED_DYNAGRAPH" || true
 else
-  log "SKIP annotated37 (RUN_ANNOTATED37=$RUN_ANNOTATED37 ids_empty=$([[ -z ${IDS_ANNOTATED37:-} ]] && echo 1 || echo 0))"
+    log "SKIP annotated37 (RUN_ANNOTATED37=$RUN_ANNOTATED37 ids_empty=$([[ -z ${IDS_ANNOTATED37:-} ]] && echo 1 || echo 0))"
 fi
 
 log "############ SUMMARY ############"

@@ -61,8 +61,8 @@ echo ""
 
 echo "=== Phase 4: unit tests ==="
 uv run emet test --no-sim -v \
-  src/test/memory/test_graph_eqa_memory.py \
-  src/test/memory/test_headless_export.py
+    src/test/memory/test_graph_eqa_memory.py \
+    src/test/memory/test_headless_export.py
 
 echo ""
 echo "Optional sim test (long; needs working MuJoCo server stack):"

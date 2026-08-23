@@ -192,10 +192,7 @@ def run_robovista_batch(
             fh.write(json.dumps(row) + "\n")
             fh.flush()
             rows.append(row)
-            logger.info(
-                f"robovista id={q.id} domain={q.domain} "
-                f"pred={letter or '?'} gold={q.gold_letter} ok={ok}"
-            )
+            logger.info(f"robovista id={q.id} domain={q.domain} pred={letter or '?'} gold={q.gold_letter} ok={ok}")
 
     summary = summarize_robovista_rows(rows)
     summary["output_dir"] = str(out_dir)
@@ -206,8 +203,5 @@ def run_robovista_batch(
     if eqa_hf_model_id:
         summary["eqa_hf_model_id"] = eqa_hf_model_id
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    logger.alert(
-        f"RoboVista done: {summary['correct']}/{summary['n']} "
-        f"acc={summary['accuracy']:.3f} -> {summary_path}"
-    )
+    logger.alert(f"RoboVista done: {summary['correct']}/{summary['n']} acc={summary['accuracy']:.3f} -> {summary_path}")
     return summary

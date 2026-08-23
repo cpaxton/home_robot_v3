@@ -146,7 +146,7 @@ def _warn_shared_vl_size_mismatch(requested: str | None) -> None:
     if got and req and got != req:
         logger.warning(
             "EQA VL shared client is already Qwen3.5-%s; ignoring requested size %r "
-            "(one multimodal load per process). Prefer matching ``--llm qwen35-vlm-%s`` with ``eqa_vl/model_size: \"%s\"``.",
+            '(one multimodal load per process). Prefer matching ``--llm qwen35-vlm-%s`` with ``eqa_vl/model_size: "%s"``.',
             got,
             req,
             got,
@@ -345,9 +345,7 @@ def create_default_eqa_vl_client(
     if device is None:
         device = default_eqa_vl_device()
     q = get_eqa_vl_str(parameters, "quantization", "int4")
-    shared = get_shared_qwen35_vl_client(
-        model_size=model_size, device=device, quantization=q, parameters=parameters
-    )
+    shared = get_shared_qwen35_vl_client(model_size=model_size, device=device, quantization=q, parameters=parameters)
     return Qwen3VLEQAClient(
         system_prompt,
         model_size=model_size,

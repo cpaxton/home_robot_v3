@@ -132,6 +132,19 @@ def test_H2_vram_prep_warms_then_releases_siglip():
     assert gm._obs_siglip_features
 
 
+def test_agentic_executor_consumes_manifest_budget_environment(monkeypatch):
+    from emet.memory.graph_eqa.agentic_eqa import build_agentic_eqa_executor
+
+    monkeypatch.setenv("EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS", "5")
+    monkeypatch.setenv("EMET_EQA_AGENTIC_MAX_NAV_STEPS", "4")
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_max_tool_rounds": 8, "agentic_max_nav_steps": 8}}
+    with patch("emet.eval.dynagraph_vram.warm_siglip_confirmed_memory"):
+        executor = build_agentic_eqa_executor(agent, "Where is the chair?")
+    assert executor.max_rounds == 5
+    assert executor.max_nav_steps == 4
+
+
 def test_H3_answer_only_skips_nav():
     """H3: allow_navigation=False → no navigate_to_target_pose / look_around."""
     from emet.controller.controller_graph_eqa import GraphEQAController

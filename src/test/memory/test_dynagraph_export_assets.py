@@ -16,9 +16,7 @@ def test_export_dynagraph_visual_assets(tmp_path: Path) -> None:
     mem = GraphEQAMemory(defer_llm_clients=True)
     rgb = np.zeros((64, 64, 3), dtype=np.uint8)
     rgb[10:30, 12:40] = 200
-    mem._observations.append(
-        GraphObservation(obs_id=1, rgb=rgb, xyz=np.array([1.0, 0.0, 0.5]), labels=["mug"])
-    )
+    mem._observations.append(GraphObservation(obs_id=1, rgb=rgb, xyz=np.array([1.0, 0.0, 0.5]), labels=["mug"]))
     mem._nodes.append(
         GraphNode(
             node_id=1,

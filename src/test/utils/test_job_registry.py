@@ -61,6 +61,26 @@ def test_looks_like_gpu_job_and_active_pids(tmp_path, monkeypatch):
     assert jr.active_gpu_job_pids(exclude_job_id=gpu.id) == []
 
 
+def test_command_gpu_heuristic_covers_hmeqa_without_need_mib():
+    assert jr.command_looks_like_gpu_job("countclock-recovery", "emet-habitat run-batch")
+    assert jr.command_looks_like_gpu_job("hmeqa-failset", "scripts/run_hmeqa_agentic_h2h.sh OUT")
+    assert not jr.command_looks_like_gpu_job("docs-build", "make docs")
+
+
+def test_gpu_lock_path_matches_shared_launcher_contract(tmp_path, monkeypatch):
+    monkeypatch.delenv("EMET_GPU_LOCK", raising=False)
+    monkeypatch.delenv("EMET_GPU_LOCK_FILE", raising=False)
+    assert jr.gpu_lock_path().name == "gpu.lock"
+
+    alias = tmp_path / "alias.lock"
+    monkeypatch.setenv("EMET_GPU_LOCK_FILE", str(alias))
+    assert jr.gpu_lock_path() == alias
+
+    canonical = tmp_path / "canonical.lock"
+    monkeypatch.setenv("EMET_GPU_LOCK", str(canonical))
+    assert jr.gpu_lock_path() == canonical
+
+
 def test_format_job_row_columns():
     job = jr.JobRecord(
         id="20260721_140000_abc123",

@@ -185,9 +185,9 @@ def main() -> int:
 
                 reused_old = False
                 if post_xyz is not None:
-                    reused_old = float(
-                        np.linalg.norm(post_xyz[:2] - np.asarray(old_pos[:2]))
-                    ) <= float(args.match_radius_m)
+                    reused_old = float(np.linalg.norm(post_xyz[:2] - np.asarray(old_pos[:2]))) <= float(
+                        args.match_radius_m
+                    )
                 payload["post_find_reused_old_pose"] = bool(reused_old)
                 payload["pass"] = not reused_old
                 payload["pre_find_ok"] = pre_xyz is not None

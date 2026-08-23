@@ -9,10 +9,11 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from emet.simulation.sim_subprocess import wait_for_sim_tcp_port
 

@@ -96,9 +96,7 @@ def main(
     resolved_llm = llm_key or (DEFAULT_VL_SERVE_MODEL if use_vl else DEFAULT_LLM_SERVE_MODEL)
     resolved_port = int(port) if port is not None else (DEFAULT_VL_SERVE_PORT if use_vl else DEFAULT_LLM_SERVE_PORT)
     resolved = resolve_serve_device(device)
-    click.echo(
-        f"emet serve llm: llm={resolved_llm} device={resolved} bind={host}:{resolved_port} vl={use_vl}"
-    )
+    click.echo(f"emet serve llm: llm={resolved_llm} device={resolved} bind={host}:{resolved_port} vl={use_vl}")
     serve_openai_llm(
         llm=resolved_llm,
         host=host,

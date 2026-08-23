@@ -6,19 +6,19 @@
 
 from __future__ import annotations
 
-import os
-
-# Before importing significance (scipy): avoid OpenBLAS fork+subprocess SIGSEGV.
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-
 import json
 from pathlib import Path
 
 import pytest
 
 from emet.eval import hmeqa_significance as sig
+
+
+@pytest.fixture(autouse=True)
+def _limit_blas_threads(monkeypatch):
+    """Keep scipy subprocess tests isolated without contaminating other modules."""
+    for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        monkeypatch.setenv(name, "1")
 
 
 def test_wilson_ci_bounds():

@@ -358,6 +358,19 @@ def env_eqa_hyp_recall_k() -> int:
         return DEFAULT_HYP_RECALL_K
 
 
+def _env_positive_int(name: str) -> int | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a positive integer; got {raw!r}") from exc
+    if value < 1:
+        raise ValueError(f"{name} must be a positive integer; got {value}")
+    return value
+
+
 def env_eqa_collect_trace() -> bool:
     v = os.environ.get("EMET_EQA_TRACE", "").strip().lower()
     return v in _TRUE
@@ -5471,12 +5484,20 @@ def build_agentic_eqa_executor(
     warm_siglip_confirmed_memory(agent)
     agent._habitat_blocked_goals = getattr(agent, "_habitat_blocked_goals", set()) or set()
     agent._habitat_recent_goals = getattr(agent, "_habitat_recent_goals", []) or []
+    env_max_rounds = _env_positive_int("EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS")
+    env_max_nav_steps = _env_positive_int("EMET_EQA_AGENTIC_MAX_NAV_STEPS")
     return AgenticEQAExecutor(
         agent,
         question,
         goal=goal,
-        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
-        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 8) or 8),
+        max_rounds=int(
+            max_rounds if max_rounds is not None else env_max_rounds or cfg.get("agentic_max_tool_rounds", 8) or 8
+        ),
+        max_nav_steps=int(
+            max_nav_steps
+            if max_nav_steps is not None
+            else env_max_nav_steps or cfg.get("agentic_max_nav_steps", 8) or 8
+        ),
         verify_min_sim=float(
             verify_min_sim
             if verify_min_sim is not None

@@ -97,9 +97,7 @@ def test_run_ovmm_batch_defers_managed_vl_to_episode(mock_worker_cls, _mock_ep, 
         "emet.eval.ovmm_find_phase.load_find_phase_episodes",
         return_value=[episode],
     ):
-        with patch(
-            "emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config"
-        ) as mock_bench:
+        with patch("emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config") as mock_bench:
             mock_bench.return_value = SimpleNamespace(
                 sim_episodes_yaml="configs/ovmm/find_phase_episodes.yaml",
                 full_episodes_yaml="configs/ovmm/full_episodes.yaml",
@@ -151,9 +149,7 @@ def test_run_ovmm_batch_skips_worker_when_endpoint_set(mock_worker_cls, _mock_ep
         "emet.eval.ovmm_find_phase.load_find_phase_episodes",
         return_value=[episode],
     ):
-        with patch(
-            "emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config"
-        ) as mock_bench:
+        with patch("emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config") as mock_bench:
             mock_bench.return_value = SimpleNamespace(
                 sim_episodes_yaml="configs/ovmm/find_phase_episodes.yaml",
                 full_episodes_yaml="configs/ovmm/full_episodes.yaml",

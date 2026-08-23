@@ -49,10 +49,7 @@ def test_get_encoder_all(encoder_name):
         # DINOv3 weights are gated on Hugging Face; skip when the env has no access.
         err = f"{type(e).__name__}: {e}"
         if encoder_name == "dinov3" and (
-            "GatedRepo" in err
-            or "403" in err
-            or "gated" in err.lower()
-            or "huggingface.co" in err.lower()
+            "GatedRepo" in err or "403" in err or "gated" in err.lower() or "huggingface.co" in err.lower()
         ):
             pytest.skip(f"DINOv3 weights unavailable in this environment: {e}")
         raise

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,6 +15,7 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
 from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsConfig,
     EpisodeDiagnosticsRecorder,
@@ -21,7 +23,7 @@ from emet.eval.episode_diagnostics import (
     habitat_export_voxel_history_default,
     unbind_diagnostics_recorder,
 )
-from emet.habitat.config import default_hm3d_scene_dir
+from emet.habitat.config import default_hm3d_scene_dir, hm3d_scene_glb_path
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 from emet.habitat.episode_debug import (
     enrich_episode_metrics,
@@ -29,6 +31,11 @@ from emet.habitat.episode_debug import (
     save_episode_debug_bundle,
     save_error_episode_bundle,
     write_run_manifest,
+)
+from emet.habitat.hm3d_semantics import (
+    hm3d_annotated_scene_dataset_config,
+    hm3d_semantic_glb_for_basis,
+    resolve_hm3d_semantics_enabled,
 )
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_dataset_question
 from emet.habitat.metrics import (
@@ -166,11 +173,38 @@ def _configure_frontier_parameters(
     parameters.set("graph_eqa_frontier_nodes", blk)
 
 
+def _validate_requested_hm3d_semantics(
+    *,
+    requested: bool | None,
+    question_ids: list[int],
+    questions: list[Any],
+    hm3d_root: Path | None,
+) -> None:
+    """Fail the batch before scoring rows when an explicit GT arm lacks assets."""
+    if requested is not True:
+        return
+    root = Path(hm3d_root or default_hm3d_scene_dir()).expanduser().resolve()
+    hm3d_data_root = root.parent.parent.parent
+    annotated_config = hm3d_annotated_scene_dataset_config(
+        hm3d_data_root,
+        split=root.name,
+    )
+    for question_id in question_ids:
+        question = get_question(questions, question_id=question_id)
+        scene_glb = hm3d_scene_glb_path(question.scene, root)
+        resolve_hm3d_semantics_enabled(
+            True,
+            semantic_glb=hm3d_semantic_glb_for_basis(scene_glb),
+            annotated_config=annotated_config,
+        )
+
+
 def _configure_eqa_parameters(
     parameters: Parameters,
     *,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    eqa_vl_quantization: str | None,
     device: str = "cuda",
 ) -> None:
     """HM-EQA always uses the MCQ system prompt; optional VL family/HF id overrides."""
@@ -178,7 +212,7 @@ def _configure_eqa_parameters(
     # Must run even when no VL CLI override — otherwise GraphEQAMemory sees an empty
     # variant, loads the caption-heavy EQA_PROMPT, and skips Reasoning: prefill.
     eqa.setdefault("prompt_variant", "hmeqa")
-    if eqa_vl_family is None and eqa_hf_model_id is None:
+    if eqa_vl_family is None and eqa_hf_model_id is None and eqa_vl_quantization is None:
         parameters.set("eqa", eqa)
         return
     from emet.llms.eqa_vl_settings import resolve_vl_hf_model_id
@@ -199,6 +233,9 @@ def _configure_eqa_parameters(
                     eqa["vl_hf_model_id"] = default_hf_model_id(fam)
     if eqa_hf_model_id is not None:
         eqa["vl_hf_model_id"] = eqa_hf_model_id
+    if eqa_vl_quantization is not None:
+        quantization = str(eqa_vl_quantization).strip().lower()
+        eqa["vl_quantization"] = None if quantization == "none" else quantization
     parameters.set("eqa", eqa)
 
 
@@ -218,7 +255,6 @@ def _make_controller(
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
 ):
-    from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
     from emet.eval.memory_backends import DYNAGRAPH
 
     method = _normalize_hmeqa_method(method)
@@ -230,7 +266,9 @@ def _make_controller(
         explore_when_uncovered=explore_when_uncovered,
     )
     harness_opts = dict(params.get("dynagraph_harness") or {})
-    hm3d_sem = robot.uses_hm3d_semantics if use_hm3d_semantics is None else use_hm3d_semantics
+    hm3d_sem = robot.uses_hm3d_semantics
+    if use_hm3d_semantics is True and not hm3d_sem:
+        raise RuntimeError("HM3D semantics were requested but the simulator did not enable them")
     # HM3D semantic sensor supplies graph labels; reserve VLM for EQA queries only.
     graph_perception = use_real_vlm and not hm3d_sem
     # Habitat: depth voxel map for nav only — no SigLIP/YoloE reload per episode.
@@ -265,6 +303,26 @@ def _make_controller(
     return agent
 
 
+def _seed_hmeqa_enrich_labels(
+    agent,
+    *,
+    question_id: int,
+    scene: str,
+    questions_path: Path | None,
+    enabled: bool,
+) -> None:
+    """Seed optional GT object hints independently of semantic perception."""
+    if not enabled or agent.graph_memory is None:
+        return
+    hints = enrich_labels_for_dataset_question(
+        question_id,
+        scene,
+        questions_path=questions_path,
+    )
+    if hints:
+        agent.graph_memory.seed_object_hints(hints)
+
+
 def run_hmeqa_episode(
     *,
     question_id: int,
@@ -282,6 +340,7 @@ def run_hmeqa_episode(
     use_enrich_labels: bool = False,
     eqa_vl_family: str | None = None,
     eqa_hf_model_id: str | None = None,
+    eqa_vl_quantization: str | None = None,
     device: str | None = "cuda",
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
@@ -323,6 +382,7 @@ def run_hmeqa_episode(
             parameters,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            eqa_vl_quantization=eqa_vl_quantization,
             device=device or "cuda",
         )
         _configure_frontier_parameters(
@@ -332,8 +392,6 @@ def run_hmeqa_episode(
         )
         _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
         _configure_habitat_mapping(parameters)
-        import os
-
         if memory_summary is None:
             raw = os.environ.get("EMET_DYNAGRAPH_MEMORY_SUMMARY", "").strip().lower()
             if raw in ("1", "true", "yes", "on"):
@@ -388,14 +446,13 @@ def run_hmeqa_episode(
         if agent.graph_memory is not None:
             # GraphEQA enrich labels are a separate GT-derived oracle axis. Keep
             # them opt-in rather than coupling them to the semantic sensor.
-            if use_enrich_labels:
-                hints = enrich_labels_for_dataset_question(
-                    question_id,
-                    q.scene,
-                    questions_path=questions_path,
-                )
-                if hints:
-                    agent.graph_memory.seed_object_hints(hints)
+            _seed_hmeqa_enrich_labels(
+                agent,
+                question_id=question_id,
+                scene=q.scene,
+                questions_path=questions_path,
+                enabled=use_enrich_labels,
+            )
             agent.graph_memory.extract_relevant_objects(eqa_question)
         executor = EQAExecuter(agent)
         if rotate_in_place:
@@ -614,6 +671,7 @@ def run_hmeqa_batch(
     init_poses_path: Path | None = None,
     eqa_vl_family: str | None = None,
     eqa_hf_model_id: str | None = None,
+    eqa_vl_quantization: str | None = None,
     device: str | None = "cuda",
     continue_on_error: bool = True,
     use_hm3d_semantics: bool | None = None,
@@ -635,6 +693,12 @@ def run_hmeqa_batch(
 
     results: list[EpisodeMetrics] = []
     questions = load_hmeqa_questions(questions_path)
+    _validate_requested_hm3d_semantics(
+        requested=use_hm3d_semantics,
+        question_ids=question_ids,
+        questions=questions,
+        hm3d_root=hm3d_root,
+    )
     done: set[int] = set()
     explicit_tag = (debug_run_tag or "").strip() or None
     run_tag = explicit_tag or run_tag_from_output_jsonl(output_jsonl)
@@ -646,11 +710,29 @@ def run_hmeqa_batch(
     )
     _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
     _configure_habitat_mapping(parameters)
+    manifest_parameters = _apply_method_parameters(parameters, method)
+    apply_dynagraph_harness_overrides(
+        manifest_parameters,
+        memory_summary=memory_summary,
+        mcq_debias=mcq_debias,
+        explore_when_uncovered=explore_when_uncovered,
+    )
+    _configure_eqa_parameters(
+        manifest_parameters,
+        eqa_vl_family=eqa_vl_family,
+        eqa_hf_model_id=eqa_hf_model_id,
+        eqa_vl_quantization=eqa_vl_quantization,
+        device=device or "cuda",
+    )
     if output_jsonl is not None:
+        output_jsonl.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path = output_jsonl.parent / f"{output_jsonl.stem}_manifest.json"
+        if not output_jsonl.exists() and not (resume and manifest_path.is_file()):
+            # Leave a durable empty JSONL beside a newly-created manifest so a
+            # crash before the first episode append can still resume safely.
+            output_jsonl.touch()
         if resume and output_jsonl.exists():
             done = read_completed_question_ids(output_jsonl)
-        elif output_jsonl.exists():
-            output_jsonl.unlink()
         manifest = write_run_manifest(
             output_jsonl=output_jsonl,
             method=method,
@@ -660,11 +742,15 @@ def run_hmeqa_batch(
             max_movement_step=max_movement_step,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            eqa_vl_quantization=eqa_vl_quantization,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
             use_enrich_labels=use_enrich_labels,
             resume=resume,
-            parameters=parameters,
+            parameters=manifest_parameters,
+            hm3d_root=hm3d_root,
+            questions_path=questions_path,
+            init_poses_path=init_poses_path,
         )
         print(f"run manifest: {manifest}", flush=True)
     for qid in question_ids:
@@ -683,6 +769,7 @@ def run_hmeqa_batch(
                 init_poses_path=init_poses_path,
                 eqa_vl_family=eqa_vl_family,
                 eqa_hf_model_id=eqa_hf_model_id,
+                eqa_vl_quantization=eqa_vl_quantization,
                 device=device,
                 use_hm3d_semantics=use_hm3d_semantics,
                 use_enrich_labels=use_enrich_labels,
@@ -747,6 +834,7 @@ def run_hmeqa_compare(
     init_poses_path: Path | None = None,
     eqa_vl_family: str | None = None,
     eqa_hf_model_id: str | None = None,
+    eqa_vl_quantization: str | None = None,
     device: str | None = "cuda",
     use_hm3d_semantics: bool | None = None,
     use_enrich_labels: bool = False,
@@ -761,6 +849,7 @@ def run_hmeqa_compare(
         "init_poses_path": init_poses_path,
         "eqa_vl_family": eqa_vl_family,
         "eqa_hf_model_id": eqa_hf_model_id,
+        "eqa_vl_quantization": eqa_vl_quantization,
         "device": device,
         "use_hm3d_semantics": use_hm3d_semantics,
         "use_enrich_labels": use_enrich_labels,

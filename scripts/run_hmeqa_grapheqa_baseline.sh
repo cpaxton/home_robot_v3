@@ -3,8 +3,8 @@
 # GT semantics on vs off (4 arms). Lets us isolate the GT-semantics perception
 # effect from the Dynagraph memory delta on identical episodes.
 #
-# Episodes: the 114 Explore-EQA rows whose scene is in the GraphEQA enrich set
-# (59 HM3D train scenes, all with .semantic.glb) — see
+# Episodes: the 114 HM-EQA rows selected by the upstream GraphEQA semantic-scene
+# filter (59 HM3D train scenes, all with .semantic.glb) — see
 # emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_question_ids.
 #
 # Arms (method x semantics):
@@ -22,6 +22,7 @@
 #   TIMEOUT    per-arm wall timeout seconds (default 28800)
 #   NEED_MIB   VRAM gate (default 12000)
 #   NEED_FREE_GB  disk floor under ~/.cache/habitat_eqa (default 50)
+#   RESUME      1 to resume only when the existing per-arm manifest matches (default 0)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -37,6 +38,7 @@ NEED_MIB="${NEED_MIB:-12000}"
 NEED_FREE_GB="${NEED_FREE_GB:-50}"
 METHODS="${METHODS:-dynagraph static_graph}"
 SEMANTICS="${SEMANTICS:-on off}"
+RESUME="${RESUME:-0}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
@@ -66,7 +68,7 @@ else
     echo "[$(date -Is)] disk preflight OK: ${FREE_GB} GB free under ~/.cache/habitat_eqa (need >= ${NEED_FREE_GB} GB)"
 fi
 
-# --- the ACTUAL GraphEQA paper episodes (114 rows) --------------------------
+# --- upstream GraphEQA HM-EQA semantic-filtered episodes (114 rows) ---------
 IDS="$(uv run python -c 'from emet.habitat.hmeqa_enrich_labels import grapheqa_baseline_question_ids as f; print(",".join(map(str, f())))')"
 N="$(awk -F, '{print NF}' <<<"$IDS")"
 echo "$IDS" >"$OUT_DIR/IDS.txt"
@@ -91,6 +93,10 @@ run_arm() {
     fi
     local jsonl="$HOME/.cache/habitat_eqa/results/subset_${tag}_${FAMILY}.jsonl"
     local logf="$OUT_DIR/${method}_${sem}.log"
+    local resume_args=()
+    if [[ "$RESUME" == "1" ]]; then
+        resume_args+=(--resume)
+    fi
     log "=== grapheqa method=$method semantics=$sem tag=$tag n=$N ==="
     NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
     timeout "$TIMEOUT" "$HAB" run-batch \
@@ -103,9 +109,9 @@ run_arm() {
         --device cuda \
         --frontier-nodes \
         --frontier-keyword-weight 2 \
-        --resume \
         --no-enrich-labels \
         "$flag" \
+        "${resume_args[@]}" \
         --output "$jsonl" \
         2>&1 | tee "$logf"
     echo "$jsonl" >"$OUT_DIR/${method}_${sem}_jsonl.path"

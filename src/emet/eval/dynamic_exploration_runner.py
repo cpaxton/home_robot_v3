@@ -62,13 +62,8 @@ def count_object_nodes(memory: Any, *, label_hint: str | None = None) -> int:
     nodes = [n for n in memory.get_nodes() if not getattr(n, "is_viewpoint", False)]
     if label_hint:
         hint = label_hint.lower()
-        nodes = [
-            n
-            for n in nodes
-            if any(hint in str(lab).lower() for lab in (getattr(n, "labels", None) or []))
-        ]
+        nodes = [n for n in nodes if any(hint in str(lab).lower() for lab in (getattr(n, "labels", None) or []))]
     return len(nodes)
-
 
 
 def count_object_nodes_near_xy(
@@ -464,9 +459,7 @@ def run_explore_episode_subprocess(
                 )
             except subprocess.TimeoutExpired as exc:
                 tail = str(exc.output or _tail_text(dyn_log))
-                raise RuntimeError(
-                    f"dynagraph timed out after {dyn_timeout:.0f}s\n{tail[-4000:]}"
-                ) from exc
+                raise RuntimeError(f"dynagraph timed out after {dyn_timeout:.0f}s\n{tail[-4000:]}") from exc
             combined = dyn_log.read_text(encoding="utf-8", errors="replace")
             if proc.returncode != 0:
                 raise RuntimeError(f"dynagraph exited {proc.returncode}\n{combined[-4000:]}")
@@ -729,12 +722,8 @@ def run_world_change_episode(
 
                 # Stale = nodes still near the old GT pose after recovery (churn @ 0.75 m).
                 if old_pos is not None:
-                    n_stale_after_move = count_object_nodes_near_xy(
-                        mem, old_pos, radius_m=_NODE_MATCH_RADIUS_M
-                    )
-                n_nodes_near_new = count_object_nodes_near_xy(
-                    mem, [rx, ry], radius_m=_NODE_MATCH_RADIUS_M
-                )
+                    n_stale_after_move = count_object_nodes_near_xy(mem, old_pos, radius_m=_NODE_MATCH_RADIUS_M)
+                n_nodes_near_new = count_object_nodes_near_xy(mem, [rx, ry], radius_m=_NODE_MATCH_RADIUS_M)
                 if mem is not None and getattr(mem, "memory_summary_enabled", False):
                     refresh = getattr(mem, "refresh_siglip_confirmed_memory", None)
                     if callable(refresh):
@@ -780,9 +769,7 @@ def run_world_change_episode(
                         loc_err = float(np.linalg.norm(pred_xy - gt_xy))
 
                 autonomous_events = (
-                    mem.get_change_events()
-                    if mem is not None and hasattr(mem, "get_change_events")
-                    else []
+                    mem.get_change_events() if mem is not None and hasattr(mem, "get_change_events") else []
                 )
                 from emet.eval.dynamic_change_metrics import score_hidden_relocations
 
@@ -964,14 +951,8 @@ def invalidate_checkpoint_nodes_near_moves(
         if _near_old(n) and n.get("obs_id") is not None and not n.get("is_viewpoint")
     }
     if drop_obs and isinstance(data.get("observations"), list):
-        data["observations"] = [
-            o for o in data["observations"] if int(o.get("obs_id", -1)) not in drop_obs
-        ]
-        kept = [
-            n
-            for n in kept
-            if not (n.get("is_viewpoint") and int(n.get("obs_id", -1)) in drop_obs)
-        ]
+        data["observations"] = [o for o in data["observations"] if int(o.get("obs_id", -1)) not in drop_obs]
+        kept = [n for n in kept if not (n.get("is_viewpoint") and int(n.get("obs_id", -1)) in drop_obs)]
     for i, n in enumerate(kept, start=1):
         n["node_id"] = i
     data["nodes"] = kept
@@ -1026,9 +1007,7 @@ def _apply_lifelong_changes(
                 measured = [float(x) for x in entry["pos"][:3]]
                 rec["verified_pos"] = measured
                 target = np.asarray(rec.get("pos", measured), dtype=np.float64)
-                rec["verified"] = bool(
-                    float(np.linalg.norm(np.asarray(measured) - target)) <= 0.05
-                )
+                rec["verified"] = bool(float(np.linalg.norm(np.asarray(measured) - target)) <= 0.05)
             move_records.append(rec)
         return applied, move_records
     finally:
@@ -1172,11 +1151,7 @@ def run_lifelong_episode(
                     n_obs=n_obs,
                 )
                 health["failure_class"] = classify_graph_failure(health)
-                autonomous_events = [
-                    dict(event)
-                    for node in nodes
-                    for event in (node.get("change_events") or [])
-                ]
+                autonomous_events = [dict(event) for node in nodes for event in (node.get("change_events") or [])]
                 from emet.eval.dynamic_change_metrics import score_hidden_relocations
 
                 change_metrics = score_hidden_relocations(

@@ -170,9 +170,7 @@ def _inspect_ovmm_find(run_id: str, harness: str, *, suffix: str, episode_id: st
     if expect_gt_pass and fps <= 0:
         out.semantic = "FAIL"
         out.headline = f"find_partial_success={fps} (GT smoke expects >0)"
-        out.notes.append(
-            "Harness exit 0 alone is not enough — GT oracle should localize object + recep."
-        )
+        out.notes.append("Harness exit 0 alone is not enough — GT oracle should localize object + recep.")
         if row.get("gt_object_body") is None:
             out.notes.append(
                 "gt_object_body is null: sim placements may not match episode queries "
@@ -265,9 +263,7 @@ def inspect_track7(run_id: str, harness: str) -> TrackCheck:
         out.headline = "subprocess error (see JSON/CSV)"
         out.metrics["error"] = err[:240]
         if out.metrics.get("explore_k3_finished") and not out.metrics.get("export_completed"):
-            out.notes.append(
-                "Explore K=3 finished but export/EQA did not — use --skip-eqa + GPU for smoke."
-            )
+            out.notes.append("Explore K=3 finished but export/EQA did not — use --skip-eqa + GPU for smoke.")
     elif out.metrics.get("explore_k3_finished") and not out.metrics.get("export_completed"):
         out.semantic = "FAIL" if harness == "PASS" else "WARN"
         out.headline = "explore finished; export missing (likely EQA timeout)"
@@ -298,7 +294,7 @@ def inspect_track7(run_id: str, harness: str) -> TrackCheck:
 def _rerun_replay_commands(run_id: str) -> list[str]:
     return [
         "# Habitat Q17 bundle (topdown map, trajectory, scene graph):",
-        f"xdg-open ~/.cache/habitat_eqa/episodes/cli_episode_q0017/q0017_dynagraph/topdown_map.png",
+        "xdg-open ~/.cache/habitat_eqa/episodes/cli_episode_q0017/q0017_dynagraph/topdown_map.png",
         "",
         "# Molmo dynamic explore — live Rerun replay (K=3, no EQA, GPU):",
         "EMET_SIM_NAV_TELEPORT=1 uv run emet run dynagraph \\",
@@ -308,7 +304,7 @@ def _rerun_replay_commands(run_id: str) -> list[str]:
         "",
         "# Robocasa world-change visual (short K=3; needs sim server running):",
         "uv run python scripts/eval_dynamic_exploration.py \\",
-        f"  --phase world-change --episode-id robocasa_seed0_world_change \\",
+        "  --phase world-change --episode-id robocasa_seed0_world_change \\",
         "  --backend dynagraph --explore-max-iters 3 \\",
         f"  --output-dir ~/runs/emet/dynamic_exploration/{run_id}_world_change_replay",
     ]
@@ -372,9 +368,7 @@ def main() -> int:
         inspect_track1(run_id, h(1)),
         inspect_track2(run_id, h(2)),
         _inspect_ovmm_find(run_id, h(3), suffix="robocasa", episode_id="robocasa_pp_s1", expect_gt_pass=True),
-        _inspect_ovmm_find(
-            run_id, h(4), suffix="molmo", episode_id="molmo_ithor_s2_idx0", expect_gt_pass=True
-        ),
+        _inspect_ovmm_find(run_id, h(4), suffix="molmo", episode_id="molmo_ithor_s2_idx0", expect_gt_pass=True),
         inspect_track5(h(5)),
         inspect_track6(run_id, h(6)),
         inspect_track7(run_id, h(7)),

@@ -34,6 +34,29 @@ _SKIP_CATEGORY_NAMES = frozenset(
 )
 
 
+def resolve_hm3d_semantics_enabled(
+    requested: bool | None,
+    *,
+    semantic_glb: Path,
+    annotated_config: Path | None,
+) -> bool:
+    """Resolve the semantic sensor request, failing closed for an explicit oracle arm."""
+    has_semantic_glb = semantic_glb.is_file()
+    has_annotated_config = annotated_config is not None and annotated_config.is_file()
+    if requested is True and not (has_semantic_glb and has_annotated_config):
+        missing: list[str] = []
+        if not has_semantic_glb:
+            missing.append(str(semantic_glb))
+        if not has_annotated_config:
+            missing.append("HM3D annotated scene_dataset_config.json")
+        raise FileNotFoundError(
+            "HM3D semantics were explicitly requested, but required semantic assets are missing: " + ", ".join(missing)
+        )
+    if requested is False:
+        return False
+    return has_semantic_glb and has_annotated_config
+
+
 def _clean_category_name(raw: str) -> str:
     name = raw.split("/")[-1].replace("_", " ").strip().lower()
     name = re.sub(r"\s+", " ", name)

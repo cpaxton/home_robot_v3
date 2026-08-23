@@ -21,6 +21,7 @@ from emet.eval.hmeqa_launch import (
     normalize_hmeqa_vl_endpoint,
     prepare_hmeqa_run_manifest,
     prepare_hmeqa_run_manifest_from_env,
+    validate_hmeqa_runtime_environment,
 )
 
 
@@ -189,6 +190,8 @@ def _treatment_config():
         episode_timeout_seconds=3600,
         max_planning_steps=12,
         max_movement_step=6,
+        data_dir="/datasets/hmeqa",
+        hm3d_root="/datasets/hm3d/train",
     )
 
 
@@ -198,6 +201,21 @@ def _git_state(commit: str = "a" * 40):
         "dirty": False,
         "dirty_digest": None,
         "status": [],
+    }
+
+
+def _external_inputs(digest: str = "a"):
+    return {
+        "data_dir": "/datasets/hmeqa",
+        "questions": {
+            "path": "/datasets/hmeqa/questions.csv",
+            "sha256": f"sha256:{digest}",
+        },
+        "scene_init_poses": {
+            "path": "/datasets/hmeqa/scene_init_poses.csv",
+            "sha256": "sha256:poses",
+        },
+        "hm3d_root": "/datasets/hm3d/train",
     }
 
 
@@ -216,6 +234,7 @@ def test_hmeqa_run_manifest_freezes_config_and_refuses_mismatch(tmp_path):
         sources={"variant.id": "command_line"},
         resume=False,
         git_state=_git_state(),
+        external_inputs=_external_inputs(),
     )
     assert manifest["schema_version"] == HMEQA_RUN_MANIFEST_VERSION
     assert manifest["git"]["commit"] == "a" * 40
@@ -224,12 +243,23 @@ def test_hmeqa_run_manifest_freezes_config_and_refuses_mismatch(tmp_path):
     assert manifest["ids"]["question_ids"] == [2, 104]
     assert manifest["config_digest"] == hmeqa_run_config_digest(config)
 
+    with pytest.raises(HmeqaRunManifestError, match="already exists"):
+        prepare_hmeqa_run_manifest(
+            tmp_path,
+            project_root=tmp_path,
+            config=config,
+            resume=False,
+            git_state=_git_state(),
+            external_inputs=_external_inputs(),
+        )
+
     resumed = prepare_hmeqa_run_manifest(
         tmp_path,
         project_root=tmp_path,
         config=config,
         resume=True,
         git_state=_git_state(),
+        external_inputs=_external_inputs(),
     )
     assert resumed == manifest
 
@@ -242,6 +272,7 @@ def test_hmeqa_run_manifest_freezes_config_and_refuses_mismatch(tmp_path):
             config=changed,
             resume=True,
             git_state=_git_state(),
+            external_inputs=_external_inputs(),
         )
 
 
@@ -253,6 +284,7 @@ def test_hmeqa_run_manifest_refuses_commit_or_dirty_state_mismatch(tmp_path):
         config=config,
         resume=False,
         git_state=_git_state(),
+        external_inputs=_external_inputs(),
     )
     with pytest.raises(HmeqaRunManifestError, match="git commit"):
         prepare_hmeqa_run_manifest(
@@ -261,6 +293,7 @@ def test_hmeqa_run_manifest_refuses_commit_or_dirty_state_mismatch(tmp_path):
             config=config,
             resume=True,
             git_state=_git_state("b" * 40),
+            external_inputs=_external_inputs(),
         )
     with pytest.raises(HmeqaRunManifestError, match="git dirty"):
         prepare_hmeqa_run_manifest(
@@ -274,6 +307,65 @@ def test_hmeqa_run_manifest_refuses_commit_or_dirty_state_mismatch(tmp_path):
                 "dirty_digest": "sha256:different",
                 "status": [" M src/example.py"],
             },
+            external_inputs=_external_inputs(),
+        )
+
+
+def test_hmeqa_run_manifest_refuses_dataset_hash_mismatch(tmp_path):
+    config = _treatment_config()
+    prepare_hmeqa_run_manifest(
+        tmp_path,
+        project_root=tmp_path,
+        config=config,
+        resume=False,
+        git_state=_git_state(),
+        external_inputs=_external_inputs("first"),
+    )
+    with pytest.raises(HmeqaRunManifestError, match="dataset hashes"):
+        prepare_hmeqa_run_manifest(
+            tmp_path,
+            project_root=tmp_path,
+            config=config,
+            resume=True,
+            git_state=_git_state(),
+            external_inputs=_external_inputs("changed"),
+        )
+
+
+def test_hmeqa_run_manifest_hashes_real_dataset_files(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    questions = data_dir / "questions.csv"
+    questions.write_text("question data\n", encoding="utf-8")
+    (data_dir / "scene_init_poses.csv").write_text("pose data\n", encoding="utf-8")
+    hm3d_root = tmp_path / "hm3d"
+    hm3d_root.mkdir()
+    config = build_hmeqa_run_config(
+        arms="agentic",
+        ids="11",
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        data_dir=data_dir,
+        hm3d_root=hm3d_root,
+    )
+
+    prepare_hmeqa_run_manifest(
+        tmp_path,
+        project_root=tmp_path,
+        config=config,
+        resume=False,
+        git_state=_git_state(),
+    )
+    questions.write_text("changed question data\n", encoding="utf-8")
+
+    with pytest.raises(HmeqaRunManifestError, match="dataset hashes"):
+        prepare_hmeqa_run_manifest(
+            tmp_path,
+            project_root=tmp_path,
+            config=config,
+            resume=True,
+            git_state=_git_state(),
         )
 
 
@@ -286,10 +378,15 @@ def test_direct_script_resume_reuses_frozen_variant(monkeypatch, tmp_path):
         config=config,
         resume=False,
         git_state=git_state,
+        external_inputs=_external_inputs(),
     )
     monkeypatch.setattr(
         "emet.eval.hmeqa_launch.hmeqa_git_state",
         lambda _project_root: git_state,
+    )
+    monkeypatch.setattr(
+        "emet.eval.hmeqa_launch.hmeqa_external_input_state",
+        lambda _config: _external_inputs(),
     )
     manifest = prepare_hmeqa_run_manifest_from_env(
         tmp_path,
@@ -307,10 +404,19 @@ def test_direct_script_resume_allows_empty_new_overnight_phase(monkeypatch, tmp_
         "emet.eval.hmeqa_launch.hmeqa_git_state",
         lambda _project_root: _git_state(),
     )
+    monkeypatch.setattr(
+        "emet.eval.hmeqa_launch.hmeqa_external_input_state",
+        lambda _config: _external_inputs(),
+    )
     manifest = prepare_hmeqa_run_manifest_from_env(
         tmp_path,
         project_root=tmp_path,
-        env={"HOLDOUT_IDS": "15,56", "ARMS": "classic,agentic"},
+        env={
+            "HOLDOUT_IDS": "15,56",
+            "ARMS": "classic,agentic",
+            "HABITAT_EQA_DATA_DIR": "/datasets/hmeqa",
+            "HM3D_SCENE_DIR": "/datasets/hm3d/train",
+        },
         resume=True,
     )
     assert manifest["ids"]["question_ids"] == [15, 56]
@@ -331,3 +437,73 @@ def test_direct_script_resume_refuses_unfrozen_historical_artifacts(monkeypatch,
             env={},
             resume=True,
         )
+
+
+def test_direct_script_rejects_unfrozen_behavior_environment(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "emet.eval.hmeqa_launch.hmeqa_git_state",
+        lambda _project_root: _git_state(),
+    )
+    with pytest.raises(HmeqaRunManifestError, match="EMET_EQA_FORCE_ANSWER"):
+        prepare_hmeqa_run_manifest_from_env(
+            tmp_path,
+            project_root=tmp_path,
+            env={"EMET_EQA_FORCE_ANSWER": "0"},
+            resume=False,
+        )
+
+
+def test_runtime_environment_allows_derived_openai_base_only_for_frozen_host():
+    config = build_hmeqa_run_config(
+        arms="agentic",
+        ids="11",
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        host="caliban",
+    )
+    validate_hmeqa_runtime_environment(
+        {
+            "EMET_LLM_HOST": "caliban",
+            "EMET_OPENAI_BASE_URL": "http://caliban:8000/v1",
+        },
+        config=config,
+    )
+    with pytest.raises(HmeqaRunManifestError, match="EMET_OPENAI_BASE_URL"):
+        validate_hmeqa_runtime_environment(
+            {"EMET_OPENAI_BASE_URL": "http://other:8000/v1"},
+            config=config,
+        )
+
+
+def test_hmeqa_config_freezes_runtime_budget_quantization_and_input_paths():
+    config = build_hmeqa_run_config(
+        arms="agentic",
+        ids="11",
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        eqa_vl_quantization="int8",
+        agentic_max_tool_rounds=5,
+        agentic_max_nav_steps=4,
+        data_dir="/datasets/hmeqa",
+        hm3d_root="/datasets/hm3d/train",
+    )
+    parts = hmeqa_h2h_env_parts(
+        arms="agentic",
+        ids="11",
+        coverage_qids="11",
+        cooldown=20,
+        crash_policy="skip",
+        streak_abort=2,
+        agentic_verifier="none",
+        require_verified=False,
+        agentic_router=True,
+        run_config=config,
+    )
+    joined = " ".join(parts)
+    assert "EQA_VL_QUANTIZATION=int8" in joined
+    assert "EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS=5" in joined
+    assert "EMET_EQA_AGENTIC_MAX_NAV_STEPS=4" in joined
+    assert "HABITAT_EQA_DATA_DIR=/datasets/hmeqa" in joined
+    assert "HM3D_SCENE_DIR=/datasets/hm3d/train" in joined

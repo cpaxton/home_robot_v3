@@ -1,8 +1,8 @@
 # Experiment: joint agentic loop across tasks
 
-**Branch:** `feat/hmeqa-strategy`  
+**Branch:** `feat/hmeqa-strategy`
 **Code:** shared `AgenticEQAExecutor` / `run_agentic_eqa` in
-`src/emet/memory/graph_eqa/agentic_eqa.py` (+ `run_agentic_eqa_result`).  
+`src/emet/memory/graph_eqa/agentic_eqa.py` (+ `run_agentic_eqa_result`).
 **Refs:** [HMEQA_STRATEGY.md](../plans/HMEQA_STRATEGY.md), [agentic_scale.md](agentic_scale.md).
 
 ## Goal
@@ -95,5 +95,3 @@ HM-EQA Habitat and OVMM mujoco on merged main; the world-change leg's failure is
 post-relocation explore-planner stall (documented environmental limitation), not the
 agentic loop. **0 `invalid in state ANSWER` across all three legs** — the #114
 verify-gate reset is confirmed non-regressing and loop-stable across tasks.
-
-

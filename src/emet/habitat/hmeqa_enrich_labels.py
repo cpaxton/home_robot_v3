@@ -11,14 +11,18 @@ from pathlib import Path
 
 import yaml
 
-# GraphEQA HM-EQA paper evaluates the first 113 Explore-EQA HM3D questions (indices 0–112).
-HMEQA_PAPER_QUESTION_COUNT = 113
+# Historical emet runs used a fixed q0–112 slice. The GraphEQA repository does
+# not define that slice: its HM-EQA runner filters the 500-row CSV by semantic
+# scene availability, yielding the 114-entry enrich sequence bundled below.
+HMEQA_LEGACY_SLICE_COUNT = 113
+HMEQA_PAPER_QUESTION_COUNT = HMEQA_LEGACY_SLICE_COUNT
+GRAPHEQA_HMEQA_QUESTION_COUNT = 114
 
 _DEFAULT_LABELS_PATH = Path(__file__).resolve().parent / "hmeqa_enrich_labels.yaml.bundled"
 
 
 def hmeqa_paper_question_ids() -> list[int]:
-    """Question indices used in the GraphEQA HM-EQA paper (0 .. 112)."""
+    """Return the historical emet q0–112 slice (not GraphEQA's filtered set)."""
     return list(range(HMEQA_PAPER_QUESTION_COUNT))
 
 
@@ -79,25 +83,55 @@ def grapheqa_baseline_question_ids(
     questions_path: Path | None = None,
     labels_path: Path | None = None,
 ) -> list[int]:
-    """Row indices of the ACTUAL GraphEQA paper HM-EQA episodes.
+    """Map the upstream GraphEQA semantic-filtered sequence to CSV row ids.
 
-    The GraphEQA paper evaluates a specific set of Explore-EQA episodes defined by
-    ``explore_eqa_dataset_enrich_labels.yaml`` (bundled here), keyed
-    ``{questionId}_{scene}`` across 59 HM3D train scenes. Our questions.csv lists all
-    Explore-EQA questions in file order, so the paper episode ``i`` (0..113) is the
-    ``i``-th row **whose scene appears in the enrich set**, in CSV order.
+    Upstream ``load_eqa_data`` filters HM-EQA questions to scenes with semantic
+    annotations before enumeration. The bundled enrich file records that filtered
+    order as contiguous ``{ordinal}_{scene}`` keys. The mapping is accepted only
+    when filtering the supplied CSV by those scenes reproduces the exact sequence.
 
-    Returns those row indices (114 for the paper set) so the runner can target the
-    real GraphEQA episodes via ``--question-ids`` instead of the by-index 0–112
-    re-creation. All 59 scenes have ``.semantic.glb`` on disk, so GT semantics can be
-    enabled for every episode.
-
-    Note: this deliberately does NOT use ``hmeqa_paper_question_ids`` (0..112) — that
-    is the re-created slice on whatever scenes questions.csv rows 0..112 happen to use.
+    The default bundled sequence has 114 rows. The often-cited 113 count belongs
+    to GraphEQA's OpenEQA HM3D subset, not this HM-EQA filtered launcher.
     """
     from emet.habitat.datasets import load_hmeqa_questions
 
     enrich = load_hmeqa_enrich_labels(labels_path)
-    ge_scenes = {str(k).split("_", 1)[1] for k in enrich}
+    ordered: list[tuple[int, str]] = []
+    for key in enrich:
+        ordinal_text, separator, scene = str(key).partition("_")
+        if not separator:
+            raise ValueError(f"invalid GraphEQA enrich key: {key!r}")
+        try:
+            ordinal = int(ordinal_text)
+        except ValueError as exc:
+            raise ValueError(f"invalid GraphEQA enrich ordinal: {key!r}") from exc
+        ordered.append((ordinal, scene))
+    ordered.sort()
+    ordinals = [ordinal for ordinal, _scene in ordered]
+    if ordinals != list(range(len(ordered))):
+        raise ValueError("GraphEQA enrich ordinals must be contiguous from zero")
+    if labels_path is None and len(ordered) != GRAPHEQA_HMEQA_QUESTION_COUNT:
+        raise ValueError(
+            f"bundled GraphEQA enrich set has {len(ordered)} rows; expected {GRAPHEQA_HMEQA_QUESTION_COUNT}"
+        )
+
+    ge_scenes = {scene for _ordinal, scene in ordered}
     questions = load_hmeqa_questions(questions_path)
-    return [q.index for q in questions if q.scene in ge_scenes]
+    selected = [q for q in questions if q.scene in ge_scenes]
+    expected_scenes = [scene for _ordinal, scene in ordered]
+    actual_scenes = [q.scene for q in selected]
+    if actual_scenes != expected_scenes:
+        mismatch = next(
+            (
+                index
+                for index, (actual, expected) in enumerate(zip(actual_scenes, expected_scenes, strict=False))
+                if actual != expected
+            ),
+            min(len(actual_scenes), len(expected_scenes)),
+        )
+        raise ValueError(
+            "questions.csv does not match the upstream GraphEQA enrich sequence "
+            f"at filtered ordinal {mismatch} ({len(actual_scenes)} rows vs "
+            f"{len(expected_scenes)} expected)"
+        )
+    return [q.index for q in selected]

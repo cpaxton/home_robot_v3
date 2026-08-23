@@ -1,7 +1,7 @@
 # Action-outcome ledger (agent world model)
 
-**Branch:** `feature/agent-world-model`  
-**Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)  
+**Branch:** `feature/agent-world-model`
+**Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)
 **Status:** Phases 1–3 landed (default **off**); Phase 4 metric helpers landed; GPU deltas vs pinned baselines still open.
 
 The scene graph already answers “what is where?”. The **attempt ledger** adds “what did we try, and how did it go?” so CHAT tools, agentic EQA, and OVMM manip paths can avoid repeating failed nav / verify / pick / place / closer-look actions.

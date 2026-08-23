@@ -16,12 +16,20 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from emet.habitat.config import default_habitat_eqa_data_dir
+from emet.eval.hmeqa_launch import hmeqa_git_state
+from emet.habitat.config import (
+    default_habitat_eqa_data_dir,
+    default_hm3d_scene_dir,
+    questions_csv_path,
+    scene_init_poses_csv_path,
+)
 from emet.habitat.metrics import EpisodeMetrics
 
 ATTEMPT_LEDGER_FILENAME = "attempt_ledger.json"
 ROOM_EVENTS_FILENAME = "room_events.json"
 COMPACT_MEMORY_DIRNAME = "compact_memory"
+HMEQA_BATCH_MANIFEST_SCHEMA = "emet.hmeqa.batch_manifest"
+HMEQA_BATCH_MANIFEST_VERSION = 2
 
 
 def default_episodes_root() -> Path:
@@ -117,6 +125,44 @@ def run_tag_from_output_jsonl(output_jsonl: Path | None) -> str:
     return output_jsonl.stem
 
 
+def _manifest_file_fingerprint(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        raise FileNotFoundError(f"HM-EQA manifest input is missing: {path}")
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return {
+        "path": str(path.expanduser().resolve()),
+        "sha256": f"sha256:{digest.hexdigest()}",
+    }
+
+
+def _manifest_parameters_digest(parameters: dict[str, Any]) -> str:
+    encoded = json.dumps(parameters, sort_keys=True, separators=(",", ":"), default=str)
+    return f"sha256:{hashlib.sha256(encoded.encode('utf-8')).hexdigest()}"
+
+
+def _hmeqa_behavior_environment() -> dict[str, str]:
+    exact = {
+        "EQA_HF_MODEL_ID",
+        "EQA_VL_FAMILY",
+        "EQA_VL_QUANTIZATION",
+        "EMET_ATTEMPT_LEDGER_MAX",
+        "EMET_ATTEMPT_LEDGER_PERSIST_ABSENT",
+        "EMET_LLM_HOST",
+        "EMET_OPENAI_BASE_URL",
+        "EMET_VLM_FRONTIER_SCORING",
+        "EMET_VL_ENDPOINT",
+        "EMET_WORLD_SESSION_ID",
+    }
+    return {
+        name: value
+        for name, value in sorted(os.environ.items())
+        if value and (name.startswith(("EMET_EQA_", "EMET_DYNAGRAPH_", "EMET_HABITAT_")) or name in exact)
+    }
+
+
 def write_run_manifest(
     *,
     output_jsonl: Path,
@@ -127,23 +173,35 @@ def write_run_manifest(
     max_movement_step: int,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    eqa_vl_quantization: str | None,
     device: str | None,
     use_hm3d_semantics: bool | None = None,
     use_enrich_labels: bool = False,
     resume: bool,
     parameters: Any = None,
+    hm3d_root: Path | None = None,
+    questions_path: Path | None = None,
+    init_poses_path: Path | None = None,
 ) -> Path:
-    """Write or update ``run_manifest.json`` beside the results JSONL."""
+    """Create or validate the immutable manifest beside a batch results JSONL."""
     manifest_path = output_jsonl.parent / f"{output_jsonl.stem}_manifest.json"
+    output_jsonl.parent.mkdir(parents=True, exist_ok=True)
     params = coerce_parameters_dict(parameters)
     eqa_cfg = {}
     raw = params.get("eqa", {}) or {}
     if isinstance(raw, dict):
         eqa_cfg = dict(raw)
-    payload = {
+    resolved_questions = Path(questions_path or questions_csv_path()).expanduser().resolve()
+    resolved_init_poses = Path(init_poses_path or scene_init_poses_csv_path()).expanduser().resolve()
+    resolved_hm3d_root = Path(hm3d_root or default_hm3d_scene_dir()).expanduser().resolve()
+    if not resolved_hm3d_root.is_dir():
+        raise FileNotFoundError(f"HM3D scene root is missing: {resolved_hm3d_root}")
+    project_root = Path(__file__).resolve().parents[3]
+    immutable = {
+        "schema": HMEQA_BATCH_MANIFEST_SCHEMA,
+        "schema_version": HMEQA_BATCH_MANIFEST_VERSION,
         "run_tag": output_jsonl.stem,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "output_jsonl": str(output_jsonl.expanduser()),
+        "output_jsonl": str(output_jsonl.expanduser().resolve()),
         "episodes_root": str(default_episodes_root() / output_jsonl.stem),
         "method": method,
         "question_ids": question_ids,
@@ -152,14 +210,23 @@ def write_run_manifest(
         "max_movement_step": max_movement_step,
         "eqa_vl_family": eqa_vl_family,
         "eqa_hf_model_id": eqa_hf_model_id or eqa_cfg.get("vl_hf_model_id"),
+        "eqa_vl_quantization": eqa_vl_quantization or eqa_cfg.get("vl_quantization"),
         "device": device,
         "use_hm3d_semantics": use_hm3d_semantics,
         "use_enrich_labels": bool(use_enrich_labels),
-        "resume": resume,
         "git_commit": _git_head(),
         "code_state": code_state_fingerprint(),
+        "git": hmeqa_git_state(project_root),
         "harness": harness_fingerprint_from_parameters(params),
         "graph_eqa_frontier_nodes": params.get("graph_eqa_frontier_nodes"),
+        "parameters_sha256": _manifest_parameters_digest(params),
+        "behavior_environment": _hmeqa_behavior_environment(),
+        "external_inputs": {
+            "questions": _manifest_file_fingerprint(resolved_questions),
+            "scene_init_poses": _manifest_file_fingerprint(resolved_init_poses),
+            # Record the canonical asset root without claiming to hash the large meshes.
+            "hm3d_root": str(resolved_hm3d_root),
+        },
         "export_full_graph": os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower()
         in ("1", "true", "yes", "on"),
         "export_diagnostics_map": os.environ.get("EMET_EVAL_EXPORT_MAP", os.environ.get("HABITAT_EQA_EXPORT_MAP", "1"))
@@ -167,15 +234,44 @@ def write_run_manifest(
         .lower()
         in ("1", "true", "yes", "on", ""),
     }
-    if manifest_path.is_file():
+    now = datetime.now(timezone.utc).isoformat()
+    if not resume and (manifest_path.exists() or (output_jsonl.exists() and output_jsonl.stat().st_size > 0)):
+        raise ValueError(
+            f"refusing to append to an existing HM-EQA run at {output_jsonl}; use --resume or choose a new output path"
+        )
+    if resume and manifest_path.is_file():
+        if not output_jsonl.is_file():
+            raise ValueError(
+                f"cannot resume {output_jsonl}: manifest exists but the results JSONL is missing; "
+                "restore the output or choose a new output path"
+            )
         try:
             prev = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if isinstance(prev, dict) and prev.get("started_at"):
-                payload["started_at"] = prev["started_at"]
-        except json.JSONDecodeError:
-            pass
-    payload.setdefault("started_at", datetime.now(timezone.utc).isoformat())
-    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"cannot resume {output_jsonl}: invalid manifest {manifest_path}: {exc}") from exc
+        mismatches = [key for key, value in immutable.items() if not isinstance(prev, dict) or prev.get(key) != value]
+        if mismatches:
+            raise ValueError(f"cannot resume {output_jsonl}: manifest mismatch in {', '.join(mismatches)}")
+        payload = dict(prev)
+        payload["updated_at"] = now
+        payload["last_invocation_resume"] = True
+    else:
+        # A zero-byte JSONL is the durable placeholder created before a new
+        # batch manifest; it is safe to complete that interrupted initialization.
+        if resume and output_jsonl.exists() and output_jsonl.stat().st_size > 0:
+            raise ValueError(
+                f"cannot resume {output_jsonl}: {manifest_path.name} is missing; "
+                "refusing to mix historical rows with a new configuration"
+            )
+        payload = {
+            **immutable,
+            "started_at": now,
+            "updated_at": now,
+            "last_invocation_resume": bool(resume),
+        }
+    tmp = manifest_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, manifest_path)
     return manifest_path
 
 

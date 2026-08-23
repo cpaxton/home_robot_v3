@@ -55,7 +55,7 @@ def main() -> int:
 
         if torch.cuda.is_available():
             free, total = torch.cuda.mem_get_info(0)
-            _log(f"VRAM after load: free={free/1024**2:.0f}MiB total={total/1024**2:.0f}MiB")
+            _log(f"VRAM after load: free={free / 1024**2:.0f}MiB total={total / 1024**2:.0f}MiB")
     except Exception as e:
         _log(f"VRAM snapshot failed: {e}")
 
@@ -69,7 +69,7 @@ def main() -> int:
             # Fake a bright rectangle as a "sink"
             rgb[200:280, 220:420] = (200, 200, 220)
             command.append(Image.fromarray(rgb, mode="RGB"))
-            _log(f"appended image {i+1}/{args.n_images} shape={rgb.shape}")
+            _log(f"appended image {i + 1}/{args.n_images} shape={rgb.shape}")
 
     system_prompt = EQA_PROMPT if args.eqa_prompt else "Answer briefly."
     _log(

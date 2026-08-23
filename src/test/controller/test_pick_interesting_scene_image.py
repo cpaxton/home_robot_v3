@@ -99,7 +99,6 @@ def test_pick_interesting_uses_named_usable_crop():
     assert img.shape[0] < live.shape[0] or img.shape[1] < live.shape[1]
 
 
-
 def test_agent_skill_tools_include_core_set():
     from emet.agent.tools import get_tools
 

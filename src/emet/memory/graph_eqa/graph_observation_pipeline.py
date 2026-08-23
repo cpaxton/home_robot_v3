@@ -109,9 +109,7 @@ def apply_instance_items_to_graph(
             continue
         if dedup_skips(label, xyz):
             continue
-        graph_memory.add_observation(
-            rgb, xyz, [label], viewer_xyz=viewer_xyz, bbox_xyxy=bbox_xyxy
-        )
+        graph_memory.add_observation(rgb, xyz, [label], viewer_xyz=viewer_xyz, bbox_xyxy=bbox_xyxy)
 
 
 def build_detections_json_rows(

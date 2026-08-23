@@ -24,16 +24,21 @@ JSONL written **before** this stack (June 2026 phrase/location MCQ fixes only) a
 
 See [habitat/usage.md](../habitat/usage.md#navigation-habitat-only) and [plans/2026-06-03_habitat_eqa_exploration_improvements.md](../plans/2026-06-03_habitat_eqa_exploration_improvements.md).
 
-## Prior art (GraphEQA paper, full 113 questions)
+## Prior art (GraphEQA paper)
 
-Reproduced from GraphEQA Table 1 (HM-EQA column). All use Habitat-Sim, 20 VLM planning iterations, API or strong VLMs, and (for GraphEQA) **full HM3D GT semantics** → Hydra 3DSGs.
+Reproduced from GraphEQA Table 1 (HM-EQA column). The table does not report
+episode count. The released HM-EQA runner filters the 500-row CSV to semantic
+scenes; its enrich sequence contains **114** rows. The paper's separate **113**
+count is for the OpenEQA HM3D subset. All use Habitat-Sim, 20 VLM planning
+iterations, API or strong VLMs, and (for GraphEQA) **full HM3D GT semantics** →
+Hydra 3DSGs.
 
 | Method | VLM | n | Accuracy | Notes |
 |--------|-----|---|----------|-------|
-| Explore-EQA | (paper stack) | 113 | **51.7%** | Baseline exploration + EQA |
-| GraphEQA | GPT-4o | 113 | **63.5%** | Hydra 3DSG + enriched frontiers |
-| GraphEQA | Gemini-2.5 Pro | 113 | **67.0%** | Best published sim result |
-| GraphEQA | Llama4-Mav | 113 | 57.7% | Strong open model in ref. stack |
+| Explore-EQA | (paper stack) | not reported | **51.7%** | Baseline exploration + EQA |
+| GraphEQA | GPT-4o | not reported | **63.5%** | Hydra 3DSG + enriched frontiers |
+| GraphEQA | Gemini-2.5 Pro | not reported | **67.0%** | Best published sim result |
+| GraphEQA | Llama4-Mav | not reported | 57.7% | Strong open model in ref. stack |
 
 **Scene-graph-generation prior art (not EQA rows):** [DeWorldSG](https://deworldsg2026.github.io/) (Kim et al., ECCV 2026) builds depth-aware 3D scene graphs from RGB-D via world-model priors — relevant as a *graph-perception* method, not a benchmark row. Our GraphEQAMemory is built online from the agent's own perception (or GT semantics where enabled), not from an offline SGG module.
 
@@ -41,7 +46,11 @@ Mean planning steps in the paper are **3–5** on *successful* trials (API VLMs 
 
 ## Our harness (`emet-habitat`, local VLMs)
 
-Same HM-EQA CSV (113 questions, indices 0–112), 20/10 step budget, RTX 4090. Stack differs: `GraphEQAMemory` / DynaMem voxels, optional graph frontier nodes, navmesh nav — see [appendix 05](../../paper/sections/appendix/05_habitat_eqa_parity.tex).
+Same HM-EQA CSV, with a historical fixed 113-row q0–112 slice, 20/10 step
+budget, RTX 4090. That slice is not the released GraphEQA runner's
+semantic-filtered selection. Stack differs: `GraphEQAMemory` / DynaMem voxels,
+optional graph frontier nodes, navmesh nav — see
+[appendix 05](../../paper/sections/appendix/05_habitat_eqa_parity.tex).
 
 **Comparability gaps:** local 3–8B VLMs (not GPT-4o/Gemini); different scene graph and frontier planner. **GT HM3D semantics are disabled** in the full-113 runner (`--no-hm3d-semantics`): the semantic sensor would otherwise feed ground-truth per-pixel object labels + GT positions into the graph on scenes that happen to have `.semantic.glb`, an inconsistent and unfair perception shortcut (see the no-semantics stratification below).
 
@@ -95,24 +104,25 @@ static_graph **37.2%** (42/113) — dynagraph +7 pp over static_graph.
 > | dynagraph | **48.7%** (37/76) | 51.4% (19/37) |
 > | static_graph | **44.7%** (34/76) | 54.1% (20/37) |
 >
-> On the **76 GT-free scenes** the memory delta is **+4 pp (dynagraph 48.7% vs
+> On the **76 GT-free rows** the memory delta is **+4 pp (dynagraph 48.7% vs
 > static_graph 44.7%)** — a clean, GT-independent Dynagraph gain. With-semantics scenes
 > score higher (both methods benefit from GT labels), which is why the pooled 113 sits a
 > few pp above the GT-free subset. Gap to GraphEQA API VLMs (63.5–67.0%, which use full
 > GT semantics) is ~14–18 pp on the pooled set.
 
-### GraphEQA-parity baseline (the real paper episodes, GT on/off)
+### GraphEQA-repository parity baseline (semantic-filtered HM-EQA, GT on/off)
 
-**Motivation:** the "paper-113" above is a re-creation on whatever scenes questions.csv
-rows 0–112 happened to use — only 14/49 of its scenes overlap the GraphEQA paper's. To
-make the GT-vs-no-GT point on the *actual* paper episodes, we added a parity baseline
-on the real GraphEQA question set.
+**Motivation:** the "paper-113" above is a historical slice on whatever scenes
+`questions.csv` rows 0–112 happened to use; only 14/49 of its scenes overlap the
+released GraphEQA runner's semantic-scene set. The repository-parity baseline
+uses that released selection without claiming the paper reported its episode count.
 
-**Episodes:** the 114 Explore-EQA rows whose scene appears in the GraphEQA enrich set
-(`hmeqa_enrich_labels.yaml.bundled`) — 59 HM3D train scenes, **all with `.semantic.glb`
-on disk** (GT semantics available for every episode). Enrich qid `i` == the `i`-th such
-row in CSV order (validated: 0 scene mismatches, 112/114 also confirm via label-token
-in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_question_ids`.
+**Episodes:** the 114 HM-EQA rows selected by the released GraphEQA runner's
+semantic-scene filter (`hmeqa_enrich_labels.yaml.bundled`) — 59 HM3D train
+scenes, **all with `.semantic.glb` on disk**. Enrich ordinal `i` must match the
+`i`-th filtered CSV row's exact scene; the helper now fails if that full sequence
+does not match:
+`emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_question_ids`.
 
 **Arms** (`scripts/run_hmeqa_grapheqa_baseline.sh`, 4 arms × 114):
 
@@ -124,9 +134,9 @@ in question text). Helper: `emet.habitat.hmeqa_enrich_labels.grapheqa_baseline_q
 | static_graph | off | no GT, GraphEQA-inspired baseline |
 
 The launcher defaults to compact diagnostics for these 114-episode arms. It
-retains reloadable graph-only checkpoints and final maps under
-`OUT_DIR/compact_memory/`, but omits per-step/evidence RGB and videos. Set the
-corresponding `EMET_EVAL_*` exports explicitly to recover full visual diagnostics.
+retains reloadable graph-only checkpoints and final maps in the per-episode cache
+bundles named by each output tag, but omits per-step/evidence RGB and videos. Set
+the corresponding `EMET_EVAL_*` exports explicitly to recover full visual diagnostics.
 
 **Interpretation once run:**
 - `dynagraph/on − dynagraph/off` = the GT-semantics perception effect (we expect this
@@ -248,7 +258,8 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 |-------|---|---------|
 | canonical-8 / balanced-32 / paper-20 | 8 / 32 / 20 | Overnight convenience (not GraphEQA paper coverage) |
 | annotated-semantics | ~37 | Paper indices with HM3DSem `.semantic.glb` — fairer perception vs GraphEQA GT path (`hmeqa_annotated_question_ids()`) |
-| paper-113 (`--paper-subset`) | **113** | GraphEQA Table 1 HM-EQA set (indices 0–112) |
+| legacy q0–112 (`--paper-subset`) | **113** | Historical emet fixed slice; not the released GraphEQA filtered set |
+| GraphEQA repository filter | **114** | Semantic-scene sequence used by the released HM-EQA runner |
 | Explore-EQA full (`--all-questions`) | up to ~500 | Beyond GraphEQA paper; stretch only |
 
 **Accuracy quoting:** Always cite the episode **harness fingerprint** (`harness` in JSONL / `metrics.json`: merge, fallback merge, profile, explore mode, git commit). Do not treat explore-off holdout 8/8 as the Dynagraph method bar — that arm is an ablation; default is `explore_when_uncovered=conservative` with merge on.

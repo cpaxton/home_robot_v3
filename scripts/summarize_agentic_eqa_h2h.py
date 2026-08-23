@@ -44,9 +44,7 @@ def _arm_summary(name: str, arm_dir: Path) -> dict[str, Any]:
         else {"accuracy": None, "n_questions": 0.0, "questions": []}
     )
     # Wall times live on the raw export rows; merge by question text.
-    wall_by_q = {
-        str(r.get("question") or ""): r.get("eqa_wall_s") for r in rows if r.get("eqa_wall_s") is not None
-    }
+    wall_by_q = {str(r.get("question") or ""): r.get("eqa_wall_s") for r in rows if r.get("eqa_wall_s") is not None}
     q_detail = []
     for q in scored.get("questions") or []:
         qtext = str(q.get("question") or "")

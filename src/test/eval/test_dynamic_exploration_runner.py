@@ -125,11 +125,7 @@ def test_run_logged_subprocess_kills_process_group(tmp_path: Path):
     marker = tmp_path / "child.pid"
     log_path = tmp_path / "pg.log"
     # Session-leader child writes its pid then sleeps; must die on timeout.
-    code = (
-        "import os, time, pathlib\n"
-        f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid()))\n"
-        "time.sleep(60)\n"
-    )
+    code = f"import os, time, pathlib\npathlib.Path({str(marker)!r}).write_text(str(os.getpid()))\ntime.sleep(60)\n"
     with pytest.raises(subprocess.TimeoutExpired):
         run_logged_subprocess(
             [sys.executable, "-c", code],

@@ -61,9 +61,15 @@ def run_hmeqa_via_shared_episode(
             "emet_habitat is not importable and .venv-habitat/bin/emet-habitat is missing. "
             "Install with ./scripts/install_habitat.sh, then retry --eqa-eval."
         )
-    out_path = Path(output) if output is not None else Path(
-        os.environ.get("HOME", "/tmp")
-    ) / ".cache" / "habitat_eqa" / "results" / f"agent_eqa_eval_q{int(question_id)}.jsonl"
+    out_path = (
+        Path(output)
+        if output is not None
+        else Path(os.environ.get("HOME", "/tmp"))
+        / ".cache"
+        / "habitat_eqa"
+        / "results"
+        / f"agent_eqa_eval_q{int(question_id)}.jsonl"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         str(habitat_bin),

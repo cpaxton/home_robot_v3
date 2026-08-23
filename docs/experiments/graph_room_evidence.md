@@ -63,14 +63,18 @@ Fairness contract:
 - Use one clean commit for all paired variants. The manifest freezes the full
   commit and dirty-tree digest; any later edit intentionally makes resume fail.
 - Hold IDs, order, Qwen model/family/quantization, answer and movement budgets,
-  paper-router preset, and operational crash policy constant.
+  paper-router preset, and operational crash policy constant. New manifests also
+  hash the question/init-pose CSVs, freeze the HM3D root path, apply the declared
+  quantization/tool/nav budgets at runtime, and reject unfrozen `EMET_EQA_*`
+  policy overrides.
 - Run one GPU job at a time and preserve each OUT independently.
 - Audit each manifest before comparing outputs. Config digests should differ
   only because the declared variant axes differ.
 
 ## Completed evidence
 
-The strongest valid comparison is the clean same-commit `fae4b89c` pair:
+The strongest locally controlled diagnostic comparison is the clean same-commit
+`fae4b89c` pair:
 
 | Variant / OUT | Result | Process |
 |---------------|--------|---------|
@@ -157,7 +161,9 @@ scene and is not needed for the baseline-recovery gate.
 ## Managed harness
 
 Run a fresh detached probe before every experimental job. Do not queue the next
-probe or experiment until the current job is terminal.
+probe or experiment until the current job is terminal. Every experiment must
+remain under the host-wide `emet jobs run --gpu-exclusive` lock (the lock is
+automatic for GPU-like commands, but do not opt out with `--no-gpu-exclusive`).
 
 Readiness:
 
@@ -264,7 +270,7 @@ write both JSON and CSV.
 | A2 grounded | **no-go** | `gre_a2_grounded_fae4b89c_20260814_160721`: 3/6, slower, more budget hits |
 | GT-free q11 pre-fix sequence | complete, failed capability gate | 0/3 complete runs; infrastructure improved |
 | Post-fix q11 diagnostic | passed once, dirty | `gre_q11_a2_canary_d3ee32e8_20260822_175238`: 1/1, direct verified evidence, no salvage |
-| Recovery correctness | in progress | Finish self-review, commit, and pass the full CPU-only gate |
+| Recovery correctness | audit complete | Focused consistency tests/lint pass; full CPU gate has three known unchanged map-rendering baseline failures |
 | Next GPU work | blocked | One clean q11 repeat only after the commit and all CPU gates |
 
 ## Related

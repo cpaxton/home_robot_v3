@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from emet.habitat.episode_debug import (
     run_tag_from_output_jsonl,
     save_error_episode_bundle,
@@ -21,6 +23,12 @@ def test_run_tag_from_output_jsonl():
 
 def test_write_run_manifest(tmp_path: Path):
     out = tmp_path / "run.jsonl"
+    questions = tmp_path / "questions.csv"
+    questions.write_text("scene,floor,question,choices,answer\ns,0,q,\"['a','b','c','d']\",A\n")
+    init_poses = tmp_path / "scene_init_poses.csv"
+    init_poses.write_text("scene_floor,init_x,init_y,init_z,init_angle\ns_0,0,0,0,0\n")
+    hm3d_root = tmp_path / "hm3d"
+    hm3d_root.mkdir()
     manifest = write_run_manifest(
         output_jsonl=out,
         method="graph_eqa",
@@ -30,15 +38,166 @@ def test_write_run_manifest(tmp_path: Path):
         max_movement_step=10,
         eqa_vl_family="gemma4",
         eqa_hf_model_id="google/gemma-3-4b-it",
+        eqa_vl_quantization="int4",
         device="cuda",
         resume=True,
         parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+        hm3d_root=hm3d_root,
+        questions_path=questions,
+        init_poses_path=init_poses,
     )
     data = json.loads(manifest.read_text(encoding="utf-8"))
     assert data["run_tag"] == "run"
     assert data["method"] == "graph_eqa"
     assert data["question_ids"] == [0, 1]
+    assert data["schema_version"] == 2
     assert "harness" in data
+    assert data["external_inputs"]["questions"]["sha256"].startswith("sha256:")
+
+
+def test_write_run_manifest_refuses_resume_configuration_or_dataset_drift(
+    tmp_path: Path,
+    monkeypatch,
+):
+    out = tmp_path / "run.jsonl"
+    questions = tmp_path / "questions.csv"
+    questions.write_text("scene,floor,question,choices,answer\ns,0,q,\"['a','b','c','d']\",A\n")
+    init_poses = tmp_path / "scene_init_poses.csv"
+    init_poses.write_text("scene_floor,init_x,init_y,init_z,init_angle\ns_0,0,0,0,0\n")
+    hm3d_root = tmp_path / "hm3d"
+    hm3d_root.mkdir()
+    kwargs = {
+        "output_jsonl": out,
+        "method": "static_graph",
+        "question_ids": [0],
+        "mock_llm": False,
+        "max_planning_steps": 20,
+        "max_movement_step": 10,
+        "eqa_vl_family": "qwen3_vl",
+        "eqa_hf_model_id": "Qwen/Qwen3-VL-8B-Instruct",
+        "eqa_vl_quantization": "int4",
+        "device": "cuda",
+        "resume": False,
+        "parameters": {"eqa": {"merged_memory": False}},
+        "hm3d_root": hm3d_root,
+        "questions_path": questions,
+        "init_poses_path": init_poses,
+    }
+    write_run_manifest(**kwargs)
+    out.touch()
+
+    with pytest.raises(ValueError, match="refusing to append"):
+        write_run_manifest(**kwargs)
+
+    monkeypatch.setenv("EMET_EQA_FORCE_ANSWER", "0")
+    ambient = dict(kwargs)
+    ambient["resume"] = True
+    with pytest.raises(ValueError, match="behavior_environment"):
+        write_run_manifest(**ambient)
+    monkeypatch.delenv("EMET_EQA_FORCE_ANSWER")
+
+    changed = dict(kwargs)
+    changed["resume"] = True
+    changed["max_planning_steps"] = 19
+    with pytest.raises(ValueError, match="max_planning_steps"):
+        write_run_manifest(**changed)
+
+    questions.write_text("scene,floor,question,choices,answer\ns,0,changed,\"['a','b','c','d']\",A\n")
+    resumed = dict(kwargs)
+    resumed["resume"] = True
+    with pytest.raises(ValueError, match="external_inputs"):
+        write_run_manifest(**resumed)
+
+
+def test_write_run_manifest_refuses_resume_when_output_is_missing(tmp_path: Path):
+    out = tmp_path / "run.jsonl"
+    questions = tmp_path / "questions.csv"
+    questions.write_text("scene,floor,question,choices,answer\ns,0,q,\"['a','b','c','d']\",A\n")
+    init_poses = tmp_path / "scene_init_poses.csv"
+    init_poses.write_text("scene_floor,init_x,init_y,init_z,init_angle\ns_0,0,0,0,0\n")
+    hm3d_root = tmp_path / "hm3d"
+    hm3d_root.mkdir()
+    kwargs = {
+        "output_jsonl": out,
+        "method": "static_graph",
+        "question_ids": [0],
+        "mock_llm": False,
+        "max_planning_steps": 20,
+        "max_movement_step": 10,
+        "eqa_vl_family": "qwen3_vl",
+        "eqa_hf_model_id": "Qwen/Qwen3-VL-8B-Instruct",
+        "eqa_vl_quantization": "int4",
+        "device": "cuda",
+        "resume": False,
+        "parameters": {},
+        "hm3d_root": hm3d_root,
+        "questions_path": questions,
+        "init_poses_path": init_poses,
+    }
+    write_run_manifest(**kwargs)
+    out.touch()
+    out.unlink()
+    with pytest.raises(ValueError, match="results JSONL is missing"):
+        write_run_manifest(**{**kwargs, "resume": True})
+
+
+def test_write_run_manifest_recovers_empty_output_without_manifest(tmp_path: Path):
+    out = tmp_path / "run.jsonl"
+    questions = tmp_path / "questions.csv"
+    questions.write_text("scene,floor,question,choices,answer\ns,0,q,\"['a','b','c','d']\",A\n")
+    init_poses = tmp_path / "scene_init_poses.csv"
+    init_poses.write_text("scene_floor,init_x,init_y,init_z,init_angle\ns_0,0,0,0,0\n")
+    hm3d_root = tmp_path / "hm3d"
+    hm3d_root.mkdir()
+    out.touch()
+
+    manifest = write_run_manifest(
+        output_jsonl=out,
+        method="static_graph",
+        question_ids=[0],
+        mock_llm=False,
+        max_planning_steps=20,
+        max_movement_step=10,
+        eqa_vl_family="qwen3_vl",
+        eqa_hf_model_id="Qwen/Qwen3-VL-8B-Instruct",
+        eqa_vl_quantization="int4",
+        device="cuda",
+        resume=True,
+        parameters={},
+        hm3d_root=hm3d_root,
+        questions_path=questions,
+        init_poses_path=init_poses,
+    )
+
+    assert manifest == tmp_path / "run_manifest.json"
+    assert json.loads(manifest.read_text(encoding="utf-8"))["last_invocation_resume"] is True
+    assert out.read_bytes() == b""
+
+
+def test_hmeqa_batch_does_not_delete_existing_output_before_manifest_guard(tmp_path: Path, monkeypatch):
+    project_root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
+    from emet_habitat import runner
+
+    output = tmp_path / "run.jsonl"
+    output.write_text("preserve this row\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "load_hmeqa_questions", lambda _path: [])
+    monkeypatch.setattr(runner, "_validate_requested_hm3d_semantics", lambda **_kwargs: None)
+    monkeypatch.setattr(runner, "_configure_frontier_parameters", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "_configure_habitat_nav", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "_configure_habitat_mapping", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "_apply_method_parameters", lambda parameters, _method: parameters)
+    monkeypatch.setattr(runner, "apply_dynagraph_harness_overrides", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "_configure_eqa_parameters", lambda *_args, **_kwargs: None)
+
+    def _guard(**_kwargs):
+        raise RuntimeError("guard")
+
+    monkeypatch.setattr(runner, "write_run_manifest", _guard)
+
+    with pytest.raises(RuntimeError, match="guard"):
+        runner.run_hmeqa_batch(question_ids=[], output_jsonl=output, resume=False)
+    assert output.read_text(encoding="utf-8") == "preserve this row\n"
 
 
 def test_enrich_episode_metrics_harness_fingerprint_merge_on():
@@ -293,30 +452,47 @@ def test_save_episode_debug_bundle_writes_reloadable_compact_memory(tmp_path: Pa
     assert diagnostics["compact_memory"] == str(compact)
 
 
-def test_hmeqa_snapshot_copies_agentic_evidence_artifacts():
-    script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_agentic_h2h.sh"
-    text = script.read_text(encoding="utf-8")
-    for artifact in (
+def test_hmeqa_snapshot_artifact_validation_fails_closed(tmp_path):
+    from emet.eval.hmeqa_launch import missing_hmeqa_snapshot_artifacts
+
+    env = {
+        "EMET_EVAL_EXPORT_COMPACT_MEMORY": "1",
+        "EMET_EQA_GRAPH_EVIDENCE_MODE": "agent",
+        "EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB": "1",
+        "EMET_EQA_ATTEMPT_LEDGER_MODE": "agent",
+        "EMET_EQA_ROOM_HISTORY_MODE": "agent",
+    }
+    expected = {
+        "compact_memory/manifest.json",
         "world_evidence.json",
+        "world_evidence_views/",
         "attempt_ledger.json",
         "room_events.json",
-        "world_evidence_views",
-        "compact_memory",
-    ):
-        assert artifact in text
-    assert '[[ -s "$dst/world_evidence.json" ]]' in text
-    assert '[[ -s "$dst/attempt_ledger.json" ]]' in text
-    assert '[[ -s "$dst/room_events.json" ]]' in text
-    assert '[[ -s "$dst/compact_memory/manifest.json" ]]' in text
-    assert 'rm -rf "$dst"' in text
-    assert "evidence snapshot incomplete" in text
+    }
+    assert (
+        set(
+            missing_hmeqa_snapshot_artifacts(
+                tmp_path,
+                arm="agentic",
+                env=env,
+            )
+        )
+        == expected
+    )
 
-
-def test_hmeqa_h2h_disables_gt_semantics():
-    script = Path(__file__).resolve().parents[3] / "scripts" / "run_hmeqa_agentic_h2h.sh"
-    text = script.read_text(encoding="utf-8")
-    assert "EQA_EXTRA_ARGS=(--no-hm3d-semantics)" in text
-    assert '"${EQA_EXTRA_ARGS[@]}"' in text
+    for relative in expected - {"world_evidence_views/"}:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+    (tmp_path / "world_evidence_views").mkdir()
+    assert (
+        missing_hmeqa_snapshot_artifacts(
+            tmp_path,
+            arm="agentic",
+            env=env,
+        )
+        == []
+    )
 
 
 def test_grapheqa_baseline_defaults_to_compact_memories():

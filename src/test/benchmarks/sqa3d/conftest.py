@@ -19,12 +19,7 @@ import sys
 
 import pytest
 
-_PROBE = (
-    "import open3d as o3d;"
-    "r = o3d.visualization.rendering.OffscreenRenderer(32, 32);"
-    "del r;"
-    "print('ok')"
-)
+_PROBE = "import open3d as o3d;r = o3d.visualization.rendering.OffscreenRenderer(32, 32);del r;print('ok')"
 
 _run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()
 RUN_SIM_TESTS = _run_sim not in ("0", "false", "no", "off")

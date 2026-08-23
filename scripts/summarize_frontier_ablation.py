@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Summarize HM-EQA frontier ablation JSONL runs (rescored MCQ parsing)."""
 
 from __future__ import annotations

@@ -387,10 +387,7 @@ def _answer_field_lines(raw: str) -> list[str]:
     field the parser missed).
     """
     raw_s = raw or ""
-    fields = [
-        m.group(1).strip()
-        for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw_s, flags=re.IGNORECASE)
-    ]
+    fields = [m.group(1).strip() for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw_s, flags=re.IGNORECASE)]
     if not fields:
         # JSON key form: "answer": "A" (also "answer" : "A" / single quotes).
         json_fields = [

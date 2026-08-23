@@ -164,10 +164,22 @@ _GPU_JOB_HINT = re.compile(
 )
 
 
+def gpu_lock_path() -> Path:
+    """Return the host-wide lock used by exclusive GPU jobs."""
+    raw = os.environ.get("EMET_GPU_LOCK", "").strip() or os.environ.get("EMET_GPU_LOCK_FILE", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / "runs" / "emet" / "gpu.lock"
+
+
+def command_looks_like_gpu_job(name: str, cmd: str) -> bool:
+    """Heuristically identify experiment commands that share the workstation GPU."""
+    return bool(_GPU_JOB_HINT.search(f"{name} {cmd}"))
+
+
 def looks_like_gpu_job(job: JobRecord) -> bool:
     """Heuristic: Habitat/VLM/MuJoCo/HM-EQA-style commands share one GPU."""
-    blob = f"{job.name} {job.cmd}"
-    return bool(_GPU_JOB_HINT.search(blob))
+    return command_looks_like_gpu_job(job.name, job.cmd)
 
 
 def active_gpu_job_pids(*, exclude_job_id: str | None = None) -> list[int]:

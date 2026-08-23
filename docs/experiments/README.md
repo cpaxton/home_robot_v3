@@ -44,7 +44,7 @@ uv run emet hmeqa overnight
 # resume: uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_… --job-name hmeqa-overnight
 uv run emet hmeqa h2h --out ~/runs/emet/hmeqa_probe --ids 15,68,105,17
 
-# Full GraphEQA-paper 113 (both methods; prefer emet jobs)
+# Historical q0–112 slice (both methods; prefer emet jobs)
 uv run emet jobs run --name hmeqa-paper113 --need-mib 12000 -- \
   ./scripts/run_hmeqa_paper113_h2h.sh
 # Or single method:

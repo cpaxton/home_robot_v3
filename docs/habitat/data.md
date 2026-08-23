@@ -2,7 +2,7 @@
 
 HM-EQA needs two things on disk:
 
-1. **Question CSVs** — small; fetched from Explore-EQA / GraphEQA sources  
+1. **Question CSVs** — small; fetched from Explore-EQA / GraphEQA sources
 2. **HM3D scene meshes** — large; train split for full HM-EQA (~27GB habitat format)
 
 ## Environment variables
@@ -80,10 +80,10 @@ That scene is in the **HM3D train** split, not the free `example` pack.
 ### Where to get tokens
 
 1. Log in to Matterport.
-2. Go to **Profile → Settings → Developer Tools**  
+2. Go to **Profile → Settings → Developer Tools**
    (direct link: [my.matterport.com/settings/account/devtools](https://my.matterport.com/settings/account/devtools))
-3. Scroll to **Habitat dataset** / HM3D and **request access** if you have not already.  
-   Approval is required before downloads work — a token alone is not enough.  
+3. Scroll to **Habitat dataset** / HM3D and **request access** if you have not already.
+   Approval is required before downloads work — a token alone is not enough.
    Also see [matterport.com/partners/meta](https://matterport.com/partners/meta) and [aihabitat.org/datasets/hm3d](https://aihabitat.org/datasets/hm3d/).
 4. After access is **approved**, create a **new** API token on the same page (regenerate if you made a token before approval).
 5. Copy **both** values when shown — the **secret is only displayed once**.
@@ -224,7 +224,7 @@ On a machine with full train + semantics downloads, expect roughly:
 | Pool | Annotated scenes | Notes |
 |------|------------------|--------|
 | HM3D train split | **~145 / ~800** (~18%) | HM3DSem v0.2 annotates 145 train scans ([dataset page](https://aihabitat.org/datasets/hm3d-semantics/)) |
-| HM-EQA paper (113 Q, 49 unique scenes) | **~14 / 49** scenes, **~37 / 113** questions | Overlap is small because Explore-EQA scenes were not chosen from the annotated subset |
+| Historical q0–112 slice (113 Q, 49 unique scenes) | **~14 / 49** scenes, **~37 / 113** questions | Legacy emet slice; not the released GraphEQA semantic-filtered set |
 
 ### Slice taxonomy (what to run / cite)
 
@@ -232,7 +232,8 @@ On a machine with full train + semantics downloads, expect roughly:
 |-------|-----|---|-----|
 | Overnight triad | `run_overnight_habitat_eval.sh` | 8 / 32 / 20 | Fast dynagraph vs static_graph iteration (alias: `graph_eqa`) |
 | Annotated semantics | `IDS="$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated_question_ids as f; print(",".join(map(str,f())))')"` or overnight `annotated37_*` phases | ~37 | Fairer perception vs GraphEQA GT path |
-| Paper HM-EQA | `emet-habitat run-batch --paper-subset` | **113** | GraphEQA Table 1 *n* |
+| Historical fixed slice | `emet-habitat run-batch --paper-subset` | **113** | Legacy q0–112 emet slice |
+| GraphEQA repository filter | `grapheqa_baseline_question_ids()` | **114** | Exact semantic-filtered enrich sequence used by upstream code |
 | Explore-EQA full | `emet-habitat run-batch --all-questions` | up to ~500 | Beyond GraphEQA paper (stretch) |
 
 See also [experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md#hm-eqa-slice-taxonomy). Helpers: [`scripts/run_hmeqa_annotated37_h2h.sh`](../../scripts/run_hmeqa_annotated37_h2h.sh), [`scripts/run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh).
@@ -241,12 +242,12 @@ See also [experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results
 
 **Two distinct cases — check the report before assuming a broken download.**
 
-1. **Download gap (fixable)**  
-   `train_scenes_with_semantics` is far below ~145 (e.g. 0–50).  
+1. **Download gap (fixable)**
+   `train_scenes_with_semantics` is far below ~145 (e.g. 0–50).
    → Run `--fetch-hm3d-semantics train` with valid Matterport tokens.
 
-2. **Dataset gap (not fixable)**  
-   Download shows ~145 train semantic meshes, but an HM-EQA scene still has no `.semantic.glb`.  
+2. **Dataset gap (not fixable)**
+   Download shows ~145 train semantic meshes, but an HM-EQA scene still has no `.semantic.glb`.
    → That scan was **never annotated** in HM3DSem. Matterport labeled 216 HM3D spaces total; HM-EQA uses 49 train scenes and most were not in that set. **No download command can create labels that do not exist.**
 
 **What we can do for unannotated episodes today:**

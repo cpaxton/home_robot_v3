@@ -1725,7 +1725,7 @@ def jobs_update(
 @click.option(
     "--gpu-exclusive/--no-gpu-exclusive",
     default=None,
-    help="Wait for other active Habitat/VLM/MuJoCo jobs (default: on when --need-mib is set).",
+    help="Hold the host-wide GPU lock (default: on for --need-mib or GPU-like commands).",
 )
 @click.option("--foreground", is_flag=True, help="Run in foreground (no nohup).")
 @click.pass_context
@@ -1742,6 +1742,9 @@ def jobs_run(
 ) -> None:
     """Start a detached supervisor that registers and runs a managed job.
 
+    GPU-like commands and jobs with ``--need-mib`` hold a host-wide ``flock``
+    for their full lifetime, closing the launch race between separate checkouts.
+
     \b
     Example:
       emet jobs run --name improve-eqa -d "owlv2 + no confirm gate" --need-mib 14000 -- \\
@@ -1749,7 +1752,13 @@ def jobs_run(
     """
     import shlex
 
-    from emet.utils.job_registry import active_gpu_job_pids, load_job, new_job_id
+    from emet.utils.job_registry import (
+        active_gpu_job_pids,
+        command_looks_like_gpu_job,
+        gpu_lock_path,
+        load_job,
+        new_job_id,
+    )
 
     cmd_args = list(ctx.args)
     if cmd_args and cmd_args[0] == "--":
@@ -1764,8 +1773,9 @@ def jobs_run(
     log_path = out / "job.log"
     cmd_str = " ".join(shlex.quote(a) for a in cmd_args)
 
-    use_cpu_safe = bool(cpu_safe) if cpu_safe is not None else (need_mib is not None)
-    use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else (need_mib is not None)
+    auto_gpu_job = need_mib is not None or command_looks_like_gpu_job(name, cmd_str)
+    use_cpu_safe = bool(cpu_safe) if cpu_safe is not None else auto_gpu_job
+    use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else auto_gpu_job
 
     wait_pids = list(wait_pid)
     if use_gpu_excl:
@@ -1808,12 +1818,52 @@ def jobs_run(
     register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
     wait_lines = ""
     for wpid in wait_pids:
-        wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
+        wait_lines += (
+            'pid_is_running() { local stat; stat="$(ps -o stat= -p "$1" 2>/dev/null || true)"; '
+            '[[ -n "$stat" && "$stat" != Z* ]]; }\n'
+            f"while pid_is_running {int(wpid)}; do sleep 15; done\n"
+        )
     need_block = ""
     if need_mib is not None:
         need_block = (
             f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)}\n'
             f'"$EMET_BIN" eval status || true\n'
+        )
+    gpu_lock_block = ""
+    if use_gpu_excl:
+        default_lock = shlex.quote(str(gpu_lock_path()))
+        gpu_lock_block = (
+            'GPU_LOCK_FILE="${EMET_GPU_LOCK:-${EMET_GPU_LOCK_FILE:-' + default_lock + '}}"\n'
+            "if ! command -v flock >/dev/null 2>&1; then\n"
+            '  echo "ERROR: gpu-exclusive jobs require the flock utility" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "flock utility is unavailable" >/dev/null 2>&1 || true\n'
+            "  exit 2\n"
+            "fi\n"
+            'if ! mkdir -p "$(dirname "$GPU_LOCK_FILE")"; then\n'
+            '  echo "ERROR: cannot create GPU lock directory for $GPU_LOCK_FILE" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "cannot create GPU lock directory" >/dev/null 2>&1 || true\n'
+            "  exit 2\n"
+            "fi\n"
+            'exec 9>"$GPU_LOCK_FILE"\n'
+            'echo "waiting for exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
+            "_lock_rc=0\n"
+            'if [[ -z "${EMET_GPU_LOCK_TIMEOUT:-}" || "${EMET_GPU_LOCK_TIMEOUT}" == "-1" ]]; then\n'
+            "  flock -x 9 || _lock_rc=$?\n"
+            "else\n"
+            '  flock -w "$EMET_GPU_LOCK_TIMEOUT" 9 || _lock_rc=$?\n'
+            "fi\n"
+            'if [[ "$_lock_rc" -ne 0 ]]; then\n'
+            '  echo "ERROR: timed out waiting for GPU lock: $GPU_LOCK_FILE" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "gpu lock timeout $GPU_LOCK_FILE" >/dev/null 2>&1 || true\n'
+            "  exit 3\n"
+            "fi\n"
+            'export EMET_GPU_LOCK="$GPU_LOCK_FILE"\n'
+            'export EMET_GPU_LOCK_FILE="$GPU_LOCK_FILE"\n'
+            "export EMET_GPU_LOCK_HELD=1\n"
+            'echo "acquired exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
         )
     cpu_block = ""
     if use_cpu_safe:
@@ -1832,6 +1882,7 @@ def jobs_run(
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
         f"{register_line}"
+        f"{gpu_lock_block}"
         f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"
@@ -2670,7 +2721,12 @@ def _hmeqa_config_sources(ctx: click.Context, *, preset: str | None) -> dict[str
     result["model.llm_port"] = "config_default"
     result["budgets.agentic_max_tool_rounds"] = "config_default"
     result["budgets.agentic_max_nav_steps"] = "config_default"
-    result["evaluation.seed"] = "not_configurable"
+    result["inputs.data_dir"] = (
+        "environment:HABITAT_EQA_DATA_DIR" if os.environ.get("HABITAT_EQA_DATA_DIR", "").strip() else "config_default"
+    )
+    result["inputs.hm3d_root"] = (
+        "environment:HM3D_SCENE_DIR" if os.environ.get("HM3D_SCENE_DIR", "").strip() else "config_default"
+    )
     return result
 
 
@@ -2702,6 +2758,7 @@ def _hmeqa_launch(
         build_hmeqa_run_config,
         hmeqa_h2h_env_parts,
         hmeqa_h2h_vl_endpoint_from_env_parts,
+        load_hmeqa_run_manifest,
         prepare_hmeqa_run_manifest,
     )
 
@@ -2710,34 +2767,42 @@ def _hmeqa_launch(
     values = dict(frozen_values)
     arms = str(values["arms"])
     ids = str(values["holdout_ids"])
-    run_config = build_hmeqa_run_config(
-        arms=arms,
-        ids=ids,
-        agentic_verifier=values["agentic_verifier"],
-        require_verified=values["require_verified"],
-        agentic_router=values["agentic_router"],
-        use_hm3d_semantics=values["use_hm3d_semantics"],
-        use_enrich_labels=values["use_enrich_labels"],
-        decision_policy=values["decision_policy"],
-        graph_evidence_mode=values["graph_evidence_mode"],
-        room_history_mode=values["room_history_mode"],
-        room_policy=values["room_policy"],
-        room_target_hints=values["room_target_hints"],
-        investigate_stamp=values["investigate_stamp"],
-        attempt_ledger_mode=values["attempt_ledger_mode"],
-        variant_id=values["variant_id"],
-        eqa_hf_model_id=values["eqa_hf_model_id"],
-        eqa_vl_family=values["eqa_vl_family"],
-        eqa_vl_quantization=values["eqa_vl_quantization"],
-        eqa_answer_max_new_tokens=values["eqa_answer_max_new_tokens"],
-        host=values["host"],
-        vl_endpoint=values["vl_endpoint"],
-        vl_port=values["vl_port"],
-        episode_timeout_seconds=values["episode_timeout"],
-        max_planning_steps=values["max_planning_steps"],
-        max_movement_step=values["max_movement_step"],
-    )
+    data_dir = os.environ.get("HABITAT_EQA_DATA_DIR", "").strip() or None
+    hm3d_root = os.environ.get("HM3D_SCENE_DIR", "").strip() or None
     try:
+        if resume and (out / "run_manifest.json").is_file():
+            frozen_inputs = load_hmeqa_run_manifest(out)["config"]["inputs"]
+            data_dir = data_dir or frozen_inputs["data_dir"]
+            hm3d_root = hm3d_root or frozen_inputs["hm3d_root"]
+        run_config = build_hmeqa_run_config(
+            arms=arms,
+            ids=ids,
+            agentic_verifier=values["agentic_verifier"],
+            require_verified=values["require_verified"],
+            agentic_router=values["agentic_router"],
+            use_hm3d_semantics=values["use_hm3d_semantics"],
+            use_enrich_labels=values["use_enrich_labels"],
+            decision_policy=values["decision_policy"],
+            graph_evidence_mode=values["graph_evidence_mode"],
+            room_history_mode=values["room_history_mode"],
+            room_policy=values["room_policy"],
+            room_target_hints=values["room_target_hints"],
+            investigate_stamp=values["investigate_stamp"],
+            attempt_ledger_mode=values["attempt_ledger_mode"],
+            variant_id=values["variant_id"],
+            eqa_hf_model_id=values["eqa_hf_model_id"],
+            eqa_vl_family=values["eqa_vl_family"],
+            eqa_vl_quantization=values["eqa_vl_quantization"],
+            eqa_answer_max_new_tokens=values["eqa_answer_max_new_tokens"],
+            host=values["host"],
+            vl_endpoint=values["vl_endpoint"],
+            vl_port=values["vl_port"],
+            episode_timeout_seconds=values["episode_timeout"],
+            max_planning_steps=values["max_planning_steps"],
+            max_movement_step=values["max_movement_step"],
+            data_dir=data_dir,
+            hm3d_root=hm3d_root,
+        )
         manifest = prepare_hmeqa_run_manifest(
             out,
             project_root=root,

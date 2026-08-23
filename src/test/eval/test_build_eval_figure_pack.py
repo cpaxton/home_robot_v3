@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Tests for scripts/build_eval_figure_pack.py eval smoke aggregation."""
 
 from __future__ import annotations
@@ -163,12 +167,7 @@ def test_find_hmeqa_jsonls_matches_run_id(tmp_path: Path):
 )
 def test_investigate_status(hmeqa_acc, ovmm_obj, ovmm_recep, expected_status):
     summary = {
-        "hmeqa": {
-            "methods": {
-                f"m{i}": {"accuracy": acc}
-                for i, acc in enumerate(hmeqa_acc)
-            }
-        },
+        "hmeqa": {"methods": {f"m{i}": {"accuracy": acc} for i, acc in enumerate(hmeqa_acc)}},
         "ovmm": {
             "backends": {
                 "dynamem": {

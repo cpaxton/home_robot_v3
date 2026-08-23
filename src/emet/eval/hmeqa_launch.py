@@ -17,10 +17,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from emet.habitat.config import default_habitat_eqa_data_dir, default_hm3d_scene_dir
 from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, openai_base_for_host
 
 HMEQA_RUN_MANIFEST_SCHEMA = "emet.hmeqa.run_manifest"
-HMEQA_RUN_MANIFEST_VERSION = 1
+HMEQA_RUN_MANIFEST_VERSION = 2
 
 DEFAULT_DECISION_POLICY = "legacy"
 DEFAULT_GRAPH_EVIDENCE_MODE = "off"
@@ -79,8 +80,23 @@ _ENV_SOURCE_PATHS = {
     "EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS": ("budgets.agentic_max_tool_rounds",),
     "EMET_EQA_AGENTIC_MAX_NAV_STEPS": ("budgets.agentic_max_nav_steps",),
     "EMET_EQA_ANSWER_MAX_NEW_TOKENS": ("budgets.answer_max_new_tokens",),
-    "HMEQA_SEED": ("evaluation.seed",),
+    "HABITAT_EQA_DATA_DIR": ("inputs.data_dir",),
+    "HM3D_SCENE_DIR": ("inputs.hm3d_root",),
 }
+_HMEQA_RUNTIME_ONLY_ENV = frozenset({"EMET_EQA_TRACE"})
+_HMEQA_NONCANONICAL_BEHAVIOR_ENV = frozenset(
+    {
+        "EMET_ATTEMPT_LEDGER_MAX",
+        "EMET_ATTEMPT_LEDGER_PERSIST_ABSENT",
+        "EMET_DYNAGRAPH_EXPLORE_UNCOVERED",
+        "EMET_DYNAGRAPH_MCQ_DEBIAS",
+        "EMET_DYNAGRAPH_MEMORY_SUMMARY",
+        "EMET_HABITAT_PAD_OBSTACLES",
+        "EMET_VLM_FRONTIER_SCORING",
+        "EMET_WORLD_SESSION_ID",
+        "HMEQA_SEED",
+    }
+)
 
 
 class HmeqaRunManifestError(ValueError):
@@ -117,6 +133,44 @@ def _positive_int(name: str, value: Any, *, allow_zero: bool = False) -> int:
     if result < minimum:
         raise HmeqaRunManifestError(f"{name} must be >= {minimum}; got {result}")
     return result
+
+
+def _resolved_path(value: str | os.PathLike[str] | None, fallback: Path) -> str:
+    path = Path(value).expanduser() if value is not None and str(value).strip() else fallback
+    return str(path.expanduser().resolve())
+
+
+def validate_hmeqa_runtime_environment(
+    env: Mapping[str, str],
+    *,
+    config: Mapping[str, Any],
+) -> None:
+    """Reject ambient HM-EQA policy overrides that are not frozen in the manifest."""
+    unsupported = {
+        name
+        for name, value in env.items()
+        if str(value).strip()
+        and (
+            (name.startswith("EMET_EQA_") and name not in _ENV_SOURCE_PATHS and name not in _HMEQA_RUNTIME_ONLY_ENV)
+            or name in _HMEQA_NONCANONICAL_BEHAVIOR_ENV
+        )
+    }
+    normalized = normalize_hmeqa_run_config(config)
+    openai_base = str(env.get("EMET_OPENAI_BASE_URL", "")).strip().rstrip("/")
+    host = str(normalized["model"].get("host") or "").strip()
+    if openai_base:
+        expected = openai_base_for_host(host, int(normalized["model"]["llm_port"])).rstrip("/") if host else ""
+        if openai_base != expected:
+            unsupported.add("EMET_OPENAI_BASE_URL")
+    for name in ("EMET_CALIBAN_HOST", "OPENAI_BASE_URL"):
+        if str(env.get(name, "")).strip():
+            unsupported.add(name)
+    if unsupported:
+        names = ", ".join(sorted(unsupported))
+        raise HmeqaRunManifestError(
+            "unfrozen HM-EQA behavior environment is set: "
+            f"{names}. Add the control to the canonical run config or unset it."
+        )
 
 
 def _csv_words(name: str, value: str, choices: frozenset[str]) -> list[str]:
@@ -207,7 +261,8 @@ def build_hmeqa_run_config(
     max_movement_step: int = DEFAULT_MAX_MOVEMENT_STEP,
     agentic_max_tool_rounds: int = DEFAULT_AGENTIC_MAX_TOOL_ROUNDS,
     agentic_max_nav_steps: int = DEFAULT_AGENTIC_MAX_NAV_STEPS,
-    seed: int | None = None,
+    data_dir: str | os.PathLike[str] | None = None,
+    hm3d_root: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Return the canonical behavior-affecting configuration frozen for one H2H OUT."""
     variant = str(variant_id or "").strip()
@@ -228,12 +283,6 @@ def build_hmeqa_run_config(
     hf_model_id = None if remote_vl else (requested_hf_model_id or DEFAULT_EQA_HF_MODEL_ID)
     family = str(eqa_vl_family or "").strip() or DEFAULT_EQA_VL_FAMILY
     quantization = str(eqa_vl_quantization or "").strip() or DEFAULT_EQA_VL_QUANTIZATION
-
-    normalized_seed: int | None
-    if seed is None:
-        normalized_seed = None
-    else:
-        normalized_seed = _positive_int("seed", seed, allow_zero=True)
 
     return {
         "variant": {
@@ -256,9 +305,6 @@ def build_hmeqa_run_config(
                 name="use_hm3d_semantics",
             ),
             "use_enrich_labels": _bool(use_enrich_labels, name="use_enrich_labels"),
-            # HM-EQA run-episode currently has no seed option. Keep that explicit
-            # instead of claiming a seed that the runner does not consume.
-            "seed": normalized_seed,
         },
         "model": {
             "hf_model_id": hf_model_id,
@@ -285,6 +331,10 @@ def build_hmeqa_run_config(
         "ids": {
             "question_ids": _csv_ids("ids", ids),
         },
+        "inputs": {
+            "data_dir": _resolved_path(data_dir, default_habitat_eqa_data_dir()),
+            "hm3d_root": _resolved_path(hm3d_root, default_hm3d_scene_dir()),
+        },
     }
 
 
@@ -296,7 +346,8 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
         model = config["model"]
         budgets = config["budgets"]
         ids = config["ids"]
-        if not all(isinstance(section, Mapping) for section in (variant, evaluation, model, budgets, ids)):
+        inputs = config["inputs"]
+        if not all(isinstance(section, Mapping) for section in (variant, evaluation, model, budgets, ids, inputs)):
             raise TypeError("manifest config sections must be mappings")
         return build_hmeqa_run_config(
             arms=",".join(str(value) for value in evaluation["arms"]),
@@ -333,7 +384,8 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
             max_movement_step=int(budgets["max_movement_step"]),
             agentic_max_tool_rounds=int(budgets["agentic_max_tool_rounds"]),
             agentic_max_nav_steps=int(budgets["agentic_max_nav_steps"]),
-            seed=evaluation.get("seed"),
+            data_dir=str(inputs["data_dir"]),
+            hm3d_root=str(inputs["hm3d_root"]),
         )
     except (KeyError, TypeError, ValueError, HmeqaRunManifestError) as exc:
         if isinstance(exc, HmeqaRunManifestError):
@@ -399,6 +451,46 @@ def hmeqa_git_state(project_root: Path) -> dict[str, Any]:
     }
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    except OSError as exc:
+        raise HmeqaRunManifestError(f"could not hash HM-EQA input {path}: {exc}") from exc
+    return f"sha256:{digest.hexdigest()}"
+
+
+def hmeqa_external_input_state(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Fingerprint the small datasets and freeze the HM3D asset root path."""
+    normalized = normalize_hmeqa_run_config(config)
+    inputs = normalized["inputs"]
+    data_dir = Path(inputs["data_dir"])
+    hm3d_root = Path(inputs["hm3d_root"])
+    questions = data_dir / "questions.csv"
+    init_poses = data_dir / "scene_init_poses.csv"
+    for path in (questions, init_poses):
+        if not path.is_file():
+            raise HmeqaRunManifestError(f"required HM-EQA input is missing: {path}")
+    if not hm3d_root.is_dir():
+        raise HmeqaRunManifestError(f"HM3D scene root is missing: {hm3d_root}")
+    return {
+        "data_dir": str(data_dir),
+        "questions": {
+            "path": str(questions),
+            "sha256": _sha256_file(questions),
+        },
+        "scene_init_poses": {
+            "path": str(init_poses),
+            "sha256": _sha256_file(init_poses),
+        },
+        # HM3D meshes are too large to hash at launch. The canonical path is
+        # frozen; the manifest does not claim content identity for scene assets.
+        "hm3d_root": str(hm3d_root),
+    }
+
+
 def load_hmeqa_run_manifest(out_dir: Path) -> dict[str, Any]:
     """Load and minimally validate ``OUT/run_manifest.json``."""
     path = Path(out_dir) / "run_manifest.json"
@@ -429,6 +521,7 @@ def _validate_hmeqa_run_manifest(
     *,
     config: Mapping[str, Any],
     git_state: Mapping[str, Any],
+    external_inputs: Mapping[str, Any],
 ) -> None:
     mismatches: list[str] = []
     try:
@@ -450,6 +543,8 @@ def _validate_hmeqa_run_manifest(
         for key in ("commit", "dirty", "dirty_digest"):
             if frozen_git.get(key) != git_state.get(key):
                 mismatches.append(f"git {key} {git_state.get(key)!r} != frozen {frozen_git.get(key)!r}")
+    if manifest.get("external_inputs") != external_inputs:
+        mismatches.append("external input paths or dataset hashes differ from the frozen manifest")
     if mismatches:
         raise HmeqaRunManifestError("refusing HM-EQA resume: " + "; ".join(mismatches))
 
@@ -462,17 +557,40 @@ def prepare_hmeqa_run_manifest(
     sources: Mapping[str, str] | None = None,
     resume: bool,
     git_state: Mapping[str, Any] | None = None,
+    external_inputs: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create or validate the immutable, versioned manifest for an H2H output."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     normalized = normalize_hmeqa_run_config(config)
     current_git = dict(git_state or hmeqa_git_state(Path(project_root)))
+    current_inputs = dict(external_inputs or hmeqa_external_input_state(normalized))
+    for key in ("data_dir", "hm3d_root"):
+        if current_inputs.get(key) != normalized["inputs"][key]:
+            raise HmeqaRunManifestError(
+                f"external input state {key} {current_inputs.get(key)!r} "
+                f"does not match config {normalized['inputs'][key]!r}"
+            )
     path = out / "run_manifest.json"
     if path.exists():
+        if not resume:
+            raise HmeqaRunManifestError(
+                f"run_manifest.json already exists in {out}; use resume or choose a new output directory"
+            )
         manifest = load_hmeqa_run_manifest(out)
-        _validate_hmeqa_run_manifest(manifest, config=normalized, git_state=current_git)
+        _validate_hmeqa_run_manifest(
+            manifest,
+            config=normalized,
+            git_state=current_git,
+            external_inputs=current_inputs,
+        )
         return manifest
+    artifacts = _hmeqa_run_artifacts(out)
+    if artifacts and not resume:
+        raise HmeqaRunManifestError(
+            f"refusing to replace an existing HM-EQA run in {out}; "
+            "choose a new output directory or resume it from a frozen manifest"
+        )
     if resume:
         # Give the more specific missing-manifest diagnostic.
         return load_hmeqa_run_manifest(out)
@@ -483,6 +601,7 @@ def prepare_hmeqa_run_manifest(
         "schema_version": HMEQA_RUN_MANIFEST_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "git": current_git,
+        "external_inputs": current_inputs,
         "config_digest": digest,
         "config": normalized,
         "sources": dict(sorted((sources or {}).items())),
@@ -526,6 +645,7 @@ def hmeqa_run_config_from_env(
     model = base["model"]
     budgets = base["budgets"]
     ids = base["ids"]
+    inputs = base["inputs"]
 
     ledger_mode_default = variant["attempt_ledger_mode"]
     if "EMET_EQA_ATTEMPT_LEDGER_MODE" not in env and "EMET_EQA_ATTEMPT_LEDGER" in env:
@@ -630,7 +750,8 @@ def hmeqa_run_config_from_env(
                 budgets["agentic_max_nav_steps"],
             )
         ),
-        seed=(int(env["HMEQA_SEED"]) if env.get("HMEQA_SEED", "").strip() else evaluation.get("seed")),
+        data_dir=_env_value(env, "HABITAT_EQA_DATA_DIR", inputs["data_dir"]),
+        hm3d_root=_env_value(env, "HM3D_SCENE_DIR", inputs["hm3d_root"]),
     )
 
 
@@ -642,6 +763,7 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
     model = normalized["model"]
     budgets = normalized["budgets"]
     ids = normalized["ids"]
+    inputs = normalized["inputs"]
     env = {
         "ARMS": ",".join(evaluation["arms"]),
         "HOLDOUT_IDS": ",".join(str(value) for value in ids["question_ids"]),
@@ -674,6 +796,8 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
         "EMET_EQA_AGENTIC_MAX_TOOL_ROUNDS": str(budgets["agentic_max_tool_rounds"]),
         "EMET_EQA_AGENTIC_MAX_NAV_STEPS": str(budgets["agentic_max_nav_steps"]),
         "EMET_EQA_ANSWER_MAX_NEW_TOKENS": str(budgets["answer_max_new_tokens"]),
+        "HABITAT_EQA_DATA_DIR": inputs["data_dir"],
+        "HM3D_SCENE_DIR": inputs["hm3d_root"],
         "EMET_HMEQA_CONFIG_DIGEST": hmeqa_run_config_digest(normalized),
     }
     if model.get("host"):
@@ -681,9 +805,45 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
             str(model["host"]),
             int(model.get("llm_port") or DEFAULT_LLM_PORT),
         )
-    if evaluation.get("seed") is not None:
-        env["HMEQA_SEED"] = str(evaluation["seed"])
     return env
+
+
+def missing_hmeqa_snapshot_artifacts(
+    bundle_dir: Path,
+    *,
+    arm: str,
+    env: Mapping[str, str],
+) -> list[str]:
+    """Return required evidence artifacts missing from an H2H bundle snapshot."""
+
+    def enabled(name: str, default: bool) -> bool:
+        raw = str(env.get(name, "")).strip().lower()
+        if not raw:
+            return default
+        return raw not in {"0", "false", "no", "off"}
+
+    bundle = Path(bundle_dir)
+    required_files: list[str] = []
+    required_dirs: list[str] = []
+    if enabled("EMET_EVAL_EXPORT_COMPACT_MEMORY", False):
+        required_files.append("compact_memory/manifest.json")
+    if arm == "agentic":
+        if str(env.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "off")).strip().lower() != "off":
+            required_files.append("world_evidence.json")
+            if enabled("EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB", True):
+                required_dirs.append("world_evidence_views")
+        if str(env.get("EMET_EQA_ATTEMPT_LEDGER_MODE", "off")).strip().lower() != "off":
+            required_files.append("attempt_ledger.json")
+        if str(env.get("EMET_EQA_ROOM_HISTORY_MODE", "off")).strip().lower() != "off":
+            required_files.append("room_events.json")
+
+    missing = [
+        relative
+        for relative in required_files
+        if not (bundle / relative).is_file() or (bundle / relative).stat().st_size == 0
+    ]
+    missing.extend(f"{relative}/" for relative in required_dirs if not (bundle / relative).is_dir())
+    return missing
 
 
 def _flatten_config_paths(value: Any, prefix: str = "") -> list[str]:
@@ -694,6 +854,14 @@ def _flatten_config_paths(value: Any, prefix: str = "") -> list[str]:
         path = f"{prefix}.{key}" if prefix else str(key)
         result.extend(_flatten_config_paths(value[key], path))
     return result
+
+
+def _hmeqa_run_artifacts(out: Path) -> list[Path]:
+    artifact_names = ("classic.jsonl", "agentic.jsonl", "orchestrator.log", "progress.json", "DONE")
+    artifacts = [out / name for name in artifact_names if (out / name).exists()]
+    artifacts.extend(out.glob("classic_q*.jsonl"))
+    artifacts.extend(out.glob("agentic_q*.jsonl"))
+    return artifacts
 
 
 def prepare_hmeqa_run_manifest_from_env(
@@ -714,10 +882,7 @@ def prepare_hmeqa_run_manifest_from_env(
         # The overnight orchestrator can mark a newly-created next phase RESUME=1
         # after an earlier phase completed. Permit only a truly empty H2H OUT;
         # historical partial/scored directories still fail closed.
-        artifact_names = ("classic.jsonl", "agentic.jsonl", "orchestrator.log", "progress.json", "DONE")
-        artifacts = [out / name for name in artifact_names if (out / name).exists()]
-        artifacts.extend(out.glob("classic_q*.jsonl"))
-        artifacts.extend(out.glob("agentic_q*.jsonl"))
+        artifacts = _hmeqa_run_artifacts(out)
         if artifacts:
             raise HmeqaRunManifestError(
                 f"cannot resume {out}: run_manifest.json is missing but run artifacts exist; "
@@ -738,6 +903,7 @@ def prepare_hmeqa_run_manifest_from_env(
             environ,
             base_config=existing.get("config") if existing is not None else None,
         )
+    validate_hmeqa_runtime_environment(environ, config=config)
 
     expected_digest = environ.get("EMET_HMEQA_CONFIG_DIGEST", "").strip()
     actual_digest = hmeqa_run_config_digest(config)

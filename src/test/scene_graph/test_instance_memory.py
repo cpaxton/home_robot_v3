@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 
 # Import instance module directly to avoid heavy emet.mapping.__init__ chain
@@ -233,10 +232,15 @@ class TestInstanceMemory:
 
         # First frame
         mem.process_instances_for_env(
-            env_id=0, instance_seg=instance_seg, point_cloud=point_cloud,
-            image=image, cam_to_world=cam_to_world,
-            instance_classes=instance_classes, instance_scores=instance_scores,
-            background_instance_labels=[-1], valid_points=valid_points,
+            env_id=0,
+            instance_seg=instance_seg,
+            point_cloud=point_cloud,
+            image=image,
+            cam_to_world=cam_to_world,
+            instance_classes=instance_classes,
+            instance_scores=instance_scores,
+            background_instance_labels=[-1],
+            valid_points=valid_points,
         )
         mem.associate_instances_to_memory()
 
@@ -244,10 +248,15 @@ class TestInstanceMemory:
         point_cloud2 = point_cloud.clone()
         point_cloud2[10:50, 10:50] += torch.rand(40, 40, 3) * 0.05
         mem.process_instances_for_env(
-            env_id=0, instance_seg=instance_seg, point_cloud=point_cloud2,
-            image=image, cam_to_world=cam_to_world,
-            instance_classes=instance_classes, instance_scores=instance_scores,
-            background_instance_labels=[-1], valid_points=valid_points,
+            env_id=0,
+            instance_seg=instance_seg,
+            point_cloud=point_cloud2,
+            image=image,
+            cam_to_world=cam_to_world,
+            instance_classes=instance_classes,
+            instance_scores=instance_scores,
+            background_instance_labels=[-1],
+            valid_points=valid_points,
         )
         mem.associate_instances_to_memory()
 

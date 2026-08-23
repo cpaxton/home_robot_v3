@@ -11,7 +11,6 @@ from typing import Any
 
 import numpy as np
 
-
 _IMAGE_ID_RE = re.compile(
     r"\b(?:image|view|observation|frame)\s*#?\s*(\d+)\b",
     re.IGNORECASE,
@@ -196,15 +195,11 @@ def format_human_eqa_answer(
         elif image_id is not None:
             lbl, xyz = _observation_for_image_index(observations, nav_samples, image_id)
             if xyz is not None:
-                user_answer = (
-                    f"From the robot's view where it saw the {lbl}, "
-                    f"the target is near {_format_xyz(xyz)}."
-                )
+                user_answer = f"From the robot's view where it saw the {lbl}, the target is near {_format_xyz(xyz)}."
                 location_hint = _format_xyz(xyz)
             else:
                 user_answer = (
-                    f"I saw something related near view {image_id}, "
-                    "but do not have a precise world position yet."
+                    f"I saw something related near view {image_id}, but do not have a precise world position yet."
                 )
         elif nodes:
             user_answer = _spatial_phrase_for_node(_best_graph_node_for_question(nodes, question), question)

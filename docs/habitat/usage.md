@@ -24,7 +24,7 @@ uv run emet run graph-eqa-habitat \
   --max-planning-steps 20 \
   --device cuda
 
-# HM-EQA paper batch (113 questions, indices 0–112; budget depends on GPU)
+# Historical emet q0–112 batch (113 questions; not GraphEQA's filtered set)
 .venv-habitat/bin/emet-habitat run-batch \
   --method static_graph \
   --paper-subset \
@@ -36,7 +36,7 @@ uv run emet run graph-eqa-habitat \
 # Or use helpers (resume + SUMMARY; they source gpu_preflight.sh which delegates to emet eval):
 #   ./scripts/run_hmeqa_memory_confirm_gate.sh   # GE-only gate → optional annotated37 → paper113
 #   ./scripts/run_hmeqa_annotated37_h2h.sh       # ~37 semantics-annotated ids, both methods
-#   ./scripts/run_hmeqa_paper113_h2h.sh          # full 113 head-to-head
+#   ./scripts/run_hmeqa_paper113_h2h.sh          # historical q0–112 head-to-head
 # Slice taxonomy: docs/habitat/data.md and docs/experiments/habitat_eqa_results.md
 
 # Full Explore-EQA CSV (500 questions) — use only if you need the extended set
@@ -74,30 +74,37 @@ Useful flags:
 | Flag | Default | Notes |
 |------|---------|-------|
 | `--question-id` | `0` | Index into `questions.csv` |
-| `--method` | `dynagraph` | `static_graph` (alias `graph_eqa`) or `dynagraph` |
+| `--method` | `static_graph` | `static_graph` (alias `graph_eqa`) or `dynagraph` |
 | `--mock-llm` | off | Smoke / CI without real LLM |
 | `--mock-llm-explore` | off | With `--mock-llm`: mock `confidence: false` so each planning step navigates |
-| `--max-planning-steps` | `3` (wrapper) / `5` (`emet run`) | Exploration budget |
+| `--max-planning-steps` | `20` | Exploration budget |
 | `--max-movement-step` | `10` | Nav substeps per planning iteration |
 | `--hm3d-root` | `HM3D_SCENE_DIR` | Override train scene directory |
 | `--data-dir` | `HABITAT_EQA_DATA_DIR` | Override CSV location |
-| `--output` | none | Write episode JSONL |
-| `--rotate-in-place` | off | Extra rotation action in loop |
+| `--output` | none (`run-episode`); required (`run-batch`) | Write episode JSONL |
+| `--rotate-in-place` | on | Initial heading sweep before the planning loop |
 | `--export-map` / `--no-export-map` | on | Per-episode top-down map bundle (see [evaluation.md](../evaluation.md)) |
 | `--export-video` / `--no-export-video` | on | Head-camera `episode_rgb.mp4` |
 | `--map-stride` | `0` | Save `maps/step_NNNN.png` every N planning steps (`0` = auto stride when map video on) |
 | `--habitat-perfect-nav` / `--no-habitat-perfect-nav` | on | Navmesh pathing vs voxel A* |
 | `--use-hm3d-semantics` / `--no-hm3d-semantics` | auto for direct Habitat CLI; off in `emet hmeqa` | Use GT-derived HM3D semantic labels |
 | `--enrich-labels` / `--no-enrich-labels` | off | Independently seed per-question GT-derived GraphEQA object hints |
+| `--eqa-vl-quantization` | config default (`int4`) | Explicit local VLM quantization override |
 
 ## Debug artifacts (batch runs)
+
+`--resume` validates the immutable batch manifest before skipping completed
+rows. It rejects method/ID/model/quantization changes, effective parameter or
+behavior-environment drift, git/dirty-state drift, changed CSV hashes, a changed
+HM3D root, and historical JSONL files with no manifest. Without `--resume`,
+`run-batch` refuses to append to an existing output or replace its manifest.
 
 Each `run-batch --output …/my_run.jsonl` writes:
 
 | Path | Contents |
 |------|----------|
 | `my_run.jsonl` | One JSON line per episode (scores + summary debug fields) |
-| `my_run_manifest.json` | Run config: method, VLM id, question ids, git commit, frontier flags |
+| `my_run_manifest.json` | Frozen method/IDs/model, effective parameter + environment fingerprints, git state, CSV hashes, HM3D root |
 | `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
 | `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
 

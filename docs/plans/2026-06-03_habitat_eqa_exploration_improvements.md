@@ -1,8 +1,8 @@
 # HM-EQA exploration and prompting improvements
 
-**Date:** 2026-06-03 (updated 2026-07-05)  
-**Status:** P0–P2 **done in code**; P3 **partial**; P4 **scripts ready, runs pending**; P5 deferred. Success criteria **not met** — need post–July-2026 nav-fix sweeps.  
-**Context:** Rescored Habitat runs (~40% on paper-comparable slices with local 3–4B VLMs) show infra/parser fixes were necessary but not sufficient for a clear win. Qwen2.5-VL-3B reached **50% on Q0–9**; frontier v2 regressed on Q0–19 (**5/20** vs paper **8/20**).  
+**Date:** 2026-06-03 (updated 2026-07-05)
+**Status:** P0–P2 **done in code**; P3 **partial**; P4 **scripts ready, runs pending**; P5 deferred. Success criteria **not met** — need post–July-2026 nav-fix sweeps.
+**Context:** Rescored Habitat runs (~40% on paper-comparable slices with local 3–4B VLMs) show infra/parser fixes were necessary but not sufficient for a clear win. Qwen2.5-VL-3B reached **50% on Q0–9**; frontier v2 regressed on Q0–19 (**5/20** vs paper **8/20**).
 **Related:** [HABITAT_EQA_HARNESS.md](HABITAT_EQA_HARNESS.md), [docs/habitat/usage.md](../habitat/usage.md), [docs/dynagraph.md](../dynagraph.md)
 
 ---
@@ -221,12 +221,12 @@ uv run python scripts/rescore_habitat_jsonl.py ~/.cache/habitat_eqa/results/<run
 
 ## Suggested order of work
 
-1. **P0** navigation index fix + tests  
-2. **P4** ablation with Qwen2.5 Q0–19 (validates P0 + frontier hypothesis)  
-3. **P1** HM-EQA prompt variant  
-4. **P2** image selection  
-5. **P3** budget gating  
-6. **P5** two-tier VLM if still LLM-bound after exploration fixes  
+1. **P0** navigation index fix + tests
+2. **P4** ablation with Qwen2.5 Q0–19 (validates P0 + frontier hypothesis)
+3. **P1** HM-EQA prompt variant
+4. **P2** image selection
+5. **P3** budget gating
+6. **P5** two-tier VLM if still LLM-bound after exploration fixes
 
 ---
 

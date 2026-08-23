@@ -121,6 +121,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `GPU_KILL_STALE` | `emet_gpu_between_steps` | Set `0` to skip process cleanup between overnight phases. |
 | `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
 | `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
+| `EMET_GPU_LOCK` | `emet jobs run --gpu-exclusive`, direct H2H script | Canonical host-wide `flock` path held for the full exclusive job lifetime (default `~/runs/emet/gpu.lock`; shared with v2/v3 launchers). |
+| `EMET_GPU_LOCK_FILE` | `emet jobs run --gpu-exclusive`, direct H2H script | Compatibility alias for `EMET_GPU_LOCK` when the canonical variable is unset. |
+| `EMET_GPU_LOCK_TIMEOUT` | `emet jobs run --gpu-exclusive` | Lock wait timeout in seconds (default `-1`, wait indefinitely); a timed-out job fails without starting its command. |
 | `EMET_JOB_ID` | smoke/queue scripts | If set by `emet jobs run`, scripts heartbeat via `emet jobs update` (and skip creating a new registry entry). Also write `OUT/progress.json` for ETA even without a job id. |
 | `EGL_FAIL_ABORT` | `scripts/run_hmeqa_agentic_h2h.sh` / `emet hmeqa` | Abort after N consecutive Habitat EGL/CUDA-map failures (`WindowlessContext` / `unable to find CUDA device`). Default `2`; `0` = never. |
 | `NATIVE_CRASH_POLICY` | H2H / `emet hmeqa --crash-policy` | `skip` (default): settle + retry + continue; `abort`: stop batch on first native crash. |

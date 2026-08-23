@@ -1050,12 +1050,8 @@ def run_episode_find_phase(
             from emet.perception.detection.yoloe import get_shared_yoloe_perception
             from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
 
-            get_shared_mask_siglip_encoder(
-                version="so400m", device="cuda", feature_matching_threshold=0.14
-            )
-            get_shared_yoloe_perception(
-                confidence_threshold=det_conf, device="cuda", size="l"
-            )
+            get_shared_mask_siglip_encoder(version="so400m", device="cuda", feature_matching_threshold=0.14)
+            get_shared_yoloe_perception(confidence_threshold=det_conf, device="cuda", size="l")
             print("OVMM find: perception preload done", flush=True)
 
         # Capture server stderr so bind failures include the real crash reason
@@ -1083,8 +1079,7 @@ def run_episode_find_phase(
             rc = server.poll()
             raise RuntimeError(
                 f"sim server did not bind port {recv_port} (port_offset={port_offset}, "
-                f"exit={rc}, sim={episode.sim})"
-                + (f":\n{err_tail}" if err_tail.strip() else "")
+                f"exit={rc}, sim={episode.sim})" + (f":\n{err_tail}" if err_tail.strip() else "")
             )
         settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
         if run_cfg.cpu_only:

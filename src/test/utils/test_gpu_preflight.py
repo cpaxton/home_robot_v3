@@ -110,9 +110,7 @@ def test_habitat_egl_error_in_text():
         "Platform::WindowlessEglApplication::tryCreateContext(): "
         "unable to find CUDA device 0 among 2 EGL devices in total"
     )
-    assert gp.habitat_egl_error_in_text(
-        "WindowlessContext: Unable to create windowless context"
-    )
+    assert gp.habitat_egl_error_in_text("WindowlessContext: Unable to create windowless context")
     assert not gp.habitat_egl_error_in_text("episode finished correctly")
 
 
@@ -184,12 +182,16 @@ def test_clean_bundles_keeps_unique_and_newest_runs(tmp_path):
     now = time.time()
     # One unique ad-hoc bundle + two sweep runs (old + new).
     u = root / "cli_episode_q0000"
-    u.mkdir(); (u / "f").write_bytes(b"x")
+    u.mkdir()
+    (u / "f").write_bytes(b"x")
     os.utime(u, (now - 3 * 86400, now - 3 * 86400))
-    for stem, age in [("subset_paper113_20260801_100000", now - 5 * 86400),
-                      ("subset_paper113_20260813_100000", now - 1 * 86400)]:
+    for stem, age in [
+        ("subset_paper113_20260801_100000", now - 5 * 86400),
+        ("subset_paper113_20260813_100000", now - 1 * 86400),
+    ]:
         d = root / f"{stem}_dynagraph_qwen3_vl"
-        d.mkdir(); (d / "f").write_bytes(b"x")
+        d.mkdir()
+        (d / "f").write_bytes(b"x")
         os.utime(d, (age, age))
     out = gp.clean_episode_bundles(keep=1, root=root, apply=True)
     remaining = sorted(p.name for p in root.iterdir())

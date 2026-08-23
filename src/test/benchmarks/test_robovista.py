@@ -111,11 +111,7 @@ def test_run_robovista_batch_resume(tmp_path: Path):
         resume=True,
     )
     assert summary["n"] == 2
-    ids = [
-        line
-        for line in (out / "predictions.jsonl").read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    ids = [line for line in (out / "predictions.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     assert len(ids) == 2
 
 

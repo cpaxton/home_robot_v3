@@ -9,8 +9,8 @@ MATRIX_PID="${2:-}"
 mkdir -p "$OUT"
 
 if [[ -n "$MATRIX_PID" ]]; then
-  echo "[eqa-smoke] waiting for matrix pid $MATRIX_PID…"
-  while kill -0 "$MATRIX_PID" 2>/dev/null; do sleep 30; done
+    echo "[eqa-smoke] waiting for matrix pid $MATRIX_PID…"
+    while kill -0 "$MATRIX_PID" 2>/dev/null; do sleep 30; done
 fi
 
 echo "[eqa-smoke] waiting for GPU…"
@@ -23,15 +23,15 @@ export EMET_DYNAMIC_EXPLORE_STALE_KILL_S="${EMET_DYNAMIC_EXPLORE_STALE_KILL_S:-6
 
 echo "[eqa-smoke] Robocasa dynagraph explore K=3 + EQA → $OUT"
 env -u PYTHONPATH \
-  EMET_EQA_QUESTION_TIMEOUT_S="$EMET_EQA_QUESTION_TIMEOUT_S" \
-  EMET_DYNAMIC_EXPLORE_STALE_LOG_S="$EMET_DYNAMIC_EXPLORE_STALE_LOG_S" \
-  EMET_DYNAMIC_EXPLORE_STALE_KILL_S="$EMET_DYNAMIC_EXPLORE_STALE_KILL_S" \
-  uv run python scripts/eval_dynamic_exploration.py \
-  --smoke \
-  --backend dynagraph \
-  --output-dir "$OUT" \
-  --port-offset-base 220 \
-  >"$OUT/eqa_smoke.log" 2>&1
+    EMET_EQA_QUESTION_TIMEOUT_S="$EMET_EQA_QUESTION_TIMEOUT_S" \
+    EMET_DYNAMIC_EXPLORE_STALE_LOG_S="$EMET_DYNAMIC_EXPLORE_STALE_LOG_S" \
+    EMET_DYNAMIC_EXPLORE_STALE_KILL_S="$EMET_DYNAMIC_EXPLORE_STALE_KILL_S" \
+    uv run python scripts/eval_dynamic_exploration.py \
+    --smoke \
+    --backend dynagraph \
+    --output-dir "$OUT" \
+    --port-offset-base 220 \
+    >"$OUT/eqa_smoke.log" 2>&1
 echo "[eqa-smoke] exit=$?"
 # Print summary
 python3 - <<PY
