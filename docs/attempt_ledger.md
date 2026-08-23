@@ -41,6 +41,15 @@ summaries/failure risk, global attempt rows, and their mirrored provenance event
 of the router state. Room timeline and live approach-affordance fields remain
 controlled by their own axes; this switch does not erase internal safety state.
 
+The 2026-08-23 matched four-question diagnostic validated this manipulation:
+all 12 shadow router states were policy-clean, while 10/14 treatment states
+contained recent/global attempts. Both scored 3/4; visible history reduced
+repeat-failure rows 6→4 but increased attempts 31→37 and mean planning steps
+35.25→39.25. The mode remains opt-in. See
+[graph_room_evidence.md](experiments/graph_room_evidence.md#focused-action-history-isolation-2026-08-23)
+and the frozen
+[`action_history_pair_20260823.json`](../paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json).
+
 ### Env
 
 ```bash

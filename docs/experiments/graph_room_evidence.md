@@ -7,14 +7,13 @@
 [agentic_scale.md](agentic_scale.md),
 [agentic_qwen_context.md](agentic_qwen_context.md#rooms_verify_probe)
 
-> **Status (2026-08-23): no-go for scale.** The strongest clean pair still has
-> A2 grounded at 3/6 versus A1 shadow at 4/6, with more planning steps and
-> budget hits. The final `b91059e5` integrity canary then produced two
-> native-clean q11 attempts; both failed to see the trash can directly,
-> exhausted all eight rounds, and answered A instead of D. The run also exposed
-> an over-strict best-effort object-crop completion check, now covered by a
-> CPU regression. The capability gate remains failed, so no A0/A1/A2 scale work
-> should start.
+> **Status (2026-08-23): no-go for scale or default enablement.** The strongest
+> clean bundled pair still has A2 grounded at 3/6 versus A1 shadow at 4/6.
+> A later history-only pair held grounded graph/room state fixed: shadow and
+> agent-visible history both scored 3/4, while visible history raised mean
+> planning steps from 35.25 to 39.25. It reduced ledger repeat-failure rows
+> (6→4) but increased total attempts (31→37) and still failed q11. The mechanism
+> and no-leakage control passed; the capability/efficiency gate did not.
 
 ## Question and hypothesis
 
@@ -113,9 +112,9 @@ so they do not establish a GT-free perception result.
 ### Focused action-history isolation (2026-08-23)
 
 The A1/A2 comparison above changed the decision implementation, graph evidence,
-room history, and action history together. Based on review feedback, we are
-running one narrower diagnostic pair with `grounded_v2`, graph evidence
-`agent`, and room history `agent` held fixed. Only
+room history, and action history together. Based on review feedback, we ran one
+narrower diagnostic pair with `grounded_v2`, graph evidence `agent`, and room
+history `agent` held fixed. Only
 `attempt_ledger_mode=shadow|agent` changes:
 
 | Variant config | Dedicated action-history visibility | IDs |
@@ -151,11 +150,43 @@ uv run emet hmeqa h2h "$OUT_AGENT" \
   --job-name hmeqa-history-agent
 ```
 
-Before comparing outcomes, require native-clean jobs, complete markers, matching
-git/input/model/budget/oracle fields, a policy-clean shadow trace, and a manifest
-diff limited to the declared variant fields. Report paired letter, planning-step,
-budget-hit, repeated-action, and per-ID trace deltas. Results are added here and
-in the paper's Agentic EQA tools appendix only after both jobs finish.
+Both safe-start probes passed (`20260823_085053_7d5210`,
+`20260823_090944_e8aad0`). Both managed jobs were native-clean and published
+validated four-unit `DONE` records:
+
+- shadow job `20260823_085244_c42458`, OUT
+  `~/runs/emet/hmeqa_action_history_shadow_63abd929_20260823_084433`
+- agent job `20260823_091138_036fc6`, OUT
+  `~/runs/emet/hmeqa_action_history_agent_63abd929_20260823_084433`
+
+The manifests share clean commit `63abd929`, input hashes, model, budgets,
+artifact profile, oracle switches, IDs, and every non-variant config field. The
+only effective variant deltas are ID and `attempt_ledger_mode`.
+
+| Variant | Letter | Mean planning steps | Budget hits | Decision rounds | Nav / explore | Ledger attempts / failures / repeats |
+|---------|--------|---------------------|-------------|-----------------|---------------|--------------------------------------|
+| shadow | **3/4** | **35.25** | 1 | 13 | 9 / 3 | 31 / 13 / 6 |
+| agent-visible | **3/4** | **39.25** | 1 | 15 | 8 / 6 | 37 / 14 / 4 |
+
+| QID | Shadow letter; steps / rounds | Agent letter; steps / rounds | Paired effect |
+|-----|--------------------------------|-------------------------------|---------------|
+| 6 | B ✓; 21 / 1 | B ✓; 21 / 1 | unchanged |
+| 11 | A ✗; 69 / 8 | A ✗; 69 / 8 | repeat failures 5→3; nav 5→3; explore 2→4; still budget fallback |
+| 12 | D ✓; 29 / 2 | D ✓; 45 / 4 | +16 planning steps, +2 rounds |
+| 47 | A ✓; 22 / 2 | A ✓; 22 / 2 | unchanged |
+
+The visibility manipulation worked. All 12 shadow router states rendered recent
+actions, loop flags, and global attempts as empty, and no mirrored attempt event
+leaked through bulk evidence. In the treatment, recent actions and global
+attempts were non-empty in 10/14 router calls (the first call of each episode
+correctly had no history); no navigation-loop flag fired in either variant.
+
+Interpretation is mixed and not promotable: visible history changed q11's search
+mix and reduced the predefined repeat-failure count, but it did not change any
+letter, did not solve q11, added six ledger attempts overall, and made q12
+slower. Keep the switch documented and opt-in; do not scale from this n=4
+diagnostic. Frozen summary:
+`paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
 
 Per-question findings:
 

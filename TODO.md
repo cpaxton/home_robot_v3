@@ -112,10 +112,16 @@ Canonical record:
       ID differ. Shadow now filters recent outcomes, loop flags, global/place
       attempts, and mirrored attempt events from policy state while retaining
       auditable rows. Focused tests and the paper/docs protocol pass.
-- [ ] Run the user-authorized, history-only pair on `6,11,12,47`: shadow first,
-      then agent-visible, one managed job at a time after a detached safe-start.
-      This eight-episode diagnostic is an explicit exception to the failed q11
-      capability ladder; it is not A0/A1/A2 promotion or scale evidence.
+- [x] Run the user-authorized, history-only pair on `6,11,12,47`, one managed
+      job at a time after successful detached probes. Shadow job
+      `20260823_085244_c42458` and agent job `20260823_091138_036fc6` both
+      completed native-clean with validated 4-unit `DONE`. Both scored **3/4**
+      with identical letters; agent-visible history raised mean planning steps
+      **35.25→39.25** and attempts **31→37**, while repeat-failure rows fell
+      **6→4**. q11 still failed A vs D; q12 took 16 extra steps. Mechanism and
+      no-leakage pass, capability/efficiency do not. Keep it opt-in and do not
+      scale; frozen summary is
+      `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
 - [ ] Keep the bundled A0→A1→A2 ladder, `2,76`, A3, rooms-11, holdout, and
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.

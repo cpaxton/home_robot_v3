@@ -57,6 +57,21 @@ stamp, no HM3D semantic sensor, and no per-question enriched labels. Only
 episodes are still too small for an accuracy claim; the test is reported as
 router-state/process evidence.
 
+\paragraph{Four-question diagnostic result (2026-08-23).}
+At clean commit \texttt{63abd929}, both managed runs passed detached EGL probes,
+completed without native crashes, and published validated four-unit completion
+records. Shadow and agent-visible history both scored \textbf{3/4}, with the
+same per-question letters (q6 B, q11 A, q12 D, q47 A). Mean planning steps
+increased from 35.25 (shadow) to 39.25 (agent-visible), with one budget hit in
+each arm. The predefined ledger repeat-failure count fell from $6$ to $4$
+(q11: $5\!\rightarrow\!3$), but total ledger attempts rose from $31$ to $37$
+and q12 required two extra decision rounds / 16 extra planning steps. All 12
+shadow router states kept the dedicated history sections empty; recent actions
+and global attempts were non-empty in 10/14 treatment router calls. Thus the
+visibility mechanism and shadow no-leakage control worked, but this small
+diagnostic does not support default enablement or scale. Frozen details:
+\texttt{paper/data/hmeqa\_agentic\_h2h/action\_history\_pair\_20260823.json}.
+
 \subsection{Answer-mode tools}
 
 \begin{description}
