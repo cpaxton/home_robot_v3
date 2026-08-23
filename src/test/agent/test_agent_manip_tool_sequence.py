@@ -38,7 +38,7 @@ class _RecordingExecutor:
 
 
 def test_canned_find_then_pick_place_dispatch_order():
-    """Agent dispatch maps find_objects → find, pick_place → pickup+place in order."""
+    """Agent dispatch maps find_objects → find, pick_place → guarded fallback commands."""
     exe = _RecordingExecutor()
     tools = {t.name: t for t in get_tools({"executor": exe})}
     ok, results, _has_info = _dispatch_tool_calls(
@@ -51,7 +51,7 @@ def test_canned_find_then_pick_place_dispatch_order():
         [("find", "bowl")],
         [("pickup", "bowl"), ("place", "table")],
     ]
-    assert "Executor ran: pickup, place -> ok" in results
+    assert "[pick_place] Pick and place (bowl -> table) done." in results
 
 
 def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
@@ -70,7 +70,7 @@ def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     )
     assert ok  # keep going
     assert exe.calls == [[("pickup", "bowl"), ("place", "table")]]
-    assert "Executor ran: pickup, place -> failed" in results
+    assert "[pick_place] Pick/place failed or interrupted." in results
 
 
 def _make_kinematic_dynamem_executor():
@@ -162,6 +162,67 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
     ]
     assert teleport_calls == []
     assert planners == ["rrt_connect", "rrt_connect"]
-    assert "Executor ran: pickup, place -> ok" in results
+    assert "[pick_place] Pick and place (bowl -> table) done." in results
     # find_objects, then a nav attempt each for pickup and place.
     assert exe._find.call_count == 3
+
+
+def test_scene_tasks_does_not_use_stale_ithor_metadata_for_live_robocasa(monkeypatch, tmp_path):
+    class _Robot:
+        def get_emet_session(self):
+            return {
+                "is_simulation": True,
+                "environment": {"kind": "robocasa", "scene": "kitchen", "index": 0},
+                "sim_object_placements": {},
+            }
+
+    ithor = tmp_path / "ithor"
+    ithor.mkdir()
+    (ithor / "FloorPlan1_physics_metadata.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("emet.eval.scene_task_extractor.default_molmospaces_scenes_dir", lambda: tmp_path)
+
+    tools = {t.name: t for t in get_tools({"robot": _Robot()})}
+
+    result = tools["scene_tasks"].func()
+
+    assert result == "No MolmoSpaces metadata matches the active simulation scene."
+
+
+def test_scene_tasks_object_filter_matches_pick_object_not_receptacle(monkeypatch, tmp_path):
+    from emet.eval.scene_task_extractor import SceneTaskSpec
+
+    class _Pick:
+        category = "bowl"
+
+    tasks = [
+        SceneTaskSpec("t1", "test", "s", "bowl", "counter", "microwave"),
+        SceneTaskSpec("t2", "test", "s", "bottle", "counter", "bowl"),
+    ]
+    ithor = tmp_path / "ithor"
+    ithor.mkdir()
+    (ithor / "FloorPlan1_physics_metadata.json").write_text('{"objects":{"obj":{}}}', encoding="utf-8")
+    monkeypatch.setattr("emet.eval.scene_task_extractor.default_molmospaces_scenes_dir", lambda: tmp_path)
+    monkeypatch.setattr("emet.eval.scene_task_extractor.load_scene_metadata", lambda path: {"objects": {"obj": {}}})
+    monkeypatch.setattr("emet.eval.scene_task_extractor.emit_tasks", lambda *args, **kwargs: tasks)
+    monkeypatch.setattr("emet.eval.scene_task_extractor.scene_objects", lambda metadata: [])
+    monkeypatch.setattr("emet.eval.scene_task_extractor.pickable_objects", lambda objs: [_Pick()])
+    monkeypatch.setattr("emet.eval.scene_task_extractor.receptacle_objects", lambda objs: [])
+    monkeypatch.setattr(
+        "emet.controller.task.tamp.agent_bridge.stable_scene_task_refs",
+        lambda context, filtered, placements, **kwargs: [],
+    )
+
+    class _Robot:
+        def get_emet_session(self):
+            return {
+                "is_simulation": True,
+                "environment": {"kind": "molmospaces", "scene": "ithor", "index": 0},
+                "scene_source_basename": "FloorPlan1_physics.xml",
+                "sim_object_placements": {},
+            }
+
+    tools = {t.name: t for t in get_tools({"robot": _Robot()})}
+    result = tools["scene_tasks"].func(object_filter="bowl")
+
+    assert "Tasks matching 'bowl' (1):" in result
+    assert "bottle" not in result

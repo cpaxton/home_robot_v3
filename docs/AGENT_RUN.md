@@ -54,7 +54,7 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 
 | Orchestrator mode | Entry | Pack | Stop / answer |
 |-------------------|-------|------|----------------|
-| **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, Discord send_*, … (metadata in `CHAT_SKILL_SPECS`; funcs bind in `build_chat_tools`) | User turns; explore is turn-blocking |
+| **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, `scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`, Discord send_*, … (metadata in `CHAT_SKILL_SPECS`; funcs bind in `build_chat_tools`) | User turns; explore is turn-blocking |
 | **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify`; OVMM find (dynagraph) via same executor | `investigate` / `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` (`EQA_SKILL_SPECS`) | VLM-assess answerable → submit (or explore `finish`); detectors are proposals only |
 
 OVMM find questions (`Where is the jar on the counter?`) use the **same** `AgenticEQAExecutor` as HM-EQA — not a parallel find loop. One-shot voxel localize is ablation-only (`--oneshot-localize` / `agentic_find: false`). See [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md).
@@ -151,6 +151,8 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 | Share map | `send_map_snapshot` | Top-down Discord/Rerun (optionally overlays last motion plan) |
 | Nav stuck | `navigation_diagnostics` | Map counts + last-plan / base clearance; pair with `send_map_snapshot` |
 | Objects / relations | `list_scene_relations` | Dynagraph / GraphEQA memory; open-vocab only if that plug-in is active |
+| TAMP discovery | `scene_tasks` | Active MolmoSpaces scene inventory plus opaque semantic `task_ref` handles (no simulator body IDs) |
+| TAMP plan | `plan_pick_place` → `execute_pick_place_plan` | Plan first; execution rechecks live poses/capabilities and rejects stale one-shot plans |
 | Memory QA | `query_memory` | Graph/voxel answer when mapped |
 | EQA | `--eqa` (+ optional `--llm qwen3-vl-eqa --share-memory-vllm`) | Caption + query path without a second full VL fight |
 
@@ -238,6 +240,18 @@ uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "desc
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless --no-discord \
   -c "pick up the bowl and place it on the microwave"
 
+# Plan-first CHAT TAMP: ask for scene_tasks, then use its task_ref with
+# plan_pick_place and execute_pick_place_plan after reviewing the returned plan.
+
+# Managed acceptance gate: default PROFILE=smoke runs the bounded rby1
+# CHAT scene_tasks → plan → execute test with instantaneous simulated base
+# approaches and physical IK/grasp/place. PROFILE=full adds Stretch + OVMM.
+#   ./scripts/schedule_tamp_agent_tools_gate.sh
+#   # or: uv run emet jobs run --name tamp-agent-tools-gate --need-mib 12000 --gpu-exclusive -- \
+#     ./scripts/run_tamp_agent_tools_gate.sh
+#   # Full/overnight coverage: PROFILE=full ./scripts/run_tamp_agent_tools_gate.sh
+# See docs/plans/2026-08-22_tamp_agent_tools.md
+
 # Stretch MuJoCo: without -V, pick/place uses GT teleport when sim_set_body_pose
 # is advertised. Pass --visual-servo / -V to keep AnyGrasp visual-servo.
 uv run emet run agent --robot stretch --start-sim --scene robocasa --headless --no-discord \
@@ -256,6 +270,8 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 
 ## Testing
 
+- TAMP agent-tools offline pack: `uv run emet test src/test/agent/test_agent_prompt_and_tools.py src/test/agent/test_agent_manip_tool_sequence.py src/test/controller/task/tamp/ src/test/scripts/test_run_tamp_agent_tools_gate.py src/test/scripts/test_scripted_sim_pick_place.py`
+- Gate quoting smoke (no sim): `DRY_RUN=1 ./scripts/run_tamp_agent_tools_gate.sh`
 - Config resolution: `uv run emet test src/test/utils/test_resolve_config.py`
 - Config loader: `uv run emet test src/test/config/test_emet_config_loader.py`
 - VL registry: `uv run emet test src/test/llms/test_qwen_vl_registry.py`

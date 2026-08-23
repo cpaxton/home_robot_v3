@@ -54,8 +54,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--manip-mode",
         choices=MANIP_MODES,
-        default="oracle",
-        help="Pick/place: skip | oracle (GT from find) | sim (MuJoCo teleport) | attempt (AnyGrasp or sim fallback)",
+        default=None,
+        help="Override per-episode mode; default uses episode YAML, otherwise oracle",
     )
     parser.add_argument("--merge-xy-m", type=float, default=None)
     parser.add_argument("--staleness-horizon", type=int, default=None)

@@ -260,8 +260,13 @@ def looks_like_gpu_job(job: JobRecord) -> bool:
     return command_looks_like_gpu_job(job.name, job.cmd)
 
 
-def active_gpu_job_pids(*, exclude_job_id: str | None = None) -> list[int]:
-    """PIDs of non-terminal GPU-like jobs (for ``--gpu-exclusive`` waits)."""
+def active_gpu_job_pids(*, exclude_job_id: str | None = None, include_unmanaged: bool = False) -> list[int]:
+    """PIDs of non-terminal GPU-like jobs (for ``--gpu-exclusive`` waits).
+
+    With ``include_unmanaged=True``, also includes any unmanaged process
+    currently using the GPU (``nvidia-smi`` compute apps, e.g. another agent's
+    MuJoCo/VLM servers) so ``--gpu-exclusive`` queues behind unregistered runs.
+    """
     pids: list[int] = []
     for job in list_jobs(include_terminal=False):
         if exclude_job_id and job.id == exclude_job_id:
@@ -272,6 +277,17 @@ def active_gpu_job_pids(*, exclude_job_id: str | None = None) -> list[int]:
             continue
         if job.pid is not None and pid_alive(job.pid):
             pids.append(int(job.pid))
+    if include_unmanaged:
+        try:
+            from emet.utils.gpu_preflight import list_compute_apps
+
+            self_pid = os.getpid()
+            for app in list_compute_apps():
+                pid = int(app.pid)
+                if pid != self_pid and pid not in pids and pid_alive(pid):
+                    pids.append(pid)
+        except Exception:
+            pass
     return pids
 
 

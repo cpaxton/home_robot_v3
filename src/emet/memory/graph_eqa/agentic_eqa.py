@@ -463,6 +463,40 @@ def env_eqa_agentic_close_look() -> bool | None:
     return None
 
 
+def env_eqa_agentic_siglip_evidence() -> bool | None:
+    """Feed the SigLIP image-text evidence line into VLM assess (default on).
+
+    ``EMET_EQA_AGENTIC_SIGLIP_EVIDENCE=0`` drops the ``'<phrase>' similarity=…``
+    hint from the assess prompt (A/B against the pre-PR-#120 baseline). It is
+    evidence, not ground truth — the VLM still weighs what it sees.
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_SIGLIP_EVIDENCE", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
+def env_eqa_agentic_close_look_multiview() -> bool | None:
+    """Aggregate close-look crops across views before VLM assess (default off).
+
+    DeWorldSG-style temporal evidence: instead of assessing the current wide frame
+    plus a single crop, keep the best recent close-look crops per target and feed
+    them all to the VLM as additional images. Helps count / clock questions where
+    one glance (even zoomed) can be ambiguous.
+
+    ``EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1`` enables; default off (conservative,
+    keeps single-view behavior until the option is validated).
+    """
+    v = os.environ.get("EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW", "").strip().lower()
+    if v in _FALSE:
+        return False
+    if v in _TRUE:
+        return True
+    return None
+
+
 def env_eqa_agentic_no_early_unverified() -> bool | None:
     """Hold unverified auto-submits while budget remains (default on).
 
@@ -571,6 +605,8 @@ class AgenticEQAExecutor:
         no_early_unverified: bool | None = None,
         single_view_confirm: bool | None = None,
         evidence_image: bool | None = None,
+        close_look_multiview: bool | None = None,
+        siglip_evidence: bool | None = None,
     ):
         self.agent = agent
         self.mode = "answer" if question else "explore"
@@ -771,7 +807,19 @@ class AgenticEQAExecutor:
         self._evidence_image = bool(
             evidence_image if evidence_image is not None else (env_ev if env_ev is not None else cfg_ev)
         )
+        env_mv = env_eqa_agentic_close_look_multiview()
+        cfg_mv = _eqa_cfg(agent).get("agentic_close_look_multiview", False)
+        self._close_look_multiview = bool(
+            close_look_multiview if close_look_multiview is not None else (env_mv if env_mv is not None else cfg_mv)
+        )
+        env_sig_ev = env_eqa_agentic_siglip_evidence()
+        cfg_sig_ev = _eqa_cfg(agent).get("agentic_siglip_evidence", True)
+        self._siglip_evidence = bool(
+            siglip_evidence if siglip_evidence is not None else (env_sig_ev if env_sig_ev is not None else cfg_sig_ev)
+        )
         self._assess_history: dict[int, dict[str, Any]] = {}
+        # Close-look crops per target phrase (multi-view consensus, opt-in).
+        self._close_look_crops: dict[str, list[tuple[int, np.ndarray]]] = {}
         self._close_look_required = False
         self._close_look_source = "disabled"
         self._tools: list[Any] | None = None
@@ -1875,8 +1923,7 @@ class AgenticEQAExecutor:
             retracted = getattr(gm, "_retracted_nav_claims", None) or set()
             key = phrase.strip().lower()
             cross_view = any(
-                int(rid) != int(evidence_obs_id)
-                and str(rphrase or "").strip().lower() == key
+                int(rid) != int(evidence_obs_id) and str(rphrase or "").strip().lower() == key
                 for rid, rphrase in list(retracted)
             )
         out = gm.retract_phrase_claim_at_obs(
@@ -2788,19 +2835,15 @@ class AgenticEQAExecutor:
             except Exception:
                 return None
         try:
-            import torch
-            import torch.nn.functional as F
+            from emet.eval.presence_verifiers import dense_siglip_patch_similarities
 
-            text_t = enc.encode_text(text).detach().float().reshape(-1)
-            text_t = text_t / (text_t.norm() + 1e-12)
-            inputs = enc._to_model_inputs(enc.processor(images=np.asarray(rgb, dtype=np.uint8), return_tensors="pt"))
-            with torch.no_grad():
-                out = enc.model.vision_model(inputs["pixel_values"], output_hidden_states=True)
-                feat = F.normalize(out.last_hidden_state.float(), dim=-1)
-                sims = feat @ text_t.to(device=feat.device, dtype=feat.dtype).reshape(-1, 1)
-                return float(sims.max().item())
-        except Exception as e:
-            _logger.warning(f"dense_max_sim_for_rgb failed: {e}")
+            dense = dense_siglip_patch_similarities(enc, np.asarray(rgb, dtype=np.uint8), text)
+            if dense is None:
+                return None
+            sims, _grid = dense
+            return float(np.max(sims))
+        except Exception as exc:
+            _logger.warning(f"dense_max_sim_for_rgb failed: {exc}")
             return None
 
     def _voxel_max_sim_for_obs(self, phrase: str, obs_id: int) -> tuple[float, str] | None:
@@ -3394,7 +3437,11 @@ class AgenticEQAExecutor:
             )
             return {"ok": False, "error": "no eqa_client", "answerable": False, "obs_id": oid}
 
-        from emet.eval.agentic_vlm_assess import assess_view_with_vlm, build_inventory_brief
+        from emet.eval.agentic_vlm_assess import (
+            assess_view_with_vlm,
+            build_inventory_brief,
+            unique_image_arrays,
+        )
 
         # Do not pass SigLIP/OWL proposal into inventory — ABSENT colors answers.
         inventory = build_inventory_brief(
@@ -3404,6 +3451,63 @@ class AgenticEQAExecutor:
             n_rounds=self._round,
             n_nav=self._n_nav + self._n_explore,
         )
+        # Cheap image-text evidence for the same view: SigLIP similarity for the target
+        # phrase (full frame + dense patch best-of). This directly helps small / visually
+        # ambiguous targets (sugar cube vs brick) that the VLM can mistake on pixels alone.
+        siglip_evidence = ""
+        try:
+            if self._siglip_evidence and rgb is not None and hasattr(gm, "verify_phrase_at_obs"):
+                vres = gm.verify_phrase_at_obs(
+                    self._target_phrase or phrase,
+                    oid,
+                    rgb=rgb,
+                    min_sim=self.verify_min_sim,
+                )
+                full_sim = float(getattr(vres, "sim", 0.0) or 0.0)
+                dense_sim = self._dense_max_sim_for_rgb(self._target_phrase or phrase, rgb)
+                best_sim = float(dense_sim) if dense_sim is not None else full_sim
+                label = "present-like" if best_sim >= SIGLIP_IMAGE_PRESENT_THRESHOLD else "weak"
+                siglip_evidence = f"'{self._target_phrase or phrase}' similarity={best_sim:.3f} ({label})"
+        except Exception as exc:
+            _logger.warning(f"siglip evidence for vlm_assess failed: {exc}")
+        # Close-look zoom: for count / clock / fine-detail questions, crop the highest
+        # phrase-aligned dense patch and show the VLM the zoomed region alongside the
+        # wide frame so it can read detail the full image hides.
+        close_look_crop = None
+        multi_crops: list[np.ndarray] = []
+        if self._close_look_required and rgb is not None:
+            try:
+                from emet.eval.presence_verifiers import dense_siglip_argmax_crop
+
+                crop = dense_siglip_argmax_crop(
+                    getattr(gm, "_confirmed_memory_siglip_encoder", None),
+                    rgb,
+                    self._target_phrase or phrase,
+                )
+                if crop is not None:
+                    close_look_crop, _crop_sim = crop
+                    # Multi-view consensus (DeWorldSG-style temporal evidence): keep the
+                    # current crop and, when enabled, the best recent crops for this target
+                    # so the VLM sees more than one glance (helps ambiguous count/clock).
+                    key = self._target_phrase or phrase or str(oid)
+                    recent = self._close_look_crops.setdefault(key, [])
+                    recent[:] = [(old_oid, old_crop) for old_oid, old_crop in recent if old_oid != oid]
+                    recent.append((oid, close_look_crop))
+                    if len(recent) > 3:
+                        recent.pop(0)
+                    if self._close_look_multiview:
+                        # The current crop is already passed separately; add only
+                        # earlier, distinct observation crops (max two).
+                        multi_crops = [np.asarray(c) for _, c in recent[:-1]]
+            except Exception as exc:
+                _logger.warning(f"close-look crop for vlm_assess failed: {exc}")
+        if self._close_look_multiview and close_look_crop is not None:
+            close_crops = unique_image_arrays(
+                [close_look_crop, *multi_crops],
+                max_images=3,
+            )
+            close_look_crop = close_crops[0] if close_crops else None
+            multi_crops = close_crops[1:]
         assessment = assess_view_with_vlm(
             client,
             question=self.question,
@@ -3411,6 +3515,9 @@ class AgenticEQAExecutor:
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
             is_mcq=self._question_is_mcq(),
+            siglip_evidence=siglip_evidence,
+            close_look_crop=close_look_crop,
+            multi_close_look_crops=multi_crops,
         )
         vlm_event_id = self._persist_agentic_evidence(
             stage="vlm_assessment",
@@ -3430,6 +3537,7 @@ class AgenticEQAExecutor:
             },
         )
         self._vlm_assessed_obs_ids.add(oid)
+        close_look_views = (1 if close_look_crop is not None else 0) + len(multi_crops)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
         # Image 1 when nothing was corroborated (see _best_evidence_obs_id).
         self._assess_history[oid] = {
@@ -3438,9 +3546,11 @@ class AgenticEQAExecutor:
             "need_more_views": bool(assessment.need_more_views),
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
+            "close_look": bool(close_look_crop is not None),
+            "close_look_views": close_look_views,
         }
         _logger.info(
-            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s close_look_views=%d",
             oid,
             bool(assessment.present),
             bool(assessment.answerable),
@@ -3449,6 +3559,8 @@ class AgenticEQAExecutor:
             str(phrase or self._target_phrase or "")[:60],
             str(assessment.suggested_answer or "")[:60],
             str(assessment.reason or "")[:80],
+            bool(close_look_crop is not None),
+            close_look_views,
         )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
@@ -5509,6 +5621,7 @@ class AgenticEQAExecutor:
         self._recent_actions = []
         self._station_obs_ids = set()
         self._assess_history = {}
+        self._close_look_crops = {}
         self._answer_evidence = []
         self._confirmed_answer_evidence = None
         self._final_answer_decision = None

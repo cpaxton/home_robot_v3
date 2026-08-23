@@ -106,6 +106,22 @@ def test_score_place_goal_gt_body_ignores_other_category_matches():
     assert out["gt_recep_bodies"] == ["cab_main"]
 
 
+def test_score_place_invalid_goal_gt_body_fails_closed():
+    placements = _placements()
+    placements["object2"] = {"cat": "red cylinder", "pos": [0.48, -0.52, 0.5]}
+
+    out = score_place_success(
+        placements,
+        object_gt_body="object2",
+        goal_recep="blue cube",
+        radius_m=0.3,
+        goal_gt_body="missing_receptacle",
+    )
+
+    assert out["place_success"] is False
+    assert out["gt_recep_bodies"] == []
+
+
 def test_goal_place_xyz_picks_farthest_recep():
     from emet.eval.ovmm_full import _goal_place_xyz
 

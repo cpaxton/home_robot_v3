@@ -142,12 +142,26 @@ def test_tools_registry_nonempty():
         "move_forward",
         "describe_scene",
         "pick_place",
+        "plan_pick_place",
+        "execute_pick_place_plan",
         "wave",
         "quit",
         "take_picture",
         "send_image",
     ):
         assert expected in names, f"Missing expected tool: {expected}"
+
+
+def test_tamp_chat_tools_expose_semantic_handles_only():
+    from emet.agent.tools import get_tools
+
+    tools = {tool.name: tool for tool in get_tools({})}
+    for name in ("plan_pick_place", "execute_pick_place_plan"):
+        assert tools[name].returns_info is True
+        schema = tools[name].schema()["function"]
+        assert "gt_body" not in str(schema).lower()
+    assert tools["plan_pick_place"].executor_commands is None
+    assert tools["execute_pick_place_plan"].executor_commands is None
 
 
 def test_prompt_routes_rotate_back_not_around():

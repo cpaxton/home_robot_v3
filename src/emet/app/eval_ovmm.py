@@ -64,7 +64,7 @@ def _batch_options_from_click(
     dry_run: bool,
     explore_steps: int | None = None,
     no_scene_cache: bool = False,
-    manip_mode: str = "skip",
+    manip_mode: str | None = None,
     oneshot_localize: bool = False,
     agentic_max_rounds: int | None = None,
     agentic_max_nav_steps: int | None = None,
@@ -280,8 +280,8 @@ def ovmm_find(
 @click.option(
     "--manip-mode",
     type=click.Choice(list(MANIP_MODES)),
-    default="oracle",
-    show_default=True,
+    default=None,
+    help="Override full-OVMM episode modes (default: use episode YAML, otherwise oracle)",
 )
 @click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
 @click.option("--no-scene-cache", is_flag=True, default=False)
@@ -321,7 +321,7 @@ def ovmm_full(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
-    manip_mode: str,
+    manip_mode: str | None,
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,

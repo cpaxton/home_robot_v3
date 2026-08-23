@@ -3,7 +3,6 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-
 ## HM-EQA graph tuning — count/location weak spots (PRIORITY — PR #124)
 
 Branch `feat/hmeqa-graph-tuning` (PR #124; base `fix/no-gt-semantics`, now **merged into
@@ -228,6 +227,48 @@ Canonical record:
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
 
+## HM-EQA close-look / weak-class validation (PR #120 + follow-ups)
+
+GPUs, not paper rewrites. The 95/113 partial says count 23% / clock 20% are the
+collapses the SigLIP-evidence + close-look work targets. All landed via PR #120
+(SigLIP evidence line, `dense_siglip_argmax_crop` single crop, opt-in multi-view
+close-look consensus). **PR #120 is OPEN on this branch** (mergeable, no reviews
+yet) — its two validation jobs died with the box 2026-08-19 and each still needs a
+clean GPU-exclusive run before merge. What's left:
+
+- [ ] **Count/clock validation run** (`scripts/run_hmeqa_countclock_slice.sh`, 15 ids)
+      single-view vs multiview vs pre-close-look baseline (count 23% / clock 20%).
+      Status: first launch (Aug 15) was a silent 0/15 on missing flash-attn (fixed
+      `EMET_ALLOW_SDPA_ATTN=1` in-runner). Aug 19 relaunch (jobs `20260819_022652_ece872`
+      single-view, `20260819_022702_c3c900` multiview) **died with the box** ~22:35 —
+      `pid exited without DONE`. Singleview had scored qids 12,21,28,32,33 of 15;
+      multiview died on qid 12. Runner does **not** resume (`run-batch` overwrites the
+      jsonl), so relaunch both arms fresh, GPU-exclusive (`NEED_MIB=12000`), then confirm
+      the trace logs `close_look_views=N` on the multiview arm.
+- [ ] **Temporal close-look consensus** (DeWorldSG idea #1 — implemented, opt-in
+      `eqa.agentic_close_look_multiview` / `EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW`,
+      default **off**): aggregate up to 3 close-look crops across views per target
+      phrase. Flip the default on only if the multiview arm beats single-view on
+      the count/clock slice. (Cross-view retraction variant is PR #124
+      `feat/hmeqa-graph-tuning`, open — strip ABSENT across all obs ids.)
+- [ ] **Gaussian-similarity node merge** (DeWorldSG idea #2 — not started): replace
+      the point-anchored `dynagraph_merge_xy_m` / staleness heuristics with a
+      probabilistic per-object Gaussian (depth-aware var). Merge when two objects'
+      posteriors overlap; track object-entity persistence across graph refreshes.
+      Measurable on location/state classes where disambiguation fails (rug
+      q-location, ACZZiU 0/5).
+- [ ] **Depth-aware crop** (DeWorldSG idea #3 — not started): `dense_siglip_argmax_crop`
+      is pixel-argmax in 2D. Weight the crop by depth continuity / object extent
+      (drop false patches on walls/ceilings; prefer small floor objects). Floor
+      pick suite (`ovmm full --manip-mode mcts`, `floor_object` eps) is the target.
+      Floor-suite baseline (PR #120): ground_truth rby1 mcts pick_success=True /
+      ovmm_full_partial=0.75 (place = known rby1 attach/release flake); teleport refs
+      1.0; pre-fix dynagraph find_obj=False / partial 0.0–0.5 (cube-vs-brick).
+      **SigLIP-validate rerun still owed**: `tamp-floor-siglip-validate` (2026-08-14)
+      was INVALID — VL worker OOM / connection refused (co-ran with the paper eval).
+      Rerun `scripts/eval_tamp_floor.py --manip-mode sim --backend dynagraph`
+      GPU-exclusive and compare find/partial vs the pre-fix table before merging #120.
+
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
 Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes nav
@@ -359,15 +400,64 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
 
-### Active PRs (2026-08-19)
+## TAMP agent tools
+
+Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs/plans/2026-08-22_tamp_agent_tools.md).
+
+**Merge posture (PR #120):** safe to land — CHAT/TAMP infrastructure is additive;
+paper HM-EQA / OVMM-find defaults unchanged. Routine acceptance is the fast
+**`PROFILE=smoke`** gate (~1–2 min). OVMM floor perf and Stretch agentic sweeps
+are explicit follow-up (`PROFILE=full`, `eval_tamp_floor.py`).
+
+- [x] Keep semantic CHAT task references separate from private simulator
+      `*_gt_body` grounding; select and retain the actual receptacle.
+- [x] Expose plan-first `plan_pick_place` and
+      `execute_pick_place_plan`; route `pick_place` through guarded planning in
+      a live simulator and preserve the hardware fallback.
+- [x] Revalidate live poses/capabilities before one-shot execution and fail
+      closed on stale plans or invalid benchmark receptacles.
+- [x] Make floor setup and per-episode `mcts` / `sim` / `skip` modes explicit,
+      including configured `floor_z_m` and find-only controls.
+- [x] Add offline regressions for semantic grounding, CHAT schemas/dispatch,
+      selected-receptacle scoring, floor setup, and close-look crop limits.
+- [x] **Stretch teleport CHAT control** (manual): job `20260823_013540_64c74f`,
+      displacement 0.10 m (`plan_pick_place` → `execute_pick_place_plan`).
+- [x] **MolmoSpaces CHAT `scene_tasks` smoke** (manual, teleport): job
+      `20260823_003208_1379d8`, `object_filter=bowl` → `task:1` pick bowl,
+      displacement 2.21 m.
+- [x] **Managed smoke gate green** (`PROFILE=smoke`, default): rby1 CHAT
+      `scene_tasks` → plan → execute through live tools + kinematic base snap.
+      Job `20260823_152854_4c7766`: 81 s sim, displacement 2.21 m, placement
+      error 0.02 m. Gate quoting bug fixed 2026-08-23 (`run_item` uses `"$@"`).
+
+### Next (OVMM perf / coverage — not blocking merge)
+
+- [ ] **`PROFILE=full` gate once** (`chat kinematic stretch floor`, ~1–2 h):
+      `./scripts/run_tamp_agent_tools_gate.sh` with `PROFILE=full` via `emet jobs`.
+      Stretch agentic head sweeps and the 4-episode RoboCasa floor matrix belong
+      here, not in routine smoke.
+- [ ] **OVMM floor smoke** (`eval_tamp_floor.py --smoke`): single rby1 MCTS
+      dynagraph episode (~5–8 min). Use when changing agentic find / SigLIP /
+      floor scoring — not the default PR gate.
+- [ ] **Dynagraph floor find quality**: Stretch head sweeps dominate wall time
+      (15–45 s/sweep vs ~1–2 s on rby1). For routine agent tests prefer rby1 +
+      `EMET_SIM_NAV_TELEPORT=1`; improve OVMM explore/verify separately.
+- [ ] **rby1 MCTS place flake**: kinematic pick succeeds but place attach/release
+      can fail (partial 0.75 in floor runs). Teleport refs score 1.0 — gap is
+      arm place, not find/pick.
+- [ ] **SigLIP floor validate rerun** (optional): `eval_tamp_floor.py --backend
+      dynagraph` GPU-exclusive; compare find/partial vs pre-fix table (see DeWorldSG
+      section below).
+
+### Active PRs (2026-08-23)
 
 - **#124** `feat/hmeqa-graph-tuning` → `main`: graph tuning (corroborated retract, count
   hint v2, instance-graph harness, count/clock runner). **Merged main (#115)** at
   `2f4b4d4f`. Count/clock best **7/15 (47%)** on merge rerun; GRAPH_COUNT blocked on
   `manipulation_only` ignored `use_instance_memory` (fixed — load YoloE when instance graph
   on). Re-slice to validate `GRAPH_COUNT`.
-- **#120** `feat/tamp-floor-experiments` → `main`: RoboCasa floor pick/place + SigLIP-aware
-  VLM assess + count/clock slice runner (now also in v2 `scripts/`). MERGEABLE.
+- **#120** `feat/tamp-floor-experiments` → `main`: **merged** — RoboCasa floor suite +
+  TAMP CHAT agent-tools + SigLIP-aware VLM assess. Routine gate: `PROFILE=smoke` (~1–2 min).
 - **#115** → **merged to main** (`9a77be37`): grounded graph room-evidence / auditable
   manifests. Location work continues on main, not this PR.
 - **#46** `feature/stretch-robocasa-robosuite` → `main`: DRAFT, unrelated (Stretch
@@ -383,10 +473,16 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [x] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: fixed — Stretch path propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (and declines confirmation → False).
 
 ### Real tests (not yet green on every machine)
-- [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
+- [x] **MolmoSpaces ithor + rby1 CHAT tool chain** (`scene_tasks` → plan → execute,
+      teleport): green 2026-08-23 (`20260823_003208_1379d8`).
+- [x] **MolmoSpaces ithor + rby1 kinematic** CHAT `scene_tasks` → plan → execute
+      in managed smoke gate (`PROFILE=smoke`): green 2026-08-23 (`20260823_152854_4c7766`).
 - [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
 - [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
-- [ ] **Robocasa / Stretch** pick-place smoke with and without `--visual-servo` to lock the teleport-vs-servo behavior.
+- [x] **Stretch teleport** CHAT plan/execute (`default_table_stretch.yaml`): green
+      2026-08-23 (`20260823_013540_64c74f`).
+- [ ] **Robocasa / Stretch visual-servo** pick-place smoke (`--visual-servo`) to
+      lock teleport-vs-servo behavior on hardware path.
 - [ ] **CI / overnight**: mark or gate the above under `RUN_MOLMOSPACES_TESTS` / sim markers so agents use `emet test --no-sim` for the offline pack only.
 
 ### Motion / grasp quality

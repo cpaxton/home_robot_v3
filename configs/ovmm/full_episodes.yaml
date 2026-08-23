@@ -33,3 +33,67 @@ episodes:
     goal_recep: microwave
     success_radius_m: 0.75
     explore_steps: 0
+
+  # ---------------------------------------------------------------------------
+  # RoboCasa TAMP floor pick/place: the object starts on the floor and must be
+  # picked off the floor and placed on a counter / cabinet (or just found while
+  # exploring the room). floor_object drops the GT body to z≈0 before pick.
+  # mcts manip_mode drives the real arm (kinematic); sim/oracle use teleport.
+  # ---------------------------------------------------------------------------
+
+  # Floor object -> counter, kinematic MCTS path (rby1 / Galaxea arm).
+  - id: robocasa_rby1_floor_to_counter_mcts
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_rby1.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: floor
+    goal_recep: counter
+    success_radius_m: 0.60
+    explore_steps: 0
+    floor_object: true
+    floor_z_m: 0.02
+    manip_mode: mcts
+
+  # Floor object -> cabinet, teleport oracle (upper-bound reference for MCTS).
+  - id: robocasa_sourccey_floor_to_cab_sim
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_sourccey.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: floor
+    goal_recep: cab
+    success_radius_m: 0.60
+    explore_steps: 0
+    floor_object: true
+    floor_z_m: 0.02
+    manip_mode: sim
+
+  # Floor object -> counter, stretch teleport reference.
+  - id: robocasa_stretch_floor_to_counter_sim
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: floor
+    goal_recep: counter
+    success_radius_m: 0.60
+    explore_steps: 0
+    floor_object: true
+    floor_z_m: 0.02
+    manip_mode: sim
+
+  # Floor-object "explore the room" find-only episode (no manip): the robot must
+  # navigate and localize an object that fell on the floor.
+  - id: robocasa_floor_find_only_explore
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: floor
+    goal_recep: floor
+    success_radius_m: 0.60
+    explore_steps: 5
+    floor_object: true
+    floor_z_m: 0.02
+    manip_mode: skip

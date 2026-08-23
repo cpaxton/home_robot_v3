@@ -926,6 +926,39 @@ def _jobs_run_id_from_output(stdout: str | None) -> str | None:
     return lines[-1] if lines else None
 
 
+def _parse_job_start_epoch(delay_minutes: float | None, at_time: str | None) -> float | None:
+    """Return a wall-clock start epoch for ``emet jobs run`` scheduling, or None.
+
+    ``--delay-minutes`` is relative to submission; ``--at`` accepts local wall time
+    (``YYYY-MM-DD HH:MM`` or ISO ``YYYY-MM-DDTHH:MM[:SS]``). Raises ``ValueError``
+    when both are set, the time is unparsable, or ``--at`` is not in the future.
+    """
+    from datetime import datetime
+
+    if delay_minutes is not None and at_time:
+        raise ValueError("--delay-minutes and --at are mutually exclusive")
+    if delay_minutes is not None:
+        if float(delay_minutes) < 0:
+            raise ValueError("--delay-minutes must be >= 0")
+        return time.time() + float(delay_minutes) * 60.0
+    if not at_time:
+        return None
+    raw = str(at_time).strip()
+    parsed: datetime | None = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
+        try:
+            parsed = datetime.strptime(raw, fmt)
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        raise ValueError(f"cannot parse --at={raw!r} (use 'YYYY-MM-DD HH:MM' or ISO)")
+    epoch = float(parsed.timestamp())
+    if epoch <= time.time():
+        raise ValueError(f"--at={raw!r} is not in the future")
+    return epoch
+
+
 def _timestamp() -> str:
     from datetime import datetime
 
@@ -1712,6 +1745,18 @@ def jobs_update(
     help="Wait for these PIDs before starting (repeatable).",
 )
 @click.option(
+    "--delay-minutes",
+    type=float,
+    default=None,
+    help="Wait this many minutes after submission before starting the command.",
+)
+@click.option(
+    "--at",
+    "at_time",
+    default=None,
+    help='Start at local wall time, e.g. "2026-08-23 12:00" or ISO 2026-08-23T12:00:00.',
+)
+@click.option(
     "--wait-timeout-sec",
     type=click.FloatRange(min=0.0),
     default=21600.0,
@@ -1755,6 +1800,8 @@ def jobs_run(
     description: str | None,
     out_dir: str | None,
     wait_pid: tuple[int, ...],
+    delay_minutes: float | None,
+    at_time: str | None,
     wait_timeout_sec: float,
     need_mib: int | None,
     gpu_wait_max_rounds: int,
@@ -1814,6 +1861,13 @@ def jobs_run(
             )
             lock_timeout = 21600.0
 
+    start_epoch: float | None = None
+    try:
+        start_epoch = _parse_job_start_epoch(delay_minutes, at_time)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+
     job_id = new_job_id()
     click.echo(f"prepared    {job_id}", err=True)
     click.echo(f"name        {name}", err=True)
@@ -1821,6 +1875,12 @@ def jobs_run(
         click.echo(f"why         {str(description).strip()}", err=True)
     click.echo(f"out_dir     {out}", err=True)
     click.echo(f"log         {log_path}", err=True)
+    if start_epoch is not None:
+        click.echo(
+            f"schedule    start at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_epoch))} "
+            f"(in {max(0, int(start_epoch - time.time()))}s)",
+            err=True,
+        )
 
     wrapper = out / "job_wrapper.sh"
     register_args = [
@@ -1846,6 +1906,18 @@ def jobs_run(
     for wpid in wait_pids:
         register_args.extend(["--wait-pid", str(int(wpid))])
     register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
+    schedule_block = ""
+    if start_epoch is not None:
+        schedule_block = (
+            'NOW="$(date +%s)"\n'
+            f'TARGET_EPOCH="{int(start_epoch)}"\n'
+            'if [ "$NOW" -lt "$TARGET_EPOCH" ]; then\n'
+            '  echo "scheduled: waiting $((TARGET_EPOCH - NOW))s until '
+            f"$(date -d @{int(start_epoch)} '+%Y-%m-%d %H:%M:%S')\"\n"
+            '  while [ "$(date +%s)" -lt "$TARGET_EPOCH" ]; do sleep 30; done\n'
+            '  echo "scheduled: start time reached"\n'
+            "fi\n"
+        )
     wait_lines = ""
     if wait_pids:
         wait_lines = (
@@ -1920,8 +1992,9 @@ def jobs_run(
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
         f"{register_line}"
-        f"{gpu_lock_block}"
+        f"{schedule_block}"
         f"{wait_lines}"
+        f"{gpu_lock_block}"
         f"{need_block}"
         f"{cpu_block}"
         f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'
@@ -3033,9 +3106,7 @@ def hmeqa_h2h(
     from emet.eval.harness import DEFAULT_BAL32_IDS
 
     if resume and variant_config is not None:
-        raise click.ClickException(
-            "--variant-config is first-launch only; resume reuses the frozen run manifest"
-        )
+        raise click.ClickException("--variant-config is first-launch only; resume reuses the frozen run manifest")
     if out_dir:
         out = Path(out_dir).expanduser().resolve()
     else:

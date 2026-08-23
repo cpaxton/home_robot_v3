@@ -36,7 +36,8 @@ from emet.eval.memory_backends import (
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = OVMM_MEMORY_BACKEND
-ManipMode = Literal["skip", "oracle", "sim", "attempt"]
+ManipMode = Literal["skip", "oracle", "sim", "attempt", "mcts"]
+MANIP_MODES = ("skip", "oracle", "sim", "attempt", "mcts")
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
     "voxel",
@@ -88,6 +89,12 @@ class FindPhaseEpisode:
     success_radius_m: float = 0.75
     explore_steps: int = 0
     object_gt_body: str | None = None
+    # TAMP floor pick/place: drop the object to the floor before the pick phase
+    # (RoboCasa "pick something off the floor" / room-exploration tasks).
+    floor_object: bool = False
+    floor_z_m: float | None = None
+    # Optional per-episode full-OVMM override; batch CLI options take precedence.
+    manip_mode: ManipMode | None = None
 
 
 @dataclass
@@ -154,8 +161,13 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
                 explore_steps=int(row.get("explore_steps", 0)),
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
+                floor_object=bool(row.get("floor_object", False)),
+                floor_z_m=(float(row["floor_z_m"]) if row.get("floor_z_m") is not None else None),
+                manip_mode=(str(row["manip_mode"]).strip().lower() if row.get("manip_mode") is not None else None),
             )
         )
+        if out[-1].manip_mode is not None and out[-1].manip_mode not in MANIP_MODES:
+            raise ValueError(f"invalid manip_mode={out[-1].manip_mode!r} in {full}")
     return out
 
 
@@ -1100,7 +1112,7 @@ def run_episode_find_phase(
         cache_dir = None
         map_source = "live"
         # Perception backends benefit from a prebuilt map; GT oracle uses placements.
-        if run_cfg.use_scene_cache and run_cfg.backend != "ground_truth":
+        if run_cfg.use_scene_cache and run_cfg.backend != "ground_truth" and not episode.floor_object:
             from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
 
             cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
@@ -1120,6 +1132,20 @@ def run_episode_find_phase(
         # Controller already started ZMQ + nav posture; apply eval velocity after.
         robot.set_velocity(v=30.0, w=15.0)
         init_wall_s = time.monotonic() - t_init0
+        if episode.floor_object:
+            placements_before_floor = read_sim_object_placements(robot.get_emet_session()) or {}
+            floor_body = episode.object_gt_body
+            if not floor_body or floor_body not in placements_before_floor:
+                raise RuntimeError(f"floor setup requires object_gt_body present in sim placements: {floor_body!r}")
+            from emet.eval.ovmm_full import drop_object_to_floor
+
+            if not drop_object_to_floor(
+                robot,
+                floor_body,
+                placements_before_floor,
+                floor_z_m=episode.floor_z_m if episode.floor_z_m is not None else 0.02,
+            ):
+                raise RuntimeError(f"floor setup failed for body {floor_body!r}")
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -1326,6 +1352,9 @@ def run_episode_find_phase(
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,
             "explore_steps": explore_steps,
+            "floor_object": bool(episode.floor_object),
+            "floor_z_m": float(episode.floor_z_m) if episode.floor_z_m is not None else None,
+            "episode_manip_mode": episode.manip_mode,
             "map_source": map_source,
             "scene_cache_dir": str(cache_dir) if cache_dir is not None else None,
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),

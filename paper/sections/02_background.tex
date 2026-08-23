@@ -11,6 +11,9 @@ Our \texttt{emet} stack re-implements graph-based EQA memory without the Hydra/R
 
 \textbf{M3Fusion} (2026) fuses 2D semantics and 3D geometry into unified 3D tokens for LLMs on 3DQA benchmarks---complementary representation focus, not an embodied exploration loop.
 
+\textbf{DeWorldSG}~\citep{kim2026deworldsg} builds spatio-temporally consistent 3D scene graphs from RGB-D by modeling each instance as a depth-aware probabilistic 3D Gaussian (rather than a single projected point) and refining relations with world-model priors, reporting large triplet/predicate recall gains over prior 3DSSG approaches.
+The probabilistic per-object representation is a promising alternative to Dynagraph's point-anchored nodes: it could make spatial merge and staleness decisions robust to pose noise, while its world-model relation prior complements our VLM-grounded graph labeling.
+
 \subsection{Feed-forward geometric perception and streaming mapping}
 
 A parallel line of work replaces classical bundle adjustment with \emph{feed-forward} geometric foundation models (GFMs) that predict depth, pose, and dense structure from casual RGB.

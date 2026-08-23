@@ -14,6 +14,7 @@ from emet.eval.scene_task_extractor import (
     load_scene_metadata,
     pickable_objects,
     receptacle_objects,
+    resolve_scene_metadata_for_session,
     scene_objects,
 )
 
@@ -92,3 +93,21 @@ def test_reachability_priors_wire_profile(floorplan1_metadata):
         assert r.ee_error_m >= 0.0
         assert r.contact_dist_m >= 0.0
         assert r.body in {o.body for o in pickable_objects(objs)}
+
+
+def test_resolve_scene_metadata_for_live_session(tmp_path):
+    ithor = tmp_path / "ithor"
+    ithor.mkdir()
+    (ithor / "FloorPlan1_physics_metadata.json").write_text("{}", encoding="utf-8")
+    (ithor / "FloorPlan2_physics_metadata.json").write_text("{}", encoding="utf-8")
+    session = {"environment": {"kind": "molmospaces", "scene": "ithor", "index": 1}}
+    resolved = resolve_scene_metadata_for_session(session, scenes_dir=tmp_path)
+    assert resolved == ithor / "FloorPlan2_physics_metadata.json"
+
+    source_session = {
+        "environment": {"kind": "molmospaces", "scene": "ithor", "index": 1},
+        "scene_source_basename": "FloorPlan1.xml",
+    }
+    assert resolve_scene_metadata_for_session(source_session, scenes_dir=tmp_path) == (
+        ithor / "FloorPlan1_physics_metadata.json"
+    )

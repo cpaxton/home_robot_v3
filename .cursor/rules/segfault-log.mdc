@@ -26,3 +26,16 @@ Agent sessions die mid-edit. The next turn must recover from disk, not chat memo
 - Treat empty `nvidia-smi` as “safe to re-probe EGL.”
 - Discard mixed in-progress trees after a crash.
 - Rely on chat history alone when `segfault.md` exists.
+
+## Large test runs and agent-host crashes
+
+- A completed “Run Everything” / broad test session can still be followed by a
+  Cursor/OpenCode agent-host `Segmentation fault`; do not interpret that
+  termination as a repository test failure when the test and lint summaries
+  are green.
+- Avoid rerunning the full suite inline after this pattern. Use short,
+  CPU-only focused batches and inspect their compact summaries; delegate
+  simulator/VLM work to a dedicated terminal or `emet jobs`.
+- A missing kernel record does not prove the crash was harmless. Classify it as
+  an agent-host/runtime incident when no child `libcuda`/Habitat failure is
+  present, record the evidence, and preserve the dirty worktree.

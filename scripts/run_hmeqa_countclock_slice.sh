@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# HM-EQA count/clock slice runner (validates graph count hint on weak classes).
+# HM-EQA count/clock slice runner (close-look crop + graph count hint on weak classes).
 #
 # Runs the 15 count/clock paper-113 questions through emet-habitat (dynagraph).
-# Use after count-hint v2 on feat/hmeqa-graph-tuning (PR #124); compare to the
-# Aug 22 pre-fix slice (6/15, 40%).
+# Use after count-hint v2 (PR #124); baseline dynagraph pre-close-look (95/113 partial):
+# count 23%, clock 20%. Aug 22 pre-fix slice: 6/15 (40%).
 #
 # Env:
 #   METHODS        space-separated methods (default "dynagraph")
@@ -17,7 +17,7 @@
 #
 # Usage (prefer emet jobs — serializes on ~/runs/emet/gpu.lock):
 #   uv run emet jobs run --name countclock-postfix --need-mib 12000 -- \
-#     env EMET_ALLOW_SDPA_ATTN=1 RESUME=0 ./scripts/run_hmeqa_countclock_slice.sh
+    #     env EMET_ALLOW_SDPA_ATTN=1 RESUME=0 ./scripts/run_hmeqa_countclock_slice.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

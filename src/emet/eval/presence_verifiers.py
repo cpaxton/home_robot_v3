@@ -62,6 +62,93 @@ def siglip_cosine(encoder: Any, rgb: np.ndarray, phrase: str) -> float:
     return float(image_np @ text_np)
 
 
+def dense_siglip_patch_similarities(
+    encoder: Any,
+    rgb: np.ndarray,
+    phrase: str,
+) -> tuple[np.ndarray, tuple[int, int]] | None:
+    """Return mask-SigLIP phrase similarities and their exact patch grid.
+
+    The mask encoder's per-pixel features are produced by the vision head's
+    attention/value block, layer norm, and MLP before they are reshaped to the
+    patch grid. Reuse that path here so image/text similarities are in the same
+    space as voxel verification. SigLIP has no CLS token; every token in
+    ``last_hidden_state`` corresponds to a spatial patch.
+    """
+    try:
+        import torch
+        import torch.nn.functional as F
+
+        from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+        if encoder is None:
+            encoder = get_shared_mask_siglip_encoder()
+        image = np.asarray(rgb, dtype=np.uint8)
+        if image.ndim != 3 or image.shape[-1] != 3:
+            return None
+        text_t = encoder.encode_text(phrase).detach().float().reshape(-1)
+        text_t = text_t / (text_t.norm() + 1e-12)
+        inputs = encoder._to_model_inputs(encoder.processor(images=image, return_tensors="pt"))
+        with torch.no_grad():
+            out = encoder.model.vision_model(inputs["pixel_values"], output_hidden_states=True)
+            head = encoder.model.vision_model.head
+            feat = encoder.forward_one_block_(head.attention, out.last_hidden_state)
+            feat = head.layernorm(feat)
+            feat = feat + head.mlp(feat)
+            _, channels, grid_h, grid_w = encoder.model.vision_model.embeddings.patch_embedding(
+                inputs["pixel_values"]
+            ).shape
+            if feat.ndim != 3 or feat.shape[1] != int(grid_h) * int(grid_w):
+                return None
+            if feat.shape[2] != text_t.numel():
+                return None
+            feat = F.normalize(feat.float(), dim=-1)
+            sims = (feat @ text_t.to(device=feat.device, dtype=feat.dtype).reshape(-1, 1)).squeeze(-1)
+        if sims.ndim == 1:
+            sims = sims.unsqueeze(0)
+        return sims[0].detach().float().cpu().numpy(), (int(grid_h), int(grid_w))
+    except Exception:
+        return None
+
+
+def dense_siglip_argmax_crop(
+    encoder: Any,
+    rgb: np.ndarray,
+    phrase: str,
+    *,
+    patch_frac: float = 0.45,
+) -> tuple[np.ndarray, float] | None:
+    """Crop around the mask-SigLIP dense-sim argmax patch for *phrase*."""
+
+    dense = dense_siglip_patch_similarities(encoder, rgb, phrase)
+    if dense is None:
+        return None
+    sims, (grid_h, grid_w) = dense
+    if sims.size < 4:
+        return None
+    max_sim = float(np.max(sims))
+    if max_sim < 0.0:
+        return None
+    argmax = int(np.argmax(sims))
+    if argmax >= grid_h * grid_w:
+        return None
+    image = np.asarray(rgb, dtype=np.uint8)
+    if image.ndim != 3 or image.shape[-1] != 3:
+        return None
+    r, c = divmod(argmax, grid_w)
+    h, w = image.shape[:2]
+    # Map a patch block to image pixels (roughly patch_frac of the frame).
+    cw = int(max(1, round(w * patch_frac)))
+    ch = int(max(1, round(h * patch_frac)))
+    cx = int(round((c + 0.5) / grid_w * w))
+    cy = int(round((r + 0.5) / grid_h * h))
+    x0, x1 = max(0, cx - cw // 2), min(w, cx + cw // 2)
+    y0, y1 = max(0, cy - ch // 2), min(h, cy + ch // 2)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return image[y0:y1, x0:x1].copy(), max_sim
+
+
 class OwlV2PresenceDetector:
     name = "owlv2"
 

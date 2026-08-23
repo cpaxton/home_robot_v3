@@ -369,6 +369,7 @@ def sim_teleport_place(
     target_receptacle: str,
     *,
     object_gt_body: str | None = None,
+    receptacle_gt_body: str | None = None,
     object_query: str | None = None,
     place_z_offset_m: float = 0.02,
     verify: bool = True,
@@ -386,7 +387,12 @@ def sim_teleport_place(
         body = resolve_sim_object_body(robot, object_query)
     if not body or body not in placements:
         return False
-    recep_bodies = bodies_matching_category(placements, target_receptacle)
+    if receptacle_gt_body:
+        if receptacle_gt_body not in placements:
+            return False
+        recep_bodies = [receptacle_gt_body]
+    else:
+        recep_bodies = bodies_matching_category(placements, target_receptacle)
     if not recep_bodies:
         return False
     anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()

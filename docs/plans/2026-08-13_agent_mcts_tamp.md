@@ -107,6 +107,12 @@ Task (goal spec, e.g. "apple -> basket") + scene state (voxel map, object poses)
   - `scripted_sim_pick_place.py --manip-mode teleport --object bowl --receptacle microwave` succeeds live (1.99 m displacement, GT placement readback).
   - Reachability reports `none` from the scene origin — correct, since every pickable object is meters away; the TAMP loop must navigate before the arm predicate applies.
 - [x] **Live MCTS TAMP on rby1 (kinematic, port-offset 70)**: `plan_pick_place_mcts` searched 12 scene candidates with `PickPlaceDistancePolicy`, chose bowl→drawer, IK-ranked grasps (rejected infeasible decoy grasp err=3.51, picked reachable grasp err=0.042), navigated to approach standoff, and streamed RRT arm paths. `scene_tasks` now reports real reachability (Apple/ButterKnife/Knife/Tomato) from live `sim_object_placements`. Execution reached `attach_verify_failed` on the synthetic COM grasp — a physics/execution detail, not a planning failure. Driver: `scripts/scripted_mcts_pick_place.py`.
+- [x] **RoboCasa floor pick/place experiment suite** (`scripts/eval_tamp_floor.py` + `--manip-mode mcts`):
+  - `FindPhaseEpisode.floor_object` (+ optional `floor_z_m`) drops the GT object to the floor before pick — "pick something off the floor" / room-exploration tasks.
+  - `_run_mcts_manip_phases` in `ovmm_full.py`: MCTS pick-place over the kinematic arm (approach → grasp → place), scored with the same GT placement deltas as `sim` teleport for a direct MCTS-vs-teleport comparison.
+  - Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic), `robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport refs), `robocasa_floor_find_only_explore` (find-only). Config `configs/sim/robocasa_pick_place_rby1.yaml`.
+  - Tests: `test_tamp_floor_episodes.py` (schema + floor-drop) + `filter_episodes(..., floor_only=True)`.
+  - **Live result (RoboCasa rby1, floor sugar_cube → counter)**: `find_object_success=True`, `pick_success=True` (arm lifted the object off the floor, 3.6 m displacement), `ovmm_full_partial=0.75`. Place phase is the known rby1 kinematic attach/release flake (object detach + freejoint publication), not a planning failure.
 - [ ] Policy shim `propose_candidates` via existing LLM client
 - [ ] Batch sim hook (threads first; mjx later if env permits)
 - [ ] Wire top-level move execution back into agent loop

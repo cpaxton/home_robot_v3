@@ -75,7 +75,9 @@ _ACTION_STATUS_LABELS: dict[str, str] = {
     "move_forward": "Moving forward",
     "find_objects": "Searching",
     "go_home": "Going home",
+    "plan_pick_place": "Planning manipulation",
     "pick_place": "Manipulating",
+    "execute_pick_place_plan": "Manipulating",
     "hand_over": "Handing over",
 }
 

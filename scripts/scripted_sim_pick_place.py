@@ -9,6 +9,11 @@ Modes:
   - ``teleport`` (default): ``sim_set_body_pose`` GT snap (same as OVMM manip_mode=sim)
   - ``kinematic``: MuJoCo IK + RRT-Connect + joint streaming + kinematic attach (rby1)
 
+When ``--tool-calls-json`` is supplied, calls run through the live CHAT tool
+registry (including semantic handles, guarded plan storage, and TAMP execution).
+Without it, kinematic mode directly invokes the executor for interactive
+motion/video debugging only.
+
 Verified (default table + rby1)::
 
   # Teleport — fastest smoke
@@ -46,57 +51,6 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 
 
-class TeleportOnlyManipExecutor:
-    """Minimal DynamemTaskExecutor stand-in: pickup/place via sim teleport only."""
-
-    def __init__(self, robot: Any) -> None:
-        self.robot = robot
-        self._last_sim_picked_body: str | None = None
-
-    def __call__(self, response: list[tuple[str, Any]] | None) -> bool:
-        from emet.simulation.sim_manipulation import (
-            robot_sim_body_pose_teleport_supported,
-            sim_teleport_pickup,
-            sim_teleport_place,
-        )
-
-        if not response:
-            return False
-        if not robot_sim_body_pose_teleport_supported(self.robot):
-            print(
-                "ERROR: server does not advertise capabilities.sim_set_body_pose "
-                "(is this a MuJoCo sim with the teleport patch?).",
-                file=sys.stderr,
-            )
-            return False
-        for command, args in response:
-            cmd = str(command).strip().lower()
-            if cmd == "pickup":
-                body = sim_teleport_pickup(self.robot, str(args))
-                if not body:
-                    print(f"FAIL pickup {args!r}: no matching GT freejoint body", file=sys.stderr)
-                    return False
-                self._last_sim_picked_body = body
-                print(f"  pickup ok body={body!r}")
-            elif cmd == "place":
-                ok = sim_teleport_place(
-                    self.robot,
-                    str(args),
-                    object_gt_body=self._last_sim_picked_body,
-                )
-                if not ok:
-                    print(
-                        f"FAIL place on {args!r} (held={self._last_sim_picked_body!r})",
-                        file=sys.stderr,
-                    )
-                    return False
-                print(f"  place ok body={self._last_sim_picked_body!r} -> {args!r}")
-                self._last_sim_picked_body = None
-            else:
-                print(f"SKIP unsupported command {cmd!r} (this example is pick/place only)")
-        return True
-
-
 def _placement_pos(robot: Any, body: str) -> np.ndarray | None:
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 
@@ -115,12 +69,18 @@ def _resolve_body(robot: Any, query: str) -> str | None:
 def run_scripted_tool_calls(
     robot: Any,
     tool_calls: list[dict[str, Any]],
+    *,
+    manip_mode: str,
+    context_out: dict[str, Any] | None = None,
 ) -> bool:
-    """Run agent-shaped tool calls (name + arguments) with teleport-only executor."""
+    """Run agent-shaped tool calls through the live CHAT tool implementation."""
     from emet.agent.tools import get_tools
 
-    executor = TeleportOnlyManipExecutor(robot)
-    context: dict[str, Any] = {"executor": executor, "robot": robot}
+    # Keep the execution path faithful to CHAT: plan/execute must resolve the
+    # live session, select the requested manipulation capability, and validate
+    # the one-shot plan. A direct KinematicPickPlaceExecutor call skips all of
+    # those agent-facing contracts.
+    context: dict[str, Any] = {"robot": robot, "manip_mode": manip_mode}
     tools_by_name = {t.name: t for t in get_tools(context)}
 
     print("Scripted tool_calls:")
@@ -138,16 +98,34 @@ def run_scripted_tool_calls(
         if tool.func is not None:
             result = tool.func(**args) if args else tool.func()
             print(f"    -> {result}")
-            # pick_place.func returns a string; treat "failed" as error
+            # CHAT tools return user-facing strings; any failure wording is a
+            # gate failure regardless of which plan/execute stage emitted it.
             if isinstance(result, str) and "fail" in result.lower():
                 ok_all = False
-        elif tool.executor_commands is not None:
-            if not executor(tool.executor_commands(args)):
-                ok_all = False
         else:
-            print(f"[{i}] tool {name!r} has no func/executor_commands", file=sys.stderr)
+            print(f"[{i}] tool {name!r} has no callable implementation", file=sys.stderr)
             ok_all = False
+    if context_out is not None:
+        context_out.update(context)
     return ok_all
+
+
+def _planned_receptacle_body(tool_calls: list[dict[str, Any]], context: dict[str, Any]) -> str | None:
+    """Find the private GT receptacle selected by a semantic task handle."""
+    refs = context.get("_tamp_task_refs")
+    if not isinstance(refs, dict):
+        return None
+    for call in tool_calls:
+        if str(call.get("name")) != "plan_pick_place":
+            continue
+        args = call.get("arguments") or {}
+        if not isinstance(args, dict):
+            continue
+        task = refs.get(str(args.get("task_ref") or ""))
+        body = getattr(task, "receptacle_body", None)
+        if body:
+            return str(body)
+    return None
 
 
 def main() -> int:
@@ -220,7 +198,8 @@ def main() -> int:
         terminate_benchmark_sim_server,
     )
 
-    if args.tool_calls_json:
+    has_explicit_tool_calls = args.tool_calls_json is not None
+    if has_explicit_tool_calls:
         tool_calls = json.loads(args.tool_calls_json)
         if not isinstance(tool_calls, list):
             raise SystemExit("--tool-calls-json must be a JSON list")
@@ -287,8 +266,12 @@ def main() -> int:
         obj_body = _resolve_body(robot, args.object)
         before = _placement_pos(robot, obj_body) if obj_body else None
         print(f"GT object body={obj_body!r} pos_before={None if before is None else before.tolist()}")
+        tool_context: dict[str, Any] = {}
 
-        if manip_mode == "kinematic":
+        # Supplying calls selects the agent contract test even in kinematic
+        # mode. The direct branch below is retained for interactive motion/video
+        # debugging, where it is useful to call the executor by itself.
+        if manip_mode == "kinematic" and not has_explicit_tool_calls:
             from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
 
             # Approach object on table (freejoint robots need EMET_SIM_NAV_TELEPORT for reliable snap).
@@ -345,6 +328,11 @@ def main() -> int:
             )
             ok = bool(result.success)
         else:
+            if args.record_mp4 and manip_mode == "kinematic":
+                raise SystemExit(
+                    "--record-mp4 with explicit --tool-calls-json is unsupported; "
+                    "the CHAT plan owns the kinematic executor."
+                )
             video = None
             if args.record_mp4:
                 from datetime import datetime
@@ -367,7 +355,16 @@ def main() -> int:
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
                 video.start()
-            ok = run_scripted_tool_calls(robot, tool_calls)
+            print(
+                f"Executing {len(tool_calls)} supplied call(s) through live CHAT tools (manip_mode={manip_mode})",
+                flush=True,
+            )
+            ok = run_scripted_tool_calls(
+                robot,
+                tool_calls,
+                manip_mode=manip_mode,
+                context_out=tool_context,
+            )
             if video is not None:
                 video.set_status("done")
                 video.capture_once()
@@ -377,13 +374,24 @@ def main() -> int:
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
         print(f"pos_after={None if after is None else after.tolist()}")
+        receptacle_body = _planned_receptacle_body(tool_calls, tool_context) or _resolve_body(robot, args.receptacle)
+        receptacle_pos = _placement_pos(robot, receptacle_body) if receptacle_body else None
+        print(
+            f"GT receptacle body={receptacle_body!r} pos={None if receptacle_pos is None else receptacle_pos.tolist()}"
+        )
         if before is not None and after is not None:
             delta = float(np.linalg.norm(after - before))
             print(f"displacement_m={delta:.4f}")
-            if delta < 0.04 and manip_mode == "teleport":
-                print("WARN: object barely moved; check object/receptacle queries.", file=sys.stderr)
+            if delta < 0.04:
+                print("FAIL: object barely moved; check object/receptacle queries.", file=sys.stderr)
                 ok = False
-            elif ok:
+            if receptacle_pos is not None:
+                placement_error = float(np.linalg.norm(after - receptacle_pos))
+                print(f"placement_error_m={placement_error:.4f}")
+                if placement_error > 0.25:
+                    print("FAIL: object is not near the selected receptacle.", file=sys.stderr)
+                    ok = False
+            if ok:
                 print(f"OK: measured object move after scripted {manip_mode} pick_place")
         elif obj_body is None:
             print("WARN: could not resolve GT body for displacement check", file=sys.stderr)

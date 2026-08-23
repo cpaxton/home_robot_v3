@@ -545,11 +545,19 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    # -- pick_place ----------------------------------------------------------
-    def pick_place(object_name: str, receptacle_name: str) -> str:
+    # -- pick_place / plan_pick_place ----------------------------------------
+    def _tamp_robot() -> Any | None:
+        robot = context.get("robot")
+        if robot is not None:
+            return robot
         executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
+        return getattr(executor, "robot", None) if executor is not None else None
+
+    def _tamp_manip_mode() -> str:
+        executor = context.get("executor")
+        return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
+
+    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> str:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         return (
@@ -558,12 +566,124 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             else "Pick/place failed or interrupted."
         )
 
+    def _build_tamp_plan(
+        *,
+        task_ref: str = "",
+        object_name: str = "",
+        receptacle_name: str = "",
+    ):
+        from emet.controller.task.tamp.agent_bridge import (
+            AgentPlanBuild,
+            AgentTaskRef,
+            build_agent_pick_place_plan,
+        )
+
+        requested_ref = str(task_ref).strip()
+        selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
+        if selected is not None and not isinstance(selected, AgentTaskRef):
+            selected = None
+        if requested_ref and selected is None:
+            return AgentPlanBuild(
+                task=None,
+                plan=None,
+                mode=None,
+                live_sim=False,
+                reason="unknown_task_ref",
+            )
+        if selected is not None:
+            return build_agent_pick_place_plan(
+                _tamp_robot(),
+                selected.object_query,
+                selected.receptacle_query,
+                object_body=selected.object_body,
+                receptacle_body=selected.receptacle_body,
+                manip_mode=_tamp_manip_mode(),
+            )
+        if not str(object_name).strip() or not str(receptacle_name).strip():
+            return AgentPlanBuild(
+                task=None,
+                plan=None,
+                mode=None,
+                live_sim=False,
+                reason="provide_task_ref_or_object_and_receptacle",
+            )
+        return build_agent_pick_place_plan(
+            _tamp_robot(),
+            str(object_name),
+            str(receptacle_name),
+            manip_mode=_tamp_manip_mode(),
+        )
+
+    def _format_tamp_plan(plan_ref: str, build: Any) -> str:
+        plan = build.plan
+        if plan is None or not plan.success or build.task is None:
+            return f"TAMP plan failed: {build.reason or getattr(plan, 'message', 'unknown_error')}."
+        ops = " -> ".join(step.op for step in plan.steps)
+        return (
+            f"TAMP plan {plan_ref}: {build.task.object_query} -> {build.task.receptacle_query}; "
+            f"mode={build.mode}; steps={ops}; chosen_grasp={plan.chosen_grasp_index}. "
+            "No motion executed; call execute_pick_place_plan with this plan_ref."
+        )
+
+    def plan_pick_place(
+        task_ref: str = "",
+        object_name: str = "",
+        receptacle_name: str = "",
+    ) -> str:
+        from emet.controller.task.tamp.agent_bridge import store_agent_plan
+
+        build = _build_tamp_plan(
+            task_ref=task_ref,
+            object_name=object_name,
+            receptacle_name=receptacle_name,
+        )
+        if build.plan is None or not build.plan.success:
+            return _format_tamp_plan("", build)
+        plan_ref = store_agent_plan(context, _tamp_robot(), build)
+        return _format_tamp_plan(plan_ref, build)
+
+    def execute_pick_place_plan(plan_ref: str) -> str:
+        from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan
+
+        robot = _tamp_robot()
+        if robot is None:
+            return "TAMP execution failed: robot not connected."
+        ok, message = execute_stored_agent_plan(robot, context, str(plan_ref))
+        return f"TAMP execution {'succeeded' if ok else 'failed'}: {message}."
+
+    def pick_place(object_name: str, receptacle_name: str) -> str:
+        executor = context.get("executor")
+        if executor is None and _tamp_robot() is None:
+            return "Robot not connected."
+        if executor is not None and (
+            bool(getattr(executor, "visual_servo", False))
+            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
+        ):
+            return _fallback_pick_place(executor, object_name, receptacle_name)
+        build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
+        if build.plan is not None and build.plan.success:
+            from emet.controller.task.tamp.agent_bridge import (
+                execute_stored_agent_plan,
+                store_agent_plan,
+            )
+
+            plan_ref = store_agent_plan(context, _tamp_robot(), build)
+            ok, message = execute_stored_agent_plan(_tamp_robot(), context, plan_ref)
+            return (
+                f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else f"Pick/place failed: {message}."
+            )
+        if build.live_sim:
+            return f"Pick/place not run: {build.reason or 'TAMP planning failed'}."
+        if executor is None:
+            return "Pick/place not run: no configured manipulation controller."
+        return _fallback_pick_place(executor, object_name, receptacle_name)
+
     tools.append(
         Tool(
             name="pick_place",
             description="Pick up an object and place it on a receptacle. "
-            "In MuJoCo sim (MolmoSpaces + rby1), uses GT teleport or kinematic IK+attach "
-            "(agent.manip_mode / EMET_MANIP_MODE) when the server advertises sim_set_body_pose.",
+            "In simulation, plan and validate the task before guarded kinematic or teleport execution; "
+            "on real hardware use the configured manipulation controller.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -576,10 +696,48 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["object_name", "receptacle_name"],
             },
             func=pick_place,
-            executor_commands=lambda args: [
-                ("pickup", args.get("object_name", "")),
-                ("place", args.get("receptacle_name", "")),
-            ],
+            returns_info=True,
+        )
+    )
+    tools.append(
+        Tool(
+            name="plan_pick_place",
+            description=(
+                "Plan, but do not execute, a pick-and-place task. Prefer a semantic task_ref from "
+                "scene_tasks; otherwise provide object_name and receptacle_name."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "task_ref": {"type": "string", "description": "Semantic task handle from scene_tasks."},
+                    "object_name": {"type": "string", "description": "Object name if no task_ref is supplied."},
+                    "receptacle_name": {
+                        "type": "string",
+                        "description": "Receptacle name if no task_ref is supplied.",
+                    },
+                },
+                "required": [],
+            },
+            func=plan_pick_place,
+            returns_info=True,
+        )
+    )
+    tools.append(
+        Tool(
+            name="execute_pick_place_plan",
+            description=(
+                "Execute a plan_ref returned by plan_pick_place after rechecking the live scene. "
+                "Plans are one-shot and stale plans are refused."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "plan_ref": {"type": "string", "description": "Opaque plan handle from plan_pick_place."}
+                },
+                "required": ["plan_ref"],
+            },
+            func=execute_pick_place_plan,
+            returns_info=True,
         )
     )
 
@@ -588,19 +746,50 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
         from collections import Counter
 
+        from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
             emit_tasks,
             load_scene_metadata,
             pickable_objects,
             receptacle_objects,
+            resolve_scene_metadata_for_session,
             scene_objects,
         )
 
         scene_dir = default_molmospaces_scenes_dir()
         ithor = scene_dir / "ithor"
-        candidates = sorted(ithor.glob("*_physics_metadata.json")) if ithor.is_dir() else []
+        executor = context.get("executor")
+        robot_obj = context.get("robot") or (getattr(executor, "robot", None) if executor is not None else None)
+        session = (
+            robot_obj.get_emet_session() if robot_obj is not None and hasattr(robot_obj, "get_emet_session") else None
+        )
+        live_sim = isinstance(session, dict) and bool(session.get("is_simulation"))
+        if live_sim:
+            from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+            placements = read_sim_object_placements(session) or {}
+        else:
+            placements = {}
+        environment = session.get("environment") if isinstance(session, dict) else {}
+        if not isinstance(environment, dict):
+            environment = {}
+        session_key = (
+            str(environment.get("kind") or ""),
+            str(environment.get("scene") or ""),
+            str(environment.get("index") or ""),
+            str(session.get("scene_source_basename") or "") if isinstance(session, dict) else "",
+        )
+        active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
+        candidates = (
+            [active_metadata]
+            if active_metadata is not None
+            else ([] if live_sim else (sorted(ithor.glob("*_physics_metadata.json")) if ithor.is_dir() else []))
+        )
         if not candidates:
+            stable_scene_task_refs(context, [], {}, session_key=session_key)
+            if live_sim:
+                return "No MolmoSpaces metadata matches the active simulation scene."
             return (
                 "No MolmoSpaces scene metadata installed "
                 "(expected *_physics_metadata.json under ~/.cache/molmospaces/assets/scenes/ithor)."
@@ -612,7 +801,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         tasks = emit_tasks(objs, sim="configs/sim/molmospaces_ithor_train_0.yaml")
         filt = (object_filter or "").strip().lower()
         if filt:
-            tasks = [t for t in tasks if filt in t.object or filt in t.goal_recep]
+            tasks = [t for t in tasks if filt in t.object]
+        task_refs = stable_scene_task_refs(
+            context,
+            tasks,
+            placements,
+            session_key=session_key,
+        )
 
         by_obj: Counter = Counter(t.object for t in tasks)
         lines = [
@@ -630,11 +825,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             shown += 1
         if len(by_obj) > shown:
             lines.append(f"  ... and {len(by_obj) - shown} more object categories")
-        if tasks:
+        if task_refs:
+            lines.append("Semantic task handles (use task_ref with plan_pick_place):")
+            for ref in task_refs[:12]:
+                lines.append(
+                    f"  - {ref.ref}: pick {ref.object_query} from {ref.start_receptacle or 'unknown'} "
+                    f"to {ref.receptacle_query}"
+                )
+        elif tasks:
             ex = tasks[0]
-            lines.append(
-                f"Example: pick {ex.object} from {ex.start_recep} to {ex.goal_recep} (gt_body={ex.object_gt_body})"
-            )
+            lines.append(f"Example: pick {ex.object} from {ex.start_recep} to {ex.goal_recep}")
         rid = (robot or "").strip().lower()
         if rid:
             try:
@@ -642,21 +842,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
                 # Prefer real object poses from a connected sim server; fall back to a
                 # documented zero-pose proxy so reachability still exercises the IK path.
-                placements: dict[str, dict] = {}
-                executor = context.get("executor")
-                if executor is not None:
-                    robot_obj = getattr(executor, "robot", None)
-                    session = (
-                        robot_obj.get_emet_session()
-                        if robot_obj is not None and hasattr(robot_obj, "get_emet_session")
-                        else None
-                    )
-                    if session:
-                        placements = session.get("sim_object_placements") or {}
                 if placements:
 
                     def _pose(body: str) -> np.ndarray:
                         info = placements.get(body)
+                        if info is None and body.endswith("_1_1_0"):
+                            info = placements.get(body[: -len("_1_1_0")] + "_1_0_0")
                         pos = (info or {}).get("pos")
                         return np.asarray(pos, dtype=np.float64).reshape(3) if pos is not None else np.zeros(3)
 
@@ -1368,6 +1559,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "move_forward",
                 "go_home",
                 "pick_place",
+                "execute_pick_place_plan",
                 "hand_over",
             }
         )

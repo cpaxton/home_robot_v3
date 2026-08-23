@@ -25,6 +25,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -84,6 +85,44 @@ def default_molmospaces_scenes_dir() -> Path:
     if env:
         return Path(env).expanduser().resolve() / "scenes"
     return Path.home() / ".cache" / "molmospaces" / "assets" / "scenes"
+
+
+def resolve_scene_metadata_for_session(
+    session: dict[str, Any] | None,
+    *,
+    scenes_dir: str | Path | None = None,
+) -> Path | None:
+    """Resolve the metadata file matching a live MolmoSpaces session."""
+
+    root = Path(scenes_dir).expanduser().resolve() if scenes_dir is not None else default_molmospaces_scenes_dir()
+    if not isinstance(session, dict):
+        return None
+    environment = session.get("environment") or {}
+    if not isinstance(environment, dict) or str(environment.get("kind", "")).lower() != "molmospaces":
+        return None
+    dataset = str(environment.get("scene") or "").strip()
+    if not dataset:
+        return None
+    dataset_dir = root / dataset
+    candidates = sorted(dataset_dir.glob("*_physics_metadata.json")) if dataset_dir.is_dir() else []
+    if not candidates:
+        return None
+
+    source = Path(str(session.get("scene_source_basename") or "")).stem.lower()
+    if source:
+        matching = [p for p in candidates if p.stem.lower() in source or source in p.stem.lower()]
+        if matching:
+            return matching[0]
+
+    try:
+        index = int(environment.get("index", 0))
+    except (TypeError, ValueError):
+        index = 0
+    if dataset.lower() == "ithor":
+        named = dataset_dir / f"FloorPlan{index + 1}_physics_metadata.json"
+        if named.is_file():
+            return named
+    return candidates[max(0, min(index, len(candidates) - 1))]
 
 
 def _freejoint_parent(body: str) -> str:

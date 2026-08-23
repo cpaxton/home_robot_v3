@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -190,6 +191,28 @@ def build_inventory_brief(
     return "\n".join(parts)
 
 
+def unique_image_arrays(images: Iterable[Any], *, max_images: int | None = None) -> list[np.ndarray]:
+    """Return non-empty image arrays once each, preserving input order."""
+
+    out: list[np.ndarray] = []
+    seen: set[tuple[tuple[int, ...], str, bytes]] = set()
+    for image in images:
+        if image is None:
+            continue
+        arr = np.asarray(image)
+        if arr.ndim != 3 or arr.size == 0:
+            continue
+        arr = np.ascontiguousarray(arr)
+        key = (tuple(int(dim) for dim in arr.shape), arr.dtype.str, arr.tobytes())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(arr)
+        if max_images is not None and len(out) >= int(max_images):
+            break
+    return out
+
+
 def assess_view_with_vlm(
     client: Any,
     *,
@@ -198,15 +221,36 @@ def assess_view_with_vlm(
     inventory: str = "",
     target_phrase: str = "",
     is_mcq: bool = True,
+    siglip_evidence: str = "",
+    close_look_crop: np.ndarray | None = None,
+    multi_close_look_crops: list[np.ndarray] | None = None,
 ) -> ViewAssessment:
-    """Multimodal VLM: is this image enough to answer the question?"""
+    """Multimodal VLM: is this image enough to answer the question?
+
+    ``siglip_evidence`` is an optional image-similarity hint (e.g. a SigLIP score for
+    the target phrase on this view). It is **evidence, not ground truth**: small /
+    visually ambiguous targets (a sugar cube vs a brick) can score high on both, so
+    the VLM should weigh it against what it actually sees rather than treat it as a
+    verdict.
+
+    ``close_look_crop`` is an optional zoomed region around the target (for count /
+    clock / fine-detail questions). When provided, it is shown to the VLM *in
+    addition to* the wide frame so fine detail is readable.
+
+    ``multi_close_look_crops`` (opt-in) adds several crops from different views of
+    the same target so the VLM can aggregate temporal evidence before deciding
+    (DeWorldSG-style) — useful when a single glance, even zoomed, is ambiguous.
+    """
     q = (question or "").strip()
     target = (target_phrase or "").strip()
+    evidence = (siglip_evidence or "").strip()
+    evidence_line = f"\nVisual evidence (image-text similarity): {evidence}\n" if evidence else "\n"
     if is_mcq:
         user = (
             f"Question:\n{q}\n\n"
             f"Target phrase (hint): {target or '(none)'}\n\n"
-            f"Inventory:\n{inventory or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n"
+            f"{evidence_line}"
             "Look at the image. Return JSON with keys:\n"
             "  target: string\n"
             "  present: bool — is the target / relevant evidence visible?\n"
@@ -224,7 +268,8 @@ def assess_view_with_vlm(
         user = (
             f"Question:\n{q}\n\n"
             f"Target phrase (hint): {target or '(none)'}\n\n"
-            f"Inventory:\n{inventory or '(none)'}\n\n"
+            f"Inventory:\n{inventory or '(none)'}\n"
+            f"{evidence_line}"
             "Look at the image. Return JSON with keys:\n"
             "  target: string\n"
             "  present: bool — is the target / relevant evidence visible in this view?\n"
@@ -243,8 +288,47 @@ def assess_view_with_vlm(
             reason="no rgb for VLM assess",
         )
 
+    # When a zoomed crop is available, describe it so the VLM knows to read it for detail.
+    crop_line = ""
+    current_crop = (
+        np.asarray(close_look_crop)
+        if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3
+        else None
+    )
+    multi_candidates = [
+        np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3
+    ]
+    crops = unique_image_arrays(
+        ([current_crop] if current_crop is not None else []) + multi_candidates,
+        max_images=3,
+    )
+    has_current_crop = current_crop is not None and bool(crops) and np.array_equal(crops[0], current_crop)
+    if has_current_crop:
+        current_crop = crops[0]
+        multi = crops[1:]
+        crop_line = (
+            "\nA zoomed crop of the target region is attached as a second image. "
+            "Use it to read fine detail (count objects, read a clock/label) — do not "
+            "rely on the wide frame alone for detail.\n"
+        )
+    else:
+        current_crop = None
+        multi = crops
+    n_extra = len(crops)
+    if multi:
+        crop_line += (
+            f"\n{n_extra} zoomed crops of the target from different views are attached "
+            "(the current view plus earlier close looks). Aggregate across all of them "
+            "before answering — a single view may be ambiguous.\n"
+        )
+    user = f"{user}{crop_line}"
+
     # Prefer generate_multimodal when the shared VL client is exposed.
     raw = ""
+    images = [np.asarray(rgb)]
+    if current_crop is not None:
+        images.append(current_crop)
+    images.extend(multi)
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):
         try:
@@ -253,7 +337,7 @@ def assess_view_with_vlm(
                     user,
                     system_prompt=_ASSESS_SYSTEM,
                     max_new_tokens=192,
-                    image=np.asarray(rgb),
+                    image=images[0] if len(images) == 1 else images,
                     reset_context=True,
                 )
             )
@@ -264,10 +348,10 @@ def assess_view_with_vlm(
         try:
             from PIL import Image
 
-            pil = Image.fromarray(np.asarray(rgb, dtype=np.uint8), mode="RGB")
+            pil = [Image.fromarray(np.asarray(im, dtype=np.uint8), mode="RGB") for im in images]
             raw = _call_eqa_client(
                 client,
-                [user, pil],
+                [user, *pil],
                 system_prompt=_ASSESS_SYSTEM,
                 max_new_tokens=192,
             )

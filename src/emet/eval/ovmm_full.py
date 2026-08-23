@@ -106,7 +106,14 @@ def score_place_success(
             "gt_object_body": object_gt_body,
             "gt_recep_bodies": [],
         }
-    if goal_gt_body and goal_gt_body in placements_after:
+    if goal_gt_body:
+        if goal_gt_body not in placements_after:
+            return {
+                "place_success": False,
+                "place_err_obj_to_recep_m": None,
+                "gt_object_body": object_gt_body,
+                "gt_recep_bodies": [],
+            }
         recep_bodies = [goal_gt_body]
     else:
         recep_bodies = bodies_matching_category(placements_after, goal_recep)
@@ -246,6 +253,69 @@ def _ledger_manip(
     )
 
 
+def _manip_failure_result(
+    find_metrics: dict[str, Any],
+    *,
+    mode: str,
+    error: str,
+    pick_attempted: bool = False,
+    place_attempted: bool = False,
+) -> dict[str, Any]:
+    full = compute_ovmm_full_metrics(
+        find_object_success=bool(find_metrics.get("find_object_success")),
+        find_recep_success=bool(find_metrics.get("find_recep_success")),
+        pick_success=False,
+        place_success=False,
+    )
+    return {
+        "manip_mode": mode,
+        "pick_attempted": pick_attempted,
+        "place_attempted": place_attempted,
+        "pick_controller_ok": False,
+        "place_controller_ok": False,
+        "pick_success": False,
+        "place_success": False,
+        "pick_wall_s": 0.0,
+        "place_wall_s": 0.0,
+        "manip_wall_s": 0.0,
+        "manip_error": error,
+        **full,
+    }
+
+
+def drop_object_to_floor(
+    robot: Any,
+    gt_body: str,
+    placements: dict[str, dict[str, Any]],
+    *,
+    floor_z_m: float = 0.02,
+) -> bool:
+    """Lower a GT object to the floor for floor-pick episodes.
+
+    Uses the existing sim body-pose teleport so the object rests on the floor (z ~0)
+    before the pick phase. Returns True when the server reports the move.
+    """
+    info = placements.get(gt_body)
+    if not info:
+        return False
+    raw_pos = info.get("pos")
+    if raw_pos is None:
+        return False
+    try:
+        floor_z = float(floor_z_m)
+    except (TypeError, ValueError):
+        return False
+    if not np.isfinite(floor_z) or floor_z < 0.0:
+        return False
+    pos = np.asarray(raw_pos, dtype=np.float64).reshape(3).copy()
+    pos[2] = floor_z
+    _robot_set_body_pose(robot, gt_body, pos)
+    after = _read_placements(robot) or placements
+    if gt_body in after:
+        return float(np.linalg.norm(np.asarray(after[gt_body]["pos"], dtype=np.float64).reshape(3) - pos)) < 1e-3
+    return False
+
+
 def _run_sim_manip_phases(
     robot: Any,
     episode: FindPhaseEpisode,
@@ -269,17 +339,15 @@ def _run_sim_manip_phases(
             status_code="missing_gt_object_body",
             note="missing_gt_object_body",
         )
-        return {
-            "manip_mode": mode,
-            "pick_attempted": True,
-            "place_attempted": False,
-            "pick_success": False,
-            "place_success": False,
-            "manip_error": "missing_gt_object_body",
-            "manip_wall_s": float(time.monotonic() - t_manip0),
-            "ovmm_full_partial": 0.0,
-            "ovmm_full_success": False,
-        }
+        out = _manip_failure_result(
+            find_metrics,
+            mode=mode,
+            error="missing_gt_object_body",
+            pick_attempted=True,
+        )
+        out["gt_object_body"] = gt_body
+        out["manip_wall_s"] = float(time.monotonic() - t_manip0)
+        return out
 
     t_pick0 = time.monotonic()
     pick_pos = np.asarray(before_pick[gt_body]["pos"], dtype=np.float64).reshape(3).copy()
@@ -377,6 +445,178 @@ def _run_sim_manip_phases(
     }
 
 
+def _run_mcts_manip_phases(
+    robot: Any,
+    episode: FindPhaseEpisode,
+    *,
+    find_metrics: dict[str, Any],
+    placements_before: dict[str, dict[str, Any]] | None,
+    gt_body: str | None,
+    agent: Any = None,
+    object_query: str = "",
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Run Pick + Place via the MCTS / heuristic TAMP planner (kinematic arm).
+
+    Uses :func:`plan_pick_place_mcts` (distance heuristic policy + UCT search) to
+    select an (object, receptacle) assignment, then :func:`execute_task_plan` to
+    drive approach → grasp → place on the real arm. Scoring uses sim GT placement
+    deltas (same as the teleport path) so MCTS-vs-teleport is comparable.
+
+    Floor episodes: the object is dropped to the floor first (``episode.floor_object``),
+    so this exercises "pick something off the floor".
+    """
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
+    from emet.motion.arm_manip_profile import resolve_manip_mode_for_robot
+
+    t_manip0 = time.monotonic()
+    mode = resolve_manip_mode_for_robot(robot, manip_mode="auto")
+    if mode != "kinematic":
+        out = _manip_failure_result(
+            find_metrics,
+            mode="mcts",
+            error=f"mcts_requires_kinematic_got_{mode}",
+        )
+        out["manip_wall_s"] = float(time.monotonic() - t_manip0)
+        return out
+
+    before = _snapshot_placements(placements_before)
+
+    # Resolve the goal receptacle GT body (must exist for MCTS state geometry).
+    from emet.eval.ovmm_find_phase import bodies_matching_category
+
+    recep_bodies = bodies_matching_category(before, episode.goal_recep)
+    recep_gt = recep_bodies[0] if recep_bodies else None
+    if not gt_body or gt_body not in before:
+        out = _manip_failure_result(
+            find_metrics,
+            mode="mcts",
+            error="missing_gt_object_body",
+            pick_attempted=True,
+        )
+        out["gt_object_body"] = gt_body
+        out["manip_wall_s"] = float(time.monotonic() - t_manip0)
+        return out
+    if recep_gt is None:
+        out = _manip_failure_result(
+            find_metrics,
+            mode="mcts",
+            error="missing_gt_receptacle_body",
+            pick_attempted=True,
+        )
+        out["gt_object_body"] = gt_body
+        out["manip_wall_s"] = float(time.monotonic() - t_manip0)
+        return out
+
+    exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
+    candidates = [
+        {
+            "object_query": episode.object,
+            "receptacle_query": episode.goal_recep,
+            "object_gt_body": gt_body,
+            "receptacle_gt_body": recep_gt,
+        }
+    ]
+    plan = plan_pick_place_mcts(
+        robot,
+        candidates=candidates,
+        executor=exe,
+        approach_standoff_m=0.55,
+        mcts_iterations=150,
+        seed=seed,
+    )
+    if plan.success and plan.receptacle_body != recep_gt:
+        plan.success = False
+        plan.failed_op = "place"
+        plan.message = "invalid_receptacle_grounding"
+    if not plan.success:
+        error = f"planner_failed:{plan.message or 'unknown'}"
+        _ledger_manip(
+            agent,
+            action_kind="pick",
+            success=False,
+            phrase=object_query or episode.object,
+            status_code="mcts_plan_failed",
+            note=error,
+        )
+        _ledger_manip(
+            agent,
+            action_kind="place",
+            success=False,
+            phrase=episode.goal_recep,
+            status_code="mcts_plan_failed",
+            note=error,
+        )
+        out = _manip_failure_result(
+            find_metrics,
+            mode="mcts",
+            error=error,
+        )
+        out.update(
+            {
+                "gt_object_body": gt_body,
+                "gt_recep_body": recep_gt,
+                "plan_failed_op": plan.failed_op,
+                "manip_wall_s": float(time.monotonic() - t_manip0),
+            }
+        )
+        return out
+    plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode="kinematic")
+
+    after = _read_placements(robot) or before
+    pick_scores = score_pick_success(
+        before,
+        after,
+        object_gt_body=gt_body,
+        start_recep=episode.start_recep,
+        radius_m=float(episode.success_radius_m),
+    )
+    place_scores = score_place_success(
+        after,
+        object_gt_body=gt_body,
+        goal_recep=episode.goal_recep,
+        radius_m=float(episode.success_radius_m),
+        placements_before=before,
+        goal_gt_body=recep_gt,
+    )
+    _ledger_manip(
+        agent,
+        action_kind="pick",
+        success=bool(pick_scores["pick_success"]),
+        phrase=object_query or episode.object,
+        status_code="ok" if pick_scores["pick_success"] else "mcts_pick_miss",
+        note=f"mcts plan={plan.message} steps={len(plan.steps)}",
+    )
+    _ledger_manip(
+        agent,
+        action_kind="place",
+        success=bool(place_scores["place_success"]),
+        phrase=episode.goal_recep,
+        status_code="ok" if place_scores["place_success"] else "mcts_place_miss",
+        note=f"mcts plan={plan.message}",
+    )
+    full = compute_ovmm_full_metrics(
+        find_object_success=bool(find_metrics.get("find_object_success")),
+        find_recep_success=bool(find_metrics.get("find_recep_success")),
+        pick_success=bool(pick_scores["pick_success"]),
+        place_success=bool(place_scores["place_success"]),
+    )
+    return {
+        "manip_mode": "mcts",
+        "pick_attempted": True,
+        "place_attempted": True,
+        "pick_controller_ok": "grasp" in plan.completed_ops,
+        "place_controller_ok": "place" in plan.completed_ops,
+        "gt_recep_body": recep_gt,
+        "tamp_plan_message": plan.message,
+        "manip_wall_s": float(time.monotonic() - t_manip0),
+        **pick_scores,
+        **place_scores,
+        **full,
+    }
+
+
 def run_ovmm_manip_phases(
     agent: Any,
     robot: Any,
@@ -446,6 +686,18 @@ def run_ovmm_manip_phases(
             mode=effective,  # type: ignore[arg-type]
             agent=agent,
             object_query=object_query,
+        )
+
+    if mode == "mcts":
+        return _run_mcts_manip_phases(
+            robot,
+            episode,
+            find_metrics=find_metrics,
+            placements_before=placements_before,
+            gt_body=gt_body,
+            agent=agent,
+            object_query=object_query,
+            seed=run_cfg.seed,
         )
 
     before_pick = _snapshot_placements(placements_before)

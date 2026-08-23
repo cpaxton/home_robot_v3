@@ -26,7 +26,10 @@ def test_allocate_local_vl_port_and_endpoint():
 @patch("emet.eval.ovmm_vl_worker.wait_for_vl_worker")
 @patch("emet.eval.ovmm_vl_worker.popen_session")
 @patch("emet.eval.ovmm_vl_worker.terminate_process_tree")
-def test_worker_starts_with_serve_command(mock_terminate, mock_popen, mock_wait):
+def test_worker_starts_with_serve_command(mock_terminate, mock_popen, mock_wait, monkeypatch):
+    # Pin the fallback: other tests set OMP_NUM_THREADS=1 at import (leaks into
+    # this session), so assert against the worker default when unset.
+    monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
     proc = MagicMock()
     proc.poll.return_value = None
     mock_popen.return_value = proc
