@@ -20,6 +20,7 @@ WORLD_EVIDENCE_SCHEMA_VERSION = 1
 WORLD_EVIDENCE_FILENAME = "world_evidence.json"
 WORLD_EVIDENCE_VIEWS_DIR = "world_evidence_views"
 WORLD_EVIDENCE_MODES = frozenset({"off", "shadow", "agent"})
+AGENTIC_EVIDENCE_STAGES = frozenset({"siglip_proposal", "vlm_assessment", "fused_confirmation"})
 
 
 def resolve_world_evidence_mode(raw: Any) -> str:
@@ -272,6 +273,11 @@ class WorldEvidenceStore:
     def set_question_id(self, question_id: str | None) -> None:
         self.question_id = str(question_id) if question_id is not None else None
 
+    def set_context(self, *, question_id: str | int | None, session_id: str | int | None) -> None:
+        """Bind stable episode metadata before subsequent views/events are appended."""
+        self.question_id = str(question_id) if question_id is not None else None
+        self.session_id = str(session_id) if session_id is not None else ""
+
     def ensure_entity(
         self,
         *,
@@ -464,13 +470,122 @@ class WorldEvidenceStore:
         self.events.append(event)
         return event
 
+    def record_agentic_evidence(
+        self,
+        *,
+        stage: str,
+        outcome: str,
+        confidence: float,
+        step: int,
+        obs_id: int,
+        phrase: str,
+        source: str,
+        view_id: str | None = None,
+        room_id: str | None = None,
+        room_name: str | None = None,
+        agent_round: int | None = None,
+        score: float | None = None,
+        threshold: float | None = None,
+        supporting_event_ids: tuple[str, ...] = (),
+        payload: dict[str, Any] | None = None,
+    ) -> EvidenceEvent | None:
+        """Append one immutable proposal/assessment/fusion event for a view."""
+        stage_n = str(stage or "").strip().lower()
+        if stage_n not in AGENTIC_EVIDENCE_STAGES:
+            raise ValueError(f"unknown agentic evidence stage: {stage!r}")
+        outcome_n = str(outcome or "unknown").strip().lower()
+        view = self.views.get(str(view_id)) if view_id else self.view_for_obs(int(obs_id))
+        stable_view_id = view.view_id if view is not None else (str(view_id) if view_id else None)
+        place_id = view.place_id if view is not None else None
+        subject_id = place_id or f"obs:{int(obs_id)}"
+        stable_room_id = str(room_id) if room_id else None
+        if stable_room_id is None and place_id:
+            place = self.places.get(place_id)
+            stable_room_id = place.room_id if place is not None else None
+        support_ids = tuple(dict.fromkeys(str(item) for item in supporting_event_ids if str(item)))
+        events_by_id = {event.event_id: event for event in self.events}
+        missing_support = [event_id for event_id in support_ids if event_id not in events_by_id]
+        if missing_support:
+            raise ValueError(f"unknown supporting evidence ids: {missing_support}")
+        incompatible_support = [
+            event_id
+            for event_id in support_ids
+            if events_by_id[event_id].session_id != self.session_id
+            or events_by_id[event_id].question_id != self.question_id
+            or (
+                stable_view_id is not None
+                and events_by_id[event_id].view_id is not None
+                and events_by_id[event_id].view_id != stable_view_id
+            )
+        ]
+        if incompatible_support:
+            raise ValueError(f"incompatible supporting evidence ids: {incompatible_support}")
+        polarity = "positive" if outcome_n in {"candidate", "present", "confirmed", "positive"} else "negative"
+        details = {
+            "legacy_obs_id": int(obs_id),
+            "phrase": str(phrase or "").strip()[:160],
+            "outcome": outcome_n,
+            "agent_round": int(agent_round) if agent_round is not None else None,
+            "score": float(score) if score is not None else None,
+            "threshold": float(threshold) if threshold is not None else None,
+            "observation_room": str(room_name or "unknown"),
+            "supporting_event_ids": list(support_ids),
+        }
+        details.update(dict(payload or {}))
+        return self.record_event(
+            subject_kind="place" if place_id else "observation",
+            subject_id=subject_id,
+            predicate=stage_n,
+            polarity=polarity,
+            source=str(source or stage_n),
+            confidence=float(confidence),
+            step=int(step),
+            view_id=stable_view_id,
+            room_id=stable_room_id,
+            place_id=place_id,
+            payload=details,
+        )
+
+    def durable_confirmation_event_ids(
+        self,
+        *,
+        obs_id: int,
+        phrase: str = "",
+    ) -> tuple[str, ...]:
+        """Return durable positive assessment/fusion IDs unaffected by raw ABSENT."""
+        oid = int(obs_id)
+        phrase_n = str(phrase or "").strip().lower()
+        current_view = self.view_for_obs(oid)
+        current_view_id = current_view.view_id if current_view is not None else None
+        candidates = [
+            event
+            for event in self.events
+            if event.predicate in {"vlm_assessment", "fused_confirmation"}
+            and int(event.payload.get("legacy_obs_id", -1)) == oid
+            and (current_view_id is None or event.view_id == current_view_id)
+            and (not phrase_n or str(event.payload.get("phrase") or "").strip().lower() == phrase_n)
+            and (self.question_id is None or event.question_id == self.question_id)
+            and (not self.session_id or event.session_id == self.session_id)
+        ]
+        for predicate in ("fused_confirmation", "vlm_assessment"):
+            stage_events = [event for event in candidates if event.predicate == predicate]
+            if not stage_events:
+                continue
+            latest = stage_events[-1]
+            if latest.polarity != "positive":
+                continue
+            supporting = tuple(str(item) for item in latest.payload.get("supporting_event_ids") or ())
+            return tuple(dict.fromkeys((*supporting, latest.event_id)))
+        return ()
+
     def _room_event_exists(self, room_id: str, source: str, room_name: str) -> bool:
         for event in reversed(self.events):
             if event.subject_kind != "room" or event.subject_id != room_id:
                 continue
             if event.predicate != "room_label":
                 continue
-            return event.source == source and str(event.payload.get("room_name") or "") == room_name
+            if event.source == source and str(event.payload.get("room_name") or "") == room_name:
+                return True
         return False
 
     def update_room_hypotheses(
@@ -579,6 +694,8 @@ class WorldEvidenceStore:
         confidence: float,
         step: int,
         view_id: str | None = None,
+        agent_round: int | None = None,
+        pose_round: int | None = None,
     ) -> RoomHypothesis | None:
         record = self.rooms.get(str(room_id))
         if record is None:
@@ -596,7 +713,11 @@ class WorldEvidenceStore:
             step=step,
             view_id=view_id,
             room_id=record.room_id,
-            payload={"room_name": name},
+            payload={
+                "room_name": name,
+                "agent_round": int(agent_round) if agent_round is not None else None,
+                "pose_round": int(pose_round) if pose_round is not None else None,
+            },
         )
         event_ids = (*record.evidence_event_ids, event.event_id) if event is not None else record.evidence_event_ids
         # Keep higher-confidence graph evidence unless this source is at least as strong.

@@ -1241,6 +1241,70 @@ class GraphEQAMemory:
     def view_id_for_obs(self, obs_id: int) -> str:
         return self.world_evidence.view_id_for_obs(int(obs_id))
 
+    def bind_episode_context(
+        self,
+        *,
+        question_id: str | int | None,
+        session_id: str | int | None,
+    ) -> None:
+        """Bind IDs before any episode-specific graph/evidence append."""
+        self._attempt_ledger_question_id = str(question_id) if question_id is not None else None
+        self.world_evidence.set_context(question_id=question_id, session_id=session_id)
+
+    def observation_room(self, obs_id: int) -> tuple[str | None, str]:
+        """Return the room persisted on an observation's stable view/place."""
+        view = self.world_evidence.view_for_obs(int(obs_id))
+        if view is None or not view.place_id:
+            return None, "unknown"
+        place = self.world_evidence.places.get(view.place_id)
+        if place is None or not place.room_id:
+            return None, "unknown"
+        room = self.world_evidence.rooms.get(place.room_id)
+        return place.room_id, room.room_name if room is not None else "unknown"
+
+    def record_agentic_evidence(
+        self,
+        *,
+        stage: str,
+        outcome: str,
+        obs_id: int,
+        phrase: str,
+        confidence: float,
+        source: str,
+        agent_round: int | None = None,
+        score: float | None = None,
+        threshold: float | None = None,
+        supporting_event_ids: tuple[str, ...] = (),
+        payload: dict[str, Any] | None = None,
+    ) -> str:
+        """Persist one agentic evidence stage and return its durable event ID."""
+        oid = int(obs_id)
+        room_id, room_name = self.observation_room(oid)
+        event = self.world_evidence.record_agentic_evidence(
+            stage=stage,
+            outcome=outcome,
+            confidence=float(confidence),
+            step=self._effective_timestep(),
+            obs_id=oid,
+            phrase=phrase,
+            source=source,
+            view_id=self.view_id_for_obs(oid) or None,
+            room_id=room_id,
+            room_name=room_name,
+            agent_round=agent_round,
+            score=score,
+            threshold=threshold,
+            supporting_event_ids=supporting_event_ids,
+            payload=payload,
+        )
+        return event.event_id if event is not None else ""
+
+    def durable_confirmation_event_ids(self, *, obs_id: int, phrase: str = "") -> tuple[str, ...]:
+        return self.world_evidence.durable_confirmation_event_ids(
+            obs_id=int(obs_id),
+            phrase=phrase,
+        )
+
     def latest_world_view_id(self) -> str:
         if not self.world_evidence.views:
             return ""
@@ -2291,6 +2355,8 @@ class GraphEQAMemory:
         corroborating_labels: list[str] | tuple[str, ...] | None = None,
         source: str = "router_vlm",
         source_view_id: str | None = None,
+        agent_round: int | None = None,
+        pose_round: int | None = None,
     ) -> str:
         """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown.
 
@@ -2351,6 +2417,8 @@ class GraphEQAMemory:
                     confidence=confidence,
                     step=self._effective_timestep(),
                     view_id=source_view_id,
+                    agent_round=agent_round,
+                    pose_round=pose_round,
                 )
                 if hypothesis is not None:
                     self._room_clusters = [
@@ -2545,6 +2613,7 @@ class GraphEQAMemory:
         phrase: str = "",
         obs_id: int | None = None,
         note: str = "",
+        agent_round: int | None = None,
     ) -> dict[str, Any] | None:
         """Append a room-scoped timeline event when ``room`` is a known label.
 
@@ -2567,6 +2636,8 @@ class GraphEQAMemory:
             "phrase": str(phrase or "").strip().lower()[:80],
             "obs_id": int(obs_id) if obs_id is not None else None,
             "note": str(note or "").strip()[:120],
+            "world_step": st,
+            "agent_round": int(agent_round) if agent_round is not None else None,
         }
         world_event = self.world_evidence.record_event(
             subject_kind="room",
@@ -2581,6 +2652,7 @@ class GraphEQAMemory:
                 "phrase": str(phrase or "").strip()[:120],
                 "legacy_obs_id": int(obs_id) if obs_id is not None else None,
                 "note": str(note or "").strip()[:120],
+                "agent_round": int(agent_round) if agent_round is not None else None,
             },
         )
         if world_event is not None:

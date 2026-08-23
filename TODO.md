@@ -90,6 +90,17 @@ Canonical record:
       canary: the inner script now validates a launcher-prepared manifest
       without switching episode semantics to resume. Managed H2H paths also
       skip in-job stale-process cleanup.
+- [x] Finish the PR #115 state-integrity gate in two reviewable commits:
+      managed lock/environment/completion integrity first, then grounded
+      graph-state contracts and image-free clean/dirty replay regressions.
+      **PR #115 CPU integrity gates: complete** — 141 lifecycle/completion,
+      182 agent-regression, 108 graph-memory/evidence, and 11 focused
+      state/metadata tests pass. Keep the PR draft through the clean q11 GPU
+      capability gate.
+- [ ] After the CPU gate is committed on a clean tree, run one detached
+      12-GiB EGL safe-start followed by a fresh q11 A2 canary. Require both a
+      validated `COMPLETE.json` bundle and direct present/answerable evidence;
+      a row, wrong-answer fallback, or budget exhaustion alone is not a pass.
 - [ ] Keep A0→A1→A2 on `6,11,12,47` blocked. Only after a future clean q11
       canary passes may it proceed, followed by an A1/A2 hard-room pair on
       `2,76`. Keep A3, rooms-11, holdout, and bal-32 blocked until both process

@@ -323,6 +323,34 @@ def _seed_hmeqa_enrich_labels(
         agent.graph_memory.seed_object_hints(hints)
 
 
+def _start_hmeqa_agent_with_context(
+    agent,
+    *,
+    question_id: int,
+    scene: str,
+    method: str,
+    debug_run_tag: str | None,
+) -> dict[str, Any]:
+    """Bind stable episode IDs before start/update can append graph evidence."""
+    qid = int(question_id)
+    normalized_method = _normalize_hmeqa_method(method)
+    session_id = str(debug_run_tag or f"hmeqa:{str(scene)}:q{qid:04d}:{normalized_method}")
+    trace_meta: dict[str, Any] = {
+        "question_id": qid,
+        "qid": qid,
+        "session_id": session_id,
+        "scene": str(scene),
+        "method": normalized_method,
+    }
+    agent._eqa_trace_meta = dict(trace_meta)
+    graph_memory = getattr(agent, "graph_memory", None)
+    bind_context = getattr(graph_memory, "bind_episode_context", None)
+    if callable(bind_context):
+        bind_context(question_id=qid, session_id=session_id)
+    agent.start()
+    return trace_meta
+
+
 def run_hmeqa_episode(
     *,
     question_id: int,
@@ -442,7 +470,13 @@ def run_hmeqa_episode(
 
         eqa_question = compose_eqa_question(q.question_formatted, extra_instruction)
         agent._eqa_question = eqa_question
-        agent.start()
+        trace_meta = _start_hmeqa_agent_with_context(
+            agent,
+            question_id=question_id,
+            scene=q.scene,
+            method=method,
+            debug_run_tag=debug_run_tag,
+        )
         if agent.graph_memory is not None:
             # GraphEQA enrich labels are a separate GT-derived oracle axis. Keep
             # them opt-in rather than coupling them to the semantic sensor.
@@ -484,6 +518,7 @@ def run_hmeqa_episode(
             eqa_question,
             max_planning_steps=max_planning_steps,
             max_movement_step=max_movement_step,
+            trace_meta=trace_meta,
         )
         raw_eqa = ""
         parsed_letter = ""

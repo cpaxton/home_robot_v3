@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -200,9 +202,38 @@ def test_hmeqa_batch_does_not_delete_existing_output_before_manifest_guard(tmp_p
     assert output.read_text(encoding="utf-8") == "preserve this row\n"
 
 
-def test_enrich_episode_metrics_harness_fingerprint_merge_on():
-    from types import SimpleNamespace
+def test_hmeqa_runner_binds_numeric_context_before_agent_start(monkeypatch):
+    project_root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
+    from emet_habitat.runner import _start_hmeqa_agent_with_context
 
+    calls: list[str] = []
+    graph_memory = MagicMock()
+    graph_memory.bind_episode_context.side_effect = lambda **_kwargs: calls.append("bind")
+    agent = SimpleNamespace(
+        graph_memory=graph_memory,
+        start=MagicMock(side_effect=lambda: calls.append("start")),
+    )
+
+    trace_meta = _start_hmeqa_agent_with_context(
+        agent,
+        question_id=11,
+        scene="yogvKWUrdnw",
+        method="dynagraph",
+        debug_run_tag="gre-q11-integrity",
+    )
+
+    assert calls == ["bind", "start"]
+    graph_memory.bind_episode_context.assert_called_once_with(
+        question_id=11,
+        session_id="gre-q11-integrity",
+    )
+    assert trace_meta["question_id"] == trace_meta["qid"] == 11
+    assert trace_meta["session_id"] == "gre-q11-integrity"
+    assert agent._eqa_trace_meta == trace_meta
+
+
+def test_enrich_episode_metrics_harness_fingerprint_merge_on():
     from emet.core.parameters import get_parameters
     from emet.eval.benchmark_dynagraph import apply_habitat_eqa_method_parameters
     from emet.habitat.episode_debug import enrich_episode_metrics

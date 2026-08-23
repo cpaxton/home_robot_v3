@@ -166,6 +166,28 @@ letter accuracy is no more than one answer worse on the paired six.
 q104 is intentionally deferred to holdout scale: it is a known native-crash hot
 scene and is not needed for the baseline-recovery gate.
 
+### PR #115 integrity revalidation
+
+The next GPU action is not a scale run. After the two CPU integrity commits are
+clean, run one fresh q11 A2 canary behind a detached 12-GiB EGL safe-start. The
+canary passes only when all of these conditions hold:
+
+1. The episode has a schema-v3 manifest plus a validated atomic
+   `COMPLETE.json`; aggregate/DONE counts come from completion markers rather
+   than JSONL file existence.
+2. The staged diagnostic snapshot passes the frozen artifact profile and its
+   hashes/config digest agree with the completion marker.
+3. The grounded trace has stable question/session IDs, fresh current-pose room
+   state after motion, durable fused evidence references, and only chooses an
+   investigate/frontier action that was rendered in that router call.
+4. q11 reaches the kitchen and direct present/answerable evidence supports the
+   requested relation. Budget fallback, plausibility, or merely producing a
+   syntactically valid wrong-answer row is a capability failure.
+
+Repeat q11 once only after that first pass. Then run A0 on `6,11,12,47`; A1 and
+A2 remain blocked until the baseline gate recovers. The `2,76` hard-room pair,
+A3, rooms-11, holdout, and bal-32 remain blocked by the existing ladder.
+
 ## Managed harness
 
 Run a fresh detached probe before every experimental job. Do not queue the next
@@ -281,8 +303,8 @@ write both JSON and CSV.
 | GT-free q11 pre-fix sequence | complete, failed capability gate | 0/3 complete runs; infrastructure improved |
 | Post-fix q11 diagnostic | passed once, dirty | `gre_q11_a2_canary_d3ee32e8_20260822_175238`: 1/1, direct verified evidence, no salvage |
 | Clean q11 repeat | complete, failed capability gate | `gre_q11_a2_clean_81a2c689_20260823_003735`: 0/1; native-clean, but eight-round budget fallback after no present/answerable view |
-| Recovery correctness | audit complete | Focused consistency tests/lint pass; full CPU gate has three known unchanged map-rendering baseline failures |
-| Next GPU work | blocked | Diagnose the clean q11 process regression before any further canary or scale run |
+| Recovery correctness | CPU integrity gate complete | Managed lifecycle/completion and grounded-state/replay contracts pass 141 lifecycle, 182 agent-regression, 108 graph-memory/evidence, and 11 focused state/metadata tests; the separate full no-sim baseline still has three known unchanged map-rendering failures |
+| Next GPU work | q11 canary only | Run a detached 12-GiB EGL probe, then one fresh clean q11 A2 canary; require a validated completion marker plus direct answerable evidence before any repeat or baseline/treatment wave |
 
 ## Related
 
