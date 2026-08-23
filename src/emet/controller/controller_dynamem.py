@@ -539,9 +539,12 @@ class DynamemController(BaseController):
         # When use_instance_memory is True we need a detector that returns instance segmentation (YoloE)
         # so that object icons show in the UI (default MuJoCo scene: red cylinder, blue cube on table).
         det_conf = parameters.get("detection", {}).get("confidence_threshold", 0.05)
-        if self.manipulation_only or (self.eqa and not self._use_instance_memory):
+        # Instance graph is opt-in via use_instance_memory / use_instance_graph — honor it even on
+        # manipulation_only nav stacks (Habitat HM-EQA, OVMM find, …). Only skip the detector when
+        # the stack is genuinely label-only (no instances, no voxel list_objects EQA).
+        if not self._use_instance_memory and (self.manipulation_only or self.eqa):
             # No object detection for pure manipulation or voxel EQA without instances.
-            # GraphEQA may set eqa=False and use_instance_memory=True so YoloE runs for instance labels.
+            # GraphEQA sets eqa=False and use_instance_memory=True so YoloE runs for instance labels.
             self.detection_model = None
             semantic_memory_resolution = 0.1
             image_shape = (360, 270)

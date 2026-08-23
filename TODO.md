@@ -43,8 +43,9 @@ Failure modes:
       post-merge **`2f4b4d4f` 7/15 (47%)** — best so far (+q43/q86/q93, −q60/q78 vs Aug 22).
       Count subset flat **4/10**; clock **3/5**. **GRAPH_COUNT still inert** — harness
       `use_instance_graph: true` is not enough: Habitat `manipulation_only: true` forces
-      `detection_model=None` in `controller_dynamem.py`, so YoloE never loads. **Next code
-      fix before another slice:** load instance detector when `use_instance_graph` on Habitat.
+      `detection_model=None` in `controller_dynamem.py` when `manipulation_only` was set
+      without checking `use_instance_memory` — **fixed** (load YoloE whenever instance graph
+      is requested). Re-slice after merge to validate `GRAPH_COUNT`.
 - [x] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
       stripped labels **only at that one `obs_id`**, so a closer look that disproved a
       node left it stale (count inflation + location confusion). Fixed in two steps:
@@ -363,8 +364,8 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - **#124** `feat/hmeqa-graph-tuning` → `main`: graph tuning (corroborated retract, count
   hint v2, instance-graph harness, count/clock runner). **Merged main (#115)** at
   `2f4b4d4f`. Count/clock best **7/15 (47%)** on merge rerun; GRAPH_COUNT blocked on
-  `manipulation_only` → no YoloE. **Next:** wire instance detector for Habitat, then
-  re-slice.
+  `manipulation_only` ignored `use_instance_memory` (fixed — load YoloE when instance graph
+  on). Re-slice to validate `GRAPH_COUNT`.
 - **#120** `feat/tamp-floor-experiments` → `main`: RoboCasa floor pick/place + SigLIP-aware
   VLM assess + count/clock slice runner (now also in v2 `scripts/`). MERGEABLE.
 - **#115** → **merged to main** (`9a77be37`): grounded graph room-evidence / auditable
