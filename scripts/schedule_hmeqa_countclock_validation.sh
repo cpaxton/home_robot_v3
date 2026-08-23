@@ -13,6 +13,7 @@
 #   DELAY_MIN  minutes from now when TARGET unset (default 30)
 #   QUESTION_IDS  comma-separated ids (default: the 15 count/clock ids)
 #   METHODS  space-separated methods (default "dynagraph")
+#   SIGLIP_EVIDENCE / CLOSE_LOOK / MULTIVIEW  forwarded A/B toggles (defaults: 1/1/0)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -21,6 +22,10 @@ DELAY_MIN="${DELAY_MIN:-30}"
 OUT_TAG="${OUT_TAG:-closelook-countclock}"
 QUESTION_IDS="${QUESTION_IDS:-12,21,28,32,33,43,47,48,51,60,78,84,86,88,93}"
 METHODS="${METHODS:-dynagraph}"
+SIGLIP_EVIDENCE="${SIGLIP_EVIDENCE:-1}"
+CLOSE_LOOK="${CLOSE_LOOK:-1}"
+MULTIVIEW="${MULTIVIEW:-0}"
+NEED_MIB="${NEED_MIB:-12000}"
 
 log() { echo "[$(date -Iseconds)] $*"; }
 
@@ -41,14 +46,16 @@ sleep "$SECS"
 log "target reached; launching"
 
 NAME="hmeqa-countclock-${OUT_TAG}"
-log "launching count/clock slice as emet jobs '$NAME' (ids=$QUESTION_IDS methods=$METHODS)"
+log "launching count/clock slice as emet jobs '$NAME' (ids=$QUESTION_IDS methods=$METHODS "
+log "siglip_evidence=$SIGLIP_EVIDENCE close_look=$CLOSE_LOOK multiview=$MULTIVIEW need_mib=$NEED_MIB)"
 uv run emet jobs run \
     --name "$NAME" \
     -d "HM-EQA count/clock slice (15 ids) validating close-look crop (dense_siglip_argmax_crop -> VLM assess 2nd image). Branch feat/tamp-floor-experiments." \
-    --need-mib 12000 \
+    --need-mib "$NEED_MIB" \
     -- \
     env EMET_ALLOW_SDPA_ATTN=1 METHODS="$METHODS" HF_ID=Qwen/Qwen3-VL-8B-Instruct \
     QUESTION_IDS="$QUESTION_IDS" \
+    SIGLIP_EVIDENCE="$SIGLIP_EVIDENCE" CLOSE_LOOK="$CLOSE_LOOK" MULTIVIEW="$MULTIVIEW" \
     ./scripts/run_hmeqa_countclock_slice.sh
 
 log "count/clock slice launched"

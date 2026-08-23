@@ -113,6 +113,11 @@ Do **not** `tail ~/runs/emet/STATUS.log` — sibling checkouts share `~/runs/eme
 
 Also distinguish **Mode A** (episode `libcuda` SIGSEGV / empty jsonl / `exit=139`) from **Mode B** (agent/`emet` null-IP segfault while a detached `emet jobs` child may keep running). See [`docs/known_issues.md`](../../docs/known_issues.md).
 
+A broad “Run Everything” session may report green tests and lint, then still end
+with an agent-host `Segmentation fault`. When no child `libcuda`/Habitat crash
+is present, preserve the tree and classify it as Mode B; recover with compact
+CPU-only batches rather than immediately rerunning the full suite inline.
+
 
 **First command when a session comes back after a crash (from the owning checkout):**
 

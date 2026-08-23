@@ -12,6 +12,7 @@ from emet.eval.agentic_vlm_assess import (
     assess_view_with_vlm,
     build_inventory_brief,
     extract_target_from_question,
+    unique_image_arrays,
 )
 
 
@@ -208,3 +209,36 @@ def test_assess_view_feeds_multi_close_look_crops():
     assert isinstance(imgs, list) and len(imgs) == 3  # wide + crop_a + crop_b
     assert imgs[1].shape == (6, 6, 3)
     assert imgs[2].shape == (6, 6, 3)
+
+
+def test_assess_view_deduplicates_and_caps_close_look_crops():
+    client = _MultiClient(
+        {
+            "target": "clock",
+            "present": True,
+            "answerable": True,
+            "need_more_views": False,
+            "suggested_answer": None,
+            "reason": "readable",
+        }
+    )
+    wide = np.zeros((16, 16, 3), dtype=np.uint8)
+    crop_a = np.full((6, 6, 3), 10, dtype=np.uint8)
+    crop_b = np.full((6, 6, 3), 20, dtype=np.uint8)
+    crop_c = np.full((6, 6, 3), 30, dtype=np.uint8)
+    crop_d = np.full((6, 6, 3), 40, dtype=np.uint8)
+
+    assess_view_with_vlm(
+        client,
+        question="What time is it?",
+        rgb=wide,
+        target_phrase="clock",
+        close_look_crop=crop_a,
+        multi_close_look_crops=[crop_b, crop_b, crop_c, crop_d],
+    )
+
+    _prompt, kwargs = client.mm_calls[0]
+    imgs = kwargs["image"]
+    assert len(imgs) == 4  # wide + three unique close-look crops
+    assert [int(img[0, 0, 0]) for img in imgs[1:]] == [10, 20, 30]
+    assert len(unique_image_arrays([crop_a, crop_b, crop_b, crop_c, crop_d], max_images=3)) == 3

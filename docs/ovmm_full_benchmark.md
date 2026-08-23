@@ -18,7 +18,7 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 | Mode | Behavior |
 |------|----------|
 | `skip` | Find phases only (same as `eval_ovmm_find_phases.py`) |
-| `oracle` (default) | Pick/place success copied from find success (harness smoke / upper bound) |
+| `oracle` (fallback) | Pick/place success copied from find success (harness smoke / upper bound); full runs use each episode's `manip_mode` unless `--manip-mode` overrides it |
 | `sim` | MuJoCo freejoint teleport via ZMQ `sim_set_body_pose` (sim E2E) |
 | `attempt` | AnyGrasp pick/place on real robot; **auto uses sim teleport when `is_simulation`** |
 | `mcts` | **Kinematic arm** via [`plan_pick_place_mcts`](../src/emet/controller/task/tamp/task_search.py): distance-heuristic UCT search picks the (object, receptacle) assignment, then `execute_task_plan` drives approach → grasp → place. Scoring uses the same GT placement deltas as `sim`, so MCTS-vs-teleport is directly comparable. Requires a kinematic-capable server (`kinematic_manip: true`, e.g. rby1 / Galaxea). |
@@ -34,10 +34,10 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 `full_episodes.yaml` has episodes with `floor_object: true`: the harness drops the GT object to the floor (`drop_object_to_floor`, z ≈ 0.02 m) before the pick phase, so the robot must **pick something off the floor** (or just find it while exploring) to complete the task. See the [experiment plan](../../docs/plans/2026-08-13_agent_mcts_tamp.md) and runner:
 
 ```bash
-# Floor-only TAMP suite (mcts = kinematic arm, sim/oracle = teleport references)
+# Floor-only TAMP suite (uses each episode's mcts/sim/skip mode)
 NEED_MIB=8000 uv run emet jobs run --name tamp-floor-suite --need-mib 8000 -- \
-  uv run python scripts/eval_tamp_floor.py --manip-mode mcts
-uv run python scripts/eval_tamp_floor.py --manip-mode sim    # teleport reference
+  uv run python scripts/eval_tamp_floor.py
+uv run python scripts/eval_tamp_floor.py --manip-mode sim    # override: teleport reference
 ```
 
 Episodes: `robocasa_rby1_floor_to_counter_mcts` (MCTS kinematic), `robocasa_sourccey_floor_to_cab_sim` / `robocasa_stretch_floor_to_counter_sim` (teleport references), `robocasa_floor_find_only_explore` (find-only, explore the room).

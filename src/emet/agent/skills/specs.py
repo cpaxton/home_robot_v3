@@ -260,7 +260,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="pick_place",
         modes=frozenset({AgentMode.CHAT}),
-        description="Pick up an object and place it on a receptacle.",
+        description=(
+            "Pick up an object and place it on a receptacle. In simulation, use the guarded "
+            "TAMP planner when the live scene supports it; on real hardware use the configured "
+            "manipulation controller."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -275,6 +279,54 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             },
             "required": ["object_name", "receptacle_name"],
         },
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="plan_pick_place",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Plan, but do not execute, a pick-and-place task. Prefer a task_ref returned by "
+            "scene_tasks; otherwise provide object_name and receptacle_name. Returns the "
+            "capability path, chosen grasp, and guarded plan handle."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_ref": {
+                    "type": "string",
+                    "description": "Optional semantic task handle returned by scene_tasks.",
+                },
+                "object_name": {
+                    "type": "string",
+                    "description": "Object name when task_ref is not supplied.",
+                },
+                "receptacle_name": {
+                    "type": "string",
+                    "description": "Receptacle name when task_ref is not supplied.",
+                },
+            },
+            "required": [],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="execute_pick_place_plan",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Execute a plan_ref returned by plan_pick_place after rechecking the live scene "
+            "and manipulation capability. Plans are one-shot and stale plans are refused."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "plan_ref": {
+                    "type": "string",
+                    "description": "Opaque plan handle returned by plan_pick_place.",
+                }
+            },
+            "required": ["plan_ref"],
+        },
+        returns_info=True,
     ),
     SkillSpec(
         name="find_objects",
@@ -544,8 +596,9 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Enumerate candidate pick-and-place tasks from the current sim scene (MolmoSpaces / iTHOR): "
             "pickable objects with grasp assets, receptacle sites, and proposed tasks with reachability "
-            "priors computed from the active robot's arm profile. Use to pick which object to manipulate "
-            "next or when asked 'what can you pick up and where can you put it'."
+            "priors computed from the active robot's arm profile. Returns opaque semantic task_ref handles "
+            "for plan_pick_place without exposing simulator body IDs. Use when asked 'what can you pick "
+            "up and where can you put it'."
         ),
         parameters={
             "type": "object",

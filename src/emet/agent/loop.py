@@ -266,6 +266,7 @@ def _dispatch_tool_calls(
                 "move_forward",
                 "go_home",
                 "pick_place",
+                "execute_pick_place_plan",
                 "hand_over",
             }
             if env_base_rotate_only() and drive_like:

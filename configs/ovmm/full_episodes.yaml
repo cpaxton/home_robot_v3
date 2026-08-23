@@ -52,6 +52,8 @@ episodes:
     success_radius_m: 0.60
     explore_steps: 0
     floor_object: true
+    floor_z_m: 0.02
+    manip_mode: mcts
 
   # Floor object -> cabinet, teleport oracle (upper-bound reference for MCTS).
   - id: robocasa_sourccey_floor_to_cab_sim
@@ -64,6 +66,8 @@ episodes:
     success_radius_m: 0.60
     explore_steps: 0
     floor_object: true
+    floor_z_m: 0.02
+    manip_mode: sim
 
   # Floor object -> counter, stretch teleport reference.
   - id: robocasa_stretch_floor_to_counter_sim
@@ -76,6 +80,8 @@ episodes:
     success_radius_m: 0.60
     explore_steps: 0
     floor_object: true
+    floor_z_m: 0.02
+    manip_mode: sim
 
   # Floor-object "explore the room" find-only episode (no manip): the robot must
   # navigate and localize an object that fell on the floor.
@@ -89,3 +95,5 @@ episodes:
     success_radius_m: 0.60
     explore_steps: 5
     floor_object: true
+    floor_z_m: 0.02
+    manip_mode: skip

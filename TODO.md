@@ -3,6 +3,48 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## HM-EQA close-look / weak-class validation (PR #120 + follow-ups)
+
+GPUs, not paper rewrites. The 95/113 partial says count 23% / clock 20% are the
+collapses the SigLIP-evidence + close-look work targets. All landed via PR #120
+(SigLIP evidence line, `dense_siglip_argmax_crop` single crop, opt-in multi-view
+close-look consensus). **PR #120 is OPEN on this branch** (mergeable, no reviews
+yet) — its two validation jobs died with the box 2026-08-19 and each still needs a
+clean GPU-exclusive run before merge. What's left:
+
+- [ ] **Count/clock validation run** (`scripts/run_hmeqa_countclock_slice.sh`, 15 ids)
+      single-view vs multiview vs pre-close-look baseline (count 23% / clock 20%).
+      Status: first launch (Aug 15) was a silent 0/15 on missing flash-attn (fixed
+      `EMET_ALLOW_SDPA_ATTN=1` in-runner). Aug 19 relaunch (jobs `20260819_022652_ece872`
+      single-view, `20260819_022702_c3c900` multiview) **died with the box** ~22:35 —
+      `pid exited without DONE`. Singleview had scored qids 12,21,28,32,33 of 15;
+      multiview died on qid 12. Runner does **not** resume (`run-batch` overwrites the
+      jsonl), so relaunch both arms fresh, GPU-exclusive (`NEED_MIB=12000`), then confirm
+      the trace logs `close_look_views=N` on the multiview arm.
+- [ ] **Temporal close-look consensus** (DeWorldSG idea #1 — implemented, opt-in
+      `eqa.agentic_close_look_multiview` / `EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW`,
+      default **off**): aggregate up to 3 close-look crops across views per target
+      phrase. Flip the default on only if the multiview arm beats single-view on
+      the count/clock slice. (Cross-view retraction variant is PR #124
+      `feat/hmeqa-graph-tuning`, open — strip ABSENT across all obs ids.)
+- [ ] **Gaussian-similarity node merge** (DeWorldSG idea #2 — not started): replace
+      the point-anchored `dynagraph_merge_xy_m` / staleness heuristics with a
+      probabilistic per-object Gaussian (depth-aware var). Merge when two objects'
+      posteriors overlap; track object-entity persistence across graph refreshes.
+      Measurable on location/state classes where disambiguation fails (rug
+      q-location, ACZZiU 0/5).
+- [ ] **Depth-aware crop** (DeWorldSG idea #3 — not started): `dense_siglip_argmax_crop`
+      is pixel-argmax in 2D. Weight the crop by depth continuity / object extent
+      (drop false patches on walls/ceilings; prefer small floor objects). Floor
+      pick suite (`ovmm full --manip-mode mcts`, `floor_object` eps) is the target.
+      Floor-suite baseline (PR #120): ground_truth rby1 mcts pick_success=True /
+      ovmm_full_partial=0.75 (place = known rby1 attach/release flake); teleport refs
+      1.0; pre-fix dynagraph find_obj=False / partial 0.0–0.5 (cube-vs-brick).
+      **SigLIP-validate rerun still owed**: `tamp-floor-siglip-validate` (2026-08-14)
+      was INVALID — VL worker OOM / connection refused (co-ran with the paper eval).
+      Rerun `scripts/eval_tamp_floor.py --manip-mode sim --backend dynagraph`
+      GPU-exclusive and compare find/partial vs the pre-fix table before merging #120.
+
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
 Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes nav
@@ -132,6 +174,24 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
+
+## TAMP agent tools
+
+Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs/plans/2026-08-22_tamp_agent_tools.md).
+
+- [x] Keep semantic CHAT task references separate from private simulator
+      `*_gt_body` grounding; select and retain the actual receptacle.
+- [x] Expose plan-first `plan_pick_place` and
+      `execute_pick_place_plan`; route `pick_place` through guarded planning in
+      a live simulator and preserve the hardware fallback.
+- [x] Revalidate live poses/capabilities before one-shot execution and fail
+      closed on stale plans or invalid benchmark receptacles.
+- [x] Make floor setup and per-episode `mcts` / `sim` / `skip` modes explicit,
+      including configured `floor_z_m` and find-only controls.
+- [x] Add offline regressions for semantic grounding, CHAT schemas/dispatch,
+      selected-receptacle scoring, floor setup, and close-look crop limits.
+- [ ] Run the documented managed MolmoSpaces+rby1 kinematic smoke and Stretch
+      control after GPU preflight.
 
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 

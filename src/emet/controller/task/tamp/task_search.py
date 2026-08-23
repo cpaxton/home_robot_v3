@@ -43,6 +43,8 @@ class TaskPlan:
     # Grasp candidates used to ground this plan (executor needs the exact list,
     # e.g. synthesized teleport grasps, to map chosen_grasp_index -> pose).
     grasp_poses: list[Any] = field(default_factory=list)
+    completed_ops: list[str] = field(default_factory=list)
+    failed_op: str | None = None
 
 
 def approach_pose_for_object_xy(obj_xy: np.ndarray, *, standoff: float = 0.55) -> np.ndarray:
@@ -261,6 +263,9 @@ def execute_task_plan(
         plan.message = plan.message or "empty_plan"
         return plan
 
+    plan.completed_ops.clear()
+    plan.failed_op = None
+
     def _status(action: str, *, detail: str = "") -> None:
         if video_recorder is None:
             return
@@ -269,6 +274,13 @@ def execute_task_plan(
             goal = f"{plan.object_body} → {plan.receptacle_body}"
         video_recorder.set_status(action, goal=goal, detail=detail)
 
+    def _fail(op: str, code: str) -> TaskPlan:
+        plan.success = False
+        plan.failed_op = op
+        plan.message = code
+        logger.warning(f"TAMP execute failed op={op}: {code}")
+        return plan
+
     for step in plan.steps:
         op = step.op
         args = step.args
@@ -276,63 +288,68 @@ def execute_task_plan(
         if op == "approach":
             _status("approach", detail=f"xyt={args.get('xyt')}")
             xyt = np.asarray(args["xyt"], dtype=np.float64)
-            robot.move_base_to(xyt, blocking=True, world_frame=bool(args.get("world_frame", True)))
+            try:
+                robot.move_base_to(xyt, blocking=True, world_frame=bool(args.get("world_frame", True)))
+            except Exception as exc:
+                return _fail(op, f"approach_failed:{type(exc).__name__}")
         elif op == "grasp":
             gi = int(args["grasp_index"])
             _status("grasp", detail=f"grasp_index={gi} object={args.get('object_query')!r}")
             if gi < 0 or gi >= len(grasp_poses):
-                plan.success = False
-                plan.message = f"bad_grasp_index_{gi}"
-                return plan
+                return _fail(op, f"bad_grasp_index_{gi}")
             g = grasp_poses[gi]
             T = getattr(g, "T_world", g)
             if str(manip_mode).lower() == "kinematic":
-                result = executor.grasp_only(
-                    args["object_query"],
-                    object_gt_body=args.get("object_gt_body"),
-                    grasp_T_world=T,
-                )
+                try:
+                    result = executor.grasp_only(
+                        args["object_query"],
+                        object_gt_body=args.get("object_gt_body"),
+                        grasp_T_world=T,
+                    )
+                except Exception as exc:
+                    return _fail(op, f"grasp_execution_error:{type(exc).__name__}")
                 if not result.success:
-                    plan.success = False
-                    plan.message = f"grasp_failed:{result.message}"
-                    return plan
+                    return _fail(op, f"grasp_failed:{result.message}")
             else:
                 from emet.simulation.sim_manipulation import sim_teleport_to_grasp_pose
 
                 pos = np.asarray(getattr(g, "position", T[:3, 3]), dtype=np.float64).reshape(3)
-                ok = sim_teleport_to_grasp_pose(robot, args["object_gt_body"], pos, lift_m=0.12)
+                try:
+                    ok = sim_teleport_to_grasp_pose(robot, args["object_gt_body"], pos, lift_m=0.12)
+                except Exception as exc:
+                    return _fail(op, f"grasp_execution_error:{type(exc).__name__}")
                 if not ok:
-                    plan.success = False
-                    plan.message = "teleport_grasp_failed"
-                    return plan
+                    return _fail(op, "teleport_grasp_failed")
         elif op == "place":
             _status("place", detail=f"receptacle={args.get('receptacle_query')!r}")
             if str(manip_mode).lower() == "kinematic":
-                result = executor.place_only(
-                    args["receptacle_query"],
-                    object_gt_body=args.get("object_gt_body"),
-                    receptacle_gt_body=args.get("receptacle_gt_body"),
-                )
+                try:
+                    result = executor.place_only(
+                        args["receptacle_query"],
+                        object_gt_body=args.get("object_gt_body"),
+                        receptacle_gt_body=args.get("receptacle_gt_body"),
+                    )
+                except Exception as exc:
+                    return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not result.success:
-                    plan.success = False
-                    plan.message = f"place_failed:{result.message}"
-                    return plan
+                    return _fail(op, f"place_failed:{result.message}")
             else:
                 from emet.simulation.sim_manipulation import sim_teleport_place
 
-                ok = sim_teleport_place(
-                    robot,
-                    args["receptacle_query"],
-                    object_gt_body=args.get("object_gt_body"),
-                )
+                try:
+                    ok = sim_teleport_place(
+                        robot,
+                        args["receptacle_query"],
+                        object_gt_body=args.get("object_gt_body"),
+                        receptacle_gt_body=args.get("receptacle_gt_body"),
+                    )
+                except Exception as exc:
+                    return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not ok:
-                    plan.success = False
-                    plan.message = "teleport_place_failed"
-                    return plan
+                    return _fail(op, "teleport_place_failed")
         else:
-            plan.success = False
-            plan.message = f"unknown_op:{op}"
-            return plan
+            return _fail(op, f"unknown_op:{op}")
+        plan.completed_ops.append(op)
         if video_recorder is not None:
             video_recorder.capture_once()
 
@@ -383,7 +400,11 @@ def plan_pick_place_mcts(
     from emet.motion.agent_mcts import AgentMCTSPlanner, MCTSConfig, PickPlaceDistancePolicy
 
     pl = read_sim_object_placements(robot.get_emet_session()) or {}
-    cands = [c for c in candidates if c.get("object_gt_body") in pl]
+    cands = [
+        c
+        for c in candidates
+        if c.get("object_gt_body") in pl and (not c.get("receptacle_gt_body") or c.get("receptacle_gt_body") in pl)
+    ]
     if not cands:
         return TaskPlan(
             steps=[],

@@ -26,7 +26,10 @@ def test_allocate_local_vl_port_and_endpoint():
 @patch("emet.eval.ovmm_vl_worker.wait_for_vl_worker")
 @patch("emet.eval.ovmm_vl_worker.popen_session")
 @patch("emet.eval.ovmm_vl_worker.terminate_process_tree")
-def test_worker_starts_with_serve_command(mock_terminate, mock_popen, mock_wait):
+def test_worker_starts_with_serve_command(mock_terminate, mock_popen, mock_wait, monkeypatch):
+    # Pin the fallback: other tests set OMP_NUM_THREADS=1 at import (leaks into
+    # this session), so assert against the worker default when unset.
+    monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
     proc = MagicMock()
     proc.poll.return_value = None
     mock_popen.return_value = proc
@@ -97,9 +100,7 @@ def test_run_ovmm_batch_defers_managed_vl_to_episode(mock_worker_cls, _mock_ep, 
         "emet.eval.ovmm_find_phase.load_find_phase_episodes",
         return_value=[episode],
     ):
-        with patch(
-            "emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config"
-        ) as mock_bench:
+        with patch("emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config") as mock_bench:
             mock_bench.return_value = SimpleNamespace(
                 sim_episodes_yaml="configs/ovmm/find_phase_episodes.yaml",
                 full_episodes_yaml="configs/ovmm/full_episodes.yaml",
@@ -151,9 +152,7 @@ def test_run_ovmm_batch_skips_worker_when_endpoint_set(mock_worker_cls, _mock_ep
         "emet.eval.ovmm_find_phase.load_find_phase_episodes",
         return_value=[episode],
     ):
-        with patch(
-            "emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config"
-        ) as mock_bench:
+        with patch("emet.eval.ovmm_benchmark_config.load_ovmm_benchmark_config") as mock_bench:
             mock_bench.return_value = SimpleNamespace(
                 sim_episodes_yaml="configs/ovmm/find_phase_episodes.yaml",
                 full_episodes_yaml="configs/ovmm/full_episodes.yaml",

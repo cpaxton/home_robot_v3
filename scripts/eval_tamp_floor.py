@@ -6,8 +6,9 @@
 """TAMP floor pick/place experiment suite (RoboCasa floor objects).
 
 Runs the RoboCasa floor episodes in ``configs/ovmm/full_episodes.yaml``
-(``floor_object: true``) with the MCTS / distance-heuristic pick-place planner
-(``--manip-mode mcts``), or teleport reference modes (``sim`` / ``oracle``).
+(``floor_object: true``) using each episode's configured manipulation mode:
+MCTS / distance-heuristic pick-place, teleport reference, or find-only.
+Pass ``--manip-mode`` to override the mode for every selected episode.
 
 Each episode: launch a RoboCasa MuJoCo server, drop the GT object to the floor,
 run find-phase localization, then Pick+Place. MCTS mode drives the real arm
@@ -16,7 +17,7 @@ run find-phase localization, then Pick+Place. MCTS mode drives the real arm
 Prefer running this as an ``emet jobs`` job (never block an agent turn on sim)::
 
   NEED_MIB=8000 uv run emet jobs run --name tamp-floor-suite --need-mib 8000 -- \\
-    uv run python scripts/eval_tamp_floor.py --manip-mode mcts
+    uv run python scripts/eval_tamp_floor.py
 
 Results: JSONL under --output-dir (default ~/runs/emet/tamp_floor).
 """
@@ -44,8 +45,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--manip-mode",
         choices=MANIP_MODES,
-        default="mcts",
-        help="mcts (kinematic arm + UCT) | sim (teleport) | oracle (GT) | skip",
+        default=None,
+        help="Override per-episode mode (default: use manip_mode from the episode YAML)",
     )
     parser.add_argument("--backend", action="append", dest="backends", default=None)
     parser.add_argument("--tier", action="append", default=None)

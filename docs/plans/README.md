@@ -29,3 +29,4 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 - **[fable5-dynagraph-habitat.md](fable5-dynagraph-habitat.md)** – Dynagraph HM-EQA results, MCQ debiasing, VLM bake-off findings (links to [vlm_bakeoff.md](../habitat/vlm_bakeoff.md)).
 - **[HMEQA_STRATEGY.md](HMEQA_STRATEGY.md)** – Post-#114 HM-EQA plan: verify-gate regression check (A), joint agentic loop across tasks (B), room ladder coordination (C), accuracy levers / full-113 / 32B (D). Branch `feat/hmeqa-strategy`.
 - **[2026-08-08_embodied_agent_planning.md](2026-08-08_embodied_agent_planning.md)** – World model + tool calling + motion (design + phase checklist; branch `feature/agent-world-model`). **Shipped reference:** [../attempt_ledger.md](../attempt_ledger.md).
+- **[2026-08-22_tamp_agent_tools.md](2026-08-22_tamp_agent_tools.md)** – Semantic CHAT TAMP tools, simulator grounding boundary, guarded execution, and acceptance criteria.

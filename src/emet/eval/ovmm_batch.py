@@ -21,6 +21,23 @@ BACKENDS = OVMM_MEMORY_BACKENDS
 MANIP_MODES = ("skip", "oracle", "sim", "attempt", "mcts")
 
 
+def resolve_episode_manip_mode(
+    episode: Any,
+    *,
+    full: bool,
+    override: str | None,
+) -> str:
+    """Resolve a full-OVMM mode, keeping find-only batches manipulation-free."""
+
+    if not full:
+        return "skip"
+    raw = override if override is not None else getattr(episode, "manip_mode", None)
+    mode = str(raw or "oracle").strip().lower()
+    if mode not in MANIP_MODES:
+        raise ValueError(f"invalid manip_mode={mode!r} for episode {getattr(episode, 'id', '<unknown>')}")
+    return mode
+
+
 @dataclass
 class OvmmBatchOptions:
     """Common knobs for find-phase / full OVMM batch runs."""
@@ -50,7 +67,7 @@ class OvmmBatchOptions:
     oneshot_localize: bool = False
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
-    manip_mode: str = "skip"
+    manip_mode: str | None = None
     full: bool = False
     # TAMP floor suite: run only episodes with floor_object=True.
     floor_only: bool = False
@@ -134,7 +151,12 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
 
     if opts.dry_run:
         for ep in episodes:
-            extra = f"\tmanip={opts.manip_mode}" if opts.full else ""
+            episode_manip = resolve_episode_manip_mode(
+                ep,
+                full=opts.full,
+                override=opts.manip_mode,
+            )
+            extra = f"\tmanip={episode_manip}" if opts.full else ""
             print(f"{ep.id}\t{ep.tier}\t{ep.sim}\tbackends={backends}{extra}")
         return 0
 
@@ -146,7 +168,6 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
     all_rows: list[dict] = []
 
     stride = max(1, int(opts.port_stride))
-    manip = str(opts.manip_mode) if opts.full else "skip"
     agentic_requested = not opts.oneshot_localize and any(
         opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"} for backend in backends
     )
@@ -159,6 +180,11 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
         for ep_i, ep in enumerate(episodes):
             port_offset = int(opts.port_offset) + ep_i * stride
             agentic = False if opts.oneshot_localize else opts.agentic_find
+            manip = resolve_episode_manip_mode(
+                ep,
+                full=opts.full,
+                override=opts.manip_mode,
+            )
             run_cfg = FindPhaseRunConfig(
                 backend=backend,
                 merge_xy_m=opts.merge_xy_m,

@@ -155,7 +155,8 @@ def build_agent_system_prompt(
         prompt += (
             "\n\n# Base motion safety (EMET_BASE_ROTATE_ONLY)\n"
             "XY drive is DISABLED (robot tethered / plugged in). "
-            "Do NOT call explore, move_forward, find_objects, go_home, pick_place, or hand_over. "
+            "Do NOT call explore, move_forward, find_objects, go_home, pick_place, "
+            "execute_pick_place_plan, or hand_over. "
             "If the user asks to drive or move forward, reply with tool_calls [] and explain you can "
             "only rotate in place, scan, or describe until drive is re-enabled. "
             "Allowed motion: rotate_base, face_toward, scan_environment.\n"

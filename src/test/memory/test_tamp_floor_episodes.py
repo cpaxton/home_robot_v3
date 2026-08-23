@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
+from emet.eval.ovmm_batch import resolve_episode_manip_mode
 from emet.eval.ovmm_find_phase import load_find_phase_episodes
 from emet.eval.ovmm_full import drop_object_to_floor
 
@@ -22,6 +25,12 @@ def test_full_episodes_include_floor_variants():
     for e in floor:
         assert e.start_recep == "floor"
         assert e.object_gt_body
+        assert e.floor_z_m == 0.02
+    by_id = {e.id: e for e in floor}
+    assert by_id["robocasa_rby1_floor_to_counter_mcts"].manip_mode == "mcts"
+    assert by_id["robocasa_sourccey_floor_to_cab_sim"].manip_mode == "sim"
+    assert by_id["robocasa_stretch_floor_to_counter_sim"].manip_mode == "sim"
+    assert by_id["robocasa_floor_find_only_explore"].manip_mode == "skip"
 
 
 def test_floor_episode_schema_roundtrip():
@@ -72,3 +81,19 @@ def test_drop_object_to_floor_lowers_z():
 def test_drop_object_to_floor_missing_body():
     robot = _FakeRobot({})
     assert not drop_object_to_floor(robot, "nope", {})
+
+
+def test_drop_object_to_floor_honors_configured_height():
+    placements = {"obj_main": {"cat": "obj", "pos": [0.3, -0.5, 1.0]}}
+    robot = _FakeRobot(placements)
+    assert drop_object_to_floor(robot, "obj_main", placements, floor_z_m=0.11)
+    assert placements["obj_main"]["pos"][2] == 0.11
+
+
+def test_batch_mode_resolution_keeps_find_batches_manipulation_free():
+    episode = SimpleNamespace(id="floor", manip_mode="mcts")
+
+    assert resolve_episode_manip_mode(episode, full=False, override=None) == "skip"
+    assert resolve_episode_manip_mode(episode, full=True, override=None) == "mcts"
+    assert resolve_episode_manip_mode(episode, full=True, override="skip") == "skip"
+    assert resolve_episode_manip_mode(SimpleNamespace(id="plain"), full=True, override=None) == "oracle"

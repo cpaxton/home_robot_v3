@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -161,6 +162,28 @@ def build_inventory_brief(
     return "\n".join(parts)
 
 
+def unique_image_arrays(images: Iterable[Any], *, max_images: int | None = None) -> list[np.ndarray]:
+    """Return non-empty image arrays once each, preserving input order."""
+
+    out: list[np.ndarray] = []
+    seen: set[tuple[tuple[int, ...], str, bytes]] = set()
+    for image in images:
+        if image is None:
+            continue
+        arr = np.asarray(image)
+        if arr.ndim != 3 or arr.size == 0:
+            continue
+        arr = np.ascontiguousarray(arr)
+        key = (tuple(int(dim) for dim in arr.shape), arr.dtype.str, arr.tobytes())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(arr)
+        if max_images is not None and len(out) >= int(max_images):
+            break
+    return out
+
+
 def assess_view_with_vlm(
     client: Any,
     *,
@@ -237,16 +260,31 @@ def assess_view_with_vlm(
 
     # When a zoomed crop is available, describe it so the VLM knows to read it for detail.
     crop_line = ""
-    n_extra = 0
-    if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
-        n_extra += 1
+    current_crop = (
+        np.asarray(close_look_crop)
+        if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3
+        else None
+    )
+    multi_candidates = [
+        np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3
+    ]
+    crops = unique_image_arrays(
+        ([current_crop] if current_crop is not None else []) + multi_candidates,
+        max_images=3,
+    )
+    has_current_crop = current_crop is not None and bool(crops) and np.array_equal(crops[0], current_crop)
+    if has_current_crop:
+        current_crop = crops[0]
+        multi = crops[1:]
         crop_line = (
             "\nA zoomed crop of the target region is attached as a second image. "
             "Use it to read fine detail (count objects, read a clock/label) — do not "
             "rely on the wide frame alone for detail.\n"
         )
-    multi = [np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3]
-    n_extra += len(multi)
+    else:
+        current_crop = None
+        multi = crops
+    n_extra = len(crops)
     if multi:
         crop_line += (
             f"\n{n_extra} zoomed crops of the target from different views are attached "
@@ -258,8 +296,8 @@ def assess_view_with_vlm(
     # Prefer generate_multimodal when the shared VL client is exposed.
     raw = ""
     images = [np.asarray(rgb)]
-    if close_look_crop is not None and getattr(close_look_crop, "ndim", 0) == 3:
-        images.append(np.asarray(close_look_crop))
+    if current_crop is not None:
+        images.append(current_crop)
     images.extend(multi)
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):

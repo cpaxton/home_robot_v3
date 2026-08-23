@@ -27,14 +27,31 @@ class _DenseSimEncoder:
         self._n = n_patches
         peak = peak_patch
         n = n_patches
+        self.head_calls = 0
 
         class _VM:
+            def __init__(self):
+                self.head = type(
+                    "_Head",
+                    (),
+                    {
+                        "attention": object(),
+                        "layernorm": torch.nn.Identity(),
+                        "mlp": torch.nn.Identity(),
+                    },
+                )()
+                self.embeddings = type(
+                    "_Embeddings",
+                    (),
+                    {"patch_embedding": lambda _self, _pixels: torch.zeros(1, 8, int(n**0.5), int(n**0.5))},
+                )()
+
             def __call__(self, pixel_values, output_hidden_states=False):
                 return self.forward(pixel_values, output_hidden_states=output_hidden_states)
 
             def forward(self, pixel_values, output_hidden_states=False):
-                sims = -torch.ones(1, 1 + n, 8)
-                sims[0, 1 + peak, :] = 1.0
+                sims = -torch.ones(1, n, 8)
+                sims[0, peak, :] = 1.0
                 out = self
                 out.last_hidden_state = sims
                 return out
@@ -44,6 +61,10 @@ class _DenseSimEncoder:
                 self.vision_model = _VM()
 
         self._model = _Model()
+
+    def forward_one_block_(self, _attention, features):
+        self.head_calls += 1
+        return features
 
     def encode_text(self, phrase):
         return torch.ones(8)
@@ -68,14 +89,16 @@ class _DenseSimEncoder:
 def test_dense_siglip_argmax_crop_returns_crop():
     from emet.eval.presence_verifiers import dense_siglip_argmax_crop
 
-    # 16 patches on a 16x16 grid -> 4x4, peak at patch 5 (row 1, col 1).
-    encoder = _DenseSimEncoder(peak_patch=5, n_patches=16)
+    # SigLIP has 16 spatial patches on a 4x4 grid and no CLS token. Peak patch 0
+    # ensures an accidental [1:] slice would discard the only positive match.
+    encoder = _DenseSimEncoder(peak_patch=0, n_patches=16)
     rgb = np.zeros((64, 64, 3), dtype=np.uint8)
     crop = dense_siglip_argmax_crop(encoder, rgb, "clock", patch_frac=0.5)
     assert crop is not None
     crop_img, sim = crop
     assert crop_img.ndim == 3
     assert sim > 0.0
+    assert encoder.head_calls == 1
 
 
 def test_dense_siglip_argmax_crop_none_on_failure():
@@ -86,6 +109,20 @@ def test_dense_siglip_argmax_crop_none_on_failure():
             raise RuntimeError("boom")
 
     assert dense_siglip_argmax_crop(BadEncoder(), np.zeros((16, 16, 3), dtype=np.uint8), "x") is None
+
+
+def test_dense_siglip_patch_sims_reject_dimension_mismatch():
+    """Image head features and text projection must share a dimension; mismatch -> None."""
+    from emet.eval.presence_verifiers import dense_siglip_patch_similarities
+
+    rgb = np.zeros((32, 32, 3), dtype=np.uint8)
+    encoder = _DenseSimEncoder(peak_patch=0, n_patches=16)
+    aligned = dense_siglip_patch_similarities(encoder, rgb, "clock")
+    assert aligned is not None  # 8-dim head features == 8-dim text projection
+
+    wrong = _DenseSimEncoder(peak_patch=0, n_patches=16)
+    wrong.encode_text = lambda _phrase: torch.ones(32)  # noqa: E731
+    assert dense_siglip_patch_similarities(wrong, rgb, "clock") is None
 
 
 def test_owl_detector_selects_max_box():
