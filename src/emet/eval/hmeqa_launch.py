@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -21,7 +23,8 @@ from emet.habitat.config import default_habitat_eqa_data_dir, default_hm3d_scene
 from emet.llms.remote_ops import DEFAULT_LLM_PORT, DEFAULT_VL_PORT, openai_base_for_host
 
 HMEQA_RUN_MANIFEST_SCHEMA = "emet.hmeqa.run_manifest"
-HMEQA_RUN_MANIFEST_VERSION = 2
+HMEQA_RUN_MANIFEST_VERSION = 3
+HMEQA_READABLE_RUN_MANIFEST_VERSIONS = frozenset({2, HMEQA_RUN_MANIFEST_VERSION})
 
 DEFAULT_DECISION_POLICY = "legacy"
 DEFAULT_GRAPH_EVIDENCE_MODE = "off"
@@ -43,6 +46,63 @@ DEFAULT_MAX_PLANNING_STEPS = 20
 DEFAULT_MAX_MOVEMENT_STEP = 10
 DEFAULT_AGENTIC_MAX_TOOL_ROUNDS = 8
 DEFAULT_AGENTIC_MAX_NAV_STEPS = 8
+
+DEFAULT_HMEQA_ARTIFACT_PROFILE: dict[str, bool | int | float] = {
+    "export_map": True,
+    "export_map_stride": 0,
+    "export_obstacle_grids": True,
+    "export_trajectory": True,
+    "export_rgb_frames": True,
+    "export_video": True,
+    "export_object_crops": True,
+    "export_full_graph": False,
+    "export_compact_memory": True,
+    "export_world_evidence_rgb": True,
+    "export_voxel_history": True,
+    "export_voxel_pickle": False,
+    "max_map_side": 1280,
+    "min_map_side": 1024,
+    "filter_map_islands": True,
+    "export_gt_navmesh_map": True,
+    "export_map_overlay": True,
+    "export_map_video": True,
+    "map_video_stride": 5,
+    "video_fps": 6.0,
+    "export_video_substeps": True,
+    "video_motion_paced": True,
+    "video_meters_per_frame": 0.25,
+    "video_radians_per_frame": 0.1745329252,
+    "video_crossfade_teleport_m": 1.5,
+    "snapshot_rgb_frames": 6,
+}
+
+_ARTIFACT_ENV_FIELDS = {
+    "EMET_EVAL_EXPORT_MAP": "export_map",
+    "EMET_EVAL_MAP_STRIDE": "export_map_stride",
+    "EMET_EVAL_EXPORT_OBSTACLE_GRIDS": "export_obstacle_grids",
+    "EMET_EVAL_EXPORT_TRAJECTORY": "export_trajectory",
+    "EMET_EVAL_EXPORT_FRAMES": "export_rgb_frames",
+    "EMET_EVAL_EXPORT_VIDEO": "export_video",
+    "EMET_EVAL_EXPORT_OBJECT_CROPS": "export_object_crops",
+    "EMET_EVAL_EXPORT_GRAPH": "export_full_graph",
+    "EMET_EVAL_EXPORT_COMPACT_MEMORY": "export_compact_memory",
+    "EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB": "export_world_evidence_rgb",
+    "EMET_EVAL_EXPORT_VOXEL_HISTORY": "export_voxel_history",
+    "EMET_EVAL_EXPORT_VOXEL_PICKLE": "export_voxel_pickle",
+    "EMET_EVAL_MAP_MAX_SIDE": "max_map_side",
+    "EMET_EVAL_MAP_MIN_SIDE": "min_map_side",
+    "EMET_EVAL_FILTER_MAP_ISLANDS": "filter_map_islands",
+    "EMET_EVAL_EXPORT_GT_MAP": "export_gt_navmesh_map",
+    "EMET_EVAL_EXPORT_MAP_OVERLAY": "export_map_overlay",
+    "EMET_EVAL_EXPORT_MAP_VIDEO": "export_map_video",
+    "EMET_EVAL_MAP_VIDEO_STRIDE": "map_video_stride",
+    "EMET_EVAL_VIDEO_FPS": "video_fps",
+    "EMET_EVAL_EXPORT_VIDEO_SUBSTEPS": "export_video_substeps",
+    "EMET_EVAL_VIDEO_MOTION_PACED": "video_motion_paced",
+    "EMET_EVAL_VIDEO_METERS_PER_FRAME": "video_meters_per_frame",
+    "EMET_EVAL_VIDEO_RADIANS_PER_FRAME": "video_radians_per_frame",
+    "EMET_EVAL_VIDEO_CROSSFADE_TELEPORT_M": "video_crossfade_teleport_m",
+}
 
 _DECISION_POLICIES = frozenset({"legacy", "grounded_v2"})
 _VISIBILITY_MODES = frozenset({"off", "shadow", "agent"})
@@ -83,6 +143,7 @@ _ENV_SOURCE_PATHS = {
     "EMET_EQA_ANSWER_MAX_NEW_TOKENS": ("budgets.answer_max_new_tokens",),
     "HABITAT_EQA_DATA_DIR": ("inputs.data_dir",),
     "HM3D_SCENE_DIR": ("inputs.hm3d_root",),
+    **{env_name: (f"artifacts.{field}",) for env_name, field in _ARTIFACT_ENV_FIELDS.items()},
 }
 _HMEQA_RUNTIME_ONLY_ENV = frozenset({"EMET_EQA_TRACE"})
 _HMEQA_NONCANONICAL_BEHAVIOR_ENV = frozenset(
@@ -102,6 +163,15 @@ _HMEQA_NONCANONICAL_BEHAVIOR_ENV = frozenset(
 
 class HmeqaRunManifestError(ValueError):
     """Raised when an HM-EQA run cannot be created or resumed reproducibly."""
+
+
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise HmeqaRunManifestError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
 
 
 def _choice(name: str, value: Any, choices: frozenset[str]) -> str:
@@ -134,6 +204,36 @@ def _positive_int(name: str, value: Any, *, allow_zero: bool = False) -> int:
     if result < minimum:
         raise HmeqaRunManifestError(f"{name} must be >= {minimum}; got {result}")
     return result
+
+
+def normalize_hmeqa_artifact_profile(
+    profile: Mapping[str, Any] | None = None,
+) -> dict[str, bool | int | float]:
+    """Return the complete artifact policy frozen into run-manifest schema v3."""
+    supplied = dict(profile or {})
+    unknown = sorted(set(supplied) - set(DEFAULT_HMEQA_ARTIFACT_PROFILE))
+    if unknown:
+        raise HmeqaRunManifestError(f"unknown HM-EQA artifact controls: {', '.join(unknown)}")
+    normalized: dict[str, bool | int | float] = {}
+    for name, default in DEFAULT_HMEQA_ARTIFACT_PROFILE.items():
+        value = supplied.get(name, default)
+        if isinstance(default, bool):
+            normalized[name] = _bool(value, name=f"artifacts.{name}")
+        elif isinstance(default, int):
+            normalized[name] = _positive_int(
+                f"artifacts.{name}",
+                value,
+                allow_zero=name in {"export_map_stride", "snapshot_rgb_frames"},
+            )
+        else:
+            try:
+                number = float(value)
+            except (TypeError, ValueError) as exc:
+                raise HmeqaRunManifestError(f"artifacts.{name} must be numeric; got {value!r}") from exc
+            if number <= 0:
+                raise HmeqaRunManifestError(f"artifacts.{name} must be > 0; got {number}")
+            normalized[name] = number
+    return normalized
 
 
 def _resolved_path(value: str | os.PathLike[str] | None, fallback: Path) -> str:
@@ -264,6 +364,7 @@ def build_hmeqa_run_config(
     agentic_max_nav_steps: int = DEFAULT_AGENTIC_MAX_NAV_STEPS,
     data_dir: str | os.PathLike[str] | None = None,
     hm3d_root: str | os.PathLike[str] | None = None,
+    artifact_profile: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the canonical behavior-affecting configuration frozen for one H2H OUT."""
     variant = str(variant_id or "").strip()
@@ -336,6 +437,7 @@ def build_hmeqa_run_config(
             "data_dir": _resolved_path(data_dir, default_habitat_eqa_data_dir()),
             "hm3d_root": _resolved_path(hm3d_root, default_hm3d_scene_dir()),
         },
+        "artifacts": normalize_hmeqa_artifact_profile(artifact_profile),
     }
 
 
@@ -348,7 +450,10 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
         budgets = config["budgets"]
         ids = config["ids"]
         inputs = config["inputs"]
-        if not all(isinstance(section, Mapping) for section in (variant, evaluation, model, budgets, ids, inputs)):
+        artifacts = config["artifacts"]
+        if not all(
+            isinstance(section, Mapping) for section in (variant, evaluation, model, budgets, ids, inputs, artifacts)
+        ):
             raise TypeError("manifest config sections must be mappings")
         return build_hmeqa_run_config(
             arms=",".join(str(value) for value in evaluation["arms"]),
@@ -387,6 +492,7 @@ def normalize_hmeqa_run_config(config: Mapping[str, Any]) -> dict[str, Any]:
             agentic_max_nav_steps=int(budgets["agentic_max_nav_steps"]),
             data_dir=str(inputs["data_dir"]),
             hm3d_root=str(inputs["hm3d_root"]),
+            artifact_profile=artifacts,
         )
     except (KeyError, TypeError, ValueError, HmeqaRunManifestError) as exc:
         if isinstance(exc, HmeqaRunManifestError):
@@ -492,16 +598,23 @@ def hmeqa_external_input_state(config: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_hmeqa_run_manifest(out_dir: Path) -> dict[str, Any]:
-    """Load and minimally validate ``OUT/run_manifest.json``."""
+def load_hmeqa_run_manifest(
+    out_dir: Path,
+    *,
+    require_resumable: bool = False,
+) -> dict[str, Any]:
+    """Load a run manifest; schema v2 remains analysis-only."""
     path = Path(out_dir) / "run_manifest.json"
     if not path.is_file():
         raise HmeqaRunManifestError(
             f"cannot resume {out_dir}: run_manifest.json is missing; refusing to mix an unfrozen historical run"
         )
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        manifest = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
+    except (OSError, json.JSONDecodeError, HmeqaRunManifestError) as exc:
         raise HmeqaRunManifestError(f"cannot read {path}: {exc}") from exc
     if not isinstance(manifest, dict):
         raise HmeqaRunManifestError(f"{path} must contain a JSON object")
@@ -509,10 +622,17 @@ def load_hmeqa_run_manifest(out_dir: Path) -> dict[str, Any]:
         raise HmeqaRunManifestError(
             f"{path} has unsupported schema {manifest.get('schema')!r}; expected {HMEQA_RUN_MANIFEST_SCHEMA!r}"
         )
-    if manifest.get("schema_version") != HMEQA_RUN_MANIFEST_VERSION:
+    version = manifest.get("schema_version")
+    if version not in HMEQA_READABLE_RUN_MANIFEST_VERSIONS:
         raise HmeqaRunManifestError(
-            f"{path} has unsupported schema_version {manifest.get('schema_version')!r}; "
-            f"expected {HMEQA_RUN_MANIFEST_VERSION}"
+            f"{path} has unsupported schema_version {version!r}; "
+            f"readable versions are {sorted(HMEQA_READABLE_RUN_MANIFEST_VERSIONS)}"
+        )
+    if require_resumable and version != HMEQA_RUN_MANIFEST_VERSION:
+        raise HmeqaRunManifestError(
+            f"cannot resume schema_version {version} HM-EQA output {out_dir}; "
+            f"schema v{version} remains readable for analysis, but only v{HMEQA_RUN_MANIFEST_VERSION} "
+            "freezes the completion and artifact profile"
         )
     return manifest
 
@@ -536,6 +656,9 @@ def _validate_hmeqa_run_manifest(
     requested_digest = hmeqa_run_config_digest(config)
     if requested_digest != frozen_digest:
         mismatches.append(f"config digest {requested_digest} != frozen {frozen_digest}")
+    for section in ("variant", "model", "budgets", "ids", "artifacts"):
+        if manifest.get(section) != frozen_config.get(section):
+            mismatches.append(f"manifest {section} mirror differs from canonical config")
 
     frozen_git = manifest.get("git")
     if not isinstance(frozen_git, Mapping):
@@ -578,7 +701,7 @@ def prepare_hmeqa_run_manifest(
             raise HmeqaRunManifestError(
                 f"run_manifest.json already exists in {out}; use resume or choose a new output directory"
             )
-        manifest = load_hmeqa_run_manifest(out)
+        manifest = load_hmeqa_run_manifest(out, require_resumable=True)
         _validate_hmeqa_run_manifest(
             manifest,
             config=normalized,
@@ -594,7 +717,7 @@ def prepare_hmeqa_run_manifest(
         )
     if resume:
         # Give the more specific missing-manifest diagnostic.
-        return load_hmeqa_run_manifest(out)
+        return load_hmeqa_run_manifest(out, require_resumable=True)
 
     digest = hmeqa_run_config_digest(normalized)
     manifest: dict[str, Any] = {
@@ -612,6 +735,7 @@ def prepare_hmeqa_run_manifest(
         "model": normalized["model"],
         "budgets": normalized["budgets"],
         "ids": normalized["ids"],
+        "artifacts": normalized["artifacts"],
     }
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -624,12 +748,58 @@ def _env_value(env: Mapping[str, str], key: str, fallback: Any) -> Any:
     return fallback if value is None or value == "" else value
 
 
+def _hmeqa_artifact_profile_from_env(
+    env: Mapping[str, str],
+    base: Mapping[str, Any],
+) -> dict[str, bool | int | float]:
+    profile: dict[str, Any] = dict(normalize_hmeqa_artifact_profile(base))
+    for env_name, field in _ARTIFACT_ENV_FIELDS.items():
+        raw = str(env.get(env_name, "")).strip()
+        if not raw:
+            continue
+        default = DEFAULT_HMEQA_ARTIFACT_PROFILE[field]
+        if isinstance(default, bool):
+            profile[field] = _bool(raw, name=env_name)
+        elif isinstance(default, int):
+            profile[field] = _positive_int(
+                env_name,
+                raw,
+                allow_zero=field == "export_map_stride",
+            )
+        else:
+            try:
+                profile[field] = float(raw)
+            except ValueError as exc:
+                raise HmeqaRunManifestError(f"{env_name} must be numeric; got {raw!r}") from exc
+    return normalize_hmeqa_artifact_profile(profile)
+
+
 def hmeqa_run_config_from_env(
     env: Mapping[str, str],
     *,
     base_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve direct-script environment values, reusing a frozen config on resume."""
+    raw_config = str(env.get("EMET_HMEQA_RUN_CONFIG_JSON", "")).strip()
+    if raw_config:
+        try:
+            parsed = json.loads(
+                raw_config,
+                object_pairs_hook=_reject_duplicate_json_keys,
+            )
+        except (json.JSONDecodeError, HmeqaRunManifestError) as exc:
+            raise HmeqaRunManifestError(f"invalid EMET_HMEQA_RUN_CONFIG_JSON: {exc}") from exc
+        if not isinstance(parsed, Mapping):
+            raise HmeqaRunManifestError("EMET_HMEQA_RUN_CONFIG_JSON must contain a JSON object")
+        config = normalize_hmeqa_run_config(parsed)
+        expected_digest = str(env.get("EMET_HMEQA_CONFIG_DIGEST", "")).strip()
+        actual_digest = hmeqa_run_config_digest(config)
+        if expected_digest and expected_digest != actual_digest:
+            raise HmeqaRunManifestError(
+                f"launch config digest {expected_digest} does not match effective {actual_digest}"
+            )
+        return config
+
     base = (
         normalize_hmeqa_run_config(base_config)
         if base_config is not None
@@ -647,6 +817,7 @@ def hmeqa_run_config_from_env(
     budgets = base["budgets"]
     ids = base["ids"]
     inputs = base["inputs"]
+    artifacts = base["artifacts"]
 
     ledger_mode_default = variant["attempt_ledger_mode"]
     if "EMET_EQA_ATTEMPT_LEDGER_MODE" not in env and "EMET_EQA_ATTEMPT_LEDGER" in env:
@@ -753,6 +924,7 @@ def hmeqa_run_config_from_env(
         ),
         data_dir=_env_value(env, "HABITAT_EQA_DATA_DIR", inputs["data_dir"]),
         hm3d_root=_env_value(env, "HM3D_SCENE_DIR", inputs["hm3d_root"]),
+        artifact_profile=_hmeqa_artifact_profile_from_env(env, artifacts),
     )
 
 
@@ -765,6 +937,7 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
     budgets = normalized["budgets"]
     ids = normalized["ids"]
     inputs = normalized["inputs"]
+    artifacts = normalized["artifacts"]
     env = {
         "ARMS": ",".join(evaluation["arms"]),
         "HOLDOUT_IDS": ",".join(str(value) for value in ids["question_ids"]),
@@ -801,50 +974,15 @@ def hmeqa_config_env(config: Mapping[str, Any]) -> dict[str, str]:
         "HM3D_SCENE_DIR": inputs["hm3d_root"],
         "EMET_HMEQA_CONFIG_DIGEST": hmeqa_run_config_digest(normalized),
     }
+    for env_name, field in _ARTIFACT_ENV_FIELDS.items():
+        value = artifacts[field]
+        env[env_name] = str(int(value)) if isinstance(value, bool) else str(value)
     if model.get("host"):
         env["EMET_OPENAI_BASE_URL"] = openai_base_for_host(
             str(model["host"]),
             int(model.get("llm_port") or DEFAULT_LLM_PORT),
         )
     return env
-
-
-def missing_hmeqa_snapshot_artifacts(
-    bundle_dir: Path,
-    *,
-    arm: str,
-    env: Mapping[str, str],
-) -> list[str]:
-    """Return required evidence artifacts missing from an H2H bundle snapshot."""
-
-    def enabled(name: str, default: bool) -> bool:
-        raw = str(env.get(name, "")).strip().lower()
-        if not raw:
-            return default
-        return raw not in {"0", "false", "no", "off"}
-
-    bundle = Path(bundle_dir)
-    required_files: list[str] = []
-    required_dirs: list[str] = []
-    if enabled("EMET_EVAL_EXPORT_COMPACT_MEMORY", False):
-        required_files.append("compact_memory/manifest.json")
-    if arm == "agentic":
-        if str(env.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "off")).strip().lower() != "off":
-            required_files.append("world_evidence.json")
-            if enabled("EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB", True):
-                required_dirs.append("world_evidence_views")
-        if str(env.get("EMET_EQA_ATTEMPT_LEDGER_MODE", "off")).strip().lower() != "off":
-            required_files.append("attempt_ledger.json")
-        if str(env.get("EMET_EQA_ROOM_HISTORY_MODE", "off")).strip().lower() != "off":
-            required_files.append("room_events.json")
-
-    missing = [
-        relative
-        for relative in required_files
-        if not (bundle / relative).is_file() or (bundle / relative).stat().st_size == 0
-    ]
-    missing.extend(f"{relative}/" for relative in required_dirs if not (bundle / relative).is_dir())
-    return missing
 
 
 def _flatten_config_paths(value: Any, prefix: str = "") -> list[str]:
@@ -862,6 +1000,8 @@ def _hmeqa_run_artifacts(out: Path) -> list[Path]:
     artifacts = [out / name for name in artifact_names if (out / name).exists()]
     artifacts.extend(out.glob("classic_q*.jsonl"))
     artifacts.extend(out.glob("agentic_q*.jsonl"))
+    artifacts.extend((out / ".pending").glob("*") if (out / ".pending").is_dir() else ())
+    artifacts.extend((out / "bundles").glob("*/COMPLETE.json") if (out / "bundles").is_dir() else ())
     return artifacts
 
 
@@ -888,7 +1028,7 @@ def prepare_hmeqa_run_manifest_from_env(
     existing: dict[str, Any] | None = None
     effective_resume = resume or launcher_prepared
     if effective_resume and manifest_path.is_file():
-        existing = load_hmeqa_run_manifest(out)
+        existing = load_hmeqa_run_manifest(out, require_resumable=True)
     elif effective_resume:
         # The overnight orchestrator can mark a newly-created next phase RESUME=1
         # after an earlier phase completed. Permit only a truly empty H2H OUT;
@@ -900,20 +1040,10 @@ def prepare_hmeqa_run_manifest_from_env(
                 "refusing to mix an unfrozen historical run"
             )
         effective_resume = False
-    raw_config = environ.get("EMET_HMEQA_RUN_CONFIG_JSON", "").strip()
-    if raw_config:
-        try:
-            parsed = json.loads(raw_config)
-        except json.JSONDecodeError as exc:
-            raise HmeqaRunManifestError(f"invalid EMET_HMEQA_RUN_CONFIG_JSON: {exc}") from exc
-        if not isinstance(parsed, Mapping):
-            raise HmeqaRunManifestError("EMET_HMEQA_RUN_CONFIG_JSON must contain a JSON object")
-        config = normalize_hmeqa_run_config(parsed)
-    else:
-        config = hmeqa_run_config_from_env(
-            environ,
-            base_config=existing.get("config") if existing is not None else None,
-        )
+    config = hmeqa_run_config_from_env(
+        environ,
+        base_config=existing.get("config") if existing is not None else None,
+    )
     validate_hmeqa_runtime_environment(environ, config=config)
 
     expected_digest = environ.get("EMET_HMEQA_CONFIG_DIGEST", "").strip()
@@ -945,6 +1075,147 @@ def prepare_hmeqa_run_manifest_from_env(
         sources=sources,
         resume=effective_resume,
     )
+
+
+_HMEQA_CHILD_PASSTHROUGH = frozenset(
+    {
+        "CUDA_DEVICE_ORDER",
+        "CUDA_VISIBLE_DEVICES",
+        "HF_HOME",
+        "HF_HUB_CACHE",
+        "HF_HUB_OFFLINE",
+        "HUGGINGFACE_HUB_CACHE",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HF_TOKEN",
+        "LD_LIBRARY_PATH",
+        "NVIDIA_VISIBLE_DEVICES",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "PYTORCH_ALLOC_CONF",
+        "PYTORCH_CUDA_ALLOC_CONF",
+        "REQUESTS_CA_BUNDLE",
+        "SSL_CERT_FILE",
+        "TOKENIZERS_PARALLELISM",
+        "TORCH_HOME",
+        "TRANSFORMERS_CACHE",
+        "UV_CACHE_DIR",
+        "WANDB_API_KEY",
+        "XDG_CACHE_HOME",
+    }
+)
+_HMEQA_CHILD_PATH_INPUTS = frozenset(
+    {
+        "EMET_HABITAT",
+        "EMET_STATUS_DIR",
+        "EMET_STATUS_LOG",
+        "HOME",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+    }
+)
+
+
+def _canonical_child_path(value: str) -> str:
+    return str(Path(value).expanduser().resolve(strict=False))
+
+
+def build_hmeqa_child_env(
+    config: Mapping[str, Any],
+    *,
+    base_env: Mapping[str, str] | None = None,
+    resume: bool,
+    coverage_qids: str,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    egl_fail_abort: int = 2,
+    manifest_prepared: bool,
+    config_sources: Mapping[str, str] | None = None,
+    inherit_managed_context: bool = True,
+    environment_sanitized: bool = True,
+) -> dict[str, str]:
+    """Build the complete allowlisted environment for an H2H shell.
+
+    Policy and lifecycle values are explicit. Ambient values are retained only
+    for operational paths, caches, credentials, and a verified managed-job/FD9
+    handoff.
+    """
+    from emet.utils.job_registry import (
+        gpu_lock_path,
+        jobs_dir,
+        validated_current_job_id,
+        validated_gpu_lock_fd,
+    )
+
+    normalized = normalize_hmeqa_run_config(config)
+    source = dict(os.environ if base_env is None else base_env)
+    env: dict[str, str] = {
+        "PATH": str(source.get("PATH") or os.defpath),
+        "LANG": str(source.get("LANG") or "C.UTF-8"),
+        "LC_ALL": str(source.get("LC_ALL") or ""),
+    }
+    for name, value in source.items():
+        if not str(value):
+            continue
+        if name.startswith("LC_") or name in _HMEQA_CHILD_PASSTHROUGH:
+            env[name] = str(value)
+        elif name in _HMEQA_CHILD_PATH_INPUTS:
+            env[name] = _canonical_child_path(str(value))
+
+    policy = str(crash_policy).strip().lower()
+    if policy not in {"skip", "abort"}:
+        raise HmeqaRunManifestError(f"crash_policy must be skip or abort; got {crash_policy!r}")
+    env.update(
+        {
+            "RESUME": str(int(bool(resume))),
+            "COVERAGE_QIDS": str(coverage_qids),
+            "EPISODE_COOLDOWN_SEC": str(max(0, int(cooldown))),
+            "EPISODE_GPU_WAIT": "1",
+            "SKIP_GPU_WAIT": "0",
+            "NATIVE_CRASH_POLICY": policy,
+            "NATIVE_CRASH_RETRIES": "1",
+            "NATIVE_CRASH_SETTLE_SEC": "60",
+            "NATIVE_CRASH_STREAK_ABORT": str(max(0, int(streak_abort))),
+            "EGL_FAIL_ABORT": str(max(0, int(egl_fail_abort))),
+            "EMET_SKIP_CPU_AFFINITY": "0",
+            "EMET_EXCLUDE_CPU_MIN_MHZ": "6000",
+            "EMET_ALLOW_SDPA_ATTN": "1",
+            "EMET_EQA_TRACE": "1",
+            "COPY_PAPER_FIGS": "0",
+            "NEED_MIB": "12000",
+            "EMET_GPU_LOCK_TIMEOUT": "21600",
+            _HMEQA_MANIFEST_PREPARED_ENV: str(int(bool(manifest_prepared))),
+            "EMET_HMEQA_ENV_SANITIZED": "1" if environment_sanitized else "0",
+        }
+    )
+    env.update(hmeqa_config_env(normalized))
+    env["EMET_HMEQA_RUN_CONFIG_JSON"] = json.dumps(
+        normalized,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    if config_sources:
+        env["EMET_HMEQA_RUN_SOURCES_JSON"] = json.dumps(
+            dict(config_sources),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    if inherit_managed_context:
+        job_id = validated_current_job_id(source.get("EMET_JOB_ID"))
+        if job_id is not None:
+            env["EMET_JOB_ID"] = job_id
+            env["EMET_JOBS_DIR"] = str(jobs_dir())
+        lock_fd = validated_gpu_lock_fd()
+        if lock_fd is not None:
+            lock = str(gpu_lock_path())
+            env["EMET_GPU_LOCK"] = lock
+            env["EMET_GPU_LOCK_FILE"] = lock
+            env["EMET_GPU_LOCK_FD"] = str(lock_fd)
+    return env
 
 
 def hmeqa_h2h_env_parts(
@@ -982,6 +1253,7 @@ def hmeqa_h2h_env_parts(
     max_movement_step: int = DEFAULT_MAX_MOVEMENT_STEP,
     run_config: Mapping[str, Any] | None = None,
     config_sources: Mapping[str, str] | None = None,
+    egl_fail_abort: int = 2,
 ) -> list[str]:
     """Explicit env assignments injected into the jobs-wrapped H2H script.
 
@@ -1021,33 +1293,109 @@ def hmeqa_h2h_env_parts(
             max_movement_step=max_movement_step,
         )
     )
-    parts = [
-        "EMET_ALLOW_SDPA_ATTN=1",
-        "EMET_EQA_TRACE=1",
-        "SKIP_KILL_STALE=1",
-        f"COVERAGE_QIDS={coverage_qids}",
-        f"EPISODE_COOLDOWN_SEC={int(cooldown)}",
-        f"NATIVE_CRASH_POLICY={crash_policy}",
-        f"NATIVE_CRASH_STREAK_ABORT={int(streak_abort)}",
-    ]
-    for key, value in hmeqa_config_env(config).items():
-        # Empty local-model values are intentionally omitted for remote VL.
-        if value != "":
-            parts.append(f"{key}={shlex.quote(value)}")
-    config_json = json.dumps(config, sort_keys=True, separators=(",", ":"))
-    parts.append(f"{_HMEQA_MANIFEST_PREPARED_ENV}=1")
-    parts.append(f"EMET_HMEQA_RUN_CONFIG_JSON={shlex.quote(config_json)}")
-    if config_sources:
-        sources_json = json.dumps(dict(config_sources), sort_keys=True, separators=(",", ":"))
-        parts.append(f"EMET_HMEQA_RUN_SOURCES_JSON={shlex.quote(sources_json)}")
-    if resume:
-        parts.append("RESUME=1")
-    return parts
+    child_env = build_hmeqa_child_env(
+        config,
+        base_env={},
+        resume=resume,
+        coverage_qids=coverage_qids,
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        egl_fail_abort=egl_fail_abort,
+        manifest_prepared=True,
+        config_sources=config_sources,
+        inherit_managed_context=False,
+        environment_sanitized=False,
+    )
+    return [f"{key}={shlex.quote(value)}" for key, value in sorted(child_env.items()) if value != ""]
 
 
 def hmeqa_h2h_vl_endpoint_from_env_parts(parts: list[str]) -> str | None:
     """Return the ``EMET_VL_ENDPOINT`` value from env parts, if present."""
     for p in parts:
         if p.startswith("EMET_VL_ENDPOINT="):
-            return p.split("=", 1)[1].strip("'\"")
+            return p.split("=", 1)[1].strip("'\"") or None
     return None
+
+
+def run_hmeqa_child(
+    out_dir: Path,
+    *,
+    resume: bool,
+    coverage_qids: str,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    egl_fail_abort: int = 2,
+) -> int:
+    """Run the H2H script behind a clean, cancellable managed boundary."""
+    from emet.utils.job_registry import validated_gpu_lock_fd
+    from emet.utils.process_tree import popen_session, terminate_process_tree
+
+    out = Path(out_dir).expanduser().resolve()
+    manifest = load_hmeqa_run_manifest(out, require_resumable=True)
+    child_env = build_hmeqa_child_env(
+        manifest["config"],
+        base_env=os.environ,
+        resume=resume,
+        coverage_qids=coverage_qids,
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        egl_fail_abort=egl_fail_abort,
+        manifest_prepared=True,
+        config_sources=manifest.get("sources") if isinstance(manifest.get("sources"), Mapping) else None,
+    )
+    lock_fd = validated_gpu_lock_fd()
+    pass_fds = (lock_fd,) if lock_fd is not None else ()
+    root = Path(__file__).resolve().parents[3]
+    script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
+    bash = shutil.which("bash", path=child_env["PATH"])
+    if bash is None:
+        raise HmeqaRunManifestError("bash is unavailable in the allowlisted H2H PATH")
+    process = popen_session(
+        [bash, str(script), str(out)],
+        cwd=str(root),
+        env=child_env,
+        pass_fds=pass_fds,
+    )
+    try:
+        return int(process.wait())
+    except BaseException:
+        terminate_process_tree(process, grace_s=20.0)
+        raise
+    finally:
+        terminate_process_tree(process, grace_s=1.0)
+
+
+def _build_child_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Internal managed HM-EQA child launcher")
+    sub = parser.add_subparsers(dest="command", required=True)
+    child = sub.add_parser("run-child")
+    child.add_argument("--out", type=Path, required=True)
+    child.add_argument("--resume", choices=("0", "1"), required=True)
+    child.add_argument("--coverage-qids", required=True)
+    child.add_argument("--cooldown", type=int, required=True)
+    child.add_argument("--crash-policy", choices=("skip", "abort"), required=True)
+    child.add_argument("--streak-abort", type=int, required=True)
+    child.add_argument("--egl-fail-abort", type=int, default=2)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_child_arg_parser().parse_args(argv)
+    if args.command == "run-child":
+        return run_hmeqa_child(
+            args.out,
+            resume=args.resume == "1",
+            coverage_qids=args.coverage_qids,
+            cooldown=args.cooldown,
+            crash_policy=args.crash_policy,
+            streak_abort=args.streak_abort,
+            egl_fail_abort=args.egl_fail_abort,
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

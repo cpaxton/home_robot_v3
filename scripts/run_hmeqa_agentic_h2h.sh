@@ -6,7 +6,7 @@
 #   uv run emet jobs run --name hmeqa-h2h --need-mib 12000 -- \
     #     env EMET_ALLOW_SDPA_ATTN=1 HOLDOUT_IDS=… ./scripts/run_hmeqa_agentic_h2h.sh OUT_DIR
 #
-# Resume (skip non-empty ${arm}_q*.jsonl; rebuild aggregate jsonl):
+# Resume (skip validated COMPLETE markers; rebuild aggregate jsonl):
 #   RESUME=1 ARMS=classic,agentic ./scripts/run_hmeqa_agentic_h2h.sh OUT_DIR
 #
 # Arms:
@@ -15,8 +15,7 @@
 #
 # Env:
 #   ARMS=classic,agentic   which arms to run (comma-separated)
-#   RESUME=1               skip finished per-qid jsonl; do not truncate arm logs/jsonl
-#   SKIP_KILL_STALE=1      skip gpu_preflight --kill-stale (default; required for managed jobs)
+#   RESUME=1               skip validated units; reconcile rows/aggregates from markers
 #   SKIP_GPU_WAIT=1        skip gpu_preflight --wait (e.g. NVML mismatch; Torch still sees CUDA)
 #   EGL_FAIL_ABORT=2       abort after this many consecutive Habitat EGL/CUDA-map failures
 #                          (0 = never). Pattern: WindowlessContext / unable to find CUDA device.
@@ -36,7 +35,7 @@
 #                          stacked Habitat/VLM teardown pressure that can hard-freeze.
 #   EPISODE_GPU_WAIT=1     re-run gpu_preflight --wait between episodes (default 1).
 #   EMET_GPU_LOCK=…        shared host-wide flock path (default ~/runs/emet/gpu.lock).
-#   EMET_GPU_LOCK_TIMEOUT=-1  flock wait in seconds (-1 = wait indefinitely).
+#   EMET_GPU_LOCK_TIMEOUT=21600  bounded direct-launch flock wait in seconds.
 #   EMET_EQA_AGENTIC_ROUTER=0|1  honor for agentic arm (default 0). paper-router /
 #                          emet hmeqa overnight pass 1; do not hardcode over the env.
 #   EMET_EQA_AGENTIC_VERIFIER / EMET_EQA_AGENTIC_REQUIRE_VERIFIED  passed through.
@@ -62,6 +61,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+if [[ "${EMET_HMEQA_ENV_SANITIZED:-0}" != "1" ]]; then
+    _EMET_PYTHON="$ROOT/.venv/bin/python"
+    if [[ ! -x "$_EMET_PYTHON" ]]; then
+        _EMET_PYTHON="$(command -v python3)"
+    fi
+    exec "$_EMET_PYTHON" -m emet.eval.hmeqa_child_env \
+        "$ROOT/scripts/run_hmeqa_agentic_h2h.sh" "$@"
+fi
 # shellcheck source=scripts/status_log.sh
 source "$ROOT/scripts/status_log.sh"
 OUT="${1:-$HOME/runs/emet/hmeqa_agentic_h2h_$(date +%Y%m%d_%H%M%S)}"
@@ -72,7 +79,6 @@ HOLDOUT_IDS="${HOLDOUT_IDS:-15,68,105,17}"
 TIMEOUT="${TIMEOUT:-7200}"
 ARMS="${ARMS:-classic,agentic}"
 RESUME="${RESUME:-0}"
-SKIP_KILL_STALE="${SKIP_KILL_STALE:-1}"
 SKIP_GPU_WAIT="${SKIP_GPU_WAIT:-0}"
 EGL_FAIL_ABORT="${EGL_FAIL_ABORT:-2}"
 if [[ "${NATIVE_CRASH_ABORT:-}" == "1" ]]; then
@@ -90,7 +96,7 @@ EPISODE_GPU_WAIT="${EPISODE_GPU_WAIT:-1}"
 EQA_HF_MODEL_ID="${EQA_HF_MODEL_ID:-}"
 EQA_VL_FAMILY="${EQA_VL_FAMILY:-}"
 EQA_VL_QUANTIZATION="${EQA_VL_QUANTIZATION:-}"
-export EMET_EVAL_EXPORT_COMPACT_MEMORY="${EMET_EVAL_EXPORT_COMPACT_MEMORY:-1}"
+EMET_GPU_LOCK_TIMEOUT="${EMET_GPU_LOCK_TIMEOUT:-21600}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
 # Create a versioned manifest on first launch. On resume, omitted frozen env
@@ -161,10 +167,10 @@ status_open "$OUT" "hmeqa-h2h"
 STATUS_RESUME_CMD="uv run emet eval recover --need-mib 12000 && uv run emet hmeqa resume $OUT"
 
 acquire_gpu_lock() {
-    local lock_file="${EMET_GPU_LOCK:-${EMET_GPU_LOCK_FILE:-$HOME/runs/emet/gpu.lock}}"
-    local inherited_fd9
-    inherited_fd9="$(readlink "/proc/$$/fd/9" 2>/dev/null || true)"
-    if [[ "$inherited_fd9" == "$lock_file" ]]; then
+    local lock_file
+    lock_file="$(uv run python -c 'from emet.utils.job_registry import gpu_lock_path; print(gpu_lock_path())')"
+    if uv run python -c \
+        'from emet.utils.job_registry import validated_gpu_lock_fd; raise SystemExit(0 if validated_gpu_lock_fd() == 9 else 1)'; then
         log "GPU exclusive lock inherited from emet jobs: $lock_file"
         return 0
     fi
@@ -181,11 +187,7 @@ acquire_gpu_lock() {
     exec 9>"$lock_file"
     log "waiting for exclusive GPU lock: $lock_file"
     local lock_rc=0
-    if [[ -z "${EMET_GPU_LOCK_TIMEOUT:-}" || "${EMET_GPU_LOCK_TIMEOUT}" == "-1" ]]; then
-        flock -x 9 || lock_rc=$?
-    else
-        flock -w "$EMET_GPU_LOCK_TIMEOUT" 9 || lock_rc=$?
-    fi
+    flock -w "$EMET_GPU_LOCK_TIMEOUT" -x 9 || lock_rc=$?
     if [[ "$lock_rc" -ne 0 ]]; then
         log "ERROR: timed out waiting for the GPU lock: $lock_file"
         status_close BLOCKED "GPU lock wait timed out; refusing to overlap direct H2H" \
@@ -194,7 +196,6 @@ acquire_gpu_lock() {
     fi
     export EMET_GPU_LOCK_FILE="$lock_file"
     export EMET_GPU_LOCK="$lock_file"
-    export EMET_GPU_LOCK_HELD=1
     log "GPU exclusive lock acquired directly: $lock_file"
 }
 
@@ -360,35 +361,11 @@ PROGRESS_FAILED=0
 _native_crash_streak=0
 
 rebuild_arm_jsonl() {
-    local name="$1"
-    local out="$OUT/${name}.jsonl"
-    : >"$out"
-    local qid
-    for qid in "${_PROGRESS_IDS[@]}"; do
-        qid="$(echo "$qid" | tr -d '[:space:]')"
-        [[ -n "$qid" ]] || continue
-        local ep="$OUT/${name}_q${qid}.jsonl"
-        if [[ -s "$ep" ]]; then
-            cat "$ep" >>"$out"
-        fi
-    done
+    uv run python -m emet.eval.hmeqa_completion rebuild "$OUT" >/dev/null
 }
 
 count_done_units() {
-    local n=0
-    local arm qid
-    for arm in "${_PROGRESS_ARMS[@]}"; do
-        arm="$(echo "$arm" | tr -d '[:space:]')"
-        [[ -n "$arm" ]] || continue
-        for qid in "${_PROGRESS_IDS[@]}"; do
-            qid="$(echo "$qid" | tr -d '[:space:]')"
-            [[ -n "$qid" ]] || continue
-            if [[ -s "$OUT/${arm}_q${qid}.jsonl" ]]; then
-                n=$((n + 1))
-            fi
-        done
-    done
-    echo "$n"
+    uv run python -m emet.eval.hmeqa_completion count "$OUT"
 }
 
 jobs_heartbeat() {
@@ -419,91 +396,6 @@ update_eval_progress(
             --out-dir "$OUT" \
             >/dev/null 2>&1 || true
     fi
-}
-
-snapshot_missing_artifacts() {
-    uv run python - "$1" "$2" <<'PY'
-import os
-import sys
-from pathlib import Path
-
-from emet.eval.hmeqa_launch import missing_hmeqa_snapshot_artifacts
-
-for artifact in missing_hmeqa_snapshot_artifacts(
-    Path(sys.argv[1]),
-    arm=sys.argv[2],
-    env=os.environ,
-):
-    print(artifact)
-PY
-}
-
-snapshot_bundle() {
-    # Copy map artifacts out of the shared Habitat cache so H2H arms do not overwrite.
-    local arm="$1"
-    local qid="$2"
-    local ep="$3"
-    local dst="$OUT/bundles/${arm}_q${qid}"
-    local src=""
-    if [[ -s "$ep" ]]; then
-        src="$(uv run python -c "
-        import json,sys
-        from pathlib import Path
-        p=Path(sys.argv[1])
-        row=json.loads(p.read_text().splitlines()[0])
-        print(row.get('debug_bundle_dir') or '')
-        " "$ep" 2>/dev/null || true)"
-    fi
-    if [[ -z "$src" || ! -d "$src" ]]; then
-        # Fallback only — prefer debug_bundle_dir from the jsonl (unique per OUT).
-        src="$HOME/.cache/habitat_eqa/episodes/h2h_${arm}_q$(printf '%04d' "$qid")_$(basename "$OUT")/q$(printf '%04d' "$qid")_dynagraph"
-    fi
-    if [[ ! -d "$src" ]]; then
-        log "ERROR: no episode bundle to snapshot for scored $arm q$qid"
-        return 1
-    fi
-    rm -rf "$dst"
-    mkdir -p "$dst"
-    for f in topdown_map.png topdown_map_overlay.png topdown_gt_navmesh.png \
-        explored_2d.npy obstacles_2d.npy grid_meta.json trajectory.jsonl \
-        spawn_record.json metrics.json diagnostics_manifest.json floor_metrics.json \
-        floor_area.jsonl floor_area_growth.png \
-        topdown_exploration.mp4 episode_rgb.mp4 agentic_trace.jsonl agentic_summary.json \
-        world_evidence.json attempt_ledger.json room_events.json; do
-        [[ -e "$src/$f" ]] && cp -a "$src/$f" "$dst/"
-    done
-    [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
-    [[ -d "$src/frontier_picks" ]] && rm -rf "$dst/frontier_picks" && cp -a "$src/frontier_picks" "$dst/frontier_picks"
-    [[ -d "$src/world_evidence_views" ]] && rm -rf "$dst/world_evidence_views" && cp -a "$src/world_evidence_views" "$dst/world_evidence_views"
-    [[ -d "$src/compact_memory" ]] && rm -rf "$dst/compact_memory" && cp -a "$src/compact_memory" "$dst/compact_memory"
-    local missing=()
-    local missing_output
-    if ! missing_output="$(snapshot_missing_artifacts "$dst" "$arm")"; then
-        log "ERROR: could not validate evidence snapshot for $arm q$qid"
-        return 1
-    fi
-    while IFS= read -r artifact; do
-        [[ -n "$artifact" ]] && missing+=("$artifact")
-    done <<<"$missing_output"
-    if (( ${#missing[@]} > 0 )); then
-        log "ERROR: evidence snapshot incomplete for $arm q$qid: ${missing[*]}"
-        return 1
-    fi
-    # Head-camera frames are large; symlink the full dir + copy a few keyframes.
-    if [[ -d "$src/frames" ]]; then
-        ln -sfn "$src/frames" "$dst/frames_all"
-        mkdir -p "$dst/frames"
-        # Evenly spaced samples for quick feh browsing without opening 360 files.
-        mapfile -t _rgbs < <(ls "$src/frames"/rgb_*.png 2>/dev/null | sort)
-        if ((${#_rgbs[@]} > 0)); then
-            _n=${#_rgbs[@]}
-            for _k in 0 1 2 3 4 5; do
-                _idx=$(( _k * (_n - 1) / 5 ))
-                cp -n "${_rgbs[$_idx]}" "$dst/frames/" 2>/dev/null || true
-            done
-        fi
-    fi
-    log "snapshot $arm q$qid → $dst"
 }
 
 if [[ ! -x "$EMET_HABITAT" ]]; then
@@ -540,11 +432,6 @@ status_note START \
     "arms=$ARMS ids=$HOLDOUT_IDS head=$(git rev-parse --short HEAD) resume=$RESUME" \
     "nothing — wait for the job. Progress: uv run emet jobs; log: uv run emet status tail"
 gpu_wait
-if [[ "$SKIP_KILL_STALE" == "1" ]]; then
-    log "SKIP_KILL_STALE=1 — not running gpu_preflight --kill-stale"
-else
-    ./scripts/gpu_preflight.sh --kill-stale || true
-fi
 
 run_arm() {
     local name="$1"
@@ -566,10 +453,12 @@ run_arm() {
         qid="$(echo "$qid" | tr -d '[:space:]')"
         [[ -n "$qid" ]] || continue
         local ep="$OUT/${name}_q${qid}.jsonl"
-        if [[ "$RESUME" == "1" && -s "$ep" ]]; then
-            log "SKIP $name q$qid (resume: non-empty $ep)"
+        if [[ "$RESUME" == "1" ]] && \
+            uv run python -m emet.eval.hmeqa_completion is-complete "$OUT" "$name" "$qid"; then
+            log "SKIP $name q$qid (resume: validated COMPLETE marker)"
             continue
         fi
+        rm -f "$ep"
         if [[ "$EPISODE_GPU_WAIT" == "1" ]]; then
             gpu_wait
         fi
@@ -581,8 +470,10 @@ run_arm() {
         local episode_ok=0
         while [[ "$attempt" -lt "$max_attempts" ]]; do
             attempt=$((attempt + 1))
-            : >"$ep"
-            tag="h2h_${name}_q$(printf '%04d' "$qid")_$(basename "$OUT")"
+            mkdir -p "$OUT/.pending"
+            pending="$OUT/.pending/${name}_q${qid}.attempt${attempt}.jsonl"
+            : >"$pending"
+            tag="$(uv run python -m emet.eval.hmeqa_completion debug-run-tag "$OUT" "$name" "$qid")"
             log "----- $name q$qid attempt=${attempt}/${max_attempts} (bundle tag=$tag) -----"
             jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
             STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
@@ -599,16 +490,25 @@ run_arm() {
                 --no-mcq-debias \
                 --memory-summary \
                 --debug-run-tag "$tag" \
-                --output "$ep" \
+                --output "$pending" \
                 "${EQA_EXTRA_ARGS[@]}" \
                 >>"$elog" 2>&1
             rc=$?
             set -e
-            if [[ "$rc" -eq 0 && -s "$ep" ]]; then
-                episode_ok=1
-                _egl_fail_streak=0
-                _native_crash_streak=0
-                break
+            if [[ "$rc" -eq 0 ]]; then
+                set +e
+                uv run python -m emet.eval.hmeqa_completion commit \
+                    "$OUT" "$name" "$qid" "$pending" --exit-code "$rc" >>"$elog" 2>&1
+                commit_rc=$?
+                set -e
+                if [[ "$commit_rc" -eq 0 ]]; then
+                    episode_ok=1
+                    _egl_fail_streak=0
+                    _native_crash_streak=0
+                    break
+                fi
+                rc=$commit_rc
+                log "FAIL $name q$qid completion validation exit=$commit_rc attempt=${attempt}/${max_attempts}"
             fi
             log "FAIL $name q$qid exit=$rc attempt=${attempt}/${max_attempts}"
             if signal_name="$(native_crash_signal "$rc")"; then
@@ -666,9 +566,8 @@ write_crash_marker(r'''$OUT''', '$name', '$qid', returncode=int('$rc'), signal_n
                     "nothing yet — batch continues. Review later: tail -n 40 $OUT/${name}.log"
             fi
         done
-        if [[ -s "$ep" ]]; then
+        if [[ "$episode_ok" -eq 1 ]]; then
             rebuild_arm_jsonl "$name"
-            snapshot_bundle "$name" "$qid" "$ep"
             PROGRESS_DONE=$((PROGRESS_DONE + 1))
             jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
             STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
@@ -734,8 +633,8 @@ if [[ -n "${CRASHED_QIDS:-}" ]]; then
     log "CRASHED_QIDS=${CRASHED_QIDS} (units_failed=${PROGRESS_FAILED}; scored=${PROGRESS_DONE}/${PROGRESS_TOTAL})"
 fi
 
-# Disk truth: skipped native crashes leave empty per-qid jsonl. Do not write
-# OUT/DONE or mark the job done until every unit scored — resume retries empties.
+# Marker truth: pending/partial rows never count. Publish JSON DONE only after
+# every COMPLETE marker and aggregate hash validates.
 PROGRESS_DONE="$(count_done_units)"
 jobs_heartbeat "final" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
 STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL final"
@@ -755,21 +654,31 @@ elif [[ "$PROGRESS_DONE" -eq 0 && "$PROGRESS_FAILED" -gt 0 ]]; then
     _final_state="FAIL"
     _final_rc=1
 fi
+_finalized=0
+if [[ "$_incomplete" -eq 0 && "$_final_rc" -eq 0 ]]; then
+    if uv run python -m emet.eval.hmeqa_completion finalize "$OUT" >>"$OUT/orchestrator.log" 2>&1; then
+        _finalized=1
+    else
+        _job_status="failed"
+        _final_state="INCOMPLETE"
+        _final_rc=1
+        rm -f "$OUT/DONE"
+    fi
+fi
 if [[ -n "${EMET_JOB_ID:-}" ]]; then
     uv run emet jobs update "$EMET_JOB_ID" --status "$_job_status" \
         --units-done "$PROGRESS_DONE" --units-total "$PROGRESS_TOTAL" \
         --phase "${_final_state,,}" --out-dir "$OUT" >/dev/null 2>&1 || true
 fi
-if [[ "$_incomplete" -eq 0 && "$_final_rc" -eq 0 ]]; then
-    echo DONE > "$OUT/DONE"
+if [[ "$_finalized" -eq 1 ]]; then
     log "All done → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED})"
     status_close DONE "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); summary + figures written" \
         "review $OUT/orchestrator.log and $OUT/figures/, then uv run emet hmeqa summarize $OUT"
 else
     rm -f "$OUT/DONE"
-    log "INCOMPLETE → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED}) — not writing DONE; resume to fill gaps"
+    log "INCOMPLETE → $OUT (validated ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED}) — no valid DONE; resume to fill gaps"
     status_close "$_final_state" \
-        "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); missing empty per-qid jsonl" \
+        "validated $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); missing or invalid COMPLETE markers" \
         "$STATUS_RESUME_CMD"
 fi
 exit "$_final_rc"

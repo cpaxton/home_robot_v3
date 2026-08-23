@@ -8,17 +8,22 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
+from emet.eval import hmeqa_launch as launch
+from emet.eval.hmeqa_child_env import sanitized_hmeqa_child_env
 from emet.eval.hmeqa_launch import (
     HMEQA_RUN_MANIFEST_VERSION,
     HmeqaRunManifestError,
+    build_hmeqa_child_env,
     build_hmeqa_run_config,
     hmeqa_h2h_env_parts,
     hmeqa_h2h_vl_endpoint_from_env_parts,
     hmeqa_run_config_digest,
     hmeqa_run_config_from_env,
+    load_hmeqa_run_manifest,
     normalize_hmeqa_vl_endpoint,
     prepare_hmeqa_run_manifest,
     prepare_hmeqa_run_manifest_from_env,
@@ -88,8 +93,8 @@ def test_hmeqa_h2h_env_parts_local_keeps_hf_model_id():
     joined = " ".join(parts)
     assert "EQA_HF_MODEL_ID=" in joined
     assert "EMET_HMEQA_MANIFEST_PREPARED=1" in joined
-    assert "SKIP_KILL_STALE=1" in joined
-    assert "RESUME=1" not in parts
+    assert "SKIP_KILL_STALE" not in joined
+    assert "RESUME=0" in parts
     assert hmeqa_h2h_vl_endpoint_from_env_parts(parts) is None
     assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" not in joined
     assert "EMET_EQA_ATTEMPT_LEDGER=1" not in joined
@@ -245,6 +250,7 @@ def test_hmeqa_run_manifest_freezes_config_and_refuses_mismatch(tmp_path):
     assert manifest["variant"]["id"] == "grounded-shadow-r1"
     assert manifest["budgets"]["max_planning_steps"] == 12
     assert manifest["ids"]["question_ids"] == [2, 104]
+    assert manifest["artifacts"]["export_compact_memory"] is True
     assert manifest["config_digest"] == hmeqa_run_config_digest(config)
 
     with pytest.raises(HmeqaRunManifestError, match="already exists"):
@@ -555,3 +561,145 @@ def test_hmeqa_config_freezes_runtime_budget_quantization_and_input_paths():
     assert "EMET_EQA_AGENTIC_MAX_NAV_STEPS=4" in joined
     assert "HABITAT_EQA_DATA_DIR=/datasets/hmeqa" in joined
     assert "HM3D_SCENE_DIR=/datasets/hm3d/train" in joined
+
+
+def test_hmeqa_child_env_overrides_ambient_resume_and_drops_policy_leaks():
+    config = _treatment_config()
+    child = build_hmeqa_child_env(
+        config,
+        base_env={
+            "PATH": "/usr/bin",
+            "HOME": "/tmp/home",
+            "RESUME": "1",
+            "SKIP_KILL_STALE": "0",
+            "NATIVE_CRASH_POLICY": "abort",
+            "EMET_EQA_FORCE_ANSWER": "1",
+            "EMET_EVAL_EXPORT_COMPACT_MEMORY": "0",
+            "HF_TOKEN": "credential",
+        },
+        resume=False,
+        coverage_qids="2",
+        cooldown=20,
+        crash_policy="skip",
+        streak_abort=2,
+        manifest_prepared=True,
+        inherit_managed_context=False,
+    )
+
+    assert child["RESUME"] == "0"
+    assert child["NATIVE_CRASH_POLICY"] == "skip"
+    assert child["EMET_EVAL_EXPORT_COMPACT_MEMORY"] == "1"
+    assert child["HF_TOKEN"] == "credential"
+    assert "SKIP_KILL_STALE" not in child
+    assert "EMET_EQA_FORCE_ANSWER" not in child
+
+
+def test_direct_h2h_reexec_sanitizes_inherited_outer_job_environment():
+    initial = build_hmeqa_child_env(
+        _treatment_config(),
+        base_env={"PATH": "/usr/bin", "HOME": "/tmp/home"},
+        resume=False,
+        coverage_qids="2",
+        cooldown=20,
+        crash_policy="skip",
+        streak_abort=2,
+        manifest_prepared=True,
+        inherit_managed_context=False,
+        environment_sanitized=False,
+    )
+    initial.update(
+        {
+            "SKIP_KILL_STALE": "0",
+            "EMET_EQA_FORCE_ANSWER": "0",
+            "EMET_EVAL_EXPORT_COMPACT_MEMORY": "0",
+        }
+    )
+
+    child = sanitized_hmeqa_child_env(initial)
+
+    assert child["EMET_HMEQA_ENV_SANITIZED"] == "1"
+    assert child["RESUME"] == "0"
+    assert child["EMET_EVAL_EXPORT_COMPACT_MEMORY"] == "1"
+    assert "SKIP_KILL_STALE" not in child
+    assert "EMET_EQA_FORCE_ANSWER" not in child
+
+
+def test_managed_h2h_child_passes_only_validated_fd9_to_process_tree(monkeypatch):
+    captured = {}
+
+    class _Proc:
+        def wait(self):
+            return 0
+
+    process = _Proc()
+    monkeypatch.setattr(
+        launch,
+        "load_hmeqa_run_manifest",
+        lambda *_args, **_kwargs: {"config": _treatment_config(), "sources": {}},
+    )
+    monkeypatch.setattr(
+        launch,
+        "build_hmeqa_child_env",
+        lambda *_args, **_kwargs: {
+            "PATH": "/usr/bin:/bin",
+            "EMET_HMEQA_ENV_SANITIZED": "1",
+            "RESUME": "0",
+        },
+    )
+    monkeypatch.setattr("emet.utils.job_registry.validated_gpu_lock_fd", lambda: 9)
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        captured.update(kwargs)
+        return process
+
+    terminated = []
+    monkeypatch.setattr("emet.utils.process_tree.popen_session", fake_popen)
+    monkeypatch.setattr(
+        "emet.utils.process_tree.terminate_process_tree",
+        lambda child, **_kwargs: terminated.append(child),
+    )
+
+    assert (
+        launch.run_hmeqa_child(
+            Path("/tmp/out"),
+            resume=False,
+            coverage_qids="2",
+            cooldown=20,
+            crash_policy="skip",
+            streak_abort=2,
+        )
+        == 0
+    )
+    assert captured["pass_fds"] == (9,)
+    assert captured["env"]["RESUME"] == "0"
+    assert terminated == [process]
+
+
+def test_schema_v2_manifest_is_readable_but_not_resumable(tmp_path):
+    config = _treatment_config()
+    config_v2 = deepcopy(config)
+    config_v2.pop("artifacts")
+    manifest = {
+        "schema": "emet.hmeqa.run_manifest",
+        "schema_version": 2,
+        "config": config_v2,
+        "config_digest": "sha256:legacy",
+    }
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    assert load_hmeqa_run_manifest(tmp_path)["schema_version"] == 2
+    with pytest.raises(HmeqaRunManifestError, match="readable for analysis"):
+        load_hmeqa_run_manifest(tmp_path, require_resumable=True)
+
+
+def test_run_manifest_rejects_duplicate_json_keys(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        '{"schema":"emet.hmeqa.run_manifest","schema_version":3,"schema_version":3}',
+        encoding="utf-8",
+    )
+    with pytest.raises(HmeqaRunManifestError, match="duplicate JSON key"):
+        load_hmeqa_run_manifest(tmp_path)

@@ -74,7 +74,7 @@ Useful flags:
 | Flag | Default | Notes |
 |------|---------|-------|
 | `--question-id` | `0` | Index into `questions.csv` |
-| `--method` | `static_graph` | `static_graph` (alias `graph_eqa`) or `dynagraph` |
+| `--method` | `dynagraph` (`run-episode`); `static_graph` (`run-batch`) | `static_graph` (alias `graph_eqa`) or `dynagraph` |
 | `--mock-llm` | off | Smoke / CI without real LLM |
 | `--mock-llm-explore` | off | With `--mock-llm`: mock `confidence: false` so each planning step navigates |
 | `--max-planning-steps` | `20` | Exploration budget |
@@ -108,7 +108,7 @@ Each `run-batch --output …/my_run.jsonl` writes:
 | `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
 | `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
 
-Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Graph-memory episodes also write `attempt_ledger.json` and `room_events.json`; shadow/agent graph-evidence modes additionally write `world_evidence.json` and, when enabled, `world_evidence_views/`. Set `EMET_EVAL_EXPORT_COMPACT_MEMORY=1` to write a graph-only `compact_memory/` checkpoint with semantic graph/runtime/evidence metadata but no voxel map, dense frames, navigation pixels, or evidence-view pixels. It can be reloaded for semantic inspection; it cannot reproduce post-hoc visual verification. H2H runs copy these evidence and compact-memory artifacts into each `OUT/bundles/<arm>_q<id>/` snapshot and fail if a requested compact checkpoint is missing.
+Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Graph-memory episodes also write `attempt_ledger.json` and `room_events.json`; shadow/agent graph-evidence modes additionally write `world_evidence.json` and, when enabled, `world_evidence_views/`. Set `EMET_EVAL_EXPORT_COMPACT_MEMORY=1` to write a graph-only `compact_memory/` checkpoint with semantic graph/runtime/evidence metadata but no voxel map, dense frames, navigation pixels, or evidence-view pixels. It can be reloaded for semantic inspection; it cannot reproduce post-hoc visual verification. H2H manifest schema v3 freezes the required artifact profile. A unit becomes resumable only after its exact expected source bundle passes schema/content and symlink-containment checks, is copied and hashed in staging, and an atomic `OUT/bundles/<arm>_q<id>/COMPLETE.json` marker is published.
 
 With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `topdown_gt_navmesh.png`, `topdown_map_overlay.png`, `maps/overlay_step_*.png`, `topdown_exploration.mp4`, `obstacles_2d.npy`, `trajectory.jsonl`, `nav_attempts.jsonl` (includes navmesh `path_xy` when available), motion-paced `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
 

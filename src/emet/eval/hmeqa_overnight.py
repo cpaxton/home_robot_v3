@@ -10,9 +10,8 @@ Pause a live ladder with ``emet jobs cancel JOB_ID`` (then confirm
 
     uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_…
 
-Re-using ``--base`` skips phases that already have ``DONE``, and passes
-``RESUME=1`` into H2H so scored per-qid jsonl are kept (empty/incomplete
-units are retried).
+Re-using ``--base`` skips phases with a validated JSON ``DONE`` marker, and
+passes ``RESUME=1`` into H2H so durable per-unit completion markers are kept.
 
 Inner phases call ``scripts/run_hmeqa_agentic_h2h.sh`` directly (no nested
 ``emet jobs``) so a single outer job owns the GPU mutex.
@@ -113,15 +112,16 @@ def _summarize(out: Path) -> None:
 
 
 def _phase_done(out: Path) -> bool:
-    return (out / "DONE").is_file()
+    from emet.eval.hmeqa_completion import validate_done
+
+    return validate_done(out)
 
 
-def _has_scored_units(out: Path) -> bool:
-    """True if any non-empty per-qid jsonl exists (partial H2H progress)."""
-    try:
-        return any(p.is_file() and p.stat().st_size > 0 for p in out.glob("*_q*.jsonl"))
-    except OSError:
-        return False
+def _has_resume_state(out: Path) -> bool:
+    """True when a phase has a manifest, marker, pending row, or legacy row."""
+    from emet.eval.hmeqa_completion import has_resume_state
+
+    return has_resume_state(out)
 
 
 def _load_gate(base: Path) -> dict[str, Any]:
@@ -146,38 +146,50 @@ def _run_h2h(
     cooldown: int,
     crash_policy: str,
     streak_abort: int,
-    skip_kill_stale: bool,
     egl_fail_abort: int,
     resume: bool = False,
 ) -> int:
+    from emet.eval.hmeqa_launch import build_hmeqa_child_env, build_hmeqa_run_config
+    from emet.utils.job_registry import validated_gpu_lock_fd
+    from emet.utils.process_tree import popen_session, terminate_process_tree
+
     script = _repo_root() / "scripts" / "run_hmeqa_agentic_h2h.sh"
     out.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
-    env.update(
-        {
-            "EMET_ALLOW_SDPA_ATTN": "1",
-            "EMET_EQA_TRACE": "1",
-            "EMET_EQA_AGENTIC_VERIFIER": agentic_verifier,
-            "EMET_EQA_AGENTIC_REQUIRE_VERIFIED": str(int(require_verified)),
-            "EMET_EQA_AGENTIC_ROUTER": str(int(agentic_router)),
-            "EPISODE_COOLDOWN_SEC": str(int(cooldown)),
-            "NATIVE_CRASH_POLICY": crash_policy,
-            "NATIVE_CRASH_STREAK_ABORT": str(int(streak_abort)),
-            "EGL_FAIL_ABORT": str(int(egl_fail_abort)),
-            "ARMS": arms,
-            "HOLDOUT_IDS": ids,
-            "RESUME": "1" if resume else "0",
-            "SKIP_KILL_STALE": "1" if skip_kill_stale else "0",
-            "SKIP_GPU_WAIT": "0",
-        }
+    config = build_hmeqa_run_config(
+        arms=arms,
+        ids=ids,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        data_dir=os.environ.get("HABITAT_EQA_DATA_DIR") or None,
+        hm3d_root=os.environ.get("HM3D_SCENE_DIR") or None,
     )
-    return int(
-        subprocess.call(
-            ["bash", str(script), str(out)],
-            cwd=str(_repo_root()),
-            env=env,
-        )
+    env = build_hmeqa_child_env(
+        config,
+        base_env=os.environ,
+        resume=resume,
+        coverage_qids="15,28,47",
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        egl_fail_abort=egl_fail_abort,
+        manifest_prepared=False,
     )
+    lock_fd = validated_gpu_lock_fd()
+    pass_fds = (lock_fd,) if lock_fd is not None else ()
+    proc = popen_session(
+        ["bash", str(script), str(out)],
+        cwd=str(_repo_root()),
+        env=env,
+        pass_fds=pass_fds,
+    )
+    try:
+        return int(proc.wait())
+    except BaseException:
+        terminate_process_tree(proc, grace_s=10.0)
+        raise
+    finally:
+        terminate_process_tree(proc, grace_s=10.0)
 
 
 def _append_gate_log(base: Path, line: str) -> None:
@@ -209,8 +221,8 @@ def run_overnight(
     """Run holdout-8 → optional retune → bal-32. Returns process exit code.
 
     Re-invoking with the same ``base`` is the supported resume path after
-    ``emet jobs cancel``: phases with ``DONE`` are skipped; partial H2H dirs
-    get ``RESUME=1`` so scored per-qid jsonl are kept.
+    ``emet jobs cancel``: phases with valid ``DONE`` are skipped; partial H2H
+    dirs get ``RESUME=1`` so marker-backed units are kept.
     """
     base = base.expanduser().resolve()
     hold_out = base / "holdout8"
@@ -278,8 +290,7 @@ def run_overnight(
             hold_out,
             ids=holdout_ids,
             arms="classic,agentic",
-            skip_kill_stale=True,
-            resume=_has_scored_units(hold_out),
+            resume=_has_resume_state(hold_out),
             **h2h_kwargs,
         )
         _summarize(hold_out)
@@ -313,8 +324,7 @@ def run_overnight(
                 hold_retune,
                 ids=holdout_ids,
                 arms="agentic",
-                skip_kill_stale=True,
-                resume=_has_scored_units(hold_retune),
+                resume=_has_resume_state(hold_retune),
                 **h2h_kwargs,
             )
             _summarize(hold_retune)
@@ -354,8 +364,8 @@ def run_overnight(
         _write_gate(base, gate)
         rc2 = 0
     else:
-        # Keep scored classic/agentic units after pause/cancel (RESUME=1).
-        resume_bal = hold_done or _has_scored_units(bal_out)
+        # Keep marker-backed classic/agentic units after pause/cancel (RESUME=1).
+        resume_bal = hold_done or _has_resume_state(bal_out)
         _status_note(
             base,
             "RUNNING",
@@ -367,7 +377,6 @@ def run_overnight(
             bal_out,
             ids=bal32_ids,
             arms="classic,agentic",
-            skip_kill_stale=True,
             resume=resume_bal,
             **h2h_kwargs,
         )
