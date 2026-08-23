@@ -2479,6 +2479,8 @@ def test_stamp_room_after_investigate_updates_graph_and_estimate():
         corroborating_labels=None,
         source="router_vlm",
         source_view_id=None,
+        agent_round=None,
+        pose_round=None,
     ):
         from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
 

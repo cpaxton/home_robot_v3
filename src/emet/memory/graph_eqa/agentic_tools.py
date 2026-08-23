@@ -345,23 +345,31 @@ def _graph_stats_line(gm: Any) -> str:
 
 
 def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
-    """Return exact event ids whose rendered rows survived state truncation."""
+    """Compatibility helper for exact event rows that survived rendering."""
     return tuple(event.event_id for event in snapshot.evidence if f"event_id={event.event_id} " in state_text)
 
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
-        from emet.memory.graph_eqa.agentic_state import compile_agent_state, render_agent_state
+        from emet.memory.graph_eqa.agentic_state import (
+            compile_agent_state,
+            render_agent_state,
+            rendered_state_allowlists,
+        )
 
         snapshot = compile_agent_state(executor)
         text = render_agent_state(
             snapshot,
             max_chars=int(getattr(executor, "agent_state_max_chars", 6000)),
         )
+        allowlists = rendered_state_allowlists(snapshot, text)
         snapshot = replace(
             snapshot,
-            visible_event_ids=_visible_event_ids(snapshot, text),
+            visible_place_ids=allowlists["place_ids"],
+            visible_place_obs_ids=allowlists["place_obs_ids"],
+            visible_frontier_ids=allowlists["frontier_ids"],
+            visible_event_ids=allowlists["event_ids"],
         )
         executor._last_agent_state_snapshot = snapshot
         return text
