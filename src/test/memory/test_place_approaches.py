@@ -51,9 +51,7 @@ def test_count_frontier_in_dilated_footprint():
     def xy_to_ij(x: float, y: float):
         return (int(round(x * 10)), int(round(y * 10)))
 
-    n = count_frontier_in_footprint(
-        fp, frontier, xy_to_ij=xy_to_ij, dilate_m=0.3, resolution_m=0.1
-    )
+    n = count_frontier_in_footprint(fp, frontier, xy_to_ij=xy_to_ij, dilate_m=0.3, resolution_m=0.1)
     assert n >= 1
     closed = count_frontier_in_footprint(
         PlaceFootprint(cx=9.0, cy=9.0, half_x=0.1, half_y=0.1),

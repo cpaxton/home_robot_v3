@@ -56,6 +56,7 @@ def _load_default_scene_with_robot(*args, **kwargs):
 
     return _impl(*args, **kwargs)
 
+
 _PREVIEW_RW, _PREVIEW_RH = 640, 480
 
 

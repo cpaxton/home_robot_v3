@@ -212,16 +212,16 @@ def _remote_camera_health_cmd(workspace: str = DEFAULT_INNATE_WORKSPACE) -> str:
         "bash -lc '"
         "source /opt/ros/humble/setup.bash 2>/dev/null || true; "
         f"source {ws}/install/setup.bash 2>/dev/null || true; "
-        "BYID=$(ls /dev/v4l/by-id 2>/dev/null | tr \"\\n\" \",\"); "
-        "ARDU=0; echo \"$BYID\" | grep -qi Arducam && ARDU=1 || true; "
+        'BYID=$(ls /dev/v4l/by-id 2>/dev/null | tr "\\n" ","); '
+        'ARDU=0; echo "$BYID" | grep -qi Arducam && ARDU=1 || true; '
         "ARM=$(timeout 5 ros2 topic info /mars/arm/image_raw 2>/dev/null "
-        "| awk \"/Publisher count:/{print \\$3; exit}\"); "
+        '| awk "/Publisher count:/{print \\$3; exit}"); '
         "HEAD=$(timeout 5 ros2 topic info /mars/main_camera/left/image_raw 2>/dev/null "
-        "| awk \"/Publisher count:/{print \\$3; exit}\"); "
-        "echo \"arducam=$ARDU\"; "
-        "echo \"arm_pubs=${ARM:--1}\"; "
-        "echo \"head_pubs=${HEAD:--1}\"; "
-        "echo \"by_id=$BYID\""
+        '| awk "/Publisher count:/{print \\$3; exit}"); '
+        'echo "arducam=$ARDU"; '
+        'echo "arm_pubs=${ARM:--1}"; '
+        'echo "head_pubs=${HEAD:--1}"; '
+        'echo "by_id=$BYID"'
         "'"
     )
 
@@ -343,12 +343,7 @@ def print_bridge_status(
 
     log_line = status.headline_log()
     show_log = bool(
-        log_line
-        and (
-            not status.ready_for_stream
-            or "waiting" in log_line.lower()
-            or "error" in log_line.lower()
-        )
+        log_line and (not status.ready_for_stream or "waiting" in log_line.lower() or "error" in log_line.lower())
     )
     if show_log and log_line:
         msg = _short_ros_message(log_line)
@@ -388,8 +383,7 @@ def print_bridge_status(
             print(style(f"  → {cam.note}", fg="yellow"))
             print(
                 style(
-                    "  → reseat/plug Arducam wrist USB, then restart maurice_cam "
-                    "(see docs/deploy.md § Wrist camera)",
+                    "  → reseat/plug Arducam wrist USB, then restart maurice_cam (see docs/deploy.md § Wrist camera)",
                     dim=True,
                 )
             )

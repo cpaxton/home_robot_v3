@@ -16,7 +16,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -31,7 +30,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2):
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -54,9 +53,7 @@ def test_scene_graph_robocasa_dedup_and_stability():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -111,9 +108,7 @@ def test_scene_graph_robocasa_dedup_and_stability():
         print(f"After spin 1: {count_after_spin1} objects")
         print(sg.to_string())
 
-        assert count_after_spin1 >= 1, (
-            "Expected at least 1 object after first spin in Robocasa kitchen"
-        )
+        assert count_after_spin1 >= 1, "Expected at least 1 object after first spin in Robocasa kitchen"
 
         # Second spin (same scene, robot returns to similar viewpoints)
         executor([("rotate_in_place", "")])
@@ -122,16 +117,14 @@ def test_scene_graph_robocasa_dedup_and_stability():
 
         # Dedup check: node count should not double
         assert count_after_spin2 < count_after_spin1 * 2.5, (
-            f"Node count exploded: {count_after_spin1} -> {count_after_spin2}. "
-            "Deduplication may not be working."
+            f"Node count exploded: {count_after_spin1} -> {count_after_spin2}. Deduplication may not be working."
         )
 
         # Stability check: some objects should have been seen multiple times
         stable_nodes = [n for n in sg.nodes.values() if n.observation_count >= 2]
         print(f"Stable objects (obs >= 2): {len(stable_nodes)}")
         assert len(stable_nodes) >= 1, (
-            "Expected at least 1 stable object (seen from multiple viewpoints) "
-            "after two spins"
+            "Expected at least 1 stable object (seen from multiple viewpoints) after two spins"
         )
 
         # Post-hoc dedup

@@ -15,9 +15,9 @@ echo "=== OUT=$OUT ===" | tee "$OUT/summary.txt"
 echo "commit=$(git rev-parse --short HEAD)" | tee -a "$OUT/summary.txt"
 
 assert_dynagraph_checkpoint() {
-  local log="$1"
-  local tag="$2"
-  python3 - "$log" "$tag" <<'PY' | tee -a "$OUT/summary.txt"
+    local log="$1"
+    local tag="$2"
+    python3 - "$log" "$tag" <<'PY' | tee -a "$OUT/summary.txt"
 import re, sys, time
 from pathlib import Path
 
@@ -61,18 +61,18 @@ ROBO="$OUT/robocasa"
 mkdir -p "$ROBO"
 echo "=== Robocasa dynagraph rotate_in_place ===" | tee -a "$OUT/summary.txt"
 uv run emet run agent \
-  --robot stretch \
-  --robot-ip 127.0.0.1 \
-  --start-sim --scene robocasa --headless \
-  --no-llm --no-discord \
-  --memory-backend dynagraph \
-  --sim-seed 0 \
-  --port-offset 70 \
-  -c rotate_in_place -c Q \
-  >"$ROBO/agent.log" 2>&1 || {
-  echo "robocasa agent FAILED" | tee -a "$OUT/summary.txt"
-  tail -100 "$ROBO/agent.log" | tee -a "$OUT/summary.txt"
-  exit 1
+    --robot stretch \
+    --robot-ip 127.0.0.1 \
+    --start-sim --scene robocasa --headless \
+    --no-llm --no-discord \
+    --memory-backend dynagraph \
+    --sim-seed 0 \
+    --port-offset 70 \
+    -c rotate_in_place -c Q \
+    >"$ROBO/agent.log" 2>&1 || {
+    echo "robocasa agent FAILED" | tee -a "$OUT/summary.txt"
+    tail -100 "$ROBO/agent.log" | tee -a "$OUT/summary.txt"
+    exit 1
 }
 tail -30 "$ROBO/agent.log" | tee -a "$OUT/summary.txt"
 assert_dynagraph_checkpoint "$ROBO/agent.log" "robocasa"
@@ -81,16 +81,16 @@ MOLMO="$OUT/molmo"
 mkdir -p "$MOLMO"
 echo "=== Molmo ithor dynagraph rotate_in_place ===" | tee -a "$OUT/summary.txt"
 uv run emet run agent \
-  --robot-ip 127.0.0.1 \
-  --start-sim --scene ithor --split train --index 0 --headless \
-  --no-llm --no-discord \
-  --memory-backend dynagraph \
-  --port-offset 80 \
-  -c rotate_in_place -c Q \
-  >"$MOLMO/agent.log" 2>&1 || {
-  echo "molmo agent FAILED" | tee -a "$OUT/summary.txt"
-  tail -100 "$MOLMO/agent.log" | tee -a "$OUT/summary.txt"
-  exit 1
+    --robot-ip 127.0.0.1 \
+    --start-sim --scene ithor --split train --index 0 --headless \
+    --no-llm --no-discord \
+    --memory-backend dynagraph \
+    --port-offset 80 \
+    -c rotate_in_place -c Q \
+    >"$MOLMO/agent.log" 2>&1 || {
+    echo "molmo agent FAILED" | tee -a "$OUT/summary.txt"
+    tail -100 "$MOLMO/agent.log" | tee -a "$OUT/summary.txt"
+    exit 1
 }
 tail -40 "$MOLMO/agent.log" | tee -a "$OUT/summary.txt"
 assert_dynagraph_checkpoint "$MOLMO/agent.log" "molmo"

@@ -75,7 +75,7 @@ def test_hmeqa_answer_call_prefills_reasoning():
         ):
             captured["assistant_prefill"] = assistant_prefill
             captured["max_new_tokens"] = max_new_tokens
-            return '{"reasoning": "the lamp is lit.", "answer": "A", "confidence": true, "action": "", "confidence_reasoning": "clear"}'
+            return '{"reasoning": "the lamp is lit.", "answer": "The lamp is on.", "confidence": true, "action": "", "confidence_reasoning": "clear"}'
 
     client = GraphEQAVLMClient(_FakeVL(""), system_prompt="sys", max_tokens=64)
     out = client(["Question: color?"], max_new_tokens=128, assistant_prefill='{"reasoning":')
@@ -101,10 +101,14 @@ def test_without_caption_fails_loudly_when_the_shared_prompt_changes():
         without_caption("Some other prompt with no caption instruction.")
 
 
-def test_hmeqa_prompt_still_requires_a_letter():
+def test_hmeqa_prompt_requires_semantic_answer_text():
     lowered = HMEQA_EQA_PROMPT.lower()
     assert "never leave" in lowered and "answer" in lowered
-    assert "exactly one letter" in lowered
+    assert "semantic option text" in lowered
+    assert "without an a/b/c/d label" in lowered
+    assert "exactly one letter" not in lowered
+    assert '"answer": "a"' not in lowered
+    assert '"answer": "d"' not in lowered
 
 
 def test_answer_decode_cap_default_leaves_room_for_an_answer(monkeypatch):
@@ -194,12 +198,13 @@ def test_query_answer_prefills_reasoning_when_hmeqa_variant_on_parameters():
     import numpy as np
 
     from emet.core.parameters import Parameters
+
     captured: dict = {}
 
     def fake_eqa(cmds, **kwargs):
         captured.update(kwargs)
         return (
-            '{"reasoning": "the lamp is lit.", "answer": "A", "confidence": true, '
+            '{"reasoning": "the lamp is lit.", "answer": "Yes", "confidence": true, '
             '"action": "", "confidence_reasoning": "clear."}'
         )
 
@@ -312,6 +317,20 @@ def test_parse_answer_json_and_labeled_fallback():
     assert a4.strip().upper() == "C"
     assert c4 is False
     assert act4.strip() == "1"
+
+
+def test_parse_answer_preserves_semantic_choice_text():
+    mem = GraphEQAMemory(eqa_client=lambda _x: "", image_description_client=lambda _x: "")
+    raw = (
+        '{"reasoning": "The trash can is beside the refrigerator.", '
+        '"answer": "Next to the refrigerator", "confidence": true, '
+        '"action": "", "confidence_reasoning": "clear view"}'
+    )
+
+    _, answer, confident, _, _ = mem.parse_answer(raw)
+
+    assert answer == "Next to the refrigerator"
+    assert confident is True
 
 
 def test_parse_answer_terse_letter_under_answer_cue():

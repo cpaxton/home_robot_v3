@@ -8,7 +8,6 @@
 
 from emet.config.stream_config import (
     StreamZmqObsConfig,
-    apply_stream_logging_config,
     load_stream_config_from_parameters,
     resolve_stream_verbose,
     should_log_every_step,

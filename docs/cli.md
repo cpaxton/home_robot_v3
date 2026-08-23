@@ -762,9 +762,9 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--delay-minutes M] [--at "YYYY-MM-DD HH:MM"] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. **Scheduling/queueing:** `--delay-minutes M` (or `--at` wall time) sleeps until the start time inside the supervisor; `--gpu-exclusive` additionally waits for any unmanaged GPU process (e.g. another agent's MuJoCo/VLM server) to exit; `--wait-pid P` waits for specific PIDs; `--need-mib N` then blocks until free VRAM ≥ N. Combine to queue a job for later without keeping a terminal/agent alive. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] [--delay-minutes M] [--at "YYYY-MM-DD HH:MM"] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. **Scheduling:** `--delay-minutes M` or `--at` sleeps until the start time inside the supervisor (after register). `--wait-pid P` waits for explicit prerequisites (bounded by `--wait-timeout-sec`). `--need-mib N` then blocks until free VRAM ≥ N. |
 
-`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
+`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. The host-wide `flock` is the serialization authority for exclusive jobs; the launcher does not infer and wait on unrelated active GPU PIDs. Only explicit `--wait-pid` prerequisites are waited, and all PID, lock, and optional pre-command GPU waits are bounded (defaults: six hours for PID/lock, 120 GPU polling rounds). The canonical shared lock is `~/runs/emet/gpu.lock` (`EMET_GPU_LOCK`); `EMET_GPU_LOCK_FILE` is a compatibility alias. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
 ```bash
 uv run emet jobs
@@ -798,14 +798,14 @@ uv run emet jobs cancel JOB_ID
 uv run emet jobs                 # unmanaged emet-habitat leftovers?
 uv run emet eval status          # GPU should clear
 
-# Resume overnight ladder (same --base; skips DONE holdout/bal32; RESUME=1 on partial):
+# Resume overnight ladder (same --base; skips validated COMPLETE-marker phases):
 uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_… --job-name hmeqa-overnight
 
 # Resume a single H2H OUT only (holdout8 or bal32 dir):
 uv run emet hmeqa resume ~/runs/emet/hmeqa_overnight_…/bal32 --preset paper-router
 ```
 
-Empty per-qid jsonl (mid-episode cancel) are retried on resume; scored non-empty jsonl are kept.
+Empty, partial, and unvalidated per-qid jsonl are retried on resume. Only units with a hash-validated `bundles/<arm>_q<id>/COMPLETE.json` marker are kept.
 
 Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel); [`emet hmeqa`](#emet-hmeqa-hm-eqa-h2h) for classic vs agentic launches; [`emet status`](#emet-status-recovery-log) after an agent death.
 
@@ -818,10 +818,10 @@ Canonical GPU preflight for paper evals and overnight smokes (Python implementat
 | `emet eval status` | Free/total VRAM + compute apps (read-only) |
 | `emet eval diagnose` | Habitat/HM-EQA readiness notes: empty apps ≠ EGL OK; flags empty `CUDA_VISIBLE_DEVICES`, missing `.venv-habitat`, recent `emet` segfault hints |
 | `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
-| `emet eval wait [--need-mib N]` | Block until free VRAM is stably above N |
+| `emet eval wait [--need-mib N] [--max-rounds N]` | Wait until free VRAM is stably above N, bounded by 120 rounds by default |
 | `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
 | `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask |
-| `emet eval recover [--need-mib N]` | `status` + `diagnose` + `wait` one-shot (post-crash / post-reboot) |
+| `emet eval recover [--need-mib N] [--max-rounds N]` | `status` + `diagnose` + bounded `wait` one-shot (post-crash / post-reboot) |
 
 Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [known_issues.md](known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals), and [environment_variables.md](environment_variables.md).
 
@@ -880,9 +880,9 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 
 | Command | Purpose |
 |---------|---------|
-| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
-| `emet hmeqa resume [OUT] [--preset paper-router]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
-| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips `DONE` phases; `RESUME=1` on partial H2H) |
+| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--variant-config FILE] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--eqa-vl-quantization int4\|int8\|float16\|bfloat16\|float32\|none] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--use-hm3d-semantics\|--no-hm3d-semantics] [--enrich-labels\|--no-enrich-labels] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `--variant-config` loads all eight variant axes from strict YAML; `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
+| `emet hmeqa resume [OUT] [variant flags…]` | Resolve latest OUT if omitted; reuse its frozen variant/model/budgets/IDs, validate commit + dirty state + digest, then set `RESUME=1` |
+| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips only phases with a validated JSON `DONE`; sets `RESUME=1` when validated or pending state exists) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
 | `emet hmeqa significance [OUT] [--from-summary …] [--json …]` | Paired McNemar / Wilcoxon / bootstrap on classic vs agentic |
@@ -891,15 +891,36 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 | `emet hmeqa inspect [OUT] --misses` | List incorrect scored episodes |
 | `emet hmeqa ladder RUN_DIR… [-o …] [--require-balanced32-gate]` | Probe/holdout ladder metrics + optional balanced-32 gate |
 
-`OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
+Each episode first writes an isolated pending row. A zero-exit row is schema-checked, matched to arm/qid/method/error policy, paired with the exact expected debug bundle, copied into a staging directory, validated against the frozen artifact profile, hashed, and atomically renamed before `COMPLETE.json` is published. Aggregates, progress, and resume state are derived only from validated completion markers. Wrong answers are valid completed episodes; partial/multiple JSON values, nonzero exits, escaped/symlinked bundles, missing required artifacts, and hash mismatches do not commit. Object-crop mosaics are best-effort because an episode may have no usable instance crops; when the diagnostics inventory declares one, it is still copied and validated strictly.
+
+`OUT/DONE` is atomic JSON, not a sentinel string. It is written only when every expected arm×id marker validates and records the run config digest plus aggregate SHA-256. Partial batches exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume.
 
 Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
 
-**`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
+**Frozen A/B axes (on both `h2h` and `resume`):**
 
-**Remote answer VL (LAN Orin):** `emet hmeqa h2h` builds an explicit `env KEY=VAL …` string for `emet jobs run`. Parent-shell `export EMET_VL_ENDPOINT=…` is **not** inherited by the Habitat child unless listed there. Pass **`--host ORIN_HOST`** (injects `EMET_LLM_HOST`, `EMET_OPENAI_BASE_URL`, `EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1` for unified-7b) or **`--vl-endpoint openai@http://ORIN_HOST:8000/v1`**. Dual-2b: `--host ORIN_HOST --vl-port 8001`. Launch stderr prints the injected endpoint; episode jsonl records `vl_endpoint`. Habitat-Sim still needs local GPU — the Orin only offloads the answer VLM. See `docs/llm_serve.md`.
+- `--decision-policy legacy|grounded_v2`
+- `--use-hm3d-semantics|--no-hm3d-semantics`
+- `--enrich-labels|--no-enrich-labels`
+- `--graph-evidence-mode off|shadow|agent`
+- `--room-history-mode off|shadow|agent`
+- `--room-policy canonical|llm`
+- `--room-target-hints|--no-room-target-hints`
+- `--investigate-stamp|--no-investigate-stamp`
+- `--attempt-ledger-mode off|shadow|agent`
+- `--variant-id ID`
 
-**`emet hmeqa overnight`** defaults to paper-router policy (`agentic_verifier=none`, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
+On first launch, `--variant-config FILE` provides the complete variant block (`id`, decision, graph/history/ledger modes, room policy/hints, and investigate stamp). The loader rejects missing or unknown axes. Explicit variant flags win over file values; the manifest source map records the resolved file path plus SHA-256 for every value supplied by the file. Checked-in action-history controls are `configs/benchmarks/hmeqa_action_history_shadow.yaml` and `configs/benchmarks/hmeqa_action_history_agent.yaml`. Resume uses the frozen manifest and does not re-read the file.
+
+For `grounded_v2`, ledger mode is also the dedicated action-history visibility switch: `off` neither persists rows nor renders history, `shadow` persists rows/artifacts but hides them, and `agent` additionally renders recent outcomes, loop flags, per-place attempt summaries/failure risk, global attempts, and mirrored attempt provenance. Room timeline and live approach affordances remain separate axes; see [attempt_ledger.md](attempt_ledger.md).
+
+Legacy-compatible defaults are `legacy`, graph/history/ledger `off`, `canonical`, target hints on, investigate stamps off, HM3D semantic labels off, per-question enrich labels off, and variant ID `legacy`. The two perception/oracle switches are independent frozen axes: enabling the HM3D semantic sensor does not implicitly seed enrich labels, and an explicit semantics-on request fails if its scene assets or annotated dataset config are unavailable. Model and budget controls (`--eqa-hf-model-id`, `--eqa-vl-family`, `--eqa-vl-quantization`, `--eqa-answer-max-new-tokens`, `--episode-timeout`, `--max-planning-steps`, `--max-movement-step`) are frozen with the IDs and are applied to the Habitat runtime. Manifest schema v3 also freezes the artifact profile (map/video/history/compact/evidence exports and snapshot limits) into the config digest. Each new OUT gets `run_manifest.json` containing the full commit, dirty-tree state/digest, effective values and sources, deterministic config digest, canonical data/HM3D paths, and SHA-256 hashes for `questions.csv` and `scene_init_poses.csv`. HM3D meshes are too large to hash at launch, so the manifest freezes their root path but does not claim mesh-content identity. Resume fills omitted frozen flags from that manifest and refuses commit, dirty-tree, config, artifact-profile, or small-dataset hash mismatches; ambient policy, artifact, and lifecycle variables are not inherited by H2H children. Schema-v2 manifests remain readable for analysis but fail closed on resume. Operational controls such as cooldown, crash policy/streak, job description/name, VRAM threshold, coverage-figure IDs, and foreground mode may change safely on resume. Historical partial OUTs without a manifest fail closed.
+
+**`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. It does **not** alter any frozen A/B axis above. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
+
+**Remote answer VL (LAN Orin):** direct and overnight launches construct the same allowlisted child environment. Parent-shell `export EMET_VL_ENDPOINT=…` is **not** inherited unless it is a frozen/explicit input. The child always receives `RESUME=0` or `RESUME=1`; validated job id, canonical lock path/inode-backed FD 9, canonical data paths, and credential inputs are preserved, while ambient policy/lifecycle controls are dropped. Pass **`--host ORIN_HOST`** (injects `EMET_LLM_HOST`, `EMET_OPENAI_BASE_URL`, `EMET_VL_ENDPOINT=openai@http://ORIN_HOST:8000/v1` for unified-7b) or **`--vl-endpoint openai@http://ORIN_HOST:8000/v1`**. Dual-2b: `--host ORIN_HOST --vl-port 8001`. Launch stderr prints the injected endpoint; episode jsonl records `vl_endpoint`. Habitat-Sim still needs local GPU — the Orin only offloads the answer VLM. See `docs/llm_serve.md`.
+
+**`emet hmeqa overnight`** defaults to paper-router policy (`agentic_verifier=none`, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly through the process-tree lifecycle helper (no nested jobs), preserving FD 9 only after canonical lock-path/inode validation. Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
 
 **Pause / resume overnight:** `emet jobs cancel JOB_ID`, confirm GPU idle (`emet jobs` / `emet eval status`), then:
 
@@ -907,7 +928,7 @@ Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2
 uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_<stamp> --job-name hmeqa-overnight
 ```
 
-That skips phases with `OUT/DONE` (e.g. finished `holdout8/`) and sets `RESUME=1` on partial `bal32/` so scored classic/agentic jsonl are kept. For a single H2H directory use `emet hmeqa resume OUT --preset paper-router` instead.
+That skips phases only when `OUT/DONE` parses and validates against every expected completion marker. A corrupt/plain-text `DONE` is incomplete. Partial `bal32/` runs use marker/pending state to set `RESUME=1`; unvalidated rows are regenerated from committed bundles. For a single H2H directory use `emet hmeqa resume OUT --preset paper-router` instead.
 
 **`emet hmeqa ladder`** reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
 

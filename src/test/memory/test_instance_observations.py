@@ -105,6 +105,4 @@ def test_frame_instances_to_labels_xyz_missing_fields(missing):
     else:
         d["depth"] = None
     frame = SimpleNamespace(**d)
-    assert frame_instances_to_labels_xyz(
-        frame, min_depth=0.01, max_depth=10.0, detection_model=_MockYoloEVocab()
-    ) == []
+    assert frame_instances_to_labels_xyz(frame, min_depth=0.01, max_depth=10.0, detection_model=_MockYoloEVocab()) == []

@@ -74,8 +74,5 @@ def deploy_llm(
     if name:
         cmd.extend(["--name", name])
 
-    print(
-        f"emet deploy llm: host={host_s} profile={prof} "
-        f"(Orin ~{CALIBAN_ORIN_VRAM_GIB} GiB unified memory)"
-    )
+    print(f"emet deploy llm: host={host_s} profile={prof} (Orin ~{CALIBAN_ORIN_VRAM_GIB} GiB unified memory)")
     return int(subprocess.call(cmd))

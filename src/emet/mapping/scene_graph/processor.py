@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import torch
@@ -37,9 +37,9 @@ class SceneGraphProcessor:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
         config_name: str = "default_scene_graph",
-        device: Optional[str] = None,
+        device: str | None = None,
         text_encoder: Any = None,
         visual_encoder: Any = None,
         segmenter: Any = None,
@@ -160,9 +160,9 @@ class SceneGraphProcessor:
         depth: np.ndarray,
         intrinsics: np.ndarray,
         camera_pose: np.ndarray,
-        world_xyz: Optional[Tensor] = None,
-        vocabulary: Optional[List[str]] = None,
-    ) -> List[int]:
+        world_xyz: Tensor | None = None,
+        vocabulary: list[str] | None = None,
+    ) -> list[int]:
         """Process a single RGBD frame and update the scene graph.
 
         Args:
@@ -185,9 +185,7 @@ class SceneGraphProcessor:
 
             camera = Camera.from_K(intrinsics, width=W, height=H)
             cam_xyz = camera.depth_to_xyz(depth)
-            world_xyz = torch.from_numpy(
-                camera_xyz_to_global_xyz(cam_xyz, camera_pose).astype(np.float32)
-            )
+            world_xyz = torch.from_numpy(camera_xyz_to_global_xyz(cam_xyz, camera_pose).astype(np.float32))
         elif isinstance(world_xyz, np.ndarray):
             world_xyz = torch.from_numpy(world_xyz.astype(np.float32))
 
@@ -252,9 +250,7 @@ class SceneGraphProcessor:
 
         return node_ids
 
-    def _run_segmentation(
-        self, rgb: np.ndarray, depth: np.ndarray, vocabulary: List[str]
-    ) -> List[Dict]:
+    def _run_segmentation(self, rgb: np.ndarray, depth: np.ndarray, vocabulary: list[str]) -> list[dict]:
         """Run the segmenter and return a list of detection dicts."""
         seg = self.segmenter
 
@@ -278,10 +274,9 @@ class SceneGraphProcessor:
         detections = []
         labels = task_obs.get("labels", [])
         scores = task_obs.get("instance_scores", np.array([]))
-        bboxes = task_obs.get("bboxes", None)
 
         unique_ids = np.unique(inst)
-        for idx, uid in enumerate(unique_ids):
+        for uid in unique_ids:
             if uid < 0:
                 continue
             mask = inst == uid
@@ -293,17 +288,19 @@ class SceneGraphProcessor:
             ys, xs = np.where(mask)
             bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
 
-            detections.append({
-                "mask": mask.astype(bool),
-                "label": label,
-                "score": score,
-                "bbox_xyxy": bbox,
-            })
+            detections.append(
+                {
+                    "mask": mask.astype(bool),
+                    "label": label,
+                    "score": score,
+                    "bbox_xyxy": bbox,
+                }
+            )
 
         return detections
 
     @torch.no_grad()
-    def _encode_siglip(self, crop: np.ndarray) -> Optional[Tensor]:
+    def _encode_siglip(self, crop: np.ndarray) -> Tensor | None:
         """Encode a crop with the text-aligned encoder."""
         try:
             feat = self.text_encoder.encode_image(crop)
@@ -315,7 +312,7 @@ class SceneGraphProcessor:
             return None
 
     @torch.no_grad()
-    def _encode_dinov3(self, crop: np.ndarray) -> Optional[Tensor]:
+    def _encode_dinov3(self, crop: np.ndarray) -> Tensor | None:
         """Encode a crop with the visual similarity encoder."""
         try:
             feat = self.visual_encoder.encode_image(crop)

@@ -157,9 +157,7 @@ def _metrics_from_associations(
     spatial_matched = [a for a in associations if a.matched]
     label_matched = [a for a in spatial_matched if a.label_match]
     bounds_matched = [
-        a
-        for a in spatial_matched
-        if a.bounds_3d_iou is not None and float(a.bounds_3d_iou) >= bounds_iou_min
+        a for a in spatial_matched if a.bounds_3d_iou is not None and float(a.bounds_3d_iou) >= bounds_iou_min
     ]
 
     xy_errs = [float(a.dist_xy_m) for a in spatial_matched if a.dist_xy_m is not None]
@@ -255,8 +253,7 @@ def format_calibration_eval_report(metrics: dict[str, Any]) -> str:
         lines.append(f"- p50_xy_err_m:  {metrics['p50_xy_err_m']:.3f}")
     if metrics.get("n_fused_nodes") is not None:
         lines.append(
-            f"- fused nodes: {int(metrics['n_fused_nodes'])} "
-            f"(dup penalty {metrics.get('duplication_penalty', 0):.0f})"
+            f"- fused nodes: {int(metrics['n_fused_nodes'])} (dup penalty {metrics.get('duplication_penalty', 0):.0f})"
         )
     lines.append("")
     lines.append("#### Per-GT associations")

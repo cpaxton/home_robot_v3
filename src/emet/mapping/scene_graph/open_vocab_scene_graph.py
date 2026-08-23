@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -33,13 +32,13 @@ class ObjectObservation:
     bbox_xyxy: np.ndarray  # (4,) x0, y0, x1, y1
     rgb_crop: np.ndarray  # (H_crop, W_crop, 3) uint8
     points_3d: Tensor  # (N, 3) world-frame xyz
-    points_rgb: Optional[Tensor]  # (N, 3) colors
+    points_rgb: Tensor | None  # (N, 3) colors
     camera_pose: np.ndarray  # (4, 4)
     label: str  # detected label / concept
     score: float
     timestep: int
-    siglip_embedding: Optional[Tensor] = None  # (D_siglip,)
-    dinov3_embedding: Optional[Tensor] = None  # (D_dino,)
+    siglip_embedding: Tensor | None = None  # (D_siglip,)
+    dinov3_embedding: Tensor | None = None  # (D_dino,)
 
 
 @dataclass
@@ -47,20 +46,20 @@ class SceneGraphNode:
     """A persistent object in the scene graph."""
 
     node_id: int
-    labels: List[str] = field(default_factory=list)
-    label_counts: Dict[str, int] = field(default_factory=dict)
+    labels: list[str] = field(default_factory=list)
+    label_counts: dict[str, int] = field(default_factory=dict)
 
     # 3D geometry
-    point_cloud: Optional[Tensor] = None  # (N, 3) world xyz, accumulated
-    point_cloud_rgb: Optional[Tensor] = None  # (N, 3) colors
-    bounds: Optional[Tensor] = None  # (3, 2) axis-aligned bbox [min, max]
-    center: Optional[np.ndarray] = None  # (3,) mean position
+    point_cloud: Tensor | None = None  # (N, 3) world xyz, accumulated
+    point_cloud_rgb: Tensor | None = None  # (N, 3) colors
+    bounds: Tensor | None = None  # (3, 2) axis-aligned bbox [min, max]
+    center: np.ndarray | None = None  # (3,) mean position
 
     # Embeddings (running averages)
-    siglip_embedding: Optional[Tensor] = None  # (D,) L2-normalized
-    dinov3_embedding: Optional[Tensor] = None  # (D,) L2-normalized
-    _siglip_sum: Optional[Tensor] = None
-    _dinov3_sum: Optional[Tensor] = None
+    siglip_embedding: Tensor | None = None  # (D,) L2-normalized
+    dinov3_embedding: Tensor | None = None  # (D,) L2-normalized
+    _siglip_sum: Tensor | None = None
+    _dinov3_sum: Tensor | None = None
 
     # Temporal tracking
     first_seen: int = 0
@@ -68,7 +67,7 @@ class SceneGraphNode:
     observation_count: int = 0
 
     # Best crop for visualization
-    best_crop: Optional[np.ndarray] = None
+    best_crop: np.ndarray | None = None
     best_score: float = 0.0
 
     @property
@@ -98,9 +97,7 @@ class SceneGraphNode:
             else:
                 self.point_cloud = torch.cat([self.point_cloud, obs.points_3d], dim=0)
                 if self.point_cloud_rgb is not None and obs.points_rgb is not None:
-                    self.point_cloud_rgb = torch.cat(
-                        [self.point_cloud_rgb, obs.points_rgb], dim=0
-                    )
+                    self.point_cloud_rgb = torch.cat([self.point_cloud_rgb, obs.points_rgb], dim=0)
 
         # Update bounds and center
         if self.point_cloud is not None and self.point_cloud.shape[0] > 0:
@@ -136,7 +133,7 @@ class SceneGraphNode:
             self.best_score = obs.score
             self.best_crop = obs.rgb_crop
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize node for JSON (without large tensors)."""
         return {
             "node_id": self.node_id,
@@ -161,7 +158,7 @@ class SceneGraphEdge:
     target_id: int
     relation: str  # "near", "on", "on_floor", "above", "below"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "source": self.source_id,
             "target": self.target_id,
@@ -206,8 +203,8 @@ class OpenVocabSceneGraph:
         self.min_points_per_object = min_points_per_object
         self.max_points_per_object = max_points_per_object
 
-        self.nodes: Dict[int, SceneGraphNode] = {}
-        self.edges: List[SceneGraphEdge] = []
+        self.nodes: dict[int, SceneGraphNode] = {}
+        self.edges: list[SceneGraphEdge] = []
         self._next_id = 0
         self._current_step = 0
 
@@ -216,7 +213,7 @@ class OpenVocabSceneGraph:
         return len(self.nodes)
 
     @property
-    def stable_objects(self) -> List[SceneGraphNode]:
+    def stable_objects(self) -> list[SceneGraphNode]:
         return [n for n in self.nodes.values() if n.is_stable]
 
     def _allocate_id(self) -> int:
@@ -245,11 +242,11 @@ class OpenVocabSceneGraph:
             self.nodes[nid] = node
             return nid
 
-    def add_observations_batch(self, observations: List[ObjectObservation]) -> List[int]:
+    def add_observations_batch(self, observations: list[ObjectObservation]) -> list[int]:
         """Add multiple observations from a single frame. Returns list of node IDs."""
         return [self.add_observation(obs) for obs in observations]
 
-    def _find_best_match(self, obs: ObjectObservation) -> Optional[int]:
+    def _find_best_match(self, obs: ObjectObservation) -> int | None:
         """Find the best matching existing node for an observation.
 
         Uses a combination of:
@@ -340,18 +337,12 @@ class OpenVocabSceneGraph:
                     self.edges.append(SceneGraphEdge(nid_a, nid_b, "near"))
 
                 # on: a is on b (a is above b, close in xy)
-                if (
-                    dist_2d < 0.5
-                    and self.min_on_height < z_diff < self.max_on_height
-                ):
+                if dist_2d < 0.5 and self.min_on_height < z_diff < self.max_on_height:
                     self.edges.append(SceneGraphEdge(nid_a, nid_b, "on"))
-                elif (
-                    dist_2d < 0.5
-                    and self.min_on_height < -z_diff < self.max_on_height
-                ):
+                elif dist_2d < 0.5 and self.min_on_height < -z_diff < self.max_on_height:
                     self.edges.append(SceneGraphEdge(nid_b, nid_a, "on"))
 
-    def prune_stale(self, current_step: Optional[int] = None) -> List[int]:
+    def prune_stale(self, current_step: int | None = None) -> list[int]:
         """Remove objects not seen recently (if staleness_horizon > 0).
 
         Returns list of removed node IDs.
@@ -366,12 +357,10 @@ class OpenVocabSceneGraph:
                 del self.nodes[nid]
                 removed.append(nid)
         if removed:
-            self.edges = [
-                e for e in self.edges if e.source_id not in removed and e.target_id not in removed
-            ]
+            self.edges = [e for e in self.edges if e.source_id not in removed and e.target_id not in removed]
         return removed
 
-    def prune_small(self) -> List[int]:
+    def prune_small(self) -> list[int]:
         """Remove objects with too few points."""
         removed = []
         for nid in list(self.nodes.keys()):
@@ -410,11 +399,7 @@ class OpenVocabSceneGraph:
                         should_merge = True
 
                 # Check DINOv3 similarity
-                if (
-                    not should_merge
-                    and node_a.dinov3_embedding is not None
-                    and node_b.dinov3_embedding is not None
-                ):
+                if not should_merge and node_a.dinov3_embedding is not None and node_b.dinov3_embedding is not None:
                     sim = F.cosine_similarity(
                         node_a.dinov3_embedding.unsqueeze(0),
                         node_b.dinov3_embedding.unsqueeze(0),
@@ -449,9 +434,7 @@ class OpenVocabSceneGraph:
             if keeper.point_cloud is not None:
                 keeper.point_cloud = torch.cat([keeper.point_cloud, donor.point_cloud], dim=0)
                 if keeper.point_cloud_rgb is not None and donor.point_cloud_rgb is not None:
-                    keeper.point_cloud_rgb = torch.cat(
-                        [keeper.point_cloud_rgb, donor.point_cloud_rgb], dim=0
-                    )
+                    keeper.point_cloud_rgb = torch.cat([keeper.point_cloud_rgb, donor.point_cloud_rgb], dim=0)
             else:
                 keeper.point_cloud = donor.point_cloud
                 keeper.point_cloud_rgb = donor.point_cloud_rgb
@@ -469,18 +452,14 @@ class OpenVocabSceneGraph:
                 keeper._siglip_sum = donor._siglip_sum.clone()
             else:
                 keeper._siglip_sum = keeper._siglip_sum + donor._siglip_sum
-            keeper.siglip_embedding = F.normalize(
-                keeper._siglip_sum.unsqueeze(0), dim=-1
-            ).squeeze(0)
+            keeper.siglip_embedding = F.normalize(keeper._siglip_sum.unsqueeze(0), dim=-1).squeeze(0)
 
         if donor._dinov3_sum is not None:
             if keeper._dinov3_sum is None:
                 keeper._dinov3_sum = donor._dinov3_sum.clone()
             else:
                 keeper._dinov3_sum = keeper._dinov3_sum + donor._dinov3_sum
-            keeper.dinov3_embedding = F.normalize(
-                keeper._dinov3_sum.unsqueeze(0), dim=-1
-            ).squeeze(0)
+            keeper.dinov3_embedding = F.normalize(keeper._dinov3_sum.unsqueeze(0), dim=-1).squeeze(0)
 
         keeper.first_seen = min(keeper.first_seen, donor.first_seen)
         keeper.last_seen = max(keeper.last_seen, donor.last_seen)
@@ -494,7 +473,7 @@ class OpenVocabSceneGraph:
 
     # --- Query methods ---
 
-    def localize_text(self, text: str, text_encoder: Any) -> Optional[np.ndarray]:
+    def localize_text(self, text: str, text_encoder: Any) -> np.ndarray | None:
         """Find the 3D position of an object matching the text query.
 
         Args:
@@ -518,16 +497,14 @@ class OpenVocabSceneGraph:
         for node in self.nodes.values():
             if node.siglip_embedding is None or node.center is None:
                 continue
-            sim = F.cosine_similarity(
-                text_feat, node.siglip_embedding.unsqueeze(0)
-            ).item()
+            sim = F.cosine_similarity(text_feat, node.siglip_embedding.unsqueeze(0)).item()
             if sim > best_score:
                 best_score = sim
                 best_center = node.center
 
         return best_center
 
-    def check_for_object(self, text: str, text_encoder: Any) -> Tuple[float, Optional[np.ndarray]]:
+    def check_for_object(self, text: str, text_encoder: Any) -> tuple[float, np.ndarray | None]:
         """Check if an object matching text is in the graph.
 
         Returns (confidence, location_xyz).
@@ -546,9 +523,7 @@ class OpenVocabSceneGraph:
         for node in self.nodes.values():
             if node.siglip_embedding is None:
                 continue
-            sim = F.cosine_similarity(
-                text_feat, node.siglip_embedding.unsqueeze(0)
-            ).item()
+            sim = F.cosine_similarity(text_feat, node.siglip_embedding.unsqueeze(0)).item()
             # Also check label string match
             label_boost = 0.0
             text_lower = text.lower().strip()
@@ -563,11 +538,11 @@ class OpenVocabSceneGraph:
 
         return best_score, best_center
 
-    def list_objects(self) -> List[str]:
+    def list_objects(self) -> list[str]:
         """Return primary labels of all stable objects."""
         return [n.primary_label for n in self.nodes.values() if n.is_stable]
 
-    def get_node_by_label(self, label: str) -> Optional[SceneGraphNode]:
+    def get_node_by_label(self, label: str) -> SceneGraphNode | None:
         """Find the node whose primary label best matches."""
         label_lower = label.lower().strip()
         for node in self.nodes.values():
@@ -581,7 +556,7 @@ class OpenVocabSceneGraph:
 
     # --- Serialization ---
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the scene graph to a JSON-compatible dict (no large tensors)."""
         self.update_edges()
         return {
@@ -644,7 +619,7 @@ class OpenVocabSceneGraph:
                 )
 
     @classmethod
-    def load(cls, path: str, **kwargs) -> "OpenVocabSceneGraph":
+    def load(cls, path: str, **kwargs) -> OpenVocabSceneGraph:
         """Load a scene graph from a directory."""
         p = Path(path)
         graph = cls(**kwargs)

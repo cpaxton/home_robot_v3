@@ -110,6 +110,23 @@ def update_graph_memory_from_dynamem_observation(
         graph_memory.set_graph_timestep(int(frame_step))
 
     viewer_xyz = viewer_xyz_world_from_observation(obs, robot=robot)
+    if hasattr(graph_memory, "set_capture_context"):
+        session_id = ""
+        session_fn = getattr(robot, "get_emet_session", None)
+        if callable(session_fn):
+            try:
+                session = session_fn() or {}
+                if isinstance(session, dict):
+                    session_id = str(
+                        session.get("session_id") or session.get("run_id") or session.get("environment_name") or ""
+                    )
+            except Exception:
+                session_id = ""
+        graph_memory.set_capture_context(
+            camera_pose_world=obs.camera_pose,
+            base_pose_world=viewer_xyz,
+            session_id=session_id or None,
+        )
     scene_profile = resolve_graph_scene_profile(
         robot=robot,
         parameters=getattr(graph_memory, "parameters", None),
@@ -144,8 +161,10 @@ def update_graph_memory_from_dynamem_observation(
             for d in raw_dets
         ]
         visible_labels.extend(str(item[0]) for item in instance_items)
-        if not instance_items and getattr(frame, "instance", None) is not None and getattr(
-            vm, "use_instance_memory", False
+        if (
+            not instance_items
+            and getattr(frame, "instance", None) is not None
+            and getattr(vm, "use_instance_memory", False)
         ):
             instance_items = [
                 it

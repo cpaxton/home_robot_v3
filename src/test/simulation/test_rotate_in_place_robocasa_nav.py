@@ -34,9 +34,7 @@ _NAV_GOAL_RE = re.compile(
 # rotate_in_place uses nav_relative: goal XY must match base_before (θ-only); base may differ from spawn banner
 _MAX_GOAL_XY_OFFSET_FROM_BASE_M = 0.05
 _MAX_BASE_XY_DRIFT_DURING_ROTATE_M = 0.35
-_SPAWN_RE = re.compile(
-    r"spawn / navigation_origin \(world\): \(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
-)
+_SPAWN_RE = re.compile(r"spawn / navigation_origin \(world\): \(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)")
 
 
 def _wait_for_port(host: str, port: int, timeout_sec: float = 120) -> bool:
@@ -152,8 +150,7 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
         goals = _parse_sim_nav_goals(stderr_text)
 
         assert origin is not None, (
-            "Expected [sim_nav] startup banner with spawn origin in server stderr. "
-            f"stderr tail:\n{stderr_text[-4000:]}"
+            f"Expected [sim_nav] startup banner with spawn origin in server stderr. stderr tail:\n{stderr_text[-4000:]}"
         )
         assert len(goals) >= 1, (
             "Expected at least one [sim_nav] navigation goal during rotate_in_place. "
@@ -165,9 +162,7 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
         prev_base: tuple[float, float] | None = None
         for wx, wy, _wt, bx, by, dxy, nav_world, frame in goals:
             assert not nav_world, f"rotate_in_place must not use nav_world (got frame={frame!r})"
-            assert frame == "relative_delta_world", (
-                f"rotate expects nav_relative world delta, got frame={frame!r}"
-            )
+            assert frame == "relative_delta_world", f"rotate expects nav_relative world delta, got frame={frame!r}"
             max_goal_offset = max(max_goal_offset, dxy, float(np.hypot(wx - bx, wy - by)))
             if prev_base is not None:
                 max_base_drift = max(
@@ -180,8 +175,7 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
             f"rotate goals must not translate in XY (max goal-vs-base offset {max_goal_offset:.3f}m)"
         )
         assert max_base_drift < _MAX_BASE_XY_DRIFT_DURING_ROTATE_M, (
-            f"rotate should not translate base (max base drift {max_base_drift:.3f}m, "
-            f"origin={origin.tolist()})"
+            f"rotate should not translate base (max base drift {max_base_drift:.3f}m, origin={origin.tolist()})"
         )
 
     finally:

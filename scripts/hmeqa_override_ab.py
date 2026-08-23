@@ -131,17 +131,14 @@ def main() -> int:
     img_gated, n_rec_img = rescore(rows, equip_gate=True, image_gate=True)
 
     print(f"file: {path.name}  n={n}")
-    print(f"  as-scored (recorded): {base}/{n} = {100*base/n:.1f}%")
+    print(f"  as-scored (recorded): {base}/{n} = {100 * base / n:.1f}%")
     print(
-        f"  legacy (always-override):      {_acc(legacy)}/{n} = {100*_acc(legacy)/n:.1f}%  "
+        f"  legacy (always-override):      {_acc(legacy)}/{n} = {100 * _acc(legacy) / n:.1f}%  "
         f"(n_rec={sum(1 for r in legacy if r['recovered'])})"
     )
+    print(f"  equip-gated (fix):              {_acc(gated)}/{n} = {100 * _acc(gated) / n:.1f}%  (recovered {n_rec})")
     print(
-        f"  equip-gated (fix):              {_acc(gated)}/{n} = {100*_acc(gated)/n:.1f}%  "
-        f"(recovered {n_rec})"
-    )
-    print(
-        f"  equip+image-gated (stricter):   {_acc(img_gated)}/{n} = {100*_acc(img_gated)/n:.1f}%  "
+        f"  equip+image-gated (stricter):   {_acc(img_gated)}/{n} = {100 * _acc(img_gated) / n:.1f}%  "
         f"(recovered {n_rec_img})"
     )
     rec = [r for r in gated if r["recovered"]]

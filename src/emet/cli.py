@@ -1757,10 +1757,24 @@ def jobs_update(
     help='Start at local wall time, e.g. "2026-08-23 12:00" or ISO 2026-08-23T12:00:00.',
 )
 @click.option(
+    "--wait-timeout-sec",
+    type=click.FloatRange(min=0.0),
+    default=21600.0,
+    show_default=True,
+    help="Total timeout for explicit --wait-pid prerequisites.",
+)
+@click.option(
     "--need-mib",
     type=int,
     default=None,
     help="If set, run emet eval wait before the command.",
+)
+@click.option(
+    "--gpu-wait-max-rounds",
+    type=click.IntRange(min=1),
+    default=120,
+    show_default=True,
+    help="Maximum free-VRAM checks before the job fails.",
 )
 @click.option(
     "--cpu-safe/--no-cpu-safe",
@@ -1770,7 +1784,13 @@ def jobs_update(
 @click.option(
     "--gpu-exclusive/--no-gpu-exclusive",
     default=None,
-    help="Wait for other active Habitat/VLM/MuJoCo jobs (default: on when --need-mib is set).",
+    help="Hold the host-wide GPU lock (default: on for --need-mib or GPU-like commands).",
+)
+@click.option(
+    "--lock-timeout-sec",
+    type=click.FloatRange(min=0.0),
+    default=None,
+    help="Exclusive-lock timeout (default: EMET_GPU_LOCK_TIMEOUT or 21600).",
 )
 @click.option("--foreground", is_flag=True, help="Run in foreground (no nohup).")
 @click.pass_context
@@ -1782,12 +1802,18 @@ def jobs_run(
     wait_pid: tuple[int, ...],
     delay_minutes: float | None,
     at_time: str | None,
+    wait_timeout_sec: float,
     need_mib: int | None,
+    gpu_wait_max_rounds: int,
     cpu_safe: bool | None,
     gpu_exclusive: bool | None,
+    lock_timeout_sec: float | None,
     foreground: bool,
 ) -> None:
     """Start a detached supervisor that registers and runs a managed job.
+
+    GPU-like commands and jobs with ``--need-mib`` hold a host-wide ``flock``
+    for their full lifetime, closing the launch race between separate checkouts.
 
     \b
     Example:
@@ -1796,7 +1822,12 @@ def jobs_run(
     """
     import shlex
 
-    from emet.utils.job_registry import active_gpu_job_pids, load_job, new_job_id
+    from emet.utils.job_registry import (
+        command_looks_like_gpu_job,
+        gpu_lock_path,
+        load_job,
+        new_job_id,
+    )
 
     cmd_args = list(ctx.args)
     if cmd_args and cmd_args[0] == "--":
@@ -1811,15 +1842,24 @@ def jobs_run(
     log_path = out / "job.log"
     cmd_str = " ".join(shlex.quote(a) for a in cmd_args)
 
-    use_cpu_safe = bool(cpu_safe) if cpu_safe is not None else (need_mib is not None)
-    use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else (need_mib is not None)
+    auto_gpu_job = need_mib is not None or command_looks_like_gpu_job(name, cmd_str)
+    use_cpu_safe = bool(cpu_safe) if cpu_safe is not None else auto_gpu_job
+    use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else auto_gpu_job
 
     wait_pids = list(wait_pid)
-    if use_gpu_excl:
-        for extra in active_gpu_job_pids(include_unmanaged=True):
-            if extra not in wait_pids:
-                wait_pids.append(extra)
-                click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
+    lock_timeout = lock_timeout_sec
+    if lock_timeout is None:
+        raw_timeout = os.environ.get("EMET_GPU_LOCK_TIMEOUT", "").strip()
+        try:
+            lock_timeout = float(raw_timeout) if raw_timeout else 21600.0
+        except ValueError as exc:
+            raise click.ClickException(f"invalid EMET_GPU_LOCK_TIMEOUT={raw_timeout!r}") from exc
+        if lock_timeout < 0:
+            click.echo(
+                "warning: unbounded EMET_GPU_LOCK_TIMEOUT is no longer supported; using 21600 seconds",
+                err=True,
+            )
+            lock_timeout = 21600.0
 
     start_epoch: float | None = None
     try:
@@ -1879,13 +1919,61 @@ def jobs_run(
             "fi\n"
         )
     wait_lines = ""
-    for wpid in wait_pids:
-        wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
+    if wait_pids:
+        wait_lines = (
+            'pid_is_running() { local stat; stat="$(ps -o stat= -p "$1" 2>/dev/null || true)"; '
+            '[[ -n "$stat" && "$stat" != Z* ]]; }\n'
+            f"WAIT_PID_DEADLINE=$((SECONDS + {max(0, int(wait_timeout_sec))}))\n"
+            "for WAIT_PID in " + " ".join(str(int(wpid)) for wpid in wait_pids) + "; do\n"
+            '  while pid_is_running "$WAIT_PID"; do\n'
+            "    if (( SECONDS >= WAIT_PID_DEADLINE )); then\n"
+            '      echo "ERROR: timed out waiting for explicit prerequisite pid $WAIT_PID" >&2\n'
+            '      "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "explicit wait-pid timeout $WAIT_PID" >/dev/null 2>&1 || true\n'
+            "      exit 4\n"
+            "    fi\n"
+            "    sleep 1\n"
+            "  done\n"
+            "done\n"
+        )
     need_block = ""
     if need_mib is not None:
         need_block = (
-            f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)}\n'
+            f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)} '
+            f"--max-rounds {int(gpu_wait_max_rounds)}\n"
             f'"$EMET_BIN" eval status || true\n'
+        )
+    gpu_lock_block = ""
+    if use_gpu_excl:
+        default_lock = shlex.quote(str(gpu_lock_path()))
+        timeout = shlex.quote(str(float(lock_timeout)))
+        gpu_lock_block = (
+            "GPU_LOCK_FILE=" + default_lock + "\n"
+            "if ! command -v flock >/dev/null 2>&1; then\n"
+            '  echo "ERROR: gpu-exclusive jobs require the flock utility" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "flock utility is unavailable" >/dev/null 2>&1 || true\n'
+            "  exit 2\n"
+            "fi\n"
+            'if ! mkdir -p "$(dirname "$GPU_LOCK_FILE")"; then\n'
+            '  echo "ERROR: cannot create GPU lock directory for $GPU_LOCK_FILE" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "cannot create GPU lock directory" >/dev/null 2>&1 || true\n'
+            "  exit 2\n"
+            "fi\n"
+            'exec 9>"$GPU_LOCK_FILE"\n'
+            'echo "waiting for exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
+            "_lock_rc=0\n"
+            "flock -w " + timeout + " -x 9 || _lock_rc=$?\n"
+            'if [[ "$_lock_rc" -ne 0 ]]; then\n'
+            '  echo "ERROR: timed out waiting for GPU lock: $GPU_LOCK_FILE" >&2\n'
+            '  "$EMET_BIN" jobs update "$JOB_ID" --status failed '
+            '--error "gpu lock timeout $GPU_LOCK_FILE" >/dev/null 2>&1 || true\n'
+            "  exit 3\n"
+            "fi\n"
+            'export EMET_GPU_LOCK="$GPU_LOCK_FILE"\n'
+            'export EMET_GPU_LOCK_FILE="$GPU_LOCK_FILE"\n'
+            'echo "acquired exclusive GPU lock: $GPU_LOCK_FILE" >&2\n'
         )
     cpu_block = ""
     if use_cpu_safe:
@@ -1906,6 +1994,7 @@ def jobs_run(
         f"{register_line}"
         f"{schedule_block}"
         f"{wait_lines}"
+        f"{gpu_lock_block}"
         f"{need_block}"
         f"{cpu_block}"
         f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'
@@ -2076,11 +2165,21 @@ def eval_check(need_mib: int | None) -> None:
     default=None,
     help="Minimum free VRAM in MiB (default: NEED_MIB or 12000).",
 )
-def eval_wait(need_mib: int | None) -> None:
+@click.option(
+    "--max-rounds",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum checks (default: GPU_WAIT_MAX_ROUNDS or 120).",
+)
+def eval_wait(need_mib: int | None, max_rounds: int | None) -> None:
     """Wait for consecutive stable free-VRAM reads (``gpu_preflight.sh --wait``)."""
     from emet.utils.gpu_preflight import wait_gpu_stable
 
-    ok = wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True))
+    ok = wait_gpu_stable(
+        need_mib,
+        max_rounds=max_rounds,
+        log=lambda m: click.echo(m, err=True),
+    )
     if not ok:
         click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
         sys.exit(1)
@@ -2192,7 +2291,13 @@ def eval_affinity(as_json: bool, do_apply: bool, pid: int | None, fail_open: boo
     is_flag=True,
     help="Only status+diagnose; do not block on free VRAM.",
 )
-def eval_recover(need_mib: int | None, skip_wait: bool) -> None:
+@click.option(
+    "--max-rounds",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum checks (default: GPU_WAIT_MAX_ROUNDS or 120).",
+)
+def eval_recover(need_mib: int | None, skip_wait: bool, max_rounds: int | None) -> None:
     """One-shot recovery gate after agent death / host reboot / failed HM-EQA job."""
     from emet.eval.harness import affinity_summary_dict
     from emet.utils.gpu_preflight import (
@@ -2215,7 +2320,11 @@ def eval_recover(need_mib: int | None, skip_wait: bool) -> None:
         sys.exit(1)
     if skip_wait:
         return
-    if not wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True)):
+    if not wait_gpu_stable(
+        need_mib,
+        max_rounds=max_rounds,
+        log=lambda m: click.echo(m, err=True),
+    ):
         click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
         sys.exit(1)
     click.echo("recover: GPU ready — next: emet hmeqa resume  (or emet jobs)")
@@ -2489,57 +2598,373 @@ def hmeqa_ladder(
     sys.exit(0)
 
 
+def _hmeqa_nested_value(config: dict[str, Any], path: str) -> Any:
+    value: Any = config
+    for part in path.split("."):
+        value = value[part]
+    return value
+
+
+_HMEQA_FROZEN_PARAMETER_PATHS = {
+    "arms": "evaluation.arms",
+    "holdout_ids": "ids.question_ids",
+    "agentic_verifier": "evaluation.agentic_verifier",
+    "require_verified": "evaluation.require_verified",
+    "agentic_router": "evaluation.agentic_router",
+    "use_hm3d_semantics": "evaluation.use_hm3d_semantics",
+    "use_enrich_labels": "evaluation.use_enrich_labels",
+    "decision_policy": "variant.agentic_decision_policy",
+    "graph_evidence_mode": "variant.graph_evidence_mode",
+    "room_history_mode": "variant.room_history_mode",
+    "room_policy": "variant.room_policy",
+    "room_target_hints": "variant.room_target_hints",
+    "investigate_stamp": "variant.investigate_stamp",
+    "attempt_ledger_mode": "variant.attempt_ledger_mode",
+    "variant_id": "variant.id",
+    "eqa_hf_model_id": "model.requested_hf_model_id",
+    "eqa_vl_family": "model.vl_family",
+    "eqa_vl_quantization": "model.vl_quantization",
+    "eqa_answer_max_new_tokens": "budgets.answer_max_new_tokens",
+    "host": "model.host",
+    "vl_endpoint": "model.vl_endpoint",
+    "vl_port": "model.vl_port",
+    "episode_timeout": "budgets.episode_timeout_seconds",
+    "max_planning_steps": "budgets.max_planning_steps",
+    "max_movement_step": "budgets.max_movement_step",
+}
+
+
+def _hmeqa_frozen_options(fn):
+    """Shared behavior/model/budget flags for ``hmeqa h2h`` and ``resume``."""
+    options = [
+        click.option(
+            "--agentic-verifier",
+            type=click.Choice(["none", "owlv2", "yoloe"]),
+            default="none",
+            show_default=True,
+            help="Hybrid presence backend for the agentic arm.",
+        ),
+        click.option(
+            "--require-verified/--allow-unverified",
+            default=True,
+            show_default=True,
+            help="Require fused evidence before submit (the exhaustion ladder may still answer).",
+        ),
+        click.option(
+            "--agentic-router/--no-agentic-router",
+            default=False,
+            show_default=True,
+            help="Use VLM tool routing (fallback policy is deterministic).",
+        ),
+        click.option(
+            "--use-hm3d-semantics/--no-hm3d-semantics",
+            default=False,
+            show_default=True,
+            help="Use HM3D semantic sensor labels (GT-derived oracle axis).",
+        ),
+        click.option(
+            "--enrich-labels/--no-enrich-labels",
+            "use_enrich_labels",
+            default=False,
+            show_default=True,
+            help="Seed per-question GraphEQA GT object hints (separate oracle axis).",
+        ),
+        click.option(
+            "--decision-policy",
+            type=click.Choice(["legacy", "grounded_v2"]),
+            default="legacy",
+            show_default=True,
+            help="Agentic decision implementation gate.",
+        ),
+        click.option(
+            "--graph-evidence-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Stable graph evidence rollout mode.",
+        ),
+        click.option(
+            "--room-history-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Room-history collection/visibility mode.",
+        ),
+        click.option(
+            "--room-policy",
+            type=click.Choice(["canonical", "llm"]),
+            default="canonical",
+            show_default=True,
+        ),
+        click.option(
+            "--room-target-hints/--no-room-target-hints",
+            default=True,
+            show_default=True,
+            help="Expose the legacy question-derived target-room hints.",
+        ),
+        click.option(
+            "--investigate-stamp/--no-investigate-stamp",
+            default=False,
+            show_default=True,
+            help="Write room timeline stamps after investigate (known letter-regression axis).",
+        ),
+        click.option(
+            "--attempt-ledger-mode",
+            type=click.Choice(["off", "shadow", "agent"]),
+            default="off",
+            show_default=True,
+            help="Attempt-ledger collection/visibility mode.",
+        ),
+        click.option(
+            "--variant-id",
+            default="legacy",
+            show_default=True,
+            help="Stable A/B label recorded in run_manifest.json and episode environments.",
+        ),
+        click.option(
+            "--preset",
+            type=click.Choice(["paper-router"]),
+            default=None,
+            help=(
+                "paper-router: none verifier + allow-unverified + agentic-router. "
+                "It never changes the explicit A/B axes; explicit flags still win."
+            ),
+        ),
+        click.option(
+            "--eqa-hf-model-id",
+            default=None,
+            help="Override HF VLM id (sets EQA_HF_MODEL_ID in the Habitat child).",
+        ),
+        click.option(
+            "--eqa-vl-family",
+            default=None,
+            help="Override VL family (sets EQA_VL_FAMILY in the Habitat child).",
+        ),
+        click.option(
+            "--eqa-vl-quantization",
+            default=None,
+            help="Freeze the effective VL quantization label (default: config int4).",
+        ),
+        click.option(
+            "--eqa-answer-max-new-tokens",
+            type=int,
+            default=384,
+            show_default=True,
+            help="Per-answer VLM decode cap.",
+        ),
+        click.option("--episode-timeout", type=int, default=7200, show_default=True),
+        click.option("--max-planning-steps", type=int, default=20, show_default=True),
+        click.option("--max-movement-step", type=int, default=10, show_default=True),
+        click.option(
+            "--host",
+            default=None,
+            help=(
+                "LAN LLM host. Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, and EMET_VL_ENDPOINT into the managed job."
+            ),
+        ),
+        click.option(
+            "--vl-endpoint",
+            default=None,
+            help="Override EMET_VL_ENDPOINT (wins over --host's default).",
+        ),
+        click.option(
+            "--vl-port",
+            type=int,
+            default=None,
+            help="With --host: VL OpenAI port (default 8000; dual-2b uses 8001).",
+        ),
+    ]
+    for option in reversed(options):
+        fn = option(fn)
+    return fn
+
+
+def _hmeqa_reuse_frozen_defaults(
+    ctx: click.Context,
+    *,
+    out: Path,
+    values: dict[str, Any],
+) -> dict[str, Any]:
+    """Reuse frozen values for omitted resume flags; explicit mismatches fail later."""
+    from emet.eval.hmeqa_launch import (
+        HmeqaRunManifestError,
+        load_hmeqa_run_manifest,
+        normalize_hmeqa_run_config,
+    )
+
+    try:
+        manifest = load_hmeqa_run_manifest(out)
+        config = normalize_hmeqa_run_config(manifest["config"])
+    except (KeyError, HmeqaRunManifestError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    result = dict(values)
+    for parameter, path in _HMEQA_FROZEN_PARAMETER_PATHS.items():
+        if ctx.get_parameter_source(parameter) is not ParameterSource.DEFAULT:
+            continue
+        value = _hmeqa_nested_value(config, path)
+        if parameter in {"arms", "holdout_ids"}:
+            value = ",".join(str(item) for item in value)
+        elif parameter == "eqa_hf_model_id" and value is None:
+            value = config["model"].get("hf_model_id")
+        result[parameter] = value
+    return result
+
+
+def _hmeqa_config_sources(ctx: click.Context, *, preset: str | None) -> dict[str, str]:
+    """Record where each frozen effective value came from on the first launch."""
+    source_labels = {
+        ParameterSource.COMMANDLINE: "command_line",
+        ParameterSource.ENVIRONMENT: "environment",
+        ParameterSource.DEFAULT_MAP: "default_map",
+        ParameterSource.DEFAULT: "cli_default",
+        ParameterSource.PROMPT: "prompt",
+    }
+    result: dict[str, str] = {}
+    for parameter, path in _HMEQA_FROZEN_PARAMETER_PATHS.items():
+        source = ctx.get_parameter_source(parameter)
+        label = source_labels.get(source, str(source or "unknown").lower())
+        if source is ParameterSource.DEFAULT and parameter in {
+            "eqa_hf_model_id",
+            "eqa_vl_family",
+            "eqa_vl_quantization",
+            "eqa_answer_max_new_tokens",
+        }:
+            label = "config_default"
+        if (
+            preset == "paper-router"
+            and source is ParameterSource.DEFAULT
+            and parameter in {"agentic_verifier", "require_verified", "agentic_router"}
+        ):
+            label = "preset:paper-router"
+        result[path] = label
+        if parameter == "eqa_hf_model_id":
+            result["model.hf_model_id"] = label
+    if (
+        ctx.get_parameter_source("vl_endpoint") is ParameterSource.DEFAULT
+        and ctx.get_parameter_source("host") is not ParameterSource.DEFAULT
+    ):
+        result["model.vl_endpoint"] = "derived:model.host"
+    if (
+        ctx.get_parameter_source("host") is not ParameterSource.DEFAULT
+        or ctx.get_parameter_source("vl_endpoint") is not ParameterSource.DEFAULT
+    ):
+        result["model.hf_model_id"] = "derived:remote_vl"
+    result["model.llm_port"] = "config_default"
+    result["budgets.agentic_max_tool_rounds"] = "config_default"
+    result["budgets.agentic_max_nav_steps"] = "config_default"
+    result["inputs.data_dir"] = (
+        "environment:HABITAT_EQA_DATA_DIR" if os.environ.get("HABITAT_EQA_DATA_DIR", "").strip() else "config_default"
+    )
+    result["inputs.hm3d_root"] = (
+        "environment:HM3D_SCENE_DIR" if os.environ.get("HM3D_SCENE_DIR", "").strip() else "config_default"
+    )
+    return result
+
+
+def _hmeqa_apply_variant_config(
+    ctx: click.Context,
+    *,
+    path: Path | None,
+    values: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Apply a strict variant file beneath explicit CLI flags."""
+    if path is None:
+        return dict(values), {}
+    from emet.eval.hmeqa_launch import HmeqaRunManifestError, load_hmeqa_variant_config
+
+    try:
+        configured, source = load_hmeqa_variant_config(path)
+    except HmeqaRunManifestError as exc:
+        raise click.ClickException(str(exc)) from exc
+    result = dict(values)
+    source_overrides: dict[str, str] = {}
+    for parameter, value in configured.items():
+        if ctx.get_parameter_source(parameter) is not ParameterSource.DEFAULT:
+            continue
+        result[parameter] = value
+        source_overrides[_HMEQA_FROZEN_PARAMETER_PATHS[parameter]] = source
+    return result, source_overrides
+
+
+def _hmeqa_frozen_values(local_values: dict[str, Any]) -> dict[str, Any]:
+    """Select only manifest-frozen callback values from ``locals()``."""
+    return {name: local_values[name] for name in _HMEQA_FROZEN_PARAMETER_PATHS}
+
+
 def _hmeqa_launch(
     *,
     out: Path,
     resume: bool,
-    arms: str,
-    ids: str,
+    frozen_values: dict[str, Any],
     coverage_qids: str,
     cooldown: int,
     crash_policy: str,
     streak_abort: int,
-    agentic_verifier: str,
-    require_verified: bool,
-    agentic_router: bool,
     job_name: str,
     need_mib: int,
     foreground: bool,
-    eqa_hf_model_id: str | None = None,
-    eqa_vl_family: str | None = None,
-    eqa_answer_max_new_tokens: int | None = None,
     description: str | None = None,
-    host: str | None = None,
-    vl_endpoint: str | None = None,
-    vl_port: int | None = None,
+    config_sources: dict[str, str] | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
-    import shlex
-
-    from emet.eval.hmeqa_launch import hmeqa_h2h_env_parts, hmeqa_h2h_vl_endpoint_from_env_parts
+    from emet.eval.hmeqa_launch import (
+        HmeqaRunManifestError,
+        build_hmeqa_run_config,
+        load_hmeqa_run_manifest,
+        prepare_hmeqa_run_manifest,
+    )
 
     root = _project_root()
-    script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
-    env_parts = hmeqa_h2h_env_parts(
-        arms=arms,
-        ids=ids,
-        coverage_qids=coverage_qids,
-        cooldown=cooldown,
-        crash_policy=crash_policy,
-        streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
-        resume=resume,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
-        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
-    )
-    vl_ep = hmeqa_h2h_vl_endpoint_from_env_parts(env_parts)
-    inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
+    values = dict(frozen_values)
+    arms = str(values["arms"])
+    ids = str(values["holdout_ids"])
+    data_dir = os.environ.get("HABITAT_EQA_DATA_DIR", "").strip() or None
+    hm3d_root = os.environ.get("HM3D_SCENE_DIR", "").strip() or None
+    try:
+        if resume and (out / "run_manifest.json").is_file():
+            frozen_inputs = load_hmeqa_run_manifest(out)["config"]["inputs"]
+            data_dir = data_dir or frozen_inputs["data_dir"]
+            hm3d_root = hm3d_root or frozen_inputs["hm3d_root"]
+        run_config = build_hmeqa_run_config(
+            arms=arms,
+            ids=ids,
+            agentic_verifier=values["agentic_verifier"],
+            require_verified=values["require_verified"],
+            agentic_router=values["agentic_router"],
+            use_hm3d_semantics=values["use_hm3d_semantics"],
+            use_enrich_labels=values["use_enrich_labels"],
+            decision_policy=values["decision_policy"],
+            graph_evidence_mode=values["graph_evidence_mode"],
+            room_history_mode=values["room_history_mode"],
+            room_policy=values["room_policy"],
+            room_target_hints=values["room_target_hints"],
+            investigate_stamp=values["investigate_stamp"],
+            attempt_ledger_mode=values["attempt_ledger_mode"],
+            variant_id=values["variant_id"],
+            eqa_hf_model_id=values["eqa_hf_model_id"],
+            eqa_vl_family=values["eqa_vl_family"],
+            eqa_vl_quantization=values["eqa_vl_quantization"],
+            eqa_answer_max_new_tokens=values["eqa_answer_max_new_tokens"],
+            host=values["host"],
+            vl_endpoint=values["vl_endpoint"],
+            vl_port=values["vl_port"],
+            episode_timeout_seconds=values["episode_timeout"],
+            max_planning_steps=values["max_planning_steps"],
+            max_movement_step=values["max_movement_step"],
+            data_dir=data_dir,
+            hm3d_root=hm3d_root,
+        )
+        manifest = prepare_hmeqa_run_manifest(
+            out,
+            project_root=root,
+            config=run_config,
+            sources=config_sources,
+            resume=resume,
+        )
+    except HmeqaRunManifestError as exc:
+        raise click.ClickException(str(exc)) from exc
+    run_config = manifest["config"]
+    vl_ep = str(run_config["model"].get("vl_endpoint") or "")
     # Re-enter CLI so jobs run applies mutex/affinity wrapper.
     cmd = [
         sys.executable,
@@ -2558,11 +2983,35 @@ def _hmeqa_launch(
         cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
-    cmd.extend(["--", "bash", "-lc", inner])
-    click.echo(f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms}", err=True)
+    cmd.extend(
+        [
+            "--",
+            sys.executable,
+            "-m",
+            "emet.eval.hmeqa_launch",
+            "run-child",
+            "--out",
+            str(out),
+            "--resume",
+            str(int(resume)),
+            "--coverage-qids",
+            coverage_qids,
+            "--cooldown",
+            str(int(cooldown)),
+            "--crash-policy",
+            crash_policy,
+            "--streak-abort",
+            str(int(streak_abort)),
+        ]
+    )
+    click.echo(
+        f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms} "
+        f"variant={run_config['variant']['id']} digest={manifest['config_digest']}",
+        err=True,
+    )
     if vl_ep:
         click.echo(f"EQA VL endpoint (injected into job env): {vl_ep}", err=True)
-    elif host or vl_endpoint:
+    elif values["host"] or values["vl_endpoint"]:
         click.echo("warning: host/vl-endpoint set but EMET_VL_ENDPOINT missing from env parts", err=True)
     rc = subprocess.call(cmd, cwd=str(root))
     sys.exit(rc)
@@ -2570,7 +3019,7 @@ def _hmeqa_launch(
 
 @hmeqa_group.command("h2h", short_help="Launch classic vs agentic H2H via emet jobs")
 @click.argument("out_dir", required=False)
-@click.option("--resume", is_flag=True, help="Skip non-empty per-qid jsonl.")
+@click.option("--resume", is_flag=True, help="Skip hash-validated COMPLETE markers.")
 @click.option("--arms", default="classic,agentic", show_default=True)
 @click.option(
     "--ids",
@@ -2594,70 +3043,15 @@ def _hmeqa_launch(
     show_default=True,
     help="Under skip: abort after N consecutive native crashes (0=never).",
 )
+@_hmeqa_frozen_options
 @click.option(
-    "--agentic-verifier",
-    type=click.Choice(["none", "owlv2", "yoloe"]),
-    default="none",
-    show_default=True,
-    help="Hybrid presence backend for the agentic arm.",
-)
-@click.option(
-    "--require-verified/--allow-unverified",
-    default=True,
-    show_default=True,
-    help="Refuse submit_answer until evidence is fused; at exhaustion the forced-answer ladder still commits.",
-)
-@click.option(
-    "--agentic-router/--no-agentic-router",
-    default=False,
-    show_default=True,
-    help="Use VLM tool routing (fallback policy is deterministic).",
-)
-@click.option(
-    "--preset",
-    type=click.Choice(["paper-router"]),
-    default=None,
-    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
-)
-@click.option(
-    "--eqa-hf-model-id",
-    default=None,
-    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
-)
-@click.option(
-    "--eqa-vl-family",
-    default=None,
-    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
-)
-@click.option(
-    "--eqa-answer-max-new-tokens",
-    type=int,
-    default=None,
-    help="Override eqa_vl.answer_max_new_tokens for this run (answer decode cap). "
-    "Raise it when swapping in a more verbose VLM.",
-)
-@click.option(
-    "--host",
+    "--variant-config",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
     help=(
-        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST, EMET_OPENAI_BASE_URL, "
-        "and EMET_VL_ENDPOINT (unified-7b on :8000) into the jobs-wrapped env. "
-        "Parent-shell exports alone are not enough — they are not in the Habitat child env."
+        "Strict YAML file for the complete variant axes. Explicit variant flags override "
+        "the file; effective values and the file digest are frozen in run_manifest.json."
     ),
-)
-@click.option(
-    "--vl-endpoint",
-    default=None,
-    help=(
-        "Override EMET_VL_ENDPOINT for answer VL (e.g. openai@http://ORIN_HOST:8000/v1). "
-        "Wins over --host's default VL URL. Dual-2b: use :8001 or --host + --vl-port 8001."
-    ),
-)
-@click.option(
-    "--vl-port",
-    type=int,
-    default=None,
-    help="With --host: VL OpenAI port (default 8000 unified-7b; dual-2b uses 8001).",
 )
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option(
@@ -2682,13 +3076,28 @@ def hmeqa_h2h(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    use_hm3d_semantics: bool,
+    use_enrich_labels: bool,
+    decision_policy: str,
+    graph_evidence_mode: str,
+    room_history_mode: str,
+    room_policy: str,
+    room_target_hints: bool,
+    investigate_stamp: bool,
+    attempt_ledger_mode: str,
+    variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
-    eqa_answer_max_new_tokens: int | None,
+    eqa_vl_quantization: str | None,
+    eqa_answer_max_new_tokens: int,
+    episode_timeout: int,
+    max_planning_steps: int,
+    max_movement_step: int,
     host: str | None,
     vl_endpoint: str | None,
     vl_port: int | None,
+    variant_config: Path | None,
     job_name: str,
     description: str | None,
     need_mib: int,
@@ -2696,42 +3105,49 @@ def hmeqa_h2h(
 ) -> None:
     from emet.eval.harness import DEFAULT_BAL32_IDS
 
-    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
-        ctx,
-        preset=preset,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
-    )
+    if resume and variant_config is not None:
+        raise click.ClickException("--variant-config is first-launch only; resume reuses the frozen run manifest")
     if out_dir:
         out = Path(out_dir).expanduser().resolve()
     else:
         stamp = time.strftime("%Y%m%d_%H%M%S")
         out = Path.home() / "runs" / "emet" / f"hmeqa_agentic_h2h_{stamp}"
     out.mkdir(parents=True, exist_ok=True)
-    ids = holdout_ids or DEFAULT_BAL32_IDS
+
+    frozen, variant_sources = _hmeqa_apply_variant_config(
+        ctx,
+        path=variant_config,
+        values=_hmeqa_frozen_values(locals()),
+    )
+    if resume:
+        frozen = _hmeqa_reuse_frozen_defaults(ctx, out=out, values=frozen)
+    (
+        frozen["agentic_verifier"],
+        frozen["require_verified"],
+        frozen["agentic_router"],
+    ) = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=frozen["agentic_verifier"],
+        require_verified=frozen["require_verified"],
+        agentic_router=frozen["agentic_router"],
+    )
+    frozen["holdout_ids"] = frozen["holdout_ids"] or DEFAULT_BAL32_IDS
+    config_sources = _hmeqa_config_sources(ctx, preset=preset)
+    config_sources.update(variant_sources)
     _hmeqa_launch(
         out=out,
         resume=resume,
-        arms=arms,
-        ids=ids,
+        frozen_values=frozen,
         coverage_qids=coverage_qids,
         cooldown=cooldown,
         crash_policy=crash_policy,
         streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
-        eqa_answer_max_new_tokens=eqa_answer_max_new_tokens,
         description=description,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
+        config_sources=config_sources,
     )
 
 
@@ -2743,49 +3159,7 @@ def hmeqa_h2h(
 @click.option("--cooldown", type=int, default=30, show_default=True)
 @click.option("--crash-policy", type=click.Choice(["skip", "abort"]), default="skip", show_default=True)
 @click.option("--streak-abort", type=int, default=2, show_default=True)
-@click.option(
-    "--agentic-verifier",
-    type=click.Choice(["none", "owlv2", "yoloe"]),
-    default="none",
-    show_default=True,
-)
-@click.option("--require-verified/--allow-unverified", default=True, show_default=True)
-@click.option("--agentic-router/--no-agentic-router", default=False, show_default=True)
-@click.option(
-    "--preset",
-    type=click.Choice(["paper-router"]),
-    default=None,
-    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
-)
-@click.option(
-    "--eqa-hf-model-id",
-    default=None,
-    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
-)
-@click.option(
-    "--eqa-vl-family",
-    default=None,
-    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
-)
-@click.option(
-    "--host",
-    default=None,
-    help=(
-        "LAN LLM host (e.g. ORIN_HOST). Injects EMET_LLM_HOST / EMET_OPENAI_BASE_URL / "
-        "EMET_VL_ENDPOINT into the jobs-wrapped env."
-    ),
-)
-@click.option(
-    "--vl-endpoint",
-    default=None,
-    help="Override EMET_VL_ENDPOINT (wins over --host default).",
-)
-@click.option(
-    "--vl-port",
-    type=int,
-    default=None,
-    help="With --host: VL OpenAI port (default 8000; dual-2b: 8001).",
-)
+@_hmeqa_frozen_options
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
 @click.option(
     "--description",
@@ -2808,9 +3182,24 @@ def hmeqa_resume(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    use_hm3d_semantics: bool,
+    use_enrich_labels: bool,
+    decision_policy: str,
+    graph_evidence_mode: str,
+    room_history_mode: str,
+    room_policy: str,
+    room_target_hints: bool,
+    investigate_stamp: bool,
+    attempt_ledger_mode: str,
+    variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
+    eqa_vl_quantization: str | None,
+    eqa_answer_max_new_tokens: int,
+    episode_timeout: int,
+    max_planning_steps: int,
+    max_movement_step: int,
     host: str | None,
     vl_endpoint: str | None,
     vl_port: int | None,
@@ -2826,49 +3215,41 @@ def hmeqa_resume(
         write_host_freeze_capsule,
     )
 
-    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+    out = resolve_hmeqa_out(out_dir)
+    frozen = _hmeqa_reuse_frozen_defaults(
+        ctx,
+        out=out,
+        values=_hmeqa_frozen_values(locals()),
+    )
+    (
+        frozen["agentic_verifier"],
+        frozen["require_verified"],
+        frozen["agentic_router"],
+    ) = _hmeqa_apply_preset(
         ctx,
         preset=preset,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
+        agentic_verifier=frozen["agentic_verifier"],
+        require_verified=frozen["require_verified"],
+        agentic_router=frozen["agentic_router"],
     )
-    out = resolve_hmeqa_out(out_dir)
     freeze = detect_host_freeze(out)
     if freeze:
         cap = write_host_freeze_capsule(out, freeze)
         click.echo(f"host-freeze capsule → {cap}", err=True)
-    ids = holdout_ids or DEFAULT_BAL32_IDS
-    # Prefer HOLDOUT from orchestrator.log if present
-    orch = out / "orchestrator.log"
-    if holdout_ids is None and orch.is_file():
-        import re as _re
-
-        text = orch.read_text(encoding="utf-8", errors="replace")
-        m = _re.search(r"ids=([0-9,]+)", text)
-        if m:
-            ids = m.group(1)
+    frozen["holdout_ids"] = frozen["holdout_ids"] or DEFAULT_BAL32_IDS
     _hmeqa_launch(
         out=out,
         resume=True,
-        arms=arms,
-        ids=ids,
+        frozen_values=frozen,
         coverage_qids=coverage_qids,
         cooldown=cooldown,
         crash_policy=crash_policy,
         streak_abort=streak_abort,
-        agentic_verifier=agentic_verifier,
-        require_verified=require_verified,
-        agentic_router=agentic_router,
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
-        eqa_hf_model_id=eqa_hf_model_id,
-        eqa_vl_family=eqa_vl_family,
         description=description,
-        host=host,
-        vl_endpoint=vl_endpoint,
-        vl_port=vl_port,
+        config_sources=_hmeqa_config_sources(ctx, preset=preset),
     )
 
 
@@ -2944,8 +3325,6 @@ def hmeqa_overnight(
     Pause with ``emet jobs cancel JOB_ID``. Resume by re-running this command with
     the same ``--base`` (skips ``DONE`` phases; keeps scored per-qid jsonl).
     """
-    import shlex
-
     from emet.eval.harness import DEFAULT_BAL32_IDS, DEFAULT_HOLDOUT8_IDS
     from emet.eval.hmeqa_overnight import run_overnight
 
@@ -2963,9 +3342,12 @@ def hmeqa_overnight(
     ids_h = holdout_ids or os.environ.get("HOLDOUT8_IDS", "").strip() or DEFAULT_HOLDOUT8_IDS
     ids_b = bal32_ids or os.environ.get("BAL32_IDS", "").strip() or DEFAULT_BAL32_IDS
 
-    # Already under a job (shim / outer jobs run) — do not nest.
-    if os.environ.get("EMET_JOB_ID", "").strip():
-        click.echo(f"overnight in-process (EMET_JOB_ID set): BASE={base}", err=True)
+    # Already under a verified live job supervisor — do not nest.
+    from emet.utils.job_registry import validated_current_job_id
+
+    managed_job_id = validated_current_job_id()
+    if managed_job_id:
+        click.echo(f"overnight in-process (managed job {managed_job_id}): BASE={base}", err=True)
         rc = run_overnight(
             base=base,
             holdout_ids=ids_h,
@@ -3034,7 +3416,7 @@ def hmeqa_overnight(
         cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
-    cmd.extend(["--", "bash", "-lc", " ".join(shlex.quote(p) for p in inner_parts)])
+    cmd.extend(["--", *inner_parts])
     click.echo(f"launching overnight via emet jobs: BASE={base}", err=True)
     rc = subprocess.call(cmd, cwd=str(root))
     sys.exit(rc)

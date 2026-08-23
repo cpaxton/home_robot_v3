@@ -67,18 +67,12 @@ def test_format_tool_running_status():
 
 def test_format_action_running_status_explore():
     assert format_action_running_status(["explore"]) == "*Exploring…*"
-    assert format_action_running_status(["explore"], detail="sweeping head") == (
-        "*Exploring…* sweeping head"
-    )
+    assert format_action_running_status(["explore"], detail="sweeping head") == ("*Exploring…* sweeping head")
     assert format_action_running_status(["scan_environment"]) == "*Looking around…*"
     assert format_action_running_status(["describe_scene"]) == "*Looking…*"
     assert format_action_running_status(["query_memory"]) is None
-    assert format_action_running_status(["rotate_base", "describe_scene"]) == (
-        "*Turning, then looking…*"
-    )
-    assert format_action_running_status(["face_toward", "describe_scene"]) == (
-        "*Turning toward, then looking…*"
-    )
+    assert format_action_running_status(["rotate_base", "describe_scene"]) == ("*Turning, then looking…*")
+    assert format_action_running_status(["face_toward", "describe_scene"]) == ("*Turning toward, then looking…*")
 
 
 def test_format_single_action_status():

@@ -15,7 +15,6 @@ import torch
 
 from emet.eval.episode_diagnostics import export_voxel_observation_history
 
-
 Frame = namedtuple(
     "Frame",
     [

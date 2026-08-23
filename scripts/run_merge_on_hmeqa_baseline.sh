@@ -4,7 +4,7 @@
 #
 # Usage (prefer nohup for overnight):
 #   nohup ./scripts/run_merge_on_hmeqa_baseline.sh \
-#     >> ~/runs/emet/branch_verify_20260711/merge_on_baseline_nohup.log 2>&1 &
+    #     >> ~/runs/emet/branch_verify_20260711/merge_on_baseline_nohup.log 2>&1 &
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -22,8 +22,8 @@ SMOKE_IDS="${SMOKE_IDS:-3,14,17}"
 TIMEOUT="${TIMEOUT:-7200}"
 
 if [[ ! -x "$EMET_HABITAT" ]]; then
-  echo "Missing emet-habitat at $EMET_HABITAT" | tee -a "$LOG"
-  exit 1
+    echo "Missing emet-habitat at $EMET_HABITAT" | tee -a "$LOG"
+    exit 1
 fi
 
 echo "===== merge-on baseline $(date -Is) =====" | tee -a "$LOG"
@@ -33,29 +33,29 @@ echo "BASE_ROOT=$BASE_ROOT" | tee -a "$LOG"
 NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait >>"$LOG" 2>&1
 
 run_ids() {
-  local name="$1"
-  local ids_csv="$2"
-  local out="$BASE_ROOT/${name}.jsonl"
-  local elog="$BASE_ROOT/${name}.log"
-  : >"$out"
-  echo "===== $name ids=$ids_csv $(date -Is) =====" | tee -a "$LOG"
-  IFS=',' read -r -a ids <<<"$ids_csv"
-  for qid in "${ids[@]}"; do
-    qid="$(echo "$qid" | tr -d '[:space:]')"
-    [[ -n "$qid" ]] || continue
-    ep_out="$BASE_ROOT/${name}_q${qid}.jsonl"
-    : >"$ep_out"
-    echo "----- question $qid $(date -Is) -----" | tee -a "$LOG"
-    timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
-      --question-id "$qid" \
-      --method dynagraph \
-      --output "$ep_out" \
-      >>"$elog" 2>&1 || echo "episode $qid failed exit=$?" | tee -a "$LOG"
-    if [[ -s "$ep_out" ]]; then
-      cat "$ep_out" >>"$out"
-    fi
-  done
-  cat "$elog" >>"$LOG" || true
+    local name="$1"
+    local ids_csv="$2"
+    local out="$BASE_ROOT/${name}.jsonl"
+    local elog="$BASE_ROOT/${name}.log"
+    : >"$out"
+    echo "===== $name ids=$ids_csv $(date -Is) =====" | tee -a "$LOG"
+    IFS=',' read -r -a ids <<<"$ids_csv"
+    for qid in "${ids[@]}"; do
+        qid="$(echo "$qid" | tr -d '[:space:]')"
+        [[ -n "$qid" ]] || continue
+        ep_out="$BASE_ROOT/${name}_q${qid}.jsonl"
+        : >"$ep_out"
+        echo "----- question $qid $(date -Is) -----" | tee -a "$LOG"
+        timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
+            --question-id "$qid" \
+            --method dynagraph \
+            --output "$ep_out" \
+            >>"$elog" 2>&1 || echo "episode $qid failed exit=$?" | tee -a "$LOG"
+        if [[ -s "$ep_out" ]]; then
+            cat "$ep_out" >>"$out"
+        fi
+    done
+    cat "$elog" >>"$LOG" || true
 }
 
 run_ids "holdout8" "$HOLDOUT_IDS"

@@ -565,14 +565,16 @@ def main(
     if staleness_horizon is not None:
         parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
 
-    sim_shutdown = None
     if start_sim:
         from dataclasses import replace
 
-        from emet.config.sim_launch_config import SimLaunchMolmospaces, resolve_serve_robot, resolve_sim_launch_for_agent
-        from emet.simulation.sim_subprocess import shutdown_mujoco_server_subprocess, spawn_mujoco_server_subprocess
+        from emet.config.sim_launch_config import (
+            SimLaunchMolmospaces,
+            resolve_serve_robot,
+            resolve_sim_launch_for_agent,
+        )
+        from emet.simulation.sim_subprocess import spawn_mujoco_server_subprocess
 
-        sim_shutdown = shutdown_mujoco_server_subprocess
         sim_cfg = resolve_sim_launch_for_agent(
             agent_config_path=runtime.config_path,
             sim_config_cli=None,
@@ -590,9 +592,8 @@ def main(
         spawn_mujoco_server_subprocess(sim_cfg, silence_sim_output=not sim_show_subprocess_output)
         click.echo("Sim is up; connecting dynagraph.", err=True)
     elif start_habitat:
-        from emet.habitat.habitat_subprocess import shutdown_habitat_server_subprocess, spawn_habitat_server_subprocess
+        from emet.habitat.habitat_subprocess import spawn_habitat_server_subprocess
 
-        sim_shutdown = shutdown_habitat_server_subprocess
         click.echo("Dynagraph: starting Habitat sim subprocess (--start-habitat)…", err=True)
         spawn_habitat_server_subprocess(
             question_id=habitat_question_id,
@@ -773,8 +774,7 @@ def main(
             }
             rows.append(row)
             click.echo(
-                f"- EQA question {qi}/{n_q} done wall_s={q_wall:.1f} "
-                f"answer={answer[:120]!r}",
+                f"- EQA question {qi}/{n_q} done wall_s={q_wall:.1f} answer={answer[:120]!r}",
                 err=True,
             )
             if discord_text.strip():

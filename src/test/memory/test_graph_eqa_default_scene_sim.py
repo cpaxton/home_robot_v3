@@ -32,7 +32,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2):
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -47,9 +47,7 @@ def test_graph_eqa_color_question_default_mujoco_scene():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -108,9 +106,7 @@ def test_graph_eqa_color_question_default_mujoco_scene():
         assert "red" in g
         assert "blue" in g
 
-        _r, answer, conf, _cr, _tp, _imgs = mem.query_answer(
-            "Which color objects can you see?", None, None
-        )
+        _r, answer, conf, _cr, _tp, _imgs = mem.query_answer("Which color objects can you see?", None, None)
         assert conf is True
         al = answer.lower()
         assert "red" in al, f"expected red in answer, got {answer!r}"

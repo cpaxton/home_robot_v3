@@ -80,9 +80,7 @@ def test_merge_chat_agent_manip_parameters():
     from emet.core.parameters import Parameters
 
     params = Parameters(**{"agent": {"realtime": {"matching_distance": 0.5}}})
-    section = AgentSectionConfig(
-        manip_mode="kinematic", manip_collision="aabb", manip_planner="linear"
-    )
+    section = AgentSectionConfig(manip_mode="kinematic", manip_collision="aabb", manip_planner="linear")
     _merge_chat_agent_manip_parameters(
         params,
         agent_config="dynav_config.yaml",

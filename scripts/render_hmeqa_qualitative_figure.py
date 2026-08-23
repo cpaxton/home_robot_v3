@@ -200,6 +200,7 @@ def _determining_images(
         img = _frame_fallback(bundle)
         if img is not None:
             picked.append(("view", img))
+
     # Keep display order by Image index when possible.
     def _img_key(item: tuple[str, Image.Image]) -> int:
         m = re.match(r"Image\s+(\d+)", item[0])
@@ -384,8 +385,7 @@ def main() -> None:
     parser.add_argument(
         "--jsonl",
         type=Path,
-        default=Path.home()
-        / "runs/emet/branch_verify_20260711/merge_on_baseline_20260712_001627/smoke_trio.jsonl",
+        default=Path.home() / "runs/emet/branch_verify_20260711/merge_on_baseline_20260712_001627/smoke_trio.jsonl",
     )
     parser.add_argument(
         "--episodes-root",

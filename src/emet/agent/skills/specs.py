@@ -152,12 +152,13 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="submit_answer",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Submit the final answer (MCQ letter or short phrase). Rejected until VLM "
+            "Submit the final semantic answer text. For MCQ questions, use the selected "
+            "option text without its letter label. Rejected until VLM "
             "assess marks the view answerable (or the round budget is exhausted)."
         ),
         parameters={
             "type": "object",
-            "properties": {"answer": {"type": "string", "description": "Final answer letter or phrase."}},
+            "properties": {"answer": {"type": "string", "description": "Final semantic answer text."}},
             "required": [],
         },
         eqa_answer_only=True,

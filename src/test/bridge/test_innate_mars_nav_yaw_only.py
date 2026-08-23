@@ -7,7 +7,6 @@
 import math
 
 import pytest
-
 from innate_mars_bridge.nav_helpers import is_yaw_only_relative
 
 

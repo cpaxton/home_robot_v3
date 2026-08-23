@@ -229,7 +229,7 @@ timeout 15 uv run emet run agent --no-llm -c Q --robot stretch
 
 # Habitat HM-EQA via the **same** episode function as emet-habitat (no chat tool-router; zero intentional loss)
 uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
-  --extra-instruction "Answer with a single letter A–D."
+  --extra-instruction "Answer with concise semantic option text; omit A–D labels."
 # Real VLM (GPU): omit --eqa-eval-mock-llm; requires .venv-habitat / emet_habitat
 
 # MolmoSpaces one-liner

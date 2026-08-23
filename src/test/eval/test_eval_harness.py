@@ -65,9 +65,7 @@ def test_write_crash_marker_and_progress(tmp_path: Path) -> None:
 
 
 def test_detect_host_freeze(tmp_path: Path) -> None:
-    (tmp_path / "progress.json").write_text(
-        '{"phase":"classic","current_id":"48","units_done":26,"units_total":64}\n'
-    )
+    (tmp_path / "progress.json").write_text('{"phase":"classic","current_id":"48","units_done":26,"units_total":64}\n')
     (tmp_path / "classic_q48.jsonl").write_text("")
     (tmp_path / "classic.log").write_bytes(b"hello\x00\x00\x00\x00")
     info = detect_host_freeze(tmp_path)

@@ -80,7 +80,7 @@ TAG=fable5_bake_q3vl8b \
 ./scripts/run_habitat_iter_subset.sh
 ```
 
-Results: `~/.cache/habitat_eqa/results/subset_<TAG>_<FAMILY>.jsonl`  
+Results: `~/.cache/habitat_eqa/results/subset_<TAG>_<FAMILY>.jsonl`
 Episode bundles: `~/.cache/habitat_eqa/episodes/subset_<TAG>_<FAMILY>/`
 
 Repeat with `FAMILY` / `HF_ID` for each candidate (see table below).
@@ -98,7 +98,7 @@ nohup env TIMEOUT=14400 ./scripts/run_fable5_bakeoff.sh \
   >> /tmp/fable5_bakeoff.nohup.out 2>&1 &
 ```
 
-Logs: `~/.cache/habitat_eqa/overnight/bakeoff_<run_id>/`  
+Logs: `~/.cache/habitat_eqa/overnight/bakeoff_<run_id>/`
 Skip a stuck phase: `SKIP_PHASES=gemma4e4b ./scripts/run_fable5_bakeoff.sh`
 
 ### Candidates (2026-06 bake-off)

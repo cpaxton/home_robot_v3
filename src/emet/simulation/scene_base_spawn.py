@@ -91,7 +91,7 @@ def _static_collision_occupancy(
     nx = max(1, int(round((x1 - x0) / res)))
     ny = max(1, int(round((y1 - y0) / res)))
     occ = np.zeros((nx, ny), dtype=bool)
-    band_lo, band_hi = float(obstacle_band[0]), float(obstacle_band[1])
+    band_lo = float(obstacle_band[0])
     # Geoms whose entire surface sits above the mobile base's navigable height do not block
     # navigation (Robocasa room boundary shells live at z≈1.5). Only count geoms that reach
     # down into the band.
@@ -3005,18 +3005,19 @@ def find_robocasa_freejoint_xyz(
     spawn_dbg(
         f"robocasa_freejoint_find: scene={scene_label!r} n_xy={len(candidates)} "
         f"margin_m={margin:.3f} hint={'yes' if hint_xy else 'no'} "
-        f"prefer_open_floor={prefer_open_floor} first_cands={[(round(a,2), round(b,2)) for a,b in candidates[:6]]}"
+        f"prefer_open_floor={prefer_open_floor} first_cands={[(round(a, 2), round(b, 2)) for a, b in candidates[:6]]}"
     )
     # Require the winning pose to sit in a navigable region of at least this area so OVMM
     # explore actually has room to move (not a 1-cell pocket next to a wall).
     min_nav_area_m2 = float(os.environ.get("EMET_ROBOCASA_SPAWN_MIN_NAV_AREA_M2", "1.5"))
     if prefer_open_floor and nav_field is not None and nav_area_map is not None:
-        prefiltered = [p for p in candidates if _nav_lookup(float(p[0]), float(p[1]))[1] == 1
-                       and _nav_lookup(float(p[0]), float(p[1]))[0] >= min_nav_area_m2]
-        spawn_dbg(
-            f"robocasa_freejoint_find: prefilter navigable candidates "
-            f"{len(prefiltered)}/{len(candidates)}"
-        )
+        prefiltered = [
+            p
+            for p in candidates
+            if _nav_lookup(float(p[0]), float(p[1]))[1] == 1
+            and _nav_lookup(float(p[0]), float(p[1]))[0] >= min_nav_area_m2
+        ]
+        spawn_dbg(f"robocasa_freejoint_find: prefilter navigable candidates {len(prefiltered)}/{len(candidates)}")
         if prefiltered:
             # Prefer open floor: larger navigable region, then closer to the walkable-clip
             # centroid (away from counters / walls), then nearer the hint.
@@ -3036,10 +3037,7 @@ def find_robocasa_freejoint_xyz(
             # No candidate is navigable on the full grid; fall back to the hint corridor so we
             # still return *something* (the sim will spawn contact-free even if explore is tight).
             candidates = [p for p in candidates if abs(float(p[0]) - (hint_xy[0] if hint_xy else 0.0)) < 1.0]
-            spawn_dbg(
-                f"robocasa_freejoint_find: no navigable candidates; hint-corridor fallback "
-                f"n={len(candidates)}"
-            )
+            spawn_dbg(f"robocasa_freejoint_find: no navigable candidates; hint-corridor fallback n={len(candidates)}")
 
     for min_clear, tag in clearance_passes:
         # With the navigable prefilter, all candidates already satisfy the open-floor gate, so
@@ -3101,9 +3099,7 @@ def find_robocasa_freejoint_xyz(
                 if placed is None:
                     continue
                 if not prefer_open_floor:
-                    spawn_dbg(
-                        f"robocasa_freejoint_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f}"
-                    )
+                    spawn_dbg(f"robocasa_freejoint_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f}")
                     return placed
                 worst = float(
                     worst_robot_nonfloor_contact_dist(

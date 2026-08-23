@@ -6,7 +6,7 @@
 # errors surface fast. Wrap with `emet jobs run` for GPU mutex + affinity:
 #
 #   uv run emet jobs run --name batch-42 --need-mib 12000 -- \
-#     SEED=42 ./scripts/run_cross_family_batch.sh OUT_DIR
+    #     SEED=42 ./scripts/run_cross_family_batch.sh OUT_DIR
 #
 # Env:
 #   SEED            random seed (default bash $RANDOM; fixed -> reproducible)

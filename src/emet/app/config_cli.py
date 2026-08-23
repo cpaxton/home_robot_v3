@@ -52,8 +52,7 @@ def emet_config_options(
                 "--connection",
                 default=None,
                 help=(
-                    "Named profile from ~/.stretch/connection.json "
-                    "(host, robot, and optional default --config path)."
+                    "Named profile from ~/.stretch/connection.json (host, robot, and optional default --config path)."
                 ),
             )(f)
         if include_deprecated_aliases:

@@ -85,9 +85,7 @@ class SiglipEncoder(BaseImageTextEncoder):
             version = "base"
 
         if version not in SIGLIP_CHECKPOINTS:
-            raise ValueError(
-                f"Invalid version {version}: must be one of {sorted(SIGLIP_CHECKPOINTS)}"
-            )
+            raise ValueError(f"Invalid version {version}: must be one of {sorted(SIGLIP_CHECKPOINTS)}")
         model_name = SIGLIP_CHECKPOINTS[version]
 
         # Hub models ship as .safetensors; avoid legacy pytorch_model.bin resolution errors.
@@ -97,9 +95,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         _sf = {"use_safetensors": True, **local_kw}
         self.processor = AutoProcessor.from_pretrained(source, use_fast=False, **_sf)
         self.tokenizer = AutoTokenizer.from_pretrained(source, **local_kw)
-        self.model = AutoModel.from_pretrained(source, dtype=self.torch_dtype, **_sf).to(
-            self.device
-        )
+        self.model = AutoModel.from_pretrained(source, dtype=self.torch_dtype, **_sf).to(self.device)
 
     def _to_model_inputs(self, inputs: dict) -> dict:
         """Move inputs to the model device, casting float tensors to the weight dtype."""
@@ -246,9 +242,7 @@ class MaskSiglipEncoder(SiglipEncoder):
             image: RGB image, shape [3, H1, W1]
             features: pixel-wise features, shape [H1, W1, 512]
         """
-        input = self._to_model_inputs(
-            self.processor(images=image, padding="max_length", return_tensors="pt")
-        )
+        input = self._to_model_inputs(self.processor(images=image, padding="max_length", return_tensors="pt"))
         if image_shape is not None:
             if image.ndim == 3:
                 image = image.unsqueeze(0)

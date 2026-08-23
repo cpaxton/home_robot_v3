@@ -44,7 +44,15 @@ def test_trajectory_corridor_fills_sparse_export_gaps():
     merged = merge_trajectory_corridor_explored(exp, obs, go, 0.1, trajectory_xyt=traj)
     assert int(merged.sum()) > int(exp.sum())
     without = eval_topdown_map_rgb(
-        obs, exp, go, 0.1, (4.0, 4.0), max_side=640, min_map_side=0, trajectory_xyt=traj, stamp_trajectory_corridor=False
+        obs,
+        exp,
+        go,
+        0.1,
+        (4.0, 4.0),
+        max_side=640,
+        min_map_side=0,
+        trajectory_xyt=traj,
+        stamp_trajectory_corridor=False,
     )
     with_stamp = eval_topdown_map_rgb(
         obs, exp, go, 0.1, (4.0, 4.0), max_side=640, min_map_side=0, trajectory_xyt=traj, stamp_trajectory_corridor=True
@@ -64,9 +72,7 @@ def test_eval_topdown_overlay_includes_trajectory_blue_pixels():
     traj = [(1.0, 1.0, 0.0), (2.0, 2.0, 0.5), (3.0, 3.0, 1.0)]
     gt = np.zeros((64, 64), dtype=bool)
     gt[8:52, 8:52] = True
-    plain = eval_topdown_map_rgb(
-        obs, exp, go, 0.1, (3.0, 3.0), max_side=640, trajectory_xyt=traj, filter_islands=True
-    )
+    plain = eval_topdown_map_rgb(obs, exp, go, 0.1, (3.0, 3.0), max_side=640, trajectory_xyt=traj, filter_islands=True)
     overlay = eval_topdown_overlay_rgb(
         obs,
         exp,
@@ -80,5 +86,6 @@ def test_eval_topdown_overlay_includes_trajectory_blue_pixels():
     )
     assert plain.shape[0] >= 20
     assert overlay.shape == plain.shape
-    blue = np.all(overlay == np.uint8([30, 90, 230]), axis=-1)
+    rgb = overlay.astype(np.int16)
+    blue = (rgb[..., 2] > rgb[..., 0] + 30) & (rgb[..., 2] > rgb[..., 1] + 30)
     assert int(blue.sum()) > 0

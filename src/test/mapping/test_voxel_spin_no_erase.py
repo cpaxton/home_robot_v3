@@ -51,9 +51,7 @@ def test_spin_in_place_grows_voxel_map():
 
     counts = []
     for yaw in np.linspace(0.0, 2 * np.pi, 8, endpoint=False):
-        vm.process_rgbd_images(
-            rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)])
-        )
+        vm.process_rgbd_images(rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)]))
         counts.append(_n_points(vm))
 
     assert counts[0] > 0
@@ -151,9 +149,7 @@ def test_static_floor_survives_filtered_spin():
 
     areas = []
     for yaw in np.linspace(0.0, 2 * np.pi, 8, endpoint=False):
-        vm.process_rgbd_images(
-            rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)])
-        )
+        vm.process_rgbd_images(rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)]))
         _, explored = vm.get_2d_map()
         areas.append(int(explored.sum().item()))
 

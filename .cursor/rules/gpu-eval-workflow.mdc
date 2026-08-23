@@ -52,6 +52,7 @@ uv run emet jobs cancel JOB_ID
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
 - Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).
 - If a job was started unmanaged: `emet jobs register` + point `--out-dir` at the run so `progress.json` / DONE are visible.
+- `--gpu-exclusive` holds the host-wide `EMET_GPU_LOCK` flock (default `~/runs/emet/gpu.lock`, with `EMET_GPU_LOCK_FILE` as a compatibility alias) from registration through command exit. It defaults on for `--need-mib` and GPU-like command/name hints, closing the simultaneous-launch race across sibling checkouts.
 - Implementation: [`src/emet/utils/job_registry.py`](../../src/emet/utils/job_registry.py), CLI in [`docs/cli.md`](../../docs/cli.md).
 
 ## One GPU job at a time

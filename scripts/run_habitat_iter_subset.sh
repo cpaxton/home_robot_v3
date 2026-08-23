@@ -29,15 +29,15 @@ echo "  log:    ${LOG}"
 echo "  timeout: ${TIMEOUT}s  frontier: ${FRONTIER_FLAG} kw=${KW}"
 
 timeout "${TIMEOUT}" "$HAB" run-batch \
-  --method "$METHOD" \
-  --question-ids "$IDS" \
-  --max-planning-steps "$MAX_PLANNING" \
-  --max-movement-step "$MAX_MOVEMENT" \
-  --eqa-vl-family "$FAMILY" \
-  --eqa-hf-model-id "$HF_ID" \
-  --device cuda \
-  ${FRONTIER_FLAG} \
-  --frontier-keyword-weight "$KW" \
-  --resume \
-  --output "$JSONL" \
-  2>&1 | tee "$LOG"
+    --method "$METHOD" \
+    --question-ids "$IDS" \
+    --max-planning-steps "$MAX_PLANNING" \
+    --max-movement-step "$MAX_MOVEMENT" \
+    --eqa-vl-family "$FAMILY" \
+    --eqa-hf-model-id "$HF_ID" \
+    --device cuda \
+    ${FRONTIER_FLAG} \
+    --frontier-keyword-weight "$KW" \
+    --resume \
+    --output "$JSONL" \
+    2>&1 | tee "$LOG"

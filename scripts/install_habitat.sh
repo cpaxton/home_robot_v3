@@ -78,7 +78,7 @@ import fla.layers.gated_deltanet
 import fla.ops.gated_delta_rule
 import triton
 print('fla', getattr(__import__('fla'), '__version__', '?'), 'triton', triton.__version__)
-"
+    "
 }
 
 repair_if_needed() {

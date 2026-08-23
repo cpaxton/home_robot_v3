@@ -36,58 +36,58 @@ KEEP_TEXT=1
 NEED_FREE_GIB=5
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --profile) PROFILE="$2"; shift 2 ;;
-    --model) MODEL_ID="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --name) NAME="$2"; shift 2 ;;
-    --host) HOST="$2"; shift 2 ;;
-    --help|-h)
-      sed -n '2,30p' "$0"
-      exit 0
-      ;;
-    *)
-      echo "Unknown arg: $1" >&2
-      exit 1
-      ;;
-  esac
+    case "$1" in
+        --profile) PROFILE="$2"; shift 2 ;;
+        --model) MODEL_ID="$2"; shift 2 ;;
+        --port) PORT="$2"; shift 2 ;;
+        --name) NAME="$2"; shift 2 ;;
+        --host) HOST="$2"; shift 2 ;;
+        --help|-h)
+            sed -n '2,30p' "$0"
+            exit 0
+            ;;
+        *)
+            echo "Unknown arg: $1" >&2
+            exit 1
+            ;;
+    esac
 done
 
 if [[ -z "$HOST" ]]; then
-  echo "ERROR: set --host HOST or EMET_LLM_HOST (example: --host caliban)" >&2
-  exit 1
+    echo "ERROR: set --host HOST or EMET_LLM_HOST (example: --host caliban)" >&2
+    exit 1
 fi
 
 case "$PROFILE" in
-  dual-2b|2b)
-    PROFILE=dual-2b
-    MODEL_ID="${MODEL_ID:-Qwen/Qwen2-VL-2B-Instruct}"
-    PORT="${PORT:-8001}"
-    NAME="${NAME:-emet-jetson-vl}"
-    KEEP_TEXT=1
-    NEED_FREE_GIB=5
-    ;;
-  unified-7b|7b|big)
-    PROFILE=unified-7b
-    MODEL_ID="${MODEL_ID:-Qwen/Qwen2-VL-7B-Instruct}"
-    PORT="${PORT:-8000}"
-    NAME="${NAME:-emet-jetson-llm}"
-    KEEP_TEXT=0
-    NEED_FREE_GIB=16
-    ;;
-  *)
-    echo "Unknown --profile $PROFILE (use dual-2b or unified-7b)" >&2
-    exit 1
-    ;;
+    dual-2b|2b)
+        PROFILE=dual-2b
+        MODEL_ID="${MODEL_ID:-Qwen/Qwen2-VL-2B-Instruct}"
+        PORT="${PORT:-8001}"
+        NAME="${NAME:-emet-jetson-vl}"
+        KEEP_TEXT=1
+        NEED_FREE_GIB=5
+        ;;
+    unified-7b|7b|big)
+        PROFILE=unified-7b
+        MODEL_ID="${MODEL_ID:-Qwen/Qwen2-VL-7B-Instruct}"
+        PORT="${PORT:-8000}"
+        NAME="${NAME:-emet-jetson-llm}"
+        KEEP_TEXT=0
+        NEED_FREE_GIB=16
+        ;;
+    *)
+        echo "Unknown --profile $PROFILE (use dual-2b or unified-7b)" >&2
+        exit 1
+        ;;
 esac
 
 HUB_DIR="models--${MODEL_ID//\//--}"
 LOCAL_HUB="${HF_HUB}/${HUB_DIR}"
 
 if [[ ! -d "$LOCAL_HUB" ]]; then
-  echo "Missing local weights: $LOCAL_HUB"
-  echo "Download:  uv run python -c \"from huggingface_hub import snapshot_download; snapshot_download('$MODEL_ID')\""
-  exit 1
+    echo "Missing local weights: $LOCAL_HUB"
+    echo "Download:  uv run python -c \"from huggingface_hub import snapshot_download; snapshot_download('$MODEL_ID')\""
+    exit 1
 fi
 
 echo "=== deploy_caliban_vl  profile=$PROFILE  model=$MODEL_ID  port=$PORT  host=$HOST ==="
@@ -113,8 +113,8 @@ REMOTE
 
 echo "[3/6] Free disk on $HOST (root-owned HF dirs via docker as root)"
 ssh -o BatchMode=yes "$HOST" \
-  NEED_FREE_GIB="$NEED_FREE_GIB" PROFILE="$PROFILE" IMAGE="$IMAGE" REMOTE_REPO="$REMOTE_REPO" \
-  bash -s <<'REMOTE'
+    NEED_FREE_GIB="$NEED_FREE_GIB" PROFILE="$PROFILE" IMAGE="$IMAGE" REMOTE_REPO="$REMOTE_REPO" \
+    bash -s <<'REMOTE'
 set -euo pipefail
 run_docker() {
   if groups | grep -q '\bdocker\b'; then docker "$@"; else sudo docker "$@"; fi
@@ -183,12 +183,12 @@ refs.mkdir(parents=True, exist_ok=True)
 print("HF ref main ->", snap.name)
 PY
 ./scripts/run_jetson_llm_container.sh --vl --detach --port $PORT --name $NAME \
-  --model $MODEL_ID --hf-cache "\$HOME/hf-cache" --image $IMAGE
+    --model $MODEL_ID --hf-cache "\$HOME/hf-cache" --image $IMAGE
 REMOTE
 
 if [[ "$KEEP_TEXT" -eq 1 ]]; then
-  echo "[5b] Ensure text CausalLM still on :8000"
-  ssh -o BatchMode=yes "$HOST" bash -s <<REMOTE
+    echo "[5b] Ensure text CausalLM still on :8000"
+    ssh -o BatchMode=yes "$HOST" bash -s <<REMOTE
 set -euo pipefail
 run_docker() {
   if groups | grep -q '\bdocker\b'; then docker "\$@"; else sudo docker "\$@"; fi
@@ -201,25 +201,25 @@ fi
 
 echo "[6/6] Wait for health on $HOST:$PORT"
 for i in $(seq 1 90); do
-  if out=$(curl -sf -m 5 "http://${HOST}:${PORT}/health" 2>/dev/null); then
-    if echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ready') else 1)"; then
-      echo "$out" | python3 -m json.tool
-      if [[ "$PROFILE" == "unified-7b" ]]; then
-        echo "OK — unified VL-7B on :${PORT}"
-        echo "  Point BOTH Herman endpoints at openai@http://${HOST}:${PORT}/v1"
-        echo "  (agent.llm + mapping.eqa.vl_endpoint), or:"
-        echo "  export EMET_OPENAI_BASE_URL=http://${HOST}:${PORT}/v1"
-        echo "  export EMET_VL_ENDPOINT=openai@http://${HOST}:${PORT}/v1"
-      else
-        echo "OK — VL on :${PORT} (text remains :8000)"
-        echo "  EMET_VL_ENDPOINT=openai@http://${HOST}:${PORT}/v1"
-      fi
-      echo "Smoke:  uv run emet llm smoke --vl-only --vl http://${HOST}:${PORT}/v1"
-      exit 0
+    if out=$(curl -sf -m 5 "http://${HOST}:${PORT}/health" 2>/dev/null); then
+        if echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ready') else 1)"; then
+            echo "$out" | python3 -m json.tool
+            if [[ "$PROFILE" == "unified-7b" ]]; then
+                echo "OK — unified VL-7B on :${PORT}"
+                echo "  Point BOTH Herman endpoints at openai@http://${HOST}:${PORT}/v1"
+                echo "  (agent.llm + mapping.eqa.vl_endpoint), or:"
+                echo "  export EMET_OPENAI_BASE_URL=http://${HOST}:${PORT}/v1"
+                echo "  export EMET_VL_ENDPOINT=openai@http://${HOST}:${PORT}/v1"
+            else
+                echo "OK — VL on :${PORT} (text remains :8000)"
+                echo "  EMET_VL_ENDPOINT=openai@http://${HOST}:${PORT}/v1"
+            fi
+            echo "Smoke:  uv run emet llm smoke --vl-only --vl http://${HOST}:${PORT}/v1"
+            exit 0
+        fi
     fi
-  fi
-  echo "  waiting… ($i/90)"
-  sleep 10
+    echo "  waiting… ($i/90)"
+    sleep 10
 done
 echo "TIMEOUT. Check: ssh $HOST 'docker logs -f $NAME'"
 exit 1

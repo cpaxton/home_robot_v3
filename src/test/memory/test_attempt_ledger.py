@@ -31,13 +31,33 @@ def test_attempt_record_roundtrip():
         xyz=(1.0, 2.0, 0.5),
         source="eqa",
         question_id="q42",
+        room="kitchen",
     )
     d = rec.to_dict()
     assert d["xyz"] == [1.0, 2.0, 0.5]
-    assert d["schema_version"] == 1
+    assert d["schema_version"] == 3
+    assert d["room"] == "kitchen"
     back = AttemptRecord.from_dict(d)
     assert back == rec
     assert records_from_dicts(records_to_dicts([rec])) == [rec]
+
+
+def test_attempt_record_v1_import_missing_room():
+    """Legacy exports without room still load (room defaults to empty)."""
+    back = AttemptRecord.from_dict(
+        {
+            "schema_version": 1,
+            "action_kind": "verify",
+            "outcome": "absent",
+            "status_code": "vlm_absent",
+            "step": 2,
+            "obs_id": 9,
+            "phrase": "clock",
+            "source": "eqa",
+        }
+    )
+    assert back.room == ""
+    assert back.phrase == "clock"
 
 
 def test_attempt_record_rejects_bad_kind():
@@ -193,16 +213,55 @@ def test_retract_records_verify_absent_and_persist_flag():
             labels=["fruit bowl", "table"],
         )
     ]
-    out = mem.retract_phrase_claim_at_obs(5, "fruit bowl")
+    out = mem.retract_phrase_claim_at_obs(5, "fruit bowl", room="kitchen", step=3)
     assert out["ok"] is True
+    assert out.get("room") == "kitchen"
     rows = mem.get_attempt_records(action_kind="verify")
     assert len(rows) == 1
     assert rows[0].outcome == "absent"
     assert rows[0].phrase == "fruit bowl"
+    assert rows[0].room == "kitchen"
+    hist = mem.format_room_history(target_rooms=["bathroom"])
+    assert "verify_absent" in hist
+    assert "kitchen" in hist
+    assert "targets=bathroom" in hist
     # Persist flag keeps blacklist across clear.
     assert (5, "fruit bowl") in mem._retracted_nav_claims
     mem.clear_retracted_nav_claims()
     assert (5, "fruit bowl") in mem._retracted_nav_claims
+
+
+def test_additive_negative_evidence_keeps_claim_and_records_both_views():
+    mem = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"eqa": {"attempt_ledger": True}},
+    )
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=5,
+            xyz=np.array([0.0, 0.0, 0.5]),
+            labels=["fruit bowl", "table"],
+        )
+    ]
+    out = mem.retract_phrase_claim_at_obs(
+        5,
+        "fruit bowl",
+        strip_matching_labels=False,
+        apply_blacklist=False,
+        evidence_obs_id=9,
+        evidence_source="vlm",
+        room="kitchen",
+        step=3,
+    )
+    assert out["recorded_only"] is True
+    assert out["claim_obs_id"] == 5
+    assert out["evidence_obs_id"] == 9
+    assert mem._nodes[0].labels == ["fruit bowl", "table"]
+    assert (5, "fruit bowl") not in mem._retracted_nav_claims
+    rows = mem.get_attempt_records(action_kind="verify")
+    assert rows[0].obs_id == 9
+    assert rows[0].status_code == "vlm_absent"
 
 
 def test_attempt_summary_for_obs():
@@ -228,3 +287,45 @@ def test_attempt_summary_for_obs():
     summary = mem.attempt_summary_for_obs(2)
     assert "verify:absent" in summary
     assert "navigate:unreachable" in summary
+
+
+def test_room_timeline_ignores_unknown_and_formats_newest_first():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    assert mem.record_room_event(room="unknown", kind="stamp", step=1) is None
+    assert mem.record_room_event(room="", kind="stamp", step=1) is None
+    assert mem.record_room_event(room="kitchen", kind="stamp", step=1) is not None
+    assert mem.record_room_event(room="kitchen", kind="verify_absent", step=3, phrase="clock") is not None
+    assert mem.record_room_event(room="bathroom", kind="coverage_closed", step=5) is not None
+    hist = mem.format_room_history(max_chars=220, target_rooms=["bathroom", "bedroom"])
+    assert hist.startswith("Room history:")
+    # Newest-first: bathroom coverage before kitchen absent.
+    assert hist.index("bathroom") < hist.index("verify_absent")
+    assert "targets=bathroom,bedroom" in hist
+    mem.clear_room_events()
+    assert mem.get_room_events() == []
+    assert "Room history: (none)" in mem.format_room_history(target_rooms=["kitchen"])
+
+
+def test_room_history_does_not_set_escape_floor():
+    """Room timeline is agent-facing memory — not a nav latch."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import ESCAPE_MIN_TRAVEL_M, AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"room_policy": "canonical"}}
+    agent.graph_memory = GraphEQAMemory(defer_llm_clients=True)
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where are the towels in the bathroom?",
+        router=False,
+        collect_trace=False,
+    )
+    agent.graph_memory.record_room_event(room="kitchen", kind="verify_absent", step=2, phrase="towels")
+    ex._last_room_estimate = "kitchen"
+    # Escape floor still requires the existing streak / policy path — history alone is inert.
+    assert ex._not_present_streak == 0
+    # Without the sticky-mismatch latch from the abandoned PR, streak-only floor stays 0.
+    assert ex._escape_min_travel_m() == 0.0
+    assert ESCAPE_MIN_TRAVEL_M == 3.0

@@ -91,6 +91,7 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
     maps/overlay_step_NNNN.png   # GT overlay stride snapshots (when export_map_overlay)
     floor_metrics.json
     diagnostics_manifest.json
+    compact_memory/               # optional reloadable graph-only checkpoint
     (track-specific: raw_eqa.txt, memory/, …)
 ```
 
@@ -112,6 +113,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
 | `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` (when >0; else `map_video_stride` drives auto stride for map video) |
 | `EMET_EVAL_EXPORT_GRAPH` | off | Full graph checkpoint (heavy) |
+| `EMET_EVAL_EXPORT_COMPACT_MEMORY` | off | Graph-only semantic/runtime/evidence metadata; no voxel map, dense frames, navigation pixels, or evidence-view pixels, so reload supports semantic inspection but not visual verification |
+| `EMET_EVAL_EXPORT_WORLD_EVIDENCE_RGB` | on | Full-resolution evidence-view PNGs; disable for compact sweeps |
 | `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
 | `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
 
@@ -122,6 +125,11 @@ Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_
 **Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → YAML → defaults. See [emet_config.md](emet_config.md).
 
 **Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`. On Habitat, when `export_video_substeps` is on, `HabitatRobotClient` post-step hooks append one RGB frame per discrete sim action (smoother head-camera MP4 during navmesh following).
+
+The GraphEQA baseline sweep defaults to compact exports: graph-only checkpoints,
+final maps, trajectories, and JSON traces are retained under the run output, while
+per-step RGB, evidence-view pixels, and videos are disabled. Individual
+`EMET_EVAL_*` variables can opt those visual artifacts back in.
 
 **CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
 
@@ -161,7 +169,7 @@ uv run emet jobs                 # list + progress/ETA columns
 uv run emet jobs status JOB_ID   # detail + derived ETA
 uv run emet jobs cancel JOB_ID   # pause/stop one managed job (then resume via overnight --base / hmeqa resume)
 
-# Launch (prefer over bare nohup):
+# Launch (prefer over bare nohup; GPU-like commands acquire the host-wide lock):
 uv run emet jobs run --name my-eval --need-mib 12000 -- ./scripts/…
 
 # Bash helpers still work (delegate to emet eval):
@@ -179,18 +187,26 @@ uv run emet jobs cancel JOB_ID
 uv run emet jobs                 # confirm no unmanaged emet-habitat orphans
 uv run emet eval status          # GPU should clear (~no compute apps)
 
-# Resume the full holdout→bal32 ladder (skips DONE phases; RESUME=1 on partial H2H):
+# Resume the full holdout→bal32 ladder (skips only validated JSON DONE phases):
 uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_<stamp> --job-name hmeqa-overnight
 
 # Or resume only the bal-32 / holdout H2H OUT:
 uv run emet hmeqa resume ~/runs/emet/hmeqa_overnight_<stamp>/bal32 --preset paper-router
 ```
 
-Do **not** re-run overnight with a **new** `--base` if you want to keep scored episodes. Mid-episode cancel leaves an empty `*_qN.jsonl`; resume retries those. Prefer `emet jobs cancel` over raw `kill` / `emet eval kill-stale` while a managed job is the thing you want to stop. Details: [cli.md](cli.md#emet-jobs-queued--running-eval-experiments), [cli.md](cli.md#emet-hmeqa-hm-eqa-h2h).
+Do **not** re-run overnight with a **new** `--base` if you want to keep committed episodes. Mid-episode cancel leaves a pending/partial row; resume retries it. Non-empty row files are not completion authority: only hash-validated per-unit `COMPLETE.json` markers count, and `DONE` is validated JSON bound to all expected markers and the aggregate hash. Prefer `emet jobs cancel` over raw `kill` / `emet eval kill-stale` while a managed job is the thing you want to stop. Details: [cli.md](cli.md#emet-jobs-queued--running-eval-experiments), [cli.md](cli.md#emet-hmeqa-hm-eqa-h2h).
 
 `kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 
 Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segments:True` when scripts call `emet_export_pytorch_alloc`.
+
+`emet jobs run` defaults `--gpu-exclusive` on when `--need-mib` is supplied or the
+command/name looks like a GPU experiment, and holds the canonical
+`EMET_GPU_LOCK` (`~/runs/emet/gpu.lock`) until the command exits. `flock` is the
+serialization authority: exclusive launches do not implicitly wait on active GPU
+PIDs, while explicit `--wait-pid`, lock, and GPU polling waits are finite. This
+closes simultaneous managed launches across sibling checkouts; do not opt out with `--no-gpu-exclusive` for
+Habitat/VLM/MuJoCo work.
 
 **Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and deep eval on **separate nights** (see below).
 

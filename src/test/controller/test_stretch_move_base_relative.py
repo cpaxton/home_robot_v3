@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Stretch move_base_to must send absolute episode xyt (idempotent under reliable resend)."""
 
 from __future__ import annotations
@@ -5,10 +9,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
+from src.test.controller import make_zmq_test_client
 
 from emet.controller.zmq_client import StretchZmqClient
 from emet.utils.geometry import xyt_base_to_global
-from src.test.controller import make_zmq_test_client
 
 
 def test_move_base_to_relative_sends_absolute_episode_xyt():

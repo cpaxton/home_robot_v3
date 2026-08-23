@@ -23,7 +23,6 @@ from __future__ import annotations
 import os
 
 import mujoco
-import numpy as np
 import pytest
 
 _run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()

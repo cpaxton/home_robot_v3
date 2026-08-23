@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Run Dynagraph Robocasa E2E for innate_mars / galaxea_r1 and compare floor metrics.
 
 Stretch Robocasa (RobosuiteZmqServer + GenericZmqClient) lives on branch
@@ -196,9 +200,7 @@ def main() -> int:
     for i, a in enumerate(ok_robots):
         for b in ok_robots[i + 1 :]:
             key = f"{a}_vs_{b}"
-            report["pairwise_explored"][key] = compare_explored_floor_metrics(
-                results[a], results[b], rtol_area=0.35
-            )
+            report["pairwise_explored"][key] = compare_explored_floor_metrics(results[a], results[b], rtol_area=0.35)
 
     report_path = BASE / "comparison_report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

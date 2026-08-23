@@ -50,10 +50,7 @@ def sweep_thresholds(
     thresholds: list[float],
     label_key: str = "gt_in_view",
 ) -> list[dict[str, float]]:
-    return [
-        binary_metrics(rows, score_key=score_key, threshold=t, label_key=label_key)
-        for t in thresholds
-    ]
+    return [binary_metrics(rows, score_key=score_key, threshold=t, label_key=label_key) for t in thresholds]
 
 
 def best_operating_point(

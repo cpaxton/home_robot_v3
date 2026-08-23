@@ -7,5 +7,5 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from .open_vocab_scene_graph import ObjectObservation, OpenVocabSceneGraph, SceneGraphEdge, SceneGraphNode
 from .scene_graph import SceneGraph
-from .open_vocab_scene_graph import OpenVocabSceneGraph, SceneGraphNode, SceneGraphEdge, ObjectObservation

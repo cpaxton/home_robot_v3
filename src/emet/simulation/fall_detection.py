@@ -182,8 +182,7 @@ class FallOverMonitor:
             self._last_report_wall_s = now
         elif not fallen and self._was_fallen:
             self._log.alert(
-                f"SIM ROBOT UPRIGHT AGAIN: base={status.body_name!r} "
-                f"tilt={status.tilt_deg:.1f}° (was fallen)"
+                f"SIM ROBOT UPRIGHT AGAIN: base={status.body_name!r} tilt={status.tilt_deg:.1f}° (was fallen)"
             )
         self._was_fallen = fallen
         return status

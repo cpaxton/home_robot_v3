@@ -12,7 +12,6 @@ import numpy as np
 
 from emet.visualization.map_snapshot import (
     finalize_export_topdown_rgb,
-    world_xy_to_grid_ij,
 )
 
 

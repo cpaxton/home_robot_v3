@@ -12,10 +12,10 @@ TIMEOUT="${TIMEOUT:-3000}"
 
 echo "############ PHASE 1: dynagraph (SigLIP) ############"
 TAG="${DG_TAG:-cmp_dynagraph}" IDS="$IDS" METHOD=dynagraph TIMEOUT="$TIMEOUT" \
-  ./scripts/run_habitat_iter_subset.sh || true
+    ./scripts/run_habitat_iter_subset.sh || true
 
 echo "############ PHASE 2: graph_eqa (baseline) ############"
 TAG="${BL_TAG:-cmp_graph_eqa}" IDS="$IDS" METHOD=graph_eqa TIMEOUT="$TIMEOUT" \
-  ./scripts/run_habitat_iter_subset.sh || true
+    ./scripts/run_habitat_iter_subset.sh || true
 
 echo "############ DONE ############"

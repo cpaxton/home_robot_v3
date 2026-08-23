@@ -2,8 +2,8 @@
 
 Primary paper goal: reproduce GraphEQA-style metrics on HM-EQA and OpenEQA subsets.
 
-**Central index:** [experiments/README.md](README.md) (HM-EQA baselines + run commands).  
-**Results vs prior art:** [habitat_eqa_results.md](habitat_eqa_results.md)  
+**Central index:** [experiments/README.md](README.md) (HM-EQA baselines + run commands).
+**Results vs prior art:** [habitat_eqa_results.md](habitat_eqa_results.md)
 **CLI flags:** [habitat/usage.md](../habitat/usage.md)
 
 **Deep docs:**

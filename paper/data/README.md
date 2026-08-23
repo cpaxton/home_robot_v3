@@ -14,6 +14,7 @@ Use these JSON files to rebuild tables/figures and to re-run the Habitat H2H.
 | `balanced32_router_off_agentic_archive.json` | Prior matched H2H agentic 11/32 (router off) |
 | `balanced32_overnight_replicate.json` | Independent overnight bal-32 (classic 10/32, agentic 12/32; router off) |
 | `failset104105_summary.json` | q104/q105 infra regression (empty pred / `n_object=0`) before vs after fix |
+| `action_history_pair_20260823.json` | Matched n=4 grounded action-history visibility diagnostic (3/4 both; process metrics) |
 | `coverage_panel_metrics.json` | Per-question metrics for `figs/hmeqa_agentic_coverage.png` |
 
 **Not stored here:** `explored_2d.npy`, trajectories, `eqa_history`, VLM traces, mp4s. Those live under `~/runs/emet/hmeqa_agentic_h2h8_*` / `~/.cache/habitat_eqa/episodes/` when you re-run.

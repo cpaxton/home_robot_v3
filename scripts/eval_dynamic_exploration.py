@@ -291,8 +291,7 @@ def main() -> int:
         csv_path = output_dir / "aggregate_dynamic_exploration.csv"
         _write_csv(all_rows, csv_path)
         _log(
-            f"Wrote {len(all_rows)} runs to {output_dir} (CSV: {csv_path}) "
-            f"ok={n_ok} err={n_err} resume_skip={n_skip}",
+            f"Wrote {len(all_rows)} runs to {output_dir} (CSV: {csv_path}) ok={n_ok} err={n_err} resume_skip={n_skip}",
             runner_log=runner_log,
         )
         _append_progress(

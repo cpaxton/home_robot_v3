@@ -150,5 +150,5 @@ uv run emet test src/test/eval/test_dynamic_exploration_config.py -q
 RUN_DYNAMIC_EXPLORE_TESTS=1 uv run emet test src/test/eval/test_dynamic_exploration_config.py -q
 ```
 
-Environment variables (`EMET_DYNAMIC_EXPLORE_OUTPUT`, `SKIP_DYNAMIC_EXPLORE`, …): [environment_variables.md](environment_variables.md).  
+Environment variables (`EMET_DYNAMIC_EXPLORE_OUTPUT`, `SKIP_DYNAMIC_EXPLORE`, …): [environment_variables.md](environment_variables.md).
 Full multi-track queue: [paper_benchmarks.md](paper_benchmarks.md) (Large paper eval queue).

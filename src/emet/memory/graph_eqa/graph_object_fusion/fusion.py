@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
+
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
 

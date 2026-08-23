@@ -27,7 +27,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 _DATA_URL_RE = re.compile(r"^data:(image/[^;]+);base64,(.+)$", re.DOTALL | re.IGNORECASE)
@@ -40,7 +40,7 @@ def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def _messages_have_images(messages: List[Dict[str, Any]]) -> bool:
+def _messages_have_images(messages: list[dict[str, Any]]) -> bool:
     for msg in messages:
         if not isinstance(msg, dict):
             continue
@@ -64,8 +64,8 @@ def _decode_data_url_pil(url: str):
     return Image.open(BytesIO(blob)).convert("RGB")
 
 
-def _messages_to_chat(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    out: List[Dict[str, str]] = []
+def _messages_to_chat(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
     for msg in messages:
         if not isinstance(msg, dict):
             continue
@@ -90,10 +90,10 @@ def _messages_to_chat(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return out
 
 
-def _messages_to_qwen_vl(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Any]]:
+def _messages_to_qwen_vl(messages: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[Any]]:
     """Convert OpenAI multimodal messages → Qwen2-VL chat + ordered PIL images."""
-    qwen_msgs: List[Dict[str, Any]] = []
-    images: List[Any] = []
+    qwen_msgs: list[dict[str, Any]] = []
+    images: list[Any] = []
     for msg in messages:
         if not isinstance(msg, dict):
             continue
@@ -103,11 +103,7 @@ def _messages_to_qwen_vl(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str,
             continue
         if role == "system":
             if isinstance(content, list):
-                texts = [
-                    str(b.get("text") or "")
-                    for b in content
-                    if isinstance(b, dict) and b.get("type") == "text"
-                ]
+                texts = [str(b.get("text") or "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 text = "\n".join(t for t in texts if t)
             else:
                 text = str(content)
@@ -116,11 +112,7 @@ def _messages_to_qwen_vl(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str,
             continue
         if role == "assistant":
             if isinstance(content, list):
-                texts = [
-                    str(b.get("text") or "")
-                    for b in content
-                    if isinstance(b, dict) and b.get("type") == "text"
-                ]
+                texts = [str(b.get("text") or "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 text = "\n".join(t for t in texts if t)
             else:
                 text = str(content)
@@ -134,7 +126,7 @@ def _messages_to_qwen_vl(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str,
         if not isinstance(content, list):
             qwen_msgs.append({"role": "user", "content": [{"type": "text", "text": str(content)}]})
             continue
-        parts: List[Dict[str, Any]] = []
+        parts: list[dict[str, Any]] = []
         for block in content:
             if isinstance(block, str):
                 if block.strip():
@@ -160,7 +152,7 @@ def _messages_to_qwen_vl(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str,
     return qwen_msgs, images
 
 
-class ModelBundle(object):
+class ModelBundle:
     def __init__(
         self,
         model_id: str,
@@ -185,14 +177,8 @@ class ModelBundle(object):
         import torch
 
         _log(
-            "Loading %s on device=%s cuda=%s torch=%s multimodal=%s"
-            % (
-                self.model_id,
-                self.device,
-                torch.cuda.is_available(),
-                torch.__version__,
-                self.multimodal,
-            )
+            f"Loading {self.model_id} on device={self.device} "
+            f"cuda={torch.cuda.is_available()} torch={torch.__version__} multimodal={self.multimodal}"
         )
         if self.device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("CUDA requested but torch.cuda.is_available() is False")
@@ -213,11 +199,8 @@ class ModelBundle(object):
         self.load_error = None
         if self.device == "cuda":
             free, total = torch.cuda.mem_get_info(0)
-            _log(
-                "CUDA ready: %.1f / %.1f GiB free on device 0"
-                % (free / (1024**3), total / (1024**3))
-            )
-        _log("Model ready: %s multimodal=%s" % (self.model_id, self.multimodal))
+            _log(f"CUDA ready: {free / (1024**3):.1f} / {total / (1024**3):.1f} GiB free on device 0")
+        _log(f"Model ready: {self.model_id} multimodal={self.multimodal}")
 
     def _load_text(self, torch, torch_dtype) -> None:
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -249,14 +232,14 @@ class ModelBundle(object):
         if self.device == "cpu":
             self.model = self.model.to("cpu")
 
-    def generate(self, messages: List[Dict[str, Any]], max_tokens: Optional[int] = None) -> str:
+    def generate(self, messages: list[dict[str, Any]], max_tokens: int | None = None) -> str:
         if not self.ready or self.model is None:
             raise RuntimeError(self.load_error or "model not loaded")
         if self.multimodal:
             return self._generate_vl(messages, max_tokens=max_tokens)
         return self._generate_text(messages, max_tokens=max_tokens)
 
-    def _generate_text(self, messages: List[Dict[str, Any]], max_tokens: Optional[int] = None) -> str:
+    def _generate_text(self, messages: list[dict[str, Any]], max_tokens: int | None = None) -> str:
         import torch
 
         if self.tokenizer is None:
@@ -272,9 +255,7 @@ class ModelBundle(object):
         if not chat:
             raise ValueError("messages must be non-empty")
         mt = int(max_tokens or self.max_tokens)
-        prompt = self.tokenizer.apply_chat_template(
-            chat, tokenize=False, add_generation_prompt=True
-        )
+        prompt = self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt, return_tensors="pt")
         if self.device == "cuda":
             inputs = {k: v.cuda(0) for k, v in inputs.items()}
@@ -289,7 +270,7 @@ class ModelBundle(object):
         gen = out[0][inputs["input_ids"].shape[-1] :]
         return self.tokenizer.decode(gen, skip_special_tokens=True).strip()
 
-    def _generate_vl(self, messages: List[Dict[str, Any]], max_tokens: Optional[int] = None) -> str:
+    def _generate_vl(self, messages: list[dict[str, Any]], max_tokens: int | None = None) -> str:
         import torch
 
         if self.processor is None:
@@ -298,9 +279,7 @@ class ModelBundle(object):
         if not qwen_msgs:
             raise ValueError("messages must be non-empty")
         mt = int(max_tokens or self.max_tokens)
-        prompt = self.processor.apply_chat_template(
-            qwen_msgs, tokenize=False, add_generation_prompt=True
-        )
+        prompt = self.processor.apply_chat_template(qwen_msgs, tokenize=False, add_generation_prompt=True)
         # Prefer processor(images=...) path; empty image list → text-only VL call.
         proc_kwargs = {
             "text": [prompt],
@@ -311,9 +290,7 @@ class ModelBundle(object):
             proc_kwargs["images"] = images
         inputs = self.processor(**proc_kwargs)
         if self.device == "cuda":
-            inputs = {
-                k: (v.cuda(0) if hasattr(v, "cuda") else v) for k, v in inputs.items()
-            }
+            inputs = {k: (v.cuda(0) if hasattr(v, "cuda") else v) for k, v in inputs.items()}
         with self._lock:
             with torch.inference_mode():
                 out = self.model.generate(**inputs, max_new_tokens=mt, do_sample=False)
@@ -322,18 +299,18 @@ class ModelBundle(object):
         return self.processor.batch_decode([gen], skip_special_tokens=True)[0].strip()
 
 
-def make_handler(bundle: ModelBundle, api_key: Optional[str]):
+def make_handler(bundle: ModelBundle, api_key: str | None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt, *args):
-            _log("%s - %s" % (self.address_string(), fmt % args))
+            _log(f"{self.address_string()} - {fmt % args}")
 
         def _auth_ok(self):
             if not api_key:
                 return True
             auth = self.headers.get("Authorization", "")
-            if auth == "Bearer %s" % api_key:
+            if auth == f"Bearer {api_key}":
                 return True
             return self.headers.get("X-Api-Key", "") == api_key
 
@@ -399,12 +376,12 @@ def make_handler(bundle: ModelBundle, api_key: Optional[str]):
                     },
                 )
                 return
-            self._send(404, {"error": {"message": "unknown path %s" % path, "type": "not_found"}})
+            self._send(404, {"error": {"message": f"unknown path {path}", "type": "not_found"}})
 
         def do_POST(self):
             path = urlparse(self.path).path.rstrip("/") or "/"
             if path not in ("/v1/chat/completions", "/chat/completions"):
-                self._send(404, {"error": {"message": "unknown path %s" % path, "type": "not_found"}})
+                self._send(404, {"error": {"message": f"unknown path {path}", "type": "not_found"}})
                 return
             if not self._auth_ok():
                 self._send(401, {"error": {"message": "unauthorized", "type": "auth_error"}})
@@ -422,7 +399,7 @@ def make_handler(bundle: ModelBundle, api_key: Optional[str]):
                 self._send(
                     200,
                     {
-                        "id": "chatcmpl-%s" % uuid.uuid4().hex[:24],
+                        "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
                         "object": "chat.completion",
                         "created": int(time.time()),
                         "model": model,
@@ -447,7 +424,7 @@ def make_handler(bundle: ModelBundle, api_key: Optional[str]):
                     },
                 )
             except Exception as exc:
-                _log("chat.completions failed: %s" % exc)
+                _log(f"chat.completions failed: {exc}")
                 self._send(500, {"error": {"message": str(exc), "type": type(exc).__name__}})
 
     return Handler
@@ -492,12 +469,11 @@ def main(argv=None):
         quant = "fp16"
     if quant not in ("fp16",):
         _log(
-            "FATAL: --quant %s is not supported on this Jetson JP5 Tegra-CUDA image "
-            "(torch %s). bitsandbytes / AutoAWQ / Quanto need newer PyTorch + CUDA "
+            f"FATAL: --quant {quant} is not supported on this Jetson JP5 Tegra-CUDA image "
+            "(torch nv/tegra). bitsandbytes / AutoAWQ / Quanto need newer PyTorch + CUDA "
             "kernels; pip installing them replaces NVIDIA torch with CPU wheels. "
             "Stay on fp16 (Orin ~64 GiB unified memory fits Qwen2-VL-7B), or move to "
             "a JP6 / dustynv vLLM container for AWQ. See docs/llm_serve.md."
-            % (quant, "nv/tegra")
         )
         return 1
 
@@ -522,16 +498,13 @@ def main(argv=None):
     try:
         bundle.load()
     except Exception as exc:
-        bundle.load_error = "%s: %s" % (type(exc).__name__, exc)
-        _log("FATAL: %s" % bundle.load_error)
+        bundle.load_error = f"{type(exc).__name__}: {exc}"
+        _log(f"FATAL: {bundle.load_error}")
         return 1
 
     httpd = ThreadingHTTPServer((args.host, int(port)), make_handler(bundle, args.api_key))
     kind = "VLM" if multimodal else "LLM"
-    _log(
-        "Serving OpenAI %s API on http://%s:%s/v1  model=%s device=%s"
-        % (kind, args.host, port, model, args.device)
-    )
+    _log(f"Serving OpenAI {kind} API on http://{args.host}:{port}/v1  model={model} device={args.device}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

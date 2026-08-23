@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "question": "Where did I leave the silver trash can at A) Next to the dining table B) Next to the TV C) Next to the kitchen sink D) Next to the refrigerator. Answer:",
+  "question_id": 11,
+  "cases": {
+    "clean_obs22": {
+      "source_run": "gre_q11_a2_clean_81a2c689_20260823_003735",
+      "session_id": "81a2c689",
+      "agent_round": 1,
+      "world_step": 13,
+      "observation": {
+        "obs_id": 22,
+        "entity_id": "entity_550b3a0b4a9b",
+        "place_id": "place_550b3a0b4a9b",
+        "view_id": "view_00000024",
+        "revision": 8,
+        "xyz": [-0.6118602216381809, 4.651959401458731, 0.6453552018012142],
+        "labels": [
+          "kitchen counter",
+          "metal table stand",
+          "refrigerator",
+          "shelving unit",
+          "stove",
+          "television",
+          "wooden sculpture",
+          "wooden table"
+        ],
+        "room_assertions": {
+          "graph_labels": "kitchen",
+          "router_vlm": "kitchen"
+        }
+      },
+      "attempts": [
+        {
+          "action_kind": "navigate",
+          "outcome": "ok",
+          "status_code": "ok",
+          "target_kind": "place",
+          "target_id": "place_550b3a0b4a9b"
+        },
+        {
+          "action_kind": "verify",
+          "outcome": "absent",
+          "status_code": "ABSENT",
+          "target_kind": "place",
+          "target_id": "place_550b3a0b4a9b"
+        }
+      ],
+      "evidence": [
+        {
+          "stage": "siglip_proposal",
+          "outcome": "absent",
+          "score": 0.06693847477436066
+        },
+        {
+          "stage": "vlm_assessment",
+          "outcome": "absent",
+          "answerable": false,
+          "need_more_views": true
+        }
+      ],
+      "loop": {
+        "status": "STALLED_NAV_LOOP",
+        "visits": 1
+      },
+      "expected": {
+        "verified": false,
+        "durable_confirmation": false,
+        "room": "kitchen"
+      }
+    },
+    "dirty_obs76": {
+      "source_run": "gre_q11_a2_canary_d3ee32e8_20260822_175238",
+      "session_id": "d3ee32e8",
+      "agent_round": 3,
+      "world_step": 29,
+      "observation": {
+        "obs_id": 76,
+        "entity_id": "entity_462123e4f33f",
+        "place_id": "place_462123e4f33f",
+        "view_id": "view_00000080",
+        "revision": 8,
+        "xyz": [-0.3918491582540855, 1.4044540046628784, 0.9761421381376054],
+        "labels": [
+          "basket",
+          "cabinets",
+          "chairs",
+          "refrigerator",
+          "sink",
+          "stove",
+          "window",
+          "wooden dining table"
+        ],
+        "room_assertions": {
+          "graph_labels": "kitchen",
+          "router_vlm": "kitchen"
+        }
+      },
+      "attempts": [
+        {
+          "action_kind": "navigate",
+          "outcome": "ok",
+          "status_code": "ok",
+          "target_kind": "place",
+          "target_id": "place_462123e4f33f"
+        },
+        {
+          "action_kind": "verify",
+          "outcome": "absent",
+          "status_code": "ABSENT",
+          "target_kind": "place",
+          "target_id": "place_462123e4f33f"
+        }
+      ],
+      "evidence": [
+        {
+          "stage": "siglip_proposal",
+          "outcome": "absent",
+          "score": 0.09533381462097168
+        },
+        {
+          "stage": "vlm_assessment",
+          "outcome": "present",
+          "answerable": true,
+          "need_more_views": false,
+          "suggested_answer": "Next to the refrigerator"
+        },
+        {
+          "stage": "fused_confirmation",
+          "outcome": "confirmed",
+          "reason": "single_view_present"
+        }
+      ],
+      "expected": {
+        "verified": true,
+        "durable_confirmation": true,
+        "answer": "Next to the refrigerator",
+        "room_conflict": false
+      }
+    }
+  }
+}

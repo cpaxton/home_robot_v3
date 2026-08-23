@@ -77,9 +77,7 @@ def test_print_bridge_status_smoke(capsys):
 
 
 def test_parse_camera_health_missing_arducam():
-    health = parse_camera_health_output(
-        "arducam=0\narm_pubs=0\nhead_pubs=1\nby_id=usb-3D_USB_Camera_…-video-index0,\n"
-    )
+    health = parse_camera_health_output("arducam=0\narm_pubs=0\nhead_pubs=1\nby_id=usb-3D_USB_Camera_…-video-index0,\n")
     assert health.arducam_symlink is False
     assert health.arm_publishers == 0
     assert health.head_left_publishers == 1

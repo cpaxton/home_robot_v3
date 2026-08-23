@@ -14,6 +14,21 @@ connection: null
 sim: null
 sim_config: null
 
+# Grounded Graph Agent rollout axes. These are inert legacy-compatible defaults;
+# HM-EQA launches freeze their effective values in OUT/run_manifest.json.
+mapping:
+  eqa:
+    agentic_decision_policy: "legacy"
+    graph_evidence_mode: "off"
+    room_history_mode: "off"
+    room_policy: "canonical"
+    room_target_hints: true
+    room_stamp_investigate: false
+    # off=no durable rows/history; shadow=collect but hide; agent=expose grounded
+    # recent outcomes, loop flags, per-place summaries, and global attempt rows.
+    attempt_ledger_mode: "off"
+    variant_id: "legacy"
+
 embodied_agent: {}
 
 robots:

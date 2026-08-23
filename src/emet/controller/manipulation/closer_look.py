@@ -111,7 +111,11 @@ def get_closer_look_aim(agent: Any = None, context: dict[str, Any] | None = None
     for src in (agent, context):
         if src is None:
             continue
-        raw = getattr(src, LAST_CLOSER_LOOK_AIM_KEY, None) if not isinstance(src, dict) else src.get(LAST_CLOSER_LOOK_AIM_KEY)
+        raw = (
+            getattr(src, LAST_CLOSER_LOOK_AIM_KEY, None)
+            if not isinstance(src, dict)
+            else src.get(LAST_CLOSER_LOOK_AIM_KEY)
+        )
         if isinstance(raw, dict) and raw.get("ok"):
             return raw
     return None
@@ -150,9 +154,7 @@ def consume_closer_look_aim_for_ee_picture(
         clear_closer_look_attempt(agent, context)
         phrase = str(aim.get("phrase") or "").strip()
         note = (
-            f"Capturing wrist camera after aim at {phrase!r}."
-            if phrase
-            else "Capturing wrist camera after aim_arm_at."
+            f"Capturing wrist camera after aim at {phrase!r}." if phrase else "Capturing wrist camera after aim_arm_at."
         )
         return True, note, aim
 

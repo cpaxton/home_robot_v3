@@ -17,8 +17,8 @@ n_target=$(awk -F, '{print NF}' <<<"$IDS")
 deadline=$(( $(date +%s) + MAX_WAIT_MIN * 60 ))
 
 count_done() {
-  [ -f "$RESULTS" ] || { echo 0; return; }
-  uv run python - <<'PY' "$RESULTS"
+    [ -f "$RESULTS" ] || { echo 0; return; }
+    uv run python - <<'PY' "$RESULTS"
 import json, sys
 from pathlib import Path
 from emet.habitat.metrics import episode_run_completed
@@ -29,27 +29,27 @@ PY
 }
 
 wait_for_gpu() {
-  local ok=0 free now
-  while :; do
-    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
-    now=$(date +%H:%M:%S)
-    if [ "${free:-0}" -ge "$NEED_MIB" ]; then ok=$((ok+1)); else ok=0; fi
-    echo "[$now] free=${free}MiB need=${NEED_MIB} stable=${ok}/${STABLE} done=$(count_done)/${n_target}"
-    [ "$ok" -ge "$STABLE" ] && return 0
-    [ "$(date +%s)" -ge "$deadline" ] && return 2
-    sleep "$INTERVAL"
-  done
+    local ok=0 free now
+    while :; do
+        free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
+        now=$(date +%H:%M:%S)
+        if [ "${free:-0}" -ge "$NEED_MIB" ]; then ok=$((ok+1)); else ok=0; fi
+        echo "[$now] free=${free}MiB need=${NEED_MIB} stable=${ok}/${STABLE} done=$(count_done)/${n_target}"
+        [ "$ok" -ge "$STABLE" ] && return 0
+        [ "$(date +%s)" -ge "$deadline" ] && return 2
+        sleep "$INTERVAL"
+    done
 }
 
 cd /home/cpaxton/src/home_robot_v4
 while [ "$(count_done)" -lt "$n_target" ]; do
-  if ! wait_for_gpu; then
-    echo "gave up after ${MAX_WAIT_MIN} min; done=$(count_done)/${n_target}"
-    exit 2
-  fi
-  echo "=== launching attempt (done=$(count_done)/${n_target}, TAG=$TAG, METHOD=${METHOD:-graph_eqa}) ==="
-  TAG="$TAG" IDS="$IDS" TIMEOUT="$TIMEOUT" METHOD="${METHOD:-graph_eqa}" ./scripts/run_habitat_iter_subset.sh || true
-  echo "=== attempt ended; done=$(count_done)/${n_target} ==="
-  sleep 5
+    if ! wait_for_gpu; then
+        echo "gave up after ${MAX_WAIT_MIN} min; done=$(count_done)/${n_target}"
+        exit 2
+    fi
+    echo "=== launching attempt (done=$(count_done)/${n_target}, TAG=$TAG, METHOD=${METHOD:-graph_eqa}) ==="
+    TAG="$TAG" IDS="$IDS" TIMEOUT="$TIMEOUT" METHOD="${METHOD:-graph_eqa}" ./scripts/run_habitat_iter_subset.sh || true
+    echo "=== attempt ended; done=$(count_done)/${n_target} ==="
+    sleep 5
 done
 echo "ALL DONE: $(count_done)/${n_target} questions in $RESULTS"

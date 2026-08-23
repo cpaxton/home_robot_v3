@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 except ImportError as exc:
     raise SystemExit("Pillow required: uv sync") from exc
 
@@ -158,13 +158,10 @@ def main() -> None:
         qid = int(row.get("question_id", -1))
         pred = str(row.get("predicted_answer") or "")
         pre = str(row.get("predebias_letter") or "")
-        title = (
-            f"Q{qid:03d} gold={row.get('gold_answer_letter','?')} "
-            f"pred={pred} pre={pre} ok={row.get('correct')}"
-        )
+        title = f"Q{qid:03d} gold={row.get('gold_answer_letter', '?')} pred={pred} pre={pre} ok={row.get('correct')}"
         labels = [f"obs {oid}" for oid in obs_ids[: len(imgs)]]
         panel = _mosaic(imgs, labels, title)
-        out = args.output_dir / f"retrieval_q{qid:03d}_{row.get('method','x')}.png"
+        out = args.output_dir / f"retrieval_q{qid:03d}_{row.get('method', 'x')}.png"
         panel.save(out)
         manifest.append({"question_id": qid, "panel": str(out), "bundle": str(bundle)})
         print(f"wrote {out}")

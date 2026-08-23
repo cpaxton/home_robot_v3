@@ -34,8 +34,7 @@ BACKENDS = OVMM_MEMORY_BACKENDS
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate OVMM-inspired find phases (FindObj / FindRec) in emet sim. "
-        "Prefer: emet ovmm find …",
+        description="Evaluate OVMM-inspired find phases (FindObj / FindRec) in emet sim. Prefer: emet ovmm find …",
     )
     parser.add_argument(
         "--episodes",

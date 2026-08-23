@@ -21,20 +21,20 @@ IDS="$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated
 N="$(awk -F, '{print NF}' <<<"$IDS")"
 echo "$IDS" >"$OUT_DIR/IDS.txt"
 {
-  echo "n=$N"
-  git rev-parse --short HEAD
+    echo "n=$N"
+    git rev-parse --short HEAD
 } | tee "$OUT_DIR/META.txt"
 
 log() { echo "[$(date -Is)] $*"; }
 
 run_method() {
-  local method="$1"
-  local tag="annotated37_${RUN_ID}_${method}"
-  log "=== annotated37 method=$method tag=$tag n=$N ==="
-  NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
-  emet_kill_stale_eval_processes
-  TAG="$tag" IDS="$IDS" METHOD="$method" TIMEOUT="$TIMEOUT" \
-    ./scripts/run_habitat_iter_subset.sh 2>&1 | tee "$OUT_DIR/${method}.log"
+    local method="$1"
+    local tag="annotated37_${RUN_ID}_${method}"
+    log "=== annotated37 method=$method tag=$tag n=$N ==="
+    NEED_MIB="$NEED_MIB" "${ROOT}/scripts/gpu_preflight.sh" --wait
+    emet_kill_stale_eval_processes
+    TAG="$tag" IDS="$IDS" METHOD="$method" TIMEOUT="$TIMEOUT" \
+        ./scripts/run_habitat_iter_subset.sh 2>&1 | tee "$OUT_DIR/${method}.log"
 }
 
 run_method static_graph

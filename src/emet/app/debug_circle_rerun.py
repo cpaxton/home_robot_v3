@@ -52,8 +52,7 @@ def main(headless: bool, frames: int, steps_per_frame: int, stride: int) -> None
         rr.serve(open_browser=not os.environ.get("RERUN_HEADLESS", "").strip())
         host = os.environ.get("RERUN_SERVE_HOST", "127.0.0.1")
         click.echo(
-            f"Rerun web: http://{host}:9090?url=ws://{host}:9877 "
-            "(set RERUN_HEADLESS=1 to skip opening a browser)"
+            f"Rerun web: http://{host}:9090?url=ws://{host}:9877 (set RERUN_HEADLESS=1 to skip opening a browser)"
         )
 
     base = _load_default_scene_with_robot("innate_mars")

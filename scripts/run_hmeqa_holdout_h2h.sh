@@ -15,8 +15,8 @@ TIMEOUT="${TIMEOUT:-7200}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
 if [[ ! -x "$EMET_HABITAT" ]]; then
-  log "Missing emet-habitat at $EMET_HABITAT"
-  exit 1
+    log "Missing emet-habitat at $EMET_HABITAT"
+    exit 1
 fi
 
 log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS"
@@ -24,39 +24,39 @@ NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
 ./scripts/gpu_preflight.sh --kill-stale || true
 
 run_method() {
-  local method="$1"
-  local out="$OUT/${method}.jsonl"
-  local elog="$OUT/${method}.log"
-  : >"$out"
-  : >"$elog"
-  log "START method=$method"
-  IFS=',' read -r -a ids <<<"$HOLDOUT_IDS"
-  for qid in "${ids[@]}"; do
-    qid="$(echo "$qid" | tr -d '[:space:]')"
-    [[ -n "$qid" ]] || continue
-    NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
-    ep="$OUT/${method}_q${qid}.jsonl"
-    : >"$ep"
-    log "----- $method q$qid -----"
-    set +e
-    timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
-      --question-id "$qid" \
-      --method "$method" \
-      --explore-when-uncovered off \
-      --no-mcq-debias \
-      --memory-summary \
-      --output "$ep" \
-      >>"$elog" 2>&1
-    rc=$?
-    set -e
-    if [[ "$rc" -ne 0 ]]; then
-      log "FAIL $method q$qid exit=$rc"
-    fi
-    if [[ -s "$ep" ]]; then
-      cat "$ep" >>"$out"
-    fi
-  done
-  log "DONE method=$method"
+    local method="$1"
+    local out="$OUT/${method}.jsonl"
+    local elog="$OUT/${method}.log"
+    : >"$out"
+    : >"$elog"
+    log "START method=$method"
+    IFS=',' read -r -a ids <<<"$HOLDOUT_IDS"
+    for qid in "${ids[@]}"; do
+        qid="$(echo "$qid" | tr -d '[:space:]')"
+        [[ -n "$qid" ]] || continue
+        NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
+        ep="$OUT/${method}_q${qid}.jsonl"
+        : >"$ep"
+        log "----- $method q$qid -----"
+        set +e
+        timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
+            --question-id "$qid" \
+            --method "$method" \
+            --explore-when-uncovered off \
+            --no-mcq-debias \
+            --memory-summary \
+            --output "$ep" \
+            >>"$elog" 2>&1
+        rc=$?
+        set -e
+        if [[ "$rc" -ne 0 ]]; then
+            log "FAIL $method q$qid exit=$rc"
+        fi
+        if [[ -s "$ep" ]]; then
+            cat "$ep" >>"$out"
+        fi
+    done
+    log "DONE method=$method"
 }
 
 run_method static_graph

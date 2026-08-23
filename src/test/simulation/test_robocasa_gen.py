@@ -22,9 +22,8 @@
 #   MuJoCo 2.x requires every mesh asset to have inertia (e.g. inertia="shell"). So we
 #   run ensure_mesh_inertia() on the kitchen XML and on the generated Stretch XML.
 
-import pytest
-
 import numpy as np
+import pytest
 
 
 def test_stretch_model_loads():
@@ -174,16 +173,15 @@ def test_robocasa_obj_main_placement_is_seed_deterministic():
     pytest.importorskip("robocasa")
     from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
 
-    kwargs = dict(
-        task="PickPlaceCounterToCabinet",
-        layout=1,
-        style=1,
-        robot="stretch",
-        seed=0,
-    )
+    kwargs = {
+        "task": "PickPlaceCounterToCabinet",
+        "layout": 1,
+        "style": 1,
+        "robot": "stretch",
+        "seed": 0,
+    }
     _m0, _x0, p0 = model_generation_wizard(**kwargs)
     _m1, _x1, p1 = model_generation_wizard(**kwargs)
     assert "obj_main" in p0 and "obj_main" in p1
     assert p0["obj_main"]["cat"] == p1["obj_main"]["cat"]
     np.testing.assert_allclose(p0["obj_main"]["pos"], p1["obj_main"]["pos"], rtol=0, atol=1e-6)
-

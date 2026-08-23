@@ -29,9 +29,7 @@ _SIGLIP2_VERSION_ALIASES = {
 def _resolve_siglip2_version(version: str | None) -> str:
     version = version or "so400m"
     if version not in _SIGLIP2_VERSION_ALIASES:
-        raise ValueError(
-            f"Invalid version {version}: must be one of {sorted(_SIGLIP2_VERSION_ALIASES)}"
-        )
+        raise ValueError(f"Invalid version {version}: must be one of {sorted(_SIGLIP2_VERSION_ALIASES)}")
     return _SIGLIP2_VERSION_ALIASES[version]
 
 
