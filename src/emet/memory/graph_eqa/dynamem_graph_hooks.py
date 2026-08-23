@@ -77,7 +77,32 @@ def _detection_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
         bbox_xyxy=tuple(d["bbox_xyxy"]) if d.get("bbox_xyxy") is not None else None,
         bounds_3d=bounds,
         embedding=emb,
+        identity_key=d.get("identity_key"),
+        countable_instance=bool(d.get("countable_instance", d.get("instance_id") is not None)),
     )
+
+
+def _instance_item_fields(item: Any) -> tuple[Any, Any, Any, Any]:
+    """Normalize legacy tuples and identity-carrying instance records."""
+    if hasattr(item, "label") and hasattr(item, "xyz"):
+        return (
+            item.label,
+            item.xyz,
+            getattr(item, "bbox_xyxy", None),
+            getattr(item, "identity_key", None),
+        )
+    if isinstance(item, dict):
+        return (
+            item.get("label", "object"),
+            item["xyz"],
+            item.get("bbox_xyxy"),
+            item.get("identity_key"),
+        )
+    if len(item) >= 4:
+        return item[0], item[1], item[2], item[3]
+    if len(item) >= 3:
+        return item[0], item[1], item[2], None
+    return item[0], item[1], None, None
 
 
 def update_graph_memory_from_dynamem_observation(
@@ -133,7 +158,7 @@ def update_graph_memory_from_dynamem_observation(
     )
 
     vm = voxel_map
-    instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
+    instance_items: list[Any] = []
     raw_dets: list[dict[str, Any]] = []
     visible_labels: list[str] = []
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
@@ -157,6 +182,7 @@ def update_graph_memory_from_dynamem_observation(
                 d["label_short"],
                 np.asarray(d["xyz"], dtype=np.float64),
                 tuple(d["bbox_xyxy"]),
+                None,
             )
             for d in raw_dets
         ]
@@ -209,9 +235,9 @@ def update_graph_memory_from_dynamem_observation(
     if labeler is not None and obs.semantic is not None:
         from emet.habitat.hm3d_semantics import hm3d_instance_items_from_obs
 
-        items = hm3d_instance_items_from_obs(labeler, obs)
+        items = hm3d_instance_items_from_obs(labeler, obs, with_instance_ids=True)
         if items:
-            visible_labels.extend(str(item[0]) for item in items)
+            visible_labels.extend(str(_instance_item_fields(item)[0]) for item in items)
             fusion_enabled = graph_object_fusion is not None and getattr(
                 getattr(graph_object_fusion, "config", None),
                 "enabled",
@@ -220,16 +246,14 @@ def update_graph_memory_from_dynamem_observation(
             if fusion_enabled:
                 crop_rgb = np.asarray(rgb)
                 for item in items:
-                    if len(item) >= 3:
-                        label, xyz_item, bbox = item[0], item[1], item[2]
-                    else:
-                        label, xyz_item = item[0], item[1]
-                        bbox = None
+                    label, xyz_item, bbox, identity_key = _instance_item_fields(item)
                     cand = _detection_to_candidate(
                         {
                             "label": str(label),
                             "xyz": np.asarray(xyz_item, dtype=np.float64),
                             "bbox_xyxy": bbox,
+                            "identity_key": identity_key,
+                            "countable_instance": True,
                         }
                     )
                     graph_object_fusion.apply_detection(

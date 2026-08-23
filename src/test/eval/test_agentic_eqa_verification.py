@@ -3218,6 +3218,44 @@ def test_investigate_samples_new_approach_after_close_absent():
     assert agent.navigate_to_target_pose.call_count == 2
 
 
+def test_retraction_correlates_distinct_station_views_not_place_ids():
+    """Two fresh ABSENT views of one place enable cross-view label stripping."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    graph = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    graph.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl"])
+    graph.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["fruit bowl"])
+    agent.graph_memory = graph
+    executor = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=False, collect_trace=True)
+
+    first = executor._maybe_retract_claim_after_station(
+        1,
+        closest_m=0.5,
+        verify_out={"status": "ABSENT", "phrase": "fruit bowl", "obs_id": 101},
+    )
+    assert first is not None
+    assert first["evidence_obs_id"] == 101
+    assert first["stripped_obs"] == 1
+    assert "fruit bowl" in str(graph.get_nodes()[1].labels).lower()
+    assert executor._trace_rows[-1]["strip_across_obs"] is False
+
+    second = executor._maybe_retract_claim_after_station(
+        1,
+        closest_m=0.5,
+        verify_out={"status": "ABSENT", "phrase": "fruit bowl", "obs_id": 102},
+    )
+    assert second is not None
+    assert second["evidence_obs_id"] == 102
+    assert second["stripped_obs"] == 1
+    assert "fruit bowl" not in str(graph.get_nodes()[1].labels).lower()
+    assert executor._trace_rows[-1]["strip_across_obs"] is True
+
+
 def test_coverage_closed_does_not_exhaust_while_approaches_remain():
     """Coverage is informational; only the approach budget gates re-investigate."""
     _require_agentic()

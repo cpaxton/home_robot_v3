@@ -178,6 +178,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 - **Seen:** bal-32 classic **q48**, planning step 4, mid-VLM decode (`[vl] decode tokens=161`). `classic_q48.jsonl` empty; `classic.log` ends with trailing NUL bytes (unclean write). Job `hmeqa-bal32-aff` → `failed` / `exited without DONE`. Progress was **26/64**, not a clean native SIGSEGV.
 - **Affinity pitfall:** excluding only CPUs **8–9** is incomplete on this i9-14900KF — CPUs **10–11** are the second 6.0 GHz P-core. `taskset -c 0-7,10-31` still schedules onto turbo silicon. H2H now auto-pins via [`emet.utils.cpu_affinity`](../src/emet/utils/cpu_affinity.py) (exclude ≥6000 MHz → keep `0-7,12-31`) plus `EPISODE_COOLDOWN_SEC` between episodes.
 - **Also:** do not queue MuJoCo/EGL jobs from a sibling checkout while Habitat HM-EQA is live (even with `wait_pids`) — a freeze kills the waiter too and multiplies GPU/driver stress after reboot.
+- **2026-08-22 recurrence (count/clock resume):** the `cc-singleview-resume` wrapper (hand-built, `eval wait` but **no mutex**) ran while another GPU experiment was live → box froze again mid-q12. **Fix:** `emet jobs run --need-mib` now wraps the command in a **shared singleflight `flock`** on `~/runs/emet/gpu.lock` (all checkouts coordinate; `EMET_GPU_LOCK` / `EMET_GPU_LOCK_TIMEOUT`). Never hand-build a jobs wrapper that skips the flock — `eval wait`'s free-VRAM gate alone has a TOCTOU race.
 
 ### Mitigation
 

@@ -85,7 +85,7 @@ def frameblob_to_labels_xyz(
 def apply_instance_items_to_graph(
     graph_memory: GraphEQAMemory,
     rgb: np.ndarray,
-    items: list[tuple[str, np.ndarray] | tuple[str, np.ndarray, tuple[int, int, int, int]]],
+    items: list[Any],
     *,
     dedup_skips: Callable[[str, np.ndarray], bool],
     viewer_xyz: np.ndarray | None = None,
@@ -100,16 +100,45 @@ def apply_instance_items_to_graph(
 
         profile = resolve_graph_scene_profile(parameters=getattr(graph_memory, "parameters", None))
     for item in items:
-        if len(item) >= 3:
+        instance_level = hasattr(item, "label") or isinstance(item, dict) or (
+            isinstance(item, (tuple, list)) and len(item) >= 3
+        )
+        identity_key = None
+        countable_instance = True
+        if hasattr(item, "label") and hasattr(item, "xyz"):
+            label = item.label
+            xyz = item.xyz
+            bbox_xyxy = getattr(item, "bbox_xyxy", None)
+            identity_key = getattr(item, "identity_key", None)
+        elif isinstance(item, dict):
+            label = item.get("label", "object")
+            xyz = item["xyz"]
+            bbox_xyxy = item.get("bbox_xyxy")
+            identity_key = item.get("identity_key")
+        elif len(item) >= 4:
+            label, xyz, bbox_xyxy, identity_key = item[0], item[1], item[2], item[3]
+        elif len(item) >= 3:
             label, xyz, bbox_xyxy = item[0], item[1], item[2]
         else:
             label, xyz = item[0], item[1]
             bbox_xyxy = None
         if not is_graph_label_allowed(str(label), scene_profile=profile):
             continue
-        if dedup_skips(label, xyz):
+        # Per-instance records already carry enough evidence for GraphEQA's
+        # identity/spatial merge. Applying the legacy label+XY pre-filter here
+        # would discard two distinct same-label objects before their IDs reach
+        # the graph.
+        if not instance_level and dedup_skips(label, xyz):
             continue
-        graph_memory.add_observation(rgb, xyz, [label], viewer_xyz=viewer_xyz, bbox_xyxy=bbox_xyxy)
+        graph_memory.add_observation(
+            rgb,
+            xyz,
+            [label],
+            viewer_xyz=viewer_xyz,
+            bbox_xyxy=bbox_xyxy,
+            identity_key=identity_key,
+            countable_instance=countable_instance,
+        )
 
 
 def build_detections_json_rows(

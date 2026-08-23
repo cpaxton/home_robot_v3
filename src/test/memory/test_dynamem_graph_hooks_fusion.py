@@ -122,3 +122,49 @@ def test_hm3d_instance_items_fusion_accepts_label_xyz_pairs():
     assert len(objs) == 2
     labels = {n.labels[0] for n in objs if n.labels}
     assert labels == {"chair", "table"}
+
+
+def test_hm3d_instance_identity_reaches_countable_graph_nodes():
+    """Semantic IDs keep two same-label instances distinct in the graph."""
+    from emet.habitat.hm3d_semantics import Hm3dInstanceItem
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.45
+    sensor_builder = MagicMock()
+    vm = MagicMock()
+    vm.observations = []
+    vm.image_descriptions = []
+    obs = _fake_obs()
+    obs.semantic = np.ones((4, 4), dtype=np.int32)
+    robot = MagicMock()
+    robot.hm3d_semantic_labeler = MagicMock()
+    items = [
+        Hm3dInstanceItem("lamp", np.array([1.0, 0.5, 0.9]), "hm3d:5"),
+        Hm3dInstanceItem("lamp", np.array([1.3, 0.5, 0.9]), "hm3d:6"),
+    ]
+
+    import emet.habitat.hm3d_semantics as hm3d_mod
+
+    old_fn = hm3d_mod.hm3d_instance_items_from_obs
+    hm3d_mod.hm3d_instance_items_from_obs = lambda _labeler, _obs, **kwargs: items
+    try:
+        update_graph_memory_from_dynamem_observation(
+            graph_memory=mem,
+            robot=robot,
+            voxel_map=vm,
+            detection_model=None,
+            sensor_builder=sensor_builder,
+            use_instance_graph=False,
+            use_sensor_perception=False,
+            dedup_skips=lambda _l, _x: True,
+            obs=obs,
+            frame_step=1,
+            graph_object_fusion=None,
+        )
+    finally:
+        hm3d_mod.hm3d_instance_items_from_obs = old_fn
+
+    objects = [n for n in mem.get_nodes() if not n.is_viewpoint and not n.is_frontier]
+    assert len(objects) == 2
+    assert {n.identity_key for n in objects} == {"hm3d:5", "hm3d:6"}
+    assert all(n.countable_instance for n in objects)

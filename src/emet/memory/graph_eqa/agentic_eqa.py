@@ -1865,6 +1865,20 @@ class AgenticEQAExecutor:
         phrase = str(verify_out.get("phrase") or self._target_phrase or "").strip()
         if not phrase:
             return None
+        # Cross-view strip only when ABSENT is corroborated at 2+ distinct views
+        # (one weak glance shouldn't delete a node seen elsewhere — exp1 regression).
+        corroboration_fn = getattr(gm, "has_absent_retraction_at_other_view", None)
+        if callable(corroboration_fn):
+            corroborated = corroboration_fn(phrase, evidence_obs_id)
+            cross_view = corroborated if isinstance(corroborated, bool) else False
+        else:
+            retracted = getattr(gm, "_retracted_nav_claims", None) or set()
+            key = phrase.strip().lower()
+            cross_view = any(
+                int(rid) != int(evidence_obs_id)
+                and str(rphrase or "").strip().lower() == key
+                for rid, rphrase in list(retracted)
+            )
         out = gm.retract_phrase_claim_at_obs(
             int(obs_id),
             phrase,
@@ -1872,6 +1886,7 @@ class AgenticEQAExecutor:
             step=self._graph_world_step(),
             strip_matching_labels=self.decision_policy != "grounded_v2",
             apply_blacklist=self.decision_policy != "grounded_v2",
+            strip_across_obs=cross_view,
             evidence_obs_id=evidence_obs_id,
             evidence_source=evidence_source,
         )
@@ -1884,6 +1899,7 @@ class AgenticEQAExecutor:
                 "evidence_source": evidence_source,
                 "phrase": str(out.get("phrase") or phrase),
                 "closest_m": float(closest_m),
+                "strip_across_obs": cross_view,
                 "room": out.get("room"),
                 **{k: out.get(k) for k in ("stripped_obs", "stripped_nodes", "ok")},
             }
