@@ -65,6 +65,13 @@ Do **not** stack in one uninterrupted session:
 
 That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH unresponsive; mouse still moved).
 
+**Concurrent-experiment guard:** `emet jobs run --need-mib` (gpu-exclusive default) wraps the
+command in a **shared singleflight `flock`** on `~/runs/emet/gpu.lock` so only one GPU job
+runs per box across **all** checkouts (v2/v3/v4). Do not hand-build a wrapper that skips it —
+the crashed `cc-singleview-resume` wrapper had `eval wait` but no lock, so two experiments
+launched together and froze the box. Override path with `EMET_GPU_LOCK`, bound the wait with
+`EMET_GPU_LOCK_TIMEOUT` (default infinite). Lock auto-releases on job exit or reboot.
+
 | Orchestrator | Default | Notes |
 |--------------|---------|-------|
 | `run_simulation_smoke_battery.sh` | sequential | **Paper-facing** seven-track battery — see `docs/simulation_testing_plan.md` |

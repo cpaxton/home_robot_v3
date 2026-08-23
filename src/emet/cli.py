@@ -1826,6 +1826,33 @@ def jobs_run(
             "  exit 2\n"
             "}\n"
         )
+    lock_block = ""
+    if use_gpu_excl:
+        # Shared GPU singleflight lock: one GPU experiment per box, across ALL emet
+        # checkouts (v2/v3/v4) — ``eval wait``'s free-VRAM gate alone has a TOCTOU
+        # race (two jobs can both pass it and then OOM/freeze the box) and the
+        # registry wait only sees *registered* jobs. flock auto-releases on wrapper
+        # exit or host reboot. Default waits forever; bound with
+        # EMET_GPU_LOCK_TIMEOUT (seconds, negative = infinite).
+        lock_block = (
+            'LOCK_FILE="${EMET_GPU_LOCK:-$HOME/runs/emet/gpu.lock}"\n'
+            'mkdir -p "$(dirname "$LOCK_FILE")"\n'
+            'exec 9>"$LOCK_FILE"\n'
+            'if [[ "${EMET_GPU_LOCK_TIMEOUT:--1}" -lt 0 ]]; then\n'
+            '  if ! flock 9; then\n'
+            '    echo "ERROR: GPU singleflight lock $LOCK_FILE acquisition failed" >&2\n'
+            '    "$EMET_BIN" jobs update "$JOB_ID" --status failed --error "gpu lock $LOCK_FILE"\n'
+            "    exit 3\n"
+            "  fi\n"
+            "else\n"
+            '  if ! flock -w "${EMET_GPU_LOCK_TIMEOUT}" 9; then\n'
+            '    echo "ERROR: timed out waiting for GPU singleflight lock $LOCK_FILE" >&2\n'
+            '    "$EMET_BIN" jobs update "$JOB_ID" --status failed --error "gpu lock timeout $LOCK_FILE"\n'
+            "    exit 3\n"
+            "  fi\n"
+            "fi\n"
+            'echo "[jobs] acquired GPU singleflight lock $LOCK_FILE"\n'
+        )
     wrapper.write_text(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
@@ -1835,6 +1862,7 @@ def jobs_run(
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
         f"{register_line}"
+        f"{lock_block}"
         f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"

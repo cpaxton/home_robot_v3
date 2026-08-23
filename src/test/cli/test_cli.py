@@ -305,6 +305,83 @@ def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):
     assert not jobs_dir.exists() or not list(jobs_dir.glob("*.json"))
 
 
+def test_jobs_run_wrapper_has_gpu_singleflight_lock_when_gpu_exclusive(tmp_path):
+    """--need-mib (gpu-exclusive default) wraps the command in a shared flock so
+    concurrent experiments across checkouts can never overlap on one GPU."""
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "out"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "lock-guard",
+            "--out-dir",
+            str(out_dir),
+            "--need-mib",
+            "12000",
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "flock -w" in wrapper, wrapper
+    assert "gpu.lock" in wrapper, wrapper
+    assert "exec 9>\"" in wrapper, wrapper
+    assert "jobs update \"$JOB_ID\" --status failed --error \"gpu lock timeout" in wrapper, wrapper
+
+
+def test_jobs_run_wrapper_skips_gpu_lock_with_no_gpu_exclusive(tmp_path):
+    """--no-gpu-exclusive must not add the flock guard (non-GPU jobs stay parallel)."""
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "out"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "no-lock",
+            "--out-dir",
+            str(out_dir),
+            "--need-mib",
+            "12000",
+            "--no-gpu-exclusive",
+            "--",
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "flock -w" not in wrapper, wrapper
+
+
 def test_jobs_update_help_lists_description():
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "jobs", "update", "--help"],
