@@ -197,6 +197,9 @@ def graph_health_metrics(
         prompt_obs_count = len(getattr(graph_memory, "last_eqa_obs_ids", None) or [])
     out["prompt_node_count"] = prompt_node_count
     out["prompt_obs_count"] = int(prompt_obs_count) if prompt_obs_count is not None else None
+    ingest = getattr(graph_memory, "instance_ingest_stats", None)
+    if isinstance(ingest, dict) and ingest:
+        out["instance_ingest"] = dict(ingest)
 
     objects = _object_nodes(graph_memory)
     if not objects:

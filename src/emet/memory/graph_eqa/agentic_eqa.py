@@ -20,6 +20,7 @@ import numpy as np
 
 from emet.agent.prompt import parse_tool_calls_response
 from emet.habitat.metrics import (
+    choices_are_count_mcq,
     extract_mcq_letter,
     parse_mcq_choices_from_question,
     should_abstain_location_mcq,
@@ -2643,6 +2644,9 @@ class AgenticEQAExecutor:
                 "verify": None,
             }
 
+        # Historical FIND RGB (obs 163) must be Image 1 on the next answer even if
+        # the arrival capture is a wall and verify pins that station instead.
+        self._pin_eqa_look_obs(oid)
         self._refresh_room_after_motion()
         cap = self._tool_capture_and_update()
         cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
@@ -2748,6 +2752,19 @@ class AgenticEQAExecutor:
     def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
         """Compat alias — ``navigate_to_obs`` shares the investigate approach path."""
         return self._tool_investigate(int(obs_id), tool_name="navigate_to_obs")
+
+    def _pin_eqa_look_obs(self, obs_id: int | None) -> None:
+        """Next ``query_answer`` attaches this graph RGB as Image 1."""
+        gm = self.graph_memory
+        if gm is None or obs_id is None:
+            return
+        try:
+            oid = int(obs_id)
+        except (TypeError, ValueError):
+            return
+        if oid <= 0:
+            return
+        gm.last_eqa_look_obs_id = oid
 
     def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
         agent = self.agent
@@ -3977,6 +3994,14 @@ class AgenticEQAExecutor:
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
         }
+        if (
+            gm is not None
+            and bool(assessment.present)
+            and hasattr(gm, "record_close_look_label")
+        ):
+            looked = str(phrase or self._target_phrase or "").strip()
+            if looked:
+                gm.record_close_look_label(oid, looked)
         _logger.info(
             "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
             oid,
@@ -5222,6 +5247,48 @@ class AgenticEQAExecutor:
             return None
         return best_oid
 
+    def _count_find_obs_ids(self) -> list[int]:
+        """Graph views to attach for a count MCQ (Action / FIND nodes, not the bathroom)."""
+        gm = self.graph_memory
+        if gm is None:
+            return []
+        if not choices_are_count_mcq(parse_mcq_choices_from_question(self.question)):
+            return []
+        out: list[int] = []
+        seen: set[int] = set()
+
+        def _add(raw: Any) -> None:
+            try:
+                oid = int(raw)
+            except (TypeError, ValueError):
+                return
+            if oid <= 0 or oid in seen:
+                return
+            usable = getattr(gm, "_obs_usable_for_eqa_image", None)
+            if callable(usable):
+                try:
+                    if not usable(oid):
+                        return
+                except Exception:
+                    pass
+            seen.add(oid)
+            out.append(oid)
+
+        _add(getattr(gm, "last_eqa_look_obs_id", None))
+        _add(getattr(gm, "last_eqa_action_obs_id", None))
+        fn = getattr(gm, "_count_candidate_nodes", None)
+        if callable(fn):
+            try:
+                found = fn(self.question)
+            except Exception:
+                found = None
+            nodes = found[0] if isinstance(found, tuple) and found else ()
+            if not isinstance(nodes, (list, tuple)):
+                nodes = ()
+            for node in nodes:
+                _add(getattr(node, "obs_id", None))
+        return out
+
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         from emet.eval.dynagraph_vram import release_siglip_for_vlm
 
@@ -5250,6 +5317,11 @@ class AgenticEQAExecutor:
                 if evidence_obs_id is not None:
                     force_obs_ids = gm.select_obs_ids_for_verified_answer(evidence_obs_id, max_images=1)
                     gm.last_eqa_obs_ids = list(force_obs_ids)
+            find_ids = self._count_find_obs_ids()
+            if find_ids:
+                rest = [int(oid) for oid in (force_obs_ids or []) if int(oid) not in set(find_ids)]
+                force_obs_ids = find_ids + rest
+                gm.last_eqa_obs_ids = list(force_obs_ids)
             # Do not clamp EMET_EQA_ANSWER_MAX_NEW_TOKENS here. A prior setdefault("64")
             # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
             # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
@@ -5412,10 +5484,12 @@ class AgenticEQAExecutor:
         return submit_out
 
     def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
-        """Navigate to EQA ``Action: N`` when submit returned unconfident Unknown.
+        """Navigate to EQA ``Action: N`` when submit returned an ungrounded guess.
 
         Location MCQs often answer Unknown with an image index to explore. Inventing
         a salvage letter (holdout q104/q105) is worse than following that action.
+        Count MCQs often guess ``One`` from the wrong RGB while GRAPH_COUNT points
+        at a different obs id — follow that Action even when the text is a number.
         Allows one soft-over-budget nav so Action:N still runs after explore used
         the nominal ``max_nav_steps``.
 
@@ -5433,7 +5507,9 @@ class AgenticEQAExecutor:
         unknownish = self._answer_unknownish(submit_out.get("answer"))
         if conf and not unknownish:
             return False
-        if not unknownish:
+        count_mcq = choices_are_count_mcq(parse_mcq_choices_from_question(self.question))
+        # Unconfident count + Action:N: the integer is from the attached (wrong) RGB.
+        if not unknownish and not (count_mcq and not conf):
             return False
         obs_id = getattr(gm, "last_eqa_action_obs_id", None)
         if obs_id is not None:
@@ -5444,6 +5520,8 @@ class AgenticEQAExecutor:
                     return False
                 self._followed_eqa_actions.add(oid)
                 gm.last_eqa_action_obs_id = None
+                # Next query_answer must attach this RGB even if verify pins another view.
+                self._pin_eqa_look_obs(oid)
                 # Force re-verify at the action target before the next submit.
                 self._verified = False
                 self._verified_obs_id = None
@@ -5467,8 +5545,12 @@ class AgenticEQAExecutor:
                 )
                 return True
         # No resolvable Action:N, or already followed that obs and still Unknown.
+        # Do not soft-explore on an unconfident count number — that burns budget
+        # after a One guess. Unknown location still explores.
         # Cap soft explores so we do not loop forever on location MCQs.
         # Soft +2 beyond max_nav_steps: Action follow may already have used +1.
+        if not unknownish:
+            return False
         if self._n_unknown_explore >= 2:
             return False
         if self._n_nav + self._n_explore >= self.max_nav_steps + 2:

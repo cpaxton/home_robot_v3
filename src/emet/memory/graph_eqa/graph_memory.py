@@ -434,10 +434,10 @@ def _count_word_matches(target: str, label: str) -> bool:
 
 
 def _collapse_count_nodes_spatially(
-    nodes: list["GraphNode"],
+    nodes: list[GraphNode],
     *,
     min_xy_m: float = 0.65,
-) -> list["GraphNode"]:
+) -> list[GraphNode]:
     """Collapse duplicate instance nodes that missed graph merge (same label, nearby XY)."""
     if len(nodes) <= 1 or min_xy_m <= 0.0:
         return list(nodes)
@@ -533,6 +533,63 @@ def label_matches_relevant_object(obj: str, label: str) -> bool:
         if aliases and (aliases & obj_tok):
             return True
     return False
+
+
+def countable_primary_label_matches(obj: str, node: GraphNode) -> bool:
+    """FIND-candidate matching uses detector-primary labels on instance nodes only."""
+    if not getattr(node, "countable_instance", False):
+        return False
+    labels = [str(l).strip() for l in (node.labels or []) if str(l).strip()]
+    if not labels:
+        return False
+    return label_matches_relevant_object(obj, labels[0])
+
+
+def node_display_name(node: GraphNode, *, max_len: int = 120) -> str:
+    """Close-look Qwen name when present; otherwise detector / VLM labels."""
+    looked = str(getattr(node, "close_look_label", None) or "").strip()
+    if looked:
+        return looked if len(looked) <= max_len else looked[: max_len - 3] + "..."
+    labels = [str(lab).strip() for lab in (getattr(node, "labels", None) or []) if str(lab).strip()]
+    if getattr(node, "is_viewpoint", False):
+        s = ", ".join(labels) if labels else "view"
+    elif getattr(node, "is_frontier", False):
+        s = ", ".join(labels) if labels else "frontier"
+    else:
+        s = ", ".join(labels) if labels else "object"
+    return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
+
+def finder_label_texts(node: GraphNode) -> list[str]:
+    """Close-look Qwen name first, then detector primary — texts used to FIND views."""
+    texts: list[str] = []
+    looked = str(getattr(node, "close_look_label", None) or "").strip()
+    if looked:
+        texts.append(looked)
+    primary = str(node.labels[0]).strip() if getattr(node, "labels", None) else ""
+    if primary and primary.lower() not in {t.lower() for t in texts}:
+        texts.append(primary)
+    return texts
+
+
+def format_graph_node_candidates(nodes: list[GraphNode], *, max_nodes: int = 6) -> str:
+    """Point at views; use a close-look Qwen label when we have one, never YoloE vocab."""
+    bits: list[str] = []
+    for node in nodes[:max_nodes]:
+        xyz = np.asarray(node.xyz, dtype=np.float64).reshape(-1)
+        loc = f"[Image {int(node.obs_id)}] at ({float(xyz[0]):.1f}, {float(xyz[1]):.1f})"
+        looked = str(getattr(node, "close_look_label", None) or "").strip()
+        if looked:
+            bits.append(f"{looked} {loc}")
+        else:
+            bits.append(loc)
+    suffix = " …" if len(nodes) > max_nodes else ""
+    return "; ".join(bits) + suffix
+
+
+_GRAPH_CANDIDATE_COUNT_DISCLAIMER = (
+    "list length is not a count; verify in attached images"
+)
 
 
 def _location_mcq_weak_tokens() -> frozenset[str]:
@@ -758,6 +815,8 @@ class GraphNode:
     # True only when this node came from instance-level evidence. Label-only
     # frame summaries are not safe inputs for exact count hints.
     countable_instance: bool = False
+    # Qwen caption after a close look / vlm_assess. Preferred over detector class names.
+    close_look_label: str | None = None
     change_events: list[dict[str, Any]] = field(default_factory=list)
     expected_absence_count: int = 0
     last_absence_step: int = -1
@@ -862,6 +921,8 @@ class GraphEQAMemory:
         self.last_agentic_decision: dict[str, Any] | None = None
         self.last_eqa_obs_ids: list[int] = []
         self.last_eqa_action_obs_id: int | None = None
+        # Next query_answer must attach this RGB as Image 1 (Action:N / post-nav look).
+        self.last_eqa_look_obs_id: int | None = None
         self.last_eqa_prompt_node_count: int = 0
         self.last_eqa_prompt_regions: int = 0
         self.last_eqa_spatial_rag: dict[str, Any] | None = None
@@ -922,6 +983,14 @@ class GraphEQAMemory:
         self._fallback_timestep: int = 0
         self.spatial_merge_m: float = 0.0
         self.staleness_horizon: int = 0
+        self.instance_ingest_stats: dict[str, int] = {
+            "proposed": 0,
+            "rejected_confidence": 0,
+            "rejected_support": 0,
+            "admitted": 0,
+            "merged": 0,
+            "created": 0,
+        }
         self.frontier_nodes_enabled: bool = True
         self._frontier_max_nodes: int = 12
         self._frontier_min_cluster_cells: int = 3
@@ -1042,6 +1111,34 @@ class GraphEQAMemory:
     def attempt_summary_for_obs(self, obs_id: int, *, max_bits: int = 4) -> str:
         """Newest-first compact attempt tags for place cards / diagnostics."""
         return summary_bits_for_obs(self._attempt_records, int(obs_id), max_bits=max_bits)
+
+    def record_close_look_label(self, obs_id: int, label: str) -> None:
+        """Store a Qwen close-look / vlm_assess name on graph nodes for this view.
+
+        Tags object nodes whose candidate image is ``obs_id``, and objects linked
+        ``seen_from`` a viewpoint with that observation id (fusion may have moved
+        the node's own ``obs_id`` to an earlier frame).
+        """
+        text = str(label or "").strip()
+        if not text:
+            return
+        oid = int(obs_id)
+        clipped = text[:80]
+        vp_ids = {
+            int(node.node_id)
+            for node in self._nodes
+            if node.is_viewpoint and int(node.obs_id) == oid
+        }
+        seen_from_ids: set[int] = set()
+        for src, dst, rel in self._edges:
+            if rel == "seen_from" and int(dst) in vp_ids:
+                seen_from_ids.add(int(src))
+        for idx, node in enumerate(self._nodes):
+            if node.is_frontier or node.is_viewpoint:
+                continue
+            if int(node.obs_id) != oid and int(node.node_id) not in seen_from_ids:
+                continue
+            self._nodes[idx] = replace(node, close_look_label=clipped)
 
     def set_graph_timestep(self, step: int) -> None:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
@@ -1233,6 +1330,7 @@ class GraphEQAMemory:
         self.last_agentic_decision = None
         self.last_eqa_obs_ids = []
         self.last_eqa_action_obs_id = None
+        self.last_eqa_look_obs_id = None
         self.last_eqa_prompt_node_count = 0
         self.last_eqa_prompt_regions = 0
         self.last_eqa_spatial_rag = None
@@ -1609,7 +1707,7 @@ class GraphEQAMemory:
             viewer_xyz: optional (3,) robot base or head-camera position in world frame when captured
             bbox_xyxy: optional (x0, y0, x1, y1) crop in ``rgb`` for this object (instance mask bbox)
             identity_key: optional stable identity for this detected instance
-            countable_instance: whether this observation is safe for exact count hints
+            countable_instance: whether this observation is a FIND candidate for count questions
 
         Returns:
             obs_id: 1-based observation id (used as image id in EQA).
@@ -1684,6 +1782,7 @@ class GraphEQAMemory:
                         else existing.identity_key or identity_key_norm
                     ),
                     countable_instance=bool(existing.countable_instance or countable_instance),
+                    close_look_label=existing.close_look_label,
                 )
                 # Keep the graph node's candidate image in sync with this revisit.
                 self.refresh_observation_candidate(
@@ -1777,7 +1876,10 @@ class GraphEQAMemory:
         identity_key = getattr(candidate, "identity_key", None)
         identity_key_norm = str(identity_key).strip() if identity_key is not None else ""
         identity_key_norm = identity_key_norm or None
-        countable_instance = bool(getattr(candidate, "countable_instance", False) or identity_key_norm)
+        semantic_only = bool(getattr(candidate, "semantic_only", False))
+        countable_instance = bool(
+            (getattr(candidate, "countable_instance", False) or identity_key_norm) and not semantic_only
+        )
         if embedding is not None:
             embedding = np.asarray(embedding, dtype=np.float32).reshape(-1).copy()
 
@@ -1805,12 +1907,27 @@ class GraphEQAMemory:
                     and str(existing.identity_key) != identity_key_norm
                 ):
                     break
+                if semantic_only and existing.countable_instance:
+                    break
+                if existing.countable_instance or countable_instance:
+                    from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
+
+                    primary = str(existing.labels[0]).strip() if existing.labels else label
+                    if not labels_compatible_for_dedup(label, primary):
+                        break
+                    merged_labels = sorted(
+                        {
+                            *[str(x).strip() for x in existing.labels if str(x).strip() and labels_compatible_for_dedup(str(x).strip(), primary)],
+                            label,
+                        }
+                    )
+                else:
+                    merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
                 sc = int(existing.support_count) + 1
                 new_xyz, covariance, history, changes, belief_confidence = self._position_update(
                     existing, xyz_a, step=step
                 )
-                merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
-                new_emb = embedding
+                new_emb = embedding if embedding is not None else existing.embedding
                 if embedding is not None and existing.embedding is not None:
                     a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
                     new_emb = (1.0 - a) * np.asarray(existing.embedding, dtype=np.float32) + a * embedding
@@ -1846,6 +1963,7 @@ class GraphEQAMemory:
                     belief_confidence=belief_confidence,
                     identity_key=identity_key_norm or existing.identity_key,
                     countable_instance=bool(existing.countable_instance or countable_instance),
+                    close_look_label=existing.close_look_label,
                 )
                 self.refresh_observation_candidate(
                     int(existing.obs_id),
@@ -1964,6 +2082,7 @@ class GraphEQAMemory:
             belief_confidence=belief_confidence,
             identity_key=dst.identity_key or src.identity_key,
             countable_instance=bool(dst.countable_instance or src.countable_instance),
+            close_look_label=dst.close_look_label or src.close_look_label,
         )
         for o in self._observations:
             if int(o.obs_id) == int(dst.obs_id):
@@ -3222,7 +3341,7 @@ class GraphEQAMemory:
         ``configs/benchmarks/dynagraph.yaml`` (harness ``habitat_eqa.dynagraph``) so its
         numbers stay on the standalone summary block; every other path gets the folded
         format. When on, the main EQA prompt tags SCENE_GRAPH nodes with status
-        (present / candidate) and room names, and emits a short CONFIRMED_MEMORY tail
+        (inspect / candidate) and room names, and emits a short CONFIRMED_MEMORY tail
         only for phrases with no tagged node, instead of a separate summary block
         (one fact, one line — no duplicate object mentions).
         """
@@ -3255,16 +3374,15 @@ class GraphEQAMemory:
 
         When ``merge_confirmed`` is set (prompt path only), fold CONFIRMED_MEMORY status
         into the serialization instead of emitting a separate summary block: matching
-        nodes get a ``present`` / ``candidate`` tag, object nodes are tagged with their
+        nodes get an ``inspect`` / ``candidate`` tag, object nodes are tagged with their
         room-cluster name, and a short CONFIRMED_MEMORY tail lists only phrases with no
         tagged node (SigLIP-only sightings, weak matches, unobserved objects) plus a
         compact ``Rooms:`` line. The spatial-RAG branch is left untouched.
         """
         lines = []
 
-        def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
-            s = ", ".join(labels) if labels else "object"
-            return s if len(s) <= max_len else s[: max_len - 3] + "..."
+        def _prompt_labels(node: GraphNode, max_len: int = 120) -> str:
+            return node_display_name(node, max_len=max_len)
 
         if max_object_nodes is not None and max_object_nodes > 0 and self._spatial_rag_enabled():
             from emet.memory.graph_eqa.spatial_rag import (
@@ -3370,7 +3488,7 @@ class GraphEQAMemory:
                             if neighbors:
                                 near_bits = []
                                 for n, dist in neighbors:
-                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    lab = node_display_name(n)
                                     near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                                 nearest_by_phrase[phrase] = (
                                     int(kept[0]),
@@ -3383,9 +3501,11 @@ class GraphEQAMemory:
                         matches_nodes = sorted(
                             (n for n in self._nodes if int(n.node_id) in set(ids)),
                             key=lambda n: int(n.node_id),
-                        )[:4]
-                        positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches_nodes)
-                        parts = [f"{len(ids)} graph node(s) at {positions}"]
+                        )
+                        parts = [
+                            "candidate views: " + format_graph_node_candidates(matches_nodes, max_nodes=4),
+                            _GRAPH_CANDIDATE_COUNT_DISCLAIMER,
+                        ]
                         anchor = matches_nodes[0] if matches_nodes else None
                         if anchor is not None:
                             neighbors = self._nearest_object_neighbors(
@@ -3397,11 +3517,11 @@ class GraphEQAMemory:
                             if neighbors:
                                 near_bits = []
                                 for n, dist in neighbors:
-                                    lab = ", ".join(n.labels) if n.labels else "object"
+                                    lab = node_display_name(n)
                                     near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                                 parts.append("nearest: " + "; ".join(near_bits))
                         tail_lines.append(
-                            f"- {phrase}: present — " + "; ".join(parts) + " (nodes not shown in graph above)"
+                            f"- {phrase}: LOOK — " + "; ".join(parts) + " (nodes not shown in graph above)"
                         )
                 elif status == "candidate":
                     pos = f" near ({xyz[0]:.1f}, {xyz[1]:.1f})" if xyz is not None else ""
@@ -3422,7 +3542,7 @@ class GraphEQAMemory:
                     tail_lines.append(f"- {phrase}: not observed during exploration")
 
         for n in nodes_for_prompt:
-            lbl = _prompt_labels(n.labels)
+            lbl = _prompt_labels(n)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
             if n.is_frontier:
                 kind = "Frontier"
@@ -3436,7 +3556,7 @@ class GraphEQAMemory:
             nearest_tag = ""
             if merge_active and not n.is_frontier and not n.is_viewpoint:
                 if nid in tagged:
-                    status_tag = " present"
+                    status_tag = " inspect"
                     # Attach nearest on the in-budget anchor node for each phrase.
                     for _phrase, (anchor_nid, near_txt) in nearest_by_phrase.items():
                         if int(anchor_nid) == nid:
@@ -3460,16 +3580,21 @@ class GraphEQAMemory:
             lines.append(f"  {rel}({a}, {b_str})")
         if tail_lines:
             lines.append(
-                "CONFIRMED_MEMORY (present = graph-grounded only; "
-                "CANDIDATE/weak SigLIP are navigation hints — not presence or absence; "
-                "if images contradict memory, trust the images):"
+                "CONFIRMED_MEMORY (index of views to look at, not the answer; "
+                "LOOK = candidate Image N to look at; CANDIDATE/weak SigLIP are "
+                "navigation hints; if images contradict memory, trust the images):"
             )
             lines.extend(tail_lines)
         if merge_active and self._room_clusters:
             rooms_line = self.format_rooms_line(max_chars=200)
             if rooms_line.strip() and rooms_line.strip() != "Rooms:":
                 lines.append(rooms_line)
-        return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
+        return (
+            "SCENE_GRAPH (views to look at, not the answer; labels are proposals for WHERE to look):\n"
+            + "\n".join(lines)
+            if lines
+            else "SCENE_GRAPH: (empty)"
+        )
 
     def to_tree_string(self, indent: str = "  ") -> str:
         """
@@ -3514,7 +3639,7 @@ class GraphEQAMemory:
         def visit(node: GraphNode, depth: int) -> None:
             pref = indent * (depth + 1)
             x, y, z = float(node.xyz[0]), float(node.xyz[1]), float(node.xyz[2])
-            lbl = ", ".join(node.labels) if node.labels else "object"
+            lbl = node_display_name(node)
             line = f"{pref}[{node.node_id}] {lbl}  at ({x:.2f}, {y:.2f}, {z:.2f})"
             if node.description:
                 d = node.description
@@ -4472,10 +4597,9 @@ class GraphEQAMemory:
     def _relevant_memory_summary(self) -> str:
         """Surface question-relevant objects as 'confirmed memory' for the VLM.
 
-        Graph label matches are PRESENT (with nearest-furniture neighbors for location MCQs).
-        SigLIP matches over observed points are CANDIDATE / weak-SigLIP hints only — they
-        catch mislabeled sightings for navigation but must not assert presence or absence
-        in the answer prompt (same where-next policy as agentic assess).
+        Graph label matches are LOOK (candidate views to inspect). SigLIP matches over
+        observed points are CANDIDATE / weak-SigLIP navigation hints — they catch
+        mislabeled sightings but must not assert presence, absence, or a count.
         """
         if not self._confirmed_memory_phrases():
             return ""
@@ -4483,12 +4607,18 @@ class GraphEQAMemory:
         present_thresh = SIGLIP_PRESENT_THRESHOLD
         lines: list[str] = []
         for obj in self._confirmed_memory_phrases():
-            matches = [n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)]
+            matches = [n for n in object_nodes if countable_primary_label_matches(obj, n)]
+            if not matches:
+                matches = [
+                    n
+                    for n in object_nodes
+                    if any(label_matches_relevant_object(obj, lab) for lab in (n.labels or []))
+                ]
             sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
-                positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches[:4])
-                parts.append(f"{len(matches)} graph node(s) at {positions}")
+                parts.append("candidate views: " + format_graph_node_candidates(matches, max_nodes=6))
+                parts.append(_GRAPH_CANDIDATE_COUNT_DISCLAIMER)
             sig_present = sig is not None and float(sig[0]) >= present_thresh
             if sig is not None:
                 sim, xyz = float(sig[0]), sig[1]
@@ -4497,12 +4627,11 @@ class GraphEQAMemory:
                     parts.append(f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}")
                 else:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
-            # Graph label match is the only PRESENT path. SigLIP ranks where-next /
-            # sighting hints — never assert presence or absence in the answer prompt.
+            # Graph label match is a FIND pointer (LOOK), not a presence/count answer.
             if matches:
                 anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
                 exclude_ids = {int(n.node_id) for n in matches}
-                status = "PRESENT"
+                status = "LOOK"
             elif sig_present:
                 anchor_xyz = np.asarray(sig[1], dtype=np.float64) if sig is not None else None
                 exclude_ids = set()
@@ -4527,7 +4656,7 @@ class GraphEQAMemory:
                 if neighbors:
                     near_bits = []
                     for n, dist in neighbors:
-                        lab = ", ".join(n.labels) if n.labels else "object"
+                        lab = node_display_name(n)
                         near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                     parts.append("nearest: " + "; ".join(near_bits))
             # Compact attempt-ledger tags for matched obs ids (opt-in; empty when off).
@@ -4546,10 +4675,12 @@ class GraphEQAMemory:
         if not lines:
             return ""
         header = (
-            "CONFIRMED_MEMORY (PRESENT = graph-grounded only; CANDIDATE/weak SigLIP are "
-            "navigation hints — not presence or absence; if images contradict memory, "
-            "trust the images and keep exploring; for location MCQs, prefer option "
-            "landmarks visible in Image 1 over nearest-furniture guesses):"
+            "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
+            "candidate Image N to look at; CANDIDATE/weak SigLIP are navigation hints. "
+            "Detector class names are proposals for WHERE to look. Identify and count "
+            "from attached RGB; if images contradict memory, trust the images and keep "
+            "exploring; for location MCQs, prefer option landmarks visible in Image 1 "
+            "over nearest-furniture guesses):"
         )
         return header + "\n" + "\n".join(lines)
 
@@ -4946,9 +5077,10 @@ class GraphEQAMemory:
             "LOCATION_MCQ: The options are places, not yes/no. When the question asks "
             "'did you see … anywhere?', answer with the matching location option text for "
             "WHERE the object was observed. Do not output its A/B/C/D label. "
-            "Prefer landmarks visible in the attached images; "
-            "treat WORKING_MEMORY / CONFIRMED_MEMORY as hints to verify, not as a final "
-            "answer if images disagree. Never answer yes/no on answer:.\n"
+            "Prefer landmarks visible in the attached images of the object; "
+            "treat WORKING_MEMORY / CONFIRMED_MEMORY / SCENE_GRAPH as views to look at, "
+            "not as the WHERE answer. Do not cite Node N or xyz as the location. "
+            "Never answer yes/no on answer:.\n"
             f"{lines}"
         )
 
@@ -5192,10 +5324,10 @@ class GraphEQAMemory:
         choice_lines = "\n".join(f"  {chr(65 + i)}) {choice}" for i, choice in enumerate(choices[:4]))
         stem = question.split("Answer:")[0].strip()
         directive = (
-            "The target object WAS observed during exploration (see CONFIRMED_MEMORY). "
+            "CONFIRMED_MEMORY lists candidate views to inspect, not the answer. "
             "This is a WHERE-did-you-see-it multiple choice question. "
-            "Answer with the exact text of the single best location option, without its "
-            "A/B/C/D label. Do NOT answer yes/no or explain.\n"
+            "Answer from the attached images with the exact text of the single best "
+            "location option, without its A/B/C/D label. Do NOT answer yes/no or explain.\n"
         )
         if memory:
             directive += memory + "\n"
@@ -5584,16 +5716,16 @@ class GraphEQAMemory:
             return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
         return None
 
-    def _graph_count_hint(self, question: str) -> str:
-        """Return an exact count hint only from stable instance evidence."""
+    def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountTarget | None]:
+        """Instance nodes whose primary label matches a count-MCQ target (FIND pointers)."""
         try:
             from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
 
             choices = parse_mcq_choices_from_question(question)
             if not choices or not choices_are_count_mcq(choices):
-                return ""
+                return [], None
         except Exception:
-            return ""
+            return [], None
 
         target = _count_target_from_stem(question_stem_for_keywords(question or ""))
         if target is None:
@@ -5606,7 +5738,7 @@ class GraphEQAMemory:
                     target = CountTarget(tokens=tuple(tokens))
                     break
         if target is None:
-            return ""
+            return [], None
 
         matches: list[GraphNode] = []
         target_phrases = [target.tokens, *_COUNT_PHRASE_ALIASES.get(target.tokens, ())]
@@ -5618,13 +5750,14 @@ class GraphEQAMemory:
                 or not node.countable_instance
             ):
                 continue
-            label_text = " ".join(node.labels or [])
-            if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
+            texts = finder_label_texts(node)
+            if not texts:
+                continue
+            if any(_count_phrase_matches(phrase, text) for phrase in target_phrases for text in texts):
                 matches.append(node)
         if not matches:
-            return ""
+            return [], target
 
-        scope_note = ""
         if target.scope_tokens:
             room_by_id = self._node_room_by_id()
             if room_by_id and all(int(node.node_id) in room_by_id for node in matches):
@@ -5634,27 +5767,119 @@ class GraphEQAMemory:
                     if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
                 ]
                 if not matches:
-                    return ""
-            else:
-                scope_note = (
-                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
-                    "this is a scene-wide observed count."
-                )
-
-        # A stable identity can be represented by several graph nodes after a
-        # checkpoint/replay. Collapse those records without guessing from distance.
+                    return [], target
         unique: dict[str, GraphNode] = {}
         for node in matches:
             key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
             unique.setdefault(key, node)
-        matches = _collapse_count_nodes_spatially(list(unique.values()))
+        return _collapse_count_nodes_spatially(list(unique.values())), target
+
+    def _graph_count_hint(self, question: str) -> str:
+        """List instance views to inspect for count MCQs; never assert an exact integer."""
+        matches, target = self._count_candidate_nodes(question)
+        if not matches:
+            return ""
+        phrase = target.phrase if target is not None else "target"
+        scope_note = ""
+        if target is not None and target.scope_tokens:
+            room_by_id = self._node_room_by_id()
+            if not (room_by_id and all(int(node.node_id) in room_by_id for node in matches)):
+                scope_note = (
+                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
+                    "look at these scene-wide candidate views."
+                )
+        labeled = format_graph_node_candidates(matches, max_nodes=6)
         return (
-            f"GRAPH_COUNT: {len(matches)} distinct object node(s) in the scene graph "
-            f"match '{target.phrase}' (labels: {', '.join(str(node.labels[0]) for node in matches[:4])}"
-            f"{' …' if len(matches) > 4 else ''});{scope_note} answer the count from the graph, "
-            "not a single image. Graph nodes are grounded; count only nodes with the "
-            "target label."
+            f"GRAPH_COUNT: views to look at for '{phrase}' "
+            f"(go look at these Image ids; not an exact count): {labeled}."
+            f"{scope_note} Count from attached images after looking; "
+            "do not use this list length as the answer."
         )
+
+    def _location_finder_nodes(self) -> list[GraphNode]:
+        """Object nodes matching the question phrase (close-look name or detector primary)."""
+        phrases = [p for p in self._confirmed_memory_phrases() if str(p).strip()]
+        if not phrases:
+            return []
+        matches: list[GraphNode] = []
+        seen_obs: set[int] = set()
+        for node in self._nodes:
+            if node.is_frontier or node.is_viewpoint or is_ground_truth_node(node):
+                continue
+            oid = int(node.obs_id)
+            if oid in seen_obs:
+                continue
+            texts = finder_label_texts(node)
+            if not texts:
+                continue
+            hit = False
+            for phrase in phrases:
+                tokens = tuple(_strip_count_wrappers(_count_tokens(phrase)))
+                for text in texts:
+                    if label_matches_relevant_object(phrase, text):
+                        hit = True
+                        break
+                    if tokens and _count_phrase_matches(tokens, text):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                seen_obs.add(oid)
+                matches.append(node)
+        return matches
+
+    def _compose_eqa_answer_obs_ids(
+        self,
+        *,
+        forced: list[int],
+        pin_obs: list[int],
+        selected: list[int],
+        max_images: int,
+        count_question: bool,
+        look_obs_id: int | None,
+    ) -> list[int]:
+        """Build Image 1..K so FIND/Action views are actually attached.
+
+        Agentic submit often passes a single verified ``force_obs_ids`` that used
+        to short-circuit this merge whenever it filled ``eqa_max_images`` (including
+        ``max_images=1``). Count MCQs then answered from a bathroom while GRAPH_COUNT
+        pointed at lamp obs 163.
+        """
+        if max_images <= 0:
+            return []
+
+        def _take(dst: list[int], src: list[int | None]) -> None:
+            seen = set(dst)
+            for raw in src:
+                if raw is None:
+                    continue
+                oid = int(raw)
+                if oid in seen:
+                    continue
+                if not self._obs_usable_for_eqa_image(oid):
+                    continue
+                dst.append(oid)
+                seen.add(oid)
+                if len(dst) >= max_images:
+                    return
+
+        look: list[int] = []
+        _take(look, [look_obs_id])
+        pins: list[int] = []
+        _take(pins, [*look, *pin_obs])
+        out: list[int] = []
+        if count_question and pins:
+            # FIND views occupy Image 1..K; verified-wrong-room frames fill leftovers.
+            _take(out, pins)
+            _take(out, forced)
+            _take(out, selected)
+            return out
+        _take(out, look)
+        _take(out, forced)
+        _take(out, pins)
+        _take(out, selected)
+        return out
 
     def query_answer(
         self,
@@ -5669,10 +5894,11 @@ class GraphEQAMemory:
         Same return contract as voxel_dynamem.SparseVoxelMap.query_answer.
 
         Args:
-            force_obs_ids: When set (agentic verified submit), use these observation
-                ids as Image 1..K instead of re-running diversified selection. Remaining
-                slots may still be filled from ``_select_relevant_obs_ids`` when
-                ``len(force_obs_ids) < eqa_max_images``.
+            force_obs_ids: When set (agentic verified submit), prefer these observation
+                ids as Image 1..K instead of a pure diversified pick. Remaining slots
+                fill from FIND pins and ``_select_relevant_obs_ids``. Count MCQs attach
+                FIND / pending Action views first so a single verified frame cannot
+                occupy the whole budget (``max_images=1`` used to drop lamp/stool RGB).
 
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
@@ -5682,6 +5908,7 @@ class GraphEQAMemory:
         from emet.habitat.metrics import (
             answer_is_visibility_abstain,
             choices_are_attribute_state,
+            choices_are_count_mcq,
             choices_are_location_mcq,
             parse_mcq_choices_from_question,
             question_is_attribute_state,
@@ -5711,6 +5938,30 @@ class GraphEQAMemory:
         include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
+        count_q = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
+        # Honor Action:N from the previous call / post-nav look even when this submit
+        # forces a different verified obs as Image 1.
+        look_obs_id = self.last_eqa_look_obs_id
+        if look_obs_id is None:
+            look_obs_id = self.last_eqa_action_obs_id
+        self.last_eqa_look_obs_id = None
+        count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
+        pin_obs: list[int] = []
+        for node in count_nodes:
+            oid = int(node.obs_id)
+            if oid in pin_obs:
+                continue
+            if self._obs_usable_for_eqa_image(oid):
+                pin_obs.append(oid)
+        if not pin_obs and not attribute_q:
+            # Location / other: pin a couple of object views so Image 1 is the target,
+            # not an MCQ landmark (q47: fridge stole Image 1 while gold was above the sink).
+            for node in self._location_finder_nodes()[:2]:
+                oid = int(node.obs_id)
+                if oid in pin_obs:
+                    continue
+                if self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(oid)
         forced: list[int] = []
         if force_obs_ids:
             for oid in force_obs_ids:
@@ -5719,26 +5970,23 @@ class GraphEQAMemory:
                     continue
                 if self._obs_usable_for_eqa_image(oi):
                     forced.append(oi)
-                if len(forced) >= max_images:
-                    break
-        if forced and len(forced) >= max_images:
-            obs_ids = forced[:max_images]
-        else:
-            selected = [
-                int(oid)
-                for oid in self._select_relevant_obs_ids(
-                    max_images=max_images,
-                    choices=parsed_choices if parsed_choices else None,
-                    attribute_question=attribute_q,
-                )
-                if self._obs_usable_for_eqa_image(oid)
-            ]
-            if forced:
-                # Verified (or caller-pinned) view stays Image 1; fill remaining slots.
-                rest = [oid for oid in selected if oid not in set(forced)]
-                obs_ids = (forced + rest)[:max_images]
-            else:
-                obs_ids = selected
+        selected = [
+            int(oid)
+            for oid in self._select_relevant_obs_ids(
+                max_images=max_images,
+                choices=parsed_choices if parsed_choices else None,
+                attribute_question=attribute_q,
+            )
+            if self._obs_usable_for_eqa_image(oid)
+        ]
+        obs_ids = self._compose_eqa_answer_obs_ids(
+            forced=forced,
+            pin_obs=pin_obs,
+            selected=selected,
+            max_images=max_images,
+            count_question=count_q,
+            look_obs_id=look_obs_id,
+        )
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         merged_memory = self._merged_memory_enabled()
@@ -5925,9 +6173,12 @@ class GraphEQAMemory:
         # - ``Unknown`` on attribute/yes-no → salvage (holdout q65).
         # - Empty/``Unknown`` on location MCQ → do NOT invent a letter (holdout q104/q105);
         #   agentic should follow Action:/explore instead of memory/salvage A–D.
+        # - ``Unknown`` on count MCQ → do NOT invent One/Two (q86 pin: bathroom RGB
+        #   salvaged to One while GRAPH_COUNT pointed at a lamp view).
         _ans_stripped = (answer or "").strip()
         _ans_unknownish = answer_is_unknownish(_ans_stripped, parsed_choices)
         _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
+        _count_mcq = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
         # A stream that never reached ``answer:`` / ``"answer"`` was cut off mid-caption.
         _answer_field_emitted = bool(
             re.search(r"answer\s*:", answer_outputs)
@@ -5939,8 +6190,9 @@ class GraphEQAMemory:
         # table instead of only showing up as a mysterious accuracy drop.
         self.last_eqa_answer_field_emitted = _answer_field_emitted
         self.last_eqa_salvage_used = False
-        # Location MCQ: never invent A–D from memory, but do recover a truncated stream.
-        _should_salvage = _ans_unknownish and (not _loc_mcq or _truncated_before_answer)
+        # Location / count MCQ: never invent A–D from a second guess, but do recover
+        # a truncated stream that never emitted ``answer:``.
+        _should_salvage = _ans_unknownish and (not (_loc_mcq or _count_mcq) or _truncated_before_answer)
         if _loc_mcq and _ans_unknownish and not _ans_stripped:
             # Truncated streams often omit ``answer:`` entirely (failfix5); normalize so
             # human_answer / agentic follow-up treat this as Unknown, not memory-B.
