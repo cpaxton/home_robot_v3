@@ -2162,6 +2162,9 @@ class AgenticEQAExecutor:
                 "verify": None,
             }
 
+        # Historical FIND RGB (obs 163) must be Image 1 on the next answer even if
+        # the arrival capture is a wall and verify pins that station instead.
+        self._pin_eqa_look_obs(oid)
         self._refresh_room_after_motion()
         cap = self._tool_capture_and_update()
         cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
@@ -2261,6 +2264,19 @@ class AgenticEQAExecutor:
     def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
         """Compat alias — ``navigate_to_obs`` shares the investigate approach path."""
         return self._tool_investigate(int(obs_id), tool_name="navigate_to_obs")
+
+    def _pin_eqa_look_obs(self, obs_id: int | None) -> None:
+        """Next ``query_answer`` attaches this graph RGB as Image 1."""
+        gm = self.graph_memory
+        if gm is None or obs_id is None:
+            return
+        try:
+            oid = int(obs_id)
+        except (TypeError, ValueError):
+            return
+        if oid <= 0:
+            return
+        gm.last_eqa_look_obs_id = oid
 
     def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
         agent = self.agent
@@ -4785,6 +4801,48 @@ class AgenticEQAExecutor:
             return None
         return best_oid
 
+    def _count_find_obs_ids(self) -> list[int]:
+        """Graph views to attach for a count MCQ (Action / FIND nodes, not the bathroom)."""
+        gm = self.graph_memory
+        if gm is None:
+            return []
+        if not choices_are_count_mcq(parse_mcq_choices_from_question(self.question)):
+            return []
+        out: list[int] = []
+        seen: set[int] = set()
+
+        def _add(raw: Any) -> None:
+            try:
+                oid = int(raw)
+            except (TypeError, ValueError):
+                return
+            if oid <= 0 or oid in seen:
+                return
+            usable = getattr(gm, "_obs_usable_for_eqa_image", None)
+            if callable(usable):
+                try:
+                    if not usable(oid):
+                        return
+                except Exception:
+                    pass
+            seen.add(oid)
+            out.append(oid)
+
+        _add(getattr(gm, "last_eqa_look_obs_id", None))
+        _add(getattr(gm, "last_eqa_action_obs_id", None))
+        fn = getattr(gm, "_count_candidate_nodes", None)
+        if callable(fn):
+            try:
+                found = fn(self.question)
+            except Exception:
+                found = None
+            nodes = found[0] if isinstance(found, tuple) and found else ()
+            if not isinstance(nodes, (list, tuple)):
+                nodes = ()
+            for node in nodes:
+                _add(getattr(node, "obs_id", None))
+        return out
+
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         from emet.eval.dynagraph_vram import release_siglip_for_vlm
 
@@ -4813,6 +4871,11 @@ class AgenticEQAExecutor:
                 if evidence_obs_id is not None:
                     force_obs_ids = gm.select_obs_ids_for_verified_answer(evidence_obs_id, max_images=1)
                     gm.last_eqa_obs_ids = list(force_obs_ids)
+            find_ids = self._count_find_obs_ids()
+            if find_ids:
+                rest = [int(oid) for oid in (force_obs_ids or []) if int(oid) not in set(find_ids)]
+                force_obs_ids = find_ids + rest
+                gm.last_eqa_obs_ids = list(force_obs_ids)
             # Do not clamp EMET_EQA_ANSWER_MAX_NEW_TOKENS here. A prior setdefault("64")
             # truncated Reasoning mid-stream and forced [salvage] on every bal-32 agentic
             # answer; the budget belongs to eqa_vl/answer_max_new_tokens so it can be tuned
@@ -5012,7 +5075,7 @@ class AgenticEQAExecutor:
                 self._followed_eqa_actions.add(oid)
                 gm.last_eqa_action_obs_id = None
                 # Next query_answer must attach this RGB even if verify pins another view.
-                gm.last_eqa_look_obs_id = oid
+                self._pin_eqa_look_obs(oid)
                 # Force re-verify at the action target before the next submit.
                 self._verified = False
                 self._verified_obs_id = None

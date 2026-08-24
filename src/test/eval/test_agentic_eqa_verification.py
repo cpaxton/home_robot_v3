@@ -1991,6 +1991,7 @@ def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
     assert out["look_around_on_no_new_obs"] is True
     agent.look_around.assert_called()
     assert out.get("capture", {}).get("status") == "NO_NEW_OBS"
+    assert gm.last_eqa_look_obs_id == 16
     assert 16 in ex._tried
     assert str(ex._tried[16]).startswith("STALLED_NAV_LOOP")
     assert any(r.get("event") == "nav_loop" for r in ex._trace_rows)
