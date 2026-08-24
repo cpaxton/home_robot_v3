@@ -42,9 +42,10 @@ cd stretch_ai
 
 Options:
 - `-y` / `--yes`: Non-interactive (skip confirmation prompts; link emet to ~/.local/bin when offered).
-- `--all`: Install everything: sim (Robocasa + robosuite), MolmoSpaces runner venv, and dynamem (SAM-2). Overridable by `--no-sim` or `--no-sam2`.
+- `--all`: Install everything: sim (Robocasa + robosuite), MolmoSpaces runner venv, dynamem (SAM-2), and the paper toolchain. Overridable by `--no-sim`, `--no-sam2`, `--no-molmospaces`, or `--no-paper`.
 - `--sim` / `--no-sim`: Include or skip simulation (third_party/robocasa, robosuite). Sim is on by default.
 - `--molmospaces`: Create `.venv-molmospaces` for [MolmoSpaces](molmospaces.md) (scenes + rby1 robot). Requires separate venv due to numpy/mujoco version mismatch with main env.
+- `--paper` / `--no-paper`: Install, or explicitly skip, `latexmk`, `texlive-latex-extra`, and `texlive-bibtex-extra`. Paper tooling is optional in the normal full profile because TeX Live is large.
 - `--no-sam2`: Skip Segment Anything 2 (omit the **dynamem** default group: `uv sync --no-group dynamem`). Use `--cpu` for CPU-only (also skips SAM-2).
 - `--clean`: Remove and re-clone third_party/robosuite, robosuite_models, robocasa before installing. Only use if repos are in a bad state; **by default we update in place** (git fetch/pull).
 
@@ -54,7 +55,14 @@ When sim is installed, `scripts/install_simulation.sh` updates existing robosuit
 
 To add SAM2 after install: `emet sync -e dynamem` or ensure **`third_party/segment-anything-2`** is present and run `uv sync` (dynamem is a default group). Or `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
-**Interactive menu:** Run `emet install menu` for a text-based UI that shows the status of each sub-asset (submodules, simulation, kitchen assets, MolmoSpaces) and lets you install or update them one by one, or run all with prompts.
+**Paper build:** Run `emet install paper -y` for only the local LaTeX
+toolchain, then `./paper/build.sh`. If local TeX is absent, the build script can
+instead use `texlive/texlive:latest` when Docker is available. See
+[`paper/README.md`](../paper/README.md).
+
+**Interactive menu:** Run `emet install menu` for a UI that shows the status
+of each sub-asset and the paper toolchain, and lets you install or update them
+one by one, or run all with prompts.
 
 #### Install On the Robot
 

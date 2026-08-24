@@ -1,9 +1,9 @@
 # Action-outcome ledger (agent world model)
 
-**Branch:** `feature/graph-room-evidence`
 **Plan:** [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md)
-**Status:** Phases 1–4 landed (default **off**); a manifest-locked action-history
-visibility A/B is available for HM-EQA.
+**Status:** The ledger, typed semantic action history, and static-world progress
+gate are implemented with legacy-compatible defaults **off**. HM-EQA variants
+freeze history visibility and retry policy independently.
 
 The scene graph already answers “what is where?”. The **attempt ledger** adds “what did we try, and how did it go?” so CHAT tools, agentic EQA, and OVMM manip paths can avoid repeating failed nav / verify / pick / place / closer-look actions.
 
@@ -16,6 +16,8 @@ This page is the **operator and developer reference**. The plan doc is the desig
 | Invariant | Detail |
 |-----------|--------|
 | **Default off** | No durable `AttemptRecord` rows or dedicated action-history section unless the ledger is enabled. World-evidence provenance may still mirror tool outcomes, but grounded state filters those events unless mode is `agent`. |
+| **Retry policy independent and off** | `action_progress_mode` does not follow ledger visibility. `shadow` is observational; `enforce` changes candidate eligibility. |
+| **No permanent failure blacklist** | Enforcement suppresses one equivalent action only while its target-local material state is unchanged. The initial contract is explicitly scoped to mostly static HM-EQA scenes. |
 | **Pinned configs unchanged** | [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) does not enable the ledger. |
 | **EQA tool names frozen** | `investigate`, `explore_frontier`, `verify_siglip`, `submit_answer`, … stay stable for traces. |
 | **`eqa.agentic_verify` default** | Still **false**; ledger does not turn on the agentic loop. |
@@ -52,68 +54,104 @@ and the frozen
 
 ### What the memory trace looks like
 
-There are three related representations:
+There are four related representations:
 
 1. `attempt_ledger.json` stores structured durable rows.
 2. `agentic_trace.jsonl` records the compact state rendered for each router call.
-3. The executor keeps a hard, question-local navigation guard even in `shadow`
-   mode; visibility is not the safety mechanism.
+3. `action_history` trace events store typed signatures, pre/post progress
+   tokens, outcome class, and progress reasons for top-level actions.
+4. `router_call.action_gate_decisions` records every rendered place/frontier
+   candidate; `action_gate_dispatch` records selected explicit verify and motion
+   calls. Both are emitted in `shadow`. Automatic post-motion verification is
+   summarized by its parent investigate/frontier history entry.
 
-For example, q11's second agent-visible router call at clean commit `63abd929`
-contained:
+The pre-gate q11 diagnostic exposed the problem as opaque adapters:
 
 ```text
 Recent action outcomes:
 - r0 investigate obs=15 ap=0 verify=ABSENT closest=0.4m
 Loop flags:
 - obs=15 visits=1 status=STALLED_NAV_LOOP
-Places:
-- ... obs_adapter=15 ... attempts=navigate:ok:ok,verify:absent:ABSENT,
-  verify:absent:vlm_absent ...
-Room events (latest first):
-- ... room=kitchen kind=verify_absent phrase=silver trash can obs_adapter=15 ...
-Global attempts (latest first):
-- world_step=21 action=verify outcome=absent status=vlm_absent ... obs_adapter=15
-- world_step=13 action=verify outcome=absent status=ABSENT ... obs_adapter=15
-- world_step=13 action=navigate outcome=ok status=ok ... obs_adapter=15
 ```
 
-By round six, the same run showed why prompt-visible history is not itself a
-complete repeat policy:
+Grounded state schema v3 now leads with semantic intent and stable identity;
+the mutable adapter is retained only as a trailing bridge to tool arguments:
 
 ```text
 Recent action outcomes:
-- r4 explore_frontier ... ok
-- r4 investigate obs=15 fail=NAV_LOOP_BLOCKED
-- r3 explore_frontier ... ok
-- r2 explore_frontier ok
-- r1 explore_frontier ... ok
-- r1 investigate obs=15 fail=NAV_LOOP_BLOCKED
+- round=1 action=investigate intent="find the silver trash can"
+  target="kitchen island/counter" room=kitchen
+  place=place_550b3a0b4a9b approach=0 view=view_00000024@rev8
+  closest=0.4m capture=NEW_OBS verify=ABSENT
+  result=progress:ABSENT progress=new_view,target_evidence adapter=15
 Loop flags:
-- obs=15 visits=1 status=NAV_LOOP_BLOCKED
-- obs=15 visits=1 status=NAV_LOOP_BLOCKED
-- obs=15 visits=1 status=STALLED_NAV_LOOP
+- action=investigate target='kitchen island/counter' room=kitchen
+  stable=place:place_550b3a0b4a9b visits=1 status=STALLED_NAV_LOOP adapter=15
+Temporarily suppressed actions:
+- action=investigate target='kitchen island/counter' room=kitchen
+  stable=place:place_550b3a0b4a9b
+  reason='all finite approach variants are temporarily ineligible for the unchanged place state'
+  retry=after_target_view_or_geometry_change adapter=15
 ```
 
-The matching `shadow` call still collected the ledger and ran the hard guard,
-but rendered `Recent action outcomes`, `Loop flags`, per-place `attempts`, and
-`Global attempts` as `none`.
+Suppressed rows are explanatory, not actionable: their stable IDs are omitted
+from the exact tool allowlist. The same decision remains trace-visible but does
+not alter cards or execution in `action_progress_mode=shadow`. Ledger
+`attempt_ledger_mode=shadow` independently hides recent/loop/suppression text
+from the router.
 
-Today, a successful navigation that produces no new observation is verified
-once and marked `STALLED_NAV_LOOP`. A later exhausted selection of that
-observation returns `NAV_LOOP_BLOCKED`, then the executor redirects the rejected
-selection to `explore_frontier`. This prevents an identical place navigation
-from executing forever, but it is post-selection and mostly keyed by
-`obs_id`/approach exhaustion. It does not yet define general action equivalence
-or material progress for repeated verifies, frontiers, or semantically
-equivalent targets. All ten non-initial treatment router calls retained a loop
-flag, so dumping these flags into every prompt is too blunt to be the long-term
-memory policy.
+## Static-world action-progress policy
+
+`eqa.action_progress_mode` is independent from
+`eqa.attempt_ledger_mode` and requires `agentic_decision_policy=grounded_v2`:
+
+| Mode | Compute and trace decisions | Remove candidates before routing |
+|------|-----------------------------|----------------------------------|
+| `off` (default) | no | no |
+| `shadow` | yes | no |
+| `enforce` | yes | yes |
+
+This is **temporary suppression**, not “failed forever.” The v1 policy is
+deliberately benchmark-scoped to HM-EQA's mostly static scenes. It suppresses a
+concrete action only when the same equivalence key previously produced a
+terminal/no-progress result from the same progress token.
+
+Action identity has two levels:
+
+- the **work key** combines action family, normalized work intent, and stable
+  target (`place_id`, `frontier_id`, or question/session identity);
+- the **equivalence key** adds the concrete variant: investigate approach slot,
+  verify view + phrase/verifier profile, or frontier material geometry + goal
+  cell. `investigate` and its `navigate_to_obs` alias share one family.
+
+The rendered intent may retain a useful per-call hint such as
+`toward="kitchen"`, but rewording that weak frontier hint does not create new
+semantic work or bypass an unchanged no-progress decision.
+
+The action-specific **progress token** includes only facts that can justify a
+retry: target view/revision, target-local non-attempt evidence, coverage/local
+geometry, material frontier geometry/lineage, and a quantized robot pose cell.
+Mirrored ledger events are excluded so a failed action cannot unlock itself by
+writing its own failure row. Raw frontier revision increments alone are not
+progress. Partial navigation into a new pose cell is a continuation and remains
+eligible.
+
+Outcomes distinguish `progress`, `negative_evidence`, `no_progress`,
+`terminal_ok`, `transient`, `operator_abort`, and `capability_absent`. Alternate
+approaches and new views remain eligible. A known transient gets one fixed
+same-token retry; unknown/terminal no-progress actions do not silently loop.
+
+Dynamic-world invalidation is intentionally **not implemented in this slice**.
+A future scheduler must reopen or decay suppressions on target/environment
+change events, map revision, elapsed-time/TTL, and evidence staleness, and may
+cool down/re-rank an action instead of removing it. Do not use `enforce` as a
+general lifelong-memory policy until that contract lands.
 
 ### Env
 
 ```bash
 export EMET_EQA_ATTEMPT_LEDGER_MODE=agent  # off | shadow | agent
+export EMET_EQA_ACTION_PROGRESS_MODE=shadow  # off | shadow | enforce
 # optional:
 export EMET_ATTEMPT_LEDGER_MAX=512
 export EMET_ATTEMPT_LEDGER_PERSIST_ABSENT=0   # keep ABSENT claim blacklist across questions
@@ -129,6 +167,7 @@ Under `eqa:` (mapping / dynav config) or unified `mapping.eqa` / top-level `eqa:
 ```yaml
 eqa:
   attempt_ledger_mode: agent  # off | shadow | agent
+  action_progress_mode: shadow  # off | shadow | enforce
 ```
 
 The lower-level boolean/mapping form remains available for non-HM-EQA writers:
@@ -147,21 +186,26 @@ CLI override example:
 uv run emet run agent --set eqa.attempt_ledger=true
 ```
 
-For a frozen HM-EQA comparison, use the checked-in complete variant files:
+For a frozen HM-EQA static-policy comparison, use the checked-in complete
+variant files:
 
 ```bash
 uv run emet hmeqa h2h OUT_SHADOW \
-  --variant-config configs/benchmarks/hmeqa_action_history_shadow.yaml \
+  --variant-config configs/benchmarks/hmeqa_action_progress_shadow.yaml \
   --preset paper-router --arms agentic --ids 6,11,12,47
-uv run emet hmeqa h2h OUT_AGENT \
-  --variant-config configs/benchmarks/hmeqa_action_history_agent.yaml \
+uv run emet hmeqa h2h OUT_ENFORCE \
+  --variant-config configs/benchmarks/hmeqa_action_progress_enforce.yaml \
   --preset paper-router --arms agentic --ids 6,11,12,47
 ```
 
-The loader rejects missing or unknown variant axes. Explicit CLI variant flags
-win over the file; the effective values plus the variant file path and SHA-256
-source label are frozen in `run_manifest.json`. Resume reuses that manifest
-rather than re-reading a mutable config.
+Variant schema v2 freezes nine fields, including action progress. The loader
+rejects missing or unknown v2 fields; legacy schema-v1 files remain readable
+with action progress defaulted to `off`. Explicit CLI variant flags win over the
+file; the effective values plus the variant file path and SHA-256 source label
+are frozen in schema-v4 `run_manifest.json`. Resume reuses that manifest rather
+than re-reading a mutable config. A non-`off` episode cannot publish completion
+unless its summary and trace contain parseable, manifest-matching gate
+diagnostics.
 
 See [emet_config.md](emet_config.md) and [environment_variables.md](environment_variables.md).
 
@@ -262,7 +306,10 @@ Shared tool result shape: [`emet.agent.tool_outcome.ToolOutcome`](../src/emet/ag
 | CONFIRMED_MEMORY / prompt tags | Compact `attempts:` suffixes (respects prompt token budget) |
 | Repeat-failure metrics | `summarize_repeat_failures(records)` for offline / future eval reports |
 
-**Repeat key** (Phase 4): same `action_kind` and (`target_node_id` if set, else `obs_id`, else planar `xyz` within **0.25 m**); prior row `outcome` not `ok`. Metrics: `n_repeat_failures`, `n_wasted_rounds`, `by_kind`.
+**Legacy ledger repeat key** (Phase 4 metric): same `action_kind` and stable
+`target_kind`/`target_id` first (`view_id` additionally distinguishes verifies),
+then legacy `target_node_id`, `obs_id`, or planar `xyz` within **0.25 m**.
+This metric is coarser than the live action equivalence/progress gate.
 
 ---
 
@@ -286,6 +333,7 @@ Agentic format blocks in [`agentic_tools.py`](../src/emet/memory/graph_eqa/agent
 
 ```bash
 uv run emet test src/test/memory/test_attempt_ledger.py \
+  src/test/memory/test_action_history.py \
   src/test/memory/test_attempt_metrics.py \
   src/test/agent/test_tool_outcome.py \
   src/test/controller/test_nav_attempt.py \
@@ -306,6 +354,8 @@ GPU A/B (ledger on vs off) must use `uv run emet jobs run …` — never inline 
 | Piece | Path |
 |-------|------|
 | Record + infer helpers | `src/emet/memory/graph_eqa/attempt_ledger.py` |
+| Semantic work/equivalence/progress policy | `src/emet/memory/graph_eqa/action_history.py` |
+| Candidate filtering + semantic state rendering | `src/emet/memory/graph_eqa/agentic_state.py`, `agentic_eqa.py` |
 | Repeat / manip helpers | `src/emet/memory/graph_eqa/attempt_metrics.py` |
 | Store + dual-write | `src/emet/memory/graph_eqa/graph_memory.py` |
 | ToolOutcome | `src/emet/agent/tool_outcome.py` |

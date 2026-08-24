@@ -11,6 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 
 from emet.eval import hmeqa_launch as launch
 from emet.eval.hmeqa_child_env import sanitized_hmeqa_child_env
@@ -37,7 +38,7 @@ def test_load_hmeqa_variant_config_is_strict_and_digest_pinned(tmp_path):
     config.write_text(
         """
 schema: emet.hmeqa.variant
-schema_version: 1
+schema_version: 2
 description: paired history treatment
 variant:
   id: action-history-agent-v1
@@ -48,6 +49,7 @@ variant:
   room_target_hints: true
   investigate_stamp: false
   attempt_ledger_mode: agent
+  action_progress_mode: "off"
 """.lstrip(),
         encoding="utf-8",
     )
@@ -61,6 +63,7 @@ variant:
         "room_target_hints": True,
         "investigate_stamp": False,
         "attempt_ledger_mode": "agent",
+        "action_progress_mode": "off",
         "variant_id": "action-history-agent-v1",
     }
     assert source.startswith(f"variant_config:{config.resolve()}#sha256:")
@@ -71,6 +74,47 @@ variant:
     )
     with pytest.raises(HmeqaRunManifestError, match="missing HM-EQA variant fields.*attempt_ledger_mode"):
         load_hmeqa_variant_config(config)
+
+
+def test_load_hmeqa_variant_config_v1_defaults_progress_mode_off(tmp_path):
+    config = tmp_path / "legacy.yaml"
+    config.write_text(
+        """
+schema: emet.hmeqa.variant
+schema_version: 1
+description: legacy history treatment
+variant:
+  id: action-history-agent-v1
+  agentic_decision_policy: grounded_v2
+  graph_evidence_mode: agent
+  room_history_mode: agent
+  room_policy: canonical
+  room_target_hints: true
+  investigate_stamp: false
+  attempt_ledger_mode: agent
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    values, _source = load_hmeqa_variant_config(config)
+    assert values["action_progress_mode"] == "off"
+
+
+def test_checked_in_progress_variants_are_a_paired_comparison():
+    root = Path(__file__).parents[3]
+    shadow, _ = load_hmeqa_variant_config(root / "configs/benchmarks/hmeqa_action_progress_shadow.yaml")
+    enforce, _ = load_hmeqa_variant_config(root / "configs/benchmarks/hmeqa_action_progress_enforce.yaml")
+
+    assert shadow["action_progress_mode"] == "shadow"
+    assert enforce["action_progress_mode"] == "enforce"
+    for key in shadow.keys() - {"variant_id", "action_progress_mode"}:
+        assert shadow[key] == enforce[key]
+
+
+def test_default_yaml_keeps_action_progress_disabled():
+    root = Path(__file__).parents[3]
+    default = yaml.safe_load((root / "configs/emet/default.yaml").read_text(encoding="utf-8"))
+    assert default["mapping"]["eqa"]["action_progress_mode"] == "off"
 
 
 def test_normalize_hmeqa_vl_endpoint_variants():
@@ -185,6 +229,7 @@ def test_hmeqa_h2h_env_parts_translates_explicit_variant_axes():
         room_target_hints=False,
         investigate_stamp=True,
         attempt_ledger_mode="shadow",
+        action_progress_mode="enforce",
         variant_id="grounded-shadow-r1",
     )
     joined = " ".join(parts)
@@ -195,6 +240,7 @@ def test_hmeqa_h2h_env_parts_translates_explicit_variant_axes():
     assert "EMET_EQA_ROOM_TARGET_HINTS=0" in joined
     assert "EMET_EQA_ROOM_STAMP_INVESTIGATE=1" in joined
     assert "EMET_EQA_ATTEMPT_LEDGER_MODE=shadow" in joined
+    assert "EMET_EQA_ACTION_PROGRESS_MODE=enforce" in joined
     assert "EMET_EQA_ATTEMPT_LEDGER=1" in joined
     assert "EMET_HMEQA_USE_HM3D_SEMANTICS=1" in joined
     assert "EMET_HMEQA_USE_ENRICH_LABELS=1" in joined
@@ -216,6 +262,7 @@ def test_direct_script_defaults_preserve_legacy_policy():
         "room_target_hints": True,
         "investigate_stamp": False,
         "attempt_ledger_mode": "off",
+        "action_progress_mode": "off",
     }
 
 
@@ -235,6 +282,7 @@ def _treatment_config():
         room_target_hints=False,
         investigate_stamp=True,
         attempt_ledger_mode="shadow",
+        action_progress_mode="shadow",
         variant_id="grounded-shadow-r1",
         eqa_hf_model_id="Qwen/Qwen3-VL-8B-Instruct",
         eqa_answer_max_new_tokens=512,
@@ -274,6 +322,22 @@ def test_hmeqa_run_config_digest_is_deterministic():
     config = _treatment_config()
     reordered = {key: deepcopy(config[key]) for key in reversed(config)}
     assert hmeqa_run_config_digest(config) == hmeqa_run_config_digest(reordered)
+
+
+def test_action_progress_mode_requires_grounded_decision_policy():
+    with pytest.raises(
+        HmeqaRunManifestError,
+        match="requires agentic_decision_policy=grounded_v2",
+    ):
+        build_hmeqa_run_config(
+            arms="agentic",
+            ids="11",
+            agentic_verifier="none",
+            require_verified=False,
+            agentic_router=True,
+            decision_policy="legacy",
+            action_progress_mode="shadow",
+        )
 
 
 def test_hmeqa_run_manifest_freezes_config_and_refuses_mismatch(tmp_path):
@@ -631,6 +695,8 @@ def test_hmeqa_child_env_overrides_ambient_resume_and_drops_policy_leaks():
     assert child["RESUME"] == "0"
     assert child["NATIVE_CRASH_POLICY"] == "skip"
     assert child["EMET_EVAL_EXPORT_COMPACT_MEMORY"] == "1"
+    assert child["EMET_EQA_ACTION_PROGRESS_MODE"] == "shadow"
+    assert hmeqa_run_config_from_env(child)["variant"]["action_progress_mode"] == "shadow"
     assert child["HF_TOKEN"] == "credential"
     assert "SKIP_KILL_STALE" not in child
     assert "EMET_EQA_FORCE_ANSWER" not in child
@@ -662,6 +728,7 @@ def test_direct_h2h_reexec_sanitizes_inherited_outer_job_environment():
     assert child["EMET_HMEQA_ENV_SANITIZED"] == "1"
     assert child["RESUME"] == "0"
     assert child["EMET_EVAL_EXPORT_COMPACT_MEMORY"] == "1"
+    assert child["EMET_EQA_ACTION_PROGRESS_MODE"] == "shadow"
     assert "SKIP_KILL_STALE" not in child
     assert "EMET_EQA_FORCE_ANSWER" not in child
 
@@ -735,6 +802,26 @@ def test_schema_v2_manifest_is_readable_but_not_resumable(tmp_path):
 
     assert load_hmeqa_run_manifest(tmp_path)["schema_version"] == 2
     with pytest.raises(HmeqaRunManifestError, match="readable for analysis"):
+        load_hmeqa_run_manifest(tmp_path, require_resumable=True)
+
+
+def test_schema_v3_manifest_without_progress_axis_is_analysis_only(tmp_path):
+    config = _treatment_config()
+    config["variant"].pop("action_progress_mode")
+    manifest = {
+        "schema": "emet.hmeqa.run_manifest",
+        "schema_version": 3,
+        "config": config,
+        "config_digest": "sha256:legacy-v3",
+    }
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    loaded = load_hmeqa_run_manifest(tmp_path)
+    assert "action_progress_mode" not in loaded["config"]["variant"]
+    with pytest.raises(HmeqaRunManifestError, match="only v4"):
         load_hmeqa_run_manifest(tmp_path, require_resumable=True)
 
 

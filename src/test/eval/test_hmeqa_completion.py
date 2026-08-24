@@ -32,6 +32,8 @@ def _prepare_run(
     arms: str = "classic",
     ids: str = "7",
     artifact_profile: dict[str, bool | int | float] | None = None,
+    decision_policy: str = "legacy",
+    action_progress_mode: str = "off",
 ) -> tuple[Path, dict]:
     out = tmp_path / "out"
     data_dir = tmp_path / "data"
@@ -44,6 +46,8 @@ def _prepare_run(
         agentic_verifier="none",
         require_verified=False,
         agentic_router=False,
+        decision_policy=decision_policy,
+        action_progress_mode=action_progress_mode,
         data_dir=data_dir,
         hm3d_root=hm3d,
         artifact_profile=artifact_profile or _minimal_artifact_profile(),
@@ -141,6 +145,90 @@ def test_wrong_answer_commits_and_marker_is_authoritative(tmp_path: Path) -> Non
     assert completion.unit_is_complete(out, "classic", 7)
     assert not pending.exists()
     assert json.loads((out / "classic_q7.jsonl").read_text())["correct"] is False
+
+
+def test_action_progress_run_requires_matching_summary_and_gate_trace(tmp_path: Path) -> None:
+    out, manifest = _prepare_run(
+        tmp_path,
+        arms="agentic",
+        decision_policy="grounded_v2",
+        action_progress_mode="shadow",
+    )
+    source = completion.expected_debug_bundle_dir(out, "agentic", 7, manifest=manifest)
+    row = _episode_row(source)
+    _write_source_bundle(source, row)
+    pending = _pending(out, row)
+
+    with pytest.raises(completion.HmeqaCompletionError, match="agentic_summary.json"):
+        completion.commit_pending_episode(
+            out,
+            arm="agentic",
+            qid=7,
+            pending_path=pending,
+            exit_code=0,
+        )
+
+    (source / "agentic_summary.json").write_text(
+        json.dumps(
+            {
+                "effective_state_contract": {
+                    "decision_policy": "grounded_v2",
+                    "action_progress_mode": "off",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (source / "agentic_trace.jsonl").write_text(
+        json.dumps({"event": "router_call", "action_gate_decisions": []}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(completion.HmeqaCompletionError, match="does not match frozen"):
+        completion.commit_pending_episode(
+            out,
+            arm="agentic",
+            qid=7,
+            pending_path=pending,
+            exit_code=0,
+        )
+
+    (source / "agentic_summary.json").write_text(
+        json.dumps(
+            {
+                "effective_state_contract": {
+                    "decision_policy": "grounded_v2",
+                    "action_progress_mode": "shadow",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (source / "agentic_trace.jsonl").write_text(
+        json.dumps({"event": "router_call", "action_gate_decisions": [{}]}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(completion.HmeqaCompletionError, match="boolean allowed"):
+        completion.commit_pending_episode(
+            out,
+            arm="agentic",
+            qid=7,
+            pending_path=pending,
+            exit_code=0,
+        )
+
+    (source / "agentic_trace.jsonl").write_text(
+        json.dumps({"event": "router_call", "action_gate_decisions": []}) + "\n",
+        encoding="utf-8",
+    )
+    committed = completion.commit_pending_episode(
+        out,
+        arm="agentic",
+        qid=7,
+        pending_path=pending,
+        exit_code=0,
+    )
+    assert committed["row"]["question_id"] == 7
+    assert (out / "bundles" / "agentic_q7" / "agentic_trace.jsonl").is_file()
 
 
 def test_existing_valid_marker_is_idempotent_and_never_replaced(tmp_path: Path) -> None:
