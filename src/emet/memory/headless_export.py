@@ -97,10 +97,7 @@ def export_dynagraph_visual_assets(graph_memory: Any, export_dir: str | Path) ->
             "relation": rel,
         }
         if obj is not None:
-            row["object_label"] = (
-                str(getattr(obj, "close_look_label", None) or "").strip()
-                or (obj.labels[0] if obj.labels else "")
-            ).strip()
+            row["object_label"] = (obj.labels[0] if obj.labels else "").strip()
             row["object_xyz"] = [float(x) for x in np.asarray(obj.xyz).reshape(3)]
             row["object_obs_id"] = int(obj.obs_id)
         if vp is not None:

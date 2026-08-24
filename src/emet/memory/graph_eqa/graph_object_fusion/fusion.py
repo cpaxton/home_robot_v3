@@ -22,9 +22,6 @@ class GraphDetectionCandidate:
     embedding: np.ndarray | None = None
     identity_key: str | None = None
     countable_instance: bool = False
-    detection_score: float | None = None
-    mask_point_count: int = 0
-    semantic_only: bool = False
 
 
 def bounds_3d_from_points(points: np.ndarray) -> dict[str, list[float]]:
@@ -82,11 +79,8 @@ class GraphObjectFusion:
             return True
         return candidate_key == node_key
 
-    def _label_match(self, node: GraphNode, label: str, candidate: GraphDetectionCandidate | None = None) -> bool:
-        instance_guard = bool(self.config.require_label_match_for_instances) and (
-            (candidate is not None and candidate.countable_instance) or bool(node.countable_instance)
-        )
-        if not self.config.require_label_match and not instance_guard:
+    def _label_match(self, node: GraphNode, label: str) -> bool:
+        if not self.config.require_label_match:
             return True
         from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
 
@@ -143,7 +137,7 @@ class GraphObjectFusion:
                 continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label):
                 continue
             if not self._spatial_ok(node, xyz, candidate.bounds_3d):
                 continue
@@ -175,7 +169,7 @@ class GraphObjectFusion:
                 continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label):
                 continue
             iou = bounds_3d_iou(candidate.bounds_3d, node.bounds_3d)
             if iou >= best_iou:
@@ -200,7 +194,7 @@ class GraphObjectFusion:
                 continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label):
                 continue
             nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
             dxy = float(np.linalg.norm(nxy[:2] - xyz[:2]))
@@ -259,15 +253,6 @@ class GraphObjectFusion:
                     and str(a.identity_key) != str(b.identity_key)
                 ):
                     continue
-                if self.config.require_label_match_for_instances and (
-                    a.countable_instance or b.countable_instance
-                ):
-                    from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
-
-                    la = str(a.labels[0]) if a.labels else ""
-                    lb = str(b.labels[0]) if b.labels else ""
-                    if la and lb and not labels_compatible_for_dedup(la, lb):
-                        continue
                 if bounds_3d_iou(a.bounds_3d, b.bounds_3d) < thr:
                     continue
                 keep, lose = (a, b) if int(a.support_count) >= int(b.support_count) else (b, a)

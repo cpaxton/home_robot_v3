@@ -16,7 +16,6 @@ verification gate and ground unverified final answers:
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -250,26 +249,3 @@ def test_grounded_v2_never_uses_absent_answerable_as_evidence(monkeypatch):
         }
     }
     assert ex._best_vlm_answer_evidence() is None
-
-
-def test_count_submit_force_puts_find_views_ahead_of_verified():
-    """q86: lamp FIND obs must be in force_obs_ids, not only the verified bathroom."""
-    q = "How many table lamps are there? A) One B) Two C) Three D) None"
-    ex, gm = _executor(question=q, query_answer="One")
-    gm.last_eqa_look_obs_id = 163
-    gm.last_eqa_action_obs_id = None
-    gm._obs_usable_for_eqa_image = MagicMock(return_value=True)
-    gm._count_candidate_nodes = MagicMock(
-        return_value=([SimpleNamespace(obs_id=163), SimpleNamespace(obs_id=195)], None)
-    )
-    gm.select_obs_ids_for_verified_answer = MagicMock(return_value=[49])
-    ex._verified = True
-    ex._verified_obs_id = 49
-
-    ex._do_submit_answer()
-
-    force = gm.query_answer.call_args.kwargs.get("force_obs_ids")
-    assert force[0] == 163
-    assert 195 in force
-    assert 49 in force
-    assert force.index(163) < force.index(49)

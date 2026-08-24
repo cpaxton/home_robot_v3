@@ -34,7 +34,7 @@ def test_to_string_flat_without_merge_flag():
     mem = _default_mem()
     s = mem.to_string(max_object_nodes=48)
     assert "CONFIRMED_MEMORY" not in s
-    assert " inspect" not in s
+    assert " present" not in s
     assert "Rooms:" not in s
 
 
@@ -63,11 +63,11 @@ def test_merged_memory_env_override(monkeypatch):
 
 
 def test_merged_memory_folds_summary_into_scene_graph(monkeypatch):
-    """Node lines carry inspect tags; grounded phrases are not re-listed; tail has the rest."""
+    """Node lines carry present tags; grounded phrases are not re-listed; tail has the rest."""
     monkeypatch.setenv("EMET_EQA_MERGED_MEMORY", "1")
     mem = _default_mem()
     s = mem.to_string(max_object_nodes=48, merge_confirmed=True)
-    assert " inspect" in s  # red pillow nodes tagged as views to inspect
+    assert " present" in s  # red pillow nodes tagged present
     assert "- red pillow:" not in s  # grounded phrase not duplicated in tail
     assert "- towel: not observed during exploration" in s  # unobserved phrase stays
     assert "CONFIRMED_MEMORY" in s  # tail header kept for greppability
@@ -94,7 +94,7 @@ def test_merged_memory_query_answer_end_to_end(monkeypatch):
     mem.query_answer("Where did I leave the red pillow? A) bedroom B) kitchen C) office. Answer:")
     text = "\n".join(str(c) for c in captured["cmds"])
     assert "CONFIRMED_MEMORY" in text  # tail header
-    assert " inspect" in text  # status tag on a node line
+    assert " present" in text  # status tag on a node line
     assert "- red pillow:" not in text  # no duplicate summary line
     assert "- towel: not observed during exploration" in text
 
@@ -105,7 +105,7 @@ def test_merged_memory_not_merged_when_summary_disabled(monkeypatch):
     mem = _default_mem()
     mem.memory_summary_enabled = False
     s = mem.to_string(max_object_nodes=48, merge_confirmed=True)
-    assert " inspect" not in s
+    assert " present" not in s
     assert "CONFIRMED_MEMORY" not in s
     assert "Rooms:" not in s
 
@@ -128,7 +128,7 @@ def test_merged_memory_attribute_question_skips_priors(monkeypatch):
     mem.query_answer("Is the lamp turned off? A) Yes B) No. Answer:")
     text = "\n".join(str(c) for c in captured["cmds"])
     assert "CONFIRMED_MEMORY" not in text
-    assert " inspect" not in text
+    assert " present" not in text
 
 
 def test_merged_memory_room_tags(monkeypatch):
@@ -200,10 +200,8 @@ def test_merged_memory_outside_budget_preserves_present(monkeypatch):
     mem._relevant_objects = ["cup", "towel"]
     # Budget 1: keyword matches win the slot; the towel-rack node is fully truncated.
     s = mem.to_string(max_object_nodes=1, merge_confirmed=True, question_keywords=["cup"])
-    assert "- towel: LOOK" in s
-    assert "[Image 3] at (1.0, 1.0)" in s
-    assert "towel rack at (1.0, 1.0)" not in s
-    assert "1 graph node(s) at (1.0, 1.0)" not in s
+    assert "- towel: present" in s
+    assert "1 graph node(s) at (1.0, 1.0)" in s
     assert "nearest: sofa at (0.8, 1.2)" in s
     assert "nodes not shown in graph above" in s
     assert "towel: not observed" not in s

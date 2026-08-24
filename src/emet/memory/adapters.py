@@ -423,7 +423,6 @@ class GraphEQABackend(MemoryBackend):
             position_history=list(getattr(n, "position_history", []) or []),
             identity_key=getattr(n, "identity_key", None),
             countable_instance=bool(getattr(n, "countable_instance", False)),
-            close_look_label=getattr(n, "close_look_label", None),
             change_events=list(getattr(n, "change_events", []) or []),
             expected_absence_count=int(getattr(n, "expected_absence_count", 0)),
             last_absence_step=int(getattr(n, "last_absence_step", -1)),
@@ -709,7 +708,6 @@ class GraphEQABackend(MemoryBackend):
                 position_history=list(getattr(n, "position_history", None) or []),
                 identity_key=getattr(n, "identity_key", None),
                 countable_instance=bool(getattr(n, "countable_instance", False)),
-                close_look_label=getattr(n, "close_look_label", None),
                 change_events=list(getattr(n, "change_events", None) or []),
                 expected_absence_count=int(getattr(n, "expected_absence_count", 0) or 0),
                 last_absence_step=int(
