@@ -509,6 +509,32 @@ def test_count_none_answer_stays_confident_without_salvage():
     assert "[salvage]" not in (mem.last_eqa_raw or "")
 
 
+def test_count_unknown_does_not_salvage_letter():
+    """q86 pin: count Unknown must not become One via salvage."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(_cmds, **_kw):
+        calls["n"] += 1
+        return (
+            "Caption:\nbathroom, no lamps.\nReasoning:\nnot in the provided images.\n"
+            "Answer:\nUnknown\nConfidence:\nFALSE\nAction:\n1\n"
+            "Confidence_reasoning:\nlamp view is Image 163\n"
+        )
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "wall")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_phrases = ["table lamp"]
+    mem._relevant_objects = ["lamp"]
+    q = "How many table lamps are there? A) Three B) Four C) One D) Two. Answer:"
+    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
+    assert calls["n"] == 1
+    assert "[salvage]" not in (mem.last_eqa_raw or "")
+    assert str(answer).strip().lower() == "unknown"
+    assert confidence is False
+
+
 def test_location_unknown_does_not_salvage_letter():
     """Holdout q104/q105: location Unknown must not invent A–D; keep Action explore."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)

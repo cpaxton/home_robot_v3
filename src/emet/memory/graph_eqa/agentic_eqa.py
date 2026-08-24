@@ -20,6 +20,7 @@ import numpy as np
 
 from emet.agent.prompt import parse_tool_calls_response
 from emet.habitat.metrics import (
+    choices_are_count_mcq,
     extract_mcq_letter,
     parse_mcq_choices_from_question,
     should_abstain_location_mcq,
@@ -4974,10 +4975,12 @@ class AgenticEQAExecutor:
         return submit_out
 
     def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
-        """Navigate to EQA ``Action: N`` when submit returned unconfident Unknown.
+        """Navigate to EQA ``Action: N`` when submit returned an ungrounded guess.
 
         Location MCQs often answer Unknown with an image index to explore. Inventing
         a salvage letter (holdout q104/q105) is worse than following that action.
+        Count MCQs often guess ``One`` from the wrong RGB while GRAPH_COUNT points
+        at a different obs id — follow that Action even when the text is a number.
         Allows one soft-over-budget nav so Action:N still runs after explore used
         the nominal ``max_nav_steps``.
 
@@ -4995,7 +4998,9 @@ class AgenticEQAExecutor:
         unknownish = self._answer_unknownish(submit_out.get("answer"))
         if conf and not unknownish:
             return False
-        if not unknownish:
+        count_mcq = choices_are_count_mcq(parse_mcq_choices_from_question(self.question))
+        # Unconfident count + Action:N: the integer is from the attached (wrong) RGB.
+        if not unknownish and not (count_mcq and not conf):
             return False
         obs_id = getattr(gm, "last_eqa_action_obs_id", None)
         if obs_id is not None:
@@ -5006,6 +5011,8 @@ class AgenticEQAExecutor:
                     return False
                 self._followed_eqa_actions.add(oid)
                 gm.last_eqa_action_obs_id = None
+                # Next query_answer must attach this RGB even if verify pins another view.
+                gm.last_eqa_look_obs_id = oid
                 # Force re-verify at the action target before the next submit.
                 self._verified = False
                 self._verified_obs_id = None
@@ -5029,8 +5036,12 @@ class AgenticEQAExecutor:
                 )
                 return True
         # No resolvable Action:N, or already followed that obs and still Unknown.
+        # Do not soft-explore on an unconfident count number — that burns budget
+        # after a One guess. Unknown location still explores.
         # Cap soft explores so we do not loop forever on location MCQs.
         # Soft +2 beyond max_nav_steps: Action follow may already have used +1.
+        if not unknownish:
+            return False
         if self._n_unknown_explore >= 2:
             return False
         if self._n_nav + self._n_explore >= self.max_nav_steps + 2:

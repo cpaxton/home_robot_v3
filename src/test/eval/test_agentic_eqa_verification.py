@@ -403,12 +403,92 @@ def test_follow_eqa_action_after_unknown_submit():
     assert "nav" in order and "verify" in order
     assert 11 in ex._followed_eqa_actions
     assert agent.graph_memory.last_eqa_action_obs_id is None
+    assert agent.graph_memory.last_eqa_look_obs_id == 11
     # Same Action obs already followed → soft explore_frontier instead of locking Unknown.
     agent.graph_memory.last_eqa_action_obs_id = 11
     order.clear()
     assert ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Unknown", "confidence": False}) is True
     assert ex._n_unknown_explore == 1
     assert agent.run_exploration.called
+
+
+def _follow_action_executor(question: str):
+    """Shared nav/verify mocks for Action:N follow tests."""
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    order: list[str] = []
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.last_eqa_action_obs_id = 11
+    agent.graph_memory.last_eqa_look_obs_id = None
+    agent.graph_memory._navigation_waypoint_for_obs.return_value = np.array([1.0, 0.0, 1.0])
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+
+    def _nav(*_a, **_k):
+        order.append("nav")
+        return NavOutcome.REACHED
+
+    def _update(*_a, **_k):
+        order.append("update")
+
+    def _verify(*_a, **_k):
+        order.append("verify")
+        return MagicMock(
+            status="PRESENT",
+            sim=0.9,
+            ok=True,
+            obs_id=11,
+            phrase="lamp",
+            text_feat=None,
+            img_feat=None,
+        )
+
+    agent.navigate_to_target_pose = _nav
+    agent.update = _update
+    agent.graph_memory.verify_phrase_at_obs = _verify
+    agent.run_exploration = MagicMock(return_value=True)
+    agent._siglip_guided_frontier = MagicMock(return_value=None)
+    agent._best_frontier_point_from_graph = MagicMock(return_value=None)
+    ex = AgenticEQAExecutor(
+        agent,
+        question=question,
+        max_rounds=4,
+        max_nav_steps=3,
+        router=False,
+    )
+    ex._round = 3
+    ex._n_explore = 3
+    return ex, agent, order
+
+
+def test_follow_eqa_action_after_unconfident_count():
+    """Unconfident One + Action:obs must look at that RGB instead of scoring One."""
+    _require_agentic()
+    ex, agent, order = _follow_action_executor(
+        "How many table lamps are there? A) One B) Two C) Three D) None"
+    )
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "One", "confidence": False})
+    assert followed is True
+    assert "nav" in order
+    assert 11 in ex._followed_eqa_actions
+    assert agent.graph_memory.last_eqa_look_obs_id == 11
+
+
+def test_follow_eqa_action_skips_unconfident_location_letter():
+    """A location letter is a guess we can score; do not nav just because conf is false."""
+    _require_agentic()
+    ex, agent, order = _follow_action_executor(
+        "Where is the clock? A) Above the sink B) On the wall C) In the hallway D) Unknown"
+    )
+    followed = ex._maybe_follow_eqa_explore_action(
+        {"ok": True, "answer": "Above the sink", "confidence": False}
+    )
+    assert followed is False
+    assert order == []
+    assert agent.graph_memory.last_eqa_look_obs_id is None
 
 
 def test_unknown_without_action_obs_explores():

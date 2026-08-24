@@ -921,6 +921,8 @@ class GraphEQAMemory:
         self.last_agentic_decision: dict[str, Any] | None = None
         self.last_eqa_obs_ids: list[int] = []
         self.last_eqa_action_obs_id: int | None = None
+        # Next query_answer must attach this RGB as Image 1 (Action:N / post-nav look).
+        self.last_eqa_look_obs_id: int | None = None
         self.last_eqa_prompt_node_count: int = 0
         self.last_eqa_prompt_regions: int = 0
         self.last_eqa_spatial_rag: dict[str, Any] | None = None
@@ -1328,6 +1330,7 @@ class GraphEQAMemory:
         self.last_agentic_decision = None
         self.last_eqa_obs_ids = []
         self.last_eqa_action_obs_id = None
+        self.last_eqa_look_obs_id = None
         self.last_eqa_prompt_node_count = 0
         self.last_eqa_prompt_regions = 0
         self.last_eqa_spatial_rag = None
@@ -5826,6 +5829,58 @@ class GraphEQAMemory:
                 matches.append(node)
         return matches
 
+    def _compose_eqa_answer_obs_ids(
+        self,
+        *,
+        forced: list[int],
+        pin_obs: list[int],
+        selected: list[int],
+        max_images: int,
+        count_question: bool,
+        look_obs_id: int | None,
+    ) -> list[int]:
+        """Build Image 1..K so FIND/Action views are actually attached.
+
+        Agentic submit often passes a single verified ``force_obs_ids`` that used
+        to short-circuit this merge whenever it filled ``eqa_max_images`` (including
+        ``max_images=1``). Count MCQs then answered from a bathroom while GRAPH_COUNT
+        pointed at lamp obs 163.
+        """
+        if max_images <= 0:
+            return []
+
+        def _take(dst: list[int], src: list[int | None]) -> None:
+            seen = set(dst)
+            for raw in src:
+                if raw is None:
+                    continue
+                oid = int(raw)
+                if oid in seen:
+                    continue
+                if not self._obs_usable_for_eqa_image(oid):
+                    continue
+                dst.append(oid)
+                seen.add(oid)
+                if len(dst) >= max_images:
+                    return
+
+        look: list[int] = []
+        _take(look, [look_obs_id])
+        pins: list[int] = []
+        _take(pins, [*look, *pin_obs])
+        out: list[int] = []
+        if count_question and pins:
+            # FIND views occupy Image 1..K; verified-wrong-room frames fill leftovers.
+            _take(out, pins)
+            _take(out, forced)
+            _take(out, selected)
+            return out
+        _take(out, look)
+        _take(out, forced)
+        _take(out, pins)
+        _take(out, selected)
+        return out
+
     def query_answer(
         self,
         question: str,
@@ -5839,10 +5894,11 @@ class GraphEQAMemory:
         Same return contract as voxel_dynamem.SparseVoxelMap.query_answer.
 
         Args:
-            force_obs_ids: When set (agentic verified submit), use these observation
-                ids as Image 1..K instead of re-running diversified selection. Remaining
-                slots may still be filled from ``_select_relevant_obs_ids`` when
-                ``len(force_obs_ids) < eqa_max_images``.
+            force_obs_ids: When set (agentic verified submit), prefer these observation
+                ids as Image 1..K instead of a pure diversified pick. Remaining slots
+                fill from FIND pins and ``_select_relevant_obs_ids``. Count MCQs attach
+                FIND / pending Action views first so a single verified frame cannot
+                occupy the whole budget (``max_images=1`` used to drop lamp/stool RGB).
 
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
@@ -5852,6 +5908,7 @@ class GraphEQAMemory:
         from emet.habitat.metrics import (
             answer_is_visibility_abstain,
             choices_are_attribute_state,
+            choices_are_count_mcq,
             choices_are_location_mcq,
             parse_mcq_choices_from_question,
             question_is_attribute_state,
@@ -5881,6 +5938,13 @@ class GraphEQAMemory:
         include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
+        count_q = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
+        # Honor Action:N from the previous call / post-nav look even when this submit
+        # forces a different verified obs as Image 1.
+        look_obs_id = self.last_eqa_look_obs_id
+        if look_obs_id is None:
+            look_obs_id = self.last_eqa_action_obs_id
+        self.last_eqa_look_obs_id = None
         count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
         pin_obs: list[int] = []
         for node in count_nodes:
@@ -5906,31 +5970,23 @@ class GraphEQAMemory:
                     continue
                 if self._obs_usable_for_eqa_image(oi):
                     forced.append(oi)
-                if len(forced) >= max_images:
-                    break
-        if forced and len(forced) >= max_images:
-            obs_ids = forced[:max_images]
-        else:
-            selected = [
-                int(oid)
-                for oid in self._select_relevant_obs_ids(
-                    max_images=max_images,
-                    choices=parsed_choices if parsed_choices else None,
-                    attribute_question=attribute_q,
-                )
-                if self._obs_usable_for_eqa_image(oid)
-            ]
-            if forced:
-                # Verified (or caller-pinned) view stays Image 1; fill remaining slots.
-                rest = [oid for oid in selected if oid not in set(forced)]
-                obs_ids = (forced + rest)[:max_images]
-            else:
-                obs_ids = selected
-            if pin_obs:
-                # FIND: attach candidate views so the VLM looks at RGB, not a node list.
-                pinned = [oid for oid in pin_obs if oid not in set(forced)]
-                rest = [oid for oid in obs_ids if oid not in set(forced) | set(pinned)]
-                obs_ids = (forced + pinned + rest)[:max_images]
+        selected = [
+            int(oid)
+            for oid in self._select_relevant_obs_ids(
+                max_images=max_images,
+                choices=parsed_choices if parsed_choices else None,
+                attribute_question=attribute_q,
+            )
+            if self._obs_usable_for_eqa_image(oid)
+        ]
+        obs_ids = self._compose_eqa_answer_obs_ids(
+            forced=forced,
+            pin_obs=pin_obs,
+            selected=selected,
+            max_images=max_images,
+            count_question=count_q,
+            look_obs_id=look_obs_id,
+        )
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         merged_memory = self._merged_memory_enabled()
@@ -6117,9 +6173,12 @@ class GraphEQAMemory:
         # - ``Unknown`` on attribute/yes-no → salvage (holdout q65).
         # - Empty/``Unknown`` on location MCQ → do NOT invent a letter (holdout q104/q105);
         #   agentic should follow Action:/explore instead of memory/salvage A–D.
+        # - ``Unknown`` on count MCQ → do NOT invent One/Two (q86 pin: bathroom RGB
+        #   salvaged to One while GRAPH_COUNT pointed at a lamp view).
         _ans_stripped = (answer or "").strip()
         _ans_unknownish = answer_is_unknownish(_ans_stripped, parsed_choices)
         _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
+        _count_mcq = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
         # A stream that never reached ``answer:`` / ``"answer"`` was cut off mid-caption.
         _answer_field_emitted = bool(
             re.search(r"answer\s*:", answer_outputs)
@@ -6131,8 +6190,9 @@ class GraphEQAMemory:
         # table instead of only showing up as a mysterious accuracy drop.
         self.last_eqa_answer_field_emitted = _answer_field_emitted
         self.last_eqa_salvage_used = False
-        # Location MCQ: never invent A–D from memory, but do recover a truncated stream.
-        _should_salvage = _ans_unknownish and (not _loc_mcq or _truncated_before_answer)
+        # Location / count MCQ: never invent A–D from a second guess, but do recover
+        # a truncated stream that never emitted ``answer:``.
+        _should_salvage = _ans_unknownish and (not (_loc_mcq or _count_mcq) or _truncated_before_answer)
         if _loc_mcq and _ans_unknownish and not _ans_stripped:
             # Truncated streams often omit ``answer:`` entirely (failfix5); normalize so
             # human_answer / agentic follow-up treat this as Unknown, not memory-B.

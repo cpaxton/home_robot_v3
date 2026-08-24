@@ -251,6 +251,71 @@ def test_query_answer_pins_count_candidate_views():
     assert any(isinstance(c, str) and "GRAPH_COUNT:" in c and "views to look at" in c for c in captured["cmds"])
 
 
+def test_query_answer_count_pins_survive_forced_single_image():
+    """Agentic submit max_images=1 must not drop FIND lamp/stool RGB (q86 bathroom)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return "reasoning: r\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
+    )
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["umbrella"],
+        identity_key="u1",
+        countable_instance=True,
+    )
+    mem.add_observation(rgb, np.array([9.0, 9.0, 0.5]), ["chair"])
+    mem._select_relevant_obs_ids = lambda **_k: [2]  # type: ignore[method-assign]
+    mem.query_answer(
+        "How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:",
+        force_obs_ids=[2],
+    )
+    assert mem.last_eqa_obs_ids[0] == 1
+
+
+def test_query_answer_pins_previous_action_obs_as_image_1():
+    """Action: graph obs_id must be Image 1 on the next query_answer (q86 Image 163)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def fake_eqa(_cmds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (
+                "reasoning: lamp not in these frames\n"
+                "answer: One\nconfidence: false\naction: 3\n"
+                "confidence_reasoning: look at Image 3\n"
+            )
+        return "reasoning: two lamps\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["chair"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["sofa"])
+    mem.add_observation(
+        rgb,
+        np.array([2.0, 0.0, 0.5]),
+        ["lamp"],
+        identity_key="lamp:1",
+        countable_instance=True,
+    )
+    mem._select_relevant_obs_ids = lambda **_k: [1]  # type: ignore[method-assign]
+    q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
+    mem.query_answer(q)
+    assert mem.last_eqa_action_obs_id == 3
+    mem.query_answer(q, force_obs_ids=[1])
+    assert mem.last_eqa_obs_ids[0] == 3
+
+
 def test_count_hint_matches_close_look_name_not_just_detector():
     """YoloE 'lamp' + Qwen 'table lamp' must still FIND the view for a table-lamp count."""
     mem = GraphEQAMemory(defer_llm_clients=True)
