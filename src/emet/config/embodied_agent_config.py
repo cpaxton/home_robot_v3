@@ -49,12 +49,9 @@ class GraphObjectFusionConfigRef:
     embedding_min_cosine: float = 0.62
     embedding_blend_alpha: float = 0.35
     require_label_match: bool = True
-    require_label_match_for_instances: bool = True
     max_candidates: int = 64
     match_xy_m: float = 0.55
     fallback_spatial_merge_xy_m: float = 0.0
-    instance_min_confidence: float = 0.12
-    instance_min_mask_points: int = 25
 
 
 @dataclass

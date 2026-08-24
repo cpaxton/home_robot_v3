@@ -96,7 +96,6 @@ class GraphNodeView:
     position_history: list[dict[str, Any]] | None = None
     identity_key: str | None = None
     countable_instance: bool = False
-    close_look_label: str | None = None
     change_events: list[dict[str, Any]] | None = None
     expected_absence_count: int = 0
     last_absence_step: int = -1
@@ -442,7 +441,6 @@ def save_memory(state: MemoryState, path: str) -> None:
                     **({"position_history": n.position_history} if getattr(n, "position_history", None) else {}),
                     **({"identity_key": n.identity_key} if getattr(n, "identity_key", None) else {}),
                     **({"countable_instance": True} if getattr(n, "countable_instance", False) else {}),
-                    **({"close_look_label": n.close_look_label} if getattr(n, "close_look_label", None) else {}),
                     **({"change_events": n.change_events} if getattr(n, "change_events", None) else {}),
                     **(
                         {"expected_absence_count": int(n.expected_absence_count)}

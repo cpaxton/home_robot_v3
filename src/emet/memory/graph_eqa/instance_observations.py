@@ -14,8 +14,6 @@ from typing import Any
 import numpy as np
 import torch
 
-from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
-
 DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M = 0.4
 
 logger = logging.getLogger(__name__)
@@ -78,31 +76,6 @@ def label_for_detection_category(detection_model: Any | None, category_id: int) 
     return f"class_{cid}"
 
 
-def filter_detections_for_graph_admission(
-    detections: list[dict[str, Any]],
-    *,
-    config: GraphObjectFusionConfig | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Drop weak YoloE masks before graph fusion; mapping recall stays unchanged upstream."""
-    cfg = config or GraphObjectFusionConfig()
-    min_conf = float(cfg.instance_min_confidence)
-    min_pts = int(cfg.instance_min_mask_points)
-    kept: list[dict[str, Any]] = []
-    stats = {"proposed": len(detections), "rejected_confidence": 0, "rejected_support": 0, "admitted": 0}
-    for d in detections:
-        score = float(d.get("detection_score", d.get("score", 0.0)) or 0.0)
-        pts = int(d.get("mask_point_count", d.get("point_count", 0)) or 0)
-        if score < min_conf:
-            stats["rejected_confidence"] += 1
-            continue
-        if pts < min_pts:
-            stats["rejected_support"] += 1
-            continue
-        kept.append(d)
-    stats["admitted"] = len(kept)
-    return kept, stats
-
-
 def frame_instances_to_detections(
     frame: Any,
     *,
@@ -142,9 +115,6 @@ def frame_instances_to_detections(
         depth = torch.as_tensor(depth)
     if classes is not None and not isinstance(classes, torch.Tensor):
         classes = torch.as_tensor(classes)
-    scores = getattr(frame, "instance_scores", None)
-    if scores is not None and not isinstance(scores, torch.Tensor):
-        scores = torch.as_tensor(scores)
 
     inst = inst.to(device=fw.device, dtype=torch.long)
     depth = depth.to(device=fw.device, dtype=torch.float32)
@@ -194,10 +164,6 @@ def frame_instances_to_detections(
         if classes is not None and uid < classes.shape[0]:
             category_id = int(classes[uid].item())
         label = label_for_detection_category(detection_model, category_id)
-        point_count = int(mask.sum().item())
-        det_score = 1.0
-        if scores is not None and uid < scores.shape[0]:
-            det_score = float(scores[uid].item())
         out.append(
             {
                 "instance_id": uid,
@@ -206,8 +172,6 @@ def frame_instances_to_detections(
                 "xyz": [float(xyz[0]), float(xyz[1]), float(xyz[2])],
                 "bbox_xyxy": bbox_xyxy,
                 "bounds_3d": bounds_3d,
-                "detection_score": det_score,
-                "mask_point_count": point_count,
             }
         )
 

@@ -28,16 +28,10 @@ class GraphObjectFusionConfig:
     embedding_min_cosine: float = 0.62
     embedding_blend_alpha: float = 0.35
     require_label_match: bool = False
-    # When either side is a countable YoloE/HM3D instance, require compatible labels to merge.
-    require_label_match_for_instances: bool = True
     max_candidates: int = 64
 
     # When strict gates fail, merge to nearest object node within this XY radius (0 = disabled).
     fallback_spatial_merge_xy_m: float = 0.0
-
-    # Graph admission (mapping may keep low-confidence proposals for recall).
-    instance_min_confidence: float = 0.12
-    instance_min_mask_points: int = 25
 
     # Scoring / calibration
     match_xy_m: float = 0.55
