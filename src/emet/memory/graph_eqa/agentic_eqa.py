@@ -24,6 +24,19 @@ from emet.habitat.metrics import (
     parse_mcq_choices_from_question,
     should_abstain_location_mcq,
 )
+from emet.memory.graph_eqa.action_history import (
+    ActionHistoryEntry,
+    ActionSignature,
+    ActionTarget,
+    GateDecision,
+    ProgressToken,
+    decide_candidate,
+    quantized_xy,
+    render_history_entry,
+    resolve_action_progress_mode,
+    stable_digest,
+    status_outcome_class,
+)
 from emet.memory.graph_eqa.agentic_policy import (
     AgenticState,
     EvidencePolicy,
@@ -463,40 +476,6 @@ def env_eqa_agentic_close_look() -> bool | None:
     return None
 
 
-def env_eqa_agentic_siglip_evidence() -> bool | None:
-    """Feed the SigLIP image-text evidence line into VLM assess (default on).
-
-    ``EMET_EQA_AGENTIC_SIGLIP_EVIDENCE=0`` drops the ``'<phrase>' similarity=…``
-    hint from the assess prompt (A/B against the pre-PR-#120 baseline). It is
-    evidence, not ground truth — the VLM still weighs what it sees.
-    """
-    v = os.environ.get("EMET_EQA_AGENTIC_SIGLIP_EVIDENCE", "").strip().lower()
-    if v in _FALSE:
-        return False
-    if v in _TRUE:
-        return True
-    return None
-
-
-def env_eqa_agentic_close_look_multiview() -> bool | None:
-    """Aggregate close-look crops across views before VLM assess (default off).
-
-    DeWorldSG-style temporal evidence: instead of assessing the current wide frame
-    plus a single crop, keep the best recent close-look crops per target and feed
-    them all to the VLM as additional images. Helps count / clock questions where
-    one glance (even zoomed) can be ambiguous.
-
-    ``EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1`` enables; default off (conservative,
-    keeps single-view behavior until the option is validated).
-    """
-    v = os.environ.get("EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW", "").strip().lower()
-    if v in _FALSE:
-        return False
-    if v in _TRUE:
-        return True
-    return None
-
-
 def env_eqa_agentic_no_early_unverified() -> bool | None:
     """Hold unverified auto-submits while budget remains (default on).
 
@@ -605,8 +584,6 @@ class AgenticEQAExecutor:
         no_early_unverified: bool | None = None,
         single_view_confirm: bool | None = None,
         evidence_image: bool | None = None,
-        close_look_multiview: bool | None = None,
-        siglip_evidence: bool | None = None,
     ):
         self.agent = agent
         self.mode = "answer" if question else "explore"
@@ -627,8 +604,12 @@ class AgenticEQAExecutor:
         self._consecutive_nav_fail = 0
         self._unreachable_obs_ids: set[int] = set()
         self._tool_log: list[str] = []
-        # Compact per-turn outcomes for the router state message (loops / stuck).
+        # Compatibility rendering cache; structured entries are the source of truth.
         self._recent_actions: list[str] = []
+        self._action_history: list[ActionHistoryEntry] = []
+        self._tool_dispatch_depth = 0
+        self._action_selected_by = "internal"
+        self._last_action_gate_decisions: list[Any] = []
         self._trace_rows: list[dict[str, Any]] = []
         # obs_id → successful navigate/investigate attempts (loop detection for the router).
         self._nav_to_obs_counts: dict[int, int] = {}
@@ -685,15 +666,23 @@ class AgenticEQAExecutor:
         graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
         history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
         attempt_mode = os.environ.get("EMET_EQA_ATTEMPT_LEDGER_MODE", "") or eqa_cfg.get("attempt_ledger_mode", "off")
+        action_progress_mode = os.environ.get("EMET_EQA_ACTION_PROGRESS_MODE", "") or eqa_cfg.get(
+            "action_progress_mode", "off"
+        )
         self.graph_evidence_mode = str(graph_mode).strip().lower()
         self.room_history_mode = str(history_mode).strip().lower()
         self.attempt_ledger_mode = str(attempt_mode).strip().lower()
+        self.action_progress_mode = resolve_action_progress_mode(action_progress_mode)
         if self.graph_evidence_mode not in {"off", "shadow", "agent"}:
             raise ValueError(f"invalid graph_evidence_mode: {graph_mode!r}")
         if self.room_history_mode not in {"off", "shadow", "agent"}:
             raise ValueError(f"invalid room_history_mode: {history_mode!r}")
         if self.attempt_ledger_mode not in {"off", "shadow", "agent"}:
             raise ValueError(f"invalid attempt_ledger_mode: {attempt_mode!r}")
+        if str(action_progress_mode).strip().lower() not in {"off", "shadow", "enforce"}:
+            raise ValueError(f"invalid action_progress_mode: {action_progress_mode!r}")
+        if self.action_progress_mode != "off" and self.decision_policy != "grounded_v2":
+            raise ValueError("action_progress_mode shadow/enforce requires agentic_decision_policy=grounded_v2")
         hints_env = os.environ.get("EMET_EQA_ROOM_TARGET_HINTS", "").strip().lower()
         if hints_env in _TRUE:
             self.room_target_hints = True
@@ -807,19 +796,7 @@ class AgenticEQAExecutor:
         self._evidence_image = bool(
             evidence_image if evidence_image is not None else (env_ev if env_ev is not None else cfg_ev)
         )
-        env_mv = env_eqa_agentic_close_look_multiview()
-        cfg_mv = _eqa_cfg(agent).get("agentic_close_look_multiview", False)
-        self._close_look_multiview = bool(
-            close_look_multiview if close_look_multiview is not None else (env_mv if env_mv is not None else cfg_mv)
-        )
-        env_sig_ev = env_eqa_agentic_siglip_evidence()
-        cfg_sig_ev = _eqa_cfg(agent).get("agentic_siglip_evidence", True)
-        self._siglip_evidence = bool(
-            siglip_evidence if siglip_evidence is not None else (env_sig_ev if env_sig_ev is not None else cfg_sig_ev)
-        )
         self._assess_history: dict[int, dict[str, Any]] = {}
-        # Close-look crops per target phrase (multi-view consensus, opt-in).
-        self._close_look_crops: dict[str, list[tuple[int, np.ndarray]]] = {}
         self._close_look_required = False
         self._close_look_source = "disabled"
         self._tools: list[Any] | None = None
@@ -998,9 +975,521 @@ class AgenticEQAExecutor:
             row["gt_dist_m"] = d
             row["gt_present"] = bool(d <= 1.5)
 
+    def _graph_node_for_obs(self, obs_id: int) -> Any | None:
+        gm = self.graph_memory
+        for node in list(getattr(gm, "_nodes", None) or ()):
+            if int(getattr(node, "obs_id", -1)) != int(obs_id):
+                continue
+            if bool(getattr(node, "is_frontier", False)) or bool(getattr(node, "is_viewpoint", False)):
+                continue
+            return node
+        return None
+
+    def _action_target_for_obs(self, obs_id: int) -> ActionTarget:
+        """Resolve a mutable adapter ID to stable place/view semantics."""
+        oid = int(obs_id)
+        gm = self.graph_memory
+        world = getattr(gm, "world_evidence", None) if gm is not None else None
+        node = self._graph_node_for_obs(oid)
+        view = world.view_for_obs(oid) if world is not None else None
+        entity = None
+        if world is not None and node is not None:
+            entity = world.entity_for_node(int(node.node_id))
+        place_id = str(getattr(view, "place_id", "") or getattr(entity, "place_id", "") or f"obs:{oid}")
+        labels = tuple(str(item) for item in (getattr(node, "labels", None) or ()))
+        if not labels:
+            labels = tuple(str(item) for item in (getattr(view, "labels", None) or ()))
+        if not labels:
+            hypothesis = next(
+                (item for item in self._hypotheses if int(item.obs_id) == oid),
+                None,
+            )
+            phrase = str(getattr(hypothesis, "phrase", "") or "").strip()
+            labels = (phrase,) if phrase else ()
+        room = self._observation_room(oid) or "unknown"
+        if room == "unknown" and world is not None:
+            place = world.places.get(place_id)
+            room_record = world.rooms.get(place.room_id) if place is not None and place.room_id else None
+            room = str(getattr(room_record, "room_name", "") or "unknown")
+        xyz_value = getattr(node, "xyz", None) if node is not None else getattr(view, "object_xyz", None)
+        xyz = None
+        if xyz_value is not None:
+            values = np.asarray(xyz_value, dtype=float).reshape(-1)
+            if values.size >= 2:
+                xyz = (
+                    float(values[0]),
+                    float(values[1]),
+                    float(values[2]) if values.size >= 3 else 0.0,
+                )
+        return ActionTarget(
+            kind="place",
+            stable_id=place_id,
+            labels=labels,
+            room=room,
+            adapter_id=oid,
+            view_id=str(getattr(view, "view_id", "") or "") or None,
+            revision=(int(view.revision) if view is not None else None),
+            xyz=xyz,
+        )
+
+    def _action_target_for_frontier(self, frontier_id: str) -> ActionTarget:
+        fid = str(frontier_id or "").strip()
+        gm = self.graph_memory
+        world = getattr(gm, "world_evidence", None) if gm is not None else None
+        record = world.frontiers.get(fid) if world is not None and fid else None
+        labels: list[str] = []
+        room = "unknown"
+        if record is not None and world is not None:
+            for place_id in tuple(record.attachment_ids)[:3]:
+                place = world.places.get(str(place_id))
+                entity = world.entities.get(place.entity_id) if place is not None else None
+                labels.extend(str(item) for item in (getattr(entity, "labels", None) or ()))
+                room_record = world.rooms.get(place.room_id) if place is not None and place.room_id else None
+                if room == "unknown" and room_record is not None:
+                    room = str(room_record.room_name or "unknown")
+        xyz = tuple(record.centroid_xyz) if record is not None else None
+        return ActionTarget(
+            kind="frontier",
+            stable_id=fid or "unresolved",
+            labels=tuple(dict.fromkeys(labels))[:3],
+            room=room,
+            adapter_id=(int(record.obs_id) if record is not None and record.obs_id is not None else None),
+            revision=(int(record.revision) if record is not None else None),
+            xyz=xyz,
+        )
+
+    def _frontier_geometry_id(self, frontier_id: str) -> str:
+        gm = self.graph_memory
+        world = getattr(gm, "world_evidence", None) if gm is not None else None
+        record = world.frontiers.get(str(frontier_id)) if world is not None else None
+        if record is None:
+            return "unknown"
+        centroid = quantized_xy(record.centroid_xyz, cell_m=0.5)
+        return stable_digest(
+            "frontier-material",
+            {
+                "status": str(record.status),
+                "centroid_cell_0p5m": centroid,
+                "cells": tuple(sorted(record.cells)),
+                "parents": tuple(sorted(record.parent_ids)),
+            },
+        )
+
+    def _relevant_evidence_digest(self, target: ActionTarget) -> str:
+        """Hash target-local non-attempt evidence only."""
+        gm = self.graph_memory
+        world = getattr(gm, "world_evidence", None) if gm is not None else None
+        if world is None:
+            return "none"
+        rows: list[tuple[Any, ...]] = []
+        for event in list(getattr(world, "events", None) or ()):
+            payload = dict(getattr(event, "payload", None) or {})
+            if "outcome" in payload and "status_code" in payload:
+                continue
+            relevant = str(getattr(event, "subject_id", "")) == target.stable_id
+            relevant = relevant or str(getattr(event, "place_id", "") or "") == target.stable_id
+            relevant = relevant or str(getattr(event, "frontier_id", "") or "") == target.stable_id
+            relevant = relevant or bool(target.view_id and getattr(event, "view_id", None) == target.view_id)
+            if not relevant:
+                continue
+            rows.append(
+                (
+                    str(getattr(event, "event_id", "")),
+                    str(getattr(event, "predicate", "")),
+                    str(getattr(event, "polarity", "")),
+                    str(getattr(event, "view_id", "") or ""),
+                )
+            )
+        return stable_digest("target-evidence", rows)
+
+    def _action_signature(
+        self,
+        name: str,
+        args: dict[str, Any],
+        *,
+        out: dict[str, Any] | None = None,
+    ) -> ActionSignature:
+        tool = str(name or "").strip().lower()
+        result = dict(out or {})
+        intent = str(
+            args.get("phrase")
+            or args.get("toward")
+            or getattr(self, "_target_phrase", "")
+            or self.query_text
+            or self.question
+        )
+        if tool in {"investigate", "navigate_to_obs"}:
+            raw_obs = args.get("obs_id", result.get("obs_id", -1))
+            try:
+                obs_id = int(raw_obs)
+            except (TypeError, ValueError):
+                obs_id = -1
+            target = self._action_target_for_obs(obs_id)
+            raw_approach = result.get("approach_index")
+            if raw_approach is None and obs_id >= 0:
+                requested = args.get("approach_index", args.get("approach"))
+                try:
+                    preferred = int(requested) if requested is not None else None
+                except (TypeError, ValueError):
+                    preferred = None
+                if preferred is not None and self.action_progress_mode == "enforce":
+                    raw_approach = preferred % PLACE_APPROACH_SAMPLES
+                else:
+                    raw_approach = self._next_approach_index(obs_id, prefer=preferred)
+            return ActionSignature.build(
+                tool_name=tool,
+                family="inspect_place",
+                intent=intent,
+                target=target,
+                variant={"approach_index": raw_approach},
+            )
+        if tool == "verify_siglip":
+            raw_obs = args.get("obs_id", result.get("obs_id"))
+            if raw_obs is None:
+                raw_obs = self._latest_obs_id()
+            target = self._action_target_for_obs(int(raw_obs) if raw_obs is not None else -1)
+            phrase = str(args.get("phrase") or getattr(self, "_target_phrase", "") or self.query_text)
+            return ActionSignature.build(
+                tool_name=tool,
+                family="verify_view",
+                intent=phrase,
+                target=target,
+                variant={
+                    "view_id": target.view_id or f"obs:{target.adapter_id}",
+                    "verifier_profile": "siglip+vlm",
+                },
+            )
+        if tool == "explore_frontier":
+            frontier_id = str(args.get("frontier_id") or result.get("frontier_id") or "")
+            target = self._action_target_for_frontier(frontier_id)
+            goal_xyz = result.get("frontier_xyz") or target.xyz
+            frontier_intent = str(getattr(self, "_target_phrase", "") or self.query_text or self.question)
+            return ActionSignature.build(
+                tool_name=tool,
+                family="explore_frontier",
+                intent=intent,
+                target=target,
+                # ``toward`` is useful display context but only a weak navigation
+                # hint: rewording it must not bypass the same static frontier work.
+                work_intent=frontier_intent,
+                variant={
+                    "frontier_geometry_id": self._frontier_geometry_id(frontier_id),
+                    "goal_cell": quantized_xy(goal_xyz),
+                },
+            )
+        pose = self._robot_xyt_world()
+        pose_cell = quantized_xy(pose)
+        if tool == "look_around":
+            target = ActionTarget(kind="pose", stable_id=f"pose:{pose_cell}", xyz=None)
+            return ActionSignature.build(
+                tool_name=tool,
+                family="scan_view",
+                intent=intent,
+                target=target,
+                variant={"pose_cell": pose_cell, "sensor_profile": "head-rgb"},
+            )
+        if tool == "submit_answer":
+            target = ActionTarget(kind="question", stable_id=self._question_id)
+            return ActionSignature.build(
+                tool_name=tool,
+                family="submit_answer",
+                intent=self.question,
+                target=target,
+                variant={"answer": str(args.get("answer") or result.get("final_answer") or "")},
+            )
+        target = ActionTarget(kind="episode", stable_id=self._question_id or self._session_id)
+        return ActionSignature.build(
+            tool_name=tool,
+            family="finish" if tool == "finish" else tool,
+            intent=intent,
+            target=target,
+            variant={},
+        )
+
+    def _action_progress_token(self, signature: ActionSignature) -> ProgressToken:
+        target = signature.target
+        components: dict[str, Any] = {
+            "family": signature.family,
+            "robot_pose_cell": quantized_xy(self._robot_xyt_world()),
+        }
+        if signature.family in {"inspect_place", "verify_view"}:
+            current = self._action_target_for_obs(target.adapter_id) if target.adapter_id is not None else target
+            components.update(
+                {
+                    "target_id": current.stable_id,
+                    "view_id": current.view_id,
+                    "view_revision": current.revision,
+                    "relevant_evidence_digest": self._relevant_evidence_digest(current),
+                }
+            )
+            rec = self._place_inspect.get(int(target.adapter_id)) if target.adapter_id is not None else None
+            if rec is not None:
+                components["coverage"] = str(rec.coverage)
+                components["local_frontier_cells"] = int(rec.local_frontier_cells)
+        elif signature.family == "explore_frontier":
+            components.update(
+                {
+                    "target_id": target.stable_id,
+                    "frontier_geometry_id": self._frontier_geometry_id(target.stable_id),
+                    "relevant_evidence_digest": self._relevant_evidence_digest(target),
+                }
+            )
+        return ProgressToken.build(components)
+
+    @staticmethod
+    def _action_progress_reasons(
+        signature: ActionSignature,
+        before: ProgressToken,
+        after: ProgressToken,
+        out: dict[str, Any],
+    ) -> tuple[str, ...]:
+        reasons: list[str] = []
+        for key, reason in (
+            ("view_id", "new_view"),
+            ("view_revision", "view_revision"),
+            ("relevant_evidence_digest", "target_evidence"),
+            ("coverage", "coverage"),
+            ("local_frontier_cells", "local_geometry"),
+            ("frontier_geometry_id", "frontier_geometry"),
+        ):
+            if before.value(key) != after.value(key):
+                reasons.append(reason)
+        pose_changed = before.value("robot_pose_cell") != after.value("robot_pose_cell")
+        partial_nav = bool(out.get("nav_progress")) and not bool(out.get("nav_finished"))
+        if pose_changed and (signature.family == "explore_frontier" or partial_nav):
+            reasons.append("motion")
+        capture = out.get("capture")
+        capture_status = str(capture.get("status") or "") if isinstance(capture, dict) else ""
+        if capture_status in {"NEW_OBS", "CONTENT_REFRESHED"} and "new_view" not in reasons:
+            reasons.append("new_view")
+        return tuple(dict.fromkeys(reasons))
+
+    def _record_action_history(
+        self,
+        name: str,
+        args: dict[str, Any],
+        out: dict[str, Any],
+        *,
+        signature: ActionSignature,
+        progress_before: ProgressToken,
+    ) -> None:
+        if name in {"inspect_graph", "capture_and_update"}:
+            return
+        if signature.family == "inspect_place" and out.get("ok"):
+            self._n_consecutive_explore = 0
+        progress_after = self._action_progress_token(signature)
+        progress_reasons = self._action_progress_reasons(
+            signature,
+            progress_before,
+            progress_after,
+            out,
+        )
+        verify = out.get("verify")
+        verify_status = ""
+        if isinstance(verify, dict):
+            verify_status = str(verify.get("status") or verify.get("decision") or "")
+        elif name == "verify_siglip":
+            verify_status = str(out.get("status") or out.get("decision") or "")
+        capture = out.get("capture")
+        capture_status = str(capture.get("status") or "") if isinstance(capture, dict) else ""
+        status = str(
+            out.get("status")
+            or out.get("nav_status_code")
+            or out.get("error")
+            or verify_status
+            or ("ok" if out.get("ok") else "failed")
+        )
+        closest = None
+        adapter = signature.target.adapter_id
+        rec = self._place_inspect.get(int(adapter)) if adapter is not None else None
+        if rec is not None and rec.closest_m is not None:
+            closest = float(rec.closest_m)
+        entry = ActionHistoryEntry(
+            schema_version=1,
+            round_index=int(self._round) + 1,
+            selected_by=str(self._action_selected_by or "internal"),
+            signature=signature,
+            progress_before=progress_before,
+            progress_after=progress_after,
+            outcome_class=status_outcome_class(
+                family=signature.family,
+                ok=bool(out.get("ok")),
+                status=verify_status or status,
+                progress_reasons=progress_reasons,
+            ),
+            status=status[:120],
+            ok=bool(out.get("ok")),
+            progress_reasons=progress_reasons,
+            closest_m=closest,
+            capture_status=capture_status,
+            verify_status=verify_status,
+            nav_outcome=str(out.get("nav_outcome") or "")[:80],
+        )
+        self._action_history.append(entry)
+        self._action_history = self._action_history[-32:]
+        line = render_history_entry(entry)
+        self._recent_actions.append(line)
+        self._recent_actions = self._recent_actions[-RECENT_ACTIONS_K:]
+        self._append_trace({"event": "action_history", "entry": entry.to_dict()})
+
+    def _inspect_action_gate_decision(
+        self,
+        name: str,
+        args: dict[str, Any],
+    ) -> GateDecision:
+        try:
+            obs_id = int(args.get("obs_id"))
+        except (TypeError, ValueError):
+            signature = self._action_signature(name, args)
+            progress = self._action_progress_token(signature)
+            return decide_candidate(self._action_history, signature, progress)
+
+        requested = args.get("approach_index", args.get("approach"))
+        try:
+            preferred = int(requested) % PLACE_APPROACH_SAMPLES if requested is not None else None
+        except (TypeError, ValueError):
+            preferred = None
+
+        rec = self._place_inspect.get(obs_id)
+        tried = [int(item) % PLACE_APPROACH_SAMPLES for item in (rec.tried_approaches if rec is not None else ())]
+        probe = self._action_signature(name, args, out={"approach_index": 0})
+        current_progress = self._action_progress_token(probe)
+        continuation: list[int] = []
+        if preferred is None:
+            for entry in reversed(self._action_history):
+                if (
+                    entry.signature.work_key == probe.work_key
+                    and entry.outcome_class == "progress"
+                    and "motion" in entry.progress_reasons
+                    and entry.progress_after.digest == current_progress.digest
+                ):
+                    approach = entry.signature.variant_value("approach_index")
+                    if approach is not None:
+                        continuation.append(int(approach) % PLACE_APPROACH_SAMPLES)
+                    break
+
+        if preferred is not None:
+            order = [preferred]
+        else:
+            order = [
+                *continuation,
+                *(index for index in range(PLACE_APPROACH_SAMPLES) if index not in tried),
+                *tried,
+            ]
+        order = list(dict.fromkeys(order))
+        decisions: list[GateDecision] = []
+        for approach in order:
+            signature = self._action_signature(name, args, out={"approach_index": approach})
+            progress = self._action_progress_token(signature)
+            decision = decide_candidate(self._action_history, signature, progress)
+            decisions.append(decision)
+            if decision.allowed:
+                return decision
+
+        if preferred is not None and decisions:
+            return decisions[0]
+        prior_rounds = tuple(
+            dict.fromkeys(round_index for decision in decisions for round_index in decision.prior_rounds)
+        )
+        base = (
+            decisions[0]
+            if decisions
+            else decide_candidate(
+                self._action_history,
+                probe,
+                current_progress,
+            )
+        )
+        return GateDecision(
+            allowed=False,
+            disposition="would_suppress_saturated",
+            reason="all finite approach variants are temporarily ineligible for the unchanged place state",
+            signature=base.signature,
+            progress=base.progress,
+            prior_rounds=prior_rounds[-4:],
+        )
+
+    def _action_gate_decision(self, name: str, args: dict[str, Any]) -> GateDecision:
+        tool = str(name or "").strip().lower()
+        if tool in {"investigate", "navigate_to_obs"}:
+            return self._inspect_action_gate_decision(tool, args)
+        signature = self._action_signature(tool, args)
+        progress = self._action_progress_token(signature)
+        return decide_candidate(self._action_history, signature, progress)
+
+    def _prepare_action_progress_dispatch(
+        self,
+        name: str,
+        args: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        if self.action_progress_mode not in {"shadow", "enforce"} or name not in {
+            "investigate",
+            "navigate_to_obs",
+            "verify_siglip",
+            "explore_frontier",
+        }:
+            return args, None
+
+        prepared = dict(args)
+        if (
+            self.action_progress_mode == "enforce"
+            and name == "explore_frontier"
+            and not str(prepared.get("frontier_id") or "").strip()
+        ):
+            frontier_ids = tuple(self._rendered_action_allowlist().get("frontier_ids", ()))
+            if not frontier_ids:
+                self._append_trace(
+                    {
+                        "event": "action_gate_dispatch",
+                        "mode": self.action_progress_mode,
+                        "tool": name,
+                        "allowed": False,
+                        "disposition": "no_eligible_frontier",
+                    }
+                )
+                return prepared, {
+                    "ok": False,
+                    "status": "NO_ELIGIBLE_ACTION",
+                    "error": "no eligible rendered frontier remains while static progress gating is enforced",
+                }
+            prepared["frontier_id"] = str(frontier_ids[0])
+
+        decision = self._action_gate_decision(name, prepared)
+        self._append_trace(
+            {
+                "event": "action_gate_dispatch",
+                "mode": self.action_progress_mode,
+                "tool": name,
+                "decision": decision.to_dict(),
+            }
+        )
+        if self.action_progress_mode == "shadow":
+            return args, None
+        if not decision.allowed:
+            return prepared, {
+                "ok": False,
+                "status": "ACTION_PROGRESS_SUPPRESSED",
+                "disposition": decision.disposition,
+                "target_id": decision.signature.target.stable_id,
+                "error": decision.reason,
+            }
+        if decision.signature.family == "inspect_place":
+            approach = decision.signature.variant_value("approach_index")
+            if approach is not None:
+                prepared["approach_index"] = int(approach)
+        return prepared, None
+
     def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
         args = dict(args or {})
         name = (name or "").strip().lower()
+        top_level = self._tool_dispatch_depth == 0
+        if top_level:
+            args, gate_error = self._prepare_action_progress_dispatch(name, args)
+            if gate_error is not None:
+                return gate_error
+        signature = self._action_signature(name, args) if top_level else None
+        progress_before = self._action_progress_token(signature) if signature is not None else None
+        self._tool_dispatch_depth += 1
         self._tool_log.append(name)
         if name == "inspect_graph":
             out = self._tool_inspect_graph()
@@ -1061,9 +1550,19 @@ class AgenticEQAExecutor:
             out = self._tool_finish(str(args.get("summary") or ""))
         else:
             out = {"ok": False, "error": f"unknown tool {name!r}"}
+        self._tool_dispatch_depth = max(0, self._tool_dispatch_depth - 1)
         if not isinstance(out, dict):
             out = {"ok": False, "error": f"non-dict tool result for {name!r}"}
-        self._record_recent_action(name, args, out)
+        completed_signature = out.pop("_action_history_signature", None) or signature
+        completed_progress_before = out.pop("_action_history_progress_before", None) or progress_before
+        if top_level and signature is not None and progress_before is not None:
+            self._record_action_history(
+                name,
+                args,
+                out,
+                signature=completed_signature,
+                progress_before=completed_progress_before,
+            )
         # Shared ToolOutcome → attempt ledger (no-op when ledger off / tool not mapped).
         try:
             from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
@@ -1086,71 +1585,15 @@ class AgenticEQAExecutor:
         args: dict[str, Any],
         out: dict[str, Any],
     ) -> None:
-        """Append a one-line tool outcome for the next router state message."""
-        # Internal / chained tools stay off the history (noise for the VLM).
-        if name in {
-            "capture_and_update",
-            "verify_siglip",
-            "inspect_graph",
-            "look_around",
-        }:
-            return
-        bits: list[str] = [f"r{int(self._round)} {name}"]
-        if name in ("investigate", "navigate_to_obs"):
-            oid = args.get("obs_id", out.get("obs_id"))
-            if oid is not None:
-                try:
-                    obs_label = str(int(oid))
-                except (TypeError, ValueError):
-                    obs_label = str(oid)[:32]
-                bits.append(f"obs={obs_label}")
-            if out.get("ok"):
-                self._n_consecutive_explore = 0
-            ap = out.get("approach_index")
-            if ap is not None:
-                bits.append(f"ap={int(ap)}")
-            if out.get("ok"):
-                st = ""
-                ver = out.get("verify")
-                if isinstance(ver, dict):
-                    st = str(ver.get("status") or ver.get("decision") or "")
-                elif ver is not None:
-                    st = str(getattr(ver, "status", "") or "")
-                oid_i = int(oid) if oid is not None else None
-                rec = self._place_inspect.get(oid_i) if oid_i is not None else None
-                if not st and rec is not None:
-                    st = str(rec.last_verify or "")
-                if st:
-                    bits.append(f"verify={st}")
-                closest = None
-                if rec is not None and rec.closest_m is not None:
-                    closest = f"{float(rec.closest_m):.1f}m"
-                else:
-                    pi = str(out.get("place_inspect") or "")
-                    if "closest=" in pi:
-                        closest = pi.split("closest=", 1)[1].split()[0]
-                if closest and closest != "none":
-                    bits.append(f"closest={closest}")
-            else:
-                bits.append(f"fail={str(out.get('status') or out.get('error') or 'err')[:40]}")
-        elif name == "explore_frontier":
-            toward = str(args.get("toward") or "").strip()
-            if toward:
-                bits.append(f"toward={toward[:40]!r}")
-            bits.append("ok" if out.get("ok") else "fail")
-        elif name == "submit_answer":
-            ans = str(args.get("answer") or out.get("final_answer") or "").strip()
-            if ans:
-                bits.append(f"answer={ans[:16]}")
-            bits.append("ok" if out.get("ok") else "fail")
-        elif name == "finish":
-            bits.append("ok" if out.get("ok") else "fail")
-        else:
-            bits.append("ok" if out.get("ok") else "fail")
-        line = " ".join(bits)
-        self._recent_actions.append(line)
-        if len(self._recent_actions) > RECENT_ACTIONS_K:
-            self._recent_actions = self._recent_actions[-RECENT_ACTIONS_K:]
+        """Compatibility helper for tests and callers with a completed result."""
+        signature = self._action_signature(name, dict(args or {}), out=out)
+        self._record_action_history(
+            name,
+            dict(args or {}),
+            dict(out or {}),
+            signature=signature,
+            progress_before=self._action_progress_token(signature),
+        )
 
     def _tool_inspect_graph(self) -> dict[str, Any]:
         gm = self.graph_memory
@@ -1200,6 +1643,15 @@ class AgenticEQAExecutor:
         toward = (toward or "").strip()
         requested_frontier_id = str(frontier_id or "").strip()
         grounded = self.decision_policy == "grounded_v2"
+        if grounded and self.action_progress_mode == "enforce" and not requested_frontier_id:
+            eligible = tuple(self._rendered_action_allowlist().get("frontier_ids", ()))
+            if not eligible:
+                return {
+                    "ok": False,
+                    "status": "NO_ELIGIBLE_ACTION",
+                    "error": "no eligible rendered frontier remains while static progress gating is enforced",
+                }
+            requested_frontier_id = str(eligible[0])
         leave = False
         if not grounded:
             leave = room_leave_needed(
@@ -1217,6 +1669,8 @@ class AgenticEQAExecutor:
         frontier_id = requested_frontier_id
         pick_source = "pick_uncovered"
         frontier_room = "unknown"
+        history_signature = None
+        history_progress_before = None
         try:
             from emet.controller.habitat_nav import pick_uncovered_explore_target
 
@@ -1311,6 +1765,12 @@ class AgenticEQAExecutor:
                     frontier_id = str(frontier_id_fn(frontier_xyz) or "")
                 except (TypeError, ValueError):
                     frontier_id = ""
+        if frontier_id:
+            history_signature = self._action_signature(
+                "explore_frontier",
+                {"frontier_id": frontier_id, "toward": toward},
+            )
+            history_progress_before = self._action_progress_token(history_signature)
         frontier_key = -1_000_000 - self._n_explore
         hypothesis_id = self._begin_policy_approach(
             "frontier",
@@ -1319,14 +1779,19 @@ class AgenticEQAExecutor:
         )
         ok = False
         motion_progress = False
+        reached = False
+        nav_outcome_str = ""
+        used_nav_target = False
         start = self._robot_xyt_world()
         if start is None:
             start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
+            used_nav_target = True
             try:
                 nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
             except TypeError:
                 nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
+            nav_outcome_str = str(nav_outcome)
             ok = bool(nav_outcome)
             motion_progress = ok
             self._n_explore += 1
@@ -1357,6 +1822,14 @@ class AgenticEQAExecutor:
                         frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
             if ok and frontier_xyz is not None:
                 self._retire_visited_frontier(frontier_xyz=frontier_xyz)
+                reached = True
+        nav_result = getattr(agent, "_last_nav_attempt", None) if used_nav_target else None
+        if nav_result is not None:
+            from emet.controller.nav_attempt import nav_status_code
+
+            nav_status = nav_status_code(nav_result)
+        else:
+            nav_status = nav_outcome_str or ("ok" if ok else "failed")
         if motion_progress:
             self._refresh_room_after_motion()
         cap = self._tool_capture_and_update()
@@ -1404,6 +1877,7 @@ class AgenticEQAExecutor:
             "toward": toward or None,
             "room_aligned": room_aligned,
             "in_target_area": self._in_target_area,
+            "nav_status_code": nav_status,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
@@ -1415,8 +1889,21 @@ class AgenticEQAExecutor:
             "ok": ok,
             "capture": cap,
             "frontier_xyz": row["frontier_xyz"],
+            "xyz": row["frontier_xyz"],
             "frontier_id": frontier_id or None,
+            "target_kind": "frontier" if frontier_id else "",
+            "target_id": frontier_id or "",
+            "phrase": toward or self.query_text,
+            "room": frontier_room,
+            "motion_progress": bool(motion_progress),
+            "nav_outcome": nav_outcome_str,
+            "nav_progress": bool(motion_progress),
+            "nav_finished": bool(reached),
+            "nav_status_code": nav_status,
+            "status": nav_status,
             "verify": verify_out,
+            "_action_history_signature": history_signature,
+            "_action_history_progress_before": history_progress_before,
         }
 
     def _investigate_hypotheses(self) -> list[NavHypothesis]:
@@ -1913,19 +2400,6 @@ class AgenticEQAExecutor:
         phrase = str(verify_out.get("phrase") or self._target_phrase or "").strip()
         if not phrase:
             return None
-        # Cross-view strip only when ABSENT is corroborated at 2+ distinct views
-        # (one weak glance shouldn't delete a node seen elsewhere — exp1 regression).
-        corroboration_fn = getattr(gm, "has_absent_retraction_at_other_view", None)
-        if callable(corroboration_fn):
-            corroborated = corroboration_fn(phrase, evidence_obs_id)
-            cross_view = corroborated if isinstance(corroborated, bool) else False
-        else:
-            retracted = getattr(gm, "_retracted_nav_claims", None) or set()
-            key = phrase.strip().lower()
-            cross_view = any(
-                int(rid) != int(evidence_obs_id) and str(rphrase or "").strip().lower() == key
-                for rid, rphrase in list(retracted)
-            )
         out = gm.retract_phrase_claim_at_obs(
             int(obs_id),
             phrase,
@@ -1933,7 +2407,6 @@ class AgenticEQAExecutor:
             step=self._graph_world_step(),
             strip_matching_labels=self.decision_policy != "grounded_v2",
             apply_blacklist=self.decision_policy != "grounded_v2",
-            strip_across_obs=cross_view,
             evidence_obs_id=evidence_obs_id,
             evidence_source=evidence_source,
         )
@@ -1946,7 +2419,6 @@ class AgenticEQAExecutor:
                 "evidence_source": evidence_source,
                 "phrase": str(out.get("phrase") or phrase),
                 "closest_m": float(closest_m),
-                "strip_across_obs": cross_view,
                 "room": out.get("room"),
                 **{k: out.get(k) for k in ("stripped_obs", "stripped_nodes", "ok")},
             }
@@ -1988,7 +2460,10 @@ class AgenticEQAExecutor:
                 "obs_id": oid,
             }
         prior_visits = int(self._nav_to_obs_counts.get(oid, 0))
-        next_ap = self._next_approach_index(oid, prefer=approach_index)
+        if self.action_progress_mode == "enforce" and approach_index is not None:
+            next_ap = int(approach_index) % PLACE_APPROACH_SAMPLES
+        else:
+            next_ap = self._next_approach_index(oid, prefer=approach_index)
         # Exhausted orbit samples / stall — not bare "nav failed". Close+ABSENT alone
         # no longer blocks while unused approach bearings remain.
         if next_ap is None or self._hypothesis_nav_blocked(oid):
@@ -2155,8 +2630,15 @@ class AgenticEQAExecutor:
         if not nav_progress:
             return {
                 "ok": False,
+                "status": status,
+                "obs_id": oid,
                 "target_xyz": row["target_xyz"],
                 "approach_index": int(next_ap),
+                "nav_outcome": nav_outcome_str,
+                "nav_progress": False,
+                "nav_finished": bool(finished),
+                "nav_status_code": status,
+                "nav_note": note,
                 "capture": None,
                 "verify": None,
             }
@@ -2246,8 +2728,14 @@ class AgenticEQAExecutor:
         room_stamp = self._stamp_room_after_investigate(oid, hyp=hyp, station_oid=station_oid)
         return {
             "ok": True,
+            "obs_id": oid,
             "target_xyz": row["target_xyz"],
             "approach_index": int(next_ap),
+            "nav_outcome": nav_outcome_str,
+            "nav_progress": bool(nav_progress),
+            "nav_finished": bool(finished),
+            "nav_status_code": status,
+            "nav_note": note,
             "capture": cap,
             "verify": verify_out,
             "look_around_on_no_new_obs": True,
@@ -2749,6 +3237,9 @@ class AgenticEQAExecutor:
     def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
         """True if investigate must refuse this id (approaches/coverage exhausted / stall)."""
         oid = int(obs_id)
+        if self.action_progress_mode == "enforce":
+            # Semantic dispatch already chose an eligible concrete approach.
+            return False
         if self._place_approaches_exhausted(oid):
             return True
         if self._next_approach_index(oid) is None:
@@ -2835,15 +3326,19 @@ class AgenticEQAExecutor:
             except Exception:
                 return None
         try:
-            from emet.eval.presence_verifiers import dense_siglip_patch_similarities
+            import torch
+            import torch.nn.functional as F
 
-            dense = dense_siglip_patch_similarities(enc, np.asarray(rgb, dtype=np.uint8), text)
-            if dense is None:
-                return None
-            sims, _grid = dense
-            return float(np.max(sims))
-        except Exception as exc:
-            _logger.warning(f"dense_max_sim_for_rgb failed: {exc}")
+            text_t = enc.encode_text(text).detach().float().reshape(-1)
+            text_t = text_t / (text_t.norm() + 1e-12)
+            inputs = enc._to_model_inputs(enc.processor(images=np.asarray(rgb, dtype=np.uint8), return_tensors="pt"))
+            with torch.no_grad():
+                out = enc.model.vision_model(inputs["pixel_values"], output_hidden_states=True)
+                feat = F.normalize(out.last_hidden_state.float(), dim=-1)
+                sims = feat @ text_t.to(device=feat.device, dtype=feat.dtype).reshape(-1, 1)
+                return float(sims.max().item())
+        except Exception as e:
+            _logger.warning(f"dense_max_sim_for_rgb failed: {e}")
             return None
 
     def _voxel_max_sim_for_obs(self, phrase: str, obs_id: int) -> tuple[float, str] | None:
@@ -3437,11 +3932,7 @@ class AgenticEQAExecutor:
             )
             return {"ok": False, "error": "no eqa_client", "answerable": False, "obs_id": oid}
 
-        from emet.eval.agentic_vlm_assess import (
-            assess_view_with_vlm,
-            build_inventory_brief,
-            unique_image_arrays,
-        )
+        from emet.eval.agentic_vlm_assess import assess_view_with_vlm, build_inventory_brief
 
         # Do not pass SigLIP/OWL proposal into inventory — ABSENT colors answers.
         inventory = build_inventory_brief(
@@ -3451,63 +3942,6 @@ class AgenticEQAExecutor:
             n_rounds=self._round,
             n_nav=self._n_nav + self._n_explore,
         )
-        # Cheap image-text evidence for the same view: SigLIP similarity for the target
-        # phrase (full frame + dense patch best-of). This directly helps small / visually
-        # ambiguous targets (sugar cube vs brick) that the VLM can mistake on pixels alone.
-        siglip_evidence = ""
-        try:
-            if self._siglip_evidence and rgb is not None and hasattr(gm, "verify_phrase_at_obs"):
-                vres = gm.verify_phrase_at_obs(
-                    self._target_phrase or phrase,
-                    oid,
-                    rgb=rgb,
-                    min_sim=self.verify_min_sim,
-                )
-                full_sim = float(getattr(vres, "sim", 0.0) or 0.0)
-                dense_sim = self._dense_max_sim_for_rgb(self._target_phrase or phrase, rgb)
-                best_sim = float(dense_sim) if dense_sim is not None else full_sim
-                label = "present-like" if best_sim >= SIGLIP_IMAGE_PRESENT_THRESHOLD else "weak"
-                siglip_evidence = f"'{self._target_phrase or phrase}' similarity={best_sim:.3f} ({label})"
-        except Exception as exc:
-            _logger.warning(f"siglip evidence for vlm_assess failed: {exc}")
-        # Close-look zoom: for count / clock / fine-detail questions, crop the highest
-        # phrase-aligned dense patch and show the VLM the zoomed region alongside the
-        # wide frame so it can read detail the full image hides.
-        close_look_crop = None
-        multi_crops: list[np.ndarray] = []
-        if self._close_look_required and rgb is not None:
-            try:
-                from emet.eval.presence_verifiers import dense_siglip_argmax_crop
-
-                crop = dense_siglip_argmax_crop(
-                    getattr(gm, "_confirmed_memory_siglip_encoder", None),
-                    rgb,
-                    self._target_phrase or phrase,
-                )
-                if crop is not None:
-                    close_look_crop, _crop_sim = crop
-                    # Multi-view consensus (DeWorldSG-style temporal evidence): keep the
-                    # current crop and, when enabled, the best recent crops for this target
-                    # so the VLM sees more than one glance (helps ambiguous count/clock).
-                    key = self._target_phrase or phrase or str(oid)
-                    recent = self._close_look_crops.setdefault(key, [])
-                    recent[:] = [(old_oid, old_crop) for old_oid, old_crop in recent if old_oid != oid]
-                    recent.append((oid, close_look_crop))
-                    if len(recent) > 3:
-                        recent.pop(0)
-                    if self._close_look_multiview:
-                        # The current crop is already passed separately; add only
-                        # earlier, distinct observation crops (max two).
-                        multi_crops = [np.asarray(c) for _, c in recent[:-1]]
-            except Exception as exc:
-                _logger.warning(f"close-look crop for vlm_assess failed: {exc}")
-        if self._close_look_multiview and close_look_crop is not None:
-            close_crops = unique_image_arrays(
-                [close_look_crop, *multi_crops],
-                max_images=3,
-            )
-            close_look_crop = close_crops[0] if close_crops else None
-            multi_crops = close_crops[1:]
         assessment = assess_view_with_vlm(
             client,
             question=self.question,
@@ -3515,9 +3949,6 @@ class AgenticEQAExecutor:
             inventory=inventory,
             target_phrase=self._target_phrase or phrase,
             is_mcq=self._question_is_mcq(),
-            siglip_evidence=siglip_evidence,
-            close_look_crop=close_look_crop,
-            multi_close_look_crops=multi_crops,
         )
         vlm_event_id = self._persist_agentic_evidence(
             stage="vlm_assessment",
@@ -3537,7 +3968,6 @@ class AgenticEQAExecutor:
             },
         )
         self._vlm_assessed_obs_ids.add(oid)
-        close_look_views = (1 if close_look_crop is not None else 0) + len(multi_crops)
         # Per-view evidence ledger: the final EQA pins the best assessed view as
         # Image 1 when nothing was corroborated (see _best_evidence_obs_id).
         self._assess_history[oid] = {
@@ -3546,11 +3976,9 @@ class AgenticEQAExecutor:
             "need_more_views": bool(assessment.need_more_views),
             "suggested_answer": assessment.suggested_answer,
             "phrase": str(phrase or self._target_phrase or ""),
-            "close_look": bool(close_look_crop is not None),
-            "close_look_views": close_look_views,
         }
         _logger.info(
-            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r close_look_crop=%s close_look_views=%d",
+            "agentic vlm_assess obs=%d present=%s answerable=%s need_more=%s mcq=%s phrase=%r suggest=%r reason=%r",
             oid,
             bool(assessment.present),
             bool(assessment.answerable),
@@ -3559,8 +3987,6 @@ class AgenticEQAExecutor:
             str(phrase or self._target_phrase or "")[:60],
             str(assessment.suggested_answer or "")[:60],
             str(assessment.reason or "")[:80],
-            bool(close_look_crop is not None),
-            close_look_views,
         )
         # Trust the VLM assess. Cheap detector status is nav/debug only.
         proposal_status = str(
@@ -3793,6 +4219,7 @@ class AgenticEQAExecutor:
             else:
                 return {"ok": False, "error": "no obs_id"}
         oid = int(oid)
+        verify_target = self._action_target_for_obs(oid)
         if (
             self._router_enabled
             and self._evidence_policy.state != AgenticState.VERIFY
@@ -3803,6 +4230,11 @@ class AgenticEQAExecutor:
                 "error": (f"obs_id {oid} is stale; SEARCH must APPROACH/capture a fresh view before VERIFY"),
                 "status": "REQUIRES_FRESH_VIEW",
                 "obs_id": oid,
+                "phrase": text,
+                "target_kind": verify_target.kind,
+                "target_id": verify_target.stable_id,
+                "view_id": verify_target.view_id,
+                "room": verify_target.room,
                 "verified": self._verified,
             }
         # Interactive rule: one verify per view. Re-checking the same obs burns rounds
@@ -3823,6 +4255,11 @@ class AgenticEQAExecutor:
                 "error": f"obs_id {oid} already verified ({self._tried.get(oid)}); navigate or explore for a new view",
                 "status": "SKIPPED_SAME_VIEW",
                 "obs_id": oid,
+                "phrase": text,
+                "target_kind": verify_target.kind,
+                "target_id": verify_target.stable_id,
+                "view_id": verify_target.view_id,
+                "room": verify_target.room,
                 "verified": self._verified,
             }
         rgb = None
@@ -3969,6 +4406,10 @@ class AgenticEQAExecutor:
             "tool": "verify_siglip",
             "phrase": text,
             "obs_id": int(result.obs_id),
+            "target_kind": verify_target.kind,
+            "target_id": verify_target.stable_id,
+            "view_id": verify_target.view_id,
+            "room": verify_target.room,
             "sim": float(result.sim),
             "decision": result.status,
             "verify_channel": verify_channel,
@@ -4035,6 +4476,11 @@ class AgenticEQAExecutor:
             "verified": self._verified,
             "vlm_answerable": bool(self._verified),
             "obs_id": int(result.obs_id),
+            "phrase": text,
+            "target_kind": verify_target.kind,
+            "target_id": verify_target.stable_id,
+            "view_id": verify_target.view_id,
+            "room": verify_target.room,
             "verify_channel": verify_channel,
             "fused_verified": bool(self._verified),
             "answerable": bool(self._evidence_policy.state == AgenticState.ANSWER),
@@ -5067,7 +5513,7 @@ class AgenticEQAExecutor:
             for item in self._investigate_hypotheses()
             if int(item.obs_id) in visible
             and not self._hypothesis_nav_blocked(int(item.obs_id))
-            and int(item.obs_id) not in self._tried
+            and (self.action_progress_mode == "enforce" or int(item.obs_id) not in self._tried)
         ]
         return candidates[0] if candidates else None
 
@@ -5089,7 +5535,8 @@ class AgenticEQAExecutor:
             return calls, []
         allowlist = self._last_rendered_action_allowlist
         allowed_obs = {int(item) for item in allowlist.get("place_obs_ids", ())}
-        allowed_frontiers = {str(item) for item in allowlist.get("frontier_ids", ()) if str(item)}
+        frontier_order = tuple(str(item) for item in allowlist.get("frontier_ids", ()) if str(item))
+        allowed_frontiers = set(frontier_order)
         accepted: list[tuple[str, dict[str, Any]]] = []
         rejected: list[dict[str, Any]] = []
         for name, args in calls:
@@ -5104,6 +5551,18 @@ class AgenticEQAExecutor:
                     continue
             elif name == "explore_frontier":
                 frontier_id = str(args.get("frontier_id") or "").strip()
+                if not frontier_id and self.action_progress_mode == "enforce":
+                    if not frontier_order:
+                        rejected.append(
+                            {
+                                "tool": name,
+                                "reason": "no_eligible_frontier",
+                                "value": None,
+                            }
+                        )
+                        continue
+                    args = {**args, "frontier_id": frontier_order[0]}
+                    frontier_id = frontier_order[0]
                 if frontier_id and frontier_id not in allowed_frontiers:
                     rejected.append(
                         {
@@ -5113,6 +5572,27 @@ class AgenticEQAExecutor:
                         }
                     )
                     continue
+            if self.action_progress_mode == "enforce" and name in {
+                "investigate",
+                "navigate_to_obs",
+                "verify_siglip",
+                "explore_frontier",
+            }:
+                decision = self._action_gate_decision(name, args)
+                if not decision.allowed:
+                    rejected.append(
+                        {
+                            "tool": name,
+                            "reason": decision.disposition,
+                            "value": decision.signature.target.stable_id,
+                            "detail": decision.reason,
+                        }
+                    )
+                    continue
+                if decision.signature.family == "inspect_place":
+                    approach = decision.signature.variant_value("approach_index")
+                    if approach is not None:
+                        args = {**args, "approach_index": int(approach)}
             accepted.append((name, args))
         return accepted, rejected
 
@@ -5125,7 +5605,12 @@ class AgenticEQAExecutor:
           (3) Qwen answerable → submit with its suggested letter; else keep exploring
         """
         if self.mode == "explore":
-            if self._explore_done():
+            no_eligible_frontier = (
+                self.action_progress_mode == "enforce"
+                and self._last_agent_state_snapshot is not None
+                and not self._rendered_action_allowlist()["frontier_ids"]
+            )
+            if self._explore_done() or no_eligible_frontier:
                 return "finish", {}
             return "explore_frontier", self._rendered_frontier_args()
         # (3) Qwen said this view is enough
@@ -5138,6 +5623,12 @@ class AgenticEQAExecutor:
         budget_left = self._n_nav + self._n_explore < self.max_nav_steps
         need_more = bool(self._last_vlm_assess and self._last_vlm_assess.get("need_more_views"))
         frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
+        if (
+            self.action_progress_mode == "enforce"
+            and self._last_agent_state_snapshot is not None
+            and not self._rendered_action_allowlist()["frontier_ids"]
+        ):
+            frontiers_gone = True
         if need_more and budget_left and not frontiers_gone:
             return "explore_frontier", self._rendered_frontier_args()
         # After a close ABSENT look, grow coverage before the next investigate —
@@ -5283,6 +5774,21 @@ class AgenticEQAExecutor:
         gm = self.graph_memory
         client = getattr(gm, "eqa_client", None) if gm is not None else None
         if not self._router_enabled or client is None:
+            if self.decision_policy == "grounded_v2":
+                build_state_message(self)
+                decisions = [
+                    dict(item.__dict__)
+                    for item in list(getattr(self._last_agent_state_snapshot, "gate_decisions", ()) or ())
+                ]
+                meta["action_gate_decisions"] = decisions
+                if decisions:
+                    self._append_trace(
+                        {
+                            "event": "action_gate_snapshot",
+                            "picked_by": "fallback",
+                            "action_gate_decisions": decisions,
+                        }
+                    )
             tool, args = self._fallback_tool()
             return [(tool, args)], "fallback", meta
         self._ensure_router_prompt()
@@ -5310,10 +5816,14 @@ class AgenticEQAExecutor:
         self._last_rendered_action_allowlist = action_allowlist
         self._router_action_allowlists[router_call_id] = {key: tuple(value) for key, value in action_allowlist.items()}
         visible_event_ids = list(action_allowlist["event_ids"])
+        gate_decisions = [
+            dict(item.__dict__) for item in list(getattr(self._last_agent_state_snapshot, "gate_decisions", ()) or ())
+        ]
         meta["router_call_id"] = router_call_id
         meta["state_text_digest"] = state_text_digest(state)
         meta["visible_event_ids"] = visible_event_ids
         meta["action_allowlist"] = {key: list(value) for key, value in action_allowlist.items()}
+        meta["action_gate_decisions"] = gate_decisions
         self._append_trace(
             {
                 "event": "router_call",
@@ -5322,6 +5832,7 @@ class AgenticEQAExecutor:
                 "state_text_digest": meta["state_text_digest"],
                 "visible_event_ids": visible_event_ids,
                 "action_allowlist": meta["action_allowlist"],
+                "action_gate_decisions": gate_decisions,
                 "robot_world_pose": pose_list,
                 "robot_world_path": list(self._router_path_world),
                 "robot_world_path_m": round(float(self._router_path_m), 4),
@@ -5573,6 +6084,20 @@ class AgenticEQAExecutor:
             if hyp is not None:
                 redirect_tool = "investigate"
                 redirect_args = {"obs_id": int(hyp.obs_id)}
+        if (
+            self.action_progress_mode == "enforce"
+            and redirect_tool == "explore_frontier"
+            and not redirect_args.get("frontier_id")
+        ):
+            self._append_trace(
+                {
+                    "event": "nav_loop_redirect_skipped",
+                    "from_obs_id": out.get("obs_id"),
+                    "status": status,
+                    "reason": "NO_ELIGIBLE_ACTION",
+                }
+            )
+            return False
 
         self._append_trace(
             {
@@ -5584,7 +6109,10 @@ class AgenticEQAExecutor:
                 "to_obs_id": redirect_args.get("obs_id"),
             }
         )
+        selected_by = self._action_selected_by
+        self._action_selected_by = "recovery"
         self.handle_tool(redirect_tool, redirect_args)
+        self._action_selected_by = selected_by
         return True
 
     def _effective_state_contract_knobs(self) -> dict[str, Any]:
@@ -5594,6 +6122,7 @@ class AgenticEQAExecutor:
             "graph_evidence_mode": self.graph_evidence_mode,
             "room_history_mode": self.room_history_mode,
             "attempt_ledger_mode": self.attempt_ledger_mode,
+            "action_progress_mode": self.action_progress_mode,
             "agent_state_max_chars": int(self.agent_state_max_chars),
             "question_id": self._question_id,
             "session_id": self._session_id,
@@ -5619,9 +6148,12 @@ class AgenticEQAExecutor:
         self._router_path_world = []
         self._router_path_m = 0.0
         self._recent_actions = []
+        self._action_history = []
+        self._tool_dispatch_depth = 0
+        self._action_selected_by = "internal"
+        self._last_action_gate_decisions = []
         self._station_obs_ids = set()
         self._assess_history = {}
-        self._close_look_crops = {}
         self._answer_evidence = []
         self._confirmed_answer_evidence = None
         self._final_answer_decision = None
@@ -5818,6 +6350,7 @@ class AgenticEQAExecutor:
                 }
             )
             for tool, args in calls:
+                self._action_selected_by = picked_by
                 out = self.handle_tool(tool, args)
                 self._append_trace(
                     {

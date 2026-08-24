@@ -926,39 +926,6 @@ def _jobs_run_id_from_output(stdout: str | None) -> str | None:
     return lines[-1] if lines else None
 
 
-def _parse_job_start_epoch(delay_minutes: float | None, at_time: str | None) -> float | None:
-    """Return a wall-clock start epoch for ``emet jobs run`` scheduling, or None.
-
-    ``--delay-minutes`` is relative to submission; ``--at`` accepts local wall time
-    (``YYYY-MM-DD HH:MM`` or ISO ``YYYY-MM-DDTHH:MM[:SS]``). Raises ``ValueError``
-    when both are set, the time is unparsable, or ``--at`` is not in the future.
-    """
-    from datetime import datetime
-
-    if delay_minutes is not None and at_time:
-        raise ValueError("--delay-minutes and --at are mutually exclusive")
-    if delay_minutes is not None:
-        if float(delay_minutes) < 0:
-            raise ValueError("--delay-minutes must be >= 0")
-        return time.time() + float(delay_minutes) * 60.0
-    if not at_time:
-        return None
-    raw = str(at_time).strip()
-    parsed: datetime | None = None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
-        try:
-            parsed = datetime.strptime(raw, fmt)
-            break
-        except ValueError:
-            continue
-    if parsed is None:
-        raise ValueError(f"cannot parse --at={raw!r} (use 'YYYY-MM-DD HH:MM' or ISO)")
-    epoch = float(parsed.timestamp())
-    if epoch <= time.time():
-        raise ValueError(f"--at={raw!r} is not in the future")
-    return epoch
-
-
 def _timestamp() -> str:
     from datetime import datetime
 
@@ -1745,18 +1712,6 @@ def jobs_update(
     help="Wait for these PIDs before starting (repeatable).",
 )
 @click.option(
-    "--delay-minutes",
-    type=float,
-    default=None,
-    help="Wait this many minutes after submission before starting the command.",
-)
-@click.option(
-    "--at",
-    "at_time",
-    default=None,
-    help='Start at local wall time, e.g. "2026-08-23 12:00" or ISO 2026-08-23T12:00:00.',
-)
-@click.option(
     "--wait-timeout-sec",
     type=click.FloatRange(min=0.0),
     default=21600.0,
@@ -1800,8 +1755,6 @@ def jobs_run(
     description: str | None,
     out_dir: str | None,
     wait_pid: tuple[int, ...],
-    delay_minutes: float | None,
-    at_time: str | None,
     wait_timeout_sec: float,
     need_mib: int | None,
     gpu_wait_max_rounds: int,
@@ -1861,13 +1814,6 @@ def jobs_run(
             )
             lock_timeout = 21600.0
 
-    start_epoch: float | None = None
-    try:
-        start_epoch = _parse_job_start_epoch(delay_minutes, at_time)
-    except ValueError as exc:
-        click.echo(f"error: {exc}", err=True)
-        sys.exit(2)
-
     job_id = new_job_id()
     click.echo(f"prepared    {job_id}", err=True)
     click.echo(f"name        {name}", err=True)
@@ -1875,12 +1821,6 @@ def jobs_run(
         click.echo(f"why         {str(description).strip()}", err=True)
     click.echo(f"out_dir     {out}", err=True)
     click.echo(f"log         {log_path}", err=True)
-    if start_epoch is not None:
-        click.echo(
-            f"schedule    start at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_epoch))} "
-            f"(in {max(0, int(start_epoch - time.time()))}s)",
-            err=True,
-        )
 
     wrapper = out / "job_wrapper.sh"
     register_args = [
@@ -1906,18 +1846,6 @@ def jobs_run(
     for wpid in wait_pids:
         register_args.extend(["--wait-pid", str(int(wpid))])
     register_line = '"$EMET_BIN" ' + shlex.join(register_args) + ' --pid "$$"\n'
-    schedule_block = ""
-    if start_epoch is not None:
-        schedule_block = (
-            'NOW="$(date +%s)"\n'
-            f'TARGET_EPOCH="{int(start_epoch)}"\n'
-            'if [ "$NOW" -lt "$TARGET_EPOCH" ]; then\n'
-            '  echo "scheduled: waiting $((TARGET_EPOCH - NOW))s until '
-            f"$(date -d @{int(start_epoch)} '+%Y-%m-%d %H:%M:%S')\"\n"
-            '  while [ "$(date +%s)" -lt "$TARGET_EPOCH" ]; do sleep 30; done\n'
-            '  echo "scheduled: start time reached"\n'
-            "fi\n"
-        )
     wait_lines = ""
     if wait_pids:
         wait_lines = (
@@ -1992,9 +1920,8 @@ def jobs_run(
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
         f"{register_line}"
-        f"{schedule_block}"
-        f"{wait_lines}"
         f"{gpu_lock_block}"
+        f"{wait_lines}"
         f"{need_block}"
         f"{cpu_block}"
         f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'
@@ -2620,6 +2547,7 @@ _HMEQA_FROZEN_PARAMETER_PATHS = {
     "room_target_hints": "variant.room_target_hints",
     "investigate_stamp": "variant.investigate_stamp",
     "attempt_ledger_mode": "variant.attempt_ledger_mode",
+    "action_progress_mode": "variant.action_progress_mode",
     "variant_id": "variant.id",
     "eqa_hf_model_id": "model.requested_hf_model_id",
     "eqa_vl_family": "model.vl_family",
@@ -2714,6 +2642,16 @@ def _hmeqa_frozen_options(fn):
             default="off",
             show_default=True,
             help="Attempt-ledger collection/visibility mode.",
+        ),
+        click.option(
+            "--action-progress-mode",
+            type=click.Choice(["off", "shadow", "enforce"]),
+            default="off",
+            show_default=True,
+            help=(
+                "Static-world duplicate-action policy: shadow records decisions; "
+                "enforce suppresses unchanged terminal/no-progress variants."
+            ),
         ),
         click.option(
             "--variant-id",
@@ -2940,6 +2878,7 @@ def _hmeqa_launch(
             room_target_hints=values["room_target_hints"],
             investigate_stamp=values["investigate_stamp"],
             attempt_ledger_mode=values["attempt_ledger_mode"],
+            action_progress_mode=values["action_progress_mode"],
             variant_id=values["variant_id"],
             eqa_hf_model_id=values["eqa_hf_model_id"],
             eqa_vl_family=values["eqa_vl_family"],
@@ -3085,6 +3024,7 @@ def hmeqa_h2h(
     room_target_hints: bool,
     investigate_stamp: bool,
     attempt_ledger_mode: str,
+    action_progress_mode: str,
     variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
@@ -3191,6 +3131,7 @@ def hmeqa_resume(
     room_target_hints: bool,
     investigate_stamp: bool,
     attempt_ledger_mode: str,
+    action_progress_mode: str,
     variant_id: str,
     preset: str | None,
     eqa_hf_model_id: str | None,
@@ -4705,7 +4646,7 @@ def install(ctx: click.Context) -> None:
 
 
 @install.command("gh", short_help="Install GitHub CLI (apt)")
-@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Run apt-get without prompting")
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip confirmation; sudo may still prompt")
 def install_gh(non_interactive: bool) -> None:
     """Install the GitHub CLI (``gh``) for pull requests and issues.
 
@@ -4718,6 +4659,23 @@ def install_gh(non_interactive: bool) -> None:
     from emet.dev_system_packages import ensure_apt_package
 
     sys.exit(ensure_apt_package("gh", non_interactive=non_interactive))
+
+
+@install.command("paper", short_help="Install LaTeX paper toolchain (apt)")
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip confirmation; sudo may still prompt")
+def install_paper(non_interactive: bool) -> None:
+    """Install ``latexmk`` and the TeX Live packages used by ``paper/main.tex``.
+
+    Package names are declared in ``pyproject.toml`` under
+    ``[tool.emet.system-packages]``.
+
+    Examples:
+      emet install paper -y
+      ./paper/build.sh
+    """
+    from emet.dev_system_packages import ensure_apt_package
+
+    sys.exit(ensure_apt_package("latexmk", non_interactive=non_interactive))
 
 
 @install.command("submodules", short_help="Init and update git submodules")
@@ -4892,8 +4850,8 @@ def install_menu(text_only: bool) -> None:
     default=None,
     help=(
         "Install profile forwarded to install.sh / EMET_INSTALL_PROFILE: "
-        "standard (default)=no sim unless --sim; full=legacy sim-on-by-default; "
-        "minimal=same as standard today; jetson=Orin/Tegra lean (MuJoCo pip + dev; no SAM2/Molmo/Robocasa)."
+        "full (default)=sim-on; standard/minimal=no sim unless --sim; "
+        "jetson=Orin/Tegra lean (MuJoCo pip + dev; no SAM2/Molmo/Robocasa)."
     ),
 )
 @click.option("--sim", is_flag=True, help="Include simulation extras")
@@ -4910,11 +4868,13 @@ def install_menu(text_only: bool) -> None:
     is_flag=True,
     help="Skip MolmoSpaces wrapper even when sim installs (forwards to install.sh --no-molmospaces).",
 )
+@click.option("--paper", is_flag=True, help="Install latexmk and the TeX Live packages used to build the paper")
+@click.option("--no-paper", is_flag=True, help="Skip paper tooling when combined with --all")
 @click.option(
     "--all",
     "install_all",
     is_flag=True,
-    help="Same as install.sh --all (includes MolmoSpaces among other bundles)",
+    help="Same as install.sh --all (includes simulation, MolmoSpaces, and paper tooling)",
 )
 def install_full(
     yes: bool,
@@ -4924,16 +4884,16 @@ def install_full(
     no_sam2: bool,
     molmospaces: bool,
     no_molmospaces: bool,
+    paper: bool,
+    no_paper: bool,
     install_all: bool,
 ) -> None:
     """Run full install (./install.sh).
 
     Installs uv, system deps, git-lfs, and syncs dependencies.
 
-    By default the shell script does **not** install Robocasa/simulation; pass ``--sim`` or ``--all``,
-    or set ``EMET_INSTALL_PROFILE=full`` for the old behavior. With sim enabled, ``install.sh`` also
-    creates ``.venv-molmospaces`` when ``packages/emet_molmospaces`` is present unless you pass
-    ``--no-molmospaces``. ``-y`` does not enable MolmoSpaces by itself — pass ``--molmospaces`` or ``--all``.
+    The default ``full`` profile installs Robocasa/simulation and the MolmoSpaces
+    wrapper. Paper tooling remains optional; pass ``--paper`` or ``--all``.
 
     Examples:
       emet install full
@@ -4942,6 +4902,7 @@ def install_full(
       emet install full -y --profile jetson
       emet install full -y --no-molmospaces
       emet install full -y --molmospaces
+      emet install full -y --paper
       emet install full -y --all
       emet install full --cpu
     """
@@ -4967,6 +4928,10 @@ def install_full(
         args.append("--molmospaces")
     if no_molmospaces:
         args.append("--no-molmospaces")
+    if paper:
+        args.append("--paper")
+    if no_paper:
+        args.append("--no-paper")
     env = os.environ.copy()
     if profile:
         env["EMET_INSTALL_PROFILE"] = profile.lower()

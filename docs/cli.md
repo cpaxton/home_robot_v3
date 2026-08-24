@@ -699,7 +699,8 @@ Install submodules, simulation extras, or full setup.
 | `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
 | `sim` | Install Robocasa and robosuite (clones into third_party) |
 | `robocasa` | Same as `sim` |
-| `menu` | Interactive text UI to manage sub-assets (submodules, sim, kitchen assets, MolmoSpaces) |
+| `paper` | Install `latexmk` and the TeX Live packages used by `paper/main.tex` (Ubuntu/apt) |
+| `menu` | Interactive UI to manage sub-assets and optional paper tooling |
 | `full` | Run full install (./install.sh) |
 | `pre-commit` | Install pre-commit hooks (ruff, mypy, etc.) |
 
@@ -716,23 +717,33 @@ Install submodules, simulation extras, or full setup.
 - `--sim` — Include simulation extras
 - `--cpu` — CPU-only (skip SAM2)
 - `--no-sam2` — Skip Segment Anything 2
+- `--paper` / `--no-paper` — Include paper tooling, or omit it from `--all`
+- `--all` — Include simulation, MolmoSpaces, dynamem, and paper tooling
 
 **Examples:**
 ```bash
 emet install menu                   # Interactive menu: status and install sub-assets
+emet install paper -y               # latexmk + TeX Live for ./paper/build.sh
 emet install submodules             # Init and update submodules
 emet install sim                    # Install Robocasa, robosuite (third_party)
 emet install robocasa               # Same as install sim
 emet install sim -d -a              # With assets and force-overwrite macros
-emet install full                   # Full install (uv, deps, sync; sim opt-in)
-emet install full -y --sim        # Non-interactive + simulation (Robocasa)
-emet install full -y --profile full   # Legacy: enable sim without --sim
+emet install full                   # Default full profile (sim + MolmoSpaces)
+emet install full -y --paper         # Full profile plus local paper toolchain
+emet install full -y --all           # All bundles, including paper tooling
+emet install full -y --sim           # Explicit simulation (Robocasa)
+emet install full -y --profile full  # Explicit full profile
 emet install full -y --profile jetson # Jetson Orin lean install (see docs/jetson.md)
 emet install full --cpu             # CPU-only (no SAM2)
 emet install menu                   # Rich plan wizard (needs dev extra / rich)
 emet install pre-commit             # Install git hooks (requires emet sync --dev)
 emet install pre-commit --run       # Install and run on all files
 ```
+
+`emet install paper` uses `apt` and may request `sudo`; it installs `latexmk`,
+`texlive-latex-extra`, and `texlive-bibtex-extra`. The toolchain is optional in
+the normal full profile because TeX Live is large. `./paper/build.sh` falls back
+to `texlive/texlive:latest` when Docker is available.
 
 Jetson Orin / Tegra: `./scripts/install_jetson.sh -y` or `emet install full -y --profile jetson` (no sim/SAM2/Molmo; Python 3.10 via uv). Details: [jetson.md](jetson.md).
 
@@ -762,7 +773,7 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] [--delay-minutes M] [--at "YYYY-MM-DD HH:MM"] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` on `~/runs/emet/gpu.lock` (`EMET_GPU_LOCK` / `EMET_GPU_LOCK_FILE`) for their full lifetime. **Scheduling:** `--delay-minutes M` or `--at` sleeps until the start time inside the supervisor (after register). `--wait-pid P` waits for explicit prerequisites (bounded by `--wait-timeout-sec`). `--need-mib N` then blocks until free VRAM ≥ N. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. |
 
 `emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. The host-wide `flock` is the serialization authority for exclusive jobs; the launcher does not infer and wait on unrelated active GPU PIDs. Only explicit `--wait-pid` prerequisites are waited, and all PID, lock, and optional pre-command GPU waits are bounded (defaults: six hours for PID/lock, 120 GPU polling rounds). The canonical shared lock is `~/runs/emet/gpu.lock` (`EMET_GPU_LOCK`); `EMET_GPU_LOCK_FILE` is a compatibility alias. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
@@ -880,7 +891,7 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 
 | Command | Purpose |
 |---------|---------|
-| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--variant-config FILE] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--eqa-vl-quantization int4\|int8\|float16\|bfloat16\|float32\|none] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--use-hm3d-semantics\|--no-hm3d-semantics] [--enrich-labels\|--no-enrich-labels] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `--variant-config` loads all eight variant axes from strict YAML; `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
+| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--variant-config FILE] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--eqa-vl-quantization int4\|int8\|float16\|bfloat16\|float32\|none] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--use-hm3d-semantics\|--no-hm3d-semantics] [--enrich-labels\|--no-enrich-labels] [--action-progress-mode off\|shadow\|enforce] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `--variant-config` loads all nine variant axes from strict YAML; `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
 | `emet hmeqa resume [OUT] [variant flags…]` | Resolve latest OUT if omitted; reuse its frozen variant/model/budgets/IDs, validate commit + dirty state + digest, then set `RESUME=1` |
 | `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips only phases with a validated JSON `DONE`; sets `RESUME=1` when validated or pending state exists) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
@@ -908,13 +919,16 @@ Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2
 - `--room-target-hints|--no-room-target-hints`
 - `--investigate-stamp|--no-investigate-stamp`
 - `--attempt-ledger-mode off|shadow|agent`
+- `--action-progress-mode off|shadow|enforce`
 - `--variant-id ID`
 
-On first launch, `--variant-config FILE` provides the complete variant block (`id`, decision, graph/history/ledger modes, room policy/hints, and investigate stamp). The loader rejects missing or unknown axes. Explicit variant flags win over file values; the manifest source map records the resolved file path plus SHA-256 for every value supplied by the file. Checked-in action-history controls are `configs/benchmarks/hmeqa_action_history_shadow.yaml` and `configs/benchmarks/hmeqa_action_history_agent.yaml`. Resume uses the frozen manifest and does not re-read the file.
+On first launch, `--variant-config FILE` provides the complete variant block (`id`, decision, graph/history/ledger modes, action-progress mode, room policy/hints, and investigate stamp). Schema v2 rejects missing or unknown fields; legacy schema-v1 files remain readable and default the new action-progress field to `off`. Explicit variant flags win over file values; the manifest source map records the resolved file path plus SHA-256 for every value supplied by the file. Checked-in action-history controls are `configs/benchmarks/hmeqa_action_history_{shadow,agent}.yaml`; static-world retry-policy controls are `configs/benchmarks/hmeqa_action_progress_{shadow,enforce}.yaml`. Resume uses the frozen manifest and does not re-read the file.
 
 For `grounded_v2`, ledger mode is also the dedicated action-history visibility switch: `off` neither persists rows nor renders history, `shadow` persists rows/artifacts but hides them, and `agent` additionally renders recent outcomes, loop flags, per-place attempt summaries/failure risk, global attempts, and mirrored attempt provenance. Room timeline and live approach affordances remain separate axes; see [attempt_ledger.md](attempt_ledger.md).
 
-Legacy-compatible defaults are `legacy`, graph/history/ledger `off`, `canonical`, target hints on, investigate stamps off, HM3D semantic labels off, per-question enrich labels off, and variant ID `legacy`. The two perception/oracle switches are independent frozen axes: enabling the HM3D semantic sensor does not implicitly seed enrich labels, and an explicit semantics-on request fails if its scene assets or annotated dataset config are unavailable. Model and budget controls (`--eqa-hf-model-id`, `--eqa-vl-family`, `--eqa-vl-quantization`, `--eqa-answer-max-new-tokens`, `--episode-timeout`, `--max-planning-steps`, `--max-movement-step`) are frozen with the IDs and are applied to the Habitat runtime. Manifest schema v3 also freezes the artifact profile (map/video/history/compact/evidence exports and snapshot limits) into the config digest. Each new OUT gets `run_manifest.json` containing the full commit, dirty-tree state/digest, effective values and sources, deterministic config digest, canonical data/HM3D paths, and SHA-256 hashes for `questions.csv` and `scene_init_poses.csv`. HM3D meshes are too large to hash at launch, so the manifest freezes their root path but does not claim mesh-content identity. Resume fills omitted frozen flags from that manifest and refuses commit, dirty-tree, config, artifact-profile, or small-dataset hash mismatches; ambient policy, artifact, and lifecycle variables are not inherited by H2H children. Schema-v2 manifests remain readable for analysis but fail closed on resume. Operational controls such as cooldown, crash policy/streak, job description/name, VRAM threshold, coverage-figure IDs, and foreground mode may change safely on resume. Historical partial OUTs without a manifest fail closed.
+`action_progress_mode` is independent from ledger visibility and requires `agentic_decision_policy=grounded_v2`; invalid combinations fail before launch. `shadow` computes and traces `would_suppress` decisions but leaves cards and execution unchanged. `enforce` removes only an equivalent terminal/no-progress candidate whose action-specific target state is unchanged; alternate approaches, new views, material frontier/coverage changes, and partial navigation progress remain eligible. This initial policy assumes mostly static HM-EQA scenes. It is not a permanent failure blacklist or a general dynamic-world scheduler; see [attempt_ledger.md](attempt_ledger.md#static-world-action-progress-policy).
+
+Legacy-compatible defaults are `legacy`, graph/history/ledger/action-progress `off`, `canonical`, target hints on, investigate stamps off, HM3D semantic labels off, per-question enrich labels off, and variant ID `legacy`. The two perception/oracle switches are independent frozen axes: enabling the HM3D semantic sensor does not implicitly seed enrich labels, and an explicit semantics-on request fails if its scene assets or annotated dataset config are unavailable. Model and budget controls (`--eqa-hf-model-id`, `--eqa-vl-family`, `--eqa-vl-quantization`, `--eqa-answer-max-new-tokens`, `--episode-timeout`, `--max-planning-steps`, `--max-movement-step`) are frozen with the IDs and are applied to the Habitat runtime. Manifest schema v4 freezes the artifact profile and action-progress axis into the config digest. Each new OUT gets `run_manifest.json` containing the full commit, dirty-tree state/digest, effective values and sources, deterministic config digest, canonical data/HM3D paths, and SHA-256 hashes for `questions.csv` and `scene_init_poses.csv`. HM3D meshes are too large to hash at launch, so the manifest freezes their root path but does not claim mesh-content identity. Resume fills omitted frozen flags from that manifest and refuses commit, dirty-tree, config, artifact-profile, or small-dataset hash mismatches; ambient policy, artifact, and lifecycle variables are not inherited by H2H children. Schema-v2/v3 manifests remain readable for analysis but fail closed on resume. Non-`off` progress runs additionally require parseable `agentic_summary.json` and `agentic_trace.jsonl` diagnostics whose runtime mode matches the manifest before an episode can publish completion. Operational controls such as cooldown, crash policy/streak, job description/name, VRAM threshold, coverage-figure IDs, and foreground mode may change safely on resume. Historical partial OUTs without a manifest fail closed.
 
 **`--preset paper-router`** (on `h2h` / `resume`): sets `agentic_verifier=none` (Qwen `vlm_assess` is the verify gate) + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. It does **not** alter any frozen A/B axis above. Opt in OWL/YoloE with `--agentic-verifier owlv2|yoloe`. Probe runs can omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it. Larger-VLM ladder: `--eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct` (or `EQA_HF_MODEL_ID`) passes through to `emet-habitat run-episode`; see `docs/habitat/vlm_bakeoff.md` and `docs/experiments/agentic_scale.md`.
 

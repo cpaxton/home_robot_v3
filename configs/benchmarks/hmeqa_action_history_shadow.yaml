@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 schema: emet.hmeqa.variant
-schema_version: 1
+schema_version: 2
 description: >-
   Grounded Graph Agent control: collect action outcomes for audit artifacts but
   hide the dedicated cross-round action history from the router.
@@ -16,3 +16,4 @@ variant:
   room_target_hints: true
   investigate_stamp: false
   attempt_ledger_mode: shadow
+  action_progress_mode: "off"

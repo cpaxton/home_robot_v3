@@ -6,7 +6,9 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 
 **Unified eval runbook (overnight smoke, diagnostics, figures):** [evaluation.md](evaluation.md)
 
-**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).
+**LaTeX:** `uv run emet install paper -y` once, then `./paper/build.sh` from
+repo root. The build uses local `latexmk` or falls back to Docker
+`texlive/texlive:latest`.
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 
 ## Benchmark map

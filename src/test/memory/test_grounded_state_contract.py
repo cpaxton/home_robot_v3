@@ -14,10 +14,13 @@ import numpy as np
 import pytest
 
 from emet.controller.controller_graph_eqa import GraphEQAController
+from emet.controller.habitat_nav import NavOutcome
+from emet.memory.graph_eqa.action_history import ActionHistoryEntry, ProgressToken
 from emet.memory.graph_eqa.agentic_eqa import (
     AgenticEQAExecutor,
     AnswerEvidenceRecord,
     FinalAnswerDecision,
+    PlaceInspectRecord,
 )
 from emet.memory.graph_eqa.agentic_state import (
     AgentStateSnapshot,
@@ -273,6 +276,34 @@ def test_rendered_action_allowlist_rejects_unshown_ids_and_redirects_to_visible(
         "frontier_id_not_rendered",
     }
 
+    executor.action_progress_mode = "shadow"
+    accepted, rejected = executor._validate_rendered_tool_calls([("explore_frontier", {})])
+    assert accepted == [("explore_frontier", {})]
+    assert rejected == []
+
+    executor.action_progress_mode = "enforce"
+    accepted, rejected = executor._validate_rendered_tool_calls([("explore_frontier", {})])
+    assert accepted == [("explore_frontier", {"frontier_id": "frontier_visible"})]
+    assert rejected == []
+
+    executor._last_agent_state_snapshot = replace(
+        executor._last_agent_state_snapshot,
+        visible_place_ids=(),
+        visible_place_obs_ids=(),
+        visible_frontier_ids=(),
+    )
+    executor._last_vlm_assess = {"need_more_views": True}
+    tool, _args = executor._fallback_tool()
+    assert tool == "submit_answer"
+
+    executor._last_agent_state_snapshot = replace(
+        executor._last_agent_state_snapshot,
+        visible_place_ids=("place_076",),
+        visible_place_obs_ids=(76,),
+        visible_frontier_ids=("frontier_visible",),
+    )
+    executor._last_rendered_action_allowlist = executor._rendered_action_allowlist()
+    executor.action_progress_mode = "off"
     executor.handle_tool = MagicMock(return_value={"ok": True})
     recovered = executor._recover_failed_router_motion(
         tool="investigate",
@@ -291,6 +322,24 @@ def test_rendered_action_allowlist_rejects_unshown_ids_and_redirects_to_visible(
         "explore_frontier",
         {"frontier_id": "frontier_visible", "toward": "Where is the can?"},
     )
+
+
+def test_action_progress_mode_rejects_legacy_executor_policy():
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "legacy",
+                "action_progress_mode": "enforce",
+            }
+        },
+        graph_memory=_agent_memory(),
+        voxel_map=None,
+    )
+    with pytest.raises(
+        ValueError,
+        match="requires agentic_decision_policy=grounded_v2",
+    ):
+        AgenticEQAExecutor(agent, "Where is the can?", router=False)
 
 
 def test_router_persists_exact_allowlist_and_nearby_caption_is_not_actionable():
@@ -449,6 +498,47 @@ def _agent_memory() -> GraphEQAMemory:
     return memory
 
 
+def _restore_replay_observation_identity(
+    memory: GraphEQAMemory,
+    obs_id: int,
+    observation: dict,
+) -> None:
+    world = memory.world_evidence
+    view = world.view_for_obs(obs_id)
+    assert view is not None and view.place_id is not None
+    old_view_id = view.view_id
+    old_place_id = view.place_id
+    new_view_id = observation["view_id"]
+    new_place_id = observation["place_id"]
+
+    place = world.places.pop(old_place_id)
+    world.places[new_place_id] = replace(place, place_id=new_place_id)
+    if view.entity_id is not None and view.entity_id in world.entities:
+        world.entities[view.entity_id] = replace(
+            world.entities[view.entity_id],
+            place_id=new_place_id,
+        )
+    world.views.pop(old_view_id)
+    world.views[new_view_id] = replace(
+        view,
+        view_id=new_view_id,
+        revision=observation["revision"],
+        place_id=new_place_id,
+    )
+    world._obs_current_view[obs_id] = new_view_id
+    world._obs_revision_to_view.pop((obs_id, view.revision), None)
+    world._obs_revision_to_view[(obs_id, observation["revision"])] = new_view_id
+    world.events = [
+        replace(
+            event,
+            subject_id=(new_place_id if event.subject_id == old_place_id else event.subject_id),
+            view_id=(new_view_id if event.view_id == old_view_id else event.view_id),
+            place_id=(new_place_id if event.place_id == old_place_id else event.place_id),
+        )
+        for event in world.events
+    ]
+
+
 def test_typed_snapshot_has_conflicts_clocks_ids_and_referential_history():
     replay = _replay()
     case = replay["cases"]["dirty_obs76"]
@@ -594,10 +684,398 @@ def test_attempt_mode_cleanly_gates_grounded_action_history():
     agent_text = render_agent_state(agent, max_chars=6000)
     assert agent.attempts[0].status_code == "no_path"
     assert agent.recent_actions == ("navigate obs=7 -> failed:no_path",)
-    assert agent.loop_flags == ("obs=7 visits=2 status=no_path",)
+    assert agent.loop_flags == ("action=investigate visits=2 status=no_path adapter=7",)
     assert any(event.predicate == "navigate" for event in agent.evidence)
     assert "failed:no_path" in agent_text
     assert "blocked route" in agent_text
+
+
+def test_static_progress_shadow_observes_and_enforce_removes_duplicate_candidate():
+    memory = _agent_memory()
+    memory.bind_episode_context(question_id=11, session_id="action-progress")
+    obs_id = memory.add_observation(
+        np.zeros((4, 4, 3), dtype=np.uint8),
+        [1.0, 2.0, 0.5],
+        ["kitchen island", "counter"],
+    )
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "grounded_v2",
+                "graph_evidence_mode": "agent",
+                "room_history_mode": "agent",
+                "attempt_ledger_mode": "agent",
+                "action_progress_mode": "enforce",
+            }
+        },
+        graph_memory=memory,
+        voxel_map=None,
+    )
+    executor = AgenticEQAExecutor(
+        agent,
+        "Where is the silver trash can?",
+        router=False,
+        trace_meta={"qid": 11, "session_id": "action-progress"},
+    )
+    executor._round = 1
+    executor._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    executor._hypotheses = [
+        NavHypothesis(
+            "kitchen island",
+            obs_id,
+            np.array([1.0, 2.0, 0.5]),
+            1.0,
+            "graph",
+        )
+    ]
+    first_frontier = executor._action_signature(
+        "explore_frontier",
+        {"frontier_id": "frontier_same", "toward": "the kitchen"},
+    )
+    reworded_frontier = executor._action_signature(
+        "explore_frontier",
+        {"frontier_id": "frontier_same", "toward": "the trash can"},
+    )
+    assert first_frontier.work_key == reworded_frontier.work_key
+    assert first_frontier.equivalence_key == reworded_frontier.equivalence_key
+    assert first_frontier.intent == "the kitchen"
+    assert reworded_frontier.intent == "the trash can"
+    assert first_frontier.work_intent == reworded_frontier.work_intent
+
+    executor._place_inspect[obs_id] = PlaceInspectRecord(
+        tried_approaches=list(range(4)),
+    )
+    executor._action_history = []
+    for approach in range(4):
+        signature = executor._action_signature(
+            "investigate",
+            {"obs_id": obs_id, "approach_index": approach},
+        )
+        token = executor._action_progress_token(signature)
+        executor._action_history.append(
+            ActionHistoryEntry(
+                schema_version=1,
+                round_index=approach + 1,
+                selected_by="router",
+                signature=signature,
+                progress_before=token,
+                progress_after=token,
+                outcome_class="no_progress",
+                status="no_path",
+                ok=False,
+            )
+        )
+
+    enforced = compile_agent_state(executor)
+    enforced_text = render_agent_state(enforced)
+    enforced_allowlist = rendered_state_allowlists(enforced, enforced_text)
+    assert enforced.places == ()
+    assert enforced_allowlist["place_obs_ids"] == ()
+    assert enforced.blocked_actions[0].target_label == "kitchen island/counter"
+    assert "Temporarily suppressed actions:" in enforced_text
+    assert "all finite approach variants are temporarily ineligible" in enforced_text
+
+    executor.action_progress_mode = "shadow"
+    shadow = compile_agent_state(executor)
+    shadow_text = render_agent_state(shadow)
+    shadow_allowlist = rendered_state_allowlists(shadow, shadow_text)
+    assert shadow_allowlist["place_obs_ids"] == (obs_id,)
+    assert shadow.blocked_actions == ()
+    assert shadow.gate_decisions[0].allowed is False
+    assert "all finite approach variants are temporarily ineligible" not in shadow_text
+
+    executor.action_progress_mode = "off"
+    off = compile_agent_state(executor)
+    assert render_agent_state(off) == shadow_text
+
+
+def test_enforce_revalidates_same_frontier_before_each_batch_execution():
+    memory = _agent_memory()
+    memory.bind_episode_context(question_id=11, session_id="batch-revalidate")
+    frontier = memory.world_evidence.update_frontier_tracks(
+        [{"centroid_xyz": (1.0, 0.0, 0.0), "cells": [(1, 1), (1, 2)]}],
+        step=1,
+    )[0]
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "grounded_v2",
+                "action_progress_mode": "enforce",
+            }
+        },
+        graph_memory=memory,
+        voxel_map=None,
+    )
+    executor = AgenticEQAExecutor(agent, "Where is the can?", router=False)
+    executor._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    executor._last_agent_state_snapshot = replace(
+        _snapshot(),
+        visible_frontier_ids=(frontier.frontier_id,),
+    )
+    executor._tool_explore_frontier = MagicMock(
+        return_value={
+            "ok": False,
+            "status": "no_path",
+            "frontier_id": frontier.frontier_id,
+        }
+    )
+
+    first = executor.handle_tool(
+        "explore_frontier",
+        {"frontier_id": frontier.frontier_id},
+    )
+    second = executor.handle_tool(
+        "explore_frontier",
+        {"frontier_id": frontier.frontier_id},
+    )
+
+    assert first["status"] == "no_path"
+    assert second["status"] == "ACTION_PROGRESS_SUPPRESSED"
+    assert second["disposition"] == "would_suppress_duplicate"
+    executor._tool_explore_frontier.assert_called_once()
+
+
+def test_shadow_omitted_frontier_records_actual_pre_motion_progress():
+    memory = _agent_memory()
+    memory.bind_episode_context(question_id=11, session_id="frontier-pre-state")
+    frontier = memory.world_evidence.update_frontier_tracks(
+        [{"centroid_xyz": (1.0, 0.0, 0.0), "cells": [(1, 1), (1, 2)]}],
+        step=1,
+    )[0]
+    pose = [np.array([0.0, 0.0, 0.0])]
+
+    def navigate(*_args, **_kwargs):
+        pose[0] = np.array([0.5, 0.0, 0.0])
+        return NavOutcome.PROGRESS
+
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "grounded_v2",
+                "action_progress_mode": "shadow",
+            }
+        },
+        graph_memory=memory,
+        voxel_map=None,
+        _vlm_frontier_choice=lambda *_args, **_kwargs: np.array(frontier.centroid_xyz),
+        navigate_to_target_pose=navigate,
+        _last_nav_attempt=None,
+    )
+    executor = AgenticEQAExecutor(agent, "Where is the can?", router=False)
+    executor._robot_xyt_world = lambda: pose[0].copy()
+    executor._tool_capture_and_update = MagicMock(
+        return_value={"ok": False, "status": "NO_NEW_OBS"},
+    )
+    executor._tool_look_around = MagicMock(
+        return_value={"ok": False, "capture": {"ok": False}},
+    )
+    executor._refresh_room_after_motion = MagicMock()
+    executor._save_frontier_pick_panel = MagicMock(return_value=None)
+
+    out = executor.handle_tool("explore_frontier", {"toward": "kitchen"})
+
+    assert out["frontier_id"] == frontier.frontier_id
+    entry = executor._action_history[-1]
+    assert entry.signature.target.stable_id == frontier.frontier_id
+    assert entry.progress_before.value("robot_pose_cell") == [0, 0]
+    assert entry.progress_after.value("robot_pose_cell") == [2, 0]
+    assert "motion" in entry.progress_reasons
+    assert entry.outcome_class == "progress"
+
+    agent.navigate_to_target_pose = lambda *_args, **_kwargs: NavOutcome.ABORTED_TIMEOUT
+    timeout = executor.handle_tool(
+        "explore_frontier",
+        {"frontier_id": frontier.frontier_id},
+    )
+    assert timeout["status"] == "aborted_timeout"
+    assert executor._action_history[-1].outcome_class == "transient"
+
+
+def test_shadow_traces_terminal_verify_decision_without_blocking_dispatch():
+    memory = _agent_memory()
+    memory.bind_episode_context(question_id=11, session_id="verify-shadow")
+    obs_id = memory.add_observation(
+        np.zeros((4, 4, 3), dtype=np.uint8),
+        [1.0, 2.0, 0.5],
+        ["kitchen island"],
+    )
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "grounded_v2",
+                "action_progress_mode": "shadow",
+            }
+        },
+        graph_memory=memory,
+        voxel_map=None,
+    )
+    executor = AgenticEQAExecutor(
+        agent,
+        "Where is the can?",
+        router=False,
+        collect_trace=True,
+    )
+    executor._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    executor._tool_verify_siglip = MagicMock(
+        return_value={"ok": True, "status": "ABSENT", "obs_id": obs_id},
+    )
+
+    executor.handle_tool("verify_siglip", {"obs_id": obs_id, "phrase": "can"})
+    executor.handle_tool("verify_siglip", {"obs_id": obs_id, "phrase": "can"})
+
+    assert executor._tool_verify_siglip.call_count == 2
+    dispatch_rows = [
+        row
+        for row in executor._trace_rows
+        if row.get("event") == "action_gate_dispatch" and row.get("tool") == "verify_siglip"
+    ]
+    assert dispatch_rows[-1]["decision"]["allowed"] is False
+    assert dispatch_rows[-1]["decision"]["disposition"] == "suppressed_terminal_view"
+
+
+@pytest.mark.parametrize(
+    "replay_case",
+    _replay()["stalled_action_replays"],
+    ids=lambda case: f"q{case['question_id']}-{case['source_run']}",
+)
+def test_q11_q12_stalled_replay_reopens_unused_approach_before_saturation(replay_case):
+    question_id = replay_case["question_id"]
+    question = replay_case["question"]
+    observation = replay_case["observation"]
+    stalled_attempt = replay_case["stalled_attempt"]
+    memory = _agent_memory()
+    memory.bind_episode_context(
+        question_id=question_id,
+        session_id=replay_case["session_id"],
+    )
+    obs_id = memory.add_observation(
+        np.zeros((4, 4, 3), dtype=np.uint8),
+        observation["xyz"],
+        observation["labels"],
+    )
+    _restore_replay_observation_identity(memory, obs_id, observation)
+    agent = SimpleNamespace(
+        parameters={
+            "eqa": {
+                "agentic_decision_policy": "grounded_v2",
+                "graph_evidence_mode": "agent",
+                "room_history_mode": "agent",
+                "attempt_ledger_mode": "agent",
+                "action_progress_mode": "enforce",
+            }
+        },
+        graph_memory=memory,
+        voxel_map=None,
+    )
+    executor = AgenticEQAExecutor(
+        agent,
+        question,
+        router=False,
+        trace_meta={
+            "qid": question_id,
+            "session_id": replay_case["session_id"],
+        },
+    )
+    executor._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    executor._hypotheses = [
+        NavHypothesis(
+            observation["labels"][0],
+            obs_id,
+            np.array(observation["xyz"]),
+            1.0,
+            "graph",
+        )
+    ]
+    first_signature = executor._action_signature(
+        "investigate",
+        {
+            "obs_id": obs_id,
+            "approach_index": stalled_attempt["approach_index"],
+        },
+    )
+    assert first_signature.target.stable_id == observation["place_id"]
+    token = executor._action_progress_token(first_signature)
+    executor._action_history = [
+        ActionHistoryEntry(
+            schema_version=1,
+            round_index=1,
+            selected_by="router",
+            signature=first_signature,
+            progress_before=token,
+            progress_after=token,
+            outcome_class="no_progress",
+            status=stalled_attempt["status"],
+            ok=False,
+        )
+    ]
+    executor._tried[obs_id] = f"{stalled_attempt['status']} verify={stalled_attempt['verify_status']}"
+    executor._place_inspect[obs_id] = PlaceInspectRecord(
+        investigate_count=1,
+        tried_approaches=[stalled_attempt["approach_index"]],
+        coverage=stalled_attempt["coverage"],
+        local_frontier_cells=stalled_attempt.get("local_frontier_cells", 0),
+    )
+
+    alternate = compile_agent_state(executor)
+    assert tuple(place.obs_adapter_id for place in alternate.places) == (obs_id,)
+    assert alternate.gate_decisions[0].allowed is True
+    assert alternate.gate_decisions[0].disposition == "allowed_alternate"
+
+    current = executor._action_progress_token(first_signature)
+    executor._action_history = [
+        ActionHistoryEntry(
+            schema_version=1,
+            round_index=1,
+            selected_by="router",
+            signature=first_signature,
+            progress_before=ProgressToken.build({"robot_pose_cell": (-1, 0)}),
+            progress_after=current,
+            outcome_class="progress",
+            status="progress",
+            ok=True,
+            progress_reasons=("motion",),
+        )
+    ]
+    continuation = compile_agent_state(executor)
+    assert continuation.gate_decisions[0].allowed is True
+    assert continuation.gate_decisions[0].disposition == "allowed_progress"
+    assert continuation.gate_decisions[0].equivalence_key == first_signature.equivalence_key
+
+    executor._place_inspect[obs_id].tried_approaches = [0, 1, 2, 3]
+    executor._action_history = []
+    for approach in range(4):
+        signature = executor._action_signature(
+            "investigate",
+            {"obs_id": obs_id, "approach_index": approach},
+        )
+        unchanged = executor._action_progress_token(signature)
+        executor._action_history.append(
+            ActionHistoryEntry(
+                schema_version=1,
+                round_index=approach + 1,
+                selected_by="router",
+                signature=signature,
+                progress_before=unchanged,
+                progress_after=unchanged,
+                outcome_class="no_progress",
+                status=stalled_attempt["status"],
+                ok=False,
+            )
+        )
+    saturated = compile_agent_state(executor)
+    assert saturated.places == ()
+    assert saturated.gate_decisions[0].disposition == "would_suppress_saturated"
+
+    view = memory.world_evidence.view_for_obs(obs_id)
+    assert view is not None
+    memory.world_evidence.views[view.view_id] = replace(
+        view,
+        revision=view.revision + 1,
+    )
+    reopened = compile_agent_state(executor)
+    assert tuple(place.obs_adapter_id for place in reopened.places) == (obs_id,)
+    assert reopened.gate_decisions[0].allowed is True
+    assert reopened.gate_decisions[0].disposition == "allowed_progress"
 
 
 def test_replay_fused_confirmation_survives_raw_absent_and_invalidates_on_revision():

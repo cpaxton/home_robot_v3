@@ -124,7 +124,7 @@ history `agent` held fixed. Only
 
 This is eight total episodes, slightly larger than the q11 canary but still an
 exploratory process test—not a paper accuracy estimate and not authorization
-for holdout/balanced-32 scale. The strict variant loader requires all eight axes;
+for holdout/balanced-32 scale. Variant schema v2 requires all nine fields;
 the manifest records effective values plus the config path and SHA-256 source.
 The two checked-in files differ only in variant ID, ledger mode, and description.
 
@@ -188,14 +188,45 @@ slower. Keep the switch documented and opt-in; do not scale from this n=4
 diagnostic. Frozen summary:
 `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
 
-The actual q11/q12 traces also clarify the remaining memory problem. The
-executor already marks a no-new-observation arrival as `STALLED_NAV_LOOP`,
-rejects a later exhausted selection as `NAV_LOOP_BLOCKED`, and redirects that
-rejected selection to `explore_frontier`. This guard is deterministic but
-post-selection and mostly observation-specific; the blocked card can still be
-proposed before the redirect, and the fallback does not reason about whether a
-frontier or verify action is equivalent to prior work or produced material new
-evidence. See [the concrete trace excerpts](../attempt_ledger.md#what-the-memory-trace-looks-like).
+The actual q11/q12 traces also isolated the remaining memory problem. The old
+executor marked a no-new-observation arrival as `STALLED_NAV_LOOP`, rejected a
+later selection as `NAV_LOOP_BLOCKED`, and redirected that rejected selection
+to generic exploration. The follow-up now uses typed semantic intent plus stable
+place/frontier/view identities and computes action equivalence/material progress
+before rendering the allowlist. `action_progress_mode=shadow` records the
+counterfactual decision without changing behavior; `enforce` removes an
+unchanged terminal/no-progress variant while preserving unused approaches, new
+views/evidence/geometry, and partial motion. This first policy is explicitly for
+mostly static HM-EQA scenes, not a permanent failed-action blacklist; dynamic
+change/TTL/staleness invalidation remains future work. See
+[the policy and concrete trace format](../attempt_ledger.md#static-world-action-progress-policy).
+
+### Action-progress shadow vs enforce (2026-08-23)
+
+Managed pair on `6,11,12,47` after CPU gates, with `attempt_ledger_mode=agent`
+held fixed and only `action_progress_mode` changing. Both jobs completed
+native-clean with validated 4-unit `DONE`.
+
+| QID | Shadow letter; steps / attempts | Enforce letter; steps / attempts | Paired effect |
+|-----|----------------------------------|----------------------------------|---------------|
+| 6 | B ✓; 21 / 2 | B ✓; 21 / 2 | unchanged |
+| 11 | A ✗; 69 / 20 | A ✗; 69 / 20 | unchanged miss (gold D) |
+| 12 | D ✓; 29 / 5 | D ✓; 61 / 13 | same letter, +32 steps / +8 attempts |
+| 47 | A ✓; 22 / 4 | D ✗; 22 / 4 | **regression** |
+
+Aggregate: shadow **3/4**, mean planning steps **35.25**, ledger attempts **31**;
+enforce **2/4**, mean steps **43.25**, attempts **39**. Shadow matched the prior
+action-history shadow baseline on letters and mean steps. Gate traces were present
+in both runs (`action_gate_dispatch` events with manifest-matching
+`action_progress_mode`), but this slice recorded **zero explicit suppress**
+dispositions; the enforce regression is therefore not explained by visible
+duplicate blocking alone and likely mixes trajectory variance (q47) with extra
+dwell (q12).
+
+**Verdict:** merge the tooling with `action_progress_mode=off` default and
+`shadow` as the diagnostic mode. Do **not** enable `enforce` or scale it. Frozen
+summary:
+`paper/data/hmeqa_agentic_h2h/action_progress_pair_20260823.json`.
 
 Per-question findings:
 
@@ -261,7 +292,7 @@ The next GPU action is not a scale run. After the two CPU integrity commits are
 clean, run one fresh q11 A2 canary behind a detached 12-GiB EGL safe-start. The
 canary passes only when all of these conditions hold:
 
-1. The episode has a schema-v3 manifest plus a validated atomic
+1. The episode has a schema-v4 manifest plus a validated atomic
    `COMPLETE.json`; aggregate/DONE counts come from completion markers rather
    than JSONL file existence.
 2. The staged diagnostic snapshot passes the frozen artifact profile and its
@@ -394,7 +425,8 @@ write both JSON and CSV.
 | Clean q11 repeat | complete, failed capability gate | `gre_q11_a2_clean_81a2c689_20260823_003735`: 0/1; native-clean, but eight-round budget fallback after no present/answerable view |
 | PR #115 integrity q11 | complete, failed capability gate | job `20260823_081229_66d6e3`, OUT `gre_q11_a2_integrity_b91059e5_20260823_081204`: two native-clean attempts, both A vs D with no direct evidence; completion correctly stayed incomplete, but first exposed a best-effort object-crop policy bug |
 | Recovery correctness | CPU integrity gate complete | Managed lifecycle/completion and grounded-state/replay contracts pass 141 lifecycle, 182 agent-regression, 108 graph-memory/evidence, and 11 focused state/metadata tests; the separate full no-sim baseline still has three known unchanged map-rendering failures |
-| Next GPU work | blocked | Diagnose why grounded q11 repeatedly misses the kitchen trash-can evidence; do not launch the wider matrix until a CPU-testable search/state fix has a clean direct-evidence canary |
+| Semantic action progress | CPU implementation complete; GPU comparison pending | Typed state v3 + static `off\|shadow\|enforce` policy; exact q11/q12 trace-derived regressions preserve unused approaches and reopen saturation after target change; manifest v4 freezes the axis and completion checks its diagnostics |
+| Next GPU work | pending CPU gate | Run the managed `6,11,12,47` progress-shadow vs progress-enforce pair; do not scale unless capability and efficiency improve without changing the static-world caveat |
 
 ## Related
 

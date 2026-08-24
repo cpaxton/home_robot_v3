@@ -128,44 +128,6 @@ def test_jobs_run_id_from_output():
     assert _jobs_run_id_from_output("only-id\n") == "only-id"
 
 
-def test_parse_job_start_epoch():
-    import time as _time
-
-    from emet.cli import _parse_job_start_epoch
-
-    assert _parse_job_start_epoch(None, None) is None
-    now = _time.time()
-    delay = _parse_job_start_epoch(30, None)
-    assert delay is not None and 1790 < delay - now < 1810
-
-    import datetime
-
-    future = datetime.datetime.now() + datetime.timedelta(hours=4)
-    at = _parse_job_start_epoch(None, future.strftime("%Y-%m-%d %H:%M"))
-    assert at is not None and abs(at - future.timestamp()) < 120
-
-    try:
-        _parse_job_start_epoch(10, "2030-01-01 00:00")
-    except ValueError as exc:
-        assert "mutually exclusive" in str(exc)
-    else:
-        raise AssertionError("expected mutual-exclusion error")
-
-    try:
-        _parse_job_start_epoch(None, "2020-01-01 00:00")
-    except ValueError as exc:
-        assert "not in the future" in str(exc)
-    else:
-        raise AssertionError("expected past-time error")
-
-    try:
-        _parse_job_start_epoch(None, "not-a-time")
-    except ValueError as exc:
-        assert "cannot parse" in str(exc)
-    else:
-        raise AssertionError("expected parse error")
-
-
 def test_hmeqa_group_help():
     """emet hmeqa --help lists H2H helpers."""
     result = subprocess.run(
@@ -246,6 +208,7 @@ def test_hmeqa_resume_help_lists_frozen_variant_flags():
         "--episode-timeout",
         "--max-planning-steps",
         "--max-movement-step",
+        "--action-progress-mode",
     ):
         assert option in result.stdout
 
@@ -277,6 +240,7 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     assert frozen["room_history_mode"] == "off"
     assert frozen["investigate_stamp"] is False
     assert frozen["attempt_ledger_mode"] == "off"
+    assert frozen["action_progress_mode"] == "off"
     assert frozen["variant_id"] == "legacy"
     assert frozen["use_hm3d_semantics"] is False
     assert frozen["use_enrich_labels"] is False
@@ -291,7 +255,7 @@ def test_hmeqa_h2h_loads_variant_config_beneath_explicit_flags(monkeypatch, tmp_
     config.write_text(
         """
 schema: emet.hmeqa.variant
-schema_version: 1
+schema_version: 2
 variant:
   id: action-history-shadow-v1
   agentic_decision_policy: grounded_v2
@@ -301,6 +265,7 @@ variant:
   room_target_hints: true
   investigate_stamp: false
   attempt_ledger_mode: shadow
+  action_progress_mode: "shadow"
 """.lstrip(),
         encoding="utf-8",
     )
@@ -327,6 +292,7 @@ variant:
     assert frozen["graph_evidence_mode"] == "agent"
     assert frozen["room_history_mode"] == "agent"
     assert frozen["attempt_ledger_mode"] == "agent"
+    assert frozen["action_progress_mode"] == "shadow"
     assert frozen["variant_id"] == "action-history-shadow-v1"
     sources = captured["config_sources"]
     assert sources["variant.agentic_decision_policy"].startswith("variant_config:")
@@ -345,6 +311,30 @@ variant:
     )
     assert resume_result.exit_code == 1
     assert "--variant-config is first-launch only" in resume_result.output
+
+
+def test_hmeqa_h2h_rejects_progress_mode_with_legacy_policy(tmp_path):
+    from click.testing import CliRunner
+
+    from emet.cli import main
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "hmeqa",
+            "h2h",
+            str(tmp_path / "out"),
+            "--ids",
+            "11",
+            "--decision-policy",
+            "legacy",
+            "--action-progress-mode",
+            "shadow",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "requires agentic_decision_policy=grounded_v2" in result.output
 
 
 def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
@@ -371,6 +361,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
         room_target_hints=False,
         investigate_stamp=True,
         attempt_ledger_mode="shadow",
+        action_progress_mode="enforce",
         variant_id="grounded-shadow-r1",
         eqa_answer_max_new_tokens=512,
         episode_timeout_seconds=3600,
@@ -424,6 +415,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
     assert frozen["room_target_hints"] is False
     assert frozen["investigate_stamp"] is True
     assert frozen["attempt_ledger_mode"] == "shadow"
+    assert frozen["action_progress_mode"] == "enforce"
     assert frozen["variant_id"] == "grounded-shadow-r1"
     assert frozen["eqa_answer_max_new_tokens"] == 512
     assert frozen["episode_timeout"] == 3600
@@ -798,83 +790,6 @@ def test_jobs_run_spawn_failure_leaves_no_phantom_record(tmp_path, monkeypatch):
     assert not jobs_dir.exists() or not list(jobs_dir.glob("*.json"))
 
 
-def test_jobs_run_wrapper_has_gpu_singleflight_lock_when_gpu_exclusive(tmp_path):
-    """--need-mib (gpu-exclusive default) wraps the command in a shared flock so
-    concurrent experiments across checkouts can never overlap on one GPU."""
-    import os
-
-    jobs_dir = tmp_path / "jobs"
-    out_dir = tmp_path / "out"
-    env = os.environ.copy()
-    env["EMET_JOBS_DIR"] = str(jobs_dir)
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "emet.cli",
-            "jobs",
-            "run",
-            "--name",
-            "lock-guard",
-            "--out-dir",
-            str(out_dir),
-            "--need-mib",
-            "12000",
-            "--",
-            sys.executable,
-            "-c",
-            "print('ok')",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=20,
-    )
-    assert result.returncode == 0, result.stderr
-    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
-    assert "flock -w" in wrapper, wrapper
-    assert "gpu.lock" in wrapper, wrapper
-    assert 'exec 9>"' in wrapper, wrapper
-    assert 'jobs update "$JOB_ID" --status failed --error "gpu lock timeout' in wrapper, wrapper
-
-
-def test_jobs_run_wrapper_skips_gpu_lock_with_no_gpu_exclusive(tmp_path):
-    """--no-gpu-exclusive must not add the flock guard (non-GPU jobs stay parallel)."""
-    import os
-
-    jobs_dir = tmp_path / "jobs"
-    out_dir = tmp_path / "out"
-    env = os.environ.copy()
-    env["EMET_JOBS_DIR"] = str(jobs_dir)
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "emet.cli",
-            "jobs",
-            "run",
-            "--name",
-            "no-lock",
-            "--out-dir",
-            str(out_dir),
-            "--need-mib",
-            "12000",
-            "--no-gpu-exclusive",
-            "--",
-            sys.executable,
-            "-c",
-            "print('ok')",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=20,
-    )
-    assert result.returncode == 0, result.stderr
-    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
-    assert "flock -w" not in wrapper, wrapper
-
-
 def test_jobs_update_help_lists_description():
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "jobs", "update", "--help"],
@@ -1056,6 +971,20 @@ def test_install_full_help():
     assert result.returncode == 0
     assert "install" in result.stdout.lower()
     assert "--profile" in result.stdout
+    assert "--paper" in result.stdout
+    assert "--no-paper" in result.stdout
+
+
+def test_install_paper_help():
+    """emet install paper --help describes the local LaTeX toolchain."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "install", "paper", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "latexmk" in result.stdout.lower()
+    assert "--yes" in result.stdout
 
 
 def test_install_menu_help():

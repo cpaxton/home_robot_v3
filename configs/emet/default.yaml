@@ -27,6 +27,9 @@ mapping:
     # off=no durable rows/history; shadow=collect but hide; agent=expose grounded
     # recent outcomes, loop flags, per-place summaries, and global attempt rows.
     attempt_ledger_mode: "off"
+    # Static-benchmark retry policy: shadow=measure only; enforce=suppress an
+    # equivalent no-progress action while its target-local state is unchanged.
+    action_progress_mode: "off"
     variant_id: "legacy"
 
 embodied_agent: {}
