@@ -70,6 +70,8 @@ elif command -v docker >/dev/null 2>&1; then
     run_docker_latexmk
 else
     echo "latexmk not found. Install TeX or Docker:" >&2
+    echo "  uv run emet install paper -y" >&2
+    echo "  # equivalent apt command:" >&2
     echo "  sudo apt install texlive-latex-extra texlive-bibtex-extra latexmk" >&2
     echo "  # or use Docker: ./paper/build.sh (auto-detects docker)" >&2
     exit 1

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -87,10 +88,14 @@ def ensure_apt_package(
 ) -> int:
     """Install *tool_key* via apt if missing. *tool_key* maps to an apt package name in pyproject."""
     packages = _load_system_packages()
-    apt_name = packages.get(tool_key)
-    if not apt_name:
+    apt_spec = packages.get(tool_key)
+    if not apt_spec:
         known = ", ".join(sorted(packages)) or "(none)"
         print(f"Unknown system tool {tool_key!r}. Declared in pyproject: {known}", file=sys.stderr)
+        return 1
+    apt_names = shlex.split(apt_spec)
+    if not apt_names:
+        print(f"System tool {tool_key!r} has an empty apt package declaration.", file=sys.stderr)
         return 1
 
     if shutil.which(tool_key):
@@ -104,12 +109,12 @@ def ensure_apt_package(
     if shutil.which("apt-get") is None:
         print(
             f"{tool_key} not found and apt-get is unavailable. "
-            f"Install the {apt_name!r} package for your OS (see https://cli.github.com/).",
+            f"Install these packages for your OS: {' '.join(apt_names)}.",
             file=sys.stderr,
         )
         return 1
 
-    cmd = ["sudo", "apt-get", "install", "-y", apt_name]
+    cmd = ["sudo", "apt-get", "install", "-y", *apt_names]
     if not non_interactive:
         print(f"Will run: {' '.join(cmd)}")
         answer = input("Continue? [y/N] ").strip().lower()
@@ -117,7 +122,7 @@ def ensure_apt_package(
             print("Aborted.")
             return 1
 
-    print(f"Installing {apt_name!r} ({tool_key})...")
+    print(f"Installing {' '.join(apt_names)} ({tool_key})...")
     r = subprocess.call(["sudo", "apt-get", "update"])
     if r != 0:
         print("apt-get update failed (continuing anyway).", file=sys.stderr)
@@ -130,10 +135,12 @@ def ensure_apt_package(
             os.environ["PATH"] = f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}"
         return r if r != 0 else (0 if shutil.which(tool_key) else 1)
     if r != 0:
-        print(f"apt-get install {apt_name!r} failed with exit {r}.", file=sys.stderr)
+        print(f"apt-get install {' '.join(apt_names)} failed with exit {r}.", file=sys.stderr)
         return r
     if shutil.which(tool_key):
-        print(f"Installed {tool_key}. Run: {tool_key} auth login")
+        print(f"Installed {tool_key}.")
+        if tool_key == "gh":
+            print("Authenticate once: gh auth login")
         return 0
     print(f"Install finished but {tool_key!r} is still not on PATH.", file=sys.stderr)
     return 1
