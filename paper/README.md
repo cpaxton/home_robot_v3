@@ -4,11 +4,17 @@ LaTeX scaffold for the Dynagraph paper (CoRL 2026 submission format).
 
 ## Build
 
-From the repo root:
+Install the local Ubuntu toolchain once, then build from the repo root:
 
 ```bash
+uv run emet install paper -y
 ./paper/build.sh
 ```
+
+The same optional toolchain is available during full setup with
+`./install.sh --paper -y` (or `--all`). It installs `latexmk`,
+`texlive-latex-extra`, and `texlive-bibtex-extra`; the normal full profile does
+not install TeX Live because it is large.
 
 Or from this directory:
 
@@ -22,7 +28,9 @@ Remove auxiliary files:
 ./paper/build.sh --clean
 ```
 
-Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extra` on Ubuntu). If TeX is not installed locally, `./build.sh` falls back to **Docker** (`texlive/texlive:latest`) when `docker` is on your PATH.
+If TeX is not installed locally, `build.sh` falls back to **Docker**
+(`texlive/texlive:latest`) when `docker` is on your PATH. The first Docker build
+must download that image; generated files remain owned by the invoking user.
 
 ## Layout
 

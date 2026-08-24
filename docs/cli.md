@@ -699,7 +699,8 @@ Install submodules, simulation extras, or full setup.
 | `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
 | `sim` | Install Robocasa and robosuite (clones into third_party) |
 | `robocasa` | Same as `sim` |
-| `menu` | Interactive text UI to manage sub-assets (submodules, sim, kitchen assets, MolmoSpaces) |
+| `paper` | Install `latexmk` and the TeX Live packages used by `paper/main.tex` (Ubuntu/apt) |
+| `menu` | Interactive UI to manage sub-assets and optional paper tooling |
 | `full` | Run full install (./install.sh) |
 | `pre-commit` | Install pre-commit hooks (ruff, mypy, etc.) |
 
@@ -716,23 +717,33 @@ Install submodules, simulation extras, or full setup.
 - `--sim` — Include simulation extras
 - `--cpu` — CPU-only (skip SAM2)
 - `--no-sam2` — Skip Segment Anything 2
+- `--paper` / `--no-paper` — Include paper tooling, or omit it from `--all`
+- `--all` — Include simulation, MolmoSpaces, dynamem, and paper tooling
 
 **Examples:**
 ```bash
 emet install menu                   # Interactive menu: status and install sub-assets
+emet install paper -y               # latexmk + TeX Live for ./paper/build.sh
 emet install submodules             # Init and update submodules
 emet install sim                    # Install Robocasa, robosuite (third_party)
 emet install robocasa               # Same as install sim
 emet install sim -d -a              # With assets and force-overwrite macros
-emet install full                   # Full install (uv, deps, sync; sim opt-in)
-emet install full -y --sim        # Non-interactive + simulation (Robocasa)
-emet install full -y --profile full   # Legacy: enable sim without --sim
+emet install full                   # Default full profile (sim + MolmoSpaces)
+emet install full -y --paper         # Full profile plus local paper toolchain
+emet install full -y --all           # All bundles, including paper tooling
+emet install full -y --sim           # Explicit simulation (Robocasa)
+emet install full -y --profile full  # Explicit full profile
 emet install full -y --profile jetson # Jetson Orin lean install (see docs/jetson.md)
 emet install full --cpu             # CPU-only (no SAM2)
 emet install menu                   # Rich plan wizard (needs dev extra / rich)
 emet install pre-commit             # Install git hooks (requires emet sync --dev)
 emet install pre-commit --run       # Install and run on all files
 ```
+
+`emet install paper` uses `apt` and may request `sudo`; it installs `latexmk`,
+`texlive-latex-extra`, and `texlive-bibtex-extra`. The toolchain is optional in
+the normal full profile because TeX Live is large. `./paper/build.sh` falls back
+to `texlive/texlive:latest` when Docker is available.
 
 Jetson Orin / Tegra: `./scripts/install_jetson.sh -y` or `emet install full -y --profile jetson` (no sim/SAM2/Molmo; Python 3.10 via uv). Details: [jetson.md](jetson.md).
 

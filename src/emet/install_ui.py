@@ -22,6 +22,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from emet.dev_system_packages import ensure_apt_package
+
 
 @dataclass
 class WizardPlan:
@@ -33,6 +35,7 @@ class WizardPlan:
     uv_sim: bool = False
     install_simulation: bool = False
     molmospaces: bool = False
+    paper: bool = False
 
     def __post_init__(self) -> None:
         if self.install_simulation:
@@ -250,12 +253,32 @@ def _check_molmospaces(root: Path) -> AssetStatus:
     )
 
 
+def _check_paper(_: Path) -> AssetStatus:
+    latexmk = shutil.which("latexmk")
+    if latexmk is None:
+        return AssetStatus(
+            id="paper",
+            name="Paper toolchain (latexmk + TeX Live)",
+            description="Builds paper/main.tex locally; optional Docker fallback remains available.",
+            status="missing",
+            detail="Run: emet install paper",
+        )
+    return AssetStatus(
+        id="paper",
+        name="Paper toolchain (latexmk + TeX Live)",
+        description="Builds paper/main.tex locally.",
+        status="installed",
+        detail=latexmk,
+    )
+
+
 def _get_all_statuses(root: Path) -> list[AssetStatus]:
     return [
         _check_submodules(root),
         _check_sim(root),
         _check_kitchen_assets(root),
         _check_molmospaces(root),
+        _check_paper(root),
     ]
 
 
@@ -328,6 +351,11 @@ def _execute_wizard_plan(root: Path, plan: WizardPlan) -> int:
             _molmospaces_pip_install_chain(py_molmo, root, use_uv)
         else:
             print("  .venv-molmospaces already looks complete.")
+    if plan.paper:
+        print("\n--- Paper toolchain (latexmk + TeX Live) ---")
+        code = ensure_apt_package("latexmk", non_interactive=True)
+        if code != 0:
+            return code
     return 0
 
 
@@ -348,8 +376,8 @@ def _run_rich_plan_wizard(root: Path) -> bool | None:
             "[bold cyan]Emet install planner[/]\n"
             "[dim]Defaults avoid multi‑GB Robocasa assets. Enable simulation only if you need "
             "`emet serve mujoco` / robocasa.[/dim]\n"
-            "[dim]Shell install: [bold]./install.sh[/bold] (standard=no sim) or "
-            "[bold]EMET_INSTALL_PROFILE=full ./install.sh -y[/bold] for legacy sim-by-default.[/dim]",
+            "[dim]Shell install: [bold]./install.sh[/bold] defaults to the full simulation profile; "
+            "use [bold]./install.sh --profile=standard[/bold] for no simulation.[/dim]",
             border_style="cyan",
         )
     )
@@ -373,6 +401,10 @@ def _run_rich_plan_wizard(root: Path) -> bool | None:
         "6) Create [bold].venv-molmospaces[/bold] (MolmoSpaces; Python 3.11+ separate venv)?",
         default=False,
     )
+    plan.paper = Confirm.ask(
+        "7) Install [bold]latexmk + TeX Live[/bold] to build paper/main.tex locally?",
+        default=False,
+    )
     if plan.install_simulation:
         plan.uv_sim = True
 
@@ -387,6 +419,7 @@ def _run_rich_plan_wizard(root: Path) -> bool | None:
         ("uv sim", "yes" if plan.uv_sim else "no", "mujoco pip extra"),
         ("install_simulation.sh", "yes" if plan.install_simulation else "no", "robosuite + robocasa"),
         ("MolmoSpaces venv", "yes" if plan.molmospaces else "no", ".venv-molmospaces"),
+        ("Paper toolchain", "yes" if plan.paper else "no", "latexmk + TeX Live"),
     ]
     for r in rows:
         table.add_row(*r)
@@ -460,13 +493,13 @@ def _legacy_asset_menu_loop(root: Path) -> int:
                 print(f"      → {s.detail}")
             print()
 
-        print("  A. Run all (submodules, sim, kitchen assets, MolmoSpaces – with prompts)")
+        print("  A. Run all (submodules, sim, kitchen assets, MolmoSpaces, paper tooling – with prompts)")
         print("  S. Sync (uv: full defaults or base-only)")
         print("  Q. Quit")
         print()
 
         try:
-            choice = input("Choice (1–4, A, S, Q) [Q]: ").strip().upper() or "Q"
+            choice = input(f"Choice (1–{len(statuses)}, A, S, Q) [Q]: ").strip().upper() or "Q"
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
@@ -505,6 +538,8 @@ def _legacy_asset_menu_loop(root: Path) -> int:
                 _molmospaces_pip_install_chain(py_molmo, root, use_uv)
             else:
                 print("  .venv-molmospaces already complete.")
+            print("\n--- Paper toolchain (latexmk + TeX Live) ---")
+            ensure_apt_package("latexmk")
             print("\nDone. Run uv sync from the repo root if you have not already.")
             continue
 
@@ -558,6 +593,8 @@ def _legacy_asset_menu_loop(root: Path) -> int:
                 "MLSPACES_CACHE_DIR for extracted archives (e.g. ~/.cache/molmospaces/resource_cache); "
                 "they must differ (upstream ResourceManager)."
             )
+        elif s.id == "paper":
+            ensure_apt_package("latexmk")
 
         print()
         input("Press Enter to return to menu...")

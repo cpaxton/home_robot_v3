@@ -1056,6 +1056,20 @@ def test_install_full_help():
     assert result.returncode == 0
     assert "install" in result.stdout.lower()
     assert "--profile" in result.stdout
+    assert "--paper" in result.stdout
+    assert "--no-paper" in result.stdout
+
+
+def test_install_paper_help():
+    """emet install paper --help describes the local LaTeX toolchain."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "install", "paper", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "latexmk" in result.stdout.lower()
+    assert "--yes" in result.stdout
 
 
 def test_install_menu_help():

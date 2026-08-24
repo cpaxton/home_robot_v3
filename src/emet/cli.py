@@ -4705,7 +4705,7 @@ def install(ctx: click.Context) -> None:
 
 
 @install.command("gh", short_help="Install GitHub CLI (apt)")
-@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Run apt-get without prompting")
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip confirmation; sudo may still prompt")
 def install_gh(non_interactive: bool) -> None:
     """Install the GitHub CLI (``gh``) for pull requests and issues.
 
@@ -4718,6 +4718,23 @@ def install_gh(non_interactive: bool) -> None:
     from emet.dev_system_packages import ensure_apt_package
 
     sys.exit(ensure_apt_package("gh", non_interactive=non_interactive))
+
+
+@install.command("paper", short_help="Install LaTeX paper toolchain (apt)")
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip confirmation; sudo may still prompt")
+def install_paper(non_interactive: bool) -> None:
+    """Install ``latexmk`` and the TeX Live packages used by ``paper/main.tex``.
+
+    Package names are declared in ``pyproject.toml`` under
+    ``[tool.emet.system-packages]``.
+
+    Examples:
+      emet install paper -y
+      ./paper/build.sh
+    """
+    from emet.dev_system_packages import ensure_apt_package
+
+    sys.exit(ensure_apt_package("latexmk", non_interactive=non_interactive))
 
 
 @install.command("submodules", short_help="Init and update git submodules")
@@ -4892,8 +4909,8 @@ def install_menu(text_only: bool) -> None:
     default=None,
     help=(
         "Install profile forwarded to install.sh / EMET_INSTALL_PROFILE: "
-        "standard (default)=no sim unless --sim; full=legacy sim-on-by-default; "
-        "minimal=same as standard today; jetson=Orin/Tegra lean (MuJoCo pip + dev; no SAM2/Molmo/Robocasa)."
+        "full (default)=sim-on; standard/minimal=no sim unless --sim; "
+        "jetson=Orin/Tegra lean (MuJoCo pip + dev; no SAM2/Molmo/Robocasa)."
     ),
 )
 @click.option("--sim", is_flag=True, help="Include simulation extras")
@@ -4910,11 +4927,13 @@ def install_menu(text_only: bool) -> None:
     is_flag=True,
     help="Skip MolmoSpaces wrapper even when sim installs (forwards to install.sh --no-molmospaces).",
 )
+@click.option("--paper", is_flag=True, help="Install latexmk and the TeX Live packages used to build the paper")
+@click.option("--no-paper", is_flag=True, help="Skip paper tooling when combined with --all")
 @click.option(
     "--all",
     "install_all",
     is_flag=True,
-    help="Same as install.sh --all (includes MolmoSpaces among other bundles)",
+    help="Same as install.sh --all (includes simulation, MolmoSpaces, and paper tooling)",
 )
 def install_full(
     yes: bool,
@@ -4924,16 +4943,16 @@ def install_full(
     no_sam2: bool,
     molmospaces: bool,
     no_molmospaces: bool,
+    paper: bool,
+    no_paper: bool,
     install_all: bool,
 ) -> None:
     """Run full install (./install.sh).
 
     Installs uv, system deps, git-lfs, and syncs dependencies.
 
-    By default the shell script does **not** install Robocasa/simulation; pass ``--sim`` or ``--all``,
-    or set ``EMET_INSTALL_PROFILE=full`` for the old behavior. With sim enabled, ``install.sh`` also
-    creates ``.venv-molmospaces`` when ``packages/emet_molmospaces`` is present unless you pass
-    ``--no-molmospaces``. ``-y`` does not enable MolmoSpaces by itself — pass ``--molmospaces`` or ``--all``.
+    The default ``full`` profile installs Robocasa/simulation and the MolmoSpaces
+    wrapper. Paper tooling remains optional; pass ``--paper`` or ``--all``.
 
     Examples:
       emet install full
@@ -4942,6 +4961,7 @@ def install_full(
       emet install full -y --profile jetson
       emet install full -y --no-molmospaces
       emet install full -y --molmospaces
+      emet install full -y --paper
       emet install full -y --all
       emet install full --cpu
     """
@@ -4967,6 +4987,10 @@ def install_full(
         args.append("--molmospaces")
     if no_molmospaces:
         args.append("--no-molmospaces")
+    if paper:
+        args.append("--paper")
+    if no_paper:
+        args.append("--no-paper")
     env = os.environ.copy()
     if profile:
         env["EMET_INSTALL_PROFILE"] = profile.lower()
