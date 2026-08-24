@@ -250,3 +250,62 @@ def test_query_answer_pins_count_candidate_views():
     assert mem.last_eqa_obs_ids[0] == 1
     assert any(isinstance(c, str) and "GRAPH_COUNT:" in c and "views to look at" in c for c in captured["cmds"])
 
+
+def test_count_hint_matches_close_look_name_not_just_detector():
+    """YoloE 'lamp' + Qwen 'table lamp' must still FIND the view for a table-lamp count."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 0.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="lamp:1",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([9.0, 9.0, 0.5]),
+        ["chair"],
+        countable_instance=True,
+        identity_key="chair:1",
+    )
+    mem.record_close_look_label(1, "table lamp")
+    q = "How many table lamps are there in the bedroom? A) Three B) Four C) One D) Two. Answer:"
+    nodes, target = mem._count_candidate_nodes(q)
+    assert target is not None
+    assert [int(n.obs_id) for n in nodes] == [1]
+    hint = mem._graph_count_hint(q)
+    assert "[Image 1]" in hint
+    assert "GRAPH_COUNT: 1" not in hint
+
+
+def test_query_answer_pins_location_object_view_ahead_of_landmark():
+    """q47-style: fridge landmark must not steal Image 1 from the clock view."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured: dict = {}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return (
+            "reasoning: Image 1 shows the clock above the sink.\n"
+            "answer: Above the sink\nconfidence: true\naction:\nconfidence_reasoning: ok"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([2.9, -0.4, 1.0]), ["clock"], countable_instance=True)
+    mem.add_observation(rgb, np.array([3.1, -0.2, 1.0]), ["refrigerator"])
+    mem._relevant_phrases = ["wall clock"]
+    mem._relevant_objects = ["clock"]
+    mem._select_relevant_obs_ids = lambda **_k: [2]  # type: ignore[method-assign]
+    q = (
+        "I'm trying to remember where I placed the wall clock. Where it is in the kitchen? "
+        "A) Above the sink B) Next to the refrigerator C) Near the stove "
+        "D) On the wall opposite the windows. Answer:"
+    )
+    mem.query_answer(q)
+    assert mem.last_eqa_obs_ids[0] == 1

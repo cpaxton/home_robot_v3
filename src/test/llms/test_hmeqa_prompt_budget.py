@@ -51,7 +51,8 @@ def test_hmeqa_prompt_treats_graph_as_finder_not_answer():
     lowered = HMEQA_EQA_PROMPT.lower()
     assert "not the answer" in lowered
     assert "never answer a count by counting" in lowered
-    assert "scene_graph labels do not decide the answer" in lowered
+    assert "scene_graph labels" in lowered and "do not decide the answer" in lowered
+    assert "never answer where from" in lowered
     assert "look" in lowered and "image n" in lowered
 
 

@@ -34,8 +34,9 @@ _HMEQA_HEADER = """
         SCENE_GRAPH, CONFIRMED_MEMORY, and GRAPH_COUNT are an index of views to inspect,
         not the answer. Use them to choose which Image N to look at (or navigate to).
         Identify and count from attached RGB. Never answer a count by counting SCENE_GRAPH
-        nodes, CONFIRMED_MEMORY rows, or GRAPH_COUNT list length. Detector class names are
-        proposals for WHERE to look.
+        nodes, CONFIRMED_MEMORY rows, or GRAPH_COUNT list length. Never answer WHERE from a
+        SCENE_GRAPH node index or xyz — look at the candidate Image N. Detector class names
+        are proposals for WHERE to look.
 """
 
 _HMEQA_MCQ_EXAMPLE = """
@@ -62,7 +63,7 @@ _HMEQA_MCQ_EXAMPLE = """
                 SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
                 IMAGE: <2 RGB frames>
             Output:
-                {"reasoning": "Image 2 shows the basket next to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "The basket is visible next to the armchairs in Image 2."}
+                {"reasoning": "Image 2 shows the basket next to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "Visible next to the armchairs in Image 2, not from Node 7's coordinates."}
 
         Example (count — look at the listed views; do not copy a graph count):
             Input:
@@ -80,7 +81,7 @@ _HMEQA_FORMAT_OVERRIDE = """
         1. Do NOT write a caption field or Caption: block. Your first token continues a JSON object.
         2. "reasoning" is at most three sentences. Do not re-list objects from the attached RGB
            frames, and do not copy scene-graph coordinates. Cite an Image N when that frame
-           shows the evidence. SCENE_GRAPH labels do not decide the answer.
+           shows the evidence. SCENE_GRAPH labels and node indices do not decide the answer.
         3. "answer" is the exact semantic option text without an A/B/C/D label.
            Emit it before elaborating further and never leave it blank.
         4. "confidence" is true or false. "action" is an image id or "". "confidence_reasoning"

@@ -560,6 +560,18 @@ def node_display_name(node: GraphNode, *, max_len: int = 120) -> str:
     return s if len(s) <= max_len else s[: max_len - 3] + "..."
 
 
+def finder_label_texts(node: GraphNode) -> list[str]:
+    """Close-look Qwen name first, then detector primary — texts used to FIND views."""
+    texts: list[str] = []
+    looked = str(getattr(node, "close_look_label", None) or "").strip()
+    if looked:
+        texts.append(looked)
+    primary = str(node.labels[0]).strip() if getattr(node, "labels", None) else ""
+    if primary and primary.lower() not in {t.lower() for t in texts}:
+        texts.append(primary)
+    return texts
+
+
 def format_graph_node_candidates(nodes: list[GraphNode], *, max_nodes: int = 6) -> str:
     """Point at views; use a close-look Qwen label when we have one, never YoloE vocab."""
     bits: list[str] = []
@@ -5062,9 +5074,10 @@ class GraphEQAMemory:
             "LOCATION_MCQ: The options are places, not yes/no. When the question asks "
             "'did you see … anywhere?', answer with the matching location option text for "
             "WHERE the object was observed. Do not output its A/B/C/D label. "
-            "Prefer landmarks visible in the attached images; "
-            "treat WORKING_MEMORY / CONFIRMED_MEMORY as hints to verify, not as a final "
-            "answer if images disagree. Never answer yes/no on answer:.\n"
+            "Prefer landmarks visible in the attached images of the object; "
+            "treat WORKING_MEMORY / CONFIRMED_MEMORY / SCENE_GRAPH as views to look at, "
+            "not as the WHERE answer. Do not cite Node N or xyz as the location. "
+            "Never answer yes/no on answer:.\n"
             f"{lines}"
         )
 
@@ -5734,10 +5747,10 @@ class GraphEQAMemory:
                 or not node.countable_instance
             ):
                 continue
-            label_text = str(node.labels[0]).strip() if node.labels else ""
-            if not label_text:
+            texts = finder_label_texts(node)
+            if not texts:
                 continue
-            if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
+            if any(_count_phrase_matches(phrase, text) for phrase in target_phrases for text in texts):
                 matches.append(node)
         if not matches:
             return [], target
@@ -5779,6 +5792,39 @@ class GraphEQAMemory:
             f"{scope_note} Count from attached images after looking; "
             "do not use this list length as the answer."
         )
+
+    def _location_finder_nodes(self) -> list[GraphNode]:
+        """Object nodes matching the question phrase (close-look name or detector primary)."""
+        phrases = [p for p in self._confirmed_memory_phrases() if str(p).strip()]
+        if not phrases:
+            return []
+        matches: list[GraphNode] = []
+        seen_obs: set[int] = set()
+        for node in self._nodes:
+            if node.is_frontier or node.is_viewpoint or is_ground_truth_node(node):
+                continue
+            oid = int(node.obs_id)
+            if oid in seen_obs:
+                continue
+            texts = finder_label_texts(node)
+            if not texts:
+                continue
+            hit = False
+            for phrase in phrases:
+                tokens = tuple(_strip_count_wrappers(_count_tokens(phrase)))
+                for text in texts:
+                    if label_matches_relevant_object(phrase, text):
+                        hit = True
+                        break
+                    if tokens and _count_phrase_matches(tokens, text):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                seen_obs.add(oid)
+                matches.append(node)
+        return matches
 
     def query_answer(
         self,
@@ -5836,13 +5882,22 @@ class GraphEQAMemory:
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
-        count_obs: list[int] = []
+        pin_obs: list[int] = []
         for node in count_nodes:
             oid = int(node.obs_id)
-            if oid in count_obs:
+            if oid in pin_obs:
                 continue
             if self._obs_usable_for_eqa_image(oid):
-                count_obs.append(oid)
+                pin_obs.append(oid)
+        if not pin_obs and not attribute_q:
+            # Location / other: pin a couple of object views so Image 1 is the target,
+            # not an MCQ landmark (q47: fridge stole Image 1 while gold was above the sink).
+            for node in self._location_finder_nodes()[:2]:
+                oid = int(node.obs_id)
+                if oid in pin_obs:
+                    continue
+                if self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(oid)
         forced: list[int] = []
         if force_obs_ids:
             for oid in force_obs_ids:
@@ -5871,9 +5926,9 @@ class GraphEQAMemory:
                 obs_ids = (forced + rest)[:max_images]
             else:
                 obs_ids = selected
-            if count_obs:
+            if pin_obs:
                 # FIND: attach candidate views so the VLM looks at RGB, not a node list.
-                pinned = [oid for oid in count_obs if oid not in set(forced)]
+                pinned = [oid for oid in pin_obs if oid not in set(forced)]
                 rest = [oid for oid in obs_ids if oid not in set(forced) | set(pinned)]
                 obs_ids = (forced + pinned + rest)[:max_images]
         self.last_eqa_obs_ids = list(obs_ids)
