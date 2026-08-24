@@ -372,6 +372,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             visible_event_ids=allowlists["event_ids"],
         )
         executor._last_agent_state_snapshot = snapshot
+        executor._last_action_gate_decisions = list(snapshot.gate_decisions)
         return text
 
     from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES

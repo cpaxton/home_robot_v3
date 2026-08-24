@@ -2,7 +2,9 @@
 
 **Branch:** `feature/agent-world-model`
 **Date:** 2026-08-08
-**Status:** Phases 1–3 landed (ledger default off); Phase 4 helpers done, GPU deltas pending.
+**Status:** Phases 1–3 landed; Phase 4 helpers done; Phase 5 typed semantic
+history + static-world progress gate implemented with defaults off. GPU deltas
+remain pending.
 
 **Shipped operator/developer reference:** [../attempt_ledger.md](../attempt_ledger.md)
 (enable knobs, schema, writers/readers, tests). Keep this plan as design history +
@@ -158,14 +160,42 @@ structured results; plan failures become ledger entries with reasons.
 - Regression gates each phase: `uv run emet test agent-regression`, skill-pack
   tests, memory-backend smoke. GPU tracks (HM-EQA smoke, OVMM find) launched
   via `uv run emet jobs run …` per the GPU workflow rules — never inline.
-- **Repeat-failure key (define before GPU runs):** same `target_node_id` when
-  set, else same `obs_id`, else `xyz` within 0.25 m planar; same `action_kind`;
-  prior row `outcome != ok`. Metrics: repeat-nav-failure count per episode,
+- **Repeat-failure key (define before GPU runs):** same stable
+  `target_kind`/`target_id` first (`view_id` distinguishes verify actions), then
+  legacy `target_node_id`, `obs_id`, or `xyz` within 0.25 m planar; same
+  `action_kind`; prior row `outcome != ok`. Metrics: repeat-nav-failure count per episode,
   wasted rounds (post-failure re-attempts on that key), episode steps. Report
   as deltas against pinned baselines on the HM-EQA agentic arm and OVMM find —
   **never** by changing pinned configs.
 - Sketch (future): mobile manipulation eval = OVMM full + ledger metrics
   (pick attempts per success, re-grasp count) once orientation IK lands.
+
+## Phase 5 — Semantic action history and static-world progress gate
+
+**Objective:** replace opaque round/`obs_id` strings with intent + stable target
+semantics, and prevent unchanged duplicate work before the router chooses it.
+
+- `action_history.py` defines deterministic work/equivalence keys, target-local
+  progress tokens, typed outcomes, and pure gate decisions.
+- Grounded state schema v3 renders intent, stable place/frontier/view identity,
+  approach/view variants, outcome, and material progress. Mutable observation
+  IDs remain trailing tool adapters only.
+- `eqa.action_progress_mode=off|shadow|enforce` is manifest-frozen and
+  independent from ledger visibility. `shadow` traces counterfactual decisions
+  with byte-for-byte policy behavior; `enforce` omits suppressed IDs from the
+  exact rendered allowlist and revalidates dispatch. Run-manifest schema v4
+  freezes the axis and completion requires matching summary/trace diagnostics.
+- This is not a permanent blacklist. The first policy assumes mostly static
+  HM-EQA scenes and suppresses an equivalent terminal/no-progress action only
+  while its target-local progress token is unchanged. Alternate approaches,
+  new views/target evidence, material frontier/coverage change, and partial
+  navigation progress reopen work.
+- Dynamic-world follow-up is explicit: target/environment change events, map
+  revision, elapsed time/TTL, and evidence staleness must invalidate or decay a
+  suppression; a future scheduler may cool down/re-rank instead of filtering.
+- Pure key/progress tests and exact q11/q12 trace-derived replay tests are
+  complete. The managed `6,11,12,47` shadow/enforce comparison remains a
+  separate GPU gate.
 
 ## Non-goals / guardrails
 
@@ -196,3 +226,4 @@ structured results; plan failures become ledger entries with reasons.
 | 2 — tool outcome schema | done | `ToolOutcome` + shared `_EQA_RULE_*` format atoms + byte-stability test |
 | 3 — motion interface + closer look | done (v1) | `nav_attempt.sync_*` + `closer_look.aim_wrist_at_phrase` |
 | 4 — eval | helpers done | `attempt_metrics.summarize_repeat_failures`; GPU deltas via `emet jobs` still open |
+| 5 — semantic action progress | CPU implementation done | typed history + `off|shadow|enforce`; static-world GPU comparison pending |

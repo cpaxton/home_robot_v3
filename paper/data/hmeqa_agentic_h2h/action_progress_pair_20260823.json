@@ -1,0 +1,160 @@
+{
+  "schema": "emet.hmeqa.action_progress_pair_summary",
+  "schema_version": 1,
+  "date": "2026-08-23",
+  "status": "complete_diagnostic",
+  "git_commit": "9a77be37229bdf1aef4e8b16041b78104fbcfc05",
+  "question_ids": [
+    6,
+    11,
+    12,
+    47
+  ],
+  "shared_config": {
+    "agentic_decision_policy": "grounded_v2",
+    "graph_evidence_mode": "agent",
+    "room_history_mode": "agent",
+    "room_policy": "canonical",
+    "room_target_hints": true,
+    "investigate_stamp": false,
+    "attempt_ledger_mode": "agent",
+    "agentic_router": true,
+    "agentic_verifier": "none",
+    "require_verified": false,
+    "use_hm3d_semantics": false,
+    "use_enrich_labels": false,
+    "vlm": "Qwen/Qwen3-VL-8B-Instruct",
+    "vl_family": "qwen3_vl",
+    "vl_quantization": "int4",
+    "answer_max_new_tokens": 384,
+    "episode_timeout_seconds": 7200,
+    "max_planning_steps": 20,
+    "max_movement_step": 10
+  },
+  "variants": {
+    "shadow": {
+      "config_file": "configs/benchmarks/hmeqa_action_progress_shadow.yaml",
+      "variant_id": "action-progress-shadow-v1",
+      "action_progress_mode": "shadow",
+      "config_digest": "sha256:d60e8aa55d31b4a73f06296a548f34178757276d45b896a6c64c96e29a094138",
+      "config_file_sha256": "sha256:1b25683966a832cbc1986baa223a53a4c1fa9c8d86f615125a9c4ea9b70854ce",
+      "job_id": "20260823_155106_470fe6",
+      "out_dir": "~/runs/emet/hmeqa_action_progress_shadow_20260823_155102",
+      "done_units": 4,
+      "native_crashes": 0,
+      "correct": 3,
+      "total": 4,
+      "accuracy": 0.75,
+      "mean_planning_steps": 35.25,
+      "ledger_attempts": 31,
+      "gate_dispatch_events": 13,
+      "gate_suppressed_dispatches": 0,
+      "nav_loop_blocked_events": 0,
+      "per_question": {
+        "6": {
+          "predicted_letter": "B",
+          "gold_letter": "B",
+          "correct": true,
+          "planning_steps": 21,
+          "ledger_attempts": 2
+        },
+        "11": {
+          "predicted_letter": "A",
+          "gold_letter": "D",
+          "correct": false,
+          "planning_steps": 69,
+          "ledger_attempts": 20
+        },
+        "12": {
+          "predicted_letter": "D",
+          "gold_letter": "D",
+          "correct": true,
+          "planning_steps": 29,
+          "ledger_attempts": 5
+        },
+        "47": {
+          "predicted_letter": "A",
+          "gold_letter": "A",
+          "correct": true,
+          "planning_steps": 22,
+          "ledger_attempts": 4
+        }
+      }
+    },
+    "enforce": {
+      "config_file": "configs/benchmarks/hmeqa_action_progress_enforce.yaml",
+      "variant_id": "action-progress-enforce-v1",
+      "action_progress_mode": "enforce",
+      "config_digest": "sha256:338085986bd81e01009e6b8d9ee6a0b30c652754b0229b4bb6b8b0a7880b45c3",
+      "config_file_sha256": "sha256:530827a95cb53802940a829e361eaedb9a076e41355c6fb1e4bfe9597b92247f",
+      "job_id": "20260823_162608_ca49e0",
+      "out_dir": "~/runs/emet/hmeqa_action_progress_enforce_20260823_162604",
+      "done_units": 4,
+      "native_crashes": 0,
+      "correct": 2,
+      "total": 4,
+      "accuracy": 0.5,
+      "mean_planning_steps": 43.25,
+      "ledger_attempts": 39,
+      "gate_dispatch_events": 16,
+      "gate_suppressed_dispatches": 0,
+      "nav_loop_blocked_events": 0,
+      "per_question": {
+        "6": {
+          "predicted_letter": "B",
+          "gold_letter": "B",
+          "correct": true,
+          "planning_steps": 21,
+          "ledger_attempts": 2
+        },
+        "11": {
+          "predicted_letter": "A",
+          "gold_letter": "D",
+          "correct": false,
+          "planning_steps": 69,
+          "ledger_attempts": 20
+        },
+        "12": {
+          "predicted_letter": "D",
+          "gold_letter": "D",
+          "correct": true,
+          "planning_steps": 61,
+          "ledger_attempts": 13
+        },
+        "47": {
+          "predicted_letter": "D",
+          "gold_letter": "A",
+          "correct": false,
+          "planning_steps": 22,
+          "ledger_attempts": 4
+        }
+      }
+    }
+  },
+  "enforce_minus_shadow": {
+    "correct": -1,
+    "accuracy": -0.25,
+    "mean_planning_steps": 8.0,
+    "ledger_attempts": 8,
+    "gate_dispatch_events": 3
+  },
+  "integrity": {
+    "manifest_parity": true,
+    "declared_variant_deltas": [
+      "variant.id",
+      "variant.action_progress_mode"
+    ],
+    "atomic_done_validated": true,
+    "gate_trace_present": true,
+    "shadow_behavior_unchanged": true,
+    "safe_start_jobs": [
+      "20260823_154936_90a785"
+    ]
+  },
+  "metric_notes": {
+    "gate_suppressed_dispatches": "count of action_gate_dispatch decisions with disposition starting with suppress or would_suppress",
+    "planning_steps": "planning_steps from each scored HM-EQA episode row",
+    "shadow_parity": "shadow matched the prior action-history shadow baseline on letters (3/4) and mean steps (35.25)"
+  },
+  "interpretation": "The semantic progress gate mechanism and shadow diagnostic passed: manifest-frozen action_progress_mode, typed action history, gate dispatch traces, and completion validation all worked with zero native crashes. Shadow preserved behavior and matched the prior 3/4 baseline on this slice. Enforce regressed to 2/4, added mean planning steps (+8.0), and increased ledger attempts (+8) without firing explicit suppress dispositions on this run; q47 flipped from correct to incorrect and q12 needed more steps despite the same final letter. Keep action_progress_mode off by default, use shadow for diagnostics, and do not scale enforce."
+}

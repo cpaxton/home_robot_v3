@@ -12,6 +12,12 @@ from typing import Any
 
 import numpy as np
 
+from emet.memory.graph_eqa.action_history import (
+    ActionHistoryEntry,
+    GateDecision,
+    render_history_entry,
+)
+
 
 @dataclass(frozen=True)
 class PlaceState:
@@ -114,6 +120,22 @@ class EvidenceState:
 
 
 @dataclass(frozen=True)
+class ActionGateState:
+    action: str
+    allowed: bool
+    disposition: str
+    reason: str
+    work_key: str
+    equivalence_key: str
+    progress_digest: str
+    target_kind: str
+    target_id: str
+    adapter_id: int | None
+    target_label: str
+    room_name: str
+
+
+@dataclass(frozen=True)
 class AgentStateSnapshot:
     schema_version: int
     question: str
@@ -150,8 +172,10 @@ class AgentStateSnapshot:
     room_events: tuple[RoomEventState, ...] = ()
     attempts: tuple[AttemptState, ...] = ()
     evidence: tuple[EvidenceState, ...] = ()
-    recent_actions: tuple[str, ...] = ()
+    recent_actions: tuple[ActionHistoryEntry | str, ...] = ()
     loop_flags: tuple[str, ...] = ()
+    gate_decisions: tuple[ActionGateState, ...] = ()
+    blocked_actions: tuple[ActionGateState, ...] = ()
     visible_place_ids: tuple[str, ...] = ()
     visible_place_obs_ids: tuple[int, ...] = ()
     visible_frontier_ids: tuple[str, ...] = ()
@@ -210,6 +234,13 @@ def _approach_bearings(record: Any, anchor_xyz: Any) -> tuple[float, ...]:
 
 
 def _world_step(graph_memory: Any) -> int:
+    graph_step = getattr(graph_memory, "_graph_timestep", None)
+    fallback_step = getattr(graph_memory, "_fallback_timestep", None)
+    if isinstance(graph_step, (int, np.integer)):
+        if int(graph_step) > 0:
+            return int(graph_step)
+        if isinstance(fallback_step, (int, np.integer)):
+            return int(fallback_step)
     getter = getattr(graph_memory, "_effective_timestep", None)
     if callable(getter):
         try:
@@ -252,6 +283,24 @@ def _assertions_conflict(assertions: list[RoomAssertionState] | tuple[RoomAssert
     return len(names) > 1
 
 
+def _gate_state(decision: GateDecision) -> ActionGateState:
+    target = decision.signature.target
+    return ActionGateState(
+        action=decision.signature.tool_name,
+        allowed=bool(decision.allowed),
+        disposition=str(decision.disposition),
+        reason=str(decision.reason),
+        work_key=str(decision.signature.work_key),
+        equivalence_key=str(decision.signature.equivalence_key),
+        progress_digest=str(decision.progress.digest),
+        target_kind=str(target.kind),
+        target_id=str(target.stable_id),
+        adapter_id=int(target.adapter_id) if target.adapter_id is not None else None,
+        target_label=str(target.display_name),
+        room_name=str(target.room or "unknown"),
+    )
+
+
 def compile_agent_state(
     executor: Any,
     *,
@@ -266,6 +315,7 @@ def compile_agent_state(
     graph_mode = str(getattr(executor, "graph_evidence_mode", "off") or "off")
     history_mode = str(getattr(executor, "room_history_mode", "off") or "off")
     attempt_mode = str(getattr(executor, "attempt_ledger_mode", "off") or "off")
+    action_progress_mode = str(getattr(executor, "action_progress_mode", "off") or "off")
     agent_graph = graph_mode == "agent" and world is not None
     agent_history = history_mode == "agent"
     agent_attempts = attempt_mode == "agent"
@@ -294,6 +344,8 @@ def compile_agent_state(
             pose = _xyz(raw_pose)
 
     places: list[PlaceState] = []
+    gate_decisions: list[ActionGateState] = []
+    blocked_actions: list[ActionGateState] = []
     hypotheses = list(getattr(executor, "_hypotheses", None) or ())
     inspect_ledger = dict(getattr(executor, "_place_inspect", None) or {})
     nodes = list(getattr(graph_memory, "_nodes", None) or ())
@@ -307,6 +359,15 @@ def compile_agent_state(
         if source not in {"graph", "confirmed", "siglip"}:
             continue
         obs_id = int(hypothesis.obs_id)
+        gate_fn = getattr(executor, "_action_gate_decision", None)
+        if action_progress_mode in {"shadow", "enforce"} and callable(gate_fn):
+            decision = gate_fn("investigate", {"obs_id": obs_id})
+            gate_state = _gate_state(decision)
+            gate_decisions.append(gate_state)
+            if action_progress_mode == "enforce" and not decision.allowed:
+                if agent_attempts:
+                    blocked_actions.append(gate_state)
+                continue
         node = node_by_obs.get(obs_id)
         entity = world.entity_for_node(int(node.node_id)) if agent_graph and node is not None else None
         place_id = entity.place_id if entity is not None else f"obs:{obs_id}"
@@ -357,6 +418,18 @@ def compile_agent_state(
         for record in world.frontiers.values():
             if record.status != "active":
                 continue
+            gate_fn = getattr(executor, "_action_gate_decision", None)
+            if action_progress_mode in {"shadow", "enforce"} and callable(gate_fn):
+                decision = gate_fn(
+                    "explore_frontier",
+                    {"frontier_id": record.frontier_id},
+                )
+                gate_state = _gate_state(decision)
+                gate_decisions.append(gate_state)
+                if action_progress_mode == "enforce" and not decision.allowed:
+                    if agent_attempts:
+                        blocked_actions.append(gate_state)
+                    continue
             frontiers.append(
                 FrontierState(
                     frontier_id=record.frontier_id,
@@ -375,9 +448,22 @@ def compile_agent_state(
             if str(getattr(hypothesis, "source", "")) in {"graph", "confirmed", "siglip"}:
                 continue
             obs_id = int(hypothesis.obs_id)
+            frontier_id = f"obs:{obs_id}"
+            gate_fn = getattr(executor, "_action_gate_decision", None)
+            if action_progress_mode in {"shadow", "enforce"} and callable(gate_fn):
+                decision = gate_fn(
+                    "explore_frontier",
+                    {"frontier_id": frontier_id},
+                )
+                gate_state = _gate_state(decision)
+                gate_decisions.append(gate_state)
+                if action_progress_mode == "enforce" and not decision.allowed:
+                    if agent_attempts:
+                        blocked_actions.append(gate_state)
+                    continue
             frontiers.append(
                 FrontierState(
-                    frontier_id=f"obs:{obs_id}",
+                    frontier_id=frontier_id,
                     obs_adapter_id=obs_id,
                     xyz=_xyz(hypothesis.xyz),
                     status="active",
@@ -590,14 +676,25 @@ def compile_agent_state(
         except ImportError:
             target_rooms = ()
 
-    loop_flags = (
-        tuple(
-            f"obs={item.get('obs_id')} visits={item.get('visits')} status={item.get('status')}"
-            for item in list(getattr(executor, "_nav_loop_flags", None) or ())[-4:]
-        )
-        if agent_attempts
-        else ()
-    )
+    loop_rows: list[str] = []
+    target_fn = getattr(executor, "_action_target_for_obs", None)
+    if agent_attempts:
+        for item in list(getattr(executor, "_nav_loop_flags", None) or ())[-4:]:
+            obs_id = item.get("obs_id")
+            target = None
+            if callable(target_fn) and obs_id is not None:
+                target = target_fn(int(obs_id))
+            if target is not None:
+                loop_rows.append(
+                    f"action=investigate target={target.display_name!r} room={target.room} "
+                    f"stable={target.kind}:{target.stable_id} visits={item.get('visits')} "
+                    f"status={item.get('status')} adapter={obs_id}"
+                )
+            else:
+                loop_rows.append(
+                    f"action=investigate visits={item.get('visits')} status={item.get('status')} adapter={obs_id}"
+                )
+    loop_flags = tuple(loop_rows)
     pending = dict(getattr(executor, "_pending_answerable", None) or {})
     pending_answer = str(pending.get("answer_text") or "").strip()
     if len(pending_answer) == 1 and pending_answer.upper() in "ABCDE":
@@ -614,7 +711,7 @@ def compile_agent_state(
         )
     )
     return AgentStateSnapshot(
-        schema_version=2,
+        schema_version=3,
         question=str(getattr(executor, "question", "") or ""),
         question_id=question_id,
         session_id=session_id,
@@ -650,16 +747,22 @@ def compile_agent_state(
         attempts=tuple(attempts),
         evidence=tuple(evidence),
         recent_actions=(
-            tuple(str(x) for x in list(getattr(executor, "_recent_actions", None) or ())[-8:])
+            tuple(
+                list(getattr(executor, "_action_history", None) or ())[-8:]
+                or [str(x) for x in list(getattr(executor, "_recent_actions", None) or ())[-8:]]
+            )
             if agent_attempts
             else ()
         ),
         loop_flags=loop_flags,
+        gate_decisions=tuple(gate_decisions),
+        blocked_actions=tuple(blocked_actions),
         metadata={
             "decision_policy": str(getattr(executor, "decision_policy", "legacy")),
             "graph_evidence_mode": graph_mode,
             "room_history_mode": history_mode,
             "attempt_ledger_mode": attempt_mode,
+            "action_progress_mode": action_progress_mode,
             "agent_state_max_chars": int(getattr(executor, "agent_state_max_chars", 6000)),
             "room_policy": str(getattr(executor, "room_policy", "canonical")),
         },
@@ -745,6 +848,8 @@ def _whole_word_limit(value: Any, *, limit: int) -> str:
 
 
 def _compact_row(title: str, row: str) -> str:
+    if title == "Temporarily suppressed actions:":
+        return _row_fields(row, ("action=", "target=", "room=", "stable=", "reason=", "adapter="))
     if title == "Places:":
         return _row_fields(row, ("place_id=", "obs_adapter=", "room=", "source=", "info_gain="))
     if title == "Frontiers:":
@@ -825,6 +930,7 @@ def _render_compact_sections(
     required = {
         "Recent action outcomes:",
         "Loop flags:",
+        "Temporarily suppressed actions:",
         "Places:",
         "Frontiers:",
         "Room events (latest first):",
@@ -838,6 +944,7 @@ def _render_compact_sections(
         short_titles = {
             "Recent action outcomes:": "Recent",
             "Loop flags:": "Loops",
+            "Temporarily suppressed actions:": "Suppressed",
             "Places:": "Places",
             "Frontiers:": "Frontiers",
             "Current-room assertions:": "Room assertions",
@@ -915,8 +1022,19 @@ def render_agent_state(snapshot: AgentStateSnapshot, *, max_chars: int = 6000) -
     else:
         fixed_lines.append("Pending answer evidence: none")
 
-    recent_rows = [f"- {item}" for item in reversed(snapshot.recent_actions)]
+    recent_rows = [
+        f"- {render_history_entry(item) if isinstance(item, ActionHistoryEntry) else str(item)}"
+        for item in reversed(snapshot.recent_actions)
+    ]
     loop_rows = [f"- {item}" for item in reversed(snapshot.loop_flags)]
+    blocked_rows = [
+        (
+            f"- action={item.action} target={item.target_label!r} room={item.room_name} "
+            f"stable={item.target_kind}:{item.target_id} reason={item.reason!r} "
+            f"retry=after_target_view_or_geometry_change adapter={item.adapter_id}"
+        )
+        for item in snapshot.blocked_actions
+    ]
     place_rows: list[str] = []
     for place in sorted(
         snapshot.places,
@@ -993,6 +1111,7 @@ def render_agent_state(snapshot: AgentStateSnapshot, *, max_chars: int = 6000) -
     sections = [
         ("Recent action outcomes:", recent_rows, min(1, len(recent_rows))),
         ("Loop flags:", loop_rows, min(1, len(loop_rows))),
+        ("Temporarily suppressed actions:", blocked_rows, 0),
         ("Places:", place_rows, min(1, len(place_rows))),
         ("Frontiers:", frontier_rows, min(1, len(frontier_rows))),
         ("Current-room assertions:", assertion_rows, min(1, len(assertion_rows))),
