@@ -47,6 +47,14 @@ def test_hmeqa_prompt_forbids_a_caption_block():
     assert "image_descriptions:" not in lowered
 
 
+def test_hmeqa_prompt_treats_graph_as_finder_not_answer():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert "not the answer" in lowered
+    assert "never answer a count by counting" in lowered
+    assert "scene_graph labels do not decide the answer" in lowered
+    assert "look" in lowered and "image n" in lowered
+
+
 def test_hmeqa_examples_still_model_the_answer_fields():
     examples = HMEQA_EQA_PROMPT.split("Example (multiple choice):", 1)[1]
     assert examples.count('"answer"') >= 2

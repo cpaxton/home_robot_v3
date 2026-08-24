@@ -536,7 +536,7 @@ def label_matches_relevant_object(obj: str, label: str) -> bool:
 
 
 def countable_primary_label_matches(obj: str, node: GraphNode) -> bool:
-    """Exact-count / PRESENT claims use detector-primary labels on instance nodes only."""
+    """FIND-candidate matching uses detector-primary labels on instance nodes only."""
     if not getattr(node, "countable_instance", False):
         return False
     labels = [str(l).strip() for l in (node.labels or []) if str(l).strip()]
@@ -1692,7 +1692,7 @@ class GraphEQAMemory:
             viewer_xyz: optional (3,) robot base or head-camera position in world frame when captured
             bbox_xyxy: optional (x0, y0, x1, y1) crop in ``rgb`` for this object (instance mask bbox)
             identity_key: optional stable identity for this detected instance
-            countable_instance: whether this observation is safe for exact count hints
+            countable_instance: whether this observation is a FIND candidate for count questions
 
         Returns:
             obs_id: 1-based observation id (used as image id in EQA).
@@ -3326,7 +3326,7 @@ class GraphEQAMemory:
         ``configs/benchmarks/dynagraph.yaml`` (harness ``habitat_eqa.dynagraph``) so its
         numbers stay on the standalone summary block; every other path gets the folded
         format. When on, the main EQA prompt tags SCENE_GRAPH nodes with status
-        (present / candidate) and room names, and emits a short CONFIRMED_MEMORY tail
+        (inspect / candidate) and room names, and emits a short CONFIRMED_MEMORY tail
         only for phrases with no tagged node, instead of a separate summary block
         (one fact, one line — no duplicate object mentions).
         """
@@ -3359,7 +3359,7 @@ class GraphEQAMemory:
 
         When ``merge_confirmed`` is set (prompt path only), fold CONFIRMED_MEMORY status
         into the serialization instead of emitting a separate summary block: matching
-        nodes get a ``present`` / ``candidate`` tag, object nodes are tagged with their
+        nodes get an ``inspect`` / ``candidate`` tag, object nodes are tagged with their
         room-cluster name, and a short CONFIRMED_MEMORY tail lists only phrases with no
         tagged node (SigLIP-only sightings, weak matches, unobserved objects) plus a
         compact ``Rooms:`` line. The spatial-RAG branch is left untouched.
@@ -3488,7 +3488,7 @@ class GraphEQAMemory:
                             key=lambda n: int(n.node_id),
                         )
                         parts = [
-                            "graph nodes: " + format_graph_node_candidates(matches_nodes, max_nodes=4),
+                            "candidate views: " + format_graph_node_candidates(matches_nodes, max_nodes=4),
                             _GRAPH_CANDIDATE_COUNT_DISCLAIMER,
                         ]
                         anchor = matches_nodes[0] if matches_nodes else None
@@ -3506,7 +3506,7 @@ class GraphEQAMemory:
                                     near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                                 parts.append("nearest: " + "; ".join(near_bits))
                         tail_lines.append(
-                            f"- {phrase}: present — " + "; ".join(parts) + " (nodes not shown in graph above)"
+                            f"- {phrase}: LOOK — " + "; ".join(parts) + " (nodes not shown in graph above)"
                         )
                 elif status == "candidate":
                     pos = f" near ({xyz[0]:.1f}, {xyz[1]:.1f})" if xyz is not None else ""
@@ -3541,7 +3541,7 @@ class GraphEQAMemory:
             nearest_tag = ""
             if merge_active and not n.is_frontier and not n.is_viewpoint:
                 if nid in tagged:
-                    status_tag = " present"
+                    status_tag = " inspect"
                     # Attach nearest on the in-budget anchor node for each phrase.
                     for _phrase, (anchor_nid, near_txt) in nearest_by_phrase.items():
                         if int(anchor_nid) == nid:
@@ -3565,16 +3565,21 @@ class GraphEQAMemory:
             lines.append(f"  {rel}({a}, {b_str})")
         if tail_lines:
             lines.append(
-                "CONFIRMED_MEMORY (present = graph-grounded only; "
-                "CANDIDATE/weak SigLIP are navigation hints — not presence or absence; "
-                "if images contradict memory, trust the images):"
+                "CONFIRMED_MEMORY (index of views to look at, not the answer; "
+                "LOOK = candidate Image N to look at; CANDIDATE/weak SigLIP are "
+                "navigation hints; if images contradict memory, trust the images):"
             )
             lines.extend(tail_lines)
         if merge_active and self._room_clusters:
             rooms_line = self.format_rooms_line(max_chars=200)
             if rooms_line.strip() and rooms_line.strip() != "Rooms:":
                 lines.append(rooms_line)
-        return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
+        return (
+            "SCENE_GRAPH (views to look at, not the answer; labels are proposals for WHERE to look):\n"
+            + "\n".join(lines)
+            if lines
+            else "SCENE_GRAPH: (empty)"
+        )
 
     def to_tree_string(self, indent: str = "  ") -> str:
         """
@@ -4577,10 +4582,9 @@ class GraphEQAMemory:
     def _relevant_memory_summary(self) -> str:
         """Surface question-relevant objects as 'confirmed memory' for the VLM.
 
-        Graph label matches are PRESENT (with nearest-furniture neighbors for location MCQs).
-        SigLIP matches over observed points are CANDIDATE / weak-SigLIP hints only — they
-        catch mislabeled sightings for navigation but must not assert presence or absence
-        in the answer prompt (same where-next policy as agentic assess).
+        Graph label matches are LOOK (candidate views to inspect). SigLIP matches over
+        observed points are CANDIDATE / weak-SigLIP navigation hints — they catch
+        mislabeled sightings but must not assert presence, absence, or a count.
         """
         if not self._confirmed_memory_phrases():
             return ""
@@ -4598,7 +4602,7 @@ class GraphEQAMemory:
             sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
-                parts.append("graph nodes: " + format_graph_node_candidates(matches, max_nodes=6))
+                parts.append("candidate views: " + format_graph_node_candidates(matches, max_nodes=6))
                 parts.append(_GRAPH_CANDIDATE_COUNT_DISCLAIMER)
             sig_present = sig is not None and float(sig[0]) >= present_thresh
             if sig is not None:
@@ -4608,12 +4612,11 @@ class GraphEQAMemory:
                     parts.append(f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}")
                 else:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
-            # Graph label match is the only PRESENT path. SigLIP ranks where-next /
-            # sighting hints — never assert presence or absence in the answer prompt.
+            # Graph label match is a FIND pointer (LOOK), not a presence/count answer.
             if matches:
                 anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
                 exclude_ids = {int(n.node_id) for n in matches}
-                status = "PRESENT"
+                status = "LOOK"
             elif sig_present:
                 anchor_xyz = np.asarray(sig[1], dtype=np.float64) if sig is not None else None
                 exclude_ids = set()
@@ -4657,12 +4660,12 @@ class GraphEQAMemory:
         if not lines:
             return ""
         header = (
-            "CONFIRMED_MEMORY (PRESENT = graph-grounded only; CANDIDATE/weak SigLIP are "
-            "navigation hints — not presence or absence; listed graph nodes are views "
-            "[Image N], with a close-look Qwen name only when one exists — not detector "
-            "class names and not an exact count; if images contradict memory, trust the "
-            "images and keep exploring; for location MCQs, prefer option landmarks "
-            "visible in Image 1 over nearest-furniture guesses):"
+            "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
+            "candidate Image N to look at; CANDIDATE/weak SigLIP are navigation hints. "
+            "Detector class names are proposals for WHERE to look. Identify and count "
+            "from attached RGB; if images contradict memory, trust the images and keep "
+            "exploring; for location MCQs, prefer option landmarks visible in Image 1 "
+            "over nearest-furniture guesses):"
         )
         return header + "\n" + "\n".join(lines)
 
@@ -5305,10 +5308,10 @@ class GraphEQAMemory:
         choice_lines = "\n".join(f"  {chr(65 + i)}) {choice}" for i, choice in enumerate(choices[:4]))
         stem = question.split("Answer:")[0].strip()
         directive = (
-            "The target object WAS observed during exploration (see CONFIRMED_MEMORY). "
+            "CONFIRMED_MEMORY lists candidate views to inspect, not the answer. "
             "This is a WHERE-did-you-see-it multiple choice question. "
-            "Answer with the exact text of the single best location option, without its "
-            "A/B/C/D label. Do NOT answer yes/no or explain.\n"
+            "Answer from the attached images with the exact text of the single best "
+            "location option, without its A/B/C/D label. Do NOT answer yes/no or explain.\n"
         )
         if memory:
             directive += memory + "\n"
@@ -5697,16 +5700,16 @@ class GraphEQAMemory:
             return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
         return None
 
-    def _graph_count_hint(self, question: str) -> str:
-        """List instance candidates for count MCQs; never assert an exact integer."""
+    def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountTarget | None]:
+        """Instance nodes whose primary label matches a count-MCQ target (FIND pointers)."""
         try:
             from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
 
             choices = parse_mcq_choices_from_question(question)
             if not choices or not choices_are_count_mcq(choices):
-                return ""
+                return [], None
         except Exception:
-            return ""
+            return [], None
 
         target = _count_target_from_stem(question_stem_for_keywords(question or ""))
         if target is None:
@@ -5719,7 +5722,7 @@ class GraphEQAMemory:
                     target = CountTarget(tokens=tuple(tokens))
                     break
         if target is None:
-            return ""
+            return [], None
 
         matches: list[GraphNode] = []
         target_phrases = [target.tokens, *_COUNT_PHRASE_ALIASES.get(target.tokens, ())]
@@ -5737,9 +5740,8 @@ class GraphEQAMemory:
             if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
                 matches.append(node)
         if not matches:
-            return ""
+            return [], target
 
-        scope_note = ""
         if target.scope_tokens:
             room_by_id = self._node_room_by_id()
             if room_by_id and all(int(node.node_id) in room_by_id for node in matches):
@@ -5749,25 +5751,33 @@ class GraphEQAMemory:
                     if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
                 ]
                 if not matches:
-                    return ""
-            else:
-                scope_note = (
-                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
-                    "this is a scene-wide observed count."
-                )
-
-        # A stable identity can be represented by several graph nodes after a
-        # checkpoint/replay. Collapse those records without guessing from distance.
+                    return [], target
         unique: dict[str, GraphNode] = {}
         for node in matches:
             key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
             unique.setdefault(key, node)
-        matches = _collapse_count_nodes_spatially(list(unique.values()))
+        return _collapse_count_nodes_spatially(list(unique.values())), target
+
+    def _graph_count_hint(self, question: str) -> str:
+        """List instance views to inspect for count MCQs; never assert an exact integer."""
+        matches, target = self._count_candidate_nodes(question)
+        if not matches:
+            return ""
+        phrase = target.phrase if target is not None else "target"
+        scope_note = ""
+        if target is not None and target.scope_tokens:
+            room_by_id = self._node_room_by_id()
+            if not (room_by_id and all(int(node.node_id) in room_by_id for node in matches)):
+                scope_note = (
+                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
+                    "look at these scene-wide candidate views."
+                )
         labeled = format_graph_node_candidates(matches, max_nodes=6)
         return (
-            f"GRAPH_COUNT: candidate views for '{target.phrase}' "
-            f"(close-look Qwen names when available, otherwise Image ids; not an exact count): {labeled}."
-            f"{scope_note} Count from attached images; do not use this list length as the answer."
+            f"GRAPH_COUNT: views to look at for '{phrase}' "
+            f"(go look at these Image ids; not an exact count): {labeled}."
+            f"{scope_note} Count from attached images after looking; "
+            "do not use this list length as the answer."
         )
 
     def query_answer(
@@ -5825,6 +5835,14 @@ class GraphEQAMemory:
         include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
+        count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
+        count_obs: list[int] = []
+        for node in count_nodes:
+            oid = int(node.obs_id)
+            if oid in count_obs:
+                continue
+            if self._obs_usable_for_eqa_image(oid):
+                count_obs.append(oid)
         forced: list[int] = []
         if force_obs_ids:
             for oid in force_obs_ids:
@@ -5853,6 +5871,11 @@ class GraphEQAMemory:
                 obs_ids = (forced + rest)[:max_images]
             else:
                 obs_ids = selected
+            if count_obs:
+                # FIND: attach candidate views so the VLM looks at RGB, not a node list.
+                pinned = [oid for oid in count_obs if oid not in set(forced)]
+                rest = [oid for oid in obs_ids if oid not in set(forced) | set(pinned)]
+                obs_ids = (forced + pinned + rest)[:max_images]
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         merged_memory = self._merged_memory_enabled()

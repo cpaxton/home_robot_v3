@@ -165,6 +165,8 @@ def test_confirmed_memory_lists_views_without_detector_class_names():
     assert "table at" not in summary.split("nearest:")[0]
     assert "4 graph node(s)" not in summary
     assert "list length is not a count" in summary
+    assert ": LOOK" in summary
+    assert ": PRESENT" not in summary
     mem.record_close_look_label(1, "table lamp")
     looked = mem._relevant_memory_summary()
     assert "table lamp [Image 1] at (4.8, 5.1)" in looked
@@ -219,3 +221,32 @@ def test_close_look_label_tags_seen_from_object():
     mem.record_close_look_label(9, "bedside lamp")
     stamped = next(n for n in mem.get_nodes() if int(n.node_id) == int(obj.node_id))
     assert stamped.close_look_label == "bedside lamp"
+
+
+def test_query_answer_pins_count_candidate_views():
+    """Count MCQs attach FIND candidate RGB even if diversification picked something else."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured: dict = {}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
+    )
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["umbrella"],
+        identity_key="u1",
+        countable_instance=True,
+    )
+    mem.add_observation(rgb, np.array([9.0, 9.0, 0.5]), ["chair"])
+    mem._select_relevant_obs_ids = lambda **_k: [2]  # type: ignore[method-assign]
+    mem.query_answer("How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:")
+    assert mem.last_eqa_obs_ids[0] == 1
+    assert any(isinstance(c, str) and "GRAPH_COUNT:" in c and "views to look at" in c for c in captured["cmds"])
+

@@ -30,6 +30,12 @@ _HMEQA_HEADER = """
         Copy the selected option text into "answer" without its letter label. Never leave
         "answer" blank. If uncertain, still give your best semantic answer and set
         "confidence" to false.
+
+        SCENE_GRAPH, CONFIRMED_MEMORY, and GRAPH_COUNT are an index of views to inspect,
+        not the answer. Use them to choose which Image N to look at (or navigate to).
+        Identify and count from attached RGB. Never answer a count by counting SCENE_GRAPH
+        nodes, CONFIRMED_MEMORY rows, or GRAPH_COUNT list length. Detector class names are
+        proposals for WHERE to look.
 """
 
 _HMEQA_MCQ_EXAMPLE = """
@@ -52,17 +58,17 @@ _HMEQA_MCQ_EXAMPLE = """
                 B) Between TV and living room sofas
                 C) Next to the dining table
                 D) Next to the living room armchairs
-                CONFIRMED_MEMORY: woven basket: PRESENT — graph nodes: woven basket [Image 2] at (-6.5, 3.6); list length is not a count; verify in attached images
+                CONFIRMED_MEMORY: woven basket: LOOK — candidate views: woven basket [Image 2] at (-6.5, 3.6); list length is not a count; verify in attached images
                 SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
                 IMAGE: <2 RGB frames>
             Output:
                 {"reasoning": "Image 2 shows the basket next to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "The basket is visible next to the armchairs in Image 2."}
 
-        Example (count — count from images; detector class names are not the answer):
+        Example (count — look at the listed views; do not copy a graph count):
             Input:
                 Question: How many table lamps are there in the bedroom?
                 A) Three B) Four C) One D) Two
-                CONFIRMED_MEMORY: table lamps: PRESENT — graph nodes: [Image 3] at (4.8, 5.1); [Image 4] at (3.1, 5.0); list length is not a count; verify in attached images
+                CONFIRMED_MEMORY: table lamps: LOOK — candidate views: [Image 3] at (4.8, 5.1); [Image 4] at (3.1, 5.0); list length is not a count; verify in attached images
                 IMAGE: <2 RGB frames of bedside lamps>
             Output:
                 {"reasoning": "Images 3 and 4 each show one bedside lamp.", "answer": "Two", "confidence": true, "action": "", "confidence_reasoning": "Two close views of table lamps, not furniture."}
@@ -73,8 +79,8 @@ _HMEQA_FORMAT_OVERRIDE = """
 
         1. Do NOT write a caption field or Caption: block. Your first token continues a JSON object.
         2. "reasoning" is at most three sentences. Do not re-list objects from the attached RGB
-           frames, and do not copy scene-graph coordinates unless they decide the answer.
-           Cite an Image N or SCENE_GRAPH node only when it decides the answer.
+           frames, and do not copy scene-graph coordinates. Cite an Image N when that frame
+           shows the evidence. SCENE_GRAPH labels do not decide the answer.
         3. "answer" is the exact semantic option text without an A/B/C/D label.
            Emit it before elaborating further and never leave it blank.
         4. "confidence" is true or false. "action" is an image id or "". "confidence_reasoning"

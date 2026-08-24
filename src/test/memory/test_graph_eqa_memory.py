@@ -113,7 +113,7 @@ def test_parse_answer_not_confident():
 
 
 def test_relevant_memory_summary_surfaces_observed_objects():
-    """CONFIRMED_MEMORY lists relevant objects present via graph nodes; flags missing ones."""
+    """CONFIRMED_MEMORY lists relevant objects as views to inspect; flags missing ones."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([4.1, -2.3, 0.5]), ["red pillow"])
@@ -123,11 +123,11 @@ def test_relevant_memory_summary_surfaces_observed_objects():
     mem._relevant_objects = ["red", "sofa"]
     summary = mem._relevant_memory_summary()
     assert "CONFIRMED_MEMORY" in summary
-    assert "red: PRESENT" in summary
+    assert "red: LOOK" in summary
     present_line = next(ln for ln in summary.splitlines() if ln.startswith("- red:"))
     assert "[Image 1]" in present_line
     assert "2 graph node(s)" not in present_line.split("nearest:")[0]
-    assert "sofa: PRESENT" in summary
+    assert "sofa: LOOK" in summary
 
     mem._relevant_objects = ["unicorn"]
     missing = mem._relevant_memory_summary()
@@ -135,7 +135,7 @@ def test_relevant_memory_summary_surfaces_observed_objects():
 
 
 def test_relevant_memory_summary_includes_nearest_furniture():
-    """Location MCQ helper: PRESENT lines list nearby furniture labels."""
+    """Location MCQ helper: LOOK lines list nearby furniture labels."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([-1.77, 4.11, 0.5]), ["basket", "cabinet"])
@@ -144,7 +144,7 @@ def test_relevant_memory_summary_includes_nearest_furniture():
     mem._relevant_phrases = ["woven basket"]
     mem._relevant_objects = ["basket"]
     summary = mem._relevant_memory_summary()
-    assert "woven basket: PRESENT" in summary or "basket: PRESENT" in summary
+    assert "woven basket: LOOK" in summary or "basket: LOOK" in summary
     assert "nearest:" in summary
     assert "armchair" in summary
     assert "oven" not in summary.split("nearest:")[-1]  # far oven not among nearest
@@ -706,6 +706,7 @@ def test_relevant_memory_summary_uses_siglip_grounder():
     summary = mem._relevant_memory_summary()
     assert "woven basket: CANDIDATE" in summary
     assert "woven basket: PRESENT" not in summary
+    assert "woven basket: LOOK" not in summary
     assert "SigLIP phrase match" in summary
 
     mem._relevant_phrases = ["elephant"]
@@ -729,6 +730,7 @@ def test_relevant_memory_summary_uses_siglip_phrase_cache():
     summary = mem._relevant_memory_summary()
     assert "woven basket: CANDIDATE" in summary
     assert "woven basket: PRESENT" not in summary
+    assert "woven basket: LOOK" not in summary
     assert "obs_id=" in summary
     assert mem._graph_covers_relevant_objects()
 
@@ -981,14 +983,14 @@ def test_query_answer_memory_summary_gated_by_flag():
 
     # Baseline GraphEQA: flag off -> plain graph, no memory tags/block.
     mem.query_answer("Where is the sofa? A) x B) y")
-    assert not any(isinstance(c, str) and " present" in c for c in captured["cmds"])
+    assert not any(isinstance(c, str) and " inspect" in c for c in captured["cmds"])
     assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
 
-    # Dynagraph: flag on -> folded present tags on node lines (merged-memory default).
+    # Dynagraph: flag on -> folded inspect tags on node lines (merged-memory default).
     mem.memory_summary_enabled = True
     mem._relevant_objects = ["sofa"]
     mem.query_answer("Where is the sofa? A) x B) y")
-    assert any(isinstance(c, str) and " present" in c for c in captured["cmds"])
+    assert any(isinstance(c, str) and " inspect" in c for c in captured["cmds"])
 
 
 def test_query_answer_records_pregate_confidence_when_gated():
