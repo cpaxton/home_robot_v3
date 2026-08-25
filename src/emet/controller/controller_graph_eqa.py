@@ -698,23 +698,47 @@ class GraphEQAController(DynamemController):
                 else None
             )
             if action_obs_id is not None and self.graph_memory is not None:
+                spent_fn = getattr(self.graph_memory, "eqa_obs_look_spent", None)
+                spent = bool(callable(spent_fn) and spent_fn(action_obs_id) is True)
                 node = next(
                     (n for n in self.graph_memory.get_nodes() if int(n.obs_id) == action_obs_id),
                     None,
                 )
-                if node is not None and int(getattr(node, "nav_failures", 0)) > 0:
-                    alt = self.graph_memory.alternate_nav_target_for_failed_action(
-                        question,
-                        action_obs_id,
-                        self.planner,
-                        self._planning_base_xyt(self.robot.get_base_pose()),
-                    )
-                    if alt is not None:
-                        logger.info(
-                            "EQA nav: avoiding re-pick of failed Image obs_id=%s, alternate frontier",
-                            action_obs_id,
+                failed = node is not None and int(getattr(node, "nav_failures", 0)) > 0
+                if spent or failed:
+                    nxt = None
+                    if spent and hasattr(self.graph_memory, "next_unspent_eqa_obs_id"):
+                        nxt = self.graph_memory.next_unspent_eqa_obs_id(
+                            list(self.graph_memory.last_eqa_obs_ids or []),
+                            skip={int(action_obs_id)},
                         )
-                        target_point = alt
+                    if nxt is not None:
+                        logger.info(
+                            "EQA nav: obs_id=%s look spent; switching to unspent obs_id=%s",
+                            action_obs_id,
+                            nxt,
+                        )
+                        wp = self.graph_memory._navigation_waypoint_for_obs(
+                            int(nxt),
+                            self._planning_base_xyt(self.robot.get_base_pose()),
+                        )
+                        if wp is not None:
+                            target_point = wp
+                            action_obs_id = int(nxt)
+                    else:
+                        alt = self.graph_memory.alternate_nav_target_for_failed_action(
+                            question,
+                            action_obs_id,
+                            self.planner,
+                            self._planning_base_xyt(self.robot.get_base_pose()),
+                        )
+                        if alt is not None:
+                            logger.info(
+                                "EQA nav: avoiding re-pick of Image obs_id=%s, alternate frontier",
+                                action_obs_id,
+                            )
+                            target_point = alt
+                            action_obs_id = None
 
             start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             if (
@@ -748,7 +772,7 @@ class GraphEQAController(DynamemController):
                         )
                     )
             stuck_retries = 0
-            min_success_dist_m = 0.08
+            min_success_dist_m = 0.5
             for move_i in range(max_movement_step):
                 logger.info(
                     "EQA nav: step %d/%d target=(%.2f, %.2f)",

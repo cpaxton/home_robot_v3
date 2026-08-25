@@ -40,6 +40,11 @@ from emet.memory.graph_eqa.attempt_ledger import (
     records_to_dicts,
     summary_bits_for_obs,
 )
+from emet.memory.graph_eqa.eqa_views import (
+    eqa_look_is_spent,
+    rgb_uint8,
+    tightest_node_crop,
+)
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 from emet.memory.graph_eqa.mcq_debias import (
     LETTERS,
@@ -938,6 +943,8 @@ class GraphEQAMemory:
         self.last_eqa_salvage_used: bool = False
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
+        # Per-question distances for each obs_id we navigated to (same-obs look budget).
+        self._obs_nav_dists: dict[int, list[float]] = {}
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
         self._room_clusters: list[Any] = []
@@ -1340,6 +1347,7 @@ class GraphEQAMemory:
         self.last_relevant_images = []
         self.last_eqa_answer_field_emitted = False
         self.last_eqa_salvage_used = False
+        self._obs_nav_dists.clear()
         self.clear_room_events()
 
     def invalidate_nodes_near(
@@ -3172,6 +3180,7 @@ class GraphEQAMemory:
             self.last_nav_result_note = note
             return
         oid = int(obs_id)
+        self._obs_nav_dists.setdefault(oid, []).append(float(dist_m))
         st = int(step if step is not None else self._effective_timestep())
         moved = float(dist_m) >= 0.12
         ok = bool(success) and moved
@@ -3233,6 +3242,49 @@ class GraphEQAMemory:
             return
         status = "ok" if success else "failed"
         self._history_outputs[-1] += f"\nNav_result: moved {float(dist_m):.2f}m ({status}; {note})"
+
+    def eqa_obs_look_spent(self, obs_id: int | None) -> bool:
+        """True when this observation has already been inspected (do not re-nav there)."""
+        if obs_id is None:
+            return False
+        oid = int(obs_id)
+        attempts = 0
+        for node in self._nodes:
+            if int(node.obs_id) != oid:
+                continue
+            attempts = max(attempts, int(getattr(node, "nav_attempts", 0) or 0))
+        return eqa_look_is_spent(self._obs_nav_dists.get(oid, ()), nav_attempts=attempts)
+
+    def next_unspent_eqa_obs_id(
+        self,
+        candidates: list[int] | None,
+        *,
+        skip: set[int] | None = None,
+    ) -> int | None:
+        """First usable observation in ``candidates`` that is not look-spent."""
+        blocked = {int(x) for x in (skip or set())}
+        for raw in candidates or []:
+            oid = int(raw)
+            if oid in blocked or not self._obs_usable_for_eqa_image(oid):
+                continue
+            if self.eqa_obs_look_spent(oid):
+                continue
+            return oid
+        return None
+
+    def _eqa_rgb_for_obs(self, obs_id: int) -> np.ndarray | None:
+        """RGB to attach for ``obs_id``: detector crop when stored, else full frame."""
+        obs = self._observation_by_id(int(obs_id))
+        if obs is None or not self._obs_usable_for_eqa_image(int(obs_id)):
+            return None
+        full = rgb_uint8(obs.rgb)
+        nodes = [
+            n
+            for n in self._nodes
+            if int(n.obs_id) == int(obs_id) and not n.is_frontier and not n.is_viewpoint
+        ]
+        crop = tightest_node_crop(nodes, full)
+        return crop if crop is not None else full
 
     def alternate_nav_target_for_failed_action(
         self,
@@ -3690,6 +3742,7 @@ class GraphEQAMemory:
         """Extract keywords from the question for image selection (same idea as DynaMem)."""
         if self._question == question:
             return
+        self._obs_nav_dists.clear()
         self._question = question
         prompt = (
             "Assume there is an agent doing Question Answering in an environment. "
@@ -4404,20 +4457,30 @@ class GraphEQAMemory:
                     return selected
 
         # Target keyword / confirmed-memory label matches (non-MCQ or remaining budget).
-        keyword_hits: list[int] = []
-        for obj in self._relevant_objects:
-            for o in reversed(self._observations):
-                if int(o.obs_id) in keyword_hits:
-                    continue
-                if any(label_matches_relevant_object(obj, lab) for lab in o.labels):
-                    keyword_hits.append(int(o.obs_id))
-        for phrase in self._confirmed_memory_phrases():
+        # Round-robin across phrases so one noun cannot fill keyword_budget.
+        seen_kw: set[int] = set()
+        buckets: list[list[int]] = []
+        phrases = list(self._relevant_objects or [])
+        for phrase in list(self._confirmed_memory_phrases()):
+            if phrase not in phrases:
+                phrases.append(phrase)
+        for obj in phrases:
+            bucket: list[int] = []
             for o in reversed(self._observations):
                 oid = int(o.obs_id)
-                if oid in keyword_hits:
+                if oid in seen_kw:
                     continue
-                if any(label_matches_relevant_object(phrase, lab) for lab in o.labels):
-                    keyword_hits.append(oid)
+                if any(label_matches_relevant_object(obj, lab) for lab in o.labels):
+                    bucket.append(oid)
+                    seen_kw.add(oid)
+            if bucket:
+                buckets.append(bucket)
+        keyword_hits: list[int] = []
+        while buckets and len(keyword_hits) < keyword_budget:
+            bucket = buckets.pop(0)
+            keyword_hits.append(bucket[0])
+            if bucket[1:]:
+                buckets.append(bucket[1:])
         for oid in keyword_hits[:keyword_budget]:
             if take(oid):
                 return selected
@@ -5813,6 +5876,9 @@ class GraphEQAMemory:
     def _location_finder_nodes(self) -> list[GraphNode]:
         """Object nodes matching the question phrase (close-look name or detector primary)."""
         phrases = [p for p in self._confirmed_memory_phrases() if str(p).strip()]
+        for obj in list(self._relevant_objects or []):
+            if obj and obj not in phrases:
+                phrases.append(str(obj))
         if not phrases:
             return []
         matches: list[GraphNode] = []
@@ -5853,12 +5919,12 @@ class GraphEQAMemory:
         count_question: bool,
         look_obs_id: int | None,
     ) -> list[int]:
-        """Build Image 1..K so FIND/Action views are actually attached.
+        """Build Image 1..K from stored views: question-relevant RGB first.
 
-        Agentic submit often passes a single verified ``force_obs_ids`` that used
-        to short-circuit this merge whenever it filled ``eqa_max_images`` (including
-        ``max_images=1``). Count MCQs then answered from a bathroom while GRAPH_COUNT
-        pointed at lamp obs 163.
+        Image 1 is a pin / FIND / keyword view, not a leftover hallway look.
+        Remaining slots mix other recalled views so one FIND noun cannot occupy
+        the whole ``max_images`` budget. ``count_question`` keeps FIND pins ahead
+        of unverified force_obs when both exist.
         """
         if max_images <= 0:
             return []
@@ -5882,23 +5948,29 @@ class GraphEQAMemory:
         _take(look, [look_obs_id])
         pins: list[int] = []
         _take(pins, pin_obs)
+        extra: list[int] = []
+        _take(extra, selected)
         out: list[int] = []
-        if count_question and (look or pins):
-            # Action/FIND graph obs as Image 1. A stale hallway look must not
-            # steal Image 1 when GRAPH_COUNT has other views (q86 after Action 55).
-            look_is_find = bool(look and look[0] in set(pins))
-            if look and (look_is_find or not pins):
-                _take(out, look)
-            _take(out, pins)
-            if look and not look_is_find and pins:
-                _take(out, look)
-            _take(out, forced)
-            _take(out, selected)
-            return out
+        pin_set = set(pins)
+        look_relevant = bool(look and look[0] in pin_set)
+        # Image 1 is a question-relevant stored view, not the last nav frame.
+        # Hallway look after frontier chase must not displace clock / FIND RGB.
+        if look and look_relevant:
+            _take(out, look)
+        elif pins:
+            _take(out, pins[:1])
+        elif look:
+            _take(out, look)
+        elif count_question:
+            _take(out, extra[:1])
+        for oid in extra:
+            if oid not in out and oid not in pin_set:
+                _take(out, [oid])
+                break
+        _take(out, pins)
+        _take(out, extra)
         _take(out, look)
         _take(out, forced)
-        _take(out, pins)
-        _take(out, selected)
         return out
 
     def query_answer(
@@ -5973,10 +6045,8 @@ class GraphEQAMemory:
                 continue
             if self._obs_usable_for_eqa_image(oid):
                 pin_obs.append(oid)
-        if not pin_obs and not attribute_q:
-            # Location / other: pin a couple of object views so Image 1 is the target,
-            # not an MCQ landmark (q47: fridge stole Image 1 while gold was above the sink).
-            for node in self._location_finder_nodes()[:2]:
+        if not pin_obs:
+            for node in self._location_finder_nodes()[:4]:
                 oid = int(node.obs_id)
                 if oid in pin_obs:
                     continue
@@ -6096,12 +6166,11 @@ class GraphEQAMemory:
         commands: list[Any] = list(text_blocks)
 
         relevant_images: list[Image.Image] = []
-        id_to_obs = {int(o.obs_id): o for o in self._observations}
         for oid in obs_ids:
-            obs = id_to_obs.get(int(oid))
-            if obs is None or not self._obs_usable_for_eqa_image(oid):
+            rgb = self._eqa_rgb_for_obs(int(oid))
+            if rgb is None:
                 continue
-            im = Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB")
+            im = Image.fromarray(rgb, mode="RGB")
             relevant_images.append(im)
             commands.append(im)
         for nv in nav_fallback_tail:
@@ -6429,17 +6498,31 @@ class GraphEQAMemory:
                 display_index = int(match.group())
                 hist_action = action.strip()
         if not confidence and display_index is not None:
-            self.last_eqa_action_obs_id = self._resolve_eqa_action_image_ref(display_index, obs_ids)
-            target_point = self._target_point_from_display_image_index(
-                display_index,
-                obs_ids=obs_ids,
-                nav_fallback_tail=nav_fallback_tail,
-                robot_xyt=xyt,
-            )
+            resolved_oid = self._resolve_eqa_action_image_ref(display_index, obs_ids)
+            if resolved_oid is not None and self.eqa_obs_look_spent(resolved_oid):
+                # Still attach this RGB next turn; do not orbit the same obs.
+                if self.last_eqa_look_obs_id is None:
+                    self.last_eqa_look_obs_id = int(resolved_oid)
+                nxt = self.next_unspent_eqa_obs_id(
+                    list(pin_obs) + list(missing_find),
+                    skip={int(resolved_oid)},
+                )
+                self.last_eqa_action_obs_id = nxt
+                if nxt is not None:
+                    target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
+            else:
+                self.last_eqa_action_obs_id = resolved_oid
+                target_point = self._target_point_from_display_image_index(
+                    display_index,
+                    obs_ids=obs_ids,
+                    nav_fallback_tail=nav_fallback_tail,
+                    robot_xyt=xyt,
+                )
         if not confidence and self.last_eqa_action_obs_id is None and missing_find:
-            self.last_eqa_action_obs_id = missing_find[0]
-            if target_point is None:
-                target_point = self._navigation_waypoint_for_obs(missing_find[0], xyt)
+            nxt = self.next_unspent_eqa_obs_id(missing_find)
+            self.last_eqa_action_obs_id = nxt
+            if nxt is not None and target_point is None:
+                target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
         pending_look = self.last_eqa_action_obs_id
         if pending_look is not None and (not obs_ids or int(obs_ids[0]) != int(pending_look)):
             self.last_eqa_look_obs_id = int(pending_look)
