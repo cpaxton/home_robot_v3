@@ -99,6 +99,41 @@ def test_fallback_find_recep_prefers_nearby_investigate():
     assert args["obs_id"] == 2
 
 
+def test_fallback_find_object_prefers_nearby_investigate():
+    ex = _executor(phase="find_object", meta={"object": "jar"})
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="jar",
+            obs_id=7,
+            xyz=np.array([0.4, 0.1, 0.8]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    name, args = ex._fallback_tool()
+    assert name == "investigate"
+    assert args["obs_id"] == 7
+
+
+def test_fallback_close_look_prefers_nearby_investigate():
+    ex = _executor()
+    ex._close_look_required = True
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="wall clock",
+            obs_id=3,
+            xyz=np.array([0.6, 0.0, 1.2]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    name, args = ex._fallback_tool()
+    assert name == "investigate"
+    assert args["obs_id"] == 3
+
+
 def test_record_recent_action_includes_nav_outcome():
     ex = _executor()
     ex._round = 1

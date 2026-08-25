@@ -20,6 +20,8 @@ FORCE_DOWNLOAD="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
 INSTALL_LINGBOT_MAP="false"
+INSTALL_PAPER="false"
+NO_PAPER="false"
 # standard | minimal | full | jetson (full = install sim without passing --sim; default profile is full)
 PROFILE="${EMET_INSTALL_PROFILE:-full}"
 # Set when user passes --sim, --no-sim, or --all (all implies sim)
@@ -44,6 +46,9 @@ for arg in "$@"; do
             SIM_EXPLICIT="1"
             if [ "$NO_MOLMOSPACES" != "true" ]; then
                 INSTALL_MOLMOSPACES="true"
+            fi
+            if [ "$NO_PAPER" != "true" ]; then
+                INSTALL_PAPER="true"
             fi
             ;;
         --cpu)
@@ -80,6 +85,14 @@ for arg in "$@"; do
             ;;
         --lingbot-map)
             INSTALL_LINGBOT_MAP="true"
+            ;;
+        --paper)
+            INSTALL_PAPER="true"
+            NO_PAPER="false"
+            ;;
+        --no-paper)
+            INSTALL_PAPER="false"
+            NO_PAPER="true"
             ;;
         --profile=*)
             PROFILE="${arg#--profile=}"
@@ -132,17 +145,19 @@ fi
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES LINGBOT_MAP=$INSTALL_LINGBOT_MAP NO_MOLMOSPACES=$NO_MOLMOSPACES JETSON=$JETSON_INSTALL"
+echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES LINGBOT_MAP=$INSTALL_LINGBOT_MAP PAPER=$INSTALL_PAPER NO_PAPER=$NO_PAPER NO_MOLMOSPACES=$NO_MOLMOSPACES JETSON=$JETSON_INSTALL"
 echo "         Defaults: profile=full enables sim when third_party/robocasa exists (use --no-sim or --profile=minimal to skip)."
 echo "         EMET_INSTALL_PROFILE=standard  or  --profile=minimal  = no sim unless you also pass --sim."
 echo "         --profile=jetson / --jetson = Orin/Tegra lean install (MuJoCo pip + dev; no SAM2/Molmo/Robocasa clone)."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or use --all"
-echo "         --all       = sim + molmospaces + dynamem bundle (same as --sim --molmospaces when wrapper package exists)"
+echo "         --all       = sim + molmospaces + dynamem + paper tooling"
 echo "         --sim       = uv sim extra + install_simulation.sh (Robocasa + robosuite)"
 echo "         --no-sim    = force sim off even if PROFILE=full"
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "         --no-molmospaces = skip MolmoSpaces venv even when sim is installed (lighter / CI)"
 echo "         --lingbot-map = create .venv-lingbot-map for LingBot-Map streaming depth (see docs/lingbot_map.md)"
+echo "         --paper     = install latexmk + TeX Live packages used by paper/main.tex"
+echo "         --no-paper  = skip paper tooling when combined with --all"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
 echo "         --force-download = re-download sim assets even if they already exist (use with --sim/--all)"
 echo "         Rich menu:  uv sync && uv run emet install menu"
@@ -188,6 +203,9 @@ echo "Using uv: $(uv --version)"
 echo ""
 echo "[3/5] Checking system dependencies..."
 APT_PKGS=(libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 gh)
+if [ "$INSTALL_PAPER" = "true" ]; then
+    APT_PKGS+=(latexmk texlive-latex-extra texlive-bibtex-extra)
+fi
 if [ "$JETSON_INSTALL" = "true" ]; then
     # sdist builds on aarch64: sophuspy, scikit-fmm, pyliblzfse, PyAudio, simpleaudio, etc.
     APT_PKGS+=(libopenblas-dev libopenmpi-dev libomp-dev cmake ninja-build pkg-config python3-dev libavformat-dev libavcodec-dev libavutil-dev libavdevice-dev libavfilter-dev)

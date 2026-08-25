@@ -1,7 +1,67 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "question": "Where did I leave the silver trash can at A) Next to the dining table B) Next to the TV C) Next to the kitchen sink D) Next to the refrigerator. Answer:",
   "question_id": 11,
+  "stalled_action_replays": [
+    {
+      "source_run": "gre_q11_a2_clean_81a2c689_20260823_003735",
+      "question_id": 11,
+      "session_id": "81a2c689",
+      "question": "Where did I leave the silver trash can at A) Next to the dining table B) Next to the TV C) Next to the kitchen sink D) Next to the refrigerator. Answer:",
+      "observation": {
+        "obs_id": 22,
+        "place_id": "place_550b3a0b4a9b",
+        "view_id": "view_00000024",
+        "revision": 8,
+        "xyz": [-0.6118602216381809, 4.651959401458731, 0.6453552018012142],
+        "labels": [
+          "kitchen counter",
+          "metal table stand",
+          "refrigerator",
+          "shelving unit",
+          "stove",
+          "television",
+          "wooden sculpture",
+          "wooden table"
+        ]
+      },
+      "stalled_attempt": {
+        "approach_index": 0,
+        "status": "STALLED_NAV_LOOP",
+        "verify_status": "ABSENT",
+        "coverage": "open"
+      }
+    },
+    {
+      "source_run": "hmeqa_action_history_agent_63abd929_20260823_084433",
+      "question_id": 12,
+      "session_id": "hmeqa_h2h_agentic_q0012_hmeqa_action_history_agent_63abd929_20260823_084433_2e2879b779b2",
+      "scene": "00025-ixTj1aTMup2",
+      "question": "How many bedside tables are there in the bedroom with the white bedding? A) Three B) One C) None D) Two. Answer:",
+      "observation": {
+        "obs_id": 9,
+        "place_id": "place_9305a5295aaa",
+        "view_id": "view_00000024",
+        "revision": 8,
+        "xyz": [1.9933736340973278, -2.6886757276794957, 0.9780127170197435],
+        "labels": [
+          "bed",
+          "bed frame",
+          "closet",
+          "door",
+          "floor",
+          "mirror"
+        ]
+      },
+      "stalled_attempt": {
+        "approach_index": 0,
+        "status": "STALLED_NAV_LOOP",
+        "verify_status": "CANDIDATE",
+        "coverage": "closed",
+        "local_frontier_cells": 0
+      }
+    }
+  ],
   "cases": {
     "clean_obs22": {
       "source_run": "gre_q11_a2_clean_81a2c689_20260823_003735",

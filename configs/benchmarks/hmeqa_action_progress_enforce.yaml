@@ -5,10 +5,10 @@
 schema: emet.hmeqa.variant
 schema_version: 2
 description: >-
-  Grounded Graph Agent treatment: expose dedicated cross-round action outcomes,
-  loop flags, and attempt summaries to the router.
+  Static HM-EQA treatment: suppress an equivalent terminal/no-progress action
+  only while its target-local material state remains unchanged.
 variant:
-  id: action-history-agent-v1
+  id: action-progress-enforce-v1
   agentic_decision_policy: grounded_v2
   graph_evidence_mode: agent
   room_history_mode: agent
@@ -16,4 +16,4 @@ variant:
   room_target_hints: true
   investigate_stamp: false
   attempt_ledger_mode: agent
-  action_progress_mode: "off"
+  action_progress_mode: "enforce"

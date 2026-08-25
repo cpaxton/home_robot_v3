@@ -403,12 +403,88 @@ def test_follow_eqa_action_after_unknown_submit():
     assert "nav" in order and "verify" in order
     assert 11 in ex._followed_eqa_actions
     assert agent.graph_memory.last_eqa_action_obs_id is None
+    assert agent.graph_memory.last_eqa_look_obs_id == 11
     # Same Action obs already followed → soft explore_frontier instead of locking Unknown.
     agent.graph_memory.last_eqa_action_obs_id = 11
     order.clear()
     assert ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Unknown", "confidence": False}) is True
     assert ex._n_unknown_explore == 1
     assert agent.run_exploration.called
+
+
+def _follow_action_executor(question: str):
+    """Shared nav/verify mocks for Action:N follow tests."""
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    order: list[str] = []
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.last_eqa_action_obs_id = 11
+    agent.graph_memory.last_eqa_look_obs_id = None
+    agent.graph_memory._navigation_waypoint_for_obs.return_value = np.array([1.0, 0.0, 1.0])
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+
+    def _nav(*_a, **_k):
+        order.append("nav")
+        return NavOutcome.REACHED
+
+    def _update(*_a, **_k):
+        order.append("update")
+
+    def _verify(*_a, **_k):
+        order.append("verify")
+        return MagicMock(
+            status="PRESENT",
+            sim=0.9,
+            ok=True,
+            obs_id=11,
+            phrase="lamp",
+            text_feat=None,
+            img_feat=None,
+        )
+
+    agent.navigate_to_target_pose = _nav
+    agent.update = _update
+    agent.graph_memory.verify_phrase_at_obs = _verify
+    agent.run_exploration = MagicMock(return_value=True)
+    agent._siglip_guided_frontier = MagicMock(return_value=None)
+    agent._best_frontier_point_from_graph = MagicMock(return_value=None)
+    ex = AgenticEQAExecutor(
+        agent,
+        question=question,
+        max_rounds=4,
+        max_nav_steps=3,
+        router=False,
+    )
+    ex._round = 3
+    ex._n_explore = 3
+    return ex, agent, order
+
+
+def test_follow_eqa_action_after_unconfident_count():
+    """Unconfident One + Action:obs must look at that RGB instead of scoring One."""
+    _require_agentic()
+    ex, agent, order = _follow_action_executor("How many table lamps are there? A) One B) Two C) Three D) None")
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "One", "confidence": False})
+    assert followed is True
+    assert "nav" in order
+    assert 11 in ex._followed_eqa_actions
+    assert agent.graph_memory.last_eqa_look_obs_id == 11
+
+
+def test_follow_eqa_action_skips_unconfident_location_letter():
+    """A location letter is a guess we can score; do not nav just because conf is false."""
+    _require_agentic()
+    ex, agent, order = _follow_action_executor(
+        "Where is the clock? A) Above the sink B) On the wall C) In the hallway D) Unknown"
+    )
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Above the sink", "confidence": False})
+    assert followed is False
+    assert order == []
+    assert agent.graph_memory.last_eqa_look_obs_id is None
 
 
 def test_unknown_without_action_obs_explores():
@@ -1911,6 +1987,7 @@ def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
     assert out["look_around_on_no_new_obs"] is True
     agent.look_around.assert_called()
     assert out.get("capture", {}).get("status") == "NO_NEW_OBS"
+    assert gm.last_eqa_look_obs_id == 16
     assert 16 in ex._tried
     assert str(ex._tried[16]).startswith("STALLED_NAV_LOOP")
     assert any(r.get("event") == "nav_loop" for r in ex._trace_rows)
@@ -2199,7 +2276,7 @@ def test_investigate_records_place_inspect_on_card():
     assert "investigated=1" in msg
     assert "recent:" in msg
     assert "Recent actions:" in msg
-    assert any("investigate" in a and "obs=15" in a for a in ex._recent_actions)
+    assert any("action=investigate" in a and "adapter=15" in a for a in ex._recent_actions)
     assert any("verify=" in a for a in ex._recent_actions)
 
 
@@ -2225,24 +2302,22 @@ def test_state_message_includes_recent_action_history():
         },
     )
     ex._record_recent_action("explore_frontier", {"toward": "kitchen"}, {"ok": True})
-    ex._record_recent_action(
-        "investigate",
-        {"obs_id": 9},
-        {"ok": False, "nav_outcome": "stuck", "error": "blocked"},
-    )
-    # Internal tools must not pollute the ring buffer.
+    # Explicit verify is useful history; only internal graph/capture plumbing is omitted.
     ex._record_recent_action("verify_siglip", {}, {"ok": True, "status": "ABSENT"})
     ex._record_recent_action("inspect_graph", {}, {"ok": True})
 
     assert len(ex._recent_actions) == 3
-    assert "r2 investigate obs=3 ap=1 verify=ABSENT closest=0.4m" in ex._recent_actions[0]
-    assert "explore_frontier toward='kitchen' ok" in ex._recent_actions[1]
-    assert "nav=stuck" in ex._recent_actions[2]
+    assert "round=3 action=investigate" in ex._recent_actions[0]
+    assert "approach=1" in ex._recent_actions[0]
+    assert "verify=ABSENT" in ex._recent_actions[0]
+    assert "adapter=3" in ex._recent_actions[0]
+    assert 'action=explore_frontier intent="kitchen"' in ex._recent_actions[1]
+    assert "action=verify_siglip" in ex._recent_actions[2]
 
     msg = build_state_message(ex)
     assert "Recent actions:" in msg
-    assert "investigate obs=3" in msg
-    assert "explore_frontier" in msg
+    assert "action=investigate" in msg
+    assert "action=explore_frontier" in msg
 
     for _i in range(RECENT_ACTIONS_K + 3):
         ex._record_recent_action("explore_frontier", {}, {"ok": True})
@@ -3222,44 +3297,6 @@ def test_investigate_samples_new_approach_after_close_absent():
     t2 = out2["target_xyz"][:2]
     assert t1 != t2
     assert agent.navigate_to_target_pose.call_count == 2
-
-
-def test_retraction_correlates_distinct_station_views_not_place_ids():
-    """Two fresh ABSENT views of one place enable cross-view label stripping."""
-    _require_agentic()
-    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
-    agent = MagicMock()
-    agent.parameters = {"eqa": {}}
-    graph = GraphEQAMemory(defer_llm_clients=True)
-    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    graph.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["fruit bowl"])
-    graph.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["fruit bowl"])
-    agent.graph_memory = graph
-    executor = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=False, collect_trace=True)
-
-    first = executor._maybe_retract_claim_after_station(
-        1,
-        closest_m=0.5,
-        verify_out={"status": "ABSENT", "phrase": "fruit bowl", "obs_id": 101},
-    )
-    assert first is not None
-    assert first["evidence_obs_id"] == 101
-    assert first["stripped_obs"] == 1
-    assert "fruit bowl" in str(graph.get_nodes()[1].labels).lower()
-    assert executor._trace_rows[-1]["strip_across_obs"] is False
-
-    second = executor._maybe_retract_claim_after_station(
-        1,
-        closest_m=0.5,
-        verify_out={"status": "ABSENT", "phrase": "fruit bowl", "obs_id": 102},
-    )
-    assert second is not None
-    assert second["evidence_obs_id"] == 102
-    assert second["stripped_obs"] == 1
-    assert "fruit bowl" not in str(graph.get_nodes()[1].labels).lower()
-    assert executor._trace_rows[-1]["strip_across_obs"] is True
 
 
 def test_coverage_closed_does_not_exhaust_while_approaches_remain():

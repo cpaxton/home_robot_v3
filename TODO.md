@@ -3,92 +3,6 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
-## HM-EQA graph tuning — count/location weak spots (PRIORITY — PR #124)
-
-Branch `feat/hmeqa-graph-tuning` (PR #124; base `fix/no-gt-semantics`, now **merged into
-main via #123 — rebase #124 onto main**). The GraphEQA-parity baseline (114 real paper
-episodes, 4 arms, OUT `~/runs/emet/hmeqa_grapheqa/20260815_013914`) settled the
-GT-semantics question and surfaced the tuning target. **Start here next.**
-
-**Results (no-GT vs GT, on the real paper episodes):**
-| Method | GT on | GT off |
-|--------|-------|--------|
-| dynagraph | 43.9% | **52.6%** |
-| static_graph | 54.4% | 54.4% |
-
-- GT semantics **hurt Dynagraph (+8.7 pp without GT)** — GT positions mislead vs the
-  agent's own grounding; GT-on also more than doubles graph size (85 vs 41 nodes) and
-  changes routing. GT is a sim crutch that won't transfer.
-- static_graph GT on/off are **identical because it never reads the HM3D semantic
-  channel** (the labeler is wired only into `dynamem_graph_hooks.py` / Dynagraph
-  controller). It is an ablation (our memory, merge off), not an independent baseline.
-- **Dynagraph memory delta is not a clean win**: −10.5 pp under GT, −1.8 pp no-GT.
-
-**Weak spots (both arms): count 38–43%, location 40–56%; existence 69–72%.**
-Failure modes:
-- [x] **Count under-counts → graph-aggregated count hint** (d882519a): SCENE_GRAPH now
-      emits count-of-label-matching nodes (was single-view eyeballing). **exp1 caveat**:
-      combined with the retraction change it regressed overall — dynagraph 49.1% vs
-      52.6%, static 52.6% vs 54.4% — count/location UP (+4–5 pp) but existence/state
-      DOWN (−7–12 pp). Count hint alone not yet validated; re-check on the count/clock
-      slice below.
-      **2026-08-23 count-hint v2** (committed on this branch): (1) phrase-first target
-      matching after "How many" (not every stem token); (2) spatially-distinct cluster
-      collapse (missed-merge guard); (3) `countable_instance` + `identity_key` so only
-      instance-level evidence counts; (4) `GRAPH_COUNT` protected from prompt-budget
-      truncation; (5) corroborated retract uses `has_absent_retraction_at_other_view`.
-      **Validation:** Aug 23 count/clock slices (`run_hmeqa_countclock_slice.sh`, `RESUME=0`,
-      `--no-hm3d-semantics`): v2 **6/15 (40%)**, broken v3 **3/15** (cli syntax at tail),
-      post-merge **`2f4b4d4f` 7/15 (47%)** — best so far (+q43/q86/q93, −q60/q78 vs Aug 22).
-      Count subset flat **4/10**; clock **3/5**. **GRAPH_COUNT still inert** — harness
-      `use_instance_graph: true` is not enough: Habitat `manipulation_only: true` forces
-      `detection_model=None` in `controller_dynamem.py` when `manipulation_only` was set
-      without checking `use_instance_memory` — **fixed** (load YoloE whenever instance graph
-      is requested). Re-slice after merge to validate `GRAPH_COUNT`.
-- [x] **Retraction gap (closer look doesn't remove stale nodes)**: `retract_phrase_claim_at_obs`
-      stripped labels **only at that one `obs_id`**, so a closer look that disproved a
-      node left it stale (count inflation + location confusion). Fixed in two steps:
-      strip ABSENT across all views (7566ab37), then **corroborated-only** — cross-view
-      strip only when ABSENT at 2+ distinct views (96f6d9a8, default
-      `strip_across_obs=False`), keeping the count/location gain without nuking
-      legitimately-seen nodes. Tests updated.
-- [ ] **Location room-mapping errors**: graph has the object at a position but the VLM
-      maps it to the wrong option (trash can at (0.9,-0.8) → C not D). → stronger
-      position→choice matching (distance to option landmarks) than
-      `_location_letter_from_*`. **Still unsolved** — q11 probes below all fail.
-- [ ] **Recall misses**: target never entered the graph (q95/q183/q317/q385). →
-      coverage-driven explore for unresolved targets.
-
-**Active validation runs (machine froze twice — 2026-08-19 and 2026-08-22; both frozen
-runs were concurrent-experiment freezes, now guarded):**
-- **count/clock slice — prior** (v3, pre count-hint v2): Aug 22 resume completed **6/15
-  (40%)** (`countclock_20260819_022802_dynagraph_qwen3_vl.jsonl`) — OK q21/q28/q47/q60/
-  q78/q88; ERR q12/q32/q33/q43/q48/q51/q84/q86/q93.
-- **count/clock slice — post-merge** (`2f4b4d4f`, job `20260823_100431_f5a6dc`): **7/15 (47%)**
-  OUT `~/runs/emet/hmeqa_countclock/20260823_100542/` — OK q21/q28/q43/q47/q86/q88/q93.
-  GRAPH_COUNT not observed in bundles; gains are exploration/VLM variance, not count hint.
-- **count/clock slice — instance graph (broken wrapper)** (`0f8fb443`): **3/15 (20%)** —
-  episodes completed but job failed on post-merge `cli.py` syntax; ignore as primary signal.
-- **gre-q11 location probes** (now on **main** via #115; was v4): see grounded graph section
-  below. Location lever still separate from count tuning on this PR.
-
-**Concurrency freeze guard (2026-08-22):** the two freezes (Aug 19 + Aug 22 `cc-singleview-resume`)
-were concurrent GPU experiments. The `cc-singleview-resume` wrapper had `eval wait` but no
-mutex, so a second experiment launched beside it and froze the box. Fix: `emet jobs run
---need-mib` now wraps the command in a **shared singleflight `flock`** on
-`~/runs/emet/gpu.lock` (default, all checkouts coordinate; `EMET_GPU_LOCK` /
-`EMET_GPU_LOCK_TIMEOUT` env). Only one GPU job per box. **Do not hand-build a jobs wrapper
-that skips the flock.** (This fix lives in `feat/hmeqa-graph-tuning`; v3/v4 pick it up on
-their next merge.)
-
-**Data collection:** `HABITAT_EQA_EXPORT_GRAPH=1` already writes per-episode
-`graph.json` (node labels/xyz/room/confidence) via `export_graph_eqa_dir` — build an
-offline count/location failure-mode analyzer to A/B reasoning without re-running GPU.
-**TODO: record the exp1 numbers in `docs/experiments/habitat_eqa_results.md`
-(§ Lessons for tuning the graph) — currently they live only in commit 96f6d9a8.**
-Analysis/numbers: `docs/experiments/habitat_eqa_results.md` (§ GraphEQA-parity baseline,
-§ Lessons for tuning the graph).
-
 ## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
 Canonical record:
@@ -210,64 +124,42 @@ Canonical record:
       no-leakage pass, capability/efficiency do not. Keep it opt-in and do not
       scale; frozen summary is
       `paper/data/hmeqa_agentic_h2h/action_history_pair_20260823.json`.
-- [ ] Improve cross-round action memory before any new scale experiment. The
-      current hard guard catches exhausted `investigate(obs_id)` attempts only
-      after the router selects them, emits `NAV_LOOP_BLOCKED`, then redirects
-      to generic frontier exploration. Replace this with a pre-router,
-      deterministic action-equivalence/progress gate keyed by action + stable
-      target + approach/view/evidence revision (and pose cell where needed).
-      Filter or re-rank blocked actions before rendering the allowlist; permit a
-      retry only after material new evidence or geometry; cover verify and
-      frontier actions as well as investigate. Keep the durable ledger in
-      `shadow` by default and expose only a compact redirect reason. Add q11/q12
-      replay regressions and optimize total attempts/planning steps, not repeat
-      count alone. Concrete current traces:
-      `docs/attempt_ledger.md#what-the-memory-trace-looks-like`.
+- [x] Implement typed cross-round action memory and a benchmark-scoped
+      pre-router progress gate. Grounded state v3 now leads with semantic intent
+      + stable place/frontier/view identity rather than `r0`/`obs=15`, and
+      `action_history.py` defines deterministic work/equivalence keys, progress
+      tokens, typed outcomes, and one transient retry. The independent
+      manifest-frozen axis is `eqa.action_progress_mode=off|shadow|enforce`
+      (default off). Shadow leaves cards/execution unchanged; enforce omits
+      unchanged terminal/no-progress variants from the exact allowlist and
+      covers investigate aliases, explicit verifies, and frontiers; automatic
+      post-motion verifies are summarized by their parent action. Alternate
+      approaches, new views/evidence/geometry, and partial motion remain
+      eligible. Manifest schema v4 freezes the new axis, rejects legacy-policy
+      combinations, and validates matching summary/trace diagnostics before
+      completion. Exact q11/q12 trace-derived replay fixtures plus the 182-test
+      agent, 151-test lifecycle, and 134-test graph-memory CPU gates pass; see
+      `docs/attempt_ledger.md#static-world-action-progress-policy`.
+- [x] Finish reproducible paper tooling: expose the optional `latexmk` + TeX
+      Live bundle through `emet install paper`, `install.sh --paper`, and the
+      interactive install menu. The package simulation and 59 focused CLI tests
+      pass; documented Docker fallback built the current 38-page appendix/PDF.
+- [x] Run the managed static-policy comparison on `6,11,12,47` after CPU gates:
+      shadow job `20260823_155106_470fe6` scored **3/4**, mean steps **35.25**,
+      attempts **31**; enforce job `20260823_162608_ca49e0` scored **2/4**, mean
+      steps **43.25**, attempts **39**. Shadow matched the prior action-history
+      shadow baseline; enforce regressed on q47 and added dwell on q12 without
+      explicit suppress dispositions. Mechanism passes; do **not** scale enforce.
+      Frozen summary:
+      `paper/data/hmeqa_agentic_h2h/action_progress_pair_20260823.json`.
+      **Merge tooling** with defaults off (`action_progress_mode=off`).
+- [ ] Generalize suppression for dynamic worlds before enabling it as lifelong
+      memory. Target/environment change events, map revision, elapsed-time/TTL,
+      and evidence staleness must invalidate or decay suppression. Consider a
+      scheduler that cools down/re-ranks actions instead of removing them.
 - [ ] Keep the bundled A0→A1→A2 ladder, `2,76`, A3, rooms-11, holdout, and
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
-
-## HM-EQA close-look / weak-class validation (PR #120 + follow-ups)
-
-GPUs, not paper rewrites. The 95/113 partial says count 23% / clock 20% are the
-collapses the SigLIP-evidence + close-look work targets. All landed via PR #120
-(SigLIP evidence line, `dense_siglip_argmax_crop` single crop, opt-in multi-view
-close-look consensus). **PR #120 is OPEN on this branch** (mergeable, no reviews
-yet) — its two validation jobs died with the box 2026-08-19 and each still needs a
-clean GPU-exclusive run before merge. What's left:
-
-- [ ] **Count/clock validation run** (`scripts/run_hmeqa_countclock_slice.sh`, 15 ids)
-      single-view vs multiview vs pre-close-look baseline (count 23% / clock 20%).
-      Status: first launch (Aug 15) was a silent 0/15 on missing flash-attn (fixed
-      `EMET_ALLOW_SDPA_ATTN=1` in-runner). Aug 19 relaunch (jobs `20260819_022652_ece872`
-      single-view, `20260819_022702_c3c900` multiview) **died with the box** ~22:35 —
-      `pid exited without DONE`. Singleview had scored qids 12,21,28,32,33 of 15;
-      multiview died on qid 12. Runner does **not** resume (`run-batch` overwrites the
-      jsonl), so relaunch both arms fresh, GPU-exclusive (`NEED_MIB=12000`), then confirm
-      the trace logs `close_look_views=N` on the multiview arm.
-- [ ] **Temporal close-look consensus** (DeWorldSG idea #1 — implemented, opt-in
-      `eqa.agentic_close_look_multiview` / `EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW`,
-      default **off**): aggregate up to 3 close-look crops across views per target
-      phrase. Flip the default on only if the multiview arm beats single-view on
-      the count/clock slice. (Cross-view retraction variant is PR #124
-      `feat/hmeqa-graph-tuning`, open — strip ABSENT across all obs ids.)
-- [ ] **Gaussian-similarity node merge** (DeWorldSG idea #2 — not started): replace
-      the point-anchored `dynagraph_merge_xy_m` / staleness heuristics with a
-      probabilistic per-object Gaussian (depth-aware var). Merge when two objects'
-      posteriors overlap; track object-entity persistence across graph refreshes.
-      Measurable on location/state classes where disambiguation fails (rug
-      q-location, ACZZiU 0/5).
-- [ ] **Depth-aware crop** (DeWorldSG idea #3 — not started): `dense_siglip_argmax_crop`
-      is pixel-argmax in 2D. Weight the crop by depth continuity / object extent
-      (drop false patches on walls/ceilings; prefer small floor objects). Floor
-      pick suite (`ovmm full --manip-mode mcts`, `floor_object` eps) is the target.
-      Floor-suite baseline (PR #120): ground_truth rby1 mcts pick_success=True /
-      ovmm_full_partial=0.75 (place = known rby1 attach/release flake); teleport refs
-      1.0; pre-fix dynagraph find_obj=False / partial 0.0–0.5 (cube-vs-brick).
-      **SigLIP-validate rerun still owed**: `tamp-floor-siglip-validate` (2026-08-14)
-      was INVALID — VL worker OOM / connection refused (co-ran with the paper eval).
-      Rerun `scripts/eval_tamp_floor.py --manip-mode sim --backend dynagraph`
-      GPU-exclusive and compare find/partial vs the pre-fix table before merging #120.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
@@ -282,6 +174,9 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
 is now **rby1** (`PROFILE=smoke` / `slice` in `run_ovmm_find_recep_slice.sh`);
 `look_around` skips head pans on non-Stretch. Docs:
 `docs/experiments/ovmm_agentic_find_teleport.md`.
+**Integration (2026-08-25):** merged `feat/instance-graph-repair` (PR #130) for
+clock/count FIND view pinning + `close_look_label`; extend investigate bias to
+`find_object` and close-look questions on top.
 
 
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
@@ -315,9 +210,12 @@ is now **rby1** (`PROFILE=smoke` / `slice` in `run_ovmm_find_recep_slice.sh`);
       agentic loops per episode (obj + recep). Options: `_fast_explore_lookaround` (2-pan) in the
       OVMM find path like run_dynagraph does, and cap recep rounds when the recep is the start
       receptable (already known).
-- [ ] **NavOutcome propagation**: `nav_outcome` is recorded in the agentic trace but not yet in
-      `NavAttemptResult` consumers (graph_memory `record_nav_attempt`, router state message). Expose
-      the enum string in the router "Recent actions" so the VLM can see reached-vs-progress-vs-blocked.
+- [x] **NavOutcome in router history**: typed recent actions now render the
+      motion enum alongside semantic target/outcome/progress, so the VLM can
+      distinguish reached vs progress vs blocked.
+- [ ] **NavOutcome in durable nav ledger**: propagate the enum through
+      `NavAttemptResult` / `graph_memory.record_nav_attempt` instead of relying
+      on status/note reconstruction in offline artifacts.
 
 ## Embodied agent planning (world model + tool calling + motion)
 
@@ -408,69 +306,6 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
 
-## TAMP agent tools
-
-Design and acceptance criteria: [docs/plans/2026-08-22_tamp_agent_tools.md](docs/plans/2026-08-22_tamp_agent_tools.md).
-
-**Merge posture (PR #120):** safe to land — CHAT/TAMP infrastructure is additive;
-paper HM-EQA / OVMM-find defaults unchanged. Routine acceptance is the fast
-**`PROFILE=smoke`** gate (~1–2 min). OVMM floor perf and Stretch agentic sweeps
-are explicit follow-up (`PROFILE=full`, `eval_tamp_floor.py`).
-
-- [x] Keep semantic CHAT task references separate from private simulator
-      `*_gt_body` grounding; select and retain the actual receptacle.
-- [x] Expose plan-first `plan_pick_place` and
-      `execute_pick_place_plan`; route `pick_place` through guarded planning in
-      a live simulator and preserve the hardware fallback.
-- [x] Revalidate live poses/capabilities before one-shot execution and fail
-      closed on stale plans or invalid benchmark receptacles.
-- [x] Make floor setup and per-episode `mcts` / `sim` / `skip` modes explicit,
-      including configured `floor_z_m` and find-only controls.
-- [x] Add offline regressions for semantic grounding, CHAT schemas/dispatch,
-      selected-receptacle scoring, floor setup, and close-look crop limits.
-- [x] **Stretch teleport CHAT control** (manual): job `20260823_013540_64c74f`,
-      displacement 0.10 m (`plan_pick_place` → `execute_pick_place_plan`).
-- [x] **MolmoSpaces CHAT `scene_tasks` smoke** (manual, teleport): job
-      `20260823_003208_1379d8`, `object_filter=bowl` → `task:1` pick bowl,
-      displacement 2.21 m.
-- [x] **Managed smoke gate green** (`PROFILE=smoke`, default): rby1 CHAT
-      `scene_tasks` → plan → execute through live tools + kinematic base snap.
-      Job `20260823_152854_4c7766`: 81 s sim, displacement 2.21 m, placement
-      error 0.02 m. Gate quoting bug fixed 2026-08-23 (`run_item` uses `"$@"`).
-
-### Next (OVMM perf / coverage — not blocking merge)
-
-- [ ] **`PROFILE=full` gate once** (`chat kinematic stretch floor`, ~1–2 h):
-      `./scripts/run_tamp_agent_tools_gate.sh` with `PROFILE=full` via `emet jobs`.
-      Stretch agentic head sweeps and the 4-episode RoboCasa floor matrix belong
-      here, not in routine smoke.
-- [ ] **OVMM floor smoke** (`eval_tamp_floor.py --smoke`): single rby1 MCTS
-      dynagraph episode (~5–8 min). Use when changing agentic find / SigLIP /
-      floor scoring — not the default PR gate.
-- [ ] **Dynagraph floor find quality**: Stretch head sweeps dominate wall time
-      (15–45 s/sweep vs ~1–2 s on rby1). For routine agent tests prefer rby1 +
-      `EMET_SIM_NAV_TELEPORT=1`; improve OVMM explore/verify separately.
-- [ ] **rby1 MCTS place flake**: kinematic pick succeeds but place attach/release
-      can fail (partial 0.75 in floor runs). Teleport refs score 1.0 — gap is
-      arm place, not find/pick.
-- [ ] **SigLIP floor validate rerun** (optional): `eval_tamp_floor.py --backend
-      dynagraph` GPU-exclusive; compare find/partial vs pre-fix table (see DeWorldSG
-      section below).
-
-### Active PRs (2026-08-23)
-
-- **#124** `feat/hmeqa-graph-tuning` → `main`: graph tuning (corroborated retract, count
-  hint v2, instance-graph harness, count/clock runner). **Merged main (#115)** at
-  `2f4b4d4f`. Count/clock best **7/15 (47%)** on merge rerun; GRAPH_COUNT blocked on
-  `manipulation_only` ignored `use_instance_memory` (fixed — load YoloE when instance graph
-  on). Re-slice to validate `GRAPH_COUNT`.
-- **#120** `feat/tamp-floor-experiments` → `main`: **merged** — RoboCasa floor suite +
-  TAMP CHAT agent-tools + SigLIP-aware VLM assess. Routine gate: `PROFILE=smoke` (~1–2 min).
-- **#115** → **merged to main** (`9a77be37`): grounded graph room-evidence / auditable
-  manifests. Location work continues on main, not this PR.
-- **#46** `feature/stretch-robocasa-robosuite` → `main`: DRAFT, unrelated (Stretch
-  RoboCasa/Robosuite port).
-
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
 Offline units + scripted table smokes exist; these are the remaining **real / integration** and product gaps.
@@ -481,16 +316,10 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [x] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: fixed — Stretch path propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (and declines confirmation → False).
 
 ### Real tests (not yet green on every machine)
-- [x] **MolmoSpaces ithor + rby1 CHAT tool chain** (`scene_tasks` → plan → execute,
-      teleport): green 2026-08-23 (`20260823_003208_1379d8`).
-- [x] **MolmoSpaces ithor + rby1 kinematic** CHAT `scene_tasks` → plan → execute
-      in managed smoke gate (`PROFILE=smoke`): green 2026-08-23 (`20260823_152854_4c7766`).
+- [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
 - [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
 - [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
-- [x] **Stretch teleport** CHAT plan/execute (`default_table_stretch.yaml`): green
-      2026-08-23 (`20260823_013540_64c74f`).
-- [ ] **Robocasa / Stretch visual-servo** pick-place smoke (`--visual-servo`) to
-      lock teleport-vs-servo behavior on hardware path.
+- [ ] **Robocasa / Stretch** pick-place smoke with and without `--visual-servo` to lock the teleport-vs-servo behavior.
 - [ ] **CI / overnight**: mark or gate the above under `RUN_MOLMOSPACES_TESTS` / sim markers so agents use `emet test --no-sim` for the offline pack only.
 
 ### Motion / grasp quality

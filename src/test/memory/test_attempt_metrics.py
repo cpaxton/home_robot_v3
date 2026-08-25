@@ -61,6 +61,40 @@ def test_summarize_repeat_failures_by_obs_then_xy():
     assert stats.n_repeat_failures == 2  # obs 9 once + xy once
 
 
+def test_summarize_prefers_stable_target_and_distinguishes_verify_views():
+    rows = [
+        _rec(
+            action_kind="navigate",
+            target_kind="place",
+            target_id="place_sink",
+            obs_id=9,
+        ),
+        _rec(
+            action_kind="navigate",
+            target_kind="place",
+            target_id="place_sink",
+            obs_id=81,
+        ),
+        _rec(
+            action_kind="verify",
+            target_kind="place",
+            target_id="place_sink",
+            view_id="view_1",
+        ),
+        _rec(
+            action_kind="verify",
+            target_kind="place",
+            target_id="place_sink",
+            view_id="view_2",
+        ),
+    ]
+
+    stats = summarize_repeat_failures(rows)
+
+    assert stats.n_repeat_failures == 1
+    assert stats.by_kind == {"navigate": 1}
+
+
 def test_summarize_filters_kinds():
     rows = [
         _rec(action_kind="navigate", target_node_id=1),

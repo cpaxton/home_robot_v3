@@ -122,6 +122,10 @@ def maybe_record_tool_attempt(
     if isinstance(xyz, (list, tuple)) and len(xyz) >= 3:
         xyz_t = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
     phrase = str(payload.get("phrase") or "")
+    target_kind = str(payload.get("target_kind") or "")
+    target_id = str(payload.get("target_id") or payload.get("frontier_id") or "")
+    view_id = str(payload.get("view_id") or "")
+    room = str(payload.get("room") or "")
     status = str(outcome.status or payload.get("nav_note") or payload.get("error") or "")
     if kind == "verify":
         st = status.upper()
@@ -153,6 +157,10 @@ def maybe_record_tool_attempt(
             xyz=xyz_t,
             source=source,
             phrase=phrase,
+            room=room,
+            target_kind=target_kind,
+            target_id=target_id,
+            view_id=view_id,
         )
     except Exception:
         pass

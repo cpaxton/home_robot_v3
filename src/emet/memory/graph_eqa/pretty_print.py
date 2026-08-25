@@ -53,8 +53,10 @@ def format_scene_graph_pretty(
         nodes = nodes[:max_nodes]
 
     lines.append(f" Nodes ({len(memory.get_nodes())})")
+    from emet.memory.graph_eqa.graph_memory import node_display_name
+
     for n in nodes:
-        lbl = _format_node_labels_line(n.labels)
+        lbl = node_display_name(n)
         lines.append(
             f"   [{n.node_id:3d}]  {lbl}    xyz=({n.xyz[0]:7.3f}, {n.xyz[1]:7.3f}, {n.xyz[2]:7.3f})  obs={n.obs_id}"
         )
