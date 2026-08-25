@@ -2104,7 +2104,8 @@ def test_attached_index_and_find_queue_in_prompt_hints():
     )
     idx = mem.format_attached_index([1])
     assert "Image 1=obs1" in idx
-    assert idx.startswith("ATTACHED_INDEX:")
+    assert "FIND_QUEUE or GRAPH_COUNT" in idx
+    assert "read N with a graph obs id" in idx
     q = "How many table lamps are there? A) One B) Two C) Three D) Four. Answer:"
     queue = mem.format_find_queue(q, attached_obs_ids=[1])
     assert "FIND_QUEUE" in queue
