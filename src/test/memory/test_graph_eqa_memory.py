@@ -698,8 +698,8 @@ def test_query_answer_does_not_finalize_yes_no_when_uncovered():
     assert mem.last_eqa_model_confident is True
 
 
-def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
-    """HM3D keyword/label matches should be Image 1 ahead of SigLIP grounder fills."""
+def test_select_relevant_obs_ids_prefers_visual_find_before_keyword_label():
+    """SigLIP/grounder FIND is Image 1; YoloE/caption labels remain extra recall."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["oven"])
@@ -707,10 +707,10 @@ def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
     mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["door"])
     mem._relevant_objects = ["basket"]
     mem._relevant_phrases = ["woven basket"]
-    # Grounder points at oven (wrong); keyword match for basket must still win Image 1.
     mem.set_obs_id_grounder(lambda text: 1)
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
-    assert obs_ids[0] == 2
+    assert obs_ids[0] == 1
+    assert 2 in obs_ids
 
 
 def test_relevant_memory_summary_uses_siglip_grounder():
@@ -1132,6 +1132,20 @@ def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
     mem.set_obs_id_grounder(lambda text: 3 if "bed" in text else None)
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
     assert obs_ids[0] == 3
+
+
+def test_select_relevant_obs_ids_spreads_same_noun_xy():
+    """Count FIND of one noun should include a far cluster, not three near duplicates."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stool"])
+    mem.add_observation(rgb, np.array([0.2, 0.0, 0.5]), ["stool"])
+    mem.add_observation(rgb, np.array([8.0, 8.0, 0.5]), ["stool"])
+    mem._relevant_objects = ["stool"]
+    mem._relevant_phrases = ["stool"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=2)
+    assert 3 in obs_ids
+    assert set(obs_ids) & {1, 2}
 
 
 def test_select_relevant_obs_ids_no_keywords_uses_recent():

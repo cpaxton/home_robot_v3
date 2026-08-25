@@ -8,12 +8,13 @@ The graph is an index into stored RGB, not the answer. Scene frames are the
 default attach; detector crops are optional extras (close-ups of a view already
 shown) so a pillow or plant crop is not counted as a second object. These
 helpers also decide when a look at one observation has already been spent
-(so the agent looks somewhere else instead of orbiting).
+(so the agent looks somewhere else instead of orbiting), and spread FIND views
+of the same noun in XY so one cluster cannot fill the image budget.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -106,6 +107,42 @@ def eqa_look_is_spent(
     if len(dists) >= 2 and float(dists[-1]) < float(progress_m):
         return True
     return False
+
+
+def spread_obs_ids_xy(
+    obs_ids: Sequence[int],
+    xyz_xy: Callable[[int], np.ndarray | None],
+    *,
+    max_n: int,
+) -> list[int]:
+    """Greedy farthest-point sample so one XY cluster cannot fill FIND slots."""
+    if max_n <= 0:
+        return []
+    remaining = [int(oid) for oid in obs_ids]
+    if not remaining:
+        return []
+    out = [remaining.pop(0)]
+    while remaining and len(out) < int(max_n):
+        best_j = 0
+        best_d = -1.0
+        for j, oid in enumerate(remaining):
+            xy = xyz_xy(oid)
+            if xy is None:
+                d = 0.0
+            else:
+                dists = []
+                p = np.asarray(xy[:2], dtype=float)
+                for chosen in out:
+                    cxy = xyz_xy(chosen)
+                    if cxy is None:
+                        continue
+                    dists.append(float(np.linalg.norm(p - np.asarray(cxy[:2], dtype=float))))
+                d = min(dists) if dists else 0.0
+            if d > best_d:
+                best_d = d
+                best_j = j
+        out.append(remaining.pop(best_j))
+    return out
 
 
 def tightest_node_crop(nodes: Sequence[Any], rgb: np.ndarray) -> np.ndarray | None:

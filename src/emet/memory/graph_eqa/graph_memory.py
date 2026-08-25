@@ -41,8 +41,10 @@ from emet.memory.graph_eqa.attempt_ledger import (
     summary_bits_for_obs,
 )
 from emet.memory.graph_eqa.eqa_views import (
+    EQA_SAME_OBS_PROGRESS_M,
     eqa_look_is_spent,
     rgb_uint8,
+    spread_obs_ids_xy,
     tightest_node_crop,
 )
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
@@ -72,6 +74,8 @@ _logger = Logger(__name__)
 SIGLIP_PRESENT_THRESHOLD = 0.21
 # Stronger bar before SigLIP-only evidence may override the VLM or finalize confidence.
 SIGLIP_CONFIRM_THRESHOLD = 0.28
+# Question tokens that retrieve garbage in SigLIP (clock questions say "time").
+_WEAK_SIGLIP_FIND_TOKENS = frozenset({"time", "hour", "now", "today", "moment"})
 
 
 # Source tiers for hyp *recall* only (not a VLM decision policy).
@@ -967,6 +971,11 @@ class GraphEQAMemory:
         self.last_mcq_debias: dict[str, Any] = {}
         self._text_grounder: Callable[[str], tuple[float, np.ndarray] | None] | None = None
         self._obs_id_grounder: Callable[[str], int | None] | None = None
+        self._visual_find_fn: Callable[..., list[Any]] | None = None
+        # phrase → top-k (sim, obs_id) from find_all_images / whole-image rank, frozen
+        # before prepare_dynagraph_vram_for_eqa drops GPU SigLIP.
+        self._visual_find_rank_cache: dict[str, list[tuple[float, int]]] = {}
+        self._eqa_highlight_key: tuple[str, int] | None = None
         self._enrich_object_hints: list[str] = []
         self._history_outputs: list[str] = []
         self._relevant_phrases: list[str] = []
@@ -3272,6 +3281,299 @@ class GraphEQAMemory:
             return oid
         return None
 
+    def _obs_xy(self, obs_id: int) -> np.ndarray | None:
+        obs = self._observation_by_id(int(obs_id))
+        if obs is None or getattr(obs, "xyz", None) is None:
+            return None
+        return np.asarray(obs.xyz, dtype=float)[:2]
+
+    def _spread_obs_xy(self, obs_ids: list[int], *, max_n: int) -> list[int]:
+        return spread_obs_ids_xy(obs_ids, self._obs_xy, max_n=max_n)
+
+    def _eqa_find_phrases(self) -> list[str]:
+        phrases: list[str] = []
+        for raw in (
+            list(self._relevant_phrases or [])
+            + list(self._relevant_objects or [])
+            + list(self._confirmed_memory_phrases())
+        ):
+            text = str(raw or "").strip()
+            if text and text not in phrases:
+                phrases.append(text)
+        return phrases
+
+    def _phrases_need_rgb_highlight(self, visual_pins: list[int], phrases: list[str]) -> bool:
+        """True when SigLIP retrieve is empty or the question phrases are weak (e.g. ``time``)."""
+        if len(visual_pins) >= 2:
+            return False
+        tokens: set[str] = set()
+        for phrase in phrases:
+            tokens |= _object_match_tokens(phrase)
+        concrete = {tok for tok in tokens if tok not in _WEAK_SIGLIP_FIND_TOKENS}
+        if visual_pins and concrete:
+            return False
+        return True
+
+    def _merge_highlight_phrases(self, extra: list[str]) -> None:
+        objects = list(self._relevant_objects or [])
+        phrases = list(self._relevant_phrases or [])
+        for name in extra:
+            key = str(name).strip().lower()
+            if not key:
+                continue
+            if key not in objects:
+                objects.append(key)
+            if key not in phrases:
+                phrases.append(key)
+        self._relevant_objects = objects
+        # Keep an empty phrase list empty so coverage still uses the full object list.
+        if self._relevant_phrases:
+            self._relevant_phrases = phrases
+
+    def _highlight_relevant_from_latest_rgb(self, question: str) -> list[str]:
+        """One pass on the live/latest full frame: names that could answer the question.
+
+        Not detector boxes. Skip when the client is missing, the latest view was already
+        highlighted for this question, or the reply looks like an EQA field dump.
+        """
+        client = self.image_description_client
+        if client is None:
+            return []
+        obs = None
+        for candidate in reversed(self._observations):
+            if self._obs_usable_for_eqa_image(int(candidate.obs_id)):
+                obs = candidate
+                break
+        if obs is None:
+            return []
+        key = (str(question), int(obs.obs_id))
+        if self._eqa_highlight_key == key:
+            return []
+        prompt = (
+            f"Question: {question}\n"
+            "Name 1-3 objects visible in this image that could help answer the question. "
+            "Comma-separated short nouns only (for example: wall clock, stool). "
+            "If nothing relevant is visible, reply none."
+        )
+        try:
+            image = Image.fromarray(rgb_uint8(obs.rgb), mode="RGB")
+            raw = client([prompt, image])
+        except Exception:
+            return []
+        self._eqa_highlight_key = key
+        text = raw if isinstance(raw, str) else str(raw or "")
+        low = text.lower()
+        if "reasoning:" in low or "answer:" in low or "confidence:" in low:
+            return []
+        out: list[str] = []
+        for part in re.split(r"[,;\n]", text):
+            name = part.strip(" .").lower()
+            if not name or name in {"none", "n/a", "nothing", "no", "unknown"}:
+                continue
+            if len(name) < 3 or len(name) > 40:
+                continue
+            if len(name.split()) > 4:
+                continue
+            if name not in out:
+                out.append(name)
+            if len(out) >= 3:
+                break
+        return out
+
+    def resolve_voxel_frame_to_graph_obs_id(self, voxel_obs_count: int, voxel_map: Any | None = None) -> int | None:
+        """Map a DynaMem voxel ``obs_count`` (1-based frame index) to a graph observation id.
+
+        Voxel frames and graph obs ids diverge after instance merges. Prefer a graph view
+        whose capture pose matches the voxel camera; fall back to the raw id when it is
+        already a usable graph observation.
+        """
+        voc = int(voxel_obs_count)
+        cam = None
+        frame_rgb = None
+        obs_list = getattr(voxel_map, "observations", None) if voxel_map is not None else None
+        if obs_list:
+            idx = voc - 1
+            if 0 <= idx < len(obs_list):
+                frame = obs_list[idx]
+                rgb = getattr(frame, "rgb", None)
+                if rgb is not None:
+                    frame_rgb = np.asarray(rgb)
+                pose = getattr(frame, "camera_pose", None)
+                if pose is not None:
+                    try:
+                        cam = np.asarray(pose, dtype=float).reshape(4, 4)[:3, 3]
+                    except Exception:
+                        cam = None
+        best_oid: int | None = None
+        best_score = -1.0
+        for gobs in self._observations:
+            oid = int(gobs.obs_id)
+            if not self._obs_usable_for_eqa_image(oid):
+                continue
+            score = 0.0
+            if cam is not None:
+                view = gobs.viewer_xyz if gobs.viewer_xyz is not None else gobs.xyz
+                if view is not None:
+                    dist = float(
+                        np.linalg.norm(np.asarray(view, dtype=float).reshape(-1)[:3] - cam[:3])
+                    )
+                    if dist < 0.75:
+                        score += 10.0 - dist
+            if frame_rgb is not None:
+                graph_rgb = np.asarray(gobs.rgb)
+                if graph_rgb.shape == frame_rgb.shape:
+                    score += 0.5
+                    if np.shares_memory(graph_rgb, frame_rgb) or graph_rgb is frame_rgb:
+                        score += 5.0
+            if score > best_score:
+                best_score = score
+                best_oid = oid
+        if best_oid is not None and best_score > 0:
+            return best_oid
+        if self._obs_usable_for_eqa_image(voc):
+            return voc
+        return None
+
+    def nearest_graph_obs_to_xyz(self, xyz: Any, *, max_dist_m: float = 2.0) -> int | None:
+        """Nearest usable graph observation to a SigLIP voxel point (planar XY)."""
+        try:
+            target = np.asarray(xyz, dtype=float).reshape(-1)[:2]
+        except Exception:
+            return None
+        if target.size < 2:
+            return None
+        best_oid: int | None = None
+        best_dist = float("inf")
+        for gobs in self._observations:
+            oid = int(gobs.obs_id)
+            if not self._obs_usable_for_eqa_image(oid) or gobs.xyz is None:
+                continue
+            xy = np.asarray(gobs.xyz, dtype=float).reshape(-1)[:2]
+            dist = float(np.linalg.norm(xy - target))
+            if dist < best_dist:
+                best_dist = dist
+                best_oid = oid
+        if best_oid is None or best_dist > float(max_dist_m):
+            return None
+        return best_oid
+
+    def _visual_find_obs_ids(self, phrases: list[str], *, max_n: int) -> list[int]:
+        """Rank stored RGB by SigLIP retrieve vs question phrases (not YoloE names)."""
+        if max_n <= 0:
+            return []
+        scored: list[tuple[float, int]] = []
+        seen: set[int] = set()
+
+        def _add(sim: float, oid: int | None) -> None:
+            if oid is None:
+                return
+            oi = int(oid)
+            if not self._obs_usable_for_eqa_image(oi):
+                return
+            if oi in seen:
+                for i, (old_sim, old_oid) in enumerate(scored):
+                    if old_oid == oi and float(sim) > old_sim:
+                        scored[i] = (float(sim), oi)
+                return
+            seen.add(oi)
+            scored.append((float(sim), oi))
+
+        visual_fn = getattr(self, "_visual_find_fn", None)
+        if visual_fn is not None:
+            for phrase in phrases:
+                hits: Any = []
+                try:
+                    hits = visual_fn(str(phrase), max(int(max_n) * 3, 8))
+                except TypeError:
+                    try:
+                        hits = visual_fn(str(phrase))
+                    except Exception:
+                        hits = []
+                except Exception:
+                    hits = []
+                for item in hits or []:
+                    if isinstance(item, (tuple, list)) and len(item) >= 2:
+                        _add(float(item[0]), int(item[1]))
+                    else:
+                        try:
+                            _add(max(SIGLIP_PRESENT_THRESHOLD, 0.25), int(item))
+                        except (TypeError, ValueError):
+                            continue
+        rank_cache = getattr(self, "_visual_find_rank_cache", None) or {}
+        for phrase in phrases:
+            key = str(phrase or "").strip().lower()
+            if not key:
+                continue
+            for sim, oid in rank_cache.get(key, []):
+                _add(float(sim), int(oid))
+        enc = getattr(self, "_confirmed_memory_siglip_encoder", None)
+        feats = getattr(self, "_obs_siglip_features", None) or {}
+        if enc is not None and feats:
+            from emet.memory.graph_eqa.graph_eqa_siglip import rank_observations_for_phrase
+
+            for phrase in phrases:
+                for sim, oid in rank_observations_for_phrase(str(phrase), enc, feats):
+                    if sim < SIGLIP_PRESENT_THRESHOLD:
+                        break
+                    _add(sim, oid)
+        for phrase in phrases:
+            key = str(phrase or "").strip().lower()
+            if not key:
+                continue
+            cached = self._siglip_phrase_cache.get(key)
+            if cached is None or cached[2] is None:
+                continue
+            if float(cached[0]) >= SIGLIP_PRESENT_THRESHOLD:
+                _add(float(cached[0]), int(cached[2]))
+        grounder = getattr(self, "_obs_id_grounder", None)
+        if grounder is not None:
+            for phrase in phrases:
+                try:
+                    oid = grounder(str(phrase))
+                except Exception:
+                    oid = None
+                if oid is not None:
+                    _add(max(SIGLIP_PRESENT_THRESHOLD, 0.25), int(oid))
+        scored.sort(key=lambda t: -t[0])
+        ordered = [oid for _sim, oid in scored]
+        return self._spread_obs_xy(ordered, max_n=max_n)
+
+    def eqa_attached_target_obs_id(self) -> int | None:
+        """Image 1 obs id when that view is already the visual FIND target."""
+        ids = list(self.last_eqa_obs_ids or [])
+        if not ids:
+            return None
+        oid = int(ids[0])
+        if not self._obs_usable_for_eqa_image(oid):
+            return None
+        phrases = self._eqa_find_phrases()
+        visual = self._visual_find_obs_ids(phrases, max_n=8)
+        if visual:
+            return oid if oid in set(visual) else None
+        if self._target_visible_in_obs_ids([oid]):
+            return oid
+        return None
+
+    def eqa_stay_on_attached_view(self) -> bool:
+        """True when Image 1 is already a FIND view — do not frontier-chase away from it."""
+        return self.eqa_attached_target_obs_id() is not None
+
+    def eqa_approach_attached_find(self, robot_xyt: Any | None = None) -> np.ndarray | None:
+        """Waypoint toward Image-1 FIND when the robot is still far; None to stay put."""
+        oid = self.eqa_attached_target_obs_id()
+        if oid is None or self.eqa_obs_look_spent(oid):
+            return None
+        waypoint = self._navigation_waypoint_for_obs(int(oid), robot_xyt)
+        if waypoint is None:
+            return None
+        robot_xy = self._robot_planar_xy(robot_xyt)
+        if robot_xy is None:
+            return waypoint
+        dist = float(math.hypot(float(waypoint[0]) - robot_xy[0], float(waypoint[1]) - robot_xy[1]))
+        if dist < EQA_SAME_OBS_PROGRESS_M:
+            return None
+        return waypoint
+
     def _eqa_rgb_for_obs(self, obs_id: int) -> np.ndarray | None:
         """Full camera frame for an observation (scene context for counting)."""
         obs = self._observation_by_id(int(obs_id))
@@ -4408,7 +4710,10 @@ class GraphEQAMemory:
 
         When ``choices`` are location MCQ options, prefer views whose labels match
         option landmarks (refrigerator, treadmill, …) *before* SigLIP nearest —
-        false CONFIRMED_MEMORY coords must not steal Image 1.
+        false CONFIRMED_MEMORY coords must not steal Image 1. Count / clock / other
+        questions rank stored RGB by visual FIND (DynaMem ``find_all_images`` /
+        SigLIP top-k) first; YoloE class strings are leftover recall only, spread
+        in XY so one cluster cannot fill the budget.
 
         For attribute/state questions, prefer views with lamp/light/curtain labels
         over frontiers before answering on/off or up/down.
@@ -4468,9 +4773,13 @@ class GraphEQAMemory:
                         return True
             return False
 
+        from emet.habitat.metrics import choices_are_location_mcq
+
+        location_q = bool(choices) and not attribute_question and choices_are_location_mcq(list(choices))
+
         # Unified Image-1 ranking for location MCQs:
         # boosted choice landmarks (fridge) > direct target (ladder) > weak aliases / generics.
-        if choices and not attribute_question:
+        if location_q:
             scored: list[tuple[float, int]] = []
             for o in self._observations:
                 oid = int(o.obs_id)
@@ -4501,14 +4810,16 @@ class GraphEQAMemory:
                 if take(oid):
                     return selected
 
-        # Target keyword / confirmed-memory label matches (non-MCQ or remaining budget).
-        # Round-robin across phrases so one noun cannot fill keyword_budget.
+        # Visual FIND (DynaMem SigLIP top-k) before YoloE/caption labels.
+        phrases = self._eqa_find_phrases()
+        for oid in self._visual_find_obs_ids(phrases, max_n=keyword_budget):
+            if take(oid):
+                return selected
+
+        # Target keyword / confirmed-memory label matches (extra recall).
+        # Round-robin across phrases; within a noun, pick views far apart in XY.
         seen_kw: set[int] = set()
         buckets: list[list[int]] = []
-        phrases = list(self._relevant_objects or [])
-        for phrase in list(self._confirmed_memory_phrases()):
-            if phrase not in phrases:
-                phrases.append(phrase)
         for obj in phrases:
             bucket: list[int] = []
             for o in reversed(self._observations):
@@ -4523,9 +4834,14 @@ class GraphEQAMemory:
         keyword_hits: list[int] = []
         while buckets and len(keyword_hits) < keyword_budget:
             bucket = buckets.pop(0)
-            keyword_hits.append(bucket[0])
-            if bucket[1:]:
-                buckets.append(bucket[1:])
+            pick = self._spread_obs_xy(keyword_hits + bucket, max_n=len(keyword_hits) + 1)
+            chosen = pick[-1] if pick else bucket[0]
+            if chosen not in bucket:
+                chosen = bucket[0]
+            keyword_hits.append(chosen)
+            rest = [oid for oid in bucket if oid != chosen]
+            if rest:
+                buckets.append(rest)
         for oid in keyword_hits[:keyword_budget]:
             if take(oid):
                 return selected
@@ -4620,6 +4936,94 @@ class GraphEQAMemory:
         into the VLM prompt regardless of its caption label.
         """
         self._obs_id_grounder = grounder
+
+    def set_visual_find_fn(self, fn: Callable[..., list[Any]] | None) -> None:
+        """Register DynaMem retrieve: ``phrase, max_n -> [(similarity, graph_obs_id), ...]``.
+
+        Backed by voxel ``find_all_images`` (top-k, not argmax) mapped onto graph
+        observation ids. SigLIP only proposes RGB; the VLM still reads the frames.
+        """
+        self._visual_find_fn = fn
+
+    def snapshot_visual_find_ranks(self, *, question: str = "") -> None:
+        """Cache top-k FIND ranks while SigLIP can still ``encode_text``.
+
+        Habitat dynagraph calls ``prepare_dynagraph_vram_for_eqa`` after
+        ``extract_relevant_objects`` and then drops GPU SigLIP so Qwen can load.
+        ``query_answer`` reads this cache instead of calling ``find_all_images``.
+        """
+        q = str(question or self._question or "").strip()
+        phrases: list[str] = []
+        for raw in self._eqa_find_phrases():
+            text = str(raw or "").strip()
+            if text and text not in phrases:
+                phrases.append(text)
+        if q:
+            for raw in heuristic_relevant_phrases(q) + heuristic_relevant_objects(q):
+                text = str(raw or "").strip()
+                if text and text not in phrases:
+                    phrases.append(text)
+            q_low = q.lower()
+            clockish = any(
+                s in q_low for s in ("what time", "time is it", "o'clock", "o’clock", "wall clock", "clock")
+            )
+            if clockish:
+                for extra in ("clock", "wall clock"):
+                    if extra not in phrases:
+                        phrases.append(extra)
+        if not phrases:
+            return
+        cache = dict(self._visual_find_rank_cache)
+        visual_fn = self._visual_find_fn
+        enc = self._confirmed_memory_siglip_encoder
+        feats = self._obs_siglip_features or {}
+
+        def _merge(rows: list[tuple[float, int]], sim: float, oid: int | None) -> None:
+            if oid is None:
+                return
+            oi = int(oid)
+            for i, (old_sim, old_oid) in enumerate(rows):
+                if old_oid == oi:
+                    if float(sim) > old_sim:
+                        rows[i] = (float(sim), oi)
+                    return
+            rows.append((float(sim), oi))
+
+        for phrase in phrases:
+            key = phrase.strip().lower()
+            if not key:
+                continue
+            rows: list[tuple[float, int]] = list(cache.get(key, []))
+            if visual_fn is not None:
+                hits: Any = []
+                try:
+                    hits = visual_fn(str(phrase), 12)
+                except TypeError:
+                    try:
+                        hits = visual_fn(str(phrase))
+                    except Exception:
+                        hits = []
+                except Exception:
+                    hits = []
+                for item in hits or []:
+                    if isinstance(item, (tuple, list)) and len(item) >= 2:
+                        _merge(rows, float(item[0]), int(item[1]))
+                    else:
+                        try:
+                            _merge(rows, max(SIGLIP_PRESENT_THRESHOLD, 0.25), int(item))
+                        except (TypeError, ValueError):
+                            continue
+            if enc is not None and feats:
+                from emet.memory.graph_eqa.graph_eqa_siglip import rank_observations_for_phrase
+
+                for sim, oid in rank_observations_for_phrase(str(phrase), enc, feats):
+                    if float(sim) < SIGLIP_PRESENT_THRESHOLD:
+                        break
+                    _merge(rows, float(sim), int(oid))
+            if rows:
+                rows.sort(key=lambda t: -t[0])
+                cache[key] = rows
+        self._visual_find_rank_cache = cache
 
     def _nearest_object_neighbors(
         self,
@@ -5897,11 +6301,20 @@ class GraphEQAMemory:
         return _collapse_count_nodes_spatially(list(unique.values())), target
 
     def _graph_count_hint(self, question: str) -> str:
-        """List instance views to inspect for count MCQs; never assert an exact integer."""
+        """List views to inspect for count MCQs; never assert an exact integer."""
         matches, target = self._count_candidate_nodes(question)
+        phrase = target.phrase if target is not None else "target"
+        visual = self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=6)
+        if visual:
+            labeled = "; ".join(f"[Image {int(oid)}]" for oid in visual)
+            return (
+                f"GRAPH_COUNT: views to look at for '{phrase}' "
+                f"(go look at these Image ids; not an exact count): {labeled}. "
+                "Count from attached images after looking; "
+                "do not use this list length as the answer."
+            )
         if not matches:
             return ""
-        phrase = target.phrase if target is not None else "target"
         scope_note = ""
         if target is not None and target.scope_tokens:
             room_by_id = self._node_room_by_id()
@@ -5999,6 +6412,12 @@ class GraphEQAMemory:
         _take(extra, selected)
         out: list[int] = []
         pin_set = set(pins)
+        # Verified evidence on a non-count question is Image 1 (agentic verified submit):
+        # a stale Action look or location-FIND pin must not displace the confirmed evidence.
+        # Count MCQs keep FIND pins ahead of force_obs so a single verified frame cannot
+        # occupy the whole budget.
+        if not count_question:
+            _take(out, forced)
         look_relevant = bool(look and look[0] in pin_set)
         # Image 1 is a question-relevant stored view, not the last nav frame.
         # Hallway look after frontier chase must not displace clock / FIND RGB.
@@ -6049,6 +6468,7 @@ class GraphEQAMemory:
             choices_are_attribute_state,
             choices_are_count_mcq,
             choices_are_location_mcq,
+            choices_are_time_of_day,
             parse_mcq_choices_from_question,
             question_is_attribute_state,
             question_is_visibility_location,
@@ -6078,6 +6498,14 @@ class GraphEQAMemory:
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         count_q = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
+        time_q = bool(parsed_choices and choices_are_time_of_day(parsed_choices) and not attribute_q)
+        location_q = bool(
+            parsed_choices
+            and choices_are_location_mcq(parsed_choices)
+            and not count_q
+            and not attribute_q
+            and not time_q
+        )
         # Honor Action:N from the previous call / post-nav look even when this submit
         # forces a different verified obs as Image 1. Do not drop the pin until
         # this call actually attaches it as Image 1 (q86 Action 163).
@@ -6086,12 +6514,33 @@ class GraphEQAMemory:
             look_obs_id = self.last_eqa_action_obs_id
         count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
         pin_obs: list[int] = []
-        for node in count_nodes:
-            oid = int(node.obs_id)
-            if oid in pin_obs:
-                continue
-            if self._obs_usable_for_eqa_image(oid):
-                pin_obs.append(oid)
+        phrases = self._eqa_find_phrases()
+        visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
+        q_low = str(question or "").lower()
+        clockish = any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock", "wall clock"))
+        if (
+            (count_q or time_q or clockish)
+            and not location_q
+            and self._phrases_need_rgb_highlight(visual_pins, phrases)
+        ):
+            extra_hl = self._highlight_relevant_from_latest_rgb(question)
+            if extra_hl:
+                self._merge_highlight_phrases(extra_hl)
+                phrases = self._eqa_find_phrases()
+                visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
+        # Location MCQs keep landmark Image 1; visual FIND is leftover recall there.
+        if not location_q:
+            for oid in visual_pins:
+                if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(int(oid))
+        # YoloE instance nodes are FIND only when SigLIP retrieved nothing.
+        if not pin_obs:
+            for node in count_nodes:
+                oid = int(node.obs_id)
+                if oid in pin_obs:
+                    continue
+                if self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(oid)
         if not pin_obs:
             for node in self._location_finder_nodes()[:4]:
                 oid = int(node.obs_id)
@@ -6099,6 +6548,7 @@ class GraphEQAMemory:
                     continue
                 if self._obs_usable_for_eqa_image(oid):
                     pin_obs.append(oid)
+        pin_obs = self._spread_obs_xy(pin_obs, max_n=max_images)
         forced: list[int] = []
         if force_obs_ids:
             for oid in force_obs_ids:

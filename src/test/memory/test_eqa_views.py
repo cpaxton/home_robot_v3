@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from emet.memory.graph_eqa.eqa_views import crop_rgb_tight_bbox, eqa_look_is_spent
+from emet.memory.graph_eqa.eqa_views import crop_rgb_tight_bbox, eqa_look_is_spent, spread_obs_ids_xy
+from emet.memory.graph_eqa.graph_eqa_siglip import flatten_find_all_images
 
 
 def test_eqa_look_spent_after_sub_meter_revisit():
@@ -23,3 +25,26 @@ def test_crop_rgb_tight_bbox_drops_full_frame_boxes():
     assert crop is not None
     assert crop.shape[1] < 10
     assert crop_rgb_tight_bbox(rgb, (0, 0, 10, 10)) is None
+
+
+def test_spread_obs_ids_xy_picks_farthest_cluster_second():
+    xyz = {
+        1: np.array([0.0, 0.0]),
+        2: np.array([0.2, 0.0]),
+        3: np.array([8.0, 8.0]),
+    }
+    out = spread_obs_ids_xy([1, 2, 3], xyz.get, max_n=2)
+    assert out[0] == 1
+    assert out[1] == 3
+
+
+def test_flatten_find_all_images_restores_score_order():
+    import torch
+
+    ids = torch.tensor([2, 5, 1])
+    aligns = torch.tensor([0.21, 0.40, 0.30])
+    points = torch.tensor([[2.0, 0.0, 0.0], [5.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+    ranked = flatten_find_all_images(ids, points, aligns)
+    assert [voc for _s, voc, _p in ranked] == [5, 1, 2]
+    assert ranked[0][0] == pytest.approx(0.40, abs=1e-5)
+    assert flatten_find_all_images(torch.tensor([]), torch.zeros(0, 3), torch.tensor([])) == []
