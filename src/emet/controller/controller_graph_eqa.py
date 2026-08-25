@@ -928,7 +928,8 @@ class GraphEQAController(DynamemController):
                         )
                     )
             stuck_retries = 0
-            min_success_dist_m = 0.5
+            # Per-step displacement from navigate_to_target_pose (not distance-to-goal).
+            min_success_dist_m = 0.08
             for move_i in range(max_movement_step):
                 logger.info(
                     "EQA nav: step %d/%d target=(%.2f, %.2f)",

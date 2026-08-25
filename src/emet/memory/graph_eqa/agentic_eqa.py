@@ -5555,16 +5555,26 @@ class AgenticEQAExecutor:
             spent_fn = getattr(gm, "eqa_obs_look_spent", None)
             spent_look = bool(callable(spent_fn) and spent_fn(oid) is True)
             if spent_look:
-                self._pin_eqa_look_obs(oid)
-                gm.last_eqa_action_obs_id = None
+                nxt_fn = getattr(gm, "next_unspent_eqa_obs_id", None)
+                alt = (
+                    nxt_fn(missing_find, skip={oid})
+                    if count_mcq and missing_find and callable(nxt_fn)
+                    else None
+                )
                 self._append_trace(
                     {
                         "event": "skip_spent_eqa_action",
                         "obs_id": oid,
+                        "alt_obs_id": alt,
                         "prior_answer": submit_out.get("answer"),
                     }
                 )
-            elif oid not in self._followed_eqa_actions:
+                if alt is not None and int(alt) not in self._followed_eqa_actions:
+                    oid = int(alt)
+                    spent_look = False
+                else:
+                    gm.last_eqa_action_obs_id = None
+            if not spent_look and oid not in self._followed_eqa_actions:
                 # Soft +1 budget so Action:N is not starved by prior explore_frontier calls.
                 if self._n_nav + self._n_explore >= self.max_nav_steps + 1:
                     return False
