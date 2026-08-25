@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from emet.memory.graph_eqa.agentic_eqa import OVMM_NEAR_INVESTIGATE_M, AgenticEQAExecutor
-from emet.memory.graph_eqa.graph_memory import NavHypothesis
+from emet.memory.graph_eqa.agentic_eqa import (
+    DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
+    INVESTIGATE_ANNULUS_OUTER_M,
+    OVMM_NEAR_INVESTIGATE_M,
+    AgenticEQAExecutor,
+)
+from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, NavHypothesis
 
 
 def _executor(*, phase: str = "", meta: dict | None = None) -> AgenticEQAExecutor:
@@ -198,3 +203,139 @@ def test_prefer_explore_skipped_when_absent_at_non_target_fixture():
         approach_index=0,
     )
     assert ex._prefer_explore is False
+
+
+def _graph_memory_stub() -> GraphEQAMemory:
+    gm = GraphEQAMemory.__new__(GraphEQAMemory)
+    gm.image_nav_min_approach_m = 0.35
+    gm._robot_planar_xy = GraphEQAMemory._robot_planar_xy.__get__(gm, GraphEQAMemory)
+    gm._orbit_approach_samples = GraphEQAMemory._orbit_approach_samples.__get__(gm, GraphEQAMemory)
+    gm._standoff_waypoint_toward = GraphEQAMemory._standoff_waypoint_toward.__get__(gm, GraphEQAMemory)
+    return gm
+
+
+def test_investigate_target_xyz_synthetic_uses_standoff_not_raw_anchor():
+    ex = _executor(phase="find_recep", meta={"goal_recep": "counter"})
+    oid = -3_000_000
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="counter",
+            obs_id=oid,
+            xyz=np.array([2.0, 0.0, 0.9]),
+            score=0.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ex._voxel_planner = lambda: (None, None)  # type: ignore[method-assign]
+    gm = _graph_memory_stub()
+    gm._obs_nav_anchor = lambda _oid: None  # type: ignore[method-assign]
+    gm._navigation_waypoint_for_obs = lambda _oid, _xyt: None  # type: ignore[method-assign]
+    ex.agent.graph_memory = gm
+
+    wp = ex._investigate_target_xyz(oid, 0)
+    assert wp is not None
+    dist_to_anchor = float(np.hypot(float(wp[0]) - 2.0, float(wp[1]) - 0.0))
+    assert 0.1 < dist_to_anchor < 2.0
+
+
+def test_investigate_target_xyz_falls_through_when_graph_waypoint_none():
+    ex = _executor()
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="table",
+            obs_id=12,
+            xyz=np.array([3.0, 1.0, 0.8]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ex._voxel_planner = lambda: (None, None)  # type: ignore[method-assign]
+    gm = _graph_memory_stub()
+    gm._obs_nav_anchor = lambda oid: np.array([3.0, 1.0, 0.8]) if int(oid) == 12 else None
+    gm._navigation_approach_waypoint_for_obs = lambda *_a, **_k: None
+    gm._navigation_waypoint_for_obs = lambda *_a, **_k: None
+    ex.agent.graph_memory = gm
+
+    wp = ex._investigate_target_xyz(12, 0)
+    assert wp is not None
+    assert float(np.hypot(float(wp[0]) - 3.0, float(wp[1]) - 1.0)) > 0.1
+
+
+def test_synthetic_arrival_theta_faces_object_anchor():
+    ex = _executor(phase="find_recep", meta={"goal_recep": "table"})
+    oid = -3_000_000
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="table",
+            obs_id=oid,
+            xyz=np.array([2.0, 0.0, 0.9]),
+            score=0.0,
+            source="graph",
+        ),
+    ]
+    target = np.array([1.5, 0.0, 1.0])
+    look_x, look_y = ex._investigate_arrival_look_at_xy(oid, target)
+    assert look_x == 2.0
+    assert look_y == 0.0
+    theta = float(np.arctan2(look_y - target[1], look_x - target[0]))
+    assert abs(theta) < 1e-6
+
+
+def test_investigate_no_waypoint_marks_approach_tried():
+    ex = _executor(phase="find_recep", meta={"goal_recep": "table"})
+    oid = -3_000_000
+    hyp = NavHypothesis(
+        phrase="table",
+        obs_id=oid,
+        xyz=np.array([1.0, 0.0, 0.9]),
+        score=0.0,
+        source="graph",
+    )
+    ex._hypotheses = [hyp]
+    ex.agent.graph_memory = MagicMock()
+    ex.agent.navigate_to_target_pose = MagicMock()
+    with patch.object(ex, "_investigate_target_xyz", return_value=None):
+        out = ex._tool_investigate(oid)
+    assert out["status"] == "NO_WAYPOINT"
+    assert ex._tried.get(oid) == "no waypoint"
+    assert ex._place_inspect[oid].tried_approaches
+    assert oid in ex._unreachable_obs_ids
+    assert ex._hypothesis_nav_blocked(oid) is True
+
+
+def test_investigate_annulus_outer_m_scoped():
+    assert _executor(phase="find_recep")._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
+    assert _executor(phase="find_object")._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
+    close_look = _executor()
+    close_look._close_look_required = True
+    assert close_look._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
+    assert _executor()._investigate_annulus_outer_m() == DEFAULT_INVESTIGATE_ANNULUS_OUTER_M
+
+
+def test_investigate_target_xyz_forwards_tight_outer_radius_to_graph_annulus():
+    ex = _executor(phase="find_recep", meta={"goal_recep": "cab"})
+    oid = 12
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="cab",
+            obs_id=oid,
+            xyz=np.array([3.0, 1.0, 0.8]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ex._voxel_planner = lambda: (None, None)  # type: ignore[method-assign]
+    gm = _graph_memory_stub()
+    gm._obs_nav_anchor = lambda oid_: np.array([3.0, 1.0, 0.8]) if int(oid_) == oid else None
+    spy = MagicMock(return_value=np.array([3.2, 1.1, 1.0]))
+    gm._navigation_approach_waypoint_for_obs = spy
+    gm._navigation_waypoint_for_obs = lambda *_a, **_k: None
+    ex.agent.graph_memory = gm
+
+    wp = ex._investigate_target_xyz(oid, 0)
+    assert wp is not None
+    assert spy.call_args is not None
+    assert spy.call_args.kwargs.get("radius_outer_m") == INVESTIGATE_ANNULUS_OUTER_M

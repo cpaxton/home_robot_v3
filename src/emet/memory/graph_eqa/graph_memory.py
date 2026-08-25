@@ -5586,9 +5586,11 @@ class GraphEQAMemory:
         avoid_xy: list[tuple[float, float]] | None = None,
         voxel_map: Any | None = None,
         planner: Any | None = None,
+        radius_outer_m: float | None = None,
     ) -> np.ndarray | None:
         """Sample a planar approach around the observation (annulus when map available)."""
         from emet.memory.graph_eqa.place_approaches import (
+            DEFAULT_ANNULUS_OUTER_M,
             make_grid_converters,
             sample_annulus_approach_xy,
         )
@@ -5625,6 +5627,9 @@ class GraphEQAMemory:
                         ij_to_xy=ij_to_xy,
                         avoid_xy=avoid_xy,
                         radius_inner_m=max(0.35, float(self.image_nav_min_approach_m)),
+                        radius_outer_m=(
+                            float(radius_outer_m) if radius_outer_m is not None else DEFAULT_ANNULUS_OUTER_M
+                        ),
                         approach_index=int(approach_index),
                     )
                     if xy is not None:

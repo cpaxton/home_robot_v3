@@ -131,6 +131,9 @@ NAV_CONSECUTIVE_FAIL_LIMIT = 2
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
 # OVMM find_recep: prefer investigate when a place card is this close (teleport sim).
 OVMM_NEAR_INVESTIGATE_M = 3.5
+# Investigate / close-look standoff: keep outer ring within approached_close (1.0m).
+INVESTIGATE_ANNULUS_OUTER_M = 1.0
+DEFAULT_INVESTIGATE_ANNULUS_OUTER_M = 1.60
 
 # Question cues that force a close-look preference (time/state/count/detail).
 _CLOSE_LOOK_CUES = (
@@ -2095,6 +2098,127 @@ class AgenticEQAExecutor:
             return None
         return float(np.hypot(float(robot[0]) - anchor[0], float(robot[1]) - anchor[1]))
 
+    def _hypothesis_for_obs_id(self, obs_id: int) -> NavHypothesis | None:
+        oid = int(obs_id)
+        for h in self._investigate_hypotheses():
+            if int(h.obs_id) == oid:
+                return h
+        for h in self._hypotheses:
+            if int(h.obs_id) == oid:
+                return h
+        return None
+
+    def _hypothesis_nav_anchor_xyz(self, obs_id: int) -> np.ndarray | None:
+        """Object anchor for investigate standoff + arrival yaw (graph obs or synthetic hyp)."""
+        gm = self.graph_memory
+        if gm is not None and hasattr(gm, "_obs_nav_anchor"):
+            try:
+                anchor = gm._obs_nav_anchor(int(obs_id))
+            except Exception:
+                anchor = None
+            if anchor is not None:
+                try:
+                    arr = np.asarray(anchor, dtype=float).reshape(-1)
+                except (TypeError, ValueError):
+                    arr = None
+                if arr is not None and arr.size >= 2 and np.isfinite(arr[:2]).all():
+                    return arr[:3].copy() if arr.size >= 3 else np.array([arr[0], arr[1], 0.0], dtype=float)
+        hyp = self._hypothesis_for_obs_id(obs_id)
+        if hyp is not None:
+            try:
+                xyz = np.asarray(hyp.xyz, dtype=float).reshape(-1)
+            except (TypeError, ValueError):
+                xyz = None
+            if xyz is not None and xyz.size >= 2 and np.isfinite(xyz[:2]).all():
+                return xyz[:3].copy() if xyz.size >= 3 else np.array([xyz[0], xyz[1], 0.0], dtype=float)
+        return None
+
+    def _investigate_annulus_outer_m(self) -> float:
+        if self._ovmm_prefers_nearby_investigate() or self._close_look_required:
+            return INVESTIGATE_ANNULUS_OUTER_M
+        return DEFAULT_INVESTIGATE_ANNULUS_OUTER_M
+
+    def _investigate_arrival_look_at_xy(self, obs_id: int, target: np.ndarray) -> tuple[float, float]:
+        anchor = self._hypothesis_nav_anchor_xyz(obs_id)
+        if anchor is not None:
+            return float(anchor[0]), float(anchor[1])
+        t_arr = np.asarray(target, dtype=float).reshape(-1)
+        return float(t_arr[0]), float(t_arr[1])
+
+    def _sample_investigate_waypoint_at_anchor(
+        self,
+        anchor: np.ndarray,
+        *,
+        approach_index: int,
+        avoid: list[tuple[float, float]] | None,
+        xyt: np.ndarray | None,
+        _as_xy: Any,
+    ) -> np.ndarray | None:
+        gm = self.graph_memory
+        if gm is None:
+            return None
+        voxel_map, planner = self._voxel_planner()
+        robot_xy = gm._robot_planar_xy(xyt) if hasattr(gm, "_robot_planar_xy") else None
+        outer_m = self._investigate_annulus_outer_m()
+        r_in = max(0.35, float(getattr(gm, "image_nav_min_approach_m", 0.35) or 0.35))
+        if voxel_map is not None and hasattr(voxel_map, "get_2d_map"):
+            try:
+                from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
+                from emet.memory.graph_eqa.place_approaches import (
+                    footprint_from_xyz,
+                    make_grid_converters,
+                    sample_annulus_approach_xy,
+                )
+
+                converters = make_grid_converters(voxel_map)
+                if converters is not None:
+                    xy_to_ij, ij_to_xy, _res = converters
+                    obstacles, explored = voxel_map.get_2d_map()
+                    obstacles_b = _as_bool_numpy(obstacles)
+                    reachable = None
+                    frontier = None
+                    if xyt is not None and planner is not None:
+                        if hasattr(voxel_map, "get_reachable_map"):
+                            reachable = _as_bool_numpy(voxel_map.get_reachable_map(xyt, planner))
+                        if hasattr(voxel_map, "get_outside_frontier"):
+                            outside = voxel_map.get_outside_frontier(xyt, planner)
+                            frontier = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
+                    xy = sample_annulus_approach_xy(
+                        anchor_xy=(float(anchor[0]), float(anchor[1])),
+                        robot_xy=robot_xy,
+                        obstacles=obstacles_b,
+                        reachable=reachable,
+                        frontier=frontier,
+                        footprint=footprint_from_xyz(anchor),
+                        xy_to_ij=xy_to_ij,
+                        ij_to_xy=ij_to_xy,
+                        avoid_xy=avoid,
+                        radius_inner_m=r_in,
+                        radius_outer_m=outer_m,
+                        approach_index=int(approach_index),
+                    )
+                    if xy is not None:
+                        return _as_xy(xy)
+            except Exception as e:
+                _logger.debug(f"synthetic annulus approach unavailable: {e}")
+        if hasattr(gm, "_orbit_approach_samples"):
+            try:
+                samples = gm._orbit_approach_samples(
+                    anchor,
+                    robot_xy,
+                    n=PLACE_APPROACH_SAMPLES,
+                    radius_m=outer_m,
+                )
+                idx = int(approach_index) % len(samples)
+                got = _as_xy(samples[idx])
+                if got is not None:
+                    return got
+            except Exception as e:
+                _logger.debug(f"synthetic orbit approach unavailable: {e}")
+        if robot_xy is not None and hasattr(gm, "_standoff_waypoint_toward"):
+            return _as_xy(gm._standoff_waypoint_toward(robot_xy, anchor))
+        return _as_xy(anchor)
+
     def _record_place_inspect(
         self,
         obs_id: int,
@@ -2452,6 +2576,7 @@ class AgenticEQAExecutor:
         voxel_map, planner = self._voxel_planner()
         rec = self._place_inspect.get(int(obs_id))
         avoid = list(rec.tried_xy) if rec is not None else None
+        anchor_xyz = self._hypothesis_nav_anchor_xyz(obs_id)
 
         def _as_xy(raw: Any) -> np.ndarray | None:
             if raw is None:
@@ -2482,10 +2607,7 @@ class AgenticEQAExecutor:
                 and is_habitat_robot_client(robot)
             ):
                 sim = getattr(robot, "_sim", None)
-                anchor = None
-                if hasattr(gm, "_obs_nav_anchor"):
-                    anchor = gm._obs_nav_anchor(int(obs_id))
-                if sim is not None and anchor is not None:
+                if sim is not None and anchor_xyz is not None:
                     robot_xy = None
                     if xyt is not None:
                         robot_xy = (float(xyt[0]), float(xyt[1]))
@@ -2495,10 +2617,11 @@ class AgenticEQAExecutor:
                     )
                     got = sample_habitat_navmesh_approach_xy(
                         sim,
-                        anchor_xy=(float(anchor[0]), float(anchor[1])),
+                        anchor_xy=(float(anchor_xyz[0]), float(anchor_xyz[1])),
                         robot_xy=robot_xy,
                         approach_index=int(approach_index),
                         radius_inner_m=r_in,
+                        radius_outer_m=self._investigate_annulus_outer_m(),
                         avoid_xy=avoid,
                     )
                     if got is not None:
@@ -2507,7 +2630,7 @@ class AgenticEQAExecutor:
             _logger.debug(f"habitat navmesh approach unavailable: {e}")
 
         fn = getattr(gm, "_navigation_approach_waypoint_for_obs", None)
-        if callable(fn):
+        if callable(fn) and int(obs_id) >= 0:
             try:
                 got = _as_xy(
                     fn(
@@ -2518,6 +2641,7 @@ class AgenticEQAExecutor:
                         avoid_xy=avoid,
                         voxel_map=voxel_map,
                         planner=planner,
+                        radius_outer_m=self._investigate_annulus_outer_m(),
                     )
                 )
             except TypeError:
@@ -2527,13 +2651,24 @@ class AgenticEQAExecutor:
                     got = None
             if got is not None:
                 return got
-        if hasattr(gm, "_navigation_waypoint_for_obs"):
-            return _as_xy(gm._navigation_waypoint_for_obs(int(obs_id), xyt))
-        # Synthetic cards (SigLIP soft-seeded search targets) carry their own xyz; the
-        # graph has no node for these obs_ids, so use the hypothesis position directly.
-        for h in self._hypotheses:
-            if int(h.obs_id) == int(obs_id):
-                return _as_xy(h.xyz)
+        if hasattr(gm, "_navigation_waypoint_for_obs") and int(obs_id) >= 0:
+            got = _as_xy(gm._navigation_waypoint_for_obs(int(obs_id), xyt))
+            if got is not None:
+                return got
+        if anchor_xyz is not None:
+            try:
+                got = self._sample_investigate_waypoint_at_anchor(
+                    anchor_xyz,
+                    approach_index=int(approach_index),
+                    avoid=avoid,
+                    xyt=xyt,
+                    _as_xy=_as_xy,
+                )
+                if got is not None:
+                    return got
+            except Exception as e:
+                _logger.debug(f"synthetic approach sample failed for obs_id={obs_id}: {e}")
+            return _as_xy(anchor_xyz)
         return None
 
     def _maybe_retract_claim_after_station(
@@ -2707,7 +2842,27 @@ class AgenticEQAExecutor:
         xyt = self._robot_xyt()
         target = self._investigate_target_xyz(oid, next_ap)
         if target is None:
-            return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
+            # Waypoint resolution is deterministic per card (anchor independent of the
+            # approach bearing): block it now so the router / fallback advances instead
+            # of re-picking a failing card on every remaining approach index.
+            self._mark_approach_tried(oid, next_ap)
+            self._tried.setdefault(oid, "no waypoint")
+            self._unreachable_obs_ids.add(oid)
+            self._append_trace(
+                {
+                    "tool": trace_tool,
+                    "ok": False,
+                    "obs_id": oid,
+                    "status": "NO_WAYPOINT",
+                    "approach_index": int(next_ap),
+                }
+            )
+            return {
+                "ok": False,
+                "error": f"no waypoint for obs_id={obs_id}",
+                "status": "NO_WAYPOINT",
+                "obs_id": oid,
+            }
         start = self._robot_xyt_world() if xyt is not None else np.array([0.0, 0.0, 0.0])
         # Face the OBJECT on arrival, not the approach waypoint. navigate_to_target_pose
         # with target_theta=None leaves the final yaw arbitrary (often a wall), so the
@@ -2716,15 +2871,14 @@ class AgenticEQAExecutor:
         # at the target itself.
         try:
             t_arr = np.asarray(target, dtype=float).reshape(-1)
-            look_at = t_arr[:2]
-            gm = self.graph_memory
-            if gm is not None and hasattr(gm, "_obs_nav_anchor"):
-                anchor = gm._obs_nav_anchor(int(oid))
-                if anchor is not None:
-                    a_arr = np.asarray(anchor, dtype=float).reshape(-1)
-                    if a_arr.size >= 2 and np.isfinite(a_arr[:2]).all():
-                        look_at = a_arr[:2]
-            target_theta = float(np.arctan2(look_at[1] - t_arr[1], look_at[0] - t_arr[0]))
+            look_x, look_y = self._investigate_arrival_look_at_xy(oid, t_arr)
+            target_theta = float(np.arctan2(look_y - t_arr[1], look_x - t_arr[0]))
+            if math.hypot(look_x - t_arr[0], look_y - t_arr[1]) < 1e-6:
+                # Waypoint coincides with the anchor (robot already inside the min
+                # standoff): face the object from the current robot pose instead.
+                rxy = self._robot_xyt_world()
+                if rxy is not None:
+                    target_theta = float(np.arctan2(look_y - float(rxy[1]), look_x - float(rxy[0])))
         except Exception:
             target_theta = None
         try:
