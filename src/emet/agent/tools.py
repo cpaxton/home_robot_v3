@@ -44,6 +44,36 @@ def _graph_size_line(context: dict[str, Any], *, verbose: bool = True) -> str:
     return format_graph_size_report(gm, verbose=verbose)
 
 
+_DETAIL_ZOOM_CUES = (
+    "clock",
+    "what time",
+    "time is it",
+    "read ",
+    "digits",
+    "sign says",
+    "label",
+    "text on",
+    "what does it say",
+    "what does the sign",
+)
+
+
+def chat_wants_detail_zoom(text: str) -> bool:
+    """True when CHAT should attach a center-zoom head crop for small detail."""
+    low = str(text or "").lower()
+    return any(cue in low for cue in _DETAIL_ZOOM_CUES)
+
+
+def chat_head_rgb_for_reply(context: dict[str, Any], rgb: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Return head RGB for Discord; center-zoom when the user asked for detail."""
+    arr = np.asarray(rgb).copy()
+    if not context.get("detail_zoom_query"):
+        return arr, False
+    from emet.memory.graph_eqa.eqa_views import center_zoom_crop
+
+    return center_zoom_crop(arr), True
+
+
 def stash_discord_image(context: dict[str, Any], image: np.ndarray | None) -> bool:
     """Copy *image* into ``context`` for the agent loop to send with the user-facing reply."""
     if image is None:
@@ -348,8 +378,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if robot is not None and hasattr(robot, "get_observation"):
             obs = robot.get_observation()
             if obs is not None and getattr(obs, "rgb", None) is not None:
-                # Copy so ZMQ recv cannot mutate the buffer while Discord async-upload runs.
-                image = np.asarray(obs.rgb).copy()
+                image, _zoomed = chat_head_rgb_for_reply(context, obs.rgb)
         if image is not None:
             print_camera_frame_diagnostics(
                 "send_image (head obs rgb → Discord)",
@@ -357,9 +386,14 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
             )
         if stash_discord_image(context, image):
+            zoom_note = (
+                " Center-zoom crop for small detail (clock face, label, digits)."
+                if context.get("detail_zoom_query")
+                else ""
+            )
             if context.get("discord_bot") is not None:
-                return "Image queued for Discord (attached to the reply)."
-            return "Image captured (no Discord to send to)."
+                return f"Image queued for Discord (attached to the reply).{zoom_note}"
+            return f"Image captured (no Discord to send to).{zoom_note}"
         return "No image available."
 
     tools.append(
@@ -967,7 +1001,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         obs2 = robot.get_observation()
         if obs2 is not None and getattr(obs2, "rgb", None) is not None:
             live_rgb = np.asarray(obs2.rgb).copy()
-        image = live_rgb
+        image, zoomed = chat_head_rgb_for_reply(context, live_rgb)
         if image is not None:
             print_camera_frame_diagnostics(
                 "describe_scene (live head RGB → Discord)",
@@ -975,7 +1009,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
             )
         if stash_discord_image(context, image):
-            text = f"{text}\n(Attaching a photo of my current view.)"
+            if zoomed:
+                text = f"{text}\n(Attaching a center-zoom of my view for small detail — clock, label, or digits.)"
+            else:
+                text = f"{text}\n(Attaching a photo of my current view.)"
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)

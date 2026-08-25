@@ -180,14 +180,15 @@ q47 stays OK; q28/q78 OK via crop-as-Image1. Merged 2026-08-25 (PR #130).
 - [ ] **Exploration/coverage**: q86 (table lamps) still finds only 1 of 2 lamps. The
       agent pins the FIND view and loops `read1`/`1` on it (up to 20 planning steps)
       instead of going after the second instance. q32/q48/q51/q60 similarly stop early
-      or answer from a partial view. Need coverage-aware targets / second-instance search.
-- [ ] **Close-look / legibility**: q33/q43/q84 ("What time is it now?") fail because the
-      clock is *visible* but not *legible*. `read N` currently re-attaches the same full
-      frame (no detector bbox for clocks ⇒ no crop). A center-zoom / upscale of the
-      `read N` target view is the low-hanging next step.
-- [ ] Consider a `read N` re-crop path: on `read N`, attach a tighter/zoomed version of
-      that image (not just re-send the full frame), so written dials/answers become
-      legible without navigating again.
+      or answer from a partial view. **Mitigation landed (2026-08-25):** ATTACHED_INDEX,
+      FIND_QUEUE, off_prompt_find in VIEW_STATUS, `follow_unspent_find` in agentic_eqa,
+      read-release after 2 attempts. Re-validate on the 15-qid slice via
+      `./scripts/run_hmeqa_countclock_slice.sh` (managed `emet jobs`).
+- [x] **Close-look / legibility**: center-zoom on `read N` when no detector bbox
+      (`center_zoom_crop` in `eqa_views.py`; primary attach on read turn for time/clock
+      questions). HM-EQA prompt forbids guessing time from tiny clocks in wide frames.
+- [x] **read N re-crop path**: zoom attach on read + optional extra close-up slot in
+      `query_answer` when `detail_zoom=True`.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 

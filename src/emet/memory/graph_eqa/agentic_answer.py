@@ -791,6 +791,101 @@ class AgenticAnswerMixin:
                 _add(getattr(node, "obs_id", None))
         return out
 
+    def _attached_views_all_risky(self) -> bool:
+        gm = self.graph_memory
+        if gm is None:
+            return False
+        raw_ids = getattr(gm, "last_eqa_obs_ids", None)
+        if not isinstance(raw_ids, (list, tuple)) or not raw_ids:
+            return False
+        obs_ids = [int(x) for x in raw_ids]
+        risky_fn = getattr(gm, "eqa_obs_is_risky", None)
+        if not callable(risky_fn):
+            return False
+        return all(risky_fn(oid, obs_ids) is True for oid in obs_ids)
+
+    def _nav_and_verify_obs(self, oid: int) -> dict[str, Any]:
+        """One soft-over-budget navigate_to_obs + verify. Always returns a dict."""
+        old_budget = self.max_nav_steps
+        self.max_nav_steps = max(old_budget, self._n_nav + self._n_explore + 1)
+        nav: dict[str, Any] = {"ok": False}
+        try:
+            out = self.handle_tool("navigate_to_obs", {"obs_id": int(oid)})
+            if isinstance(out, dict):
+                nav = out
+            self.handle_tool("verify_siglip", {})
+        finally:
+            self.max_nav_steps = old_budget
+        return nav
+
+    def _maybe_follow_unspent_find(
+        self,
+        submit_out: dict[str, Any],
+        missing_find: list[int],
+    ) -> bool:
+        """Navigate to an unspent FIND view when attached slots are already spent.
+
+        Callers must skip this on a confident non-None count. ``read N`` is not a
+        reason to leave unless the attached set is already spent/risky.
+        """
+        gm = self.graph_memory
+        if gm is None or not missing_find:
+            return False
+        if not self._attached_views_all_risky():
+            return False
+        candidates = list(missing_find)
+        fn = getattr(gm, "_find_queue_candidate_obs_ids", None)
+        if callable(fn):
+            extra = fn(
+                self.question,
+                pin_obs=list(getattr(gm, "last_eqa_obs_ids", None) or []),
+            )
+            if isinstance(extra, (list, tuple)):
+                coerced: list[int] = []
+                for x in extra:
+                    try:
+                        coerced.append(int(x))
+                    except (TypeError, ValueError):
+                        continue
+                if coerced:
+                    candidates = coerced
+        raw_attached = getattr(gm, "last_eqa_obs_ids", None)
+        attached = (
+            {int(x) for x in raw_attached} if isinstance(raw_attached, (list, tuple)) else set()
+        )
+        unattached = [int(x) for x in candidates if int(x) not in attached]
+        if not unattached:
+            return False
+        nxt_fn = getattr(gm, "next_unspent_eqa_obs_id", None)
+        if not callable(nxt_fn):
+            return False
+        oid = nxt_fn(unattached)
+        try:
+            oid_i = int(oid)
+        except (TypeError, ValueError):
+            return False
+        if oid_i in self._followed_eqa_actions:
+            return False
+        if self._n_nav + self._n_explore >= self.max_nav_steps + 1:
+            return False
+        self._followed_eqa_actions.add(oid_i)
+        gm.last_eqa_action_obs_id = None
+        self._pin_eqa_look_obs(oid_i)
+        self._verified = False
+        self._verified_obs_id = None
+        self._last_verify = None
+        nav = self._nav_and_verify_obs(oid_i)
+        self._append_trace(
+            {
+                "event": "follow_unspent_find",
+                "obs_id": oid_i,
+                "nav_ok": bool(nav.get("ok")),
+                "prior_answer": submit_out.get("answer"),
+                "missing_find": list(missing_find),
+            }
+        )
+        return True
+
     def _count_find_unattached_obs_ids(self) -> list[int]:
         """FIND views that were not in the last attached Image 1..K set."""
         attached = {int(oid) for oid in (getattr(self.graph_memory, "last_eqa_obs_ids", None) or [])}
@@ -1045,6 +1140,8 @@ class AgenticAnswerMixin:
             if getattr(gm, "last_eqa_action_obs_id", None) is None:
                 gm.last_eqa_action_obs_id = missing_find[0]
             self._pin_eqa_look_obs(missing_find[0])
+        if count_mcq and missing_find and self._maybe_follow_unspent_find(submit_out, missing_find):
+            return True
         if conf and not unknownish:
             return False
         # Unconfident count + Action:N: the integer is from the attached (wrong) RGB.

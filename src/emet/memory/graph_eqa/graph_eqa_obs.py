@@ -18,6 +18,8 @@ from PIL import Image
 from emet.memory.graph_eqa.eqa_views import (
     EQA_SAME_OBS_MAX_VISITS,
     EQA_SAME_OBS_PROGRESS_M,
+    center_zoom_crop,
+    center_zoom_enabled,
     eqa_look_is_spent,
     rgb_uint8,
     spread_obs_ids_xy,
@@ -32,6 +34,7 @@ from emet.memory.graph_eqa.graph_types import (
     NavHypothesis,
     _object_match_tokens,
     consolidate_relevant_keywords,
+    finder_label_texts,
     format_graph_node_candidates,
     heuristic_relevant_objects,
     heuristic_relevant_phrases,
@@ -73,6 +76,15 @@ class GraphEqaObsMixin:
                 continue
             return oid
         return None
+
+    def eqa_obs_is_risky(self, obs_id: int, obs_ids: list[int] | None = None) -> bool:
+        """True when this attached view is spent, over-visited, or already read twice."""
+        oid = int(obs_id)
+        attached = [int(x) for x in (obs_ids if obs_ids is not None else (self.last_eqa_obs_ids or []))]
+        spent = self.eqa_obs_look_spent(oid)
+        visits = self._obs_visit_count(oid)
+        read_n = self._obs_read_count_for_attached(oid, attached) if attached else 0
+        return bool(spent or visits >= int(EQA_SAME_OBS_MAX_VISITS) or read_n >= 2)
 
     def _obs_xy(self, obs_id: int) -> np.ndarray | None:
         obs = self._observation_by_id(int(obs_id))
@@ -340,7 +352,9 @@ class GraphEqaObsMixin:
             action = str(self.last_eqa_parsed[3] or "")
         kind, display_index = parse_eqa_action(action)
         if display_index is not None:
-            oid = self._resolve_eqa_action_image_ref(display_index, ids)
+            oid = self._resolve_eqa_action_image_ref(
+                display_index, ids, slots_only=(kind == "read")
+            )
             if oid is not None and int(oid) in attached and self._obs_usable_for_eqa_image(int(oid)):
                 if kind == "read":
                     return int(oid)
@@ -397,7 +411,93 @@ class GraphEqaObsMixin:
                     stats[display_index]["unknown"] += 1
         return stats
 
-    def format_eqa_view_status(self, obs_ids: list[int]) -> str:
+    def format_attached_index(self, obs_ids: list[int]) -> str:
+        """Map prompt-local Image 1..K slots to graph observation ids."""
+        if not obs_ids:
+            return ""
+        parts = [f"Image {i}=obs{int(oid)}" for i, oid in enumerate(obs_ids, start=1)]
+        return (
+            "ATTACHED_INDEX: "
+            + ", ".join(parts)
+            + '. "read N" / close look: use attached slot N only (1..'
+            + str(len(obs_ids))
+            + "). Navigation: set action to a graph obs id from FIND_QUEUE or GRAPH_COUNT "
+            + "to visit a candidate view; do not use read N with a graph obs id."
+        )
+
+    def _find_queue_candidate_obs_ids(self, question: str, *, pin_obs: list[int] | None = None) -> list[int]:
+        """Distinct FIND observation ids for count/time/detail questions."""
+        pins = list(pin_obs or [])
+        count_nodes, _target = self._count_candidate_nodes(question)
+        phrases = self._eqa_find_phrases()
+        visual = self._visual_find_obs_ids(phrases, max_n=12)
+        ordered: list[int] = []
+        seen: set[int] = set()
+        for raw in visual + pins + [int(n.obs_id) for n in count_nodes]:
+            oid = int(raw)
+            if oid in seen or not self._obs_usable_for_eqa_image(oid):
+                continue
+            seen.add(oid)
+            ordered.append(oid)
+        return self._spread_obs_xy(ordered, max_n=8)
+
+    def format_find_queue(
+        self,
+        question: str,
+        *,
+        attached_obs_ids: list[int],
+        pin_obs: list[int] | None = None,
+        max_entries: int = 4,
+    ) -> str:
+        """Unattached / unspent FIND targets for exploration steering."""
+        attached = {int(x) for x in attached_obs_ids}
+        candidates = self._find_queue_candidate_obs_ids(question, pin_obs=pin_obs)
+        if len(candidates) <= 1 and all(int(c) in attached for c in candidates):
+            return ""
+        lines = [
+            "FIND_QUEUE (navigate targets — graph obs ids; not attached prompt slots):",
+            "Pick an unspent, unattached entry when the attached set is incomplete.",
+            "Set action to that obs id (e.g. action: 149) to navigate; use read N only on attached slots after arrival.",
+        ]
+        unattached_first = [int(oid) for oid in candidates if int(oid) not in attached]
+        attached_rest = [int(oid) for oid in candidates if int(oid) in attached]
+        n = 0
+        for oid in unattached_first + attached_rest:
+            if n >= int(max_entries):
+                break
+            label = ""
+            for node in self._nodes:
+                if int(node.obs_id) != int(oid) or node.is_frontier or node.is_viewpoint:
+                    continue
+                texts = finder_label_texts(node)
+                if texts:
+                    label = texts[0]
+                    break
+            spent = "yes" if self.eqa_obs_look_spent(oid) else "no"
+            att = "yes" if int(oid) in attached else "no"
+            visits = self._obs_visit_count(int(oid))
+            tail = f" {label}" if label else ""
+            lines.append(f"  obs{int(oid)}{tail} spent={spent} attached={att} visits={visits}")
+            n += 1
+        if n == 0:
+            return ""
+        return "\n".join(lines)
+
+    def _obs_read_count_for_attached(self, obs_id: int, obs_ids: list[int]) -> int:
+        if not obs_ids:
+            return 0
+        stats = self._history_action_stats_for_images(obs_ids)
+        for idx, oid in enumerate(obs_ids, start=1):
+            if int(oid) == int(obs_id):
+                return int(stats.get(idx, {}).get("read", 0))
+        return 0
+
+    def format_eqa_view_status(
+        self,
+        obs_ids: list[int],
+        *,
+        off_prompt_find: list[int] | None = None,
+    ) -> str:
         """Investigation counters for attached views (debugging signal for the EQA VLM)."""
         if not obs_ids:
             return ""
@@ -407,6 +507,7 @@ class GraphEqaObsMixin:
         except Exception:
             pass
         action_stats = self._history_action_stats_for_images(obs_ids)
+        attached_set = {int(x) for x in obs_ids}
         lines = [
             "VIEW_STATUS (investigation counters — not the answer; "
             f">{EQA_SAME_OBS_MAX_VISITS} visits on one Image without progress is risky; "
@@ -421,7 +522,7 @@ class GraphEqaObsMixin:
             look_n = int(st.get("look", 0))
             read_n = int(st.get("read", 0))
             unk_n = int(st.get("unknown", 0))
-            risky = spent or visits >= int(EQA_SAME_OBS_MAX_VISITS)
+            risky = self.eqa_obs_is_risky(oid_i, obs_ids)
             parts = [
                 f"visits={visits}",
                 f"look={look_n}",
@@ -433,6 +534,13 @@ class GraphEqaObsMixin:
             if risky:
                 parts.append("risky=yes")
             lines.append(f"  Image {idx} (obs {oid_i}): " + ", ".join(parts))
+        off = [int(x) for x in (off_prompt_find or []) if int(x) not in attached_set]
+        if off:
+            bits: list[str] = []
+            for oid in off[:4]:
+                spent = "yes" if self.eqa_obs_look_spent(oid) else "no"
+                bits.append(f"obs{oid} spent={spent} attached=no")
+            lines.append("- off_prompt_find: " + "; ".join(bits))
         return "\n".join(lines)
 
     def eqa_should_stay_on_attached_view(self, *, answer: str, confidence: bool) -> bool:
@@ -483,19 +591,30 @@ class GraphEqaObsMixin:
             return None
         return rgb_uint8(obs.rgb)
 
-    def _eqa_crop_for_obs(self, obs_id: int) -> np.ndarray | None:
-        """Tight detector crop, or None when the bbox is missing or covers the frame."""
+    def _eqa_crop_for_obs(self, obs_id: int, *, detail_zoom: bool = False) -> np.ndarray | None:
+        """Tight detector crop; optional center-zoom when bbox is missing (clocks, labels)."""
         obs = self._observation_by_id(int(obs_id))
         if obs is None or not self._obs_usable_for_eqa_image(int(obs_id)):
             return None
-        nodes = [n for n in self._nodes if int(n.obs_id) == int(obs_id) and not n.is_frontier and not n.is_viewpoint]
-        return tightest_node_crop(nodes, rgb_uint8(obs.rgb))
+        nodes = [
+            n
+            for n in self._nodes
+            if int(n.obs_id) == int(obs_id) and not n.is_frontier and not n.is_viewpoint
+        ]
+        crop = tightest_node_crop(nodes, rgb_uint8(obs.rgb))
+        if crop is not None:
+            return crop
+        if detail_zoom and center_zoom_enabled(self.parameters):
+            return center_zoom_crop(rgb_uint8(obs.rgb))
+        return None
 
     def _eqa_pick_closeup_obs_id(
         self,
         obs_ids: list[int],
         look_obs_id: int | None,
         pin_obs: list[int],
+        *,
+        detail_zoom: bool = False,
     ) -> int | None:
         """Choose an already-attached scene whose detector crop is a useful extra view."""
         attached = {int(oid) for oid in obs_ids}
@@ -509,7 +628,7 @@ class GraphEqaObsMixin:
             if oid in seen:
                 continue
             seen.add(oid)
-            if self._eqa_crop_for_obs(oid) is not None:
+            if self._eqa_crop_for_obs(oid, detail_zoom=detail_zoom) is not None:
                 return oid
         return None
 
@@ -867,7 +986,7 @@ class GraphEqaObsMixin:
                     status_tag = " candidate"
             lines.append(
                 f"{kind} {n.node_id}{room_tag}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) "
-                f"[Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}{status_tag}{nearest_tag}"
+                f"[graph obs {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}{status_tag}{nearest_tag}"
             )
         for a, b, rel in self._edges:
             if int(a) not in keep_ids:

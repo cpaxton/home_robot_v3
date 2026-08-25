@@ -322,3 +322,16 @@ def test_describe_scene_delegates_to_agent():
     assert PENDING_DISCORD_IMAGE_KEY in context
     assert context[PENDING_DISCORD_IMAGE_KEY].shape == (4, 4, 3)
     assert discord.pushed == []  # image is attached by the agent loop with the reply
+
+
+def test_chat_wants_detail_zoom_on_clock_questions():
+    import numpy as np
+
+    from emet.agent.tools import chat_head_rgb_for_reply, chat_wants_detail_zoom
+
+    assert chat_wants_detail_zoom("What time is it on the clock?")
+    assert not chat_wants_detail_zoom("Where is the sofa?")
+    rgb = np.zeros((240, 320, 3), dtype=np.uint8)
+    zoom, used = chat_head_rgb_for_reply({"detail_zoom_query": True}, rgb)
+    assert used is True
+    assert max(zoom.shape[0], zoom.shape[1]) >= 384

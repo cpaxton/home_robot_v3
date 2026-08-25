@@ -14,6 +14,7 @@ of the same noun in XY so one cluster cannot fill the image budget.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -26,6 +27,39 @@ EQA_SAME_OBS_PROGRESS_M = 1.0
 # Detector boxes covering most of the frame are full-frame, not instance crops.
 EQA_CROP_MAX_AREA_FRACTION = 0.85
 EQA_CROP_PADDING_FRAC = 0.12
+# Center-zoom fallback when no detector bbox (clocks, small text).
+# Default OFF. Re-enable with EMET_EQA_CENTER_ZOOM=1. Prefer the geometric
+# close-look map (docs/close_map.md) for clock/detail approaches.
+EQA_CENTER_ZOOM_FRAC = 0.45
+EQA_CENTER_ZOOM_MIN_SIDE = 384
+_TRUE = ("1", "true", "yes", "on")
+_FALSE = ("0", "false", "no", "off")
+
+
+def center_zoom_enabled(parameters: Any | None = None) -> bool:
+    """Blind center-crop zoom for clocks/labels. Default off.
+
+    Env ``EMET_EQA_CENTER_ZOOM`` beats YAML ``eqa.center_zoom``.
+    """
+    raw = os.environ.get("EMET_EQA_CENTER_ZOOM", "").strip().lower()
+    if raw in _TRUE:
+        return True
+    if raw in _FALSE:
+        return False
+    if parameters is None:
+        return False
+    if hasattr(parameters, "get"):
+        val = parameters.get("eqa/center_zoom")
+        if val is not None:
+            return bool(val)
+        eqa = parameters.get("eqa")
+        if isinstance(eqa, dict) and "center_zoom" in eqa:
+            return bool(eqa.get("center_zoom"))
+    elif isinstance(parameters, dict):
+        eqa = parameters.get("eqa")
+        if isinstance(eqa, dict) and "center_zoom" in eqa:
+            return bool(eqa.get("center_zoom"))
+    return False
 
 
 def rgb_uint8(rgb: np.ndarray) -> np.ndarray:
@@ -86,6 +120,37 @@ def crop_rgb_tight_bbox(
     if x1 <= x0 or y1 <= y0:
         return None
     return img[y0:y1, x0:x1]
+
+
+def center_zoom_crop(
+    rgb: np.ndarray,
+    *,
+    frac: float = EQA_CENTER_ZOOM_FRAC,
+    min_side: int = EQA_CENTER_ZOOM_MIN_SIDE,
+) -> np.ndarray:
+    """Center crop then upscale so fine detail (clock faces, labels) is legible."""
+    img = rgb_uint8(rgb)
+    h, w = img.shape[:2]
+    if h < 4 or w < 4:
+        return img
+    f = float(frac)
+    f = min(max(f, 0.15), 0.95)
+    cw = max(4, int(round(w * f)))
+    ch = max(4, int(round(h * f)))
+    x0 = max(0, (w - cw) // 2)
+    y0 = max(0, (h - ch) // 2)
+    crop = img[y0 : y0 + ch, x0 : x0 + cw]
+    if crop.size == 0:
+        return img
+    if min_side > 0 and max(crop.shape[0], crop.shape[1]) < int(min_side):
+        from PIL import Image
+
+        scale = float(min_side) / float(max(crop.shape[0], crop.shape[1]))
+        new_w = max(1, int(round(crop.shape[1] * scale)))
+        new_h = max(1, int(round(crop.shape[0] * scale)))
+        pil = Image.fromarray(crop, mode="RGB")
+        crop = np.asarray(pil.resize((new_w, new_h), resample=Image.Resampling.NEAREST), dtype=np.uint8)
+    return np.ascontiguousarray(crop)
 
 
 def eqa_look_is_spent(

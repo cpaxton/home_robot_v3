@@ -1155,6 +1155,9 @@ def run_agent_with_robot(
             # --- Multi-turn tool-use loop ---
             # The LLM may call tools that return information (e.g. query_memory).
             # When that happens we feed the results back and let the LLM summarize.
+            from emet.agent.tools import chat_wants_detail_zoom
+
+            context["detail_zoom_query"] = chat_wants_detail_zoom(user_text)
             current_input = user_text
             turn_t0 = timeit.default_timer()
             for _round in range(_MAX_TOOL_ROUNDS):

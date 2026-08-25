@@ -15,6 +15,7 @@ from PIL import Image
 from emet.habitat.metrics import (
     extract_mcq_letter,
 )
+from emet.memory.graph_eqa.eqa_views import center_zoom_enabled
 from emet.memory.graph_eqa.graph_types import (
     GraphNavigationSample,
     GraphNode,
@@ -173,19 +174,41 @@ class GraphAnswerMixin:
             count_question=count_q,
             look_obs_id=look_obs_id,
         )
+        zoom_on = center_zoom_enabled(self.parameters)
+        detail_zoom = bool((time_q or clockish) and zoom_on)
+        read_zoom_primary: set[int] = set()
+        if zoom_on and look_obs_id is not None and self.last_eqa_parsed:
+            prev_kind, prev_disp = parse_eqa_action(str(self.last_eqa_parsed[3] or ""))
+            if prev_kind == "read":
+                prev_ids = list(self.last_eqa_obs_ids or [])
+                resolved = (
+                    self._resolve_eqa_action_image_ref(int(prev_disp), prev_ids, slots_only=True)
+                    if prev_disp is not None
+                    else int(look_obs_id)
+                )
+                if resolved is not None:
+                    read_zoom_primary.add(int(resolved))
         crop_oid: int | None = None
         crop_rgb: np.ndarray | None = None
         if max_images >= 2:
-            crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
+            crop_oid = self._eqa_pick_closeup_obs_id(
+                obs_ids, look_obs_id, pin_obs, detail_zoom=detail_zoom
+            )
             if crop_oid is not None:
-                crop_rgb = self._eqa_crop_for_obs(crop_oid)
+                crop_rgb = self._eqa_crop_for_obs(crop_oid, detail_zoom=detail_zoom)
             if crop_rgb is None:
                 crop_oid = None
             elif len(obs_ids) >= max_images:
                 obs_ids = self._eqa_reserve_closeup_slot(obs_ids, pin_obs, look_obs_id)
                 if crop_oid not in obs_ids:
-                    crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
-                    crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
+                    crop_oid = self._eqa_pick_closeup_obs_id(
+                        obs_ids, look_obs_id, pin_obs, detail_zoom=detail_zoom
+                    )
+                    crop_rgb = (
+                        self._eqa_crop_for_obs(crop_oid, detail_zoom=detail_zoom)
+                        if crop_oid is not None
+                        else None
+                    )
                     if crop_rgb is None:
                         crop_oid = None
         self.last_eqa_obs_ids = list(obs_ids)
@@ -257,14 +280,41 @@ class GraphAnswerMixin:
             except ValueError:
                 parent_txt = f"graph obs {int(crop_oid)}"
             n_scene = len(obs_ids)
+            zoom_note = (
+                "center-zoom of the clock/detail region; read hands or digits from this frame"
+                if detail_zoom
+                else "close-up of the object"
+            )
+            read_note = (
+                " If a scene view is too wide to read detail, set action to read that Image slot "
+                "for a center-zoom on the next turn."
+                if detail_zoom
+                else ""
+            )
             img_desc_str = str(img_desc_str).rstrip() + (
-                f" Image {n_scene + 1} is a close-up of the object in {parent_txt} "
-                "(the same instance, not another object). Count from the scene views. "
-                "If a scene view is too wide to see the object, set action to that Image id "
-                "for a close-up next turn."
+                f" Image {n_scene + 1} is a {zoom_note} from {parent_txt} "
+                "(the same view, not another object). Count from the scene views."
+                + read_note
             )
 
         extra_hints: list[str] = []
+        if obs_ids:
+            extra_hints.append(self.format_attached_index(obs_ids))
+        if read_zoom_primary:
+            extra_hints.append(
+                "A zoomed/detail crop is already attached this turn. Pick a time bucket or "
+                "count from that frame, or leave action empty to explore; do not emit read N "
+                "again on the same attached slot."
+            )
+        find_queue = ""
+        if count_q or time_q or clockish or detail_zoom:
+            find_queue = self.format_find_queue(
+                question,
+                attached_obs_ids=obs_ids,
+                pin_obs=pin_obs,
+            )
+        if find_queue:
+            extra_hints.append(find_queue)
         if count_hint:
             extra_hints.append(count_hint)
         if crop_oid is not None:
@@ -283,7 +333,8 @@ class GraphAnswerMixin:
         history = self._history_outputs
         start = max(0, len(history) - max_history) if max_history > 0 else 0
         history_slice = list(history[start:])
-        view_status = self.format_eqa_view_status(obs_ids)
+        off_prompt = self._find_queue_candidate_obs_ids(question, pin_obs=pin_obs)
+        view_status = self.format_eqa_view_status(obs_ids, off_prompt_find=off_prompt)
         prompt_max_tokens = resolve_eqa_prompt_max_tokens(self.parameters)
         text_blocks = self.build_eqa_prompt_text(
             question_line="Question: " + question,
@@ -628,18 +679,20 @@ class GraphAnswerMixin:
         if display_index is not None:
             hist_action = action.strip()
         if not confidence and display_index is not None:
-            resolved_oid = self._resolve_eqa_action_image_ref(display_index, action_obs_ids)
+            if kind == "read":
+                resolved_oid = self._resolve_eqa_action_image_ref(
+                    display_index, action_obs_ids, slots_only=True
+                )
+            else:
+                resolved_oid = self._resolve_eqa_action_image_ref(display_index, action_obs_ids)
             if kind == "read" and resolved_oid is not None:
                 self.last_eqa_action_obs_id = int(resolved_oid)
                 if self.last_eqa_look_obs_id is None:
                     self.last_eqa_look_obs_id = int(resolved_oid)
-                if not self.eqa_obs_look_spent(resolved_oid):
-                    target_point = self._target_point_from_display_image_index(
-                        display_index,
-                        obs_ids=action_obs_ids,
-                        nav_fallback_tail=nav_fallback_tail,
-                        robot_xyt=xyt,
-                    )
+                # Stay put: next turn can zoom or close-look this slot. Do not hop 1–5 m.
+            elif kind == "read":
+                # ``read 195`` (graph obs id) is not a zoom slot; fall through to FIND.
+                pass
             elif resolved_oid is not None and self.eqa_obs_look_spent(resolved_oid):
                 # Still attach this RGB next turn; do not orbit the same obs.
                 if self.last_eqa_look_obs_id is None:

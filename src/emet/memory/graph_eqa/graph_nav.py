@@ -272,13 +272,18 @@ class GraphNavMixin:
         """Return ``(x, y, 1)`` nav waypoint for observation ``image_id``."""
         return self._navigation_waypoint_for_obs(int(image_id), robot_xyt)
 
-    def _resolve_eqa_action_image_ref(self, display_index: int, obs_ids: list[int] | None) -> int | None:
+    def _resolve_eqa_action_image_ref(
+        self,
+        display_index: int,
+        obs_ids: list[int] | None,
+        *,
+        slots_only: bool = False,
+    ) -> int | None:
         """Map ``Action: Image N`` to a graph observation id.
 
-        Prompt-attached images are renumbered 1..K (``obs_ids`` order). SCENE_GRAPH
-        lines use the raw ``[Image {obs_id}]``, so models often emit that id (e.g.
-        ``Navigate to Image 19``). Accept both when a real ``GraphObservation``
-        exists — not viewpoint-only nav-sample anchors without RGB history.
+        Prompt-attached images are renumbered 1..K (``obs_ids`` order). For ``look``,
+        also accept a raw graph obs id (FIND_QUEUE / GRAPH_COUNT, e.g. ``action: 37``).
+        ``read N`` passes ``slots_only=True`` so graph obs ids cannot be treated as zoom slots.
         """
         idx = int(display_index)
         if idx < 1:
@@ -286,6 +291,8 @@ class GraphNavMixin:
         ids = [int(x) for x in (obs_ids or [])]
         if ids and 1 <= idx <= len(ids):
             return ids[idx - 1]
+        if slots_only:
+            return None
         if self._observation_by_id(idx) is not None:
             return idx
         return None
@@ -384,10 +391,10 @@ class GraphNavMixin:
         phrase = target.phrase if target is not None else "target"
         visual = self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=6)
         if visual:
-            labeled = "; ".join(f"[Image {int(oid)}]" for oid in visual)
+            labeled = "; ".join(f"obs{int(oid)}" for oid in visual)
             return (
                 f"GRAPH_COUNT: views to look at for '{phrase}' "
-                f"(go look at these Image ids; not an exact count): {labeled}. "
+                f"(navigate via action=<obs id>; not an exact count): {labeled}. "
                 "Count from attached images after looking; "
                 "do not use this list length as the answer."
             )
@@ -404,7 +411,7 @@ class GraphNavMixin:
         labeled = format_graph_node_candidates(matches, max_nodes=6)
         return (
             f"GRAPH_COUNT: views to look at for '{phrase}' "
-            f"(go look at these Image ids; not an exact count): {labeled}."
+            f"(navigate via action=<graph obs id>; not an exact count): {labeled}."
             f"{scope_note} Count from attached images after looking; "
             "do not use this list length as the answer."
         )

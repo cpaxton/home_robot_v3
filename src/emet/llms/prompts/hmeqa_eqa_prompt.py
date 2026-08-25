@@ -101,6 +101,10 @@ _HMEQA_FORMAT_OVERRIDE = """
         4. "confidence" is true or false. "action" is "", an Image id, or "read N".
            Use "read N" when Image N shows the thing to read but the text or digits are
            not large and unambiguous. Do not guess. "confidence_reasoning" is one short sentence.
+        5. For "What time is it now?" and other clock/time MCQs: do not guess a time bucket
+           from a tiny clock in a wide frame. Use "read N" on the attached slot that shows
+           the clock, then read hour/minute hand positions from the zoomed frame on the next turn.
+           Leave "action" empty only when the hands or digits are clearly legible.
 
         You have a limited output budget. Spending it describing images instead of answering
         counts as a wrong answer.
