@@ -2615,7 +2615,7 @@ class AgenticEQAExecutor:
                         0.35,
                         float(getattr(gm, "image_nav_min_approach_m", 0.35) or 0.35),
                     )
-                    got = sample_habitat_navmesh_approach_xy(
+                    navmesh_xy = sample_habitat_navmesh_approach_xy(
                         sim,
                         anchor_xy=(float(anchor_xyz[0]), float(anchor_xyz[1])),
                         robot_xy=robot_xy,
@@ -2624,8 +2624,8 @@ class AgenticEQAExecutor:
                         radius_outer_m=self._investigate_annulus_outer_m(),
                         avoid_xy=avoid,
                     )
-                    if got is not None:
-                        return np.array([float(got[0]), float(got[1]), 1.0], dtype=float)
+                    if navmesh_xy is not None:
+                        return np.array([float(navmesh_xy[0]), float(navmesh_xy[1]), 1.0], dtype=float)
         except Exception as e:
             _logger.debug(f"habitat navmesh approach unavailable: {e}")
 
