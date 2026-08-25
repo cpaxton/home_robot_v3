@@ -40,6 +40,7 @@ def test_prepare_dynagraph_vram_warms_then_releases_siglip():
     assert agent.graph_memory._confirmed_memory_siglip_encoder is None
     assert agent.graph_memory._obs_siglip_features
     assert "woven basket" in agent.graph_memory._siglip_phrase_cache
+    assert "woven basket" in agent.graph_memory._visual_find_rank_cache
 
 
 def test_warm_keeps_encoder_release_drops():

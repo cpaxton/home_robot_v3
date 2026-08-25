@@ -436,6 +436,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
         return None
 
     def find_alignment_over_model(self, queries: str):
+        if getattr(self, "encoder", None) is None:
+            return None
         clip_text_tokens = self.encoder.encode_text(queries).cpu()
         points, features, weights, _ = self.semantic_memory.get_pointcloud()
         if points is None:

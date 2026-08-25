@@ -7,6 +7,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 from PIL import Image
 
 
@@ -60,6 +61,95 @@ def test_run_eqa_one_iter_skips_nav_when_disallowed():
     agent.navigate_to_target_pose.assert_not_called()
     agent.look_around.assert_not_called()
     agent.robot.look_front.assert_called()
+
+
+def test_run_eqa_one_iter_stays_when_find_view_already_attached():
+    """q43: do not frontier-chase when Image 1 is already the clock/FIND view."""
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    agent = _make_agent()
+    agent.graph_memory.query_answer.return_value = (
+        "clock reads 2-4pm",
+        "2-4pm",
+        False,
+        "hard to read",
+        None,
+        [Image.new("RGB", (8, 8), color=(1, 2, 3))],
+    )
+    agent.graph_memory.eqa_should_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_attached_target_obs_id.return_value = 7
+    agent.graph_memory.last_eqa_look_obs_id = None
+    with patch.object(GraphEQAController, "_sync_graph_frontier_nodes", lambda self: None):
+        with patch.object(GraphEQAController, "_rerun_refresh_monologue_panel", lambda self: None):
+            GraphEQAController.run_eqa_one_iter(agent, "What time is it now?", allow_navigation=True)
+    agent.navigate_to_target_pose.assert_not_called()
+    agent.space.sample_frontier.assert_not_called()
+    assert agent.graph_memory.last_eqa_look_obs_id == 7
+
+
+def test_run_eqa_one_iter_stays_on_sign_even_if_vlm_returned_a_point():
+    """Do not frontier-chase a readable sign/oven because query_answer set a leftover target."""
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    agent = _make_agent()
+    agent.graph_memory.query_answer.return_value = (
+        "sign is too small",
+        "Unknown",
+        False,
+        "need closer look",
+        np.array([9.0, 9.0, 0.0]),
+        [Image.new("RGB", (8, 8), color=(1, 2, 3))],
+    )
+    agent.graph_memory.eqa_should_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_attached_target_obs_id.return_value = 4
+    agent.graph_memory.last_eqa_look_obs_id = None
+    agent.graph_memory.eqa_approach_attached_find.return_value = None
+    with patch.object(GraphEQAController, "_sync_graph_frontier_nodes", lambda self: None):
+        with patch.object(GraphEQAController, "_rerun_refresh_monologue_panel", lambda self: None):
+            GraphEQAController.run_eqa_one_iter(
+                agent, "What does the sign on the door say?", allow_navigation=True
+            )
+    agent.navigate_to_target_pose.assert_not_called()
+    agent.space.sample_frontier.assert_not_called()
+
+
+def test_siglip_visual_find_maps_voxel_frames_and_ranks_by_score():
+    """find_all_images voxel ids map to graph obs; score order beats chronological sort."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from emet.controller.controller_graph_eqa import GraphEQAController
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    rgb_a = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_b = np.ones((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb_a, np.array([0.0, 0.0, 0.5]), ["railing"], viewer_xyz=np.array([0.0, 0.0, 1.0]))
+    mem.add_observation(rgb_b, np.array([8.0, 8.0, 0.5]), ["island"], viewer_xyz=np.array([8.0, 8.0, 1.0]))
+
+    def _frame(rgb, cam):
+        pose = np.eye(4)
+        pose[:3, 3] = cam
+        return SimpleNamespace(rgb=rgb, camera_pose=pose)
+
+    agent = _make_agent()
+    agent.graph_memory = mem
+    agent.voxel_map = MagicMock()
+    agent.voxel_map.observations = [
+        _frame(rgb_a, [0.0, 0.0, 1.0]),
+        _frame(rgb_b, [8.0, 8.0, 1.0]),
+    ]
+    agent.voxel_map.find_all_images.return_value = (
+        torch.tensor([1, 2]),
+        torch.tensor([[0.0, 0.0, 0.5], [8.0, 8.0, 0.5]]),
+        torch.tensor([0.22, 0.41]),
+    )
+    ranked = GraphEQAController._siglip_visual_find(agent, "stool", 4)
+    assert [oid for _s, oid in ranked] == [2, 1]
+    assert ranked[0][0] == pytest.approx(0.41, abs=1e-5)
 
 
 def test_agentic_verify_defaults_off_for_discord_herman():

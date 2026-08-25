@@ -301,7 +301,7 @@ def format_regions_for_prompt(
     """Serialize regions (+ optional frontiers) for the EQA / router prompt."""
     if not result.regions and not result.frontier_nodes:
         return ""
-    lines: list[str] = ["SCENE_GRAPH (spatial regions):"]
+    lines: list[str] = ["SCENE_GRAPH (spatial regions — views to look at, not the answer):"]
     for r in result.regions:
         label_str = ", ".join(r.labels) if r.labels else "object"
         if len(label_str) > max_label_chars:

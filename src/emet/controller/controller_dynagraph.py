@@ -66,6 +66,7 @@ class DynagraphController(GraphEQAController):
             if bool(flags.get("siglip_grounding", False)):
                 self.graph_memory.set_text_grounder(self._siglip_text_match)
                 self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
+                self.graph_memory.set_visual_find_fn(self._siglip_visual_find)
         if ground_truth_mode and self.graph_memory is not None:
             # Keep full rotate/explore viewpoint history (voxel frames also logged on export).
             self.graph_memory.set_navigation_samples_max(max(self.graph_memory.navigation_samples_max, 8192))

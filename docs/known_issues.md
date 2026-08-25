@@ -112,7 +112,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 3. **Silent SDPA fallback:** when `flash-attn` was missing, CUDA VL loads quietly used PyTorch SDPA. Habitat MCQ still finished (~4–5 min/ep), but Robocasa multi-image `query_answer` (`prompt≈4500`, 4 RGB) decoded at ~0.02 tok/s (~45 s/token) and looked “stuck” at low GPU util.
 
 ### Mitigation
-- [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches then **always releases** SigLIP before the EQA VLM.
+- [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches **and visual FIND top-k ranks**, then **always releases** SigLIP before the EQA VLM. Voxel `find_all_images` cannot run after that release.
 - [`release_shared_mask_siglip_encoder`](../src/emet/perception/encoders/siglip_encoder.py) moves weights to CPU and empties the CUDA cache.
 - Answer-only EQA skips robot head/posture I/O (`allow_navigation=False` → `skip_perception_prelude`).
 - Before EQA, [`release_zmq_ports`](../src/emet/utils/port_utils.py) kills MuJoCo **LISTEN** sockets on the session ports so EGL is not sharing the GPU with Qwen (must not use plain `lsof -i:PORT`, which also matches the dynagraph client and SIGTERMs it — exit 241).

@@ -31,6 +31,7 @@ from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothe
 from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
 from emet.memory.graph_eqa.instance_observations import (
+    filter_detections_for_graph_admission,
     frame_instances_to_detections,
     frame_rgb_hwc_uint8,
     instance_items_from_instance_memory,
@@ -71,6 +72,10 @@ def _detection_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
     bounds = d.get("bounds_3d")
     if bounds is None and xyz is not None:
         bounds = _default_bounds_3d_for_xyz(xyz)
+    semantic_only = bool(d.get("semantic_only", False))
+    instance_id = d.get("instance_id")
+    countable = bool(d.get("countable_instance", instance_id is not None)) and not semantic_only
+    score = d.get("detection_score", d.get("score"))
     return GraphDetectionCandidate(
         label=str(d.get("label_short", d.get("label", "object"))),
         xyz=xyz,
@@ -78,8 +83,23 @@ def _detection_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
         bounds_3d=bounds,
         embedding=emb,
         identity_key=d.get("identity_key"),
-        countable_instance=bool(d.get("countable_instance", d.get("instance_id") is not None)),
+        countable_instance=countable,
+        detection_score=float(score) if score is not None else None,
+        mask_point_count=int(d.get("mask_point_count", d.get("point_count", 0)) or 0),
+        semantic_only=semantic_only,
     )
+
+
+def _note_instance_ingest(graph_memory: Any, stats: dict[str, int], *, merged: int = 0, created: int = 0) -> None:
+    bucket = getattr(graph_memory, "instance_ingest_stats", None)
+    if not isinstance(bucket, dict):
+        return
+    for key, val in stats.items():
+        bucket[key] = int(bucket.get(key, 0)) + int(val)
+    if merged:
+        bucket["merged"] = int(bucket.get("merged", 0)) + int(merged)
+    if created:
+        bucket["created"] = int(bucket.get("created", 0)) + int(created)
 
 
 def _instance_item_fields(item: Any) -> tuple[Any, Any, Any, Any]:
@@ -177,6 +197,14 @@ def update_graph_memory_from_dynamem_observation(
                 scene_profile=scene_profile,
             )
         ]
+        fusion_cfg = getattr(graph_object_fusion, "config", None) if graph_object_fusion is not None else None
+        if fusion_cfg is not None:
+            admitted, ingest_stats = filter_detections_for_graph_admission(
+                raw_dets,
+                config=fusion_cfg,
+            )
+            _note_instance_ingest(graph_memory, ingest_stats)
+            raw_dets = admitted
         instance_items = [
             (
                 d["label_short"],
@@ -323,7 +351,7 @@ def update_graph_memory_from_dynamem_observation(
             crop_rgb = np.asarray(rgb)
             xyz_a = np.asarray(xyz, dtype=np.float64)
             for label in labels:
-                cand = _detection_to_candidate({"label": str(label), "xyz": xyz_a})
+                cand = _detection_to_candidate({"label": str(label), "xyz": xyz_a, "semantic_only": True})
                 graph_object_fusion.apply_detection(
                     graph_memory,
                     crop_rgb,

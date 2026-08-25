@@ -231,6 +231,9 @@ def _safe_rerun_path_component(text: str, *, max_len: int = 48) -> str:
 
 def graph_node_primary_label(node: Any) -> str:
     """Best human-readable class label on a graph object node (skip ``obj_*`` placeholders)."""
+    looked = str(getattr(node, "close_look_label", None) or "").strip()
+    if looked:
+        return looked
     labels = getattr(node, "labels", None) or []
     for lab in labels:
         s = str(lab).strip()
