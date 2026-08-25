@@ -261,9 +261,39 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
 
+## LazyGraph memory backend (PR #131 — merged 2026-08-25)
+
+- [x] Land **`lazy_graph`** backend: Dynamem voxel find + viewpoints during `update()`, Qwen commit on arrival only (`emet run lazy-graph`, `--memory-backend lazy_graph`). Does not change `dynagraph` defaults.
+- [ ] Robocasa smoke: `emet run lazy-graph` with sim server (or `scripts/queue_lazy_graph_robocasa_smoke.sh` via `emet jobs`).
+- [ ] Herman hardware smoke: `emet run agent --memory-backend lazy_graph --connection herman` after bridge + remote VL are up.
+
+## Herman / Orin offload (branch `feature/herman-orin`)
+
+Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman --deploy`; head stereo OK, wrist Arducam still unplugged.
+
+**What can run on the Orin today (documented paths):**
+
+| Component | Where | Notes |
+|-----------|--------|--------|
+| ROS bridge + ZMQ | Herman Jetson (innate-os) | `emet deploy` / `emet mars start` |
+| DA3 depth (SMALL) | Herman Jetson | `--onboard-da3` on bridge; `depth_source: auto` skips workstation DA3 |
+| Qwen2-VL-7B text+VL | LAN Orin (e.g. caliban) | `emet deploy llm --profile unified-7b`; agent `--host caliban` |
+| Nav2 / drivers | Herman Jetson | innate-os (not emet) |
+
+**Still workstation-only (no Jetson deploy path yet):**
+
+- SigLIP, YoloE, DINOv3 encoders (`emet/perception/encoders/`)
+- Voxel map + Dynagraph/LazyGraph memory loop
+- Full `emet run agent` stack when not using remote `--host` VL
+
+- [ ] **Onboard DA3 dogfood**: `emet mars start --connection herman --deploy --onboard-da3`; confirm ZMQ depth + `emet stream --backend voxel_only`.
+- [ ] **Remote VL smoke**: `emet llm health --host caliban` + `emet run agent --connection herman --host caliban` (tethered: `EMET_BASE_ROTATE_ONLY=1`).
+- [ ] **DINOv3 on Orin**: no deploy hook yet — encoder exists (`dinov3_encoder.py`) but aarch64 jetson profile skips heavy perception groups. Spike: smallest `vits16` in Tegra Docker or ONNX; compare to shipping DA3 onboard pattern.
+- [ ] **Wrist camera**: reseat Arducam USB on Herman; `maurice_cam` must publish `/mars/arm/image_raw`.
+
 ## Embodied agent / Herman
 
-- [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
+- [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem` | `lazy_graph`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
 - [x] **Arm IK “closer look” (v1)**: CHAT `aim_arm_at` → `closer_look.aim_wrist_at_phrase` (localize + kinematic EE aim when available). Follow-ups under Embodied agent planning (EE picture after aim; hardware dogfood).
   - Fallback when aim unavailable: “closer look / inspect X” → **change viewpoint** (rotate / small drive) then `describe_scene` / `send_image` (head), never raw `take_ee_picture`.
 - [x] **Chat verify ≈ EQA look**: prompt + tools route “look at / closer look / are you sure” → `face_toward` then `describe_scene` (not blind ±45°); tests in `test_agent_prompt_and_tools` / `test_face_toward`. Full EQA-style `navigate_to_obs` + `verify_siglip` in CHAT still optional later.
