@@ -291,7 +291,16 @@ Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman
 - [ ] **DINOv3 on Orin**: caliban deploy path added (`docker/jetson_dinov3_server.py`, `scripts/deploy_caliban_dinov3.sh`, `EMET_DINOV3_ENDPOINT` client + tests). Run `./scripts/deploy_caliban_dinov3.sh --host caliban` after caching `facebook/dinov3-vits16-pretrain-lvd1689m`.
 - [ ] **Wrist camera**: reseat Arducam USB on Herman; SSH verified no `/dev/v4l/by-id/*Arducam*` (2026-08-25).
 
-## Embodied agent / Herman
+## ZMQ protocol / comms (Herman + sim)
+
+innate-os likely publishes **`/scan`** for Nav2/slam; **emet does not consume it today**. Stretch bridge ships `lidar_points` + `lidar_timestamp` over ZMQ; Mars bridge does not. Full obs also **duplicates JPEGs** (e.g. `rgb` + `head_cam_left/image`, `ee_cam/image` + `rgb_tertiary`) — profile before adding more streams.
+
+- [ ] **LiDAR in ZMQ contract**: subscribe innate-os `/scan` in `innate_mars_bridge` (mirror `stretch_ros2_bridge/ros/lidar.py`); publish `lidar_points` + `lidar_timestamp` on full obs; declare `capabilities.lidar` in `emet_session` ([`docs/zmq_session_metadata.md`](docs/zmq_session_metadata.md), [`BRIDGE_CONTRACT.md`](src/emet_core/BRIDGE_CONTRACT.md)). Audit Herman topic name/frame with `ros2 topic info /scan` when stack is up.
+- [ ] **LiDAR → mapping**: fuse scan into 2D explored/obstacle layer (voxel `TODO` at `voxel.py` ~1001); avoid naive double-count with DA3 3D cloud — start with base-height obstacle mask only.
+- [ ] **Sim LiDAR (innate_mars)**: add base rangefinder / `/scan` equivalent to MuJoCo `innate_mars` server (Stretch has `base_lidar` in MJCF); parity with hardware bridge so mapping smokes do not require the robot.
+- [ ] **Profile ZMQ payload**: script or `emet stream --verbose` harness — bytes/step for full obs (head L/R, wrist, depth JP2, dinov3_head, duplicates). Target: **one JPEG per logical camera** on wire; clients alias legacy keys (`rgb` → head left) for compat.
+- [ ] **Slim messaging v2 (if bloated)**: optional `obs_mode` / session flag — `state`+`servo` stay lightweight; full obs sends only streams the client subscribed to (stereo pair OR mono + depth, not both raw + namespaced dupes). Document in `zmq_session_metadata.md` schema bump when needed.
+
 
 - [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem` | `lazy_graph`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
 - [x] **Arm IK “closer look” (v1)**: CHAT `aim_arm_at` → `closer_look.aim_wrist_at_phrase` (localize + kinematic EE aim when available). Follow-ups under Embodied agent planning (EE picture after aim; hardware dogfood).
