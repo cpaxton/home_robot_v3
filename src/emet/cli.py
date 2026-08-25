@@ -38,6 +38,7 @@ _EMET_RUN_APPS_WITH_ROBOT = frozenset(
         "agent",
         "graph-eqa",
         "dynagraph",
+        "lazy-graph",
         "scene-graph",
         "molmospaces-explore",
         "debug-da3-depth",
@@ -4183,6 +4184,7 @@ def deploy_llm_cmd(
             "scene-graph",
             "graph-eqa",
             "dynagraph",
+            "lazy-graph",
             "mapping",
             "grasp",
             "chat",
@@ -4295,6 +4297,8 @@ def run(
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "dynagraph":
         sys.exit(_run_module("emet.app.run_dynagraph", args))
+    elif app == "lazy-graph":
+        sys.exit(_run_module("emet.app.run_lazy_graph", args))
     elif app == "graph-eqa-habitat":
         sys.exit(_run_module("emet.app.run_graph_eqa_habitat", args))
     elif app == "molmospaces-explore":

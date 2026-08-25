@@ -15,6 +15,7 @@ logger = Logger(__name__)
 # Canonical backend / HM-EQA method ids.
 STATIC_GRAPH = "static_graph"  # object graph, merge/staleness off (was graph_eqa)
 DYNAGRAPH = "dynagraph"
+LAZY_GRAPH = "lazy_graph"
 DYNAMEM = "dynamem"
 GROUND_TRUTH = "ground_truth"
 
@@ -51,9 +52,10 @@ HMEQA_METHOD = Literal["static_graph", "dynagraph"]
 HMEQA_METHOD_CHOICES: tuple[str, ...] = (STATIC_GRAPH, "graph_eqa", DYNAGRAPH)
 
 # Agent / interactive object-graph plug-ins (plus open_vocab / dynamem voxels).
-AGENT_MEMORY_BACKENDS: tuple[str, ...] = (DYNAGRAPH, STATIC_GRAPH, DYNAMEM, "open_vocab")
+AGENT_MEMORY_BACKENDS: tuple[str, ...] = (DYNAGRAPH, LAZY_GRAPH, STATIC_GRAPH, DYNAMEM, "open_vocab")
 AGENT_MEMORY_BACKEND_CHOICES: tuple[str, ...] = (
     DYNAGRAPH,
+    LAZY_GRAPH,
     STATIC_GRAPH,
     "graph_eqa",
     DYNAMEM,

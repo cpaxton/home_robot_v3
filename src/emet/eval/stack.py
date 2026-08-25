@@ -14,12 +14,12 @@ from emet.config.embodied_agent_config import (
     normalize_memory_backend,
 )
 from emet.eval.benchmark_dynagraph import apply_dynagraph_harness
-from emet.eval.memory_backends import DYNAGRAPH, STATIC_GRAPH
+from emet.eval.memory_backends import DYNAGRAPH, LAZY_GRAPH, STATIC_GRAPH
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
-MemoryBackendName = Literal["dynagraph", "static_graph", "dynamem", "open_vocab"]
+MemoryBackendName = Literal["dynagraph", "lazy_graph", "static_graph", "dynamem", "open_vocab"]
 HarnessName = Literal[
     "interactive",
     "habitat_eqa",
@@ -70,7 +70,7 @@ def build_memory_agent(
     embodied_agent = coerce_embodied_agent_for_memory_backend(embodied_agent, backend_key)
 
     if apply_harness_profile and backend_key in GRAPH_EQA_FAMILY_BACKENDS:
-        method = DYNAGRAPH if backend_key == DYNAGRAPH else STATIC_GRAPH
+        method = DYNAGRAPH if backend_key in (DYNAGRAPH, LAZY_GRAPH) else STATIC_GRAPH
         if harness_key == "interactive":
             from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
 
@@ -90,6 +90,9 @@ def build_memory_agent(
 
         inst = True if use_instance_graph is None else bool(use_instance_graph)
         sens = False if use_sensor_perception is None else bool(use_sensor_perception)
+        if backend_key == LAZY_GRAPH:
+            inst = False
+            sens = True
         if getattr(embodied_agent, "graph_eqa_memory", None) is not None:
             gcfg = embodied_agent.graph_eqa_memory
             if getattr(gcfg, "enabled", False):
@@ -119,6 +122,13 @@ def build_memory_agent(
                 f"build_memory_agent: dynagraph harness={harness_key} instance_graph={inst} sensor={sens} eqa={eqa}"
             )
             return DynagraphController(**common)
+        if backend_key == LAZY_GRAPH:
+            from emet.controller.controller_lazy_graph import LazyGraphController
+
+            logger.info(
+                f"build_memory_agent: lazy_graph harness={harness_key} instance_graph={inst} sensor={sens} eqa={eqa}"
+            )
+            return LazyGraphController(**common)
         from emet.controller.controller_graph_eqa import GraphEQAController
 
         logger.info(
