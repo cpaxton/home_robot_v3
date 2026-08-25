@@ -79,6 +79,15 @@ def test_count_choices_are_not_location_mcq():
     assert not choices_are_location_mcq(counts)
 
 
+def test_temperature_digits_are_not_count_mcq():
+    from emet.habitat.metrics import choices_are_count_mcq, parse_mcq_choices_from_question
+
+    oven_q = "What temperature is the oven set to? A) 350 B) 400 C) 450 D) Unknown. Answer:"
+    assert not choices_are_count_mcq(parse_mcq_choices_from_question(oven_q))
+    assert choices_are_count_mcq(["One", "Two", "Three", "None"])
+    assert choices_are_count_mcq(["1", "2", "3", "4"])
+
+
 def test_grade_mcq_answer_letter_e():
     assert extract_mcq_letter("E") == "E"
     assert extract_mcq_letter("Answer: e") == "E"

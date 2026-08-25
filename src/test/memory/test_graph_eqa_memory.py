@@ -26,6 +26,7 @@ from emet.memory.graph_eqa.graph_memory import (
     consolidate_relevant_keywords,
     heuristic_relevant_phrases,
     label_matches_relevant_object,
+    parse_eqa_action,
 )
 
 
@@ -921,6 +922,36 @@ def test_query_answer_injects_location_mcq_hint():
     mem.extract_relevant_objects(q)
     mem.query_answer(q)
     assert any(isinstance(c, str) and "LOCATION_MCQ" in c for c in captured["cmds"])
+
+
+def test_parse_eqa_action_read_vs_look():
+    assert parse_eqa_action("") == ("", None)
+    assert parse_eqa_action("2") == ("look", 2)
+    assert parse_eqa_action("Image 2") == ("look", 2)
+    assert parse_eqa_action("read 2") == ("read", 2)
+    assert parse_eqa_action("read Image 2") == ("read", 2)
+    assert parse_eqa_action("read2") == ("read", 2)
+
+
+def test_query_answer_records_read_action():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return (
+            "reasoning: letters too small\nanswer: Unknown\nconfidence: false\n"
+            "action: read 2\nconfidence_reasoning: need closer view"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "sign",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["door"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 1.5]), ["sign"])
+    mem.query_answer("What does the sign on the door say? A) Exit B) Open C) Closed D) Unknown. Answer:")
+    assert parse_eqa_action(mem.last_eqa_parsed[3]) == ("read", 2)
+    assert mem.last_eqa_action_obs_id is not None
 
 
 def test_query_answer_injects_count_hint_as_prompt_hint():

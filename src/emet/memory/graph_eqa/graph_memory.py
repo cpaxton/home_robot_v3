@@ -41,6 +41,7 @@ from emet.memory.graph_eqa.attempt_ledger import (
     summary_bits_for_obs,
 )
 from emet.memory.graph_eqa.eqa_views import (
+    EQA_SAME_OBS_MAX_VISITS,
     EQA_SAME_OBS_PROGRESS_M,
     eqa_look_is_spent,
     rgb_uint8,
@@ -515,6 +516,22 @@ def _object_match_tokens(text: str) -> set[str]:
         for tok in re.findall(r"[a-z0-9]+", (text or "").lower())
         if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
     }
+
+
+def parse_eqa_action(action: str) -> tuple[str, int | None]:
+    """Parse the EQA ``action`` field into ``("", None)``, ``("look", N)``, or ``("read", N)``.
+
+    ``read N`` means the answer is written or shown in Image N but not legible —
+    stay on that view. A bare image id is ``look`` (navigate / inspect).
+    """
+    raw = (action or "").strip().lower()
+    if not raw:
+        return "", None
+    match = re.search(r"\d+", raw)
+    idx = int(match.group()) if match else None
+    if re.match(r"read(\b|\d)", raw):
+        return "read", idx
+    return "look", idx
 
 
 def label_matches_relevant_object(obj: str, label: str) -> bool:
@@ -3539,24 +3556,135 @@ class GraphEQAMemory:
         return self._spread_obs_xy(ordered, max_n=max_n)
 
     def eqa_attached_target_obs_id(self) -> int | None:
-        """Image 1 obs id when that view is already the visual FIND target."""
+        """Attached view to stay on: VLM ``read N`` / ``N``, else Image 1 FIND."""
         ids = list(self.last_eqa_obs_ids or [])
         if not ids:
             return None
+        attached = {int(x) for x in ids}
+        action = ""
+        if self.last_eqa_parsed:
+            action = str(self.last_eqa_parsed[3] or "")
+        kind, display_index = parse_eqa_action(action)
+        if display_index is not None:
+            oid = self._resolve_eqa_action_image_ref(display_index, ids)
+            if oid is not None and int(oid) in attached and self._obs_usable_for_eqa_image(int(oid)):
+                if kind == "read":
+                    return int(oid)
+                phrases = self._eqa_find_phrases()
+                visual = set(self._visual_find_obs_ids(phrases, max_n=8))
+                if not visual or int(oid) in visual:
+                    return int(oid)
         oid = int(ids[0])
         if not self._obs_usable_for_eqa_image(oid):
             return None
         phrases = self._eqa_find_phrases()
-        visual = self._visual_find_obs_ids(phrases, max_n=8)
+        visual = set(self._visual_find_obs_ids(phrases, max_n=8))
         if visual:
-            return oid if oid in set(visual) else None
+            return oid if oid in visual else None
         if self._target_visible_in_obs_ids([oid]):
             return oid
         return None
 
     def eqa_stay_on_attached_view(self) -> bool:
-        """True when Image 1 is already a FIND view — do not frontier-chase away from it."""
+        """True when an attached RGB is already the FIND or ``read N`` view — do not frontier-chase."""
         return self.eqa_attached_target_obs_id() is not None
+
+    def _obs_visit_count(self, obs_id: int) -> int:
+        oid = int(obs_id)
+        nav_dists = self._obs_nav_dists.get(oid, ())
+        attempts = 0
+        for node in self._nodes:
+            if int(node.obs_id) == oid:
+                attempts = max(attempts, int(getattr(node, "nav_attempts", 0) or 0))
+        return max(len(nav_dists), attempts)
+
+    def _history_action_stats_for_images(self, obs_ids: list[int]) -> dict[int, dict[str, int]]:
+        """Per attached Image index: look/read action picks and Unknown answers in HISTORY."""
+        stats: dict[int, dict[str, int]] = {
+            idx: {"look": 0, "read": 0, "unknown": 0} for idx in range(1, len(obs_ids) + 1)
+        }
+        for raw in self._history_outputs:
+            line = str(raw or "")
+            act_m = re.search(r"\baction=([^\s|]+)", line)
+            ans_m = re.search(r"\banswer=([^\s|]+)", line)
+            if not act_m:
+                continue
+            action_raw = act_m.group(1).strip().lower()
+            kind, display_index = parse_eqa_action(action_raw)
+            if display_index is None or display_index not in stats:
+                continue
+            if kind == "read":
+                stats[display_index]["read"] += 1
+            else:
+                stats[display_index]["look"] += 1
+            if ans_m:
+                ans = ans_m.group(1).strip().lower()
+                if ans in ("unknown", "none", "?"):
+                    stats[display_index]["unknown"] += 1
+        return stats
+
+    def format_eqa_view_status(self, obs_ids: list[int]) -> str:
+        """Investigation counters for attached views (debugging signal for the EQA VLM)."""
+        if not obs_ids:
+            return ""
+        covered = True
+        try:
+            covered = self._graph_covers_relevant_objects()
+        except Exception:
+            pass
+        action_stats = self._history_action_stats_for_images(obs_ids)
+        lines = [
+            "VIEW_STATUS (investigation counters — not the answer; "
+            f">{EQA_SAME_OBS_MAX_VISITS} visits on one Image without progress is risky; "
+            "pick another Image or leave action empty to explore when stuck):",
+            f"- relevant_objects_in_graph: {'yes' if covered else 'no — explore other rooms'}",
+        ]
+        for idx, oid in enumerate(obs_ids, start=1):
+            oid_i = int(oid)
+            visits = self._obs_visit_count(oid_i)
+            spent = self.eqa_obs_look_spent(oid_i)
+            st = action_stats.get(idx, {})
+            look_n = int(st.get("look", 0))
+            read_n = int(st.get("read", 0))
+            unk_n = int(st.get("unknown", 0))
+            risky = spent or visits >= int(EQA_SAME_OBS_MAX_VISITS)
+            parts = [
+                f"visits={visits}",
+                f"look={look_n}",
+                f"read={read_n}",
+                f"unknown={unk_n}",
+            ]
+            if spent:
+                parts.append("spent=yes")
+            if risky:
+                parts.append("risky=yes")
+            lines.append(f"  Image {idx} (obs {oid_i}): " + ", ".join(parts))
+        return "\n".join(lines)
+
+    def eqa_should_stay_on_attached_view(self, *, answer: str, confidence: bool) -> bool:
+        """Controller gate: investigate closer at most a few times, then release to explore."""
+        if not self.eqa_stay_on_attached_view():
+            return False
+        oid = self.eqa_attached_target_obs_id()
+        if oid is None:
+            return False
+        if self.eqa_obs_look_spent(int(oid)):
+            return False
+        try:
+            if not self._graph_covers_relevant_objects():
+                return False
+        except Exception:
+            pass
+        visits = self._obs_visit_count(int(oid))
+        if visits >= int(EQA_SAME_OBS_MAX_VISITS):
+            return False
+        ans = (answer or "").strip().lower()
+        action = str(self.last_eqa_parsed[3] or "") if self.last_eqa_parsed else ""
+        kind, _display_index = parse_eqa_action(action)
+        if not confidence and ans in ("unknown", "none", "?", ""):
+            # ``read N`` may need a closer pass; bare Unknown on a FIND view should explore.
+            return kind == "read" and visits < int(EQA_SAME_OBS_MAX_VISITS)
+        return True
 
     def eqa_approach_attached_find(self, robot_xyt: Any | None = None) -> np.ndarray | None:
         """Waypoint toward Image-1 FIND when the robot is still far; None to stay put."""
@@ -4964,10 +5092,7 @@ class GraphEQAMemory:
                 if text and text not in phrases:
                     phrases.append(text)
             q_low = q.lower()
-            clockish = any(
-                s in q_low for s in ("what time", "time is it", "o'clock", "o’clock", "wall clock", "clock")
-            )
-            if clockish:
+            if any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock")):
                 for extra in ("clock", "wall clock"):
                     if extra not in phrases:
                         phrases.append(extra)
@@ -5479,6 +5604,7 @@ class GraphEQAMemory:
         history_entries: list[str] | None = None,
         history_start_index: int = 0,
         graph_str: str,
+        view_status_str: str | None = None,
         img_desc_str: str,
         max_tokens: int = 2500,
     ) -> list[str]:
@@ -5491,6 +5617,7 @@ class GraphEQAMemory:
         history = list(history_entries or [])
         mem = memory_summary or ""
         graph = graph_str
+        view_status = (view_status_str or "").strip()
         img = img_desc_str
         max_tok = int(max_tokens)
 
@@ -5503,6 +5630,8 @@ class GraphEQAMemory:
             for i, h in enumerate(hist):
                 out.append("Iteration_" + str(history_start_index + i) + ":" + h)
             out.append(graph_block)
+            if view_status:
+                out.append(view_status)
             out.append(img)
             return out
 
@@ -6517,7 +6646,11 @@ class GraphEQAMemory:
         phrases = self._eqa_find_phrases()
         visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
         q_low = str(question or "").lower()
-        clockish = any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock", "wall clock"))
+        clockish = any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock"))
+        if clockish:
+            self._merge_highlight_phrases(["clock", "wall clock"])
+            phrases = self._eqa_find_phrases()
+            visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
         if (
             (count_q or time_q or clockish)
             and not location_q
@@ -6684,6 +6817,7 @@ class GraphEQAMemory:
         history = self._history_outputs
         start = max(0, len(history) - max_history) if max_history > 0 else 0
         history_slice = list(history[start:])
+        view_status = self.format_eqa_view_status(obs_ids)
         prompt_max_tokens = resolve_eqa_prompt_max_tokens(self.parameters)
         text_blocks = self.build_eqa_prompt_text(
             question_line="Question: " + question,
@@ -6692,6 +6826,7 @@ class GraphEQAMemory:
             history_entries=history_slice,
             history_start_index=start,
             graph_str=graph_str,
+            view_status_str=view_status,
             img_desc_str=img_desc_str,
             max_tokens=prompt_max_tokens,
         )
@@ -7027,15 +7162,23 @@ class GraphEQAMemory:
         target_point = None
         self.last_eqa_action_obs_id = None
         hist_action = ""
-        display_index: int | None = None
-        if action.strip():
-            match = re.search(r"\d+", action.strip())
-            if match:
-                display_index = int(match.group())
-                hist_action = action.strip()
+        kind, display_index = parse_eqa_action(action)
+        if display_index is not None:
+            hist_action = action.strip()
         if not confidence and display_index is not None:
             resolved_oid = self._resolve_eqa_action_image_ref(display_index, action_obs_ids)
-            if resolved_oid is not None and self.eqa_obs_look_spent(resolved_oid):
+            if kind == "read" and resolved_oid is not None:
+                self.last_eqa_action_obs_id = int(resolved_oid)
+                if self.last_eqa_look_obs_id is None:
+                    self.last_eqa_look_obs_id = int(resolved_oid)
+                if not self.eqa_obs_look_spent(resolved_oid):
+                    target_point = self._target_point_from_display_image_index(
+                        display_index,
+                        obs_ids=action_obs_ids,
+                        nav_fallback_tail=nav_fallback_tail,
+                        robot_xyt=xyt,
+                    )
+            elif resolved_oid is not None and self.eqa_obs_look_spent(resolved_oid):
                 # Still attach this RGB next turn; do not orbit the same obs.
                 if self.last_eqa_look_obs_id is None:
                     self.last_eqa_look_obs_id = int(resolved_oid)

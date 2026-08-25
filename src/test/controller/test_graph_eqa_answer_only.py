@@ -76,6 +76,7 @@ def test_run_eqa_one_iter_stays_when_find_view_already_attached():
         None,
         [Image.new("RGB", (8, 8), color=(1, 2, 3))],
     )
+    agent.graph_memory.eqa_should_stay_on_attached_view.return_value = True
     agent.graph_memory.eqa_stay_on_attached_view.return_value = True
     agent.graph_memory.eqa_attached_target_obs_id.return_value = 7
     agent.graph_memory.last_eqa_look_obs_id = None
@@ -85,6 +86,33 @@ def test_run_eqa_one_iter_stays_when_find_view_already_attached():
     agent.navigate_to_target_pose.assert_not_called()
     agent.space.sample_frontier.assert_not_called()
     assert agent.graph_memory.last_eqa_look_obs_id == 7
+
+
+def test_run_eqa_one_iter_stays_on_sign_even_if_vlm_returned_a_point():
+    """Do not frontier-chase a readable sign/oven because query_answer set a leftover target."""
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    agent = _make_agent()
+    agent.graph_memory.query_answer.return_value = (
+        "sign is too small",
+        "Unknown",
+        False,
+        "need closer look",
+        np.array([9.0, 9.0, 0.0]),
+        [Image.new("RGB", (8, 8), color=(1, 2, 3))],
+    )
+    agent.graph_memory.eqa_should_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_stay_on_attached_view.return_value = True
+    agent.graph_memory.eqa_attached_target_obs_id.return_value = 4
+    agent.graph_memory.last_eqa_look_obs_id = None
+    agent.graph_memory.eqa_approach_attached_find.return_value = None
+    with patch.object(GraphEQAController, "_sync_graph_frontier_nodes", lambda self: None):
+        with patch.object(GraphEQAController, "_rerun_refresh_monologue_panel", lambda self: None):
+            GraphEQAController.run_eqa_one_iter(
+                agent, "What does the sign on the door say?", allow_navigation=True
+            )
+    agent.navigate_to_target_pose.assert_not_called()
+    agent.space.sample_frontier.assert_not_called()
 
 
 def test_siglip_visual_find_maps_voxel_frames_and_ranks_by_score():

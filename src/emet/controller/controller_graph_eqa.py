@@ -241,6 +241,21 @@ class GraphEQAController(DynamemController):
             return False
         if not habitat_explore_frontiers_enabled(self.parameters):
             return False
+        if (
+            self.graph_memory is not None
+            and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
+            and self.graph_memory.eqa_stay_on_attached_view() is True
+        ):
+            oid_fn = getattr(self.graph_memory, "eqa_attached_target_obs_id", None)
+            spent_fn = getattr(self.graph_memory, "eqa_obs_look_spent", None)
+            oid = oid_fn() if callable(oid_fn) else None
+            spent = bool(oid is not None and callable(spent_fn) and spent_fn(oid))
+            try:
+                covered = self.graph_memory._graph_covers_relevant_objects()
+            except Exception:
+                covered = True
+            if covered and not spent:
+                return False
         if target_point is not None:
             if habitat_nav_would_be_noop(self.robot, target_point):
                 return True
@@ -250,13 +265,6 @@ class GraphEQAController(DynamemController):
                     return True
             except Exception:
                 return True
-        if (
-            target_point is None
-            and self.graph_memory is not None
-            and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
-            and self.graph_memory.eqa_stay_on_attached_view() is True
-        ):
-            return False
         last_nav = getattr(self, "_last_nav_attempt", None)
         if last_nav is not None and not last_nav.finished and float(last_nav.dist_m) < 0.05:
             return True
@@ -675,12 +683,26 @@ class GraphEQAController(DynamemController):
         if confidence or not allow_navigation:
             return answer, discord_text, relevant_images, confidence
 
-        stay = (
-            target_point is None
+        stay_fn = getattr(self.graph_memory, "eqa_should_stay_on_attached_view", None)
+        if callable(stay_fn):
+            stay = bool(stay_fn(answer=answer, confidence=confidence))
+        else:
+            stay = (
+                self.graph_memory is not None
+                and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
+                and self.graph_memory.eqa_stay_on_attached_view() is True
+            )
+        if (
+            not stay
             and self.graph_memory is not None
             and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
-            and self.graph_memory.eqa_stay_on_attached_view() is True
-        )
+            and self.graph_memory.eqa_stay_on_attached_view()
+        ):
+            oid = self.graph_memory.eqa_attached_target_obs_id()
+            logger.info(
+                "EQA nav: releasing attached-view stay (unknown/uncovered/spent) obs_id=%s",
+                oid,
+            )
         approaching_find = False
         if stay:
             oid = self.graph_memory.eqa_attached_target_obs_id()
@@ -796,6 +818,11 @@ class GraphEQAController(DynamemController):
                 target_point = alt
             else:
                 eff_key = goal_key_xy(resolved)
+                if stay and (
+                    eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)
+                ):
+                    logger.info("EQA habitat: already at FIND/readout view; stay for close-up")
+                    return answer, discord_text, relevant_images, confidence
                 if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved):
                     self._habitat_blocked_goals.add(eff_key)
                     self._habitat_blocked_goals.add(goal_key_xy(target_point))

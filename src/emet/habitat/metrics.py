@@ -220,7 +220,11 @@ def choices_are_count_mcq(choices: list[str] | None) -> bool:
             "5",
         }
     )
-    hits = sum(1 for c in real if c in count_exact or re.fullmatch(r"\d+", c))
+    hits = sum(
+        1
+        for c in real
+        if c in count_exact or (re.fullmatch(r"\d+", c) is not None and 0 <= int(c) <= 20)
+    )
     return hits >= max(2, (len(real) + 1) // 2)
 
 

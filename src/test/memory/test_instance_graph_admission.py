@@ -777,6 +777,36 @@ def test_eqa_stay_on_attached_clock_view():
     assert mem.eqa_stay_on_attached_view() is False
 
 
+def test_eqa_stay_read_action_uses_later_image_not_only_image1():
+    """VLM ``read 2`` stays on that attached view even when Image 1 is a landmark."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["refrigerator"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 1.5]), ["clock"])
+    mem._question = "I'm trying to remember where I placed the wall clock. Where it is in the kitchen?"
+    mem.last_eqa_obs_ids = [1, 2]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 2", "hands too small")
+    assert mem.eqa_stay_on_attached_view() is True
+    assert mem.eqa_attached_target_obs_id() == 2
+    mem.last_eqa_parsed = ("", "Unknown", False, "", "")
+    mem.last_eqa_obs_ids = [1]
+    assert mem.eqa_stay_on_attached_view() is False
+
+
+def test_eqa_stay_read_action_works_for_sign_or_oven():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["door"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 1.5]), ["sign"])
+    mem.add_observation(rgb, np.array([4.0, 1.0, 1.0]), ["oven"])
+    mem.last_eqa_obs_ids = [1, 2]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 2", "letters too small")
+    assert mem.eqa_attached_target_obs_id() == 2
+    mem.last_eqa_obs_ids = [1, 3]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 2", "digits too small")
+    assert mem.eqa_attached_target_obs_id() == 3
+
+
 def test_visual_find_fn_topk_spreads_same_noun_xy():
     """Argmax FIND would keep two railing stools; top-k + XY spread includes the island."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
@@ -824,6 +854,46 @@ def test_eqa_approach_attached_find_when_far_then_stay_when_close():
     assert float(np.linalg.norm(np.asarray(far[:2]) - np.array([0.0, 0.0]))) > 1.0
     close = mem.eqa_approach_attached_find(np.array([8.0, 8.0, 0.0]))
     assert close is None
+
+
+def test_format_eqa_view_status_exposes_visit_counters():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
+    mem.add_observation(rgb, np.array([4.0, 4.0, 0.5]), ["table"])
+    mem.last_eqa_obs_ids = [1, 2]
+    mem._history_outputs = [
+        "Iter: answer=Unknown conf=false action=1 salvage=0 | living room",
+        "Iter: answer=Unknown conf=false action=1 salvage=0 | still no table",
+    ]
+    mem._obs_nav_dists[1] = [2.0, 0.5, 0.2]
+    block = mem.format_eqa_view_status([1, 2])
+    assert "VIEW_STATUS" in block
+    assert "Image 1 (obs 1): visits=3" in block
+    assert "look=2" in block
+    assert "unknown=2" in block
+
+
+def test_eqa_should_stay_releases_on_unknown_find_not_read():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["chair"])
+    mem._relevant_objects = ["dining chair"]
+    mem._relevant_phrases = ["dining chair"]
+    mem.last_eqa_obs_ids = [1]
+    mem.last_eqa_parsed = ("", "Unknown", False, "1", "no table visible")
+    assert mem.eqa_stay_on_attached_view() is True
+    assert mem.eqa_should_stay_on_attached_view(answer="Unknown", confidence=False) is False
+
+
+def test_eqa_should_stay_allows_read_unknown_until_spent():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sign"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 1.5]), ["sign"])
+    mem.last_eqa_obs_ids = [1, 2]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 2", "too small")
+    assert mem.eqa_should_stay_on_attached_view(answer="Unknown", confidence=False) is True
 
 
 def test_graph_count_hint_prefers_visual_find_images():
