@@ -3273,18 +3273,63 @@ class GraphEQAMemory:
         return None
 
     def _eqa_rgb_for_obs(self, obs_id: int) -> np.ndarray | None:
-        """RGB to attach for ``obs_id``: detector crop when stored, else full frame."""
+        """Full camera frame for an observation (scene context for counting)."""
         obs = self._observation_by_id(int(obs_id))
         if obs is None or not self._obs_usable_for_eqa_image(int(obs_id)):
             return None
-        full = rgb_uint8(obs.rgb)
+        return rgb_uint8(obs.rgb)
+
+    def _eqa_crop_for_obs(self, obs_id: int) -> np.ndarray | None:
+        """Tight detector crop, or None when the bbox is missing or covers the frame."""
+        obs = self._observation_by_id(int(obs_id))
+        if obs is None or not self._obs_usable_for_eqa_image(int(obs_id)):
+            return None
         nodes = [
             n
             for n in self._nodes
             if int(n.obs_id) == int(obs_id) and not n.is_frontier and not n.is_viewpoint
         ]
-        crop = tightest_node_crop(nodes, full)
-        return crop if crop is not None else full
+        return tightest_node_crop(nodes, rgb_uint8(obs.rgb))
+
+    def _eqa_pick_closeup_obs_id(
+        self,
+        obs_ids: list[int],
+        look_obs_id: int | None,
+        pin_obs: list[int],
+    ) -> int | None:
+        """Choose an already-attached scene whose detector crop is a useful extra view."""
+        attached = {int(oid) for oid in obs_ids}
+        ordered: list[int] = []
+        if look_obs_id is not None and int(look_obs_id) in attached:
+            ordered.append(int(look_obs_id))
+        ordered.extend(int(oid) for oid in pin_obs if int(oid) in attached)
+        ordered.extend(int(oid) for oid in obs_ids)
+        seen: set[int] = set()
+        for oid in ordered:
+            if oid in seen:
+                continue
+            seen.add(oid)
+            if self._eqa_crop_for_obs(oid) is not None:
+                return oid
+        return None
+
+    def _eqa_reserve_closeup_slot(
+        self,
+        obs_ids: list[int],
+        pin_obs: list[int],
+        look_obs_id: int | None,
+    ) -> list[int]:
+        """Drop one extra FIND view so a labeled close-up can occupy the last slot."""
+        if len(obs_ids) < 2:
+            return list(obs_ids)
+        pin_set = {int(x) for x in pin_obs}
+        look = int(look_obs_id) if look_obs_id is not None else None
+        ids = list(obs_ids)
+        for i in range(len(ids) - 1, 0, -1):
+            oid = int(ids[i])
+            if oid in pin_set and oid != int(ids[0]) and oid != look:
+                return ids[:i] + ids[i + 1 :]
+        return ids[:-1]
 
     def alternate_nav_target_for_failed_action(
         self,
@@ -5931,6 +5976,8 @@ class GraphEQAMemory:
 
         def _take(dst: list[int], src: list[int | None]) -> None:
             seen = set(dst)
+            if len(dst) >= max_images:
+                return
             for raw in src:
                 if raw is None:
                     continue
@@ -6077,7 +6124,25 @@ class GraphEQAMemory:
             count_question=count_q,
             look_obs_id=look_obs_id,
         )
+        crop_oid: int | None = None
+        crop_rgb: np.ndarray | None = None
+        if max_images >= 2:
+            crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
+            if crop_oid is not None:
+                crop_rgb = self._eqa_crop_for_obs(crop_oid)
+            if crop_rgb is None:
+                crop_oid = None
+            elif len(obs_ids) >= max_images:
+                obs_ids = self._eqa_reserve_closeup_slot(obs_ids, pin_obs, look_obs_id)
+                if crop_oid not in obs_ids:
+                    crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
+                    crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
+                    if crop_rgb is None:
+                        crop_oid = None
         self.last_eqa_obs_ids = list(obs_ids)
+        action_obs_ids = list(obs_ids)
+        if crop_oid is not None:
+            action_obs_ids.append(int(crop_oid))
         if look_obs_id is not None and (not obs_ids or int(obs_ids[0]) != int(look_obs_id)):
             self.last_eqa_look_obs_id = int(look_obs_id)
         else:
@@ -6108,7 +6173,7 @@ class GraphEQAMemory:
             else:
                 n = len(obs_ids)
                 img_desc_str = (
-                    f"Attached images: Image 1..{n} are RGB views; match them to SCENE_GRAPH "
+                    f"Attached images: Image 1..{n} are full camera views; match them to SCENE_GRAPH "
                     "nodes via Image tags on nodes. Do not re-list objects from the images."
                 )
         elif self._nav_samples:
@@ -6137,10 +6202,27 @@ class GraphEQAMemory:
                 if include_image_descriptions
                 else "Attached images: (none — explore for a real camera view before answering)"
             )
+        if crop_oid is not None and crop_rgb is not None and obs_ids:
+            try:
+                parent_txt = f"Image {obs_ids.index(int(crop_oid)) + 1}"
+            except ValueError:
+                parent_txt = f"graph obs {int(crop_oid)}"
+            n_scene = len(obs_ids)
+            img_desc_str = str(img_desc_str).rstrip() + (
+                f" Image {n_scene + 1} is a close-up of the object in {parent_txt} "
+                "(the same instance, not another object). Count from the scene views. "
+                "If a scene view is too wide to see the object, set action to that Image id "
+                "for a close-up next turn."
+            )
 
         extra_hints: list[str] = []
         if count_hint:
             extra_hints.append(count_hint)
+        if crop_oid is not None:
+            extra_hints.append(
+                "A later attached image is a close-up of an object already shown in a scene view; "
+                "do not count that close-up as a second object."
+            )
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
             extra_hints.append(self._visibility_location_mcq_hint(parsed_choices))
         # Attribute/state questions: answer from images; do not inject memory priors.
@@ -6171,6 +6253,10 @@ class GraphEQAMemory:
             if rgb is None:
                 continue
             im = Image.fromarray(rgb, mode="RGB")
+            relevant_images.append(im)
+            commands.append(im)
+        if crop_rgb is not None:
+            im = Image.fromarray(crop_rgb, mode="RGB")
             relevant_images.append(im)
             commands.append(im)
         for nv in nav_fallback_tail:
@@ -6498,7 +6584,7 @@ class GraphEQAMemory:
                 display_index = int(match.group())
                 hist_action = action.strip()
         if not confidence and display_index is not None:
-            resolved_oid = self._resolve_eqa_action_image_ref(display_index, obs_ids)
+            resolved_oid = self._resolve_eqa_action_image_ref(display_index, action_obs_ids)
             if resolved_oid is not None and self.eqa_obs_look_spent(resolved_oid):
                 # Still attach this RGB next turn; do not orbit the same obs.
                 if self.last_eqa_look_obs_id is None:
@@ -6514,7 +6600,7 @@ class GraphEQAMemory:
                 self.last_eqa_action_obs_id = resolved_oid
                 target_point = self._target_point_from_display_image_index(
                     display_index,
-                    obs_ids=obs_ids,
+                    obs_ids=action_obs_ids,
                     nav_fallback_tail=nav_fallback_tail,
                     robot_xyt=xyt,
                 )

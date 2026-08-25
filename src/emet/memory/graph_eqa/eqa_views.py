@@ -4,9 +4,11 @@
 
 """Helpers for EQA view recall: detector crops and same-obs look budgets.
 
-The graph is an index. These helpers decide which stored RGB to show the VLM and
-when a look at one observation has already been spent (so the agent looks
-somewhere else instead of orbiting).
+The graph is an index into stored RGB, not the answer. Scene frames are the
+default attach; detector crops are optional extras (close-ups of a view already
+shown) so a pillow or plant crop is not counted as a second object. These
+helpers also decide when a look at one observation has already been spent
+(so the agent looks somewhere else instead of orbiting).
 """
 
 from __future__ import annotations

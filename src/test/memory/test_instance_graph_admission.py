@@ -499,23 +499,25 @@ def test_query_answer_count_none_unconfident_when_find_views_unattached():
     assert mem.last_eqa_action_obs_id in {3, 4}
 
 
-def test_query_answer_attaches_detector_crop_not_full_hallway_frame():
-    """Stored instance bbox is the RGB we show, not the surrounding hallway."""
+def test_query_answer_attaches_full_frame_then_labeled_detector_crop():
+    """Image 1 is the scene; a leftover slot may add a close-up of that same view."""
     rgb = np.zeros((16, 16, 3), dtype=np.uint8)
     rgb[:, :8] = (180, 20, 20)
     rgb[:, 8:] = (20, 20, 200)
-    captured: dict = {}
+    question = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
 
-    def fake_eqa(cmds):
-        captured["cmds"] = cmds
-        return "reasoning: lamp crop\nanswer: One\nconfidence: true\naction:\nconfidence_reasoning: ok"
+    captured_one: dict = {}
 
-    mem = GraphEQAMemory(
-        eqa_client=fake_eqa,
+    def fake_eqa_one(cmds):
+        captured_one["cmds"] = cmds
+        return "reasoning: hallway with lamp\nanswer: One\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem_one = GraphEQAMemory(
+        eqa_client=fake_eqa_one,
         image_description_client=lambda _x: "lamp",
         parameters={"eqa_vl": {"eqa_max_images": 1}},
     )
-    mem.add_observation(
+    mem_one.add_observation(
         rgb,
         np.array([2.0, 0.0, 0.5]),
         ["lamp"],
@@ -523,11 +525,84 @@ def test_query_answer_attaches_detector_crop_not_full_hallway_frame():
         identity_key="lamp:1",
         bbox_xyxy=(8, 0, 16, 16),
     )
-    mem.query_answer("How many table lamps are there? A) One B) Two C) Three D) None. Answer:")
+    mem_one.query_answer(question)
+    imgs_one = [c for c in captured_one["cmds"] if hasattr(c, "size")]
+    assert len(imgs_one) == 1
+    scene = np.asarray(imgs_one[0])
+    assert scene.shape[1] == 16
+    assert scene[:, :, 0].mean() > 40
+    assert scene[:, :, 2].mean() > 40
+
+    captured_two: dict = {}
+
+    def fake_eqa_two(cmds):
+        captured_two["cmds"] = cmds
+        return "reasoning: scene plus close-up\nanswer: One\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem_two = GraphEQAMemory(
+        eqa_client=fake_eqa_two,
+        image_description_client=lambda _x: "lamp",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem_two.add_observation(
+        rgb,
+        np.array([2.0, 0.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="lamp:1",
+        bbox_xyxy=(8, 0, 16, 16),
+    )
+    mem_two.query_answer(question)
+    imgs_two = [c for c in captured_two["cmds"] if hasattr(c, "size")]
+    assert len(imgs_two) == 2
+    scene2 = np.asarray(imgs_two[0])
+    crop = np.asarray(imgs_two[1])
+    assert scene2.shape[1] == 16
+    assert crop.shape[1] < 16
+    assert crop[:, :, 2].mean() > crop[:, :, 0].mean()
+    prompt = " ".join(str(c) for c in captured_two["cmds"] if isinstance(c, str))
+    assert "close-up" in prompt
+    assert "not another object" in prompt or "second object" in prompt
+
+
+def test_query_answer_keeps_mixed_recall_when_reserving_closeup_slot():
+    """A detector crop steals an extra FIND stool, not the kitchen-counter view."""
+    rgb = np.zeros((16, 16, 3), dtype=np.uint8)
+    rgb[:, :8] = (180, 20, 20)
+    rgb[:, 8:] = (20, 20, 200)
+    captured: dict = {}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "stool, kitchen counter",
+        parameters={"eqa_vl": {"eqa_max_images": 4}},
+    )
+    for i in range(4):
+        mem.add_observation(
+            rgb,
+            np.array([float(i), 8.0, 0.5]),
+            ["stool"],
+            countable_instance=True,
+            identity_key=f"stool:{i}",
+            bbox_xyxy=(8, 0, 16, 16),
+        )
+    mem.add_observation(
+        rgb,
+        np.array([-2.5, 1.0, 0.6]),
+        ["kitchen counter"],
+        identity_key="counter:1",
+    )
+    q = "How many stools are at the kitchen counter? A) One B) Two C) Three D) None. Answer:"
+    mem.query_answer(q)
+    assert 5 in mem.last_eqa_obs_ids
     imgs = [c for c in captured["cmds"] if hasattr(c, "size")]
-    assert imgs
-    arr = np.asarray(imgs[0])
-    assert arr[:, :, 2].mean() > arr[:, :, 0].mean()
+    assert len(imgs) == len(mem.last_eqa_obs_ids) + 1
+    assert np.asarray(imgs[0]).shape[1] == 16
+    assert np.asarray(imgs[-1]).shape[1] < 16
 
 
 def test_query_answer_keeps_relevant_memory_view_when_look_is_hallway():

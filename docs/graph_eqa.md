@@ -148,6 +148,7 @@ So “find some known object” means: **ask about an object that is actually in
 EQA answers are formatted for **people and agents**, not internal image indices:
 
 - The mLLM may reason about “Image 1 / Image 8” in **reasoning**, but the **answer** shown to users is a short sentence with **object names and scene coordinates** (e.g. *The sink is on the counter at (2.1, -0.8, 0.9) m*).
+- **Attached RGB:** `query_answer` shows **full camera frames** for FIND / Action-pinned observations (the graph is an index into stored views, not the count). When the image budget has room — or the last non-pin slot — a **detector close-up** of an already-attached view may be appended and labeled as the same instance, not a second object. Set `action` to a scene Image id to request that close-up on the next turn.
 - **`emet run agent`**: use **`query_scene_graph`** for where-is / what-is questions; tool results look like `Answer: …`, `Location: …`, `Confidence: …`.
 - When **`Nodes (0)`** in export, answers may rely on navigation viewpoints only until graph merge populates nodes; see [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
 
