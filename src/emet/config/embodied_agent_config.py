@@ -25,8 +25,8 @@ logger = Logger(__name__)
 
 # Mutually exclusive object-graph plug-ins on the voxel map (``agent.memory_backend``).
 # Canonical static baseline is ``static_graph`` (legacy alias: ``graph_eqa``).
-MEMORY_BACKENDS = ("dynamem", "open_vocab", "static_graph", "dynagraph")
-GRAPH_EQA_FAMILY_BACKENDS = frozenset({"static_graph", "dynagraph"})
+MEMORY_BACKENDS = ("dynamem", "open_vocab", "static_graph", "dynagraph", "lazy_graph")
+GRAPH_EQA_FAMILY_BACKENDS = frozenset({"static_graph", "dynagraph", "lazy_graph"})
 
 
 @dataclass
