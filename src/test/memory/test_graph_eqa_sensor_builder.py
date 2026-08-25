@@ -265,7 +265,7 @@ def test_format_scene_graph_pretty_navigation_samples_section():
     assert "anchor=" in s
 
 
-def test_format_scene_graph_pretty_truncates_many_labels():
+def test_format_scene_graph_pretty_lists_all_labels():
     mem = GraphEQAMemory(
         eqa_client=lambda x: "",
         image_description_client=lambda x: "",
@@ -276,7 +276,7 @@ def test_format_scene_graph_pretty_truncates_many_labels():
         ["a", "b", "c", "d", "e"],
     )
     s = format_scene_graph_pretty(mem)
-    assert "(+2 more)" in s
+    assert "a, b, c, d, e" in s
 
 
 def test_compare_graph_to_placements_report():

@@ -933,6 +933,29 @@ def test_parse_eqa_action_read_vs_look():
     assert parse_eqa_action("read2") == ("read", 2)
 
 
+def test_parse_eqa_action_rejects_free_text_digits():
+    assert parse_eqa_action("I count 3 lamps") == ("", None)
+    assert parse_eqa_action("look at image 2") == ("", None)
+    assert parse_eqa_action("navigate to 5") == ("", None)
+    assert parse_eqa_action("-") == ("", None)
+
+
+def test_read_action_round_trips_through_history():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    read_entry = mem.format_eqa_history_outcome(
+        answer="Unknown", confidence=False, action="read 2", reasoning="letters too small"
+    )
+    assert "action=read2" in read_entry
+    look_entry = mem.format_eqa_history_outcome(
+        answer="A", confidence=False, action="2", reasoning="look closer"
+    )
+    assert "action=2" in look_entry
+    empty_entry = mem.format_eqa_history_outcome(
+        answer="A", confidence=False, action="", reasoning="done"
+    )
+    assert "action=-" in empty_entry
+
+
 def test_query_answer_records_read_action():
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
 

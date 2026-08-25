@@ -874,6 +874,26 @@ def test_format_eqa_view_status_exposes_visit_counters():
     assert "unknown=2" in block
 
 
+def test_format_eqa_view_status_counts_read_actions():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
+    mem.add_observation(rgb, np.array([4.0, 4.0, 0.5]), ["table"])
+    mem.last_eqa_obs_ids = [1, 2]
+    mem._history_outputs = [
+        mem.format_eqa_history_outcome(
+            answer="Unknown", confidence=False, action="read 2", reasoning="letters too small"
+        ),
+        mem.format_eqa_history_outcome(
+            answer="Unknown", confidence=False, action="read 2", reasoning="still too small"
+        ),
+    ]
+    block = mem.format_eqa_view_status([1, 2])
+    assert "Image 2 (obs 2):" in block
+    assert "read=2" in block
+    assert "look=0" in block
+
+
 def test_eqa_should_stay_releases_on_unknown_find_not_read():
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)

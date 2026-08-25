@@ -636,6 +636,21 @@ def test_collect_episode_scores_from_consolidated_jsonl(tmp_path):
     assert by_q[21].correct is True
 
 
+def test_collect_episode_scores_falls_back_to_filename_qid(tmp_path):
+    out = tmp_path / "h2h"
+    out.mkdir()
+    jsonl = out / "dynagraph_q12.jsonl"
+    jsonl.write_text(
+        '{"correct":false,"predicted_answer":"C","gold_answer_letter":"D",'
+        '"planning_steps":3,"confident":true}\n',
+        encoding="utf-8",
+    )
+    scores = jr.collect_episode_scores(out)
+    assert len(scores) == 1
+    assert scores[0].question_id == 12
+    assert scores[0].arm == "dynagraph"
+
+
 def test_format_job_report_countclock_slice(tmp_path, monkeypatch):
     monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
     wrapper = tmp_path / "jobs_runs" / "instance-graph-repair-15q"

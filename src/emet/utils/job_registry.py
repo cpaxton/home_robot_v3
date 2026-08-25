@@ -1116,12 +1116,22 @@ def _episode_score_from_row(
     arm: str,
     path: str | Path,
     out_dir: Path | None = None,
+    fallback_qid: int | str | None = None,
 ) -> EpisodeScore | None:
-    """Build :class:`EpisodeScore` from a consolidated or per-episode jsonl row."""
+    """Build :class:`EpisodeScore` from a consolidated or per-episode jsonl row.
+
+    ``fallback_qid`` is used when the row omits ``question_id`` (per-episode H2H
+    jsonls encode it in the filename as ``{arm}_q{id}.jsonl``).
+    """
     try:
         qid = int(row.get("question_id"))
     except (TypeError, ValueError):
-        return None
+        if fallback_qid is None:
+            return None
+        try:
+            qid = int(fallback_qid)
+        except (TypeError, ValueError):
+            return None
     pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
     gold = row.get("gold_answer_letter") or row.get("gt_answer") or row.get("answer_gt")
     steps = row.get("planning_steps")
@@ -1207,7 +1217,13 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
         except (OSError, json.JSONDecodeError, StopIteration, TypeError, ValueError):
             continue
         arm = str(m.group("arm")).lower()
-        score = _episode_score_from_row(row, arm=arm, path=path, out_dir=root)
+        score = _episode_score_from_row(
+            row,
+            arm=arm,
+            path=path,
+            out_dir=root,
+            fallback_qid=m.group("qid"),
+        )
         if score is None:
             continue
         scores.append(score)

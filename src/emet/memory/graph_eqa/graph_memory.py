@@ -518,20 +518,30 @@ def _object_match_tokens(text: str) -> set[str]:
     }
 
 
+_ACTION_READ_RE = re.compile(r"^read\s*(?:image\s+)?(\d+)$")
+_ACTION_LOOK_RE = re.compile(r"^(?:image\s+)?(\d+)$")
+
+
 def parse_eqa_action(action: str) -> tuple[str, int | None]:
     """Parse the EQA ``action`` field into ``("", None)``, ``("look", N)``, or ``("read", N)``.
 
-    ``read N`` means the answer is written or shown in Image N but not legible —
-    stay on that view. A bare image id is ``look`` (navigate / inspect).
+    Only the documented forms are accepted: ``""``, a bare Image id (``2`` / ``Image 2``),
+    or ``read N`` (``read 2`` / ``read Image 2`` / ``read2``). Free text that merely
+    contains a number (e.g. ``I count 3 lamps``) is rejected as ``("", None)`` so a stray
+    digit can never be mistaken for an Image id; callers fall back to the Image-1 FIND view.
+    ``read N`` means the answer is written or shown in Image N but not legible — stay on
+    that view. A bare image id is ``look`` (navigate / inspect).
     """
     raw = (action or "").strip().lower()
     if not raw:
         return "", None
-    match = re.search(r"\d+", raw)
-    idx = int(match.group()) if match else None
-    if re.match(r"read(\b|\d)", raw):
-        return "read", idx
-    return "look", idx
+    m = _ACTION_READ_RE.match(raw)
+    if m:
+        return "read", int(m.group(1))
+    m = _ACTION_LOOK_RE.match(raw)
+    if m:
+        return "look", int(m.group(1))
+    return "", None
 
 
 def label_matches_relevant_object(obj: str, label: str) -> bool:
@@ -5540,8 +5550,9 @@ class GraphEQAMemory:
         act = (action or "").strip().replace("\n", " ")
         act_bit = ""
         if act:
-            m = re.search(r"\d+", act)
-            act_bit = m.group(0) if m else act[:16]
+            kind, display_index = parse_eqa_action(act)
+            if display_index is not None:
+                act_bit = f"read{display_index}" if kind == "read" else str(display_index)
         reason = (reasoning or "").replace("\n", " ").strip()[:80]
         return (
             f"Iter: answer={ans} conf={str(bool(confidence)).lower()} "
