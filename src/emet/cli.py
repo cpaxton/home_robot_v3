@@ -3913,6 +3913,11 @@ def mars_cmd() -> None:
     is_flag=True,
     help="Run Depth Anything 3 on the Jetson; publish depth over ZMQ (implies --deploy when set)",
 )
+@click.option(
+    "--onboard-dinov3",
+    is_flag=True,
+    help="Run DINOv3 vits16 on the Jetson; publish dinov3_head over ZMQ (implies --deploy when set)",
+)
 @click.option("--preview", is_flag=True, help="Run preview-cameras after bridge startup")
 @click.option("--wait-s", default=20.0, show_default=True, help="Seconds to wait before status check")
 @click.option("--no-save", is_flag=True, help="Do not update saved connection profile")
@@ -3923,6 +3928,7 @@ def mars_start_cmd(
     connection_name: str | None,
     deploy: bool,
     onboard_da3: bool,
+    onboard_dinov3: bool,
     preview: bool,
     wait_s: float,
     no_save: bool,
@@ -3940,6 +3946,8 @@ def mars_start_cmd(
 
     if onboard_da3 and not deploy:
         deploy = True
+    if onboard_dinov3 and not deploy:
+        deploy = True
 
     mars_start(
         host=host,
@@ -3950,6 +3958,7 @@ def mars_start_cmd(
         deploy=deploy,
         preview=preview,
         onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
         wait_s=wait_s,
     )
 

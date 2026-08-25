@@ -33,6 +33,7 @@ from emet.core.zmq_protocol import (
 )
 from emet.utils.image import scale_camera_matrix
 from innate_mars_bridge.onboard_da3 import create_onboard_da3_from_env, onboard_da3_enabled
+from innate_mars_bridge.onboard_dinov3 import create_onboard_dinov3_from_env, onboard_dinov3_enabled
 from innate_mars_bridge.remote import InnateMarsClient
 
 
@@ -50,6 +51,9 @@ class ZmqServer(BaseZmqServer):
         self._onboard_da3 = create_onboard_da3_from_env()
         self._warned_onboard_da3 = False
         self._onboard_depth_ok = False
+        self._onboard_dinov3 = create_onboard_dinov3_from_env()
+        self._warned_onboard_dinov3 = False
+        self._onboard_dinov3_ok = False
 
     def _emet_session_payload(self) -> dict[str, Any]:
         """Schema v1 session metadata (see docs/zmq_session_metadata.md)."""
@@ -66,6 +70,7 @@ class ZmqServer(BaseZmqServer):
                 "num_cameras": 3,
                 "dof": 10,
                 "onboard_da3": onboard_da3_enabled(),
+                "onboard_dinov3": onboard_dinov3_enabled(),
             },
             "environment": {"kind": "ros2", "package": "innate_mars_bridge"},
         }
@@ -98,6 +103,19 @@ class ZmqServer(BaseZmqServer):
             click.echo(f"Warning: onboard DA3 enabled but not producing depth ({err}).", err=True)
         return None
 
+    def _maybe_onboard_dinov3(self, head_left: np.ndarray) -> list[float] | None:
+        if self._onboard_dinov3 is None:
+            return None
+        emb = self._onboard_dinov3.infer_head_embedding(head_left)
+        if emb:
+            self._onboard_dinov3_ok = True
+            return emb
+        if not self._warned_onboard_dinov3:
+            self._warned_onboard_dinov3 = True
+            err = self._onboard_dinov3.load_error or "inference returned empty embedding"
+            click.echo(f"Warning: onboard DINOv3 enabled but not producing embeddings ({err}).", err=True)
+        return None
+
     @override
     def is_running(self) -> bool:
         return not self.done and rclpy.ok()
@@ -124,6 +142,7 @@ class ZmqServer(BaseZmqServer):
         pose_l = self.client.head_left_camera_pose
         pose_r = self.client.head_right_camera_pose
         depth_m = self._maybe_onboard_depth(head_left, head_right, kl, kr, pose_l, pose_r)
+        dinov3_head = self._maybe_onboard_dinov3(head_left)
         depth_zmq = None
         if depth_m is not None:
             depth_u16 = (np.asarray(depth_m, dtype=np.float32) * 1000.0).astype(np.uint16)
@@ -154,6 +173,7 @@ class ZmqServer(BaseZmqServer):
             "camera_K_right": kr,
             "camera_pose_right": pose_r,
             "depth": depth_zmq,
+            "dinov3_head": dinov3_head,
             "head_cam_left/image": compression.to_jpg(head_left),
             "head_cam_right/image": compression.to_jpg(head_right),
             "ee_cam/image": compression.to_jpg(ee_img),

@@ -125,13 +125,20 @@ def resolve_mars_target(
     return host.strip(), user.strip(), password, workspace.rstrip("/"), emet_dir.rstrip("/")
 
 
-def _remote_bridge_launch_cmd(*, workspace: str, emet_dir: str, onboard_da3: bool = False) -> str:
+def _remote_bridge_launch_cmd(
+    *,
+    workspace: str,
+    emet_dir: str,
+    onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
+) -> str:
     emet_core = f"{emet_dir}/emet_core"
     emet_src = f"{emet_dir}/src"
     da3_env = "export EMET_MARS_ONBOARD_DA3=1; " if onboard_da3 else ""
+    dinov3_env = "export EMET_MARS_ONBOARD_DINOV3=1; " if onboard_dinov3 else ""
     py_paths = f"{emet_core}:{emet_src}"
     return (
-        f"{da3_env}"
+        f"{da3_env}{dinov3_env}"
         f"source {emet_dir}/bridge_env.sh 2>/dev/null || "
         f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
         f"source ~/innate-os/dds/setup_dds.zsh && "
@@ -318,6 +325,7 @@ def print_bridge_status(
     *,
     profile: str | None = None,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
     show_next_steps: bool = True,
 ) -> None:
     """Pretty-print bridge health for ``emet mars start`` / ``emet mars status``."""
@@ -340,6 +348,8 @@ def print_bridge_status(
     parts.append(f"ZMQ {_compact_ports(status)}")
     if onboard_da3:
         parts.append(style("DA3", fg="cyan"))
+    if onboard_dinov3:
+        parts.append(style("DINOv3", fg="cyan"))
 
     log_line = status.headline_log()
     show_log = bool(
@@ -402,9 +412,15 @@ def start_bridge_on_robot(
     workspace: str = DEFAULT_INNATE_WORKSPACE,
     emet_dir: str = DEFAULT_EMET_DIR,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
 ) -> None:
     """Start innate_mars_bridge inside innate-os tmux (Zenoh DDS env)."""
-    launch_line = _remote_bridge_launch_cmd(workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
+    launch_line = _remote_bridge_launch_cmd(
+        workspace=workspace,
+        emet_dir=emet_dir,
+        onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
+    )
     remote = (
         f"{_kill_bridge_remote()}; "
         "sleep 1; "
@@ -439,6 +455,7 @@ def bridge_status_on_robot(
     *,
     profile: str | None = None,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
     show_next_steps: bool = True,
     workspace: str = DEFAULT_INNATE_WORKSPACE,
 ) -> MarsBridgeStatus:
@@ -447,6 +464,7 @@ def bridge_status_on_robot(
         status,
         profile=profile,
         onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
         show_next_steps=show_next_steps,
     )
     return status
@@ -462,6 +480,7 @@ def mars_start(
     deploy: bool = False,
     preview: bool = False,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
     wait_s: float = 20.0,
 ) -> None:
     host, user, password, workspace, emet_dir = resolve_mars_target(
@@ -498,11 +517,20 @@ def mars_start(
             emet_dir=emet_dir,
             start_bridge=False,
             with_da3=onboard_da3,
+            with_dinov3=onboard_dinov3,
             robot="innate_mars",
             root=_project_root(),
         )
 
-    start_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
+    start_bridge_on_robot(
+        host,
+        user,
+        password,
+        workspace=workspace,
+        emet_dir=emet_dir,
+        onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
+    )
 
     if wait_s > 0:
         note(f"Waiting {wait_s:.0f}s for bridge startup…")
@@ -514,6 +542,7 @@ def mars_start(
         password,
         profile=profile_name or connection_name or host,
         onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
         show_next_steps=not preview,
         workspace=workspace,
     )

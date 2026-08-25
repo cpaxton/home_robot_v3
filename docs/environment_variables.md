@@ -181,6 +181,13 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ROBOSUITE_AUTOPLACE` | `scene_base_spawn` | Planar base autoplace on Robocasa / default-table merges (default `1`). `0`/`false`/`no`/`off` disables. |
 | `MUJOCO_GL` | MuJoCo rendering | e.g. `egl` for headless GPU cameras on Linux. RobosuiteZmqServer sets this automatically unless `--use-glx`. |
 | `EMET_MARS_ONBOARD_DA3` | Innate Mars bridge | Set to `1` on the Jetson when `emet mars start --onboard-da3` runs DA3 stereo onboard (see [innate_mars_hardware.md](robots/innate_mars_hardware.md)). |
+| `EMET_MARS_ONBOARD_DINOV3` | Innate Mars bridge | Set to `1` on the Jetson when `emet mars start --onboard-dinov3` runs DINOv3 vits16 onboard; publishes `dinov3_head` on full ZMQ observations. |
+| `EMET_MARS_DINOV3_INFER_EVERY_N` | Onboard Jetson DINOv3 | Run inference every N frames (default `4`). |
+| `EMET_MARS_DINOV3_VERSION` | Onboard Jetson DINOv3 | DINOv3 size key (default `vits16`). |
+| `EMET_DINOV3_ENDPOINT` | `Dinov3Encoder` / open_vocab graph | HTTP base URL for remote embeddings on LAN Orin (e.g. `http://caliban:8002`). When set, workstation skips local DINOv3 weights. |
+| `EMET_DINOV3_HOST` | Remote DINOv3 | Alias for host:port without scheme (e.g. `caliban:8002`). |
+| `EMET_DINOV3_MODEL_ID` | Jetson DINOv3 deploy | HF model id (default `facebook/dinov3-vits16-pretrain-lvd1689m`). |
+| `EMET_DINOV3_SERVE_PORT` | Jetson DINOv3 container | HTTP port (default `8002`). |
 | `EMET_MARS_DA3_SPECKLE_OPEN_KERNEL` | Onboard Jetson DA3 | Morphological depth speckle filter kernel (pixels); `0` = off (default). Same helper as dynav `filters.depth_speckle_open_kernel`. |
 | `EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS` | Onboard Jetson DA3 | Speckle opening repeat count (default `1`). Ignored when kernel is `0`. |
 | `EMET_STREAM_VERBOSE` | `emet capture` / `emet stream` | `1`/`true` → per-step status + DA3 INFO timing (same as `--verbose`). Default off; dynav `stream.verbose` also applies. |

@@ -264,8 +264,8 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 ## LazyGraph memory backend (PR #131 — merged 2026-08-25)
 
 - [x] Land **`lazy_graph`** backend: Dynamem voxel find + viewpoints during `update()`, Qwen commit on arrival only (`emet run lazy-graph`, `--memory-backend lazy_graph`). Does not change `dynagraph` defaults.
-- [ ] Robocasa smoke: `emet run lazy-graph` with sim server (or `scripts/queue_lazy_graph_robocasa_smoke.sh` via `emet jobs`).
-- [ ] Herman hardware smoke: `emet run agent --memory-backend lazy_graph --connection herman` after bridge + remote VL are up.
+- [ ] Robocasa smoke: `emet run lazy-graph` with sim server (or `scripts/queue_lazy_graph_robocasa_smoke.sh` via `emet jobs`). Job `20260825_163104_886a12` queued 2026-08-25.
+- [x] Herman hardware smoke: `emet run agent --memory-backend lazy_graph --connection herman --host caliban` loads lazy_graph + remote VL (2026-08-25; wrist still down).
 
 ## Herman / Orin offload (branch `feature/herman-orin`)
 
@@ -286,10 +286,10 @@ Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman
 - Voxel map + Dynagraph/LazyGraph memory loop
 - Full `emet run agent` stack when not using remote `--host` VL
 
-- [ ] **Onboard DA3 dogfood**: `emet mars start --connection herman --deploy --onboard-da3`; confirm ZMQ depth + `emet stream --backend voxel_only`.
-- [ ] **Remote VL smoke**: `emet llm health --host caliban` + `emet run agent --connection herman --host caliban` (tethered: `EMET_BASE_ROTATE_ONLY=1`).
-- [ ] **DINOv3 on Orin**: no deploy hook yet — encoder exists (`dinov3_encoder.py`) but aarch64 jetson profile skips heavy perception groups. Spike: smallest `vits16` in Tegra Docker or ONNX; compare to shipping DA3 onboard pattern.
-- [ ] **Wrist camera**: reseat Arducam USB on Herman; `maurice_cam` must publish `/mars/arm/image_raw`.
+- [ ] **Onboard DA3 dogfood**: `emet mars start --connection herman --deploy --onboard-da3`; confirm ZMQ depth + `emet stream --backend voxel_only`. **Blocked 2026-08-25:** Herman pip install fails — `depth-anything-3` needs `pycolmap` (no Linux aarch64 wheel). Workstation DA3 still used via `depth_source: auto`. Bridge code synced; retry when pycolmap/Tegra wheel exists.
+- [x] **Remote VL smoke**: `emet llm health --host caliban` + `emet run chat --host caliban --once` → `Pong` via caliban:8000 (2026-08-25).
+- [ ] **DINOv3 on Orin**: caliban deploy path added (`docker/jetson_dinov3_server.py`, `scripts/deploy_caliban_dinov3.sh`, `EMET_DINOV3_ENDPOINT` client + tests). Run `./scripts/deploy_caliban_dinov3.sh --host caliban` after caching `facebook/dinov3-vits16-pretrain-lvd1689m`.
+- [ ] **Wrist camera**: reseat Arducam USB on Herman; SSH verified no `/dev/v4l/by-id/*Arducam*` (2026-08-25).
 
 ## Embodied agent / Herman
 

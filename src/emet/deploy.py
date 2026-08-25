@@ -187,9 +187,15 @@ def _rsync_to_robot(
         _paramiko_upload(host, user, password, local_path, remote_path)
         return
     target = _ssh_target(host, user, password)
-    dest = f"{target}:{remote_path}"
-    _ssh_run(host, user, password, f"mkdir -p {remote_path}", use_paramiko=False)
-    cmd = ["rsync", "-az", "--delete", str(local_path) + "/", dest + "/"]
+    if local_path.is_file():
+        remote_dir = remote_path.rstrip("/")
+        remote_file = remote_path if remote_path.endswith(local_path.name) else f"{remote_dir}/{local_path.name}"
+        _ssh_run(host, user, password, f"mkdir -p {remote_dir}", use_paramiko=False)
+        cmd = ["rsync", "-az", str(local_path), f"{target}:{remote_file}"]
+    else:
+        dest = f"{target}:{remote_path}"
+        _ssh_run(host, user, password, f"mkdir -p {remote_path}", use_paramiko=False)
+        cmd = ["rsync", "-az", "--delete", str(local_path) + "/", dest + "/"]
     if password:
         cmd = ["sshpass", "-p", password] + cmd
     _run(cmd)
@@ -405,6 +411,7 @@ def deploy(
     emet_dir: str = DEFAULT_EMET_DIR,
     start_bridge: bool = False,
     with_da3: bool = False,
+    with_dinov3: bool = False,
     robot: str | None = None,
     root: Path | None = None,
 ) -> None:
@@ -422,6 +429,7 @@ def deploy(
         emet_dir: Remote path for emet_core (e.g. ~/emet).
         start_bridge: If True, launch the bridge after deploy (Mars: innate-os tmux; Stretch: nohup).
         with_da3: If True (Mars only), sync emet perception + install torch / depth-anything-3.
+        with_dinov3: If True (Mars only), sync emet encoders + install transformers for onboard DINOv3.
         robot: ``stretch`` or ``innate_mars`` (aliases: hello_stretch, mars). Resolved from
             connection profile when omitted.
         root: Project root (default: repo root containing ``src/emet_core`` and bridge packages).
@@ -460,6 +468,8 @@ def deploy(
 
     if with_da3 and robot_id != "innate_mars":
         raise SystemExit("--with-da3 / onboard DA3 is only supported for --robot innate_mars")
+    if with_dinov3 and robot_id != "innate_mars":
+        raise SystemExit("--with-dinov3 / onboard DINOv3 is only supported for --robot innate_mars")
 
     emet_core_src = root / "src" / "emet_core"
     bridge_src = root / "src" / spec.bridge_pkg
@@ -529,6 +539,28 @@ def deploy(
                 f"bash -lc 'python3 -m pip install --user -r {remote_da3_reqs}'",
                 use_paramiko,
             )
+
+    if with_dinov3:
+        if not emet_src.is_dir():
+            raise SystemExit(f"emet package not found at {emet_src} (required for --with-dinov3)")
+        print("Syncing emet encoders (onboard DINOv3) to robot...")
+        remote_emet_src = f"{remote_emet}/src/emet"
+        for sub in ("perception", "utils"):
+            local_sub = emet_src / sub
+            if local_sub.is_dir():
+                _rsync_to_robot(local_sub, f"{remote_emet_src}/{sub}", host, user, password, use_paramiko)
+        init_py = emet_src / "__init__.py"
+        if init_py.is_file():
+            _ssh_run(host, user, password, f"mkdir -p {remote_emet_src}", use_paramiko)
+            _rsync_to_robot(init_py, remote_emet_src, host, user, password, use_paramiko)
+        print("Installing onboard DINOv3 Python deps on robot (transformers; may take a while)...")
+        _ssh_run(
+            host,
+            user,
+            password,
+            "bash -lc 'python3 -m pip install --user \"transformers>=4.40\" \"Pillow>=9.0\"'",
+            use_paramiko,
+        )
 
     py_paths = f"{remote_emet_core}:{remote_emet}/src"
     _ssh_run(
