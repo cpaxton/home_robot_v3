@@ -138,3 +138,15 @@ def answer_is_unknownish(answer: str, choices: list[str] | None = None) -> bool:
     if normalized == "none" and choices and match_freeform_to_choice(text, choices) is not None:
         return False
     return normalized in {"unknown", "none", "n/a", "na"} or "frontier" in normalized
+
+
+def count_answer_is_none_or_zero(answer: str, choices: list[str] | None = None) -> bool:
+    """True when the scored count letter is ``None`` / ``Zero`` / ``0``."""
+    text = str(answer or "").strip()
+    if not text:
+        return False
+    if choices:
+        matched = match_freeform_to_choice(text, choices)
+        if matched is not None:
+            text = str(choices[matched] or "")
+    return str(text).strip().lower() in {"none", "zero", "0"}

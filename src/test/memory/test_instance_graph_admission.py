@@ -374,3 +374,142 @@ def test_query_answer_pins_location_object_view_ahead_of_landmark():
     )
     mem.query_answer(q)
     assert mem.last_eqa_obs_ids[0] == 1
+
+
+def _relabel_obs_id(mem: GraphEQAMemory, src: int, dst: int) -> None:
+    from dataclasses import replace
+
+    mem._observations = [replace(obs, obs_id=dst) if int(obs.obs_id) == src else obs for obs in mem._observations]
+    mem._nodes = [replace(node, obs_id=dst) if int(node.obs_id) == src else node for node in mem._nodes]
+
+
+def test_count_candidates_match_head_noun_lamp_for_table_lamps():
+    """Detector 'lamp' must FIND for 'table lamps' without a close-look name or alias table."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb, np.array([1.0, 0.0, 0.5]), ["lamp"], countable_instance=True, identity_key="lamp:1"
+    )
+    mem.add_observation(
+        rgb, np.array([9.0, 9.0, 0.5]), ["chair"], countable_instance=True, identity_key="chair:1"
+    )
+    q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
+    nodes, target = mem._count_candidate_nodes(q)
+    assert target is not None
+    assert [int(n.obs_id) for n in nodes] == [1]
+    hint = mem._graph_count_hint(q)
+    assert "[Image 1]" in hint
+    assert "GRAPH_COUNT: 1" not in hint
+
+
+def test_query_answer_count_find_beats_stale_hallway_look():
+    """q86: GRAPH_COUNT lamp views must be Image 1, not a leftover Action:55 hallway."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return "reasoning: r\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["chair"], identity_key="hall:1")
+    mem.add_observation(
+        rgb,
+        np.array([4.0, 5.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="lamp:1",
+    )
+    mem.last_eqa_look_obs_id = 1
+    mem._select_relevant_obs_ids = lambda **_k: [1]  # type: ignore[method-assign]
+    mem.query_answer("How many table lamps are there? A) One B) Two C) Three D) None. Answer:")
+    assert mem.last_eqa_obs_ids[0] == 2
+
+
+def test_query_answer_pins_graph_action_163_as_image_1_among_four_frames():
+    """Action:163 with 4 attached display images must be Image 1 on the next call."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def fake_eqa(_cmds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (
+                "reasoning: not in these four frames\n"
+                "answer: Unknown\nconfidence: false\naction: 163\n"
+                "confidence_reasoning: look at Image 163\n"
+            )
+        return "reasoning: two lamps\nanswer: Two\nconfidence: true\naction:\nconfidence_reasoning: ok"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 4}},
+    )
+    for i, label in enumerate(("chair", "sofa", "wall", "box"), start=1):
+        mem.add_observation(
+            rgb,
+            np.array([float(i), 0.0, 0.5]),
+            [label],
+            identity_key=f"ctx:{i}",
+        )
+    mem.add_observation(
+        rgb,
+        np.array([20.0, 20.0, 0.5]),
+        ["box"],
+        identity_key="gallery:163",
+    )
+    _relabel_obs_id(mem, 5, 163)
+    mem._select_relevant_obs_ids = lambda **_k: [1, 2, 3, 4]  # type: ignore[method-assign]
+    q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
+    mem.query_answer(q)
+    assert mem.last_eqa_action_obs_id == 163
+    assert mem.last_eqa_look_obs_id == 163
+    assert 163 not in mem.last_eqa_obs_ids
+    mem.query_answer(q, force_obs_ids=[1])
+    assert mem.last_eqa_obs_ids[0] == 163
+
+
+def test_query_answer_count_none_unconfident_when_find_views_unattached():
+    """q93: confident None is not final while stool FIND RGB was never attached."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return (
+            "reasoning: stools are not at the kitchen counter in these frames\n"
+            "answer: None\nconfidence: true\naction:\n"
+            "confidence_reasoning: dining chairs only\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["chair"], identity_key="c1")
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["chair"], identity_key="c2")
+    mem.add_observation(
+        rgb, np.array([8.0, 8.0, 0.5]), ["stool"], countable_instance=True, identity_key="s1"
+    )
+    mem.add_observation(
+        rgb, np.array([10.0, 8.0, 0.5]), ["stool"], countable_instance=True, identity_key="s2"
+    )
+    orig = mem._compose_eqa_answer_obs_ids
+
+    def drop_find(**kwargs):
+        kwargs = dict(kwargs)
+        kwargs["pin_obs"] = []
+        kwargs["look_obs_id"] = None
+        return orig(**kwargs)
+
+    mem._compose_eqa_answer_obs_ids = drop_find  # type: ignore[method-assign]
+    mem._select_relevant_obs_ids = lambda **_k: [1, 2]  # type: ignore[method-assign]
+    q = "How many stools are at the kitchen counter? A) One B) Two C) Three D) None. Answer:"
+    _r, answer, confidence, _cr, _tp, _imgs = mem.query_answer(q)
+    assert str(answer).strip().lower() == "none"
+    assert confidence is False
+    assert mem.last_eqa_obs_ids == [1, 2]
+    assert mem.last_eqa_look_obs_id in {3, 4}
+    assert mem.last_eqa_action_obs_id in {3, 4}

@@ -44,6 +44,7 @@ from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 from emet.memory.graph_eqa.mcq_debias import (
     LETTERS,
     answer_is_unknownish,
+    count_answer_is_none_or_zero,
     extract_single_letter,
     letter_to_original_index,
     match_freeform_to_choice,
@@ -5742,6 +5743,17 @@ class GraphEQAMemory:
 
         matches: list[GraphNode] = []
         target_phrases = [target.tokens, *_COUNT_PHRASE_ALIASES.get(target.tokens, ())]
+        # FIND recall, not a new alias table: "table lamps" must still point at
+        # detector "lamp" views so the VLM can look (q86 without close-look).
+        head = target.tokens[-1] if target.tokens else ""
+        if (
+            len(target.tokens) > 1
+            and head
+            and (head in _COUNT_WORD_ALIASES or head.rstrip("s") in _COUNT_WORD_ALIASES)
+        ):
+            head_phrase = (head,)
+            if head_phrase not in target_phrases:
+                target_phrases = [*target_phrases, head_phrase]
         for node in self._nodes:
             if (
                 node.is_frontier
@@ -5761,13 +5773,15 @@ class GraphEQAMemory:
         if target.scope_tokens:
             room_by_id = self._node_room_by_id()
             if room_by_id and all(int(node.node_id) in room_by_id for node in matches):
-                matches = [
+                scoped = [
                     node
                     for node in matches
                     if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
                 ]
-                if not matches:
-                    return [], target
+                if scoped:
+                    matches = scoped
+                # Scope miss (q93: dining stools vs "kitchen counter"): keep
+                # scene-wide FIND views. List length is still not a count.
         unique: dict[str, GraphNode] = {}
         for node in matches:
             key = str(node.identity_key).strip() if node.identity_key else f"node:{int(node.node_id)}"
@@ -5867,11 +5881,17 @@ class GraphEQAMemory:
         look: list[int] = []
         _take(look, [look_obs_id])
         pins: list[int] = []
-        _take(pins, [*look, *pin_obs])
+        _take(pins, pin_obs)
         out: list[int] = []
-        if count_question and pins:
-            # FIND views occupy Image 1..K; verified-wrong-room frames fill leftovers.
+        if count_question and (look or pins):
+            # Action/FIND graph obs as Image 1. A stale hallway look must not
+            # steal Image 1 when GRAPH_COUNT has other views (q86 after Action 55).
+            look_is_find = bool(look and look[0] in set(pins))
+            if look and (look_is_find or not pins):
+                _take(out, look)
             _take(out, pins)
+            if look and not look_is_find and pins:
+                _take(out, look)
             _take(out, forced)
             _take(out, selected)
             return out
@@ -5940,11 +5960,11 @@ class GraphEQAMemory:
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         count_q = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
         # Honor Action:N from the previous call / post-nav look even when this submit
-        # forces a different verified obs as Image 1.
+        # forces a different verified obs as Image 1. Do not drop the pin until
+        # this call actually attaches it as Image 1 (q86 Action 163).
         look_obs_id = self.last_eqa_look_obs_id
         if look_obs_id is None:
             look_obs_id = self.last_eqa_action_obs_id
-        self.last_eqa_look_obs_id = None
         count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
         pin_obs: list[int] = []
         for node in count_nodes:
@@ -5988,6 +6008,10 @@ class GraphEQAMemory:
             look_obs_id=look_obs_id,
         )
         self.last_eqa_obs_ids = list(obs_ids)
+        if look_obs_id is not None and (not obs_ids or int(obs_ids[0]) != int(look_obs_id)):
+            self.last_eqa_look_obs_id = int(look_obs_id)
+        else:
+            self.last_eqa_look_obs_id = None
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         merged_memory = self._merged_memory_enabled()
         merge_confirmed = (
@@ -6356,6 +6380,31 @@ class GraphEQAMemory:
                 confidence_reasoning = (
                     confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
                 ).strip()
+        missing_find: list[int] = []
+        if _count_mcq and count_nodes:
+            attached = {int(oid) for oid in obs_ids}
+            attached_find = False
+            for node in count_nodes:
+                oid = int(node.obs_id)
+                if not self._obs_usable_for_eqa_image(oid):
+                    continue
+                if oid in attached:
+                    attached_find = True
+                elif oid not in missing_find:
+                    missing_find.append(oid)
+            if (
+                missing_find
+                and not attached_find
+                and count_answer_is_none_or_zero(str(answer or ""), parsed_choices)
+            ):
+                if confidence:
+                    confidence = False
+                    confidence_reasoning = (
+                        confidence_reasoning
+                        + " FIND views were not attached; look at those RGB frames before answering None."
+                    ).strip()
+                if self.last_eqa_look_obs_id is None:
+                    self.last_eqa_look_obs_id = missing_find[0]
         raw_answer = answer
         self.last_eqa_parsed = (reasoning, raw_answer, confidence, action, confidence_reasoning)
         human = format_human_eqa_answer(
@@ -6373,18 +6422,27 @@ class GraphEQAMemory:
         target_point = None
         self.last_eqa_action_obs_id = None
         hist_action = ""
-        if not confidence and action.strip():
+        display_index: int | None = None
+        if action.strip():
             match = re.search(r"\d+", action.strip())
             if match:
                 display_index = int(match.group())
-                self.last_eqa_action_obs_id = self._resolve_eqa_action_image_ref(display_index, obs_ids)
-                target_point = self._target_point_from_display_image_index(
-                    display_index,
-                    obs_ids=obs_ids,
-                    nav_fallback_tail=nav_fallback_tail,
-                    robot_xyt=xyt,
-                )
-            hist_action = action.strip()
+                hist_action = action.strip()
+        if not confidence and display_index is not None:
+            self.last_eqa_action_obs_id = self._resolve_eqa_action_image_ref(display_index, obs_ids)
+            target_point = self._target_point_from_display_image_index(
+                display_index,
+                obs_ids=obs_ids,
+                nav_fallback_tail=nav_fallback_tail,
+                robot_xyt=xyt,
+            )
+        if not confidence and self.last_eqa_action_obs_id is None and missing_find:
+            self.last_eqa_action_obs_id = missing_find[0]
+            if target_point is None:
+                target_point = self._navigation_waypoint_for_obs(missing_find[0], xyt)
+        pending_look = self.last_eqa_action_obs_id
+        if pending_look is not None and (not obs_ids or int(obs_ids[0]) != int(pending_look)):
+            self.last_eqa_look_obs_id = int(pending_look)
         self._append_eqa_history(
             self.format_eqa_history_outcome(
                 answer=raw_answer,
