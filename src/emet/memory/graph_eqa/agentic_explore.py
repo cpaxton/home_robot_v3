@@ -454,11 +454,15 @@ class AgenticExploreMixin:
 
     def _frontier_pick_out_dir(self) -> Path:
         """Directory for numbered pick panels (episode bundle when available)."""
+        from emet.habitat.episode_debug import coerce_path_string
+
         if getattr(self, "_frontier_pick_dir", None):
             out = Path(self._frontier_pick_dir)
             out.mkdir(parents=True, exist_ok=True)
             return out
-        ep = getattr(self.agent, "_episode_debug_dir", None) or os.environ.get("EMET_EQA_EPISODE_DIR")
+        ep = coerce_path_string(getattr(self.agent, "_episode_debug_dir", None)) or os.environ.get(
+            "EMET_EQA_EPISODE_DIR"
+        )
         if ep:
             out = Path(str(ep)).expanduser() / "frontier_picks"
         elif self._trace_path is not None:

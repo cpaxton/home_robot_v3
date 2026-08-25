@@ -32,6 +32,42 @@ HMEQA_BATCH_MANIFEST_SCHEMA = "emet.hmeqa.batch_manifest"
 HMEQA_BATCH_MANIFEST_VERSION = 2
 
 
+def _looks_like_mock_repr(text: str) -> bool:
+    return "MagicMock" in text or "Mock(" in text or (text.startswith("<") and text.endswith(">"))
+
+
+def coerce_path_string(value: Any) -> str | None:
+    """Return a filesystem path string, or None for mocks and non-path values."""
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        text = str(value.expanduser()).strip()
+    elif isinstance(value, str):
+        text = value.strip()
+    else:
+        return None
+    if not text or _looks_like_mock_repr(text):
+        return None
+    return text
+
+
+def coerce_session_id(value: Any, *, fallback: str = "") -> str:
+    """Normalize trace/session ids; never emit unittest mock repr strings."""
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, (int, float)):
+        return str(int(value))
+    if isinstance(value, str):
+        text = value.strip()
+        if text and not _looks_like_mock_repr(text):
+            return text
+        return fallback
+    path = coerce_path_string(value)
+    return path or fallback
+
+
 def default_episodes_root() -> Path:
     return default_habitat_eqa_data_dir().parent / "episodes"
 
@@ -452,9 +488,10 @@ def save_episode_debug_bundle(
     src_dirs: list[Path] = []
     for key in ("_frontier_pick_dir", "_episode_debug_dir"):
         raw = getattr(agent, key, None)
-        if not raw:
+        p_raw = coerce_path_string(raw)
+        if not p_raw:
             continue
-        p = Path(str(raw)).expanduser()
+        p = Path(p_raw)
         if key == "_episode_debug_dir":
             p = p / "frontier_picks"
         if p.is_dir() and p.resolve() != picks_dst.resolve():

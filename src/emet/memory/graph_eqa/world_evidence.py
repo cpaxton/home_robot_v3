@@ -275,8 +275,10 @@ class WorldEvidenceStore:
 
     def set_context(self, *, question_id: str | int | None, session_id: str | int | None) -> None:
         """Bind stable episode metadata before subsequent views/events are appended."""
+        from emet.habitat.episode_debug import coerce_session_id
+
         self.question_id = str(question_id) if question_id is not None else None
-        self.session_id = str(session_id) if session_id is not None else ""
+        self.session_id = coerce_session_id(session_id, fallback="")
 
     def ensure_entity(
         self,

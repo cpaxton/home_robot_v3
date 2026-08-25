@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.habitat.episode_debug import coerce_session_id
 from emet.memory.graph_eqa.action_history import (
     ActionHistoryEntry,
     GateDecision,
@@ -329,10 +330,10 @@ def compile_agent_state(
         or getattr(world, "question_id", "")
         or hashlib.sha1(str(getattr(executor, "question", "") or "").encode("utf-8")).hexdigest()[:12]
     )
-    session_id = str(
-        getattr(executor, "_session_id", "")
-        or trace_meta.get("session_id")
-        or getattr(world, "session_id", "")
+    session_id = (
+        coerce_session_id(getattr(executor, "_session_id", ""), fallback="")
+        or coerce_session_id(trace_meta.get("session_id"), fallback="")
+        or coerce_session_id(getattr(world, "session_id", ""), fallback="")
         or "session"
     )
 

@@ -208,9 +208,16 @@ class AgenticInitMixin:
             raw_session_id = self._trace_meta.get("episode_id")
         if raw_session_id is None:
             raw_session_id = self._trace_meta.get("run_id")
+        from emet.habitat.episode_debug import coerce_path_string, coerce_session_id
+
         if raw_session_id is None:
-            raw_session_id = getattr(agent, "_episode_debug_dir", None)
-        self._session_id = str(raw_session_id or f"session:{self._question_id}")
+            raw_session_id = coerce_path_string(getattr(agent, "_episode_debug_dir", None))
+        else:
+            cleaned = coerce_session_id(raw_session_id, fallback="")
+            raw_session_id = cleaned or None
+        self._session_id = (
+            str(raw_session_id) if raw_session_id else coerce_session_id(None, fallback=f"session:{self._question_id}")
+        )
         self._trace_meta.setdefault("question_id", self._question_id)
         self._trace_meta.setdefault("session_id", self._session_id)
         gm_context = self.graph_memory
