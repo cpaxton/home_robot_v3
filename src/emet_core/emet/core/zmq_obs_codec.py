@@ -2,7 +2,7 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""ZMQ full-observation image alias compression (slim wire format)."""
+"""ZMQ full-observation slim wire helpers (image aliases, lidar dtype)."""
 
 from __future__ import annotations
 
@@ -44,6 +44,23 @@ def slim_zmq_obs_images(obs: dict[str, Any]) -> None:
             continue
         if obs[legacy] == obs[canonical]:
             del obs[legacy]
+
+
+def slim_zmq_obs_lidar(obs: dict[str, Any]) -> None:
+    """Cast ``lidar_points`` to float32 Nx2 (halves wire size vs float64)."""
+    pts = obs.get("lidar_points")
+    if pts is None:
+        return
+    arr = np.asarray(pts, dtype=np.float32)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        return
+    obs["lidar_points"] = np.ascontiguousarray(arr)
+
+
+def slim_zmq_obs(obs: dict[str, Any]) -> None:
+    """Apply all slim wire-format transforms (images + lidar)."""
+    slim_zmq_obs_images(obs)
+    slim_zmq_obs_lidar(obs)
 
 
 def _decode_jpg_if_needed(val: Any) -> np.ndarray | None:

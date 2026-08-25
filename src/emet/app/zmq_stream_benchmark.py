@@ -128,6 +128,18 @@ def slim_duplicates(msg: dict[str, Any]) -> list[str]:
     return problems
 
 
+def lidar_wire_notes(msg: dict[str, Any]) -> list[str]:
+    """Warnings when lidar is present but not in the slim float32 wire format."""
+    pts = msg.get("lidar_points")
+    if pts is None:
+        return []
+    arr = np.asarray(pts)
+    notes: list[str] = []
+    if arr.dtype != np.float32:
+        notes.append(f"lidar_points is {arr.dtype} ({arr.nbytes}B); float32 would be {arr.size * 4}B")
+    return notes
+
+
 @dataclass
 class FrameSample:
     seq: int
@@ -291,6 +303,7 @@ class BenchmarkResult:
     capabilities: dict[str, Any] | None = None
     last_message_keys: list[str] | None = None
     slim_problems: list[str] | None = None
+    lidar_notes: list[str] | None = None
 
 
 def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> BenchmarkResult:
@@ -311,6 +324,7 @@ def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> Benchmark
     capabilities: dict[str, Any] | None = None
     last_keys: list[str] | None = None
     slim_problems: list[str] | None = None
+    lidar_notes: list[str] | None = None
     samples: list[FrameSample] = []
     try:
         warmup = 0
@@ -368,6 +382,7 @@ def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> Benchmark
             last_keys = list(msg.keys())
             if last_keys is not None:
                 slim_problems = slim_duplicates(msg)
+                lidar_notes = lidar_wire_notes(msg)
     finally:
         sock.close()
         ctx.term()
@@ -379,6 +394,7 @@ def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> Benchmark
         capabilities=capabilities,
         last_message_keys=last_keys,
         slim_problems=slim_problems,
+        lidar_notes=lidar_notes,
     )
 
 
@@ -393,11 +409,14 @@ def summarize(result: BenchmarkResult, *, json_out: str | None = None) -> str:
         text += "\nSLIM FORMAT VIOLATION — duplicate JPEG aliases on the wire:\n  " + "\n  ".join(
             result.slim_problems
         )
+    if result.lidar_notes:
+        text += "\nLIDAR WIRE NOTE:\n  " + "\n  ".join(result.lidar_notes)
     if json_out:
         payload = {
             "robot_id": result.robot_id,
             "capabilities": result.capabilities,
             "slim_problems": result.slim_problems,
+            "lidar_notes": result.lidar_notes,
             "stats": result.stats,
         }
         with open(json_out, "w", encoding="utf-8") as fh:

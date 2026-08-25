@@ -31,12 +31,12 @@ class RosLidar:
         )
 
     def _lidar_scan_callback(self, scan_msg: LaserScan) -> None:
-        ranges = np.array(scan_msg.ranges, dtype=np.float64)
+        ranges = np.array(scan_msg.ranges, dtype=np.float32)
         ranges[~np.isfinite(ranges)] = self._max_dist
-        angles = np.linspace(scan_msg.angle_min, scan_msg.angle_max, len(ranges))
+        angles = np.linspace(scan_msg.angle_min, scan_msg.angle_max, len(ranges), dtype=np.float32)
         xs = ranges * np.cos(angles)
         ys = ranges * np.sin(angles)
-        lidar_points = np.column_stack((xs, ys))
+        lidar_points = np.column_stack((xs, ys)).astype(np.float32, copy=False)
         if self.verbose:
             print(f"[LIDAR] {self.name}: {lidar_points.shape[0]} points")
         with self._lock:

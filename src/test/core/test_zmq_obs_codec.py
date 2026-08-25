@@ -8,7 +8,9 @@ import emet.utils.compression as compression
 from emet.core.zmq_obs_codec import (
     decode_zmq_obs_images_inplace,
     expand_zmq_obs_image_aliases,
+    slim_zmq_obs,
     slim_zmq_obs_images,
+    slim_zmq_obs_lidar,
 )
 from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
 
@@ -61,3 +63,21 @@ def test_get_observation_from_zmq_dict_accepts_slim_head_cam_left_only():
     assert obs is not None
     assert obs.rgb.shape == (2, 2, 3)
     assert obs.ee_rgb is not None and int(obs.ee_rgb.max()) == 200
+
+
+def test_slim_zmq_obs_lidar_casts_to_float32():
+    pts = np.ones((360, 2), dtype=np.float64)
+    obs = {"lidar_points": pts}
+    slim_zmq_obs_lidar(obs)
+    assert obs["lidar_points"].dtype == np.float32
+    assert obs["lidar_points"].shape == (360, 2)
+    assert obs["lidar_points"].nbytes == 360 * 2 * 4
+
+
+def test_slim_zmq_obs_applies_images_and_lidar():
+    jpg = b"jpeg"
+    pts = np.zeros((4, 2), dtype=np.float64)
+    obs = {"rgb": jpg, "head_cam_left/image": jpg, "lidar_points": pts}
+    slim_zmq_obs(obs)
+    assert "rgb" not in obs
+    assert obs["lidar_points"].dtype == np.float32

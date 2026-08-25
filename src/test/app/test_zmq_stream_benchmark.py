@@ -14,6 +14,7 @@ from emet.app.zmq_stream_benchmark import (
     FrameSample,
     aggregate_benchmark,
     decode_message_images,
+    lidar_wire_notes,
     measure_message_sizes,
     payload_size,
     run_benchmark,
@@ -59,6 +60,15 @@ def test_slim_duplicates_detects_legacy_dupes():
 
 def test_slim_duplicates_flags_distinct_jpegs():
     assert len(slim_duplicates({"rgb": b"a", "head_cam_left/image": b"b"})) == 1
+
+
+def test_lidar_wire_notes_flags_float64():
+    pts = np.zeros((360, 2), dtype=np.float64)
+    notes = lidar_wire_notes({"lidar_points": pts})
+    assert len(notes) == 1
+    assert "float64" in notes[0]
+    assert lidar_wire_notes({"lidar_points": pts.astype(np.float32)}) == []
+    assert lidar_wire_notes({}) == []
 
 
 def test_aggregate_benchmark_stats_math():

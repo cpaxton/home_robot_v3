@@ -47,16 +47,16 @@ def lidar_ranges_to_points(
     ranges = np.asarray(ranges, dtype=np.float64).reshape(-1)
     n = int(ranges.size)
     if n == 0:
-        return np.zeros((0, 2), dtype=np.float64)
-    angles = np.arange(n, dtype=np.float64) * (2.0 * np.pi / n)
-    cleaned = ranges.copy()
+        return np.zeros((0, 2), dtype=np.float32)
+    angles = np.arange(n, dtype=np.float32) * (2.0 * np.pi / n)
+    cleaned = ranges.astype(np.float32, copy=True)
     cleaned[~np.isfinite(cleaned)] = max_range
     valid = (cleaned > 1e-3) & (cleaned < max_range - 1e-3)
     r = cleaned[valid]
     a = angles[valid]
     if r.size == 0:
-        return np.zeros((0, 2), dtype=np.float64)
-    return np.column_stack((r * np.cos(a), r * np.sin(a)))
+        return np.zeros((0, 2), dtype=np.float32)
+    return np.column_stack((r * np.cos(a), r * np.sin(a))).astype(np.float32, copy=False)
 
 
 def attach_lidar_to_zmq_message(

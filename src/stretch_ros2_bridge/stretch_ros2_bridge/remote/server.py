@@ -20,6 +20,7 @@ from overrides import override
 import emet.utils.compression as compression
 import emet.utils.logger as logger
 from emet.core.server import BaseZmqServer
+from emet.core.zmq_obs_codec import slim_zmq_obs_lidar
 from emet.utils.image import adjust_gamma, scale_camera_matrix
 from stretch_ros2_bridge.remote import StretchClient
 
@@ -97,6 +98,7 @@ class ZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self.client.at_goal(),
         }
+        slim_zmq_obs_lidar(data)
         return data
 
     @override

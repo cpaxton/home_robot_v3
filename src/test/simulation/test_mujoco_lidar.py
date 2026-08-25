@@ -45,4 +45,5 @@ def test_lidar_points_from_merged_innate_mars_scene():
     msg: dict = {"lidar_points": None, "lidar_timestamp": None}
     attach_lidar_to_zmq_message(msg, model, data)
     assert msg["lidar_points"] is not None
+    assert msg["lidar_points"].dtype == np.float32
     assert isinstance(msg["lidar_timestamp"], int)

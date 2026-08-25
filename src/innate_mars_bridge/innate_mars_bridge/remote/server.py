@@ -25,7 +25,7 @@ from overrides import override
 
 import emet.utils.compression as compression
 from emet.core.server import BaseZmqServer
-from emet.core.zmq_obs_codec import slim_zmq_obs_images
+from emet.core.zmq_obs_codec import slim_zmq_obs
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
     EMET_ZMQ_ROBOT_ID_KEY,
@@ -73,6 +73,7 @@ class ZmqServer(BaseZmqServer):
                 "onboard_da3": onboard_da3_enabled(),
                 "onboard_dinov3": onboard_dinov3_enabled(),
                 "zmq_obs_slim": True,
+                "zmq_lidar_f32": True,
             },
             "environment": {"kind": "ros2", "package": "innate_mars_bridge"},
         }
@@ -195,7 +196,7 @@ class ZmqServer(BaseZmqServer):
             "step": self._last_step,
             "recv_address": self.recv_address,
         }
-        slim_zmq_obs_images(message)
+        slim_zmq_obs(message)
         return message
 
     @override

@@ -10,7 +10,7 @@ Every full-observation, state, and (where applicable) servo message from Emet’
 | `runtime_kind` | `str` | e.g. `robosuite_sim`, `stretch_mujoco_sim`; hardware bridges should use a distinct value (e.g. `hardware_stretch`). |
 | `is_simulation` | `bool` | Same meaning as the top-level `is_simulation` flag on observations. |
 | `emet_robot_id` | `str` | Duplicate of top-level `emet_robot_id` for a single merge point. |
-| `capabilities` | `dict` | Declared features, e.g. `teleport_base` (bool), `depth`, `num_cameras`, `dof`, `zmq_obs_slim` (bool, Innate Mars: one JPEG per camera on the wire). Innate Mars hardware bridge also advertises `onboard_da3` and `onboard_dinov3` (bool) when the corresponding `--onboard-*` flags are set. |
+| `capabilities` | `dict` | Declared features, e.g. `teleport_base` (bool), `depth`, `num_cameras`, `dof`, `zmq_obs_slim` (bool, Innate Mars: one JPEG per camera on the wire), `zmq_lidar_f32` (bool, `lidar_points` published as float32 N×2). Innate Mars hardware bridge also advertises `onboard_da3` and `onboard_dinov3` (bool) when the corresponding `--onboard-*` flags are set. |
 | `environment` | `dict` | Optional scene identity; see below. |
 
 Optional: `mjcf_model_name`, `scene_source_basename` (short debugging strings).

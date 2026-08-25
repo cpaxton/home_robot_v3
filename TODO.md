@@ -293,13 +293,13 @@ Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman
 
 ## ZMQ protocol / comms (Herman + sim)
 
-innate-os likely publishes **`/scan`** for Nav2/slam; **emet does not consume it today**. Stretch bridge ships `lidar_points` + `lidar_timestamp` over ZMQ; Mars bridge does not. Full obs also **duplicates JPEGs** (e.g. `rgb` + `head_cam_left/image`, `ee_cam/image` + `rgb_tertiary`) — profile before adding more streams.
+Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32 N×2). Slim image wire format (`zmq_obs_slim`) drops duplicate JPEG aliases. Sustained benchmark: `scripts/benchmark_zmq_obs_payload.py` (one-shot sizes) and `scripts/benchmark_zmq_obs_stream.py` (fps/jitter/unpickle).
 
-- [ ] **LiDAR in ZMQ contract**: subscribe innate-os `/scan` in `innate_mars_bridge` (mirror `stretch_ros2_bridge/ros/lidar.py`); publish `lidar_points` + `lidar_timestamp` on full obs; declare `capabilities.lidar` in `emet_session` ([`docs/zmq_session_metadata.md`](docs/zmq_session_metadata.md), [`BRIDGE_CONTRACT.md`](src/emet_core/BRIDGE_CONTRACT.md)). Audit Herman topic name/frame with `ros2 topic info /scan` when stack is up.
+- [x] **LiDAR in ZMQ contract**: `innate_mars_bridge` subscribes `/scan`, publishes `lidar_points` + `lidar_timestamp`; `zmq_lidar_f32` capability when float32 slim is active ([`docs/zmq_session_metadata.md`](docs/zmq_session_metadata.md), [`BRIDGE_CONTRACT.md`](src/emet_core/BRIDGE_CONTRACT.md)). Audit Herman topic name/frame with `ros2 topic info /scan` when stack is up.
 - [ ] **LiDAR → mapping**: fuse scan into 2D explored/obstacle layer (voxel `TODO` at `voxel.py` ~1001); avoid naive double-count with DA3 3D cloud — start with base-height obstacle mask only.
-- [ ] **Sim LiDAR (innate_mars)**: add base rangefinder / `/scan` equivalent to MuJoCo `innate_mars` server (Stretch has `base_lidar` in MJCF); parity with hardware bridge so mapping smokes do not require the robot.
-- [ ] **Profile ZMQ payload**: script or `emet stream --verbose` harness — bytes/step for full obs (head L/R, wrist, depth JP2, dinov3_head, duplicates). Target: **one JPEG per logical camera** on wire; clients alias legacy keys (`rgb` → head left) for compat.
-- [ ] **Slim messaging v2 (if bloated)**: optional `obs_mode` / session flag — `state`+`servo` stay lightweight; full obs sends only streams the client subscribed to (stereo pair OR mono + depth, not both raw + namespaced dupes). Document in `zmq_session_metadata.md` schema bump when needed.
+- [x] **Sim LiDAR (innate_mars)**: MuJoCo `base_lidar*` → `lidar_points` via `mujoco_lidar.py` (360 rays, float32).
+- [x] **Profile ZMQ payload**: `scripts/profile_zmq_obs_payload.py` + `scripts/benchmark_zmq_obs_stream.py` — bytes/step, fps, jitter, unpickle/decode cost; flags duplicate JPEG aliases and float64 lidar.
+- [x] **Slim messaging v1**: one JPEG per logical camera (`zmq_obs_slim`); `lidar_points` as float32 (`zmq_lidar_f32`). v2 (subscribed streams only) still optional — document schema bump in `zmq_session_metadata.md` when needed.
 
 
 - [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem` | `lazy_graph`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
