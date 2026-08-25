@@ -275,6 +275,14 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
 (sample_target_point projection, chunked-nav-as-progress); PR #111 (stacked) adds the
 `NavOutcome` enum + question-type-aware verification + camera diagnostic. What's left:
 
+**Branch `feat/tamp-ovmm-perf` (2026-08-23):** OVMM-scoped routing — unified
+`_recall_nav_hypotheses`, GT placement seeds, find_recep nearby-investigate bias,
+`nav_outcome` in router Recent actions, richer `trace_meta` from find-phase harness.
+**Efficiency pivot:** Stretch 3-ep slice took ~3.5 h with 0/3 success — default gate
+is now **rby1** (`PROFILE=smoke` / `slice` in `run_ovmm_find_recep_slice.sh`);
+`look_around` skips head pans on non-Stretch. Docs:
+`docs/experiments/ovmm_agentic_find_teleport.md`.
+
 
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
       runs all 8 rounds with `nav=0..2 explore=N`; the router keeps picking

@@ -120,6 +120,8 @@ class FindPhaseRunConfig:
     use_scene_cache: bool = True
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
+    # None → full 8-step rotate_in_place; 4 is a fast rby1 gate (~table sweep).
+    mapping_rotate_steps: int | None = None
 
 
 def resolve_find_phase_nav_step_timeout(
@@ -917,17 +919,97 @@ def get_memory_backend_for_agent(agent: Any, backend: MemoryBackendName):
     )
 
 
+def _is_default_table_rby1_agent(agent: Any) -> bool:
+    """True when agent runs on Galaxea / rby1 in the default MuJoCo table scene."""
+    robot = getattr(agent, "robot", None)
+    if robot is None:
+        return False
+    get_sess = getattr(robot, "get_emet_session", None)
+    if not callable(get_sess):
+        return False
+    from emet.simulation.sim_object_placements import is_default_table_environment
+
+    sess = get_sess() or {}
+    env = sess.get("environment") or {}
+    env_kind = env.get("kind")
+    if not is_default_table_environment(env_kind if isinstance(env_kind, str) else None):
+        return False
+    rid = str(sess.get("emet_robot_id") or getattr(robot, "name", "") or "").lower()
+    return rid in ("rby1", "galaxea_r1")
+
+
+def _prepare_default_table_rby1_mapping_view(agent: Any) -> bool:
+    """Back up and face the default-table workspace so the horizontal ZED sees tabletop objects.
+
+    Galaxea R1 / rby1 spawn near the origin with a level ZED; Stretch ``look_front`` pitches
+    the head down ~30°. Without backing up (~2.5 m toward +Y) and pitching torso1, SigLIP
+    voxel memory never gets points on object1/object2 (false floor/sky matches instead).
+    """
+    import os
+
+    if os.environ.get("EMET_OVMM_SKIP_TABLE_MAPPING_POSE", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    if not _is_default_table_rby1_agent(agent):
+        return False
+    robot = getattr(agent, "robot", None)
+    assert robot is not None
+    timeout_fn = getattr(agent, "_find_phase_nav_step_timeout", None)
+    timeout = float(timeout_fn()) if callable(timeout_fn) else 30.0
+    move = getattr(robot, "move_base_to", None)
+    if callable(move):
+        # Episode frame: face −world Y (table at y≈−1). y≈1.5 m keeps tabletop depth < max_depth (2.5 m).
+        move(
+            np.array([0.0, 1.5, np.pi], dtype=np.float64),
+            relative=False,
+            blocking=True,
+            timeout=timeout,
+        )
+    look_front = getattr(robot, "look_front", None)
+    if callable(look_front):
+        look_front(blocking=True, timeout=timeout)
+    wait_obs = getattr(robot, "wait_for_obs", None)
+    if callable(wait_obs):
+        wait_obs(timeout=timeout)
+    from emet.controller.controller_dynamem import DYNAMEM_HEAD_SETTLE_S
+
+    time.sleep(DYNAMEM_HEAD_SETTLE_S)
+    return True
+
+
 def run_mapping_protocol(
     agent: Any,
     *,
     explore_steps: int,
     not_rotate: bool,
+    mapping_rotate_steps: int | None = None,
 ) -> int:
     """Rotate in place and optionally run frontier explore steps."""
     steps = 0
+    rotate_steps = mapping_rotate_steps
+    if _is_default_table_rby1_agent(agent):
+        # Horizontal ZED + wide rotate scan mostly maps floor; one pitched tabletop view is enough.
+        rotate_steps = 0
     if not not_rotate:
-        agent.rotate_in_place()
-        steps += 1
+        if rotate_steps == 0 and _is_default_table_rby1_agent(agent):
+            robot = getattr(agent, "robot", None)
+            if robot is not None and hasattr(robot, "move_to_nav_posture"):
+                robot.move_to_nav_posture()
+            if _prepare_default_table_rby1_mapping_view(agent):
+                update = getattr(agent, "update", None)
+                if callable(update):
+                    update()
+            steps += 1
+        else:
+            rotate = getattr(agent, "rotate_in_place", None)
+            if callable(rotate):
+                rotate(n_steps=rotate_steps)
+            steps += 1
+    seed_fn = getattr(agent, "_seed_local_radius_explored", None)
+    vm = getattr(agent, "voxel_map", None)
+    if vm is None and hasattr(agent, "get_voxel_map"):
+        vm = agent.get_voxel_map()
+    if callable(seed_fn) and vm is not None:
+        seed_fn(vm)
     for _ in range(max(0, int(explore_steps))):
         agent.execute_action("")
         steps += 1
@@ -1168,6 +1250,7 @@ def run_episode_find_phase(
             agent,
             explore_steps=explore_steps,
             not_rotate=not_rotate,
+            mapping_rotate_steps=run_cfg.mapping_rotate_steps,
         )
         mapping_wall_s = time.monotonic() - t_map0
 
@@ -1264,7 +1347,14 @@ def run_episode_find_phase(
                 max_rounds=run_cfg.agentic_max_rounds,
                 max_nav_steps=run_cfg.agentic_max_nav_steps,
                 require_verified=True,
-                trace_meta={"ovmm_phase": "find_object", "episode_id": episode.id},
+                trace_meta={
+                    "ovmm_phase": "find_object",
+                    "episode_id": episode.id,
+                    "object": object_query,
+                    "start_recep": episode.start_recep,
+                    "goal_recep": episode.goal_recep,
+                    "object_gt_body": episode.object_gt_body,
+                },
             )
             # No oneshot rescue: agentic miss/timeout scores as FindObj fail (ablation: --oneshot-localize).
             if obj_res.error:
@@ -1283,7 +1373,14 @@ def run_episode_find_phase(
                 max_rounds=run_cfg.agentic_max_rounds,
                 max_nav_steps=run_cfg.agentic_max_nav_steps,
                 require_verified=True,
-                trace_meta={"ovmm_phase": "find_recep", "episode_id": episode.id},
+                trace_meta={
+                    "ovmm_phase": "find_recep",
+                    "episode_id": episode.id,
+                    "object": object_query,
+                    "start_recep": episode.start_recep,
+                    "goal_recep": episode.goal_recep,
+                    "object_gt_body": episode.object_gt_body,
+                },
             )
             if recep_res.error:
                 agentic_meta["agentic_find_error_recep"] = recep_res.error

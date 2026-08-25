@@ -1214,12 +1214,31 @@ class RobosuiteZmqServer(BaseZmqServer):
             return np.flipud(img).copy()
         return img
 
+    def _configure_renderer_geomgroups_for_camera(self, renderer: Any, camera_name: str) -> None:
+        """Hide robot-body geoms for the primary mapping camera (Stretch d435i policy).
+
+        ``RobosuiteZmqServer`` (rby1 / Galaxea / innate_mars) reuses one ``mujoco.Renderer``.
+        Without masking, head depth includes the torso / arms and the voxel map paints a
+        self-obstacle ring at the base → A* ``non navigable point`` / ``sample_nav_failed``.
+        Secondary / tertiary cameras (stereo aux, ee) keep all geom groups visible.
+        """
+        from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import head_camera_geomgroup_mask
+
+        cam_names = list(self._spec.camera_names or ())
+        primary = cam_names[0] if cam_names else None
+        if primary is not None and camera_name == primary:
+            mask = head_camera_geomgroup_mask(self._mjmodel, base_body_name=self._spec.base_link_name)
+        else:
+            mask = np.ones(6, dtype=np.uint8)
+        renderer._scene_option.geomgroup[:] = mask
+
     def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
         """RGB uint8 from ``mujoco.Renderer`` at primary resolution (no pixel postprocess)."""
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 return np.asarray(rgb, dtype=np.uint8).copy()
@@ -1230,11 +1249,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 rgb = np.asarray(rgb, dtype=np.uint8).copy()
                 renderer.enable_depth_rendering()
                 try:
+                    self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                     renderer.update_scene(self._mjdata, camera=cam)
                     depth = cast(np.ndarray, renderer.render())
                     depth = np.asarray(depth, dtype=np.float32).copy()
@@ -2195,7 +2216,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         elif self._spec.name == "innate_mars":
                             self._pin_spec_actuators_by_name("joint_head")
                         elif self._spec.name in ("rby1", "galaxea_r1"):
-                            self._pin_spec_actuators_by_name("torso2", "torso3")
+                            self._pin_spec_actuators_by_name("torso1", "torso4")
                         else:
                             self._pin_spec_actuators_by_name("head_pan", "head_tilt")
                     else:

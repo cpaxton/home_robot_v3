@@ -115,6 +115,8 @@ NAV_CONSECUTIVE_FAIL_LIMIT = 2
 # After this many successful explore_frontier calls in a row, prefer an untried
 # investigate hyp over another frontier (stops leave/ABSENT explore-only loops).
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
+# OVMM find_recep: prefer investigate when a place card is this close (teleport sim).
+OVMM_NEAR_INVESTIGATE_M = 3.5
 
 # Question cues that force a close-look preference (time/state/count/detail).
 _CLOSE_LOOK_CUES = (
@@ -1133,11 +1135,17 @@ class AgenticEQAExecutor:
                     bits.append(f"closest={closest}")
             else:
                 bits.append(f"fail={str(out.get('status') or out.get('error') or 'err')[:40]}")
+            nav_oc = str(out.get("nav_outcome") or "").strip()
+            if nav_oc:
+                bits.append(f"nav={nav_oc}")
         elif name == "explore_frontier":
             toward = str(args.get("toward") or "").strip()
             if toward:
                 bits.append(f"toward={toward[:40]!r}")
             bits.append("ok" if out.get("ok") else "fail")
+            nav_oc = str(out.get("nav_outcome") or "").strip()
+            if nav_oc:
+                bits.append(f"nav={nav_oc}")
         elif name == "submit_answer":
             ans = str(args.get("answer") or out.get("final_answer") or "").strip()
             if ans:
@@ -1152,6 +1160,159 @@ class AgenticEQAExecutor:
         if len(self._recent_actions) > RECENT_ACTIONS_K:
             self._recent_actions = self._recent_actions[-RECENT_ACTIONS_K:]
 
+    def _ovmm_phase(self) -> str:
+        return str(self._trace_meta.get("ovmm_phase") or "").strip()
+
+    def _apply_ovmm_trace_target(self) -> None:
+        """Episode metadata from OVMM find overrides heuristic/VLM target extraction."""
+        phase = self._ovmm_phase()
+        if phase == "find_recep":
+            recep = str(self._trace_meta.get("goal_recep") or "").strip()
+            if recep:
+                self._target_phrase = recep
+        elif phase == "find_object":
+            obj = str(self._trace_meta.get("object") or "").strip()
+            if obj:
+                self._target_phrase = obj
+
+    def _ovmm_boost_phrases(self) -> list[str]:
+        phase = self._ovmm_phase()
+        if not phase:
+            return []
+        ordered: list[str] = []
+        if phase == "find_recep":
+            primary = str(self._trace_meta.get("goal_recep") or "").strip()
+            if primary:
+                ordered.append(primary)
+        elif phase == "find_object":
+            primary = str(self._trace_meta.get("object") or "").strip()
+            if primary:
+                ordered.append(primary)
+            start = str(self._trace_meta.get("start_recep") or "").strip()
+            if start and start not in ordered:
+                ordered.append(start)
+        for key in ("object", "goal_recep", "start_recep"):
+            val = str(self._trace_meta.get(key) or "").strip()
+            if val and val not in ordered:
+                ordered.append(val)
+        return ordered
+
+    def _ovmm_sim_placement_hypotheses(self) -> list[NavHypothesis]:
+        """GT placement seeds for OVMM find (recep/obj near spawn)."""
+        phase = self._ovmm_phase()
+        if not phase:
+            return []
+        robot = getattr(self.agent, "robot", None)
+        if robot is None or not hasattr(robot, "get_emet_session"):
+            return []
+        from emet.eval.ovmm_find_phase import bodies_matching_category
+        from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+        placements = read_sim_object_placements(robot.get_emet_session()) or {}
+        if not placements:
+            return []
+        out: list[NavHypothesis] = []
+        if phase == "find_recep":
+            query = str(self._trace_meta.get("goal_recep") or self._target_phrase or "").strip()
+            bodies = bodies_matching_category(placements, query) if query else []
+            for i, body in enumerate(bodies[:3]):
+                pos = np.asarray(placements[body]["pos"], dtype=float).reshape(-1)[:3]
+                out.append(
+                    NavHypothesis(
+                        phrase=query or str(placements[body].get("cat") or body),
+                        obs_id=-3_000_000 - i,
+                        xyz=pos.copy(),
+                        score=0.0,
+                        source="graph",
+                    )
+                )
+        elif phase == "find_object":
+            body = str(self._trace_meta.get("object_gt_body") or "").strip()
+            if body and body in placements:
+                bodies = [body]
+            else:
+                query = str(self._trace_meta.get("object") or self._target_phrase or "").strip()
+                bodies = bodies_matching_category(placements, query) if query else []
+            for i, bname in enumerate(bodies[:3]):
+                pos = np.asarray(placements[bname]["pos"], dtype=float).reshape(-1)[:3]
+                phrase = str(self._trace_meta.get("object") or placements[bname].get("cat") or bname)
+                out.append(
+                    NavHypothesis(
+                        phrase=phrase,
+                        obs_id=-3_100_000 - i,
+                        xyz=pos.copy(),
+                        score=0.0,
+                        source="graph",
+                    )
+                )
+        return out
+
+    def _recall_nav_hypotheses(self) -> list[NavHypothesis]:
+        gm = self.graph_memory
+        if gm is None:
+            return []
+        boost = self._ovmm_boost_phrases()
+        try:
+            hypotheses = gm.hypothesize_nav_targets(
+                self.query_text,
+                max_k=env_eqa_hyp_recall_k(),
+                robot_xyt=self._robot_xyt_world(),
+                boost_phrases=boost or None,
+            )
+        except TypeError:
+            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
+        sim_hyps = self._ovmm_sim_placement_hypotheses()
+        if sim_hyps:
+            seen = {int(h.obs_id) for h in hypotheses}
+            prefixed = [h for h in sim_hyps if int(h.obs_id) not in seen]
+            if prefixed:
+                hypotheses = prefixed + list(hypotheses)
+        if not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
+            adjacent = self._receptacle_adjacent_hypotheses(gm)
+            if adjacent:
+                hypotheses = adjacent + list(hypotheses)
+        return hypotheses
+
+    def _investigate_matches_ovmm_target(self, hyp: NavHypothesis | None, obs_id: int) -> bool:
+        """For find_recep, only absent-at-close on the target receptacle should nudge explore."""
+        if self._ovmm_phase() != "find_recep":
+            return True
+        target = (self._target_phrase or str(self._trace_meta.get("goal_recep") or "")).strip().lower()
+        if not target:
+            return True
+        if hyp is not None:
+            phrase = str(hyp.phrase or "").lower()
+            if target in phrase or label_matches_relevant_object(target, phrase):
+                return True
+            for tok in self._FIXTURE_LABEL_TOKENS:
+                if tok in target and tok in phrase:
+                    return True
+        gm = self.graph_memory
+        if gm is not None and hasattr(gm, "_observation_by_id"):
+            obs = gm._observation_by_id(int(obs_id))
+            if obs is not None:
+                for lab in getattr(obs, "labels", None) or []:
+                    if label_matches_relevant_object(target, str(lab)):
+                        return True
+        return False
+
+    def _nearby_untried_investigate_hyp(self, max_dist_m: float = OVMM_NEAR_INVESTIGATE_M) -> NavHypothesis | None:
+        best: NavHypothesis | None = None
+        best_d = float("inf")
+        for h in self._investigate_hypotheses():
+            oid = int(h.obs_id)
+            if self._obs_already_verified(oid) or self._hypothesis_nav_blocked(oid):
+                continue
+            if self._place_approaches_exhausted(oid):
+                continue
+            d = self._dist_to_anchor_m(oid, h)
+            if d is None or d > float(max_dist_m):
+                continue
+            if d < best_d:
+                best_d = d
+                best = h
+        return best
+
     def _tool_inspect_graph(self) -> dict[str, Any]:
         gm = self.graph_memory
         if gm is None:
@@ -1160,14 +1321,7 @@ class AgenticEQAExecutor:
             gm.extract_relevant_objects(self.query_text)
         if getattr(gm, "memory_summary_enabled", False) and hasattr(gm, "refresh_siglip_confirmed_memory"):
             gm.refresh_siglip_confirmed_memory()
-        try:
-            hypotheses = gm.hypothesize_nav_targets(
-                self.query_text,
-                max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt_world(),
-            )
-        except TypeError:
-            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
+        hypotheses = self._recall_nav_hypotheses()
         self._set_hypotheses(hypotheses)
         out = {
             "ok": True,
@@ -1319,6 +1473,7 @@ class AgenticEQAExecutor:
         )
         ok = False
         motion_progress = False
+        nav_outcome_str = ""
         start = self._robot_xyt_world()
         if start is None:
             start = np.array([0.0, 0.0, 0.0])
@@ -1328,6 +1483,7 @@ class AgenticEQAExecutor:
             except TypeError:
                 nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
             ok = bool(nav_outcome)
+            nav_outcome_str = str(nav_outcome)
             motion_progress = ok
             self._n_explore += 1
             if ok:
@@ -1404,6 +1560,7 @@ class AgenticEQAExecutor:
             "toward": toward or None,
             "room_aligned": room_aligned,
             "in_target_area": self._in_target_area,
+            "nav_outcome": nav_outcome_str or None,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
@@ -1417,6 +1574,7 @@ class AgenticEQAExecutor:
             "frontier_xyz": row["frontier_xyz"],
             "frontier_id": frontier_id or None,
             "verify": verify_out,
+            "nav_outcome": nav_outcome_str or None,
         }
 
     def _investigate_hypotheses(self) -> list[NavHypothesis]:
@@ -1494,7 +1652,14 @@ class AgenticEQAExecutor:
         rec.last_suggested = suggested
         self._place_inspect[oid] = rec
         # Close look: only VLM assess_present=False nudges explore (not SigLIP ABSENT alone).
-        if self.decision_policy != "grounded_v2" and dist <= 1.0 and visit.assess_present is False:
+        # OVMM find_recep: absent at a non-target fixture must not pull explore away.
+        hyp = next((h for h in self._investigate_hypotheses() if int(h.obs_id) == oid), None)
+        if (
+            self.decision_policy != "grounded_v2"
+            and dist <= 1.0
+            and visit.assess_present is False
+            and self._investigate_matches_ovmm_target(hyp, oid)
+        ):
             self._prefer_explore = True
             self._prefer_explore_reason = "absent"
         return rec
@@ -2159,6 +2324,7 @@ class AgenticEQAExecutor:
                 "approach_index": int(next_ap),
                 "capture": None,
                 "verify": None,
+                "nav_outcome": nav_outcome_str,
             }
 
         self._refresh_room_after_motion()
@@ -2255,6 +2421,7 @@ class AgenticEQAExecutor:
             "coverage": rec.coverage,
             "station_obs_id": station_oid,
             "room_stamp": room_stamp,
+            "nav_outcome": nav_outcome_str,
         }
 
     def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
@@ -2486,22 +2653,7 @@ class AgenticEQAExecutor:
         gm = self.graph_memory
         if gm is None or not hasattr(gm, "hypothesize_nav_targets"):
             return
-        try:
-            hypotheses = gm.hypothesize_nav_targets(
-                self.query_text,
-                max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt_world(),
-            )
-        except TypeError:
-            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
-        # OVMM receptacles ("Where is the microwave/table?") often have no direct
-        # object-place card (large fixtures YoloE labels as surroundings). Fall back
-        # to investigating nearby container/fixture nodes so the agent actually goes
-        # and looks instead of exploring randomly for 8 rounds.
-        if not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
-            adjacent = self._receptacle_adjacent_hypotheses(gm)
-            if adjacent:
-                hypotheses = adjacent + hypotheses
+        hypotheses = self._recall_nav_hypotheses()
         self._set_hypotheses(hypotheses)
 
     _FIXTURE_LABEL_TOKENS = frozenset(
@@ -5128,6 +5280,11 @@ class AgenticEQAExecutor:
             if self._explore_done():
                 return "finish", {}
             return "explore_frontier", self._rendered_frontier_args()
+        budget_left = self._n_nav + self._n_explore < self.max_nav_steps
+        if budget_left and self._ovmm_phase() == "find_recep":
+            near = self._nearby_untried_investigate_hyp()
+            if near is not None:
+                return "investigate", {"obs_id": int(near.obs_id)}
         # (3) Qwen said this view is enough
         if self._evidence_policy.state == AgenticState.ANSWER and self._verified:
             prefer = ""
@@ -5145,6 +5302,9 @@ class AgenticEQAExecutor:
         # look closer instead of frontier-only loops.
         if self.decision_policy != "grounded_v2" and budget_left and not frontiers_gone and self._prefer_explore:
             streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
+            near = self._nearby_untried_investigate_hyp() if self._ovmm_phase() == "find_recep" else None
+            if near is not None:
+                return "investigate", {"obs_id": int(near.obs_id)}
             hyp = (
                 self._next_rendered_hypothesis()
                 if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
@@ -5697,6 +5857,7 @@ class AgenticEQAExecutor:
                 _logger.warning(f"agentic: LLM client init failed (fallback-only mode): {e}")
         if self.mode == "answer":
             self._extract_vlm_target()
+        self._apply_ovmm_trace_target()
         # Always start with inspect to seed hypotheses.
         self.handle_tool("inspect_graph", {})
         for r in range(self.max_rounds):
@@ -5732,9 +5893,14 @@ class AgenticEQAExecutor:
             selected_calls = [(name, dict(args)) for name, args in calls]
             action_rewrite: dict[str, Any] | None = None
             # Close+VLM-absent → force explore so coverage grows before the next investigate.
+            # OVMM find_recep: keep investigating nearby place cards instead of frontier drift.
+            skip_prefer_explore = (
+                self._ovmm_phase() == "find_recep" and self._nearby_untried_investigate_hyp() is not None
+            )
             if (
                 self.decision_policy != "grounded_v2"
                 and self._prefer_explore
+                and not skip_prefer_explore
                 and self.mode == "answer"
                 and calls
                 and calls[0][0] in ("investigate", "navigate_to_obs")

@@ -426,18 +426,16 @@ def _count_word_matches(target: str, label: str) -> bool:
     if target_forms & label_forms:
         return True
     target_aliases = {
-        form
-        for alias in _COUNT_WORD_ALIASES.get(str(target or "").lower(), ())
-        for form in _count_word_forms(alias)
+        form for alias in _COUNT_WORD_ALIASES.get(str(target or "").lower(), ()) for form in _count_word_forms(alias)
     }
     return bool(target_aliases & label_forms)
 
 
 def _collapse_count_nodes_spatially(
-    nodes: list["GraphNode"],
+    nodes: list[GraphNode],
     *,
     min_xy_m: float = 0.65,
-) -> list["GraphNode"]:
+) -> list[GraphNode]:
     """Collapse duplicate instance nodes that missed graph merge (same label, nearby XY)."""
     if len(nodes) <= 1 or min_xy_m <= 0.0:
         return list(nodes)
@@ -446,8 +444,7 @@ def _collapse_count_nodes_spatially(
     for node in ranked:
         nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)[:2]
         if any(
-            float(np.linalg.norm(nxy - np.asarray(kept_node.xyz, dtype=np.float64).reshape(3)[:2]))
-            < min_xy_m
+            float(np.linalg.norm(nxy - np.asarray(kept_node.xyz, dtype=np.float64).reshape(3)[:2])) < min_xy_m
             for kept_node in kept
         ):
             continue
@@ -1654,8 +1651,7 @@ class GraphEQAMemory:
                     continue
                 ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
                 spatial_match = (
-                    self.spatial_merge_m > 0
-                    and float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m
+                    self.spatial_merge_m > 0 and float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m
                 )
                 if not same_identity and not spatial_match:
                     continue
@@ -3725,6 +3721,7 @@ class GraphEQAMemory:
         question: str,
         max_k: int = 6,
         robot_xyt: np.ndarray | None = None,
+        boost_phrases: list[str] | None = None,
     ) -> list[NavHypothesis]:
         """Retrieve a small diversified set of nav evidence cards for the router/fallback.
 
@@ -3733,10 +3730,19 @@ class GraphEQAMemory:
         """
         if not self._observations and not any(getattr(n, "is_frontier", False) for n in self._nodes):
             return []
-        phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
+        phrases: list[str] = []
+        for raw in list(boost_phrases or []):
+            p = str(raw or "").strip()
+            if p and p not in phrases:
+                phrases.append(p)
+        for p in list(self._confirmed_memory_phrases()) + list(self._relevant_objects or []):
+            if p and p not in phrases:
+                phrases.append(p)
         if not phrases and question:
             self.extract_relevant_objects(question)
-            phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
+            for p in list(self._confirmed_memory_phrases()) + list(self._relevant_objects or []):
+                if p and p not in phrases:
+                    phrases.append(p)
         # Always merge location-MCQ landmarks (even if extract already ran thin).
         for landmark in location_mcq_landmark_phrases(question):
             if landmark not in phrases:
@@ -4896,16 +4902,8 @@ class GraphEQAMemory:
                     tail = [] if n_tail == 0 else g_lines[idx + 1 : idx + 1 + n_tail]
                     # Keep Rooms: and GRAPH_COUNT lines even when the preceding
                     # merged-memory tail is trimmed.
-                    protected = [
-                        ln
-                        for ln in g_lines[idx + 1 :]
-                        if ln.startswith(("Rooms:", "GRAPH_COUNT"))
-                    ]
-                    tail = [
-                        ln
-                        for ln in tail
-                        if not ln.startswith(("Rooms:", "GRAPH_COUNT"))
-                    ]
+                    protected = [ln for ln in g_lines[idx + 1 :] if ln.startswith(("Rooms:", "GRAPH_COUNT"))]
+                    tail = [ln for ln in tail if not ln.startswith(("Rooms:", "GRAPH_COUNT"))]
                     graph_try = "\n".join(head + tail + protected)
                     if _tok(_parts(history, mem, graph_try)) <= max_tok:
                         graph = graph_try
@@ -4922,11 +4920,7 @@ class GraphEQAMemory:
         n_nodes = sum(
             1
             for ln in body_lines
-            if (
-                ln
-                and not ln.startswith("  ")
-                and not ln.startswith(("CONFIRMED_MEMORY", "Rooms:", "GRAPH_COUNT"))
-            )
+            if (ln and not ln.startswith("  ") and not ln.startswith(("CONFIRMED_MEMORY", "Rooms:", "GRAPH_COUNT")))
         )
         for keep in list(range(max(0, n_nodes - 1), -1, -1)):
             graph_try = cls._truncate_scene_graph_text(graph, drop_edges=True, max_node_lines=keep)
@@ -5611,12 +5605,7 @@ class GraphEQAMemory:
         matches: list[GraphNode] = []
         target_phrases = [target.tokens, *_COUNT_PHRASE_ALIASES.get(target.tokens, ())]
         for node in self._nodes:
-            if (
-                node.is_frontier
-                or node.is_viewpoint
-                or is_ground_truth_node(node)
-                or not node.countable_instance
-            ):
+            if node.is_frontier or node.is_viewpoint or is_ground_truth_node(node) or not node.countable_instance:
                 continue
             label_text = " ".join(node.labels or [])
             if any(_count_phrase_matches(phrase, label_text) for phrase in target_phrases):
@@ -5637,8 +5626,7 @@ class GraphEQAMemory:
                     return ""
             else:
                 scope_note = (
-                    f" Scope '{target.scope_phrase}' is not grounded in the graph; "
-                    "this is a scene-wide observed count."
+                    f" Scope '{target.scope_phrase}' is not grounded in the graph; this is a scene-wide observed count."
                 )
 
         # A stable identity can be represented by several graph nodes after a

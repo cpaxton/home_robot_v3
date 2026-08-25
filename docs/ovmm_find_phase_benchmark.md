@@ -107,6 +107,19 @@ uv run python scripts/eval_ovmm_find_phases.py --tier S2 --backend dynagraph \
 
 Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggregate_<backends>.csv`.
 
+### Teleport sim (routine agentic regression)
+
+**Default robot for agentic find iteration is rby1** (wide FOV; no Stretch head-sweep
+tax). Use `scripts/run_ovmm_find_recep_slice.sh` (`PROFILE=smoke` or `slice`).
+
+For fast dynagraph agentic find regression set `EMET_SIM_NAV_TELEPORT=1` and prefer
+`--not-rotate`. The find-phase harness already enables `_fast_explore_lookaround`;
+non-Stretch robots skip head pans in `look_around` entirely.
+
+Stretch episodes in `find_phase_episodes.yaml` remain for paper / overnight
+(`PROFILE=stretch-legacy`). See
+[experiments/ovmm_agentic_find_teleport.md](experiments/ovmm_agentic_find_teleport.md).
+
 ### Metrics
 
 - `find_object_success`, `find_recep_success` @ `success_radius_m`

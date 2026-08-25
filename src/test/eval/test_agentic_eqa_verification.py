@@ -2225,13 +2225,19 @@ def test_state_message_includes_recent_action_history():
         },
     )
     ex._record_recent_action("explore_frontier", {"toward": "kitchen"}, {"ok": True})
+    ex._record_recent_action(
+        "investigate",
+        {"obs_id": 9},
+        {"ok": False, "nav_outcome": "stuck", "error": "blocked"},
+    )
     # Internal tools must not pollute the ring buffer.
     ex._record_recent_action("verify_siglip", {}, {"ok": True, "status": "ABSENT"})
     ex._record_recent_action("inspect_graph", {}, {"ok": True})
 
-    assert len(ex._recent_actions) == 2
+    assert len(ex._recent_actions) == 3
     assert "r2 investigate obs=3 ap=1 verify=ABSENT closest=0.4m" in ex._recent_actions[0]
     assert "explore_frontier toward='kitchen' ok" in ex._recent_actions[1]
+    assert "nav=stuck" in ex._recent_actions[2]
 
     msg = build_state_message(ex)
     assert "Recent actions:" in msg

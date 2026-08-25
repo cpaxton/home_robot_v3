@@ -1,6 +1,11 @@
+---
+description: Prefer emet CLI for evals, jobs queue/schedule, and OVMM/HM-EQA launches
+alwaysApply: true
+---
+
 # Dogfood emet CLI for evals
 
-When launching, recovering, or monitoring Habitat / HM-EQA / GPU paper runs:
+When launching, recovering, or monitoring Habitat / HM-EQA / OVMM / GPU paper runs:
 
 - Prefer **`uv run emet …`** over ad-hoc `env … taskset … nohup ./scripts/…` lines.
 - **Before Habitat/HM-EQA:** `uv run emet habitat safe-start` (recover + detached jobs-wrapped EGL probe). Exit 0 = queued only — wait for `emet jobs status` `done` + logs OK before `hmeqa`. Never inline `emet-habitat` / `run-episode` in a Cursor agent turn.
@@ -12,3 +17,24 @@ When launching, recovering, or monitoring Habitat / HM-EQA / GPU paper runs:
 - Agent/Discord gate: `emet test agent-regression`.
 - Thin bash under `scripts/` may remain as implementation detail; **operator/agent docs and STATUS `next:` lines must show `emet` commands**.
 - When adding a new long GPU workflow, expose it as an `emet` subcommand (or extend `emet jobs` / `emet hmeqa` / `emet eval`) and document it in `docs/cli.md` before telling users to run a raw script.
+
+## Queue overnight / after current (agents)
+
+1. `uv run emet jobs` + `uv run emet eval status` — note live `PID` / job id if any.
+2. Launch with **`emet jobs run`**, never as a blocking agent shell:
+   - **Chain:** `--wait-pid <live_pid>` (and/or rely on `--need-mib` → gpu-exclusive `flock`)
+   - **Clock:** `--at "YYYY-MM-DD HH:MM"` or `--delay-minutes M`
+   - Always **`-d "why"`** and return the printed job id to the user
+3. Confirm with `emet jobs status JOB_ID` / `emet jobs logs JOB_ID --tail 40`; do not `AwaitShell` for hours.
+
+Verify scheduling flags every time: `uv run emet jobs run --help`.
+
+## OVMM find-phase gate
+
+Fast iteration uses rby1 + teleport, not Stretch overnight slices:
+
+```bash
+uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+# PROFILE=slice | stretch-legacy — see script header + docs/experiments/ovmm_agentic_find_teleport.md
+```

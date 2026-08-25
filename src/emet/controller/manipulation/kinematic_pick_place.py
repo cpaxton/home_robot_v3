@@ -592,8 +592,13 @@ class KinematicPickPlaceExecutor:
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         robot_zmq_detach_body(self.robot, body)
         robot_zmq_set_body_pose(self.robot, body, place)
-        self._sleep(0.15)
+        self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
+        if not ok_place:
+            # Freejoint children can lag one publish step after detach+snap.
+            robot_zmq_set_body_pose(self.robot, body, place)
+            self._sleep(0.2)
+            ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         try:
             self._set_gripper(open_=True)
         except Exception as e:

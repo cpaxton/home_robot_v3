@@ -38,16 +38,61 @@ Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale,affinity,reco
 
 ## `emet jobs` (required for long GPU / paper runs)
 
-**Always** launch multi-episode Habitat/HM-EQA, overnight batteries, and paper sweeps through the job registry — not bare `nohup` when avoidable:
+**Always** launch multi-episode Habitat/HM-EQA, OVMM find gates, overnight batteries, and paper sweeps through the job registry — not bare `nohup` when avoidable. **Never** block a Cursor agent turn on the GPU command; queue with `emet jobs run`, return the job id, and monitor later.
 
 ```bash
-uv run emet jobs run --name hmeqa-agentic-bal32 --need-mib 12000 -- \
-  env EMET_ALLOW_SDPA_ATTN=1 ./scripts/run_hmeqa_agentic_h2h.sh …
-uv run emet jobs                 # list + PROGRESS/ETA columns
-uv run emet jobs status JOB_ID   # detail + derived ETA (--json includes progress)
+uv run emet jobs                 # active jobs first (before launching)
+uv run emet jobs run --name SHORT -d "why" --need-mib 8000 -- \
+  ./scripts/…
+uv run emet jobs status JOB_ID
 uv run emet jobs logs JOB_ID --tail 80
 uv run emet jobs cancel JOB_ID
 ```
+
+### Queue / schedule (overnight + “after current”)
+
+Verify flags with `uv run emet jobs run --help`. Common patterns:
+
+| Goal | How |
+|------|-----|
+| After a **named** live job | `emet jobs run … --wait-pid PID` where `PID` is from `emet jobs` / `emet jobs status` (repeatable; default wait timeout 6h) |
+| Wall-clock overnight | `--at "YYYY-MM-DD HH:MM"` or `--delay-minutes M` (sleeps inside supervisor after register) |
+| Serialize vs other checkouts | `--need-mib N` implies **`--gpu-exclusive`** → host `flock` on `~/runs/emet/gpu.lock`; later jobs wait on the lock even without `--wait-pid` |
+| GPU free, nothing running | Just `emet jobs run --need-mib … -- CMD` — do not invent a wait target |
+
+```bash
+# After current experiment PID (from emet jobs):
+uv run emet jobs run --name ovmm-find-rby1-smoke -d "after countclock" \
+  --wait-pid 2998011 --need-mib 8000 -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+
+# Or rely on gpu.lock alone when the live job also holds exclusive:
+uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+```
+
+- Always pass **`-d` / `--description`** so `emet jobs` shows a `why:` line.
+- Record job id + OUT + commit via `emet status` / `status_log.sh` **before** returning.
+- If GPU is idle and user said “after current” but `emet jobs` is empty, still queue with `--need-mib` + exclusive lock (starts now; safe if something else grabs the GPU later).
+
+### OVMM agentic-find gate (rby1, fast)
+
+Do **not** default to Stretch / `PROFILE=stretch-legacy` for iteration (hours). Use [`scripts/run_ovmm_find_recep_slice.sh`](../../scripts/run_ovmm_find_recep_slice.sh):
+
+| `PROFILE` | Episodes | Target wall | When |
+|-----------|----------|-------------|------|
+| `smoke` (default) | 1× rby1 S0 | ~5–15 min | PR / overnight smoke |
+| `slice` | 2× rby1 S0+S1 | ~15–40+ min | overnight validation |
+| `stretch-legacy` | 3× Stretch | hours | paper only |
+
+```bash
+uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+PROFILE=slice uv run emet jobs run --name ovmm-find-rby1-slice --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+```
+
+Script sets `EMET_SIM_NAV_TELEPORT=1`, `EMET_SKIP_HEAD_SWEEP=1`, `--not-rotate`, default 4 agentic rounds. Artifacts: `~/runs/emet/ovmm_find_phase/rby1_<profile>_<timestamp>/`. Docs: [`docs/experiments/ovmm_agentic_find_teleport.md`](../../docs/experiments/ovmm_agentic_find_teleport.md).
 
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
 - Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).
