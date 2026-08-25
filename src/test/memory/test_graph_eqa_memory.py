@@ -26,6 +26,7 @@ from emet.memory.graph_eqa.graph_memory import (
     consolidate_relevant_keywords,
     heuristic_relevant_phrases,
     label_matches_relevant_object,
+    parse_eqa_action,
 )
 
 
@@ -698,8 +699,8 @@ def test_query_answer_does_not_finalize_yes_no_when_uncovered():
     assert mem.last_eqa_model_confident is True
 
 
-def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
-    """HM3D keyword/label matches should be Image 1 ahead of SigLIP grounder fills."""
+def test_select_relevant_obs_ids_prefers_visual_find_before_keyword_label():
+    """SigLIP/grounder FIND is Image 1; YoloE/caption labels remain extra recall."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["oven"])
@@ -707,10 +708,10 @@ def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
     mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["door"])
     mem._relevant_objects = ["basket"]
     mem._relevant_phrases = ["woven basket"]
-    # Grounder points at oven (wrong); keyword match for basket must still win Image 1.
     mem.set_obs_id_grounder(lambda text: 1)
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
-    assert obs_ids[0] == 2
+    assert obs_ids[0] == 1
+    assert 2 in obs_ids
 
 
 def test_relevant_memory_summary_uses_siglip_grounder():
@@ -923,6 +924,59 @@ def test_query_answer_injects_location_mcq_hint():
     assert any(isinstance(c, str) and "LOCATION_MCQ" in c for c in captured["cmds"])
 
 
+def test_parse_eqa_action_read_vs_look():
+    assert parse_eqa_action("") == ("", None)
+    assert parse_eqa_action("2") == ("look", 2)
+    assert parse_eqa_action("Image 2") == ("look", 2)
+    assert parse_eqa_action("read 2") == ("read", 2)
+    assert parse_eqa_action("read Image 2") == ("read", 2)
+    assert parse_eqa_action("read2") == ("read", 2)
+
+
+def test_parse_eqa_action_rejects_free_text_digits():
+    assert parse_eqa_action("I count 3 lamps") == ("", None)
+    assert parse_eqa_action("look at image 2") == ("", None)
+    assert parse_eqa_action("navigate to 5") == ("", None)
+    assert parse_eqa_action("-") == ("", None)
+
+
+def test_read_action_round_trips_through_history():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    read_entry = mem.format_eqa_history_outcome(
+        answer="Unknown", confidence=False, action="read 2", reasoning="letters too small"
+    )
+    assert "action=read2" in read_entry
+    look_entry = mem.format_eqa_history_outcome(
+        answer="A", confidence=False, action="2", reasoning="look closer"
+    )
+    assert "action=2" in look_entry
+    empty_entry = mem.format_eqa_history_outcome(
+        answer="A", confidence=False, action="", reasoning="done"
+    )
+    assert "action=-" in empty_entry
+
+
+def test_query_answer_records_read_action():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return (
+            "reasoning: letters too small\nanswer: Unknown\nconfidence: false\n"
+            "action: read 2\nconfidence_reasoning: need closer view"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "sign",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["door"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 1.5]), ["sign"])
+    mem.query_answer("What does the sign on the door say? A) Exit B) Open C) Closed D) Unknown. Answer:")
+    assert parse_eqa_action(mem.last_eqa_parsed[3]) == ("read", 2)
+    assert mem.last_eqa_action_obs_id is not None
+
+
 def test_query_answer_injects_count_hint_as_prompt_hint():
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     captured = {"cmds": None}
@@ -1132,6 +1186,20 @@ def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
     mem.set_obs_id_grounder(lambda text: 3 if "bed" in text else None)
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
     assert obs_ids[0] == 3
+
+
+def test_select_relevant_obs_ids_spreads_same_noun_xy():
+    """Count FIND of one noun should include a far cluster, not three near duplicates."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stool"])
+    mem.add_observation(rgb, np.array([0.2, 0.0, 0.5]), ["stool"])
+    mem.add_observation(rgb, np.array([8.0, 8.0, 0.5]), ["stool"])
+    mem._relevant_objects = ["stool"]
+    mem._relevant_phrases = ["stool"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=2)
+    assert 3 in obs_ids
+    assert set(obs_ids) & {1, 2}
 
 
 def test_select_relevant_obs_ids_no_keywords_uses_recent():

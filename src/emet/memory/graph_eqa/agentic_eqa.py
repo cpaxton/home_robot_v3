@@ -60,6 +60,7 @@ from emet.memory.graph_eqa.graph_memory import (
 )
 from emet.memory.graph_eqa.mcq_debias import (
     answer_is_unknownish,
+    count_answer_is_none_or_zero,
     match_freeform_to_choice,
     valid_choice_indices,
 )
@@ -5592,6 +5593,27 @@ class AgenticEQAExecutor:
                 _add(getattr(node, "obs_id", None))
         return out
 
+    def _count_find_unattached_obs_ids(self) -> list[int]:
+        """FIND views that were not in the last attached Image 1..K set."""
+        attached = {int(oid) for oid in (getattr(self.graph_memory, "last_eqa_obs_ids", None) or [])}
+        return [oid for oid in self._count_find_obs_ids() if oid not in attached]
+
+    def _downgrade_unattached_count_none(self, answer: str, confidence: bool) -> bool:
+        """Do not score confident None while stool/lamp FIND RGB was never attached."""
+        choices = parse_mcq_choices_from_question(self.question)
+        if not choices_are_count_mcq(choices):
+            return confidence
+        if not count_answer_is_none_or_zero(str(answer or ""), choices):
+            return confidence
+        missing = self._count_find_unattached_obs_ids()
+        if not missing:
+            return confidence
+        self._pin_eqa_look_obs(missing[0])
+        gm = self.graph_memory
+        if gm is not None and getattr(gm, "last_eqa_action_obs_id", None) is None:
+            gm.last_eqa_action_obs_id = missing[0]
+        return False
+
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         from emet.eval.dynagraph_vram import release_siglip_for_vlm
 
@@ -5658,6 +5680,7 @@ class AgenticEQAExecutor:
             # inherit False confidence from a coordinate-dump query_answer path.
             if answer_source in ("prefer", "vlm_suggested") and self._mcq_letter_from_text(answer):
                 confidence = bool(self._verified) or bool(confidence)
+            confidence = self._downgrade_unattached_count_none(answer, bool(confidence))
             discord_text = f"Answer:{answer}\nConfidence:{confidence}\n[submit_source:{answer_source}]"
             if query_ans and query_ans != answer:
                 discord_text += f"\n[query_answer:{query_ans[:160]}]"
@@ -5672,6 +5695,7 @@ class AgenticEQAExecutor:
             discord_text = "Answer:Unknown\nNo graph memory"
             answer = "Unknown"
             answer_source = "query"
+        confidence = self._downgrade_unattached_count_none(str(answer or ""), bool(confidence))
         self._append_trace(
             {
                 "tool": "submit_answer",
@@ -5808,16 +5832,48 @@ class AgenticEQAExecutor:
             return False
         conf = bool(submit_out.get("confidence"))
         unknownish = self._answer_unknownish(submit_out.get("answer"))
+        count_mcq = choices_are_count_mcq(parse_mcq_choices_from_question(self.question))
+        missing_find = self._count_find_unattached_obs_ids() if count_mcq else []
+        none_without_find = bool(
+            missing_find
+            and count_answer_is_none_or_zero(
+                str(submit_out.get("answer") or ""),
+                parse_mcq_choices_from_question(self.question),
+            )
+        )
+        if none_without_find:
+            conf = False
+            submit_out["confidence"] = False
+            if getattr(gm, "last_eqa_action_obs_id", None) is None:
+                gm.last_eqa_action_obs_id = missing_find[0]
+            self._pin_eqa_look_obs(missing_find[0])
         if conf and not unknownish:
             return False
-        count_mcq = choices_are_count_mcq(parse_mcq_choices_from_question(self.question))
         # Unconfident count + Action:N: the integer is from the attached (wrong) RGB.
         if not unknownish and not (count_mcq and not conf):
             return False
         obs_id = getattr(gm, "last_eqa_action_obs_id", None)
         if obs_id is not None:
             oid = int(obs_id)
-            if oid not in self._followed_eqa_actions:
+            spent_fn = getattr(gm, "eqa_obs_look_spent", None)
+            spent_look = bool(callable(spent_fn) and spent_fn(oid) is True)
+            if spent_look:
+                nxt_fn = getattr(gm, "next_unspent_eqa_obs_id", None)
+                alt = nxt_fn(missing_find, skip={oid}) if count_mcq and missing_find and callable(nxt_fn) else None
+                self._append_trace(
+                    {
+                        "event": "skip_spent_eqa_action",
+                        "obs_id": oid,
+                        "alt_obs_id": alt,
+                        "prior_answer": submit_out.get("answer"),
+                    }
+                )
+                if alt is not None and int(alt) not in self._followed_eqa_actions:
+                    oid = int(alt)
+                    spent_look = False
+                else:
+                    gm.last_eqa_action_obs_id = None
+            if not spent_look and oid not in self._followed_eqa_actions:
                 # Soft +1 budget so Action:N is not starved by prior explore_frontier calls.
                 if self._n_nav + self._n_explore >= self.max_nav_steps + 1:
                     return False

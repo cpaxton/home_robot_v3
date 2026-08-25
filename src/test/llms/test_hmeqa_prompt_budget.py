@@ -54,6 +54,20 @@ def test_hmeqa_prompt_treats_graph_as_finder_not_answer():
     assert "scene_graph labels" in lowered and "do not decide the answer" in lowered
     assert "never answer where from" in lowered
     assert "look" in lowered and "image n" in lowered
+    assert "read n" in lowered
+
+
+def test_hmeqa_prompt_teaches_read_action():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert '"action": "read 2"' in lowered
+    assert "not legible" in lowered
+
+
+def test_hmeqa_prompt_teaches_view_status_risk():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert "view_status" in lowered
+    assert "risky" in lowered
+    assert "spent=yes" in lowered or "spent" in lowered
 
 
 def test_hmeqa_examples_still_model_the_answer_fields():

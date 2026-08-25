@@ -32,6 +32,8 @@ EQA_PROMPT = """
         You also have to choose the next action, one which will enable you to answer the question better.
         The answer should be made in the form of identifying which image should we navigate to and the image should be selected from the list of image descriptions.
         Please identify the image id number only as it will be transformed into an integer!
+        If the relevant object is already in an attached Image N, set action to that id — do not leave it empty.
+        If you can see it but cannot read printed text, digits, a clock face, or a display, set action to "read N". That means get closer to Image N; do not guess the reading and do not explore a new room.
 
         Other considerations:
             1. Each image description, if applicable, will be associated with the image observations provided and will be pointed out if this image contains a space where the robot has never explored before.

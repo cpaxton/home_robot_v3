@@ -475,6 +475,28 @@ def test_follow_eqa_action_after_unconfident_count():
     assert agent.graph_memory.last_eqa_look_obs_id == 11
 
 
+def test_follow_eqa_action_after_confident_none_with_unattached_find():
+    """q93: confident None while stool FIND RGB was never attached must still look."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    ex, agent, order = _follow_action_executor(
+        "How many stools are at the kitchen counter? A) One B) Two C) Three D) None"
+    )
+    agent.graph_memory.last_eqa_action_obs_id = None
+    agent.graph_memory.last_eqa_look_obs_id = None
+    agent.graph_memory.last_eqa_obs_ids = [1, 2]
+    agent.graph_memory._obs_usable_for_eqa_image = MagicMock(return_value=True)
+    agent.graph_memory._count_candidate_nodes = MagicMock(
+        return_value=([SimpleNamespace(obs_id=168), SimpleNamespace(obs_id=199)], None)
+    )
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "None", "confidence": True})
+    assert followed is True
+    assert "nav" in order
+    assert 168 in ex._followed_eqa_actions
+    assert agent.graph_memory.last_eqa_look_obs_id == 168
+
+
 def test_follow_eqa_action_skips_unconfident_location_letter():
     """A location letter is a guess we can score; do not nav just because conf is false."""
     _require_agentic()

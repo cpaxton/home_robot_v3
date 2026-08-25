@@ -161,6 +161,34 @@ Canonical record:
       bal-32 blocked until both process and letter gates pass.
 - [ ] Keep q104 deferred until scale; it is a known native-crash hot scene.
 
+## HM-EQA count/clock — FIND views, not node-list answers (PR #130, 7/15 = ceiling)
+
+The instance graph **finds** candidate views; it is not the answer (no integer counts
+from YoloE node lists). PR #130 (`feat/instance-graph-repair`) hardens graph admission
+(`instance_min_confidence: 0.12`, `instance_min_mask_points: 25`), requires label-match
+for instance fusion, marks `CONFIRMED_MEMORY` as **LOOK** image ids, pins FIND/Action
+RGB as Image 1, attaches detector crops, exposes **VIEW_STATUS** per-Image counters,
+and releases the controller stay when a FIND view is spent / Unknown without `read N`.
+
+Frozen 15-qid slice (`12,21,28,32,33,43,47,48,51,60,78,84,86,88,93`,
+`scripts/run_hmeqa_countclock_slice.sh`) — **HEAD `fb9fa75d`+VIEW_STATUS: 7/15**, equal
+to the no-YoloE ceiling `2f4b4d4f`. q93 (bar stools) recovered via attached FIND RGB;
+q47 stays OK; q28/q78 OK via crop-as-Image1. Merged 2026-08-25 (PR #130).
+
+### Remaining gaps (documented in PR, not blockers)
+
+- [ ] **Exploration/coverage**: q86 (table lamps) still finds only 1 of 2 lamps. The
+      agent pins the FIND view and loops `read1`/`1` on it (up to 20 planning steps)
+      instead of going after the second instance. q32/q48/q51/q60 similarly stop early
+      or answer from a partial view. Need coverage-aware targets / second-instance search.
+- [ ] **Close-look / legibility**: q33/q43/q84 ("What time is it now?") fail because the
+      clock is *visible* but not *legible*. `read N` currently re-attaches the same full
+      frame (no detector bbox for clocks ⇒ no crop). A center-zoom / upscale of the
+      `read N` target view is the low-hanging next step.
+- [ ] Consider a `read N` re-crop path: on `read N`, attach a tighter/zoomed version of
+      that image (not just re-send the full frame), so written dials/answers become
+      legible without navigating again.
+
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 
 Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes nav
