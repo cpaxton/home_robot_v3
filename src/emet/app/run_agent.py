@@ -307,14 +307,15 @@ log = Logger(__name__)
     "--memory-backend",
     "memory_backend",
     type=click.Choice(
-        ["dynagraph", "static_graph", "graph_eqa", "dynamem", "open_vocab"],
+        ["dynagraph", "lazy_graph", "static_graph", "graph_eqa", "dynamem", "open_vocab"],
         case_sensitive=False,
     ),
     default="dynagraph",
     show_default=True,
     help=(
         "Object-graph plug-in on the voxel map (mutually exclusive): "
-        "dynagraph (default; GraphEQAMemory + merge/staleness), "
+        "dynagraph (default; streaming GraphEQAMemory + merge/staleness), "
+        "lazy_graph (DynaMem find + Qwen graph commit on nav arrival only; no YoloE graph labels), "
         "static_graph (zero-merge GraphEQA-inspired baseline; graph_eqa is a legacy alias), "
         "open_vocab (SAM3/OWL scene graph only), or dynamem (voxels only)."
     ),
