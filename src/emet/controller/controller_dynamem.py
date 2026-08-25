@@ -1025,6 +1025,19 @@ class DynamemController(BaseController):
         if (
             self._run_full_perception()
             and self.graph_memory is not None
+            and getattr(self, "_lazy_graph_mode", False)
+        ):
+            from emet.memory.graph_eqa.lazy_graph_commit import record_lazy_graph_viewpoint
+
+            record_lazy_graph_viewpoint(
+                graph_memory=self.graph_memory,
+                robot=self.robot,
+                obs=obs,
+                frame_step=self.obs_count,
+            )
+        elif (
+            self._run_full_perception()
+            and self.graph_memory is not None
             and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler)
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
