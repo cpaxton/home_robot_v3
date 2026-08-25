@@ -38,6 +38,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     build_mujoco_ground_truth_dump_action,
@@ -228,11 +229,11 @@ def _decode_servo_message_to_observations(
 
 def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
     """Build :class:`Observations` from a decoded full-observation ZMQ dict."""
-    rgb = obs.get("rgb")
-    if rgb is None:
+    if not decode_zmq_obs_images_inplace(obs):
         return None
     enrich_zmq_observation_ee_fields(obs)
     joint_head = obs.get("joint_head")
+    rgb = obs["rgb"]
     return Observations(
         rgb=rgb,
         depth=obs.get("depth"),
@@ -668,21 +669,20 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             if output is None:
                 continue
             self._seq_id += 1
-            output["rgb"] = compression.from_jpg(output["rgb"])
+            if not decode_zmq_obs_images_inplace(output):
+                logger.warning("Observation missing primary RGB; skipping frame.")
+                continue
             if output.get("camera_K") is not None:
                 output["camera_K"] = _align_camera_k_to_rgb(
                     np.asarray(output["camera_K"], dtype=np.float64).reshape(3, 3),
                     output["rgb"],
                 )
             if "rgb_right" in output and output["rgb_right"] is not None:
-                output["rgb_right"] = compression.from_jpg(output["rgb_right"])
                 if output.get("camera_K_right") is not None:
                     output["camera_K_right"] = _align_camera_k_to_rgb(
                         np.asarray(output["camera_K_right"], dtype=np.float64).reshape(3, 3),
                         output["rgb_right"],
                     )
-            if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
-                output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
             if "third_person_image" in output and output["third_person_image"] is not None:
                 try:
                     output["third_person_image"] = compression.from_jpg(output["third_person_image"])

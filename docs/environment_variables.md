@@ -188,6 +188,7 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_DINOV3_HOST` | Remote DINOv3 | Alias for host:port without scheme (e.g. `caliban:8002`). |
 | `EMET_DINOV3_MODEL_ID` | Jetson DINOv3 deploy | HF model id (default `facebook/dinov3-vits16-pretrain-lvd1689m`). |
 | `EMET_DINOV3_SERVE_PORT` | Jetson DINOv3 container | HTTP port (default `8002`). |
+| `EMET_DINOV3_SERVE_DEVICE` | Jetson DINOv3 container | Torch device for the embedding server (`cuda` default; `cpu` fallback for debug). |
 | `EMET_MARS_DA3_SPECKLE_OPEN_KERNEL` | Onboard Jetson DA3 | Morphological depth speckle filter kernel (pixels); `0` = off (default). Same helper as dynav `filters.depth_speckle_open_kernel`. |
 | `EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS` | Onboard Jetson DA3 | Speckle opening repeat count (default `1`). Ignored when kernel is `0`. |
 | `EMET_STREAM_VERBOSE` | `emet capture` / `emet stream` | `1`/`true` → per-step status + DA3 INFO timing (same as `--verbose`). Default off; dynav `stream.verbose` also applies. |

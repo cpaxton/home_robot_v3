@@ -57,13 +57,13 @@ fi
 echo "=== deploy_caliban_dinov3  model=$MODEL_ID  port=$PORT  host=$HOST ==="
 
 echo "[1/4] Sync DINOv3 server + runner → $HOST:$REMOTE_REPO"
-ssh -o BatchMode=yes "$HOST" "mkdir -p $REMOTE_REPO/docker $REMOTE_REPO/scripts ~/hf-cache"
+ssh -o BatchMode=yes "$HOST" "mkdir -p $REMOTE_REPO/docker $REMOTE_REPO/scripts ~/hf-cache/hub"
 rsync -az "$ROOT/docker/jetson_dinov3_server.py" "$HOST:$REMOTE_REPO/docker/jetson_dinov3_server.py"
 rsync -az "$ROOT/scripts/run_jetson_dinov3_container.sh" "$HOST:$REMOTE_REPO/scripts/run_jetson_dinov3_container.sh"
 ssh -o BatchMode=yes "$HOST" "chmod +x $REMOTE_REPO/scripts/run_jetson_dinov3_container.sh"
 
-echo "[2/4] Rsync $MODEL_ID → $HOST:$REMOTE_HF/$HUB_DIR"
-rsync -a --info=progress2 "$LOCAL_HUB/" "$HOST:$REMOTE_HF/$HUB_DIR/"
+echo "[2/4] Rsync $MODEL_ID → $HOST:$REMOTE_HF/hub/$HUB_DIR"
+rsync -a --info=progress2 "$LOCAL_HUB/" "$HOST:$REMOTE_HF/hub/$HUB_DIR/"
 
 echo "[3/4] Start container name=$NAME port=$PORT"
 ssh -o BatchMode=yes "$HOST" bash -s <<REMOTE
@@ -72,7 +72,7 @@ cd $REMOTE_REPO
 python3 - <<'PY'
 import os
 from pathlib import Path
-hub = Path(os.path.expanduser("~/hf-cache"))
+hub = Path(os.path.expanduser("~/hf-cache/hub"))
 model = hub / "$HUB_DIR"
 snaps = sorted((model / "snapshots").glob("*")) if (model / "snapshots").is_dir() else []
 if not snaps:

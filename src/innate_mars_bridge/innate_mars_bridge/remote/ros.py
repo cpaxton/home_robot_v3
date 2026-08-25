@@ -38,10 +38,12 @@ from innate_mars_bridge.constants import (
     HEAD_POSITION_TOPIC,
     HEAD_RIGHT_CAMERA_INFO_TOPIC,
     HEAD_RIGHT_IMAGE_TOPIC,
+    LIDAR_TOPIC,
     MAP_FRAME,
     ODOM_FRAME,
     ODOM_TOPIC,
 )
+from innate_mars_bridge.ros.lidar import RosLidar
 from innate_mars_bridge.joint_layout import pack_innate_mars_joint_positions, pack_innate_mars_joint_velocities
 from innate_mars_bridge.remote.modules.nav import MarsNavigationClient
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
@@ -100,6 +102,7 @@ class InnateMarsRosInterface(Node):
             image_ext="",
             verbose=verbose,
         )
+        self._lidar = RosLidar(self, LIDAR_TOPIC, verbose=verbose)
 
         self.nav = None
 

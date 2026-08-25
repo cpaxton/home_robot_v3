@@ -2304,6 +2304,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             except Exception as e:
                 logger.debug(f"third_person chase RGB failed: {e!r}")
         message = self._attach_emet_session(message)
+        if self._mjmodel is not None and self._mjdata is not None:
+            from emet.simulation.mujoco_lidar import attach_lidar_to_zmq_message
+
+            with self._mj_lock:
+                attach_lidar_to_zmq_message(message, self._mjmodel, self._mjdata)
         with self._render_lock:
             self._last_full_obs_for_servo = message
         return message

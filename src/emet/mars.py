@@ -135,7 +135,9 @@ def _remote_bridge_launch_cmd(
     emet_core = f"{emet_dir}/emet_core"
     emet_src = f"{emet_dir}/src"
     da3_env = "export EMET_MARS_ONBOARD_DA3=1; " if onboard_da3 else ""
-    dinov3_env = "export EMET_MARS_ONBOARD_DINOV3=1; " if onboard_dinov3 else ""
+    dinov3_env = ""
+    if onboard_dinov3:
+        dinov3_env = "export EMET_MARS_ONBOARD_DINOV3=1; export HF_HOME=$HOME/hf-cache; export TRANSFORMERS_CACHE=$HOME/hf-cache; "
     py_paths = f"{emet_core}:{emet_src}"
     return (
         f"{da3_env}{dinov3_env}"

@@ -25,6 +25,7 @@ from overrides import override
 
 import emet.utils.compression as compression
 from emet.core.server import BaseZmqServer
+from emet.core.zmq_obs_codec import slim_zmq_obs_images
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
     EMET_ZMQ_ROBOT_ID_KEY,
@@ -71,6 +72,7 @@ class ZmqServer(BaseZmqServer):
                 "dof": 10,
                 "onboard_da3": onboard_da3_enabled(),
                 "onboard_dinov3": onboard_dinov3_enabled(),
+                "zmq_obs_slim": True,
             },
             "environment": {"kind": "ros2", "package": "innate_mars_bridge"},
         }
@@ -157,7 +159,13 @@ class ZmqServer(BaseZmqServer):
                 "Head stereo OK; EE Rerun panel will stay blank until maurice_cam publishes the arm stream.",
                 err=True,
             )
-        return {
+        lidar_points = None
+        lidar_timestamp = None
+        pts = self.client.lidar.get()
+        if pts is not None:
+            lidar_points = pts
+            lidar_timestamp = int(self.client.lidar.get_time().nanoseconds)
+        message = {
             EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
             EMET_ZMQ_SESSION_KEY: self._emet_session_payload(),
             "base_pose": base_pose,
@@ -166,8 +174,6 @@ class ZmqServer(BaseZmqServer):
             "joint_head": head_joint,
             "gps": gps,
             "compass": compass,
-            "rgb": compression.to_jpg(head_left),
-            "rgb_right": compression.to_jpg(head_right),
             "camera_K": kl,
             "camera_pose": self.client.head_left_camera_pose,
             "camera_K_right": kr,
@@ -180,14 +186,17 @@ class ZmqServer(BaseZmqServer):
             "head_cam_left/pose": self.client.head_left_camera_pose,
             "head_cam_right/pose": self.client.head_right_camera_pose,
             "ee_cam/pose": ee_pose,
-            "rgb_tertiary": compression.to_jpg(ee_img),
             "camera_K_tertiary": ee_K,
             "camera_pose_tertiary": ee_pose,
             "camera_name_tertiary": "camera_arm",
             "ee/pose": self.client.ee_pose,
+            "lidar_points": lidar_points,
+            "lidar_timestamp": lidar_timestamp,
             "step": self._last_step,
             "recv_address": self.recv_address,
         }
+        slim_zmq_obs_images(message)
+        return message
 
     @override
     def get_state_message(self) -> dict[str, Any]:

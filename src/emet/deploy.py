@@ -201,6 +201,48 @@ def _rsync_to_robot(
     _run(cmd)
 
 
+def _onboard_dinov3_model_id() -> str:
+    """HF model id for the configured onboard DINOv3 version (default vits16)."""
+    try:
+        from emet.perception.encoders.dinov3_encoder import DINOV3_MODELS
+    except ImportError:
+        return "facebook/dinov3-vits16-pretrain-lvd1689m"
+    version = os.environ.get("EMET_MARS_DINOV3_VERSION", "vits16").strip() or "vits16"
+    return DINOV3_MODELS.get(version, "facebook/dinov3-vits16-pretrain-lvd1689m")
+
+
+def _sync_onboard_dinov3_weights(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    use_paramiko: bool,
+    remote_hf: str,
+) -> None:
+    """Pre-cache DINOv3 HF weights on the robot so first inference doesn't download.
+
+    Weights are copied into ``<remote_hf>/hub/models--<id>`` (huggingface_hub cache layout),
+    which matches ``HF_HOME=<remote_hf>`` set in the bridge launch command. Skips with a
+    warning when the workstation hasn't cached the model locally.
+    """
+    model_id = _onboard_dinov3_model_id()
+    hub_dir = "models--" + model_id.replace("/", "--")
+    hf_home = Path(os.environ.get("HF_HOME", "~/.cache/huggingface")).expanduser()
+    local_hub = hf_home / "hub" / hub_dir
+    if not local_hub.is_dir():
+        print(
+            f"WARNING: local HF weights not found at {local_hub}; onboard DINOv3 will try to "
+            f"download from Hugging Face on first use. Pre-cache with:\n"
+            f'  uv run python -c "from huggingface_hub import snapshot_download; '
+            f"snapshot_download('{model_id}')\""
+        )
+        return
+    print(f"Syncing DINOv3 weights {model_id} → {host}:{remote_hf}/hub (may take a while)...")
+    remote_hub = f"{remote_hf}/hub/{hub_dir}"
+    _ssh_run(host, user, password, f"mkdir -p {remote_hub}", use_paramiko)
+    _rsync_to_robot(local_hub, remote_hub, host, user, password, use_paramiko)
+
+
 def _paramiko_upload(
     host: str,
     user: str,
@@ -560,6 +602,13 @@ def deploy(
             password,
             "bash -lc 'python3 -m pip install --user \"transformers>=4.40\" \"Pillow>=9.0\"'",
             use_paramiko,
+        )
+        _sync_onboard_dinov3_weights(
+            host,
+            user,
+            password,
+            use_paramiko=use_paramiko,
+            remote_hf="~/hf-cache",
         )
 
     py_paths = f"{remote_emet_core}:{remote_emet}/src"

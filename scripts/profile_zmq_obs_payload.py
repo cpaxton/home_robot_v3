@@ -38,7 +38,9 @@ def _sizeof_value(val: object) -> int:
         return 0
     if isinstance(val, (bytes, bytearray)):
         return len(val)
-    if isinstance(val, (list, tuple)):
+    if isinstance(val, dict):
+        return sum(_sizeof_value(k) + _sizeof_value(v) for k, v in val.items())
+    if isinstance(val, (list, tuple, set, frozenset)):
         return sum(_sizeof_value(v) for v in val)
     try:
         import numpy as np

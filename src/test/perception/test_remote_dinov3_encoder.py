@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from unittest.mock import patch
@@ -71,6 +72,13 @@ def test_remote_dinov3_encoder_roundtrip(dinov3_server):
     assert isinstance(out, torch.Tensor)
     assert out.shape == (1, 4)
     assert abs(float(out.norm()) - 1.0) < 1e-4
+
+
+def test_remote_dinov3_encoder_circuit_breaker(dinov3_server):
+    enc = RemoteDinov3Encoder(endpoint=dinov3_server, version="vits16", timeout_s=5.0)
+    enc._last_failure_at = time.monotonic()
+    with pytest.raises(RuntimeError, match="circuit open"):
+        enc.encode_image(np.zeros((8, 8, 3), dtype=np.uint8))
 
 
 def test_build_dinov3_encoder_uses_remote_when_env_set(dinov3_server):

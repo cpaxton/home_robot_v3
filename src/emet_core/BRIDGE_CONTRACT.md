@@ -55,6 +55,12 @@ Clients expect these keys when present. All bridges should use the same keys so 
 ### get_full_observation_message()
 
 - At least: images (e.g. `rgb`, `depth` or per-cam), `camera_pose` or per-cam poses, `joint`, `joint_velocities`, `ee_pose`, `base_pose` or `gps`/`compass`, `step`, `recv_address`.
+- Onboard perception fields (optional, per robot):
+  - `depth`: JPEG2000 (JP2) bytes of meter depth ×1000 as uint16 (Innate Mars onboard DA3; `EMET_MARS_ONBOARD_DA3=1`).
+  - `dinov3_head`: `list[float]` head-left DINOv3 vits16 embedding (Innate Mars onboard; `EMET_MARS_ONBOARD_DINOV3=1`). Optional — clients must tolerate absence.
+- `lidar_points` / `lidar_timestamp`: optional 2D scan as N×2 float array + int timestamp (Stretch hardware, Innate Mars `/scan`, innate_mars MuJoCo sim).
+- Slim image wire format (`capabilities.zmq_obs_slim`): publish canonical keys only (`head_cam_left/image`, `head_cam_right/image`, `ee_cam/image`); clients expand legacy aliases (`rgb`, `rgb_right`, `rgb_tertiary`) via `emet.core.zmq_obs_codec`.
+- Capability flags are advertised in `session["capabilities"]` (see `docs/zmq_session_metadata.md`): e.g. `onboard_da3`, `onboard_dinov3`, `zmq_obs_slim`, `teleport_base`.
 
 ### handle_action(action)
 

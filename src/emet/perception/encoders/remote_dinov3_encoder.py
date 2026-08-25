@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import os
+import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
@@ -26,6 +27,8 @@ from .dinov3_encoder import DINOV3_MODELS
 logger = Logger(__name__)
 
 _DEFAULT_FEATURE_DIM = 384  # dinov3-vits16
+
+_LOCAL_DINOV3_ARGS = frozenset({"version", "device", "normalize"})
 
 
 def resolve_dinov3_endpoint(explicit: str | None = None) -> str | None:
@@ -59,7 +62,8 @@ class RemoteDinov3Encoder(BaseImageTextEncoder):
         device: str | None = None,
         normalize: bool = True,
         endpoint: str | None = None,
-        timeout_s: float = 30.0,
+        timeout_s: float = 10.0,
+        circuit_open_s: float = 10.0,
         **kwargs: Any,
     ) -> None:
         del device, kwargs
@@ -69,25 +73,36 @@ class RemoteDinov3Encoder(BaseImageTextEncoder):
         if not self.endpoint:
             raise ValueError("Remote DINOv3 requires EMET_DINOV3_ENDPOINT or endpoint=...")
         self.timeout_s = float(timeout_s)
+        self._circuit_open_s = float(circuit_open_s)
+        self._last_failure_at: float | None = None
         self.feature_dim = _DEFAULT_FEATURE_DIM
         self._probe_feature_dim()
 
+    def _circuit_open(self) -> bool:
+        if self._last_failure_at is None:
+            return False
+        return time.monotonic() - self._last_failure_at < self._circuit_open_s
+
     def _probe_feature_dim(self) -> None:
+        import json
         import urllib.error
         import urllib.request
 
         req = urllib.request.Request(_health_url(self.endpoint), method="GET")
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                import json
-
-                data = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-            logger.warning(f"Remote DINOv3 health probe failed ({exc}); using dim={self.feature_dim}")
-            return
-        dim = int(data.get("feature_dim") or 0)
-        if dim > 0:
-            self.feature_dim = dim
+        last_exc: Exception | None = None
+        for _ in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                dim = int(data.get("feature_dim") or 0)
+                if dim > 0:
+                    self.feature_dim = dim
+                    return
+                last_exc = RuntimeError(f"feature_dim not ready yet: {data}")
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+                last_exc = exc
+            time.sleep(0.5)
+        logger.warning(f"Remote DINOv3 health probe failed ({last_exc}); using dim={self.feature_dim}")
 
     def _image_to_b64(self, image: torch.Tensor | np.ndarray) -> str:
         if isinstance(image, torch.Tensor):
@@ -107,6 +122,8 @@ class RemoteDinov3Encoder(BaseImageTextEncoder):
         import urllib.error
         import urllib.request
 
+        if self._circuit_open():
+            raise RuntimeError("remote DINOv3 unavailable (circuit open); skipping embedding")
         body = json.dumps({"image_b64": image_b64}).encode("utf-8")
         req = urllib.request.Request(
             _embed_url(self.endpoint),
@@ -114,8 +131,12 @@ class RemoteDinov3Encoder(BaseImageTextEncoder):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+            self._last_failure_at = time.monotonic()
+            raise RuntimeError(f"remote DINOv3 request failed ({exc}); circuit open for {self._circuit_open_s:.0f}s") from exc
         emb = data.get("embedding")
         if not emb:
             raise RuntimeError(f"remote DINOv3 missing embedding: {data}")
@@ -153,4 +174,8 @@ def build_dinov3_encoder(**args: Any) -> BaseImageTextEncoder:
         return RemoteDinov3Encoder(endpoint=endpoint, **args)
     from .dinov3_encoder import Dinov3Encoder
 
-    return Dinov3Encoder(**args)
+    local_args = {k: v for k, v in args.items() if k in _LOCAL_DINOV3_ARGS}
+    extra = sorted(set(args) - _LOCAL_DINOV3_ARGS)
+    if extra:
+        logger.warning(f"build_dinov3_encoder: dropping kwargs unsupported by local Dinov3Encoder: {extra}")
+    return Dinov3Encoder(**local_args)
