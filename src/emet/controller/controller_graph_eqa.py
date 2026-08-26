@@ -621,6 +621,7 @@ class GraphEQAController(DynamemController):
                 question,
                 self._planning_base_xyt(self.robot.get_base_pose()),
                 self.planner,
+                voxel_map=getattr(self, "voxel_map", None),
             )
             logger.info(
                 f"EQA query_answer done wall_s={time.monotonic() - t_qa0:.1f} "

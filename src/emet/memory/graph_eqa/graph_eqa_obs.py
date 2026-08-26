@@ -25,6 +25,7 @@ from emet.memory.graph_eqa.eqa_views import (
     spread_obs_ids_xy,
     tightest_node_crop,
 )
+from emet.mapping.close_map import CloseLookQuery, close_map_from_voxel_map
 from emet.memory.graph_eqa.graph_types import (
     _GRAPH_CANDIDATE_COUNT_DISCLAIMER,
     _RECALL_SOURCE_TIER,
@@ -541,6 +542,49 @@ class GraphEqaObsMixin:
                 spent = "yes" if self.eqa_obs_look_spent(oid) else "no"
                 bits.append(f"obs{oid} spent={spent} attached=no")
             lines.append("- off_prompt_find: " + "; ".join(bits))
+        return "\n".join(lines)
+
+    def _close_look_query_for_obs(self, obs_id: int, voxel_map: Any | None) -> CloseLookQuery | None:
+        cm = close_map_from_voxel_map(voxel_map)
+        if cm is None:
+            return None
+        xy = self._obs_xy(int(obs_id))
+        if xy is None:
+            return None
+        return cm.query_xy(float(xy[0]), float(xy[1]))
+
+    def _format_close_look_line(self, obs_id: int, voxel_map: Any | None, *, slot: str) -> str:
+        q = self._close_look_query_for_obs(obs_id, voxel_map)
+        if q is None:
+            return f"  {slot} (obs {int(obs_id)}): close_map=unavailable"
+        min_d = q.min_cam_dist_m
+        min_s = "unknown" if min_d is None else f"{min_d:.2f}m"
+        res = "yes" if q.resolved else "no"
+        return (
+            f"  {slot} (obs {int(obs_id)}): resolved={res} min_cam={min_s} "
+            f"aimed={str(q.aimed_hit).lower()} hits={q.n_hit_cells}"
+        )
+
+    def format_close_look_status(
+        self,
+        obs_ids: list[int],
+        *,
+        off_prompt_find: list[int] | None = None,
+        voxel_map: Any | None = None,
+    ) -> str:
+        """Geometric close-look evidence for attached and FIND views (not the answer)."""
+        if close_map_from_voxel_map(voxel_map) is None:
+            return ""
+        attached_set = {int(x) for x in obs_ids}
+        lines = [
+            "CLOSE_LOOK_STATUS (geometric — did the camera get a close on-axis look at this XY? "
+            "Not the answer; occupancy/nearby alone is insufficient for clocks and small counts):",
+        ]
+        for idx, oid in enumerate(obs_ids, start=1):
+            lines.append(self._format_close_look_line(int(oid), voxel_map, slot=f"Image {idx}"))
+        off = [int(x) for x in (off_prompt_find or []) if int(x) not in attached_set]
+        for oid in off[:4]:
+            lines.append(self._format_close_look_line(int(oid), voxel_map, slot="FIND"))
         return "\n".join(lines)
 
     def eqa_should_stay_on_attached_view(self, *, answer: str, confidence: bool) -> bool:

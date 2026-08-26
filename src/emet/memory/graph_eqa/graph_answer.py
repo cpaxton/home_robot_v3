@@ -51,6 +51,7 @@ class GraphAnswerMixin:
         planner: Any = None,
         *,
         force_obs_ids: list[int] | None = None,
+        voxel_map: Any | None = None,
     ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
         """
         Answer the question using the scene graph and task-relevant images.
@@ -344,6 +345,11 @@ class GraphAnswerMixin:
         history_slice = list(history[start:])
         off_prompt = self._find_queue_candidate_obs_ids(question, pin_obs=pin_obs)
         view_status = self.format_eqa_view_status(obs_ids, off_prompt_find=off_prompt)
+        close_look = self.format_close_look_status(
+            obs_ids, off_prompt_find=off_prompt, voxel_map=voxel_map
+        )
+        if close_look:
+            view_status = view_status + "\n" + close_look if view_status else close_look
         prompt_max_tokens = resolve_eqa_prompt_max_tokens(self.parameters)
         text_blocks = self.build_eqa_prompt_text(
             question_line="Question: " + question,

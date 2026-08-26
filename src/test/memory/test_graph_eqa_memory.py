@@ -2198,3 +2198,26 @@ def test_query_answer_read_attaches_zoom_when_enabled(monkeypatch):
     expect = center_zoom_crop(rgb)
     assert zoom.shape == expect.shape
     assert mem.last_eqa_obs_ids[:1] == [1]
+
+
+def test_format_close_look_status_reports_resolved_and_find():
+    from emet.mapping.close_map import CloseDistanceMap
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["clock"])
+    mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["lamp"], identity_key="lamp:1")
+    cm = CloseDistanceMap(grid_size=(64, 64), origin_xy=(32.0, 32.0), resolution_m=0.1)
+    pose = np.eye(4, dtype=np.float64)
+    pose[:3, 3] = (0.0, 0.0, 0.4)
+    pose[:3, 2] = (1.0, 0.0, 0.0)
+    pts = np.array([[0.05, 0.0, 0.5]], dtype=np.float64)
+    cm.update_from_view(pose, pts)
+    voxel = type("VM", (), {"close_map": cm})()
+
+    block = mem.format_close_look_status([1], off_prompt_find=[2], voxel_map=voxel)
+    assert "CLOSE_LOOK_STATUS" in block
+    assert "Image 1" in block
+    assert "FIND" in block and "obs 2" in block
+    assert "resolved=" in block
+    assert mem.format_close_look_status([1], voxel_map=None) == ""

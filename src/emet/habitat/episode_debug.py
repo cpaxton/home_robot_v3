@@ -601,6 +601,15 @@ def save_episode_debug_bundle(
             metrics.diagnostics_manifest_path = str(manifest["diagnostics_manifest"])
 
     metrics.debug_bundle_dir = str(episode_dir)
+    vm = getattr(agent, "voxel_map", None)
+    from emet.mapping.close_map import close_map_from_voxel_map
+
+    cm = close_map_from_voxel_map(vm)
+    if cm is not None:
+        (episode_dir / "close_map_summary.json").write_text(
+            json.dumps(cm.summary(), indent=2) + "\n",
+            encoding="utf-8",
+        )
     (episode_dir / "metrics.json").write_text(
         json.dumps(metrics.to_dict(), indent=2) + "\n",
         encoding="utf-8",
