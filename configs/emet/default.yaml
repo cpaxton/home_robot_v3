@@ -62,9 +62,12 @@ robots:
         embedding_min_cosine: 0.0
         embedding_blend_alpha: 0.35
         require_label_match: false
+        require_label_match_for_instances: true
         max_candidates: 64
         match_xy_m: 0.55
         fallback_spatial_merge_xy_m: 0.55
+        instance_min_confidence: 0.12
+        instance_min_mask_points: 25
     zmq:
       allow_missing_depth: true
   rby1: {}

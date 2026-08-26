@@ -41,11 +41,16 @@ def _vram_free_mib() -> float | None:
 
 
 def warm_siglip_confirmed_memory(agent: Any) -> None:
-    """Snapshot SigLIP CONFIRMED_MEMORY features; keep encoder attached for agentic verify."""
+    """Snapshot SigLIP CONFIRMED_MEMORY features and visual FIND ranks.
+
+    Keep the encoder attached for agentic verify; answer-only / Habitat then
+    calls :func:`release_siglip_for_vlm` so Qwen can load. FIND after that
+    release uses the ranks cached here.
+    """
     from emet.memory.graph_eqa.graph_eqa_siglip import warm_graph_eqa_siglip_confirmed_memory
 
     warm_graph_eqa_siglip_confirmed_memory(agent)
-    logger.info("warm_siglip_confirmed_memory: CONFIRMED_MEMORY features warmed")
+    logger.info("warm_siglip_confirmed_memory: CONFIRMED_MEMORY features + FIND ranks warmed")
 
 
 def release_siglip_for_vlm(agent: Any) -> None:
@@ -83,10 +88,12 @@ def release_siglip_for_vlm(agent: Any) -> None:
 def prepare_dynagraph_vram_for_eqa(agent: Any) -> None:
     """Free GPU headroom before the EQA VLM forward.
 
-    Snapshot SigLIP CONFIRMED_MEMORY features into graph-memory caches, then
-    **always** drop SigLIP + voxel encoders. Keeping SigLIP loaded next to
-    Qwen3-VL-8B int4 was starving activations: overnight smokes loaded the VLM
-    in ~125s then hung after ``ready for inference`` until STALE_KILL.
+    Snapshot SigLIP CONFIRMED_MEMORY features and visual FIND top-k ranks into
+    graph-memory caches, then **always** drop SigLIP + voxel encoders. Keeping
+    SigLIP loaded next to Qwen3-VL-8B int4 was starving activations: overnight
+    smokes loaded the VLM in ~125s then hung after ``ready for inference``
+    until STALE_KILL. Voxel ``find_all_images`` cannot run after this release;
+    ``query_answer`` uses the cached ranks.
 
     For agentic verify loops, call :func:`warm_siglip_confirmed_memory` before
     navigate/verify and :func:`release_siglip_for_vlm` only before submit_answer.

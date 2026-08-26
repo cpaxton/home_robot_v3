@@ -220,7 +220,11 @@ def choices_are_count_mcq(choices: list[str] | None) -> bool:
             "5",
         }
     )
-    hits = sum(1 for c in real if c in count_exact or re.fullmatch(r"\d+", c))
+    hits = sum(
+        1
+        for c in real
+        if c in count_exact or (re.fullmatch(r"\d+", c) is not None and 0 <= int(c) <= 20)
+    )
     return hits >= max(2, (len(real) + 1) // 2)
 
 
@@ -245,6 +249,22 @@ _TIME_OF_DAY_CHOICES = frozenset(
         "nighttime",
     }
 )
+_CLOCK_RANGE_CHOICE_RE = re.compile(
+    r"\d{1,2}(?::\d{2})?\s*[-–]\s*\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?",
+    re.IGNORECASE,
+)
+
+
+def _choice_is_clock_range(text: str) -> bool:
+    """True for HM-EQA clock-face buckets such as ``1-3pm`` / ``8-10am``."""
+    cleaned = (text or "").strip().lower().rstrip(".")
+    if not cleaned or cleaned in {"unknown", "none", "n/a", "na"}:
+        return False
+    if cleaned in _TIME_OF_DAY_CHOICES:
+        return False
+    if _CLOCK_RANGE_CHOICE_RE.search(cleaned) and re.search(r"(a\.?m\.?|p\.?m\.?)", cleaned):
+        return True
+    return bool(re.search(r"\d", cleaned) and re.search(r"\b(am|pm|a\.m\.|p\.m\.)\b", cleaned))
 
 
 def choices_are_time_of_day(choices: list[str] | None) -> bool:
@@ -260,7 +280,7 @@ def choices_are_time_of_day(choices: list[str] | None) -> bool:
     real = [c for c in cleaned if not c.startswith("(do not choose")]
     if len(real) < 2:
         return False
-    hits = sum(1 for c in real if c in _TIME_OF_DAY_CHOICES)
+    hits = sum(1 for c in real if c in _TIME_OF_DAY_CHOICES or _choice_is_clock_range(c))
     return hits >= max(2, (len(real) + 1) // 2)
 
 

@@ -595,3 +595,103 @@ def test_format_job_report_fail_only(tmp_path, monkeypatch):
     body = fails.split("pred/gold", 1)[1]
     assert "A/A" not in body
     assert "B/D" in body
+
+
+def test_resolve_report_out_dir_prefers_slice_out(tmp_path):
+    wrapper = tmp_path / "jobs_runs" / "countclock"
+    slice_out = tmp_path / "hmeqa_countclock" / "run1"
+    slice_out.mkdir(parents=True)
+    (slice_out / "META.txt").write_text(
+        "run_id=run1\nquestion_ids=12,21\nmethods=dynagraph\n",
+        encoding="utf-8",
+    )
+    job = jr.JobRecord(
+        id="j",
+        name="countclock",
+        status="running",
+        out_dir=str(wrapper),
+        cmd=f"OUT_DIR={slice_out} ./scripts/run_hmeqa_countclock_slice.sh",
+    )
+    assert jr.resolve_report_out_dir(job) == slice_out
+
+
+def test_collect_episode_scores_from_consolidated_jsonl(tmp_path):
+    slice_out = tmp_path / "slice"
+    slice_out.mkdir()
+    jsonl = tmp_path / "results" / "countclock_run1_dynagraph_qwen3_vl.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text(
+        '{"question_id":12,"method":"dynagraph","correct":false,"predicted_answer":"C",'
+        '"gold_answer_letter":"D","planning_steps":22,"confident":true,'
+        '"debug_bundle_dir":"/tmp/q12"}\n'
+        '{"question_id":21,"method":"dynagraph","correct":true,"predicted_answer":"A",'
+        '"gold_answer_letter":"A","planning_steps":10,"confident":true}\n',
+        encoding="utf-8",
+    )
+    (slice_out / "dynagraph_jsonl.path").write_text(f"{jsonl}\n", encoding="utf-8")
+    scores = jr.collect_episode_scores(slice_out)
+    assert len(scores) == 2
+    by_q = {s.question_id: s for s in scores}
+    assert by_q[12].correct is False
+    assert by_q[21].correct is True
+
+
+def test_collect_episode_scores_falls_back_to_filename_qid(tmp_path):
+    out = tmp_path / "h2h"
+    out.mkdir()
+    jsonl = out / "dynagraph_q12.jsonl"
+    jsonl.write_text(
+        '{"correct":false,"predicted_answer":"C","gold_answer_letter":"D",'
+        '"planning_steps":3,"confident":true}\n',
+        encoding="utf-8",
+    )
+    scores = jr.collect_episode_scores(out)
+    assert len(scores) == 1
+    assert scores[0].question_id == 12
+    assert scores[0].arm == "dynagraph"
+
+
+def test_format_job_report_countclock_slice(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    wrapper = tmp_path / "jobs_runs" / "instance-graph-repair-15q"
+    slice_out = tmp_path / "hmeqa_countclock" / "run1"
+    slice_out.mkdir(parents=True)
+    jsonl = tmp_path / "results" / "countclock_run1_dynagraph_qwen3_vl.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text(
+        '{"question_id":12,"method":"dynagraph","correct":false,"predicted_answer":"C",'
+        '"gold_answer_letter":"D","planning_steps":22,"confident":true}\n',
+        encoding="utf-8",
+    )
+    (slice_out / "META.txt").write_text(
+        "run_id=run1\nquestion_ids=12,21\nmethods=dynagraph\n",
+        encoding="utf-8",
+    )
+    (slice_out / "dynagraph_jsonl.path").write_text(f"{jsonl}\n", encoding="utf-8")
+    (slice_out / "dynagraph.progress").write_text("done=12\n", encoding="utf-8")
+    job = jr.register_job(
+        name="instance-graph-repair-15q",
+        status="running",
+        pid=os.getpid(),
+        out_dir=wrapper,
+        cmd=f"OUT_DIR={slice_out} QUESTION_IDS=12,21 ./scripts/run_hmeqa_countclock_slice.sh",
+    )
+    text = jr.format_job_report(job)
+    assert "1/2" in text
+    assert "FAIL" in text
+    assert str(slice_out) in text
+    assert "wrap:" in text
+    assert "next: 21" in text
+    assert "  12  " in text
+
+
+def test_analyze_eqa_history_investigation_detects_stuck_loop():
+    iters = [
+        "Iter: answer=Unknown conf=false action=4 salvage=0 | no dining table",
+        "Iter: answer=Unknown conf=false action=4 salvage=0 | no dining table",
+        "Iter: answer=Unknown conf=false action=4 salvage=0 | no dining table",
+    ]
+    inv = jr.analyze_eqa_history_investigation(iters)
+    assert inv["stuck_loop"] is True
+    assert inv["max_unknown_streak"] == 3
+    assert inv["per_action"]["4"]["count"] == 3

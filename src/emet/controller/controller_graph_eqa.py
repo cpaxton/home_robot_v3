@@ -241,6 +241,21 @@ class GraphEQAController(DynamemController):
             return False
         if not habitat_explore_frontiers_enabled(self.parameters):
             return False
+        if (
+            self.graph_memory is not None
+            and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
+            and self.graph_memory.eqa_stay_on_attached_view() is True
+        ):
+            oid_fn = getattr(self.graph_memory, "eqa_attached_target_obs_id", None)
+            spent_fn = getattr(self.graph_memory, "eqa_obs_look_spent", None)
+            oid = oid_fn() if callable(oid_fn) else None
+            spent = bool(oid is not None and callable(spent_fn) and spent_fn(oid))
+            try:
+                covered = self.graph_memory._graph_covers_relevant_objects()
+            except Exception:
+                covered = True
+            if covered and not spent:
+                return False
         if target_point is not None:
             if habitat_nav_would_be_noop(self.robot, target_point):
                 return True
@@ -251,9 +266,9 @@ class GraphEQAController(DynamemController):
             except Exception:
                 return True
         last_nav = getattr(self, "_last_nav_attempt", None)
-        if target_point is None:
-            return True
         if last_nav is not None and not last_nav.finished and float(last_nav.dist_m) < 0.05:
+            return True
+        if target_point is None:
             return True
         return False
 
@@ -282,8 +297,8 @@ class GraphEQAController(DynamemController):
     def _siglip_obs_id_for_text(self, text: str) -> int | None:
         """Best-aligned observation id for *text* via the voxel map's SigLIP features.
 
-        Lets image selection surface the actual view of the target object (caption-independent)
-        instead of whatever furniture is in the most recent frames.
+        Voxel ``obs_count`` is a frame index; graph obs ids diverge after instance
+        merges, so map through ``resolve_voxel_frame_to_graph_obs_id``.
         """
         vm = getattr(self, "voxel_map", None)
         if vm is None or not hasattr(vm, "find_obs_id_for_text"):
@@ -294,9 +309,89 @@ class GraphEQAController(DynamemController):
                 return None
             if hasattr(oid, "item"):
                 oid = oid.item()
-            return int(oid)
+            voc = int(oid)
         except Exception:
             return None
+        gm = getattr(self, "graph_memory", None)
+        mapper = getattr(gm, "resolve_voxel_frame_to_graph_obs_id", None) if gm is not None else None
+        if callable(mapper):
+            try:
+                mapped = mapper(voc, vm)
+                if mapped is not None:
+                    return int(mapped)
+            except (TypeError, ValueError):
+                pass
+        return voc
+
+    def _siglip_visual_find(self, text: str, max_n: int = 4) -> list[tuple[float, int]]:
+        """Top-k DynaMem retrieve: phrase → scored graph observation ids.
+
+        Uses ``find_all_images`` (not argmax). SigLIP only proposes RGB; Qwen still
+        looks. Falls back to ``find_obs_id_for_text`` when the voxel map is empty.
+        """
+        vm = getattr(self, "voxel_map", None)
+        gm = getattr(self, "graph_memory", None)
+        if vm is None or gm is None:
+            return []
+        ranked: list[tuple[float, int]] = []
+        seen: set[int] = set()
+
+        def _add(sim: float, oid: int | None) -> None:
+            if oid is None:
+                return
+            try:
+                graph_oid = int(oid)
+            except (TypeError, ValueError):
+                return
+            usable = getattr(gm, "_obs_usable_for_eqa_image", None)
+            if callable(usable) and not usable(graph_oid):
+                return
+            if graph_oid in seen:
+                return
+            seen.add(graph_oid)
+            ranked.append((float(sim), graph_oid))
+
+        def _map_voxel(voc: int, xyz: Any | None) -> int | None:
+            mapper = getattr(gm, "resolve_voxel_frame_to_graph_obs_id", None)
+            if callable(mapper):
+                try:
+                    mapped = mapper(int(voc), vm)
+                    if mapped is not None:
+                        return int(mapped)
+                except (TypeError, ValueError):
+                    pass
+            nearest = getattr(gm, "nearest_graph_obs_to_xyz", None)
+            if callable(nearest) and xyz is not None:
+                try:
+                    mapped = nearest(xyz)
+                    if mapped is not None:
+                        return int(mapped)
+                except (TypeError, ValueError):
+                    pass
+            return None
+
+        enc = getattr(vm, "encoder", None)
+        if enc is not None and hasattr(vm, "find_all_images"):
+            try:
+                ids, points, aligns = vm.find_all_images(
+                    text,
+                    min_point_num=20,
+                    max_img_num=max(int(max_n), 4),
+                )
+            except Exception:
+                ids, points, aligns = None, None, None
+            if ids is not None:
+                from emet.memory.graph_eqa.graph_eqa_siglip import flatten_find_all_images
+
+                for sim, voc, xyz in flatten_find_all_images(ids, points, aligns):
+                    _add(sim, _map_voxel(int(voc), xyz))
+        if not ranked:
+            voc = self._siglip_obs_id_for_text(text)
+            if voc is not None:
+                _add(max(0.25, 0.21), voc)
+        ranked.sort(key=lambda t: -t[0])
+        limit = max(int(max_n), 1)
+        return ranked[:limit]
 
     def _siglip_guided_frontier(self, text: str) -> np.ndarray | None:
         """Intelligent exploration: head toward the frontier nearest the most query-aligned
@@ -588,6 +683,54 @@ class GraphEQAController(DynamemController):
         if confidence or not allow_navigation:
             return answer, discord_text, relevant_images, confidence
 
+        stay_fn = getattr(self.graph_memory, "eqa_should_stay_on_attached_view", None)
+        if callable(stay_fn):
+            stay = bool(stay_fn(answer=answer, confidence=confidence))
+        else:
+            stay = (
+                self.graph_memory is not None
+                and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
+                and self.graph_memory.eqa_stay_on_attached_view() is True
+            )
+        if (
+            not stay
+            and self.graph_memory is not None
+            and getattr(self.graph_memory, "eqa_stay_on_attached_view", None) is not None
+            and self.graph_memory.eqa_stay_on_attached_view()
+        ):
+            oid = self.graph_memory.eqa_attached_target_obs_id()
+            logger.info(
+                "EQA nav: releasing attached-view stay (unknown/uncovered/spent) obs_id=%s",
+                oid,
+            )
+        approaching_find = False
+        if stay:
+            oid = self.graph_memory.eqa_attached_target_obs_id()
+            if oid is not None and self.graph_memory.last_eqa_look_obs_id is None:
+                self.graph_memory.last_eqa_look_obs_id = int(oid)
+            approach = None
+            fn = getattr(self.graph_memory, "eqa_approach_attached_find", None)
+            if callable(fn):
+                try:
+                    raw = fn(self._planning_base_xyt(self.robot.get_base_pose()))
+                    if raw is not None:
+                        arr = np.asarray(raw, dtype=float).reshape(-1)
+                        if arr.size >= 2 and np.isfinite(arr[:2]).all():
+                            approach = np.array([float(arr[0]), float(arr[1]), 1.0], dtype=float)
+                except (TypeError, ValueError):
+                    approach = None
+            if approach is None:
+                logger.info("EQA nav: FIND view already Image 1 (obs_id=%s); stay for close-up", oid)
+                return answer, discord_text, relevant_images, confidence
+            target_point = approach
+            approaching_find = True
+            logger.info(
+                "EQA nav: approach attached FIND obs_id=%s target=(%.2f, %.2f)",
+                oid,
+                float(target_point[0]),
+                float(target_point[1]),
+            )
+
         # Coverage: while the question-relevant objects have NOT been observed yet, prefer an
         # unexplored, question-matched frontier over revisiting the VLM's already-seen
         # "Navigate to Image N" target. The VLM anchors on objects it has already seen and
@@ -595,7 +738,12 @@ class GraphEQAController(DynamemController):
         # in an unexplored room) stay unanswerable. Once those objects are in the graph (or
         # the VLM is confident) we follow its inspection target.
         # Use blocked/recent-aware pick (Habitat navmesh + MuJoCo sample_frontier).
-        if not confidence and self.graph_memory is not None and getattr(self, "_eqa_explore_when_uncovered", False):
+        if (
+            not approaching_find
+            and not confidence
+            and self.graph_memory is not None
+            and getattr(self, "_eqa_explore_when_uncovered", False)
+        ):
             try:
                 covered = self.graph_memory._graph_covers_relevant_objects()
             except Exception:
@@ -616,7 +764,9 @@ class GraphEQAController(DynamemController):
                 if frontier_pt is not None:
                     target_point = frontier_pt
 
-        if self._habitat_should_prefer_frontier(confidence=confidence, target_point=target_point):
+        if not approaching_find and self._habitat_should_prefer_frontier(
+            confidence=confidence, target_point=target_point
+        ):
             frontier_pt = pick_habitat_exploration_target(
                 self,
                 question=question,
@@ -629,7 +779,7 @@ class GraphEQAController(DynamemController):
                 )
                 target_point = frontier_pt
 
-        if target_point is None and not confidence:
+        if not approaching_find and target_point is None and not confidence:
             target_point = pick_uncovered_explore_target(
                 self,
                 question=question,
@@ -637,7 +787,8 @@ class GraphEQAController(DynamemController):
                 recent_goals=self._habitat_recent_goals,
             )
         if (
-            target_point is None
+            not approaching_find
+            and target_point is None
             and not confidence
             and hasattr(self, "space")
             and hasattr(self.space, "sample_frontier")
@@ -667,6 +818,11 @@ class GraphEQAController(DynamemController):
                 target_point = alt
             else:
                 eff_key = goal_key_xy(resolved)
+                if stay and (
+                    eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)
+                ):
+                    logger.info("EQA habitat: already at FIND/readout view; stay for close-up")
+                    return answer, discord_text, relevant_images, confidence
                 if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved):
                     self._habitat_blocked_goals.add(eff_key)
                     self._habitat_blocked_goals.add(goal_key_xy(target_point))
@@ -698,23 +854,47 @@ class GraphEQAController(DynamemController):
                 else None
             )
             if action_obs_id is not None and self.graph_memory is not None:
+                spent_fn = getattr(self.graph_memory, "eqa_obs_look_spent", None)
+                spent = bool(callable(spent_fn) and spent_fn(action_obs_id) is True)
                 node = next(
                     (n for n in self.graph_memory.get_nodes() if int(n.obs_id) == action_obs_id),
                     None,
                 )
-                if node is not None and int(getattr(node, "nav_failures", 0)) > 0:
-                    alt = self.graph_memory.alternate_nav_target_for_failed_action(
-                        question,
-                        action_obs_id,
-                        self.planner,
-                        self._planning_base_xyt(self.robot.get_base_pose()),
-                    )
-                    if alt is not None:
-                        logger.info(
-                            "EQA nav: avoiding re-pick of failed Image obs_id=%s, alternate frontier",
-                            action_obs_id,
+                failed = node is not None and int(getattr(node, "nav_failures", 0)) > 0
+                if spent or failed:
+                    nxt = None
+                    if spent and hasattr(self.graph_memory, "next_unspent_eqa_obs_id"):
+                        nxt = self.graph_memory.next_unspent_eqa_obs_id(
+                            list(self.graph_memory.last_eqa_obs_ids or []),
+                            skip={int(action_obs_id)},
                         )
-                        target_point = alt
+                    if nxt is not None:
+                        logger.info(
+                            "EQA nav: obs_id=%s look spent; switching to unspent obs_id=%s",
+                            action_obs_id,
+                            nxt,
+                        )
+                        wp = self.graph_memory._navigation_waypoint_for_obs(
+                            int(nxt),
+                            self._planning_base_xyt(self.robot.get_base_pose()),
+                        )
+                        if wp is not None:
+                            target_point = wp
+                            action_obs_id = int(nxt)
+                    else:
+                        alt = self.graph_memory.alternate_nav_target_for_failed_action(
+                            question,
+                            action_obs_id,
+                            self.planner,
+                            self._planning_base_xyt(self.robot.get_base_pose()),
+                        )
+                        if alt is not None:
+                            logger.info(
+                                "EQA nav: avoiding re-pick of Image obs_id=%s, alternate frontier",
+                                action_obs_id,
+                            )
+                            target_point = alt
+                            action_obs_id = None
 
             start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             if (
@@ -748,6 +928,7 @@ class GraphEQAController(DynamemController):
                         )
                     )
             stuck_retries = 0
+            # Per-step displacement from navigate_to_target_pose (not distance-to-goal).
             min_success_dist_m = 0.08
             for move_i in range(max_movement_step):
                 logger.info(

@@ -466,4 +466,6 @@ def test_time_of_day_choices_are_not_a_location_mcq():
     choices = ["Morning", "Afternoon", "Evening", "Night"]
     assert choices_are_time_of_day(choices) is True
     assert choices_are_location_mcq(choices) is False
+    assert choices_are_time_of_day(["1-3pm", "2-4pm", "5-7pm", "Unknown"]) is True
+    assert choices_are_location_mcq(["1-3pm", "2-4pm", "5-7pm", "Unknown"]) is False
     assert choices_are_location_mcq(["Above the sink", "On the toilet tank", "By the bathtub"]) is True

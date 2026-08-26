@@ -588,13 +588,182 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
+def read_meta_kv(out_dir: str | Path | None) -> dict[str, str]:
+    """Parse ``KEY=value`` lines from ``META.txt`` under a slice OUT dir."""
+    if not out_dir:
+        return {}
+    path = Path(out_dir).expanduser() / "META.txt"
+    if not path.is_file():
+        return {}
+    out: dict[str, str] = {}
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if key:
+                out[key] = val
+    except OSError:
+        return {}
+    return out
+
+
+def resolve_report_out_dir(job: JobRecord) -> Path | None:
+    """Effective eval OUT dir for ``emet jobs report`` scoring.
+
+    ``emet jobs run`` registers ``out_dir`` under ``jobs_runs/``; orchestrators
+    often pass a separate ``OUT_DIR=…`` for the real slice/H2H tree.
+    """
+    candidates: list[Path] = []
+    if job.cmd:
+        m = _OUT_DIR_ENV_RE.search(job.cmd)
+        if m:
+            candidates.append(Path(m.group(1)).expanduser())
+    if job.out_dir:
+        candidates.append(Path(job.out_dir).expanduser())
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen or not path.is_dir():
+            continue
+        seen.add(key)
+        if (
+            (path / "META.txt").is_file()
+            or list(path.glob("*_jsonl.path"))
+            or list(path.glob("*_q*.jsonl"))
+            or list(path.glob("*.progress"))
+            or (path / "progress.json").is_file()
+        ):
+            return path
+    for path in candidates:
+        if path.is_dir():
+            return path
+    return None
+
+
+def _parse_id_list(raw: str) -> list[int]:
+    ids: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.append(int(part))
+    return ids
+
+
+def discover_consolidated_results_jsonls(out_dir: str | Path | None) -> list[tuple[str, Path]]:
+    """Locate consolidated Habitat result jsonls for slice runners (e.g. count/clock)."""
+    if not out_dir:
+        return []
+    root = Path(out_dir).expanduser()
+    if not root.is_dir():
+        return []
+    found: list[tuple[str, Path]] = []
+    seen_paths: set[str] = set()
+
+    def _add(arm: str, jsonl: Path) -> None:
+        key = str(jsonl.expanduser())
+        if key in seen_paths or not jsonl.is_file():
+            return
+        seen_paths.add(key)
+        found.append((arm.lower(), jsonl.expanduser()))
+
+    for path_file in sorted(root.glob("*_jsonl.path")):
+        arm = path_file.name[: -len("_jsonl.path")]
+        try:
+            raw = path_file.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            continue
+        if raw:
+            _add(arm, Path(raw))
+
+    meta = read_meta_kv(root)
+    run_id = meta.get("run_id")
+    methods = [m.strip() for m in (meta.get("methods") or "dynagraph").split() if m.strip()]
+    family = "qwen3_vl"
+    if run_id:
+        for method in methods:
+            _add(method, Path.home() / ".cache/habitat_eqa/results" / f"countclock_{run_id}_{method}_{family}.jsonl")
+
+    run_log = root / "run.log"
+    if run_log.is_file():
+        try:
+            text = run_log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        m = _COUNT_CLOCK_TAG_RE.search(text)
+        if m:
+            tag = m.group(1)
+            arm = tag.rsplit("_", 1)[-1] if "_" in tag else "dynagraph"
+            _add(arm, Path.home() / ".cache/habitat_eqa/results" / f"{tag}_{family}.jsonl")
+
+    return found
+
+
+def read_slice_progress(out_dir: str | Path | None) -> dict[str, Any]:
+    """Progress from ``{method}.progress`` (``done=N`` lines) + ``META.txt`` ids."""
+    if not out_dir:
+        return {}
+    root = Path(out_dir).expanduser()
+    done_ids: list[int] = []
+    for path in sorted(root.glob("*.progress")):
+        try:
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if line.startswith("done="):
+                    try:
+                        done_ids.append(int(line.split("=", 1)[1]))
+                    except ValueError:
+                        continue
+        except OSError:
+            continue
+        if done_ids:
+            break
+    if not done_ids:
+        for _arm, jsonl in discover_consolidated_results_jsonls(root):
+            try:
+                rows = [
+                    json.loads(ln)
+                    for ln in jsonl.read_text(encoding="utf-8", errors="replace").splitlines()
+                    if ln.strip()
+                ]
+            except OSError:
+                continue
+            done_ids = sorted(
+                {
+                    int(r["question_id"])
+                    for r in rows
+                    if r.get("correct") is not None and str(r.get("question_id", "")).isdigit()
+                }
+            )
+            if done_ids:
+                break
+    if not done_ids:
+        return {}
+    planned = _parse_id_list(read_meta_kv(root).get("question_ids", ""))
+    out: dict[str, Any] = {"units_done": len(done_ids), "phase": "dynagraph"}
+    if planned:
+        out["units_total"] = len(planned)
+        remaining = [q for q in planned if q not in set(done_ids)]
+        if remaining:
+            out["current_id"] = str(remaining[0])
+        else:
+            out["current_id"] = str(done_ids[-1])
+    else:
+        out["current_id"] = str(done_ids[-1])
+    return out
+
+
 def compute_job_progress(job: JobRecord, *, now: float | None = None) -> JobProgress:
     """Merge ``job.meta`` progress with optional ``out_dir/progress.json`` (file wins on conflict)."""
     now_t = now if now is not None else _now()
-    file_prog = read_progress_file(job.out_dir)
+    report_root = resolve_report_out_dir(job) or (Path(job.out_dir).expanduser() if job.out_dir else None)
+    file_prog = read_progress_file(report_root)
+    slice_prog = read_slice_progress(report_root)
     meta = dict(job.meta or {})
     # File overlays meta so heartbeats on disk work even without jobs update.
-    merged: dict[str, Any] = {**meta, **file_prog}
+    merged: dict[str, Any] = {**meta, **slice_prog, **file_prog}
     units_done = _coerce_int(merged.get("units_done"))
     units_total = _coerce_int(merged.get("units_total"))
     phase = merged.get("phase")
@@ -805,7 +974,10 @@ _EPISODE_JSONL_RE = re.compile(
     re.IGNORECASE,
 )
 _HOLDOUT_IDS_RE = re.compile(r"HOLDOUT_IDS=([0-9,\s]+)")
+_QUESTION_IDS_RE = re.compile(r"QUESTION_IDS=([0-9,\s]+)")
 _IDS_FLAG_RE = re.compile(r"--ids\s+([0-9,\s]+)")
+_OUT_DIR_ENV_RE = re.compile(r"(?:^|\s)OUT_DIR=([^\s]+)")
+_COUNT_CLOCK_TAG_RE = re.compile(r"tag=(countclock_\S+)")
 
 
 @dataclass
@@ -906,8 +1078,13 @@ def resolve_report_job(job_id: str | None = None) -> JobRecord | None:
 
 
 def parse_planned_question_ids(job: JobRecord) -> list[int]:
-    """Best-effort planned QID list from cmd / orchestrator.log / progress."""
+    """Best-effort planned QID list from cmd / orchestrator.log / progress / META."""
+    report_root = resolve_report_out_dir(job)
     blobs: list[str] = [job.cmd or ""]
+    if report_root:
+        meta = read_meta_kv(report_root)
+        if meta.get("question_ids"):
+            return _parse_id_list(meta["question_ids"])
     if job.out_dir:
         orch = Path(job.out_dir).expanduser() / "orchestrator.log"
         if orch.is_file():
@@ -915,7 +1092,7 @@ def parse_planned_question_ids(job: JobRecord) -> list[int]:
                 blobs.append(orch.read_text(encoding="utf-8", errors="replace")[:8000])
             except OSError:
                 pass
-        prog = read_progress_file(job.out_dir)
+        prog = read_progress_file(report_root or job.out_dir)
         ids_raw = prog.get("ids") or prog.get("holdout_ids")
         if isinstance(ids_raw, str):
             blobs.append(f"HOLDOUT_IDS={ids_raw}")
@@ -923,28 +1100,106 @@ def parse_planned_question_ids(job: JobRecord) -> list[int]:
             return [int(x) for x in ids_raw]
 
     for blob in blobs:
-        for cre in (_HOLDOUT_IDS_RE, _IDS_FLAG_RE):
+        for cre in (_HOLDOUT_IDS_RE, _QUESTION_IDS_RE, _IDS_FLAG_RE):
             m = cre.search(blob)
             if not m:
                 continue
-            ids: list[int] = []
-            for part in m.group(1).split(","):
-                part = part.strip()
-                if part.isdigit():
-                    ids.append(int(part))
+            ids = _parse_id_list(m.group(1))
             if ids:
                 return ids
     return []
 
 
+def _episode_score_from_row(
+    row: dict[str, Any],
+    *,
+    arm: str,
+    path: str | Path,
+    out_dir: Path | None = None,
+    fallback_qid: int | str | None = None,
+) -> EpisodeScore | None:
+    """Build :class:`EpisodeScore` from a consolidated or per-episode jsonl row.
+
+    ``fallback_qid`` is used when the row omits ``question_id`` (per-episode H2H
+    jsonls encode it in the filename as ``{arm}_q{id}.jsonl``).
+    """
+    try:
+        qid = int(row.get("question_id"))
+    except (TypeError, ValueError):
+        if fallback_qid is None:
+            return None
+        try:
+            qid = int(fallback_qid)
+        except (TypeError, ValueError):
+            return None
+    pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
+    gold = row.get("gold_answer_letter") or row.get("gt_answer") or row.get("answer_gt")
+    steps = row.get("planning_steps")
+    eqa_conf = row.get("confident")
+    if not isinstance(eqa_conf, bool):
+        eqa_conf = row.get("model_confident") if isinstance(row.get("model_confident"), bool) else None
+    verified, answerable = _load_agentic_summary_flags(
+        out_dir,
+        arm,
+        qid,
+        debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
+    )
+    prov_raw = row.get("answer_provenance")
+    provenance = str(prov_raw).strip() if prov_raw not in (None, "") else None
+    return EpisodeScore(
+        arm=arm,
+        question_id=qid,
+        correct=row.get("correct") if isinstance(row.get("correct"), bool) else None,
+        predicted=str(pred).strip() if pred not in (None, "") else None,
+        gold=str(gold).strip() if gold not in (None, "") else None,
+        planning_steps=int(steps) if isinstance(steps, (int, float)) else None,
+        confident=eqa_conf if isinstance(eqa_conf, bool) else None,
+        verified=verified,
+        answerable=answerable,
+        answer_provenance=provenance,
+        path=str(path),
+    )
+
+
+def _collect_episode_scores_from_consolidated(
+    out_dir: Path,
+) -> list[EpisodeScore]:
+    """Load scored rows from consolidated Habitat cache jsonls (count/clock slice)."""
+    by_key: dict[tuple[str, int], EpisodeScore] = {}
+    for arm, jsonl in discover_consolidated_results_jsonls(out_dir):
+        try:
+            lines = jsonl.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for idx, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("correct") is None:
+                continue
+            row_arm = str(row.get("method") or arm).lower()
+            score = _episode_score_from_row(row, arm=row_arm, path=f"{jsonl}#{idx + 1}", out_dir=out_dir)
+            if score is None:
+                continue
+            by_key[(score.arm, score.question_id)] = score
+    scores = list(by_key.values())
+    scores.sort(key=lambda s: (s.arm, s.question_id))
+    return scores
+
+
 def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
-    """Load non-empty ``{arm}_q{id}.jsonl`` scores under an H2H OUT dir."""
+    """Load scored episodes from H2H ``{arm}_q{id}.jsonl`` and consolidated slice jsonls."""
     if not out_dir:
         return []
     root = Path(out_dir).expanduser()
     if not root.is_dir():
         return []
     scores: list[EpisodeScore] = []
+    seen: set[tuple[str, int]] = set()
     for path in sorted(root.glob("*_q*.jsonl")):
         m = _EPISODE_JSONL_RE.match(path.name)
         if not m:
@@ -961,37 +1216,24 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
             row = json.loads(line)
         except (OSError, json.JSONDecodeError, StopIteration, TypeError, ValueError):
             continue
-        qid = int(row.get("question_id") or m.group("qid"))
         arm = str(m.group("arm")).lower()
-        pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
-        gold = row.get("gold_answer_letter") or row.get("gt_answer") or row.get("answer_gt")
-        steps = row.get("planning_steps")
-        eqa_conf = row.get("confident")
-        if not isinstance(eqa_conf, bool):
-            eqa_conf = row.get("model_confident") if isinstance(row.get("model_confident"), bool) else None
-        verified, answerable = _load_agentic_summary_flags(
-            root,
-            arm,
-            qid,
-            debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
+        score = _episode_score_from_row(
+            row,
+            arm=arm,
+            path=path,
+            out_dir=root,
+            fallback_qid=m.group("qid"),
         )
-        prov_raw = row.get("answer_provenance")
-        provenance = str(prov_raw).strip() if prov_raw not in (None, "") else None
-        scores.append(
-            EpisodeScore(
-                arm=arm,
-                question_id=qid,
-                correct=row.get("correct") if isinstance(row.get("correct"), bool) else None,
-                predicted=str(pred).strip() if pred not in (None, "") else None,
-                gold=str(gold).strip() if gold not in (None, "") else None,
-                planning_steps=int(steps) if isinstance(steps, (int, float)) else None,
-                confident=eqa_conf if isinstance(eqa_conf, bool) else None,
-                verified=verified,
-                answerable=answerable,
-                answer_provenance=provenance,
-                path=str(path),
-            )
-        )
+        if score is None:
+            continue
+        scores.append(score)
+        seen.add((score.arm, score.question_id))
+    for score in _collect_episode_scores_from_consolidated(root):
+        key = (score.arm, score.question_id)
+        if key in seen:
+            continue
+        scores.append(score)
+        seen.add(key)
     scores.sort(key=lambda s: (s.arm, s.question_id))
     return scores
 
@@ -1031,10 +1273,15 @@ def list_crash_markers(out_dir: str | Path | None) -> list[str]:
     return names
 
 
+def _report_scoring_dir(job: JobRecord) -> Path | None:
+    return resolve_report_out_dir(job) or (Path(job.out_dir).expanduser() if job.out_dir else None)
+
+
 def job_report_dict(job: JobRecord) -> dict[str, Any]:
     """Structured payload for ``emet jobs report --json``."""
+    scoring_dir = _report_scoring_dir(job)
     prog = compute_job_progress(job)
-    episodes = collect_episode_scores(job.out_dir)
+    episodes = collect_episode_scores(scoring_dir)
     planned = parse_planned_question_ids(job)
     scored_ids = {e.question_id for e in episodes}
     remaining = [q for q in planned if q not in scored_ids]
@@ -1047,7 +1294,8 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
         "id": job.id,
         "name": job.name,
         "status": job.status,
-        "out_dir": job.out_dir,
+        "out_dir": str(scoring_dir) if scoring_dir else job.out_dir,
+        "job_out_dir": job.out_dir,
         "progress": {
             "units_done": prog.units_done,
             "units_total": prog.units_total,
@@ -1067,7 +1315,7 @@ def job_report_dict(job: JobRecord) -> dict[str, Any]:
         "n_excl_uniform_prior": len(excl),
         "correct_excl_uniform_prior": excl_ok,
         "accuracy_excl_uniform_prior": (float(excl_ok) / float(len(excl))) if excl else None,
-        "crashes": list_crash_markers(job.out_dir),
+        "crashes": list_crash_markers(scoring_dir),
         "episodes": [asdict(e) for e in episodes],
     }
 
@@ -1078,12 +1326,13 @@ def format_job_report(
     fail_only: bool = False,
 ) -> str:
     """Operator-facing progress + per-episode score table (default ``emet jobs report``)."""
+    scoring_dir = _report_scoring_dir(job)
     prog = compute_job_progress(job)
-    episodes = collect_episode_scores(job.out_dir)
+    episodes = collect_episode_scores(scoring_dir)
     planned = parse_planned_question_ids(job)
     scored_ids = {e.question_id for e in episodes}
     remaining = [q for q in planned if q not in scored_ids]
-    crashes = list_crash_markers(job.out_dir)
+    crashes = list_crash_markers(scoring_dir)
     n_ok = sum(1 for e in episodes if e.correct is True)
     n_fail = sum(1 for e in episodes if e.correct is False)
     n_scored = n_ok + n_fail
@@ -1108,9 +1357,15 @@ def format_job_report(
     lines = [
         "  ".join(headline_bits),
         f"job:  {job.id}  ({job.name})",
-        f"out:  {job.out_dir or '-'}",
+        f"out:  {scoring_dir or job.out_dir or '-'}",
     ]
-    for viz_line in format_viz_artifact_lines(job.out_dir):
+    if (
+        job.out_dir
+        and scoring_dir is not None
+        and str(Path(job.out_dir).expanduser().resolve()) != str(scoring_dir.expanduser().resolve())
+    ):
+        lines.append(f"wrap: {job.out_dir}")
+    for viz_line in format_viz_artifact_lines(scoring_dir):
         # Re-indent status-style "viz:" / "feh:" lines for the report layout.
         if viz_line.startswith("viz:"):
             lines.append("viz:  " + viz_line[len("viz:") :].lstrip())
@@ -1184,7 +1439,7 @@ def format_job_report(
 
 
 def _episode_row_for_qid(out_dir: str | Path | None, qid: int, arm: str | None = None) -> dict[str, Any] | None:
-    """First non-empty jsonl row for a question id under an H2H OUT dir."""
+    """First non-empty jsonl row for a question id under an H2H or slice OUT dir."""
     if not out_dir:
         return None
     root = Path(out_dir).expanduser()
@@ -1215,6 +1470,27 @@ def _episode_row_for_qid(out_dir: str | Path | None, qid: int, arm: str | None =
             return row
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             continue
+    for arm_name, jsonl in discover_consolidated_results_jsonls(root):
+        if arm and arm_name != arm.lower():
+            continue
+        try:
+            lines = jsonl.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for idx, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if int(row.get("question_id") or -1) != int(qid) or row.get("correct") is None:
+                continue
+            row = dict(row)
+            row.setdefault("_jsonl_path", f"{jsonl}#{idx + 1}")
+            row.setdefault("method", arm_name)
+            return row
     return None
 
 
@@ -1590,12 +1866,90 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+_EQA_HISTORY_ITER_RE = re.compile(
+    r"Iter:\s*answer=(?P<answer>[^\s|]+)\s*conf=(?P<conf>\w+)\s*action=(?P<action>[^\s|]+)"
+)
+
+
+def _load_eqa_history_iterations(bundle_dir: str | Path | None) -> list[str]:
+    if not bundle_dir:
+        return []
+    path = Path(bundle_dir).expanduser() / "eqa_history.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return []
+    rows = data.get("iterations") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [str(x) for x in rows if str(x).strip()]
+
+
+def analyze_eqa_history_investigation(iterations: list[str]) -> dict[str, Any]:
+    """Per-action EQA iteration stats (mirrors VIEW_STATUS debugging for ``emet jobs report``)."""
+    per_action: dict[str, dict[str, int]] = {}
+    max_unknown_streak = 0
+    streak = 0
+    total_unknown = 0
+    for line in iterations:
+        m = _EQA_HISTORY_ITER_RE.search(line)
+        if not m:
+            continue
+        action = m.group("action").strip() or "-"
+        answer = m.group("answer").strip().lower()
+        slot = per_action.setdefault(action, {"count": 0, "unknown": 0})
+        slot["count"] += 1
+        if answer in ("unknown", "none", "?"):
+            slot["unknown"] += 1
+            total_unknown += 1
+            streak += 1
+            max_unknown_streak = max(max_unknown_streak, streak)
+        else:
+            streak = 0
+    red_flags: list[str] = []
+    if max_unknown_streak >= 3:
+        red_flags.append(f"Unknown streak {max_unknown_streak} on same action loop")
+    for action, stats in sorted(per_action.items(), key=lambda kv: -kv[1]["count"]):
+        if stats["count"] >= 3 and stats["unknown"] >= 2:
+            red_flags.append(f"action={action}: {stats['unknown']}/{stats['count']} Unknown")
+    return {
+        "n_iterations": len(iterations),
+        "total_unknown": total_unknown,
+        "max_unknown_streak": max_unknown_streak,
+        "per_action": per_action,
+        "red_flags": red_flags,
+        "stuck_loop": bool(red_flags),
+    }
+
+
+def format_eqa_history_investigation_lines(inv: dict[str, Any] | None, *, verbose: bool = False) -> list[str]:
+    if not inv:
+        return ["(no eqa_history.json)"]
+    lines = [
+        f"iterations={inv.get('n_iterations')} unknown={inv.get('total_unknown')} "
+        f"max_streak={inv.get('max_unknown_streak')}"
+    ]
+    per_action = inv.get("per_action") or {}
+    for action, stats in sorted(per_action.items(), key=lambda kv: -kv[1].get("count", 0)):
+        lines.append(
+            f"  action {action}: count={stats.get('count')} unknown={stats.get('unknown')}"
+        )
+    for flag in inv.get("red_flags") or []:
+        lines.append(f"  RED: {flag}")
+    if verbose and not per_action:
+        lines.append("  (no parsed Iter: lines)")
+    return lines
+
+
 def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> dict[str, Any]:
     """Structured per-question payload for ``emet jobs report --question X --json``."""
-    row = _episode_row_for_qid(job.out_dir, qid, arm=arm)
-    trace_path = _find_agentic_trace(job.out_dir, qid, row)
+    scoring_dir = _report_scoring_dir(job)
+    row = _episode_row_for_qid(scoring_dir, qid, arm=arm)
+    trace_path = _find_agentic_trace(scoring_dir, qid, row)
     trace = analyze_agentic_trace(_load_trace_rows(trace_path)) if trace_path else None
-    maps = _find_episode_map_paths(job.out_dir, qid, row)
+    maps = _find_episode_map_paths(scoring_dir, qid, row)
     payload: dict[str, Any] = {
         "id": job.id,
         "question_id": qid,
@@ -1613,7 +1967,7 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
             if m:
                 arm_name = str(m.group("arm")).lower()
         verified, answerable = _load_agentic_summary_flags(
-            Path(job.out_dir).expanduser() if job.out_dir else Path("."),
+            scoring_dir if scoring_dir is not None else Path("."),
             arm_name,
             qid,
             debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
@@ -1649,6 +2003,12 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
             "confidence_reasoning": row.get("eqa_confidence_reasoning") or None,
             "jsonl_path": row.get("_jsonl_path"),
         }
+        bundle = row.get("debug_bundle_dir")
+        hist_iters = _load_eqa_history_iterations(str(bundle) if bundle else None)
+        payload["view_investigation"] = analyze_eqa_history_investigation(hist_iters)
+        payload["eqa_history_path"] = (
+            str(Path(str(bundle)).expanduser() / "eqa_history.json") if bundle else None
+        )
     if trace is not None:
         rooms = trace.get("rooms")
         if isinstance(rooms, dict) and not rooms.get("question_target_rooms"):
@@ -1675,6 +2035,7 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
 
 _QUESTION_REPORT_SECTIONS = (
     "summary",
+    "views",
     "rooms",
     "router",
     "nav",
@@ -1691,7 +2052,7 @@ def _normalize_report_sections(
     brief: bool = False,
 ) -> set[str]:
     if rooms_focus:
-        return {"summary", "rooms", "flags"}
+        return {"summary", "views", "rooms", "flags"}
     if sections:
         out: set[str] = set()
         for raw in sections:
@@ -1786,9 +2147,10 @@ def format_question_report(
     """Human-readable per-question deep dive (episode row + agentic trace signals)."""
     data = question_report_dict(job, qid, arm=arm)
     want = _normalize_report_sections(sections, rooms_focus=rooms_focus, brief=brief)
+    scoring_dir = _report_scoring_dir(job)
     lines = [f"q{qid}  job {job.id}  ({job.name})"]
     if not data["found"]:
-        lines.append(f"(no scored jsonl for q{qid} under {job.out_dir or '-'})")
+        lines.append(f"(no scored jsonl for q{qid} under {scoring_dir or job.out_dir or '-'})")
         if data.get("trace_path"):
             lines.append(f"trace: {data['trace_path']}")
         else:
@@ -1817,10 +2179,22 @@ def format_question_report(
         if ep.get("confidence_reasoning") and verbose:
             lines.append(f"reason: {str(ep['confidence_reasoning'])[:220]}")
 
+    if "views" in want:
+        lines.append("")
+        lines.append("── view investigation ──")
+        if data.get("eqa_history_path"):
+            lines.append(f"history: {data['eqa_history_path']}")
+        lines.extend(format_eqa_history_investigation_lines(data.get("view_investigation"), verbose=verbose))
+
     trace = data.get("trace")
     if not trace:
+        if "flags" in want and data.get("view_investigation", {}).get("red_flags"):
+            lines.append("")
+            lines.append("── flags ──")
+            for red in data["view_investigation"]["red_flags"]:
+                lines.append(f"  * {red}")
         lines.append("")
-        lines.append("trace: (none found)")
+        lines.append("trace: (none found — dynagraph uses eqa_history above)")
         return "\n".join(lines)
 
     if "summary" in want:
@@ -1957,6 +2331,9 @@ def format_question_report(
             flags.append("room_mismatch diagnostic (informational; no hard redirect)")
         if rooms.get("n_vlm_graph_disagree", 0) >= 3:
             flags.append(f"vlm≠graph on {rooms['n_vlm_graph_disagree']} router turns")
+        inv = data.get("view_investigation") or {}
+        for red in inv.get("red_flags") or []:
+            flags.append(red)
         lines.append("")
         if flags:
             lines.append("RED FLAGS: " + "; ".join(flags))

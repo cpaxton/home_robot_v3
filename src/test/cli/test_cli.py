@@ -73,6 +73,19 @@ def test_comm_group_help():
     assert "obs" in result.stdout
 
 
+def test_mars_start_help_lists_zmq_wire_flags():
+    """emet mars start --help lists onboard DINOv3 and slim-wire flags."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "mars", "start", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--onboard-dinov3" in result.stdout
+    assert "--video-rtsp" in result.stdout
+    assert "--metadata-only-obs" in result.stdout
+
+
 def test_habitat_group_help_lists_safe_start():
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "habitat", "--help"],
@@ -232,7 +245,7 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     from emet.cli import main
 
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         [
@@ -283,7 +296,7 @@ variant:
         encoding="utf-8",
     )
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         [
@@ -410,7 +423,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
     )
 
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         ["hmeqa", "resume", str(tmp_path), "--cooldown", "7"],
