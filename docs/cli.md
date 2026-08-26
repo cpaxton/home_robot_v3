@@ -1,6 +1,6 @@
 # Emet CLI Tool
 
-The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below).
+The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below). Click groups live under `emet.cli_cmds`; [`src/emet/cli.py`](../src/emet/cli.py) is the registrar (`emet.cli:main`).
 
 ## Installation
 

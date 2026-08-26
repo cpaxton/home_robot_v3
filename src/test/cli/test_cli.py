@@ -219,7 +219,7 @@ def test_hmeqa_paper_router_does_not_enable_variant_axes(monkeypatch, tmp_path):
     from emet.cli import main
 
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         [
@@ -270,7 +270,7 @@ variant:
         encoding="utf-8",
     )
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         [
@@ -397,7 +397,7 @@ def test_hmeqa_resume_reuses_frozen_variant_and_allows_operational_override(
     )
 
     captured = {}
-    monkeypatch.setattr("emet.cli._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr("emet.cli_cmds.hmeqa._hmeqa_launch", lambda **kwargs: captured.update(kwargs))
     result = CliRunner().invoke(
         main,
         ["hmeqa", "resume", str(tmp_path), "--cooldown", "7"],
