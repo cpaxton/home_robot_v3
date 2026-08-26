@@ -105,7 +105,7 @@ Compare autoplace / floor alignment logs with and without the updated clearance 
 | [`molmospaces_spawn_metadata.py`](../src/emet/simulation/molmospaces_spawn_metadata.py) | Runtime load of JSON into `MolmospacesSpawnMetadata`. |
 
 Other simulation internals (home tuning, stationary control, Robocasa asset checks): [simulation_modules.md](simulation_modules.md).
-| `emet molmospaces write-spawn-metadata` | Click wrapper in [`cli.py`](../src/emet/cli.py). |
+| `emet molmospaces write-spawn-metadata` | Click wrapper in [`cli_cmds/molmospaces.py`](../src/emet/cli_cmds/molmospaces.py). |
 
 ## Related docs
 
