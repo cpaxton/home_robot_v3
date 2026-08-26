@@ -30,6 +30,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
@@ -1776,7 +1777,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
 
             self._seq_id += 1
-            output["rgb"] = compression.from_jpg(output["rgb"])
+            if not decode_zmq_obs_images_inplace(output):
+                logger.warning("Observation missing primary RGB; skipping frame.")
+                continue
             compressed_depth = output.get("depth")
             if compressed_depth is None:
                 if not self._allow_missing_depth:
@@ -1786,8 +1789,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     continue
                 output["depth"] = None
                 output["xyz"] = None
+            elif not (isinstance(compressed_depth, np.ndarray) and compressed_depth.ndim == 2):
+                logger.warning("Observation depth failed to decode; skipping frame.")
+                continue
             else:
-                depth = compression.from_jp2(compressed_depth) / 1000
+                depth = np.asarray(compressed_depth, dtype=np.float32)
                 output["depth"] = depth
                 dh, dw = int(depth.shape[0]), int(depth.shape[1])
                 k = np.asarray(output["camera_K"], dtype=np.float64).reshape(3, 3)

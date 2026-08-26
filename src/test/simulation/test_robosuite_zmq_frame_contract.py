@@ -117,6 +117,9 @@ def test_robosuite_full_obs_camera_pose_is_world():
     with patch.object(server, "_primary_rgb_and_depth", return_value=(rgb, depth, k)):
         msg = server.get_full_observation_message()
     assert msg is not None
+    assert msg.get("lidar_points") is not None
+    assert msg["lidar_points"].ndim == 2 and msg["lidar_points"].shape[1] == 2
+    assert msg.get("lidar_timestamp") is not None
     expected = server._camera_pose_world(primary)
     np.testing.assert_allclose(msg["camera_pose"], expected, atol=1e-4)
 

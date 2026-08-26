@@ -289,9 +289,48 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
 
-## Embodied agent / Herman
+## LazyGraph memory backend (PR #131 — merged 2026-08-25)
 
-- [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
+- [x] Land **`lazy_graph`** backend: Dynamem voxel find + viewpoints during `update()`, Qwen commit on arrival only (`emet run lazy-graph`, `--memory-backend lazy_graph`). Does not change `dynagraph` defaults.
+- [ ] Robocasa smoke: `emet run lazy-graph` with sim server (or `scripts/queue_lazy_graph_robocasa_smoke.sh` via `emet jobs`). Job `20260825_163104_886a12` queued 2026-08-25.
+- [x] Herman hardware smoke: `emet run agent --memory-backend lazy_graph --connection herman --host caliban` loads lazy_graph + remote VL (2026-08-25; wrist still down).
+
+## Herman / Orin offload (branch `feature/herman-orin`)
+
+Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman --deploy`; head stereo OK, wrist Arducam still unplugged.
+
+**What can run on the Orin today (documented paths):**
+
+| Component | Where | Notes |
+|-----------|--------|--------|
+| ROS bridge + ZMQ | Herman Jetson (innate-os) | `emet deploy` / `emet mars start` |
+| DA3 depth (SMALL) | Herman Jetson | `--onboard-da3` on bridge; `depth_source: auto` skips workstation DA3 |
+| Qwen2-VL-7B text+VL | LAN Orin (e.g. caliban) | `emet deploy llm --profile unified-7b`; agent `--host caliban` |
+| Nav2 / drivers | Herman Jetson | innate-os (not emet) |
+
+**Still workstation-only (no Jetson deploy path yet):**
+
+- SigLIP, YoloE, DINOv3 encoders (`emet/perception/encoders/`)
+- Voxel map + Dynagraph/LazyGraph memory loop
+- Full `emet run agent` stack when not using remote `--host` VL
+
+- [ ] **Onboard DA3 dogfood**: `emet mars start --connection herman --deploy --onboard-da3`; confirm ZMQ depth + `emet stream --backend voxel_only`. **Blocked 2026-08-25:** Herman pip install fails — `depth-anything-3` needs `pycolmap` (no Linux aarch64 wheel). Workstation DA3 still used via `depth_source: auto`. Bridge code synced; retry when pycolmap/Tegra wheel exists.
+- [x] **Remote VL smoke**: `emet llm health --host caliban` + `emet run chat --host caliban --once` → `Pong` via caliban:8000 (2026-08-25).
+- [ ] **DINOv3 on Orin**: caliban deploy path added (`docker/jetson_dinov3_server.py`, `scripts/deploy_caliban_dinov3.sh`, `EMET_DINOV3_ENDPOINT` client + tests). Run `./scripts/deploy_caliban_dinov3.sh --host caliban` after caching `facebook/dinov3-vits16-pretrain-lvd1689m`.
+- [ ] **Wrist camera**: reseat Arducam USB on Herman; SSH verified no `/dev/v4l/by-id/*Arducam*` (2026-08-25).
+
+## ZMQ protocol / comms (Herman + sim)
+
+Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32 N×2). Slim image wire format (`zmq_obs_slim`) drops duplicate JPEG aliases. Sustained benchmark: `scripts/benchmark_zmq_obs_payload.py` (one-shot sizes) and `scripts/benchmark_zmq_obs_stream.py` (fps/jitter/unpickle).
+
+- [x] **LiDAR in ZMQ contract**: `innate_mars_bridge` subscribes `/scan`, publishes `lidar_points` + `lidar_timestamp`; `zmq_lidar_f32` capability when float32 slim is active ([`docs/zmq_session_metadata.md`](docs/zmq_session_metadata.md), [`BRIDGE_CONTRACT.md`](src/emet_core/BRIDGE_CONTRACT.md)). Audit Herman topic name/frame with `ros2 topic info /scan` when stack is up.
+- [ ] **LiDAR → mapping**: fuse scan into 2D explored/obstacle layer (voxel `TODO` at `voxel.py` ~1001); avoid naive double-count with DA3 3D cloud — start with base-height obstacle mask only.
+- [x] **Sim LiDAR (innate_mars)**: MuJoCo `base_lidar*` → `lidar_points` via `mujoco_lidar.py` (360 rays, float32).
+- [x] **Profile ZMQ payload**: `scripts/profile_zmq_obs_payload.py` + `scripts/benchmark_zmq_obs_stream.py` — bytes/step, fps, jitter, unpickle/decode cost; flags duplicate JPEG aliases and float64 lidar.
+- [x] **Slim messaging v1**: one JPEG per logical camera (`zmq_obs_slim`); `lidar_points` as float32 (`zmq_lidar_f32`). v2 (subscribed streams only) still optional — document schema bump in `zmq_session_metadata.md` when needed.
+
+
+- [x] **One open-vocab scene graph (not two builders)**: CHAT uses mutually exclusive `agent.memory_backend` (`dynagraph` | `graph_eqa` | `open_vocab` | `dynamem` | `lazy_graph`). Discord presets → Dynagraph memory plug-in only; GraphEQA baseline left frozen for paper. Lifelong save/load writes the active plug-in only.
 - [x] **Arm IK “closer look” (v1)**: CHAT `aim_arm_at` → `closer_look.aim_wrist_at_phrase` (localize + kinematic EE aim when available). Follow-ups under Embodied agent planning (EE picture after aim; hardware dogfood).
   - Fallback when aim unavailable: “closer look / inspect X” → **change viewpoint** (rotate / small drive) then `describe_scene` / `send_image` (head), never raw `take_ee_picture`.
 - [x] **Chat verify ≈ EQA look**: prompt + tools route “look at / closer look / are you sure” → `face_toward` then `describe_scene` (not blind ±45°); tests in `test_agent_prompt_and_tools` / `test_face_toward`. Full EQA-style `navigate_to_obs` + `verify_siglip` in CHAT still optional later.

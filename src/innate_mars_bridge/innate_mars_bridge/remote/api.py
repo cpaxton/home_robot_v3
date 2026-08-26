@@ -121,3 +121,7 @@ class InnateMarsClient:
     @property
     def ee_cam(self):
         return self._ros.ee_cam
+
+    @property
+    def lidar(self):
+        return self._ros._lidar

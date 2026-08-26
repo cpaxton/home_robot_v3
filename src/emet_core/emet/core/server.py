@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 import threading
 import time
 import timeit
@@ -18,9 +19,17 @@ import numpy as np
 import zmq
 
 from emet.core.comms import CommsNode
+from emet.core.zmq_server_env import zmq_send_period_s
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:
+    if period_s <= 0:
+        time.sleep(minimum_s)
+        return
+    time.sleep(max(minimum_s, period_s - elapsed_s))
 
 try:
     from emet.audio.text_to_speech import PiperTextToSpeech
@@ -58,6 +67,9 @@ class BaseZmqServer(CommsNode, ABC):
         self.ee_image_scaling = ee_image_scaling
         self.depth_scaling = depth_scaling
         self.ee_depth_scaling = ee_depth_scaling
+        self._full_send_period_s = zmq_send_period_s("EMET_ZMQ_FULL_HZ")
+        self._state_send_period_s = zmq_send_period_s("EMET_ZMQ_STATE_HZ")
+        self._servo_send_period_s = zmq_send_period_s("EMET_ZMQ_SERVO_HZ")
 
         # Set up the publisher socket using ZMQ
         self.send_socket = self._make_pub_socket(send_port, use_remote_computer)
@@ -210,7 +222,7 @@ class BaseZmqServer(CommsNode, ABC):
             if self.verbose or steps % self.report_steps == 0:
                 print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._full_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_recv(self):
@@ -283,7 +295,7 @@ class BaseZmqServer(CommsNode, ABC):
             if self.verbose or steps % self.fast_report_steps == 0:
                 logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._state_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_send_servo(self):
@@ -292,7 +304,7 @@ class BaseZmqServer(CommsNode, ABC):
         steps: int = 0
         t0 = timeit.default_timer()
 
-        while not self._done:
+        while self.is_running():
             message = self.get_servo_message()
 
             # Skip if no message - could not access camera yet
@@ -315,7 +327,7 @@ class BaseZmqServer(CommsNode, ABC):
                     f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time / steps} rate={1 / (sum_time / steps)}"
                 )
 
-            time.sleep(1e-5)
+            _rate_sleep(self._servo_send_period_s, dt, 1e-5)
             t0 = timeit.default_timer()
 
     def __del__(self):

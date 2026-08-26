@@ -38,6 +38,12 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
+from emet.core.zmq_obs_codec import (
+    decode_zmq_obs_depth_inplace,
+    decode_zmq_obs_images_inplace,
+    full_obs_has_wire_images,
+    merge_servo_images_into_full_obs,
+)
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     build_mujoco_ground_truth_dump_action,
@@ -228,11 +234,11 @@ def _decode_servo_message_to_observations(
 
 def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
     """Build :class:`Observations` from a decoded full-observation ZMQ dict."""
-    rgb = obs.get("rgb")
-    if rgb is None:
+    if not decode_zmq_obs_images_inplace(obs):
         return None
     enrich_zmq_observation_ee_fields(obs)
     joint_head = obs.get("joint_head")
+    rgb = obs["rgb"]
     return Observations(
         rgb=rgb,
         depth=obs.get("depth"),
@@ -475,15 +481,13 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         )
 
     def _wait_for_zmq_ready(self, timeout: float | None = None) -> bool:
-        """Wait until at least one observation and one state message arrived."""
+        """Wait until observation (+ servo when metadata-only) and state messages arrived."""
         if timeout is None:
             timeout = self._zmq_startup_timeout
         t0 = timeit.default_timer()
         last_log = t0
         while True:
-            with self._obs_lock:
-                ready = self._obs is not None and self._state is not None
-            if ready:
+            if self._zmq_streams_ready():
                 return True
             now = timeit.default_timer()
             if now - t0 > timeout:
@@ -495,6 +499,21 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 )
                 last_log = now
             time.sleep(0.05)
+
+    def _zmq_streams_ready(self) -> bool:
+        with self._obs_lock:
+            if self._obs is None or self._state is None:
+                return False
+            obs = self._obs
+            servo = self._servo
+            sess = read_emet_session(obs) or read_emet_session(self._state)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if servo is None or servo.get("head_cam_left/color_image") is None:
+                    return False
+                merge_servo_images_into_full_obs(self._obs, servo)
+                decode_zmq_obs_images_inplace(self._obs)
+        return True
 
     def _verify_emet_robot_id(self) -> bool:
         """Ensure ``emet_robot_id`` from the server matches this client's RobotSpec (if present)."""
@@ -668,21 +687,39 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             if output is None:
                 continue
             self._seq_id += 1
-            output["rgb"] = compression.from_jpg(output["rgb"])
+            with self._obs_lock:
+                servo_msg = self._servo
+            sess = read_emet_session(output)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only") and not full_obs_has_wire_images(output):
+                merge_servo_images_into_full_obs(output, servo_msg)
+            if not decode_zmq_obs_images_inplace(output):
+                if caps.get("zmq_obs_metadata_only"):
+                    with self._obs_lock:
+                        self._obs = output
+                        if "step" in output:
+                            self._last_step = output["step"]
+                        if "gps" in output and "compass" in output:
+                            self._base_xyt = np.array([output["gps"][0], output["gps"][1], output["compass"][0]])
+                        self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                            self._emet_session_cache,
+                            self._emet_session_cache_step,
+                            output,
+                        )
+                    continue
+                logger.warning("Observation missing primary RGB; skipping frame.")
+                continue
             if output.get("camera_K") is not None:
                 output["camera_K"] = _align_camera_k_to_rgb(
                     np.asarray(output["camera_K"], dtype=np.float64).reshape(3, 3),
                     output["rgb"],
                 )
             if "rgb_right" in output and output["rgb_right"] is not None:
-                output["rgb_right"] = compression.from_jpg(output["rgb_right"])
                 if output.get("camera_K_right") is not None:
                     output["camera_K_right"] = _align_camera_k_to_rgb(
                         np.asarray(output["camera_K_right"], dtype=np.float64).reshape(3, 3),
                         output["rgb_right"],
                     )
-            if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
-                output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
             if "third_person_image" in output and output["third_person_image"] is not None:
                 try:
                     output["third_person_image"] = compression.from_jpg(output["third_person_image"])
@@ -697,8 +734,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     )
                     continue
                 output["depth"] = None
-            else:
-                output["depth"] = compression.from_jp2(raw_depth) / 1000
+            elif not (isinstance(raw_depth, np.ndarray) and raw_depth.ndim == 2):
+                logger.warning("Observation depth failed to decode; skipping frame.")
+                continue
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
@@ -745,6 +783,12 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._servo = msg
+                if self._obs is not None:
+                    sess = read_emet_session(self._obs)
+                    caps = (sess or {}).get("capabilities") or {}
+                    if caps.get("zmq_obs_metadata_only"):
+                        merge_servo_images_into_full_obs(self._obs, msg)
+                        decode_zmq_obs_images_inplace(self._obs)
                 self._servo_obs_rerun = _decode_servo_message_to_observations(msg, self._state, self._obs)
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
                     self._emet_session_cache,
@@ -759,9 +803,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             require_navigation_origin = self._robosuite_sim_zmq()
         t0 = timeit.default_timer()
         while True:
-            with self._obs_lock:
-                has_obs = self._obs is not None
-            if has_obs:
+            if self._obs_ready_for_mapping():
                 if not require_navigation_origin:
                     return True
                 sess = self.get_emet_session()
@@ -781,6 +823,23 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     logger.error("Timeout waiting for observations.")
                 return False
             time.sleep(0.05)
+
+    def _obs_ready_for_mapping(self) -> bool:
+        with self._obs_lock:
+            obs = self._obs
+            if obs is None:
+                return False
+            sess = read_emet_session(obs)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if not full_obs_has_wire_images(obs):
+                    servo = self._servo
+                    if servo is None:
+                        return False
+                    merge_servo_images_into_full_obs(obs, servo)
+                decode_zmq_obs_images_inplace(obs)
+                return obs.get("rgb") is not None
+            return True
 
     def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
@@ -830,9 +889,19 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def get_observation(self, max_iter: int = 5) -> Observations | None:
         """Get the latest observation from the server."""
         with self._obs_lock:
+            if self._obs is None:
+                return None
             obs = self._obs
-        if obs is None:
-            return None
+            servo = self._servo
+            sess = read_emet_session(obs)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if not full_obs_has_wire_images(obs) and servo is not None:
+                    merge_servo_images_into_full_obs(obs, servo)
+                decode_zmq_obs_images_inplace(obs)
+            else:
+                decode_zmq_obs_depth_inplace(obs)
+            obs = dict(self._obs)
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")

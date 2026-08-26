@@ -39,6 +39,7 @@ def test_cli_help():
     assert "test" in result.stdout
     assert "eval" in result.stdout
     assert "jobs" in result.stdout
+    assert "comm" in result.stdout
     assert "hmeqa" in result.stdout
     assert "debug-da3-depth" in result.stdout
 
@@ -58,6 +59,31 @@ def test_eval_group_help():
     assert "kill-stale" in result.stdout
     assert "affinity" in result.stdout
     assert "recover" in result.stdout
+
+
+def test_comm_group_help():
+    """emet comm --help lists ZMQ link diagnostic subcommands."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "comm", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "benchmark" in result.stdout
+    assert "obs" in result.stdout
+
+
+def test_mars_start_help_lists_zmq_wire_flags():
+    """emet mars start --help lists onboard DINOv3 and slim-wire flags."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "mars", "start", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--onboard-dinov3" in result.stdout
+    assert "--video-rtsp" in result.stdout
+    assert "--metadata-only-obs" in result.stdout
 
 
 def test_habitat_group_help_lists_safe_start():

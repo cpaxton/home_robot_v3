@@ -187,12 +187,60 @@ def _rsync_to_robot(
         _paramiko_upload(host, user, password, local_path, remote_path)
         return
     target = _ssh_target(host, user, password)
-    dest = f"{target}:{remote_path}"
-    _ssh_run(host, user, password, f"mkdir -p {remote_path}", use_paramiko=False)
-    cmd = ["rsync", "-az", "--delete", str(local_path) + "/", dest + "/"]
+    if local_path.is_file():
+        remote_dir = remote_path.rstrip("/")
+        remote_file = remote_path if remote_path.endswith(local_path.name) else f"{remote_dir}/{local_path.name}"
+        _ssh_run(host, user, password, f"mkdir -p {remote_dir}", use_paramiko=False)
+        cmd = ["rsync", "-az", str(local_path), f"{target}:{remote_file}"]
+    else:
+        dest = f"{target}:{remote_path}"
+        _ssh_run(host, user, password, f"mkdir -p {remote_path}", use_paramiko=False)
+        cmd = ["rsync", "-az", "--delete", str(local_path) + "/", dest + "/"]
     if password:
         cmd = ["sshpass", "-p", password] + cmd
     _run(cmd)
+
+
+def _onboard_dinov3_model_id() -> str:
+    """HF model id for the configured onboard DINOv3 version (default vits16)."""
+    try:
+        from emet.perception.encoders.dinov3_encoder import DINOV3_MODELS
+    except ImportError:
+        return "facebook/dinov3-vits16-pretrain-lvd1689m"
+    version = os.environ.get("EMET_MARS_DINOV3_VERSION", "vits16").strip() or "vits16"
+    return DINOV3_MODELS.get(version, "facebook/dinov3-vits16-pretrain-lvd1689m")
+
+
+def _sync_onboard_dinov3_weights(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    use_paramiko: bool,
+    remote_hf: str,
+) -> None:
+    """Pre-cache DINOv3 HF weights on the robot so first inference doesn't download.
+
+    Weights are copied into ``<remote_hf>/hub/models--<id>`` (huggingface_hub cache layout),
+    which matches ``HF_HOME=<remote_hf>`` set in the bridge launch command. Skips with a
+    warning when the workstation hasn't cached the model locally.
+    """
+    model_id = _onboard_dinov3_model_id()
+    hub_dir = "models--" + model_id.replace("/", "--")
+    hf_home = Path(os.environ.get("HF_HOME", "~/.cache/huggingface")).expanduser()
+    local_hub = hf_home / "hub" / hub_dir
+    if not local_hub.is_dir():
+        print(
+            f"WARNING: local HF weights not found at {local_hub}; onboard DINOv3 will try to "
+            f"download from Hugging Face on first use. Pre-cache with:\n"
+            f'  uv run python -c "from huggingface_hub import snapshot_download; '
+            f"snapshot_download('{model_id}')\""
+        )
+        return
+    print(f"Syncing DINOv3 weights {model_id} → {host}:{remote_hf}/hub (may take a while)...")
+    remote_hub = f"{remote_hf}/hub/{hub_dir}"
+    _ssh_run(host, user, password, f"mkdir -p {remote_hub}", use_paramiko)
+    _rsync_to_robot(local_hub, remote_hub, host, user, password, use_paramiko)
 
 
 def _paramiko_upload(
@@ -405,6 +453,7 @@ def deploy(
     emet_dir: str = DEFAULT_EMET_DIR,
     start_bridge: bool = False,
     with_da3: bool = False,
+    with_dinov3: bool = False,
     robot: str | None = None,
     root: Path | None = None,
 ) -> None:
@@ -422,6 +471,7 @@ def deploy(
         emet_dir: Remote path for emet_core (e.g. ~/emet).
         start_bridge: If True, launch the bridge after deploy (Mars: innate-os tmux; Stretch: nohup).
         with_da3: If True (Mars only), sync emet perception + install torch / depth-anything-3.
+        with_dinov3: If True (Mars only), sync emet encoders + install transformers for onboard DINOv3.
         robot: ``stretch`` or ``innate_mars`` (aliases: hello_stretch, mars). Resolved from
             connection profile when omitted.
         root: Project root (default: repo root containing ``src/emet_core`` and bridge packages).
@@ -460,6 +510,8 @@ def deploy(
 
     if with_da3 and robot_id != "innate_mars":
         raise SystemExit("--with-da3 / onboard DA3 is only supported for --robot innate_mars")
+    if with_dinov3 and robot_id != "innate_mars":
+        raise SystemExit("--with-dinov3 / onboard DINOv3 is only supported for --robot innate_mars")
 
     emet_core_src = root / "src" / "emet_core"
     bridge_src = root / "src" / spec.bridge_pkg
@@ -529,6 +581,35 @@ def deploy(
                 f"bash -lc 'python3 -m pip install --user -r {remote_da3_reqs}'",
                 use_paramiko,
             )
+
+    if with_dinov3:
+        if not emet_src.is_dir():
+            raise SystemExit(f"emet package not found at {emet_src} (required for --with-dinov3)")
+        print("Syncing emet encoders (onboard DINOv3) to robot...")
+        remote_emet_src = f"{remote_emet}/src/emet"
+        for sub in ("perception", "utils"):
+            local_sub = emet_src / sub
+            if local_sub.is_dir():
+                _rsync_to_robot(local_sub, f"{remote_emet_src}/{sub}", host, user, password, use_paramiko)
+        init_py = emet_src / "__init__.py"
+        if init_py.is_file():
+            _ssh_run(host, user, password, f"mkdir -p {remote_emet_src}", use_paramiko)
+            _rsync_to_robot(init_py, remote_emet_src, host, user, password, use_paramiko)
+        print("Installing onboard DINOv3 Python deps on robot (transformers; may take a while)...")
+        _ssh_run(
+            host,
+            user,
+            password,
+            "bash -lc 'python3 -m pip install --user \"transformers>=4.40\" \"Pillow>=9.0\"'",
+            use_paramiko,
+        )
+        _sync_onboard_dinov3_weights(
+            host,
+            user,
+            password,
+            use_paramiko=use_paramiko,
+            remote_hf="~/hf-cache",
+        )
 
     py_paths = f"{remote_emet_core}:{remote_emet}/src"
     _ssh_run(

@@ -114,6 +114,10 @@ def install_completion(shell: str | None) -> None:
     click.echo(comp.source())
 
 
+from emet.comm import comm_group  # noqa: E402
+
+main.add_command(comm_group)
+
 from emet.app.capture import main as _capture_app  # noqa: E402
 
 _capture_app.short_help = "One ZMQ frame + metadata (shortcut: zmq_obs capture profile)"

@@ -86,6 +86,22 @@ emet run agent --llm openai
 
 Native (CPU) path without Docker: `emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000` — slower; see [llm_serve.md](llm_serve.md).
 
+### Serve DINOv3 embeddings for the LAN (open_vocab offload)
+
+On caliban (or any JP5 Orin with the `emet-jetson-llm` Docker image):
+
+```bash
+./scripts/deploy_caliban_dinov3.sh --host caliban
+# or on-Orin: ./scripts/run_jetson_dinov3_container.sh --detach
+```
+
+Workstation client (skips local DINOv3 weights):
+
+```bash
+export EMET_DINOV3_ENDPOINT=http://caliban:8002
+curl -s http://caliban:8002/health
+```
+
 ### Disk space
 
 Aim for **≥15 GB free** before sync. Stale Docker images are a common reclaim:

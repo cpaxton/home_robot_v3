@@ -41,7 +41,11 @@ def test_get_encoder():
 
 
 @pytest.mark.parametrize("encoder_name", encoders)
-def test_get_encoder_all(encoder_name):
+def test_get_encoder_all(encoder_name, monkeypatch):
+    # Never route to a live remote DINOv3 server in tests: exercise the local path so the
+    # gated-weights skip below is deterministic instead of a real HTTP call.
+    monkeypatch.delenv("EMET_DINOV3_ENDPOINT", raising=False)
+    monkeypatch.delenv("EMET_DINOV3_HOST", raising=False)
     print(f"Testing encoder: {encoder_name}")
     try:
         encoder = get_encoder(encoder_name, {})
