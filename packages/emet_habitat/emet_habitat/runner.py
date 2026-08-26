@@ -514,6 +514,8 @@ def run_hmeqa_episode(
             ep_dir.mkdir(parents=True, exist_ok=True)
             agent._episode_debug_dir = str(ep_dir)
             (ep_dir / "frontier_picks").mkdir(exist_ok=True)
+            if agent.graph_memory is not None:
+                agent.graph_memory._eqa_decision_trace_dir = str(ep_dir / "eqa_decisions")
 
         discord_text, _images = agent.run_eqa(
             eqa_question,
