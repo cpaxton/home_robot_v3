@@ -27,6 +27,7 @@ from emet.memory.graph_eqa.count_mcq import CountTarget
 from emet.memory.graph_eqa.eqa import graph_answer, graph_eqa_obs, graph_hypotheses, graph_nav, graph_prompt
 from emet.memory.graph_eqa.eqa.graph_eqa_siglip import SIGLIP_CONFIRM_THRESHOLD, SIGLIP_PRESENT_THRESHOLD
 from emet.memory.graph_eqa.geom import _inside_bounds, _near, _node_is_room, _on, _on_floor
+from emet.memory.graph_eqa.graph_answer_trace import GraphAnswerTraceMixin
 from emet.memory.graph_eqa.ingest import graph_mutate
 from emet.memory.graph_eqa.labels import (
     consolidate_relevant_keywords,
@@ -92,7 +93,7 @@ __all__ = [
 ]
 
 
-class GraphEQAMemory:
+class GraphEQAMemory(GraphAnswerTraceMixin):
     """
     Graph-based semantic memory for Embodied Question Answering (EQA).
 

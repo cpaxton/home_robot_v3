@@ -356,6 +356,25 @@ def query_answer(
         self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
         self.last_eqa_model_raw = raw
         self.last_eqa_model_parsed = self.last_eqa_parsed
+        self._record_eqa_decision_trace(
+            iteration=len(self._history_outputs) + 1,
+            question=question,
+            text_blocks=text_blocks,
+            obs_ids=list(obs_ids),
+            crop_obs_id=crop_oid,
+            nav_fallback_count=len(nav_fallback_tail),
+            relevant_images=relevant_images,
+            view_status=view_status,
+            close_look_status="",
+            vlm_raw=f"Error: {exc}",
+            parsed={
+                "reasoning": str(exc),
+                "answer": "Unknown",
+                "confidence": False,
+                "action": "",
+                "confidence_reasoning": str(exc),
+            },
+        )
         self._append_eqa_history(
             self.format_eqa_history_outcome(
                 answer="Unknown",
@@ -363,6 +382,7 @@ def query_answer(
                 action="",
                 reasoning=str(exc),
                 salvage=False,
+                obs_ids=list(obs_ids),
             )
         )
         return (
@@ -665,6 +685,25 @@ def query_answer(
     pending_look = self.last_eqa_action_obs_id
     if pending_look is not None and (not obs_ids or int(obs_ids[0]) != int(pending_look)):
         self.last_eqa_look_obs_id = int(pending_look)
+    self._record_eqa_decision_trace(
+        iteration=len(self._history_outputs) + 1,
+        question=question,
+        text_blocks=text_blocks,
+        obs_ids=list(obs_ids),
+        crop_obs_id=crop_oid,
+        nav_fallback_count=len(nav_fallback_tail),
+        relevant_images=relevant_images,
+        view_status=view_status,
+        close_look_status="",
+        vlm_raw=str(raw or ""),
+        parsed={
+            "reasoning": reasoning,
+            "answer": raw_answer,
+            "confidence": bool(confidence),
+            "action": hist_action,
+            "confidence_reasoning": confidence_reasoning,
+        },
+    )
     self._append_eqa_history(
         self.format_eqa_history_outcome(
             answer=raw_answer,
@@ -672,6 +711,7 @@ def query_answer(
             action=hist_action,
             reasoning=reasoning,
             salvage=bool(self.last_eqa_salvage_used),
+            obs_ids=list(obs_ids),
         )
     )
 

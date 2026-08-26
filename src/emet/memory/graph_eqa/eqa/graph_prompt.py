@@ -206,6 +206,7 @@ def format_eqa_history_outcome(
     action: str,
     reasoning: str,
     salvage: bool = False,
+    obs_ids: list[int] | None = None,
 ) -> str:
     """One-line HISTORY entry — semantic answer/outcome, not a raw model replay."""
     ans = (answer or "").strip().replace("\n", " ")[:40] or "?"
@@ -216,9 +217,12 @@ def format_eqa_history_outcome(
         if display_index is not None:
             act_bit = f"read{display_index}" if kind == "read" else str(display_index)
     reason = (reasoning or "").replace("\n", " ").strip()[:80]
+    obs_bit = ""
+    if obs_ids:
+        obs_bit = f" obs={','.join(str(int(x)) for x in obs_ids)}"
     return (
         f"Iter: answer={ans} conf={str(bool(confidence)).lower()} "
-        f"action={act_bit or '-'} salvage={1 if salvage else 0} | {reason}"
+        f"action={act_bit or '-'} salvage={1 if salvage else 0}{obs_bit} | {reason}"
     )
 
 @staticmethod
