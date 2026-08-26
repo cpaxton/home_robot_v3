@@ -33,7 +33,31 @@ MARS_ZMQ_PORTS: dict[int, str] = {
     4402: "actions",
     4403: "state",
     4404: "servo",
+    4405: "h264",
 }
+
+
+def _mars_zmq_env_exports(
+    *,
+    video_rtsp: bool = False,
+    rtsp_host: str | None = None,
+    metadata_only_obs: bool = False,
+) -> str:
+    """Default Mars bridge ZMQ wire-format env (half-res 4401, no duplicate 4404 JPEG)."""
+    parts = [
+        "export EMET_ZMQ_IMAGE_SCALING=0.5",
+        "export EMET_ZMQ_SERVO_INCLUDE_IMAGES=0",
+    ]
+    if metadata_only_obs:
+        parts.append("export EMET_ZMQ_OBS_INCLUDE_IMAGES=0")
+        parts.append("export EMET_ZMQ_FULL_HZ=15")
+        parts.append("export EMET_ZMQ_SERVO_HZ=10")
+        parts.append("export EMET_ZMQ_SERVO_INCLUDE_IMAGES=1")
+    if video_rtsp:
+        parts.append("export EMET_MARS_VIDEO_RTSP=1")
+        if rtsp_host:
+            parts.append(f"export EMET_MARS_VIDEO_RTSP_HOST={rtsp_host}")
+    return "; ".join(parts) + "; "
 
 
 @dataclass
@@ -131,6 +155,9 @@ def _remote_bridge_launch_cmd(
     emet_dir: str,
     onboard_da3: bool = False,
     onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    rtsp_host: str | None = None,
+    metadata_only_obs: bool = False,
 ) -> str:
     emet_core = f"{emet_dir}/emet_core"
     emet_src = f"{emet_dir}/src"
@@ -139,8 +166,13 @@ def _remote_bridge_launch_cmd(
     if onboard_dinov3:
         dinov3_env = "export EMET_MARS_ONBOARD_DINOV3=1; export HF_HOME=$HOME/hf-cache; export TRANSFORMERS_CACHE=$HOME/hf-cache; "
     py_paths = f"{emet_core}:{emet_src}"
+    zmq_env = _mars_zmq_env_exports(
+        video_rtsp=video_rtsp,
+        rtsp_host=rtsp_host,
+        metadata_only_obs=metadata_only_obs,
+    )
     return (
-        f"{da3_env}{dinov3_env}"
+        f"{da3_env}{dinov3_env}{zmq_env}"
         f"source {emet_dir}/bridge_env.sh 2>/dev/null || "
         f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
         f"source ~/innate-os/dds/setup_dds.zsh && "
@@ -152,7 +184,7 @@ def _remote_bridge_launch_cmd(
 
 def _kill_bridge_remote() -> str:
     """Free ZMQ ports (avoids pkill -f matching the SSH shell command line)."""
-    return "fuser -k 4401/tcp 4402/tcp 4403/tcp 4404/tcp 2>/dev/null || true"
+    return "fuser -k 4401/tcp 4402/tcp 4403/tcp 4404/tcp 4405/tcp 2>/dev/null || true"
 
 
 def _remote_status_cmd() -> str:
@@ -415,6 +447,8 @@ def start_bridge_on_robot(
     emet_dir: str = DEFAULT_EMET_DIR,
     onboard_da3: bool = False,
     onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    metadata_only_obs: bool = False,
 ) -> None:
     """Start innate_mars_bridge inside innate-os tmux (Zenoh DDS env)."""
     launch_line = _remote_bridge_launch_cmd(
@@ -422,6 +456,9 @@ def start_bridge_on_robot(
         emet_dir=emet_dir,
         onboard_da3=onboard_da3,
         onboard_dinov3=onboard_dinov3,
+        video_rtsp=video_rtsp,
+        rtsp_host=host,
+        metadata_only_obs=metadata_only_obs,
     )
     remote = (
         f"{_kill_bridge_remote()}; "
@@ -483,6 +520,8 @@ def mars_start(
     preview: bool = False,
     onboard_da3: bool = False,
     onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    metadata_only_obs: bool = False,
     wait_s: float = 20.0,
 ) -> None:
     host, user, password, workspace, emet_dir = resolve_mars_target(
@@ -532,6 +571,8 @@ def mars_start(
         emet_dir=emet_dir,
         onboard_da3=onboard_da3,
         onboard_dinov3=onboard_dinov3,
+        video_rtsp=video_rtsp,
+        metadata_only_obs=metadata_only_obs,
     )
 
     if wait_s > 0:

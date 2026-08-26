@@ -304,6 +304,8 @@ Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. 
 
 ```bash
 emet mars start --ip MARS_IP --username jetson1 --deploy
+emet mars start --connection mars --video-rtsp
+emet mars start --connection mars --metadata-only-obs
 emet mars status --connection mars
 emet mars stop --connection mars
 ```
@@ -357,6 +359,27 @@ emet connect show
 3. Else `EMET_CONFIG` / packaged default (`configs/emet/default.yaml`).
 
 So with a Mars profile active and `config=configs/agent_innate_mars.yaml`, a bare `emet run dynamem` (no `--config`) also loads that agent preset — usually fine on a Mars-only workstation. For Stretch/sim on the same machine, pass an explicit `--config`, use a profile without `config`, or `--no-active` when saving the Mars profile.
+
+---
+
+### `emet comm [benchmark|obs|video]`
+
+CPU-only **ZMQ link diagnostics** for the observation stream (port **4401+**): frame rate, wire/payload size, inter-frame jitter, unpickle/decode cost, slim-wire flags (duplicate JPEG aliases, float64 lidar). No perception models or GPU. See [`zmq_obs.md`](zmq_obs.md) § streaming benchmark.
+
+| Subcommand | Use |
+|------------|-----|
+| `emet comm benchmark` | Sustained run (`--seconds` default 10s, or `--frames`); `--port` 4401/4403/4404/4405 |
+| `emet comm obs` | Short probe (default **10 frames**) |
+| `emet comm video` | OpenCV/ffplay preview of `capabilities.video_streams` RTSP URLs |
+
+Shared flags: `--connection`, `--ip` / `--robot-ip`, `--port-offset`, `--decode`, `--no-conflate`, `--json-out`, `--verbose`.
+
+```bash
+emet comm benchmark --connection herman --seconds 30 --decode
+emet comm benchmark --connection herman --port 4404 --seconds 15
+emet comm obs --connection herman
+emet comm video --connection herman
+```
 
 ---
 

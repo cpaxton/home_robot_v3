@@ -5,14 +5,16 @@
 import numpy as np
 
 import emet.utils.compression as compression
+from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
 from emet.core.zmq_obs_codec import (
     decode_zmq_obs_images_inplace,
     expand_zmq_obs_image_aliases,
+    full_obs_has_wire_images,
+    merge_servo_images_into_full_obs,
     slim_zmq_obs,
     slim_zmq_obs_images,
     slim_zmq_obs_lidar,
 )
-from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
 
 
 def test_slim_zmq_obs_images_drops_duplicate_legacy_keys():
@@ -81,3 +83,24 @@ def test_slim_zmq_obs_applies_images_and_lidar():
     slim_zmq_obs(obs)
     assert "rgb" not in obs
     assert obs["lidar_points"].dtype == np.float32
+
+
+def test_merge_servo_images_into_full_obs_fills_metadata_only_obs():
+    rgb = np.full((4, 6, 3), 9, dtype=np.uint8)
+    jpg = compression.to_jpg(rgb)
+    servo = {
+        "head_cam_left/color_image": jpg,
+        "head_cam_left/color_image/shape": (4, 6, 3),
+        "head_cam_left/image_scaling": 0.5,
+        "head_cam_left/color_camera_K": np.eye(3),
+    }
+    full = {"lidar_points": np.zeros((8, 2), dtype=np.float32), "gps": np.zeros(2)}
+    assert not full_obs_has_wire_images(full)
+    assert merge_servo_images_into_full_obs(full, servo)
+    assert full_obs_has_wire_images(full)
+    assert decode_zmq_obs_images_inplace(full)
+    assert int(full["rgb"][0, 0, 0]) == 9
+
+
+def test_full_obs_has_wire_images_false_without_jpeg_keys():
+    assert not full_obs_has_wire_images({"gps": np.zeros(2)})

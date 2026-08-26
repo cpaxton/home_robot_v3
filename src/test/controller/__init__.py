@@ -26,6 +26,7 @@ def make_zmq_test_client(cls):
     for name in ("_obs_lock", "_act_lock", "_state_lock", "_servo_lock", "_send_lock", "_emet_session_lock"):
         setattr(client, name, Lock())
     client._obs = None
+    client._servo = None
     client._state = None
     client._last_step = -1
     client._finish = False

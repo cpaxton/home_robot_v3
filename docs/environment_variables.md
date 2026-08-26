@@ -171,6 +171,18 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ZMQ_FULL_HZ` | `BaseZmqServer` | Optional maximum full RGB-D observation publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 5 Hz. |
 | `EMET_ZMQ_STATE_HZ` | `BaseZmqServer` | Optional maximum low-level state publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 30 Hz. |
 | `EMET_ZMQ_SERVO_HZ` | `BaseZmqServer` | Optional maximum visual-servo stream publish rate. Unset keeps the legacy unthrottled loop; OVMM eval subprocesses default to 10 Hz. |
+| `EMET_ZMQ_IMAGE_SCALING` | Innate Mars bridge | Head stereo downscale before JPEG on 4401/4404 (default `0.5` on Mars launch). |
+| `EMET_ZMQ_EE_IMAGE_SCALING` | Innate Mars bridge | EE camera downscale before JPEG (default `0.5`). |
+| `EMET_ZMQ_JPEG_QUALITY` | Innate Mars bridge | JPEG quality 1–100 (default `90`). |
+| `EMET_ZMQ_OBS_INCLUDE_IMAGES` | Innate Mars bridge | `0` → metadata-only 4401 (no JPEG keys); use with servo images on 4404. |
+| `EMET_ZMQ_SERVO_INCLUDE_IMAGES` | Innate Mars bridge | `0` → 4404 poses/joints only (Mars default when 4401 has images). |
+| `EMET_ZMQ_WEBP_IMAGES` | Innate Mars bridge | `1` → WebP instead of JPEG on wire. |
+| `EMET_ZMQ_TURBOJPEG` | `compression.to_jpg` | `1` → PyTurboJPEG encode when installed. |
+| `EMET_ZMQ_H264` | Innate Mars bridge | `1` → publish H.264 NAL on port 4405 (`capabilities.zmq_video_h264`). |
+| `EMET_ZMQ_H264_PORT` | Innate Mars bridge | H.264 SUB port (default `4405`). |
+| `EMET_MARS_VIDEO_RTSP` | Innate Mars bridge | `1` → start GStreamer RTSP side channel (`emet mars start --video-rtsp`). |
+| `EMET_MARS_VIDEO_RTSP_HOST` | Session `video_streams` URLs | Advertised RTSP host (set automatically on `emet mars start`). |
+| `EMET_MARS_VIDEO_RTSP_PORT` | RTSP server | Default `8554`. |
 | `EMET_NAVGRID_ASCII` | Dynamem / Dynagraph mapping | Terminal nav grid; see [dynagraph.md](dynagraph.md). |
 | `EMET_NAVGRID_MAX_SIDE` | Nav grid ASCII | Default 320. |
 | `EMET_NAVGRID_CONTEXTS` | Nav grid ASCII | Limit which hooks print. |

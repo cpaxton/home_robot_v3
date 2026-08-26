@@ -10,7 +10,7 @@ Every full-observation, state, and (where applicable) servo message from Emet’
 | `runtime_kind` | `str` | e.g. `robosuite_sim`, `stretch_mujoco_sim`; hardware bridges should use a distinct value (e.g. `hardware_stretch`). |
 | `is_simulation` | `bool` | Same meaning as the top-level `is_simulation` flag on observations. |
 | `emet_robot_id` | `str` | Duplicate of top-level `emet_robot_id` for a single merge point. |
-| `capabilities` | `dict` | Declared features, e.g. `teleport_base` (bool), `depth`, `num_cameras`, `dof`, `zmq_obs_slim` (bool, Innate Mars: one JPEG per camera on the wire), `zmq_lidar_f32` (bool, `lidar_points` published as float32 N×2). Innate Mars hardware bridge also advertises `onboard_da3` and `onboard_dinov3` (bool) when the corresponding `--onboard-*` flags are set. |
+| `capabilities` | `dict` | Declared features, e.g. `teleport_base` (bool), `depth`, `num_cameras`, `dof`, `zmq_obs_slim` (bool, Innate Mars: one JPEG per camera on the wire), `zmq_lidar_f32` (bool, `lidar_points` published as float32 N×2), `zmq_image_scaling` (float), `zmq_obs_metadata_only` (bool, 4401 omits JPEG), `zmq_images_on_port` (int, usually 4404), `video_streams` (dict name → RTSP URL), `zmq_video_h264` (bool), `zmq_h264_port` (int, default 4405), `zmq_webp_images` (bool). Innate Mars hardware bridge also advertises `onboard_da3` and `onboard_dinov3` (bool) when the corresponding `--onboard-*` flags are set. |
 | `environment` | `dict` | Optional scene identity; see below. |
 
 Optional: `mjcf_model_name`, `scene_source_basename` (short debugging strings).

@@ -78,13 +78,16 @@ Same names as paper evals and `emet run dynamem` / `emet run dynagraph` controll
 
 ## Streaming benchmark (no models, CPU only)
 
-`scripts/benchmark_zmq_obs_stream.py` measures sustained full-observation streaming with a
-bare SUB socket — no perception/VLM models, no GPU. It mirrors the real client socket options
-(`HWM=1`, `CONFLATE=1`) so results reflect what a mapping client sees, then reports fps, server
-push rate, wire/payload MB/s, jitter (median/p95/max period), unpickle cost, and optional CPU
-JPEG/JP2 decode cost. It also flags duplicate legacy JPEG aliases (slim-format violations).
+`emet comm benchmark` (or `emet comm obs` for a short default probe) measures sustained
+full-observation streaming with a bare SUB socket — no perception/VLM models, no GPU. It
+mirrors the real client socket options (`HWM=1`, `CONFLATE=1`) so results reflect what a
+mapping client sees, then reports fps, server push rate, wire/payload MB/s, jitter
+(median/p95/max period), unpickle cost, and optional CPU JPEG/JP2 decode cost. It also
+flags duplicate legacy JPEG aliases (slim-format violations) and float64 lidar on the wire.
 
 ```bash
+uv run emet comm benchmark --connection herman --seconds 30 --decode
+uv run emet comm obs --connection herman
 uv run python scripts/benchmark_zmq_obs_stream.py --connection herman --seconds 30 --decode
 uv run python scripts/benchmark_zmq_obs_stream.py --robot-ip 192.168.1.43 --frames 100 --json-out /tmp/zmq.json
 ```

@@ -39,6 +39,7 @@ def test_cli_help():
     assert "test" in result.stdout
     assert "eval" in result.stdout
     assert "jobs" in result.stdout
+    assert "comm" in result.stdout
     assert "hmeqa" in result.stdout
     assert "debug-da3-depth" in result.stdout
 
@@ -58,6 +59,18 @@ def test_eval_group_help():
     assert "kill-stale" in result.stdout
     assert "affinity" in result.stdout
     assert "recover" in result.stdout
+
+
+def test_comm_group_help():
+    """emet comm --help lists ZMQ link diagnostic subcommands."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "comm", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "benchmark" in result.stdout
+    assert "obs" in result.stdout
 
 
 def test_habitat_group_help_lists_safe_start():

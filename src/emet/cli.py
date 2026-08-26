@@ -3919,6 +3919,16 @@ def mars_cmd() -> None:
     help="Run DINOv3 vits16 on the Jetson; publish dinov3_head over ZMQ (implies --deploy when set)",
 )
 @click.option("--preview", is_flag=True, help="Run preview-cameras after bridge startup")
+@click.option(
+    "--video-rtsp",
+    is_flag=True,
+    help="Enable GStreamer RTSP side channel (EMET_MARS_VIDEO_RTSP=1; advertises video_streams)",
+)
+@click.option(
+    "--metadata-only-obs",
+    is_flag=True,
+    help="Skinny 4401 (lidar/poses only); scaled JPEG on 4404 (EMET_ZMQ_OBS_INCLUDE_IMAGES=0)",
+)
 @click.option("--wait-s", default=20.0, show_default=True, help="Seconds to wait before status check")
 @click.option("--no-save", is_flag=True, help="Do not update saved connection profile")
 def mars_start_cmd(
@@ -3930,6 +3940,8 @@ def mars_start_cmd(
     onboard_da3: bool,
     onboard_dinov3: bool,
     preview: bool,
+    video_rtsp: bool,
+    metadata_only_obs: bool,
     wait_s: float,
     no_save: bool,
 ) -> None:
@@ -3959,6 +3971,8 @@ def mars_start_cmd(
         preview=preview,
         onboard_da3=onboard_da3,
         onboard_dinov3=onboard_dinov3,
+        video_rtsp=video_rtsp,
+        metadata_only_obs=metadata_only_obs,
         wait_s=wait_s,
     )
 
@@ -5021,6 +5035,10 @@ def install_completion(shell: str | None) -> None:
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
 
+
+from emet.comm import comm_group  # noqa: E402
+
+main.add_command(comm_group)
 
 from emet.app.capture import main as _capture_app  # noqa: E402
 

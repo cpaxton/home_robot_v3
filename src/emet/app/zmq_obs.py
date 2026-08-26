@@ -93,6 +93,7 @@ class ZmqObsRun:
     rerun_bind: bool = False
     allow_missing_depth: bool = False
     verbose: bool = False
+    rtsp_preview: bool = False
     # capture-oriented
     recv_port: int | None = None
     timeout_ms: int = 9000
@@ -402,6 +403,21 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
                 f"{map_stats.get('n_voxel_explored_cells', 0)} explored cells"
             )
     elif run.profile == "stream":
+        if run.rtsp_preview:
+            import threading
+
+            from emet.app.comm_video import run_comm_video
+
+            threading.Thread(
+                target=lambda: run_comm_video(
+                    robot_ip=host,
+                    connection_name=run.connection_name,
+                    port_offset=run.port_offset,
+                    seconds=0.0,
+                    ffplay=False,
+                ),
+                daemon=True,
+            ).start()
         _stream_zmq_only(
             robot_key=robot_key,
             host=host,
@@ -554,6 +570,11 @@ def capture_main(
     is_flag=True,
     help="Rerun cameras + MJCF mesh only (no mapping); overrides remote dynamem default",
 )
+@click.option(
+    "--rtsp-preview",
+    is_flag=True,
+    help="When session advertises video_streams, open RTSP preview (OpenCV) alongside ZMQ stream",
+)
 @click.option("--hz", default=1.0, show_default=True, help="Update rate when a mapping backend is active")
 @click.option(
     "--max-steps",
@@ -595,6 +616,7 @@ def stream_main(
     cpu_only: bool,
     headless: bool,
     cameras_only: bool,
+    rtsp_preview: bool,
     hz: float,
     max_steps: int,
     no_sensor_perception: bool,
@@ -648,6 +670,7 @@ def stream_main(
             cpu_only=cpu_only,
             headless=headless,
             cameras_only=cameras_only,
+            rtsp_preview=rtsp_preview,
             hz=hz,
             max_steps=max_steps,
             no_sensor_perception=no_sensor_perception,

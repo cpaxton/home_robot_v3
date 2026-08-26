@@ -63,6 +63,61 @@ def slim_zmq_obs(obs: dict[str, Any]) -> None:
     slim_zmq_obs_lidar(obs)
 
 
+def full_obs_has_wire_images(obs: dict[str, Any]) -> bool:
+    """True when any canonical or legacy JPEG/WebP image key is present."""
+    for key in (
+        "head_cam_left/image",
+        "head_cam_right/image",
+        "ee_cam/image",
+        "rgb",
+        "rgb_right",
+        "rgb_tertiary",
+    ):
+        if obs.get(key) is not None:
+            return True
+    return False
+
+
+_SERVO_TO_FULL_IMAGE: tuple[tuple[str, str], ...] = (
+    ("head_cam_left/color_image", "head_cam_left/image"),
+    ("head_cam_right/color_image", "head_cam_right/image"),
+    ("ee_cam/color_image", "ee_cam/image"),
+)
+
+_SERVO_TO_FULL_K: tuple[tuple[str, str], ...] = (
+    ("head_cam_left/color_camera_K", "camera_K"),
+    ("head_cam_right/color_camera_K", "camera_K_right"),
+    ("ee_cam/color_camera_K", "camera_K_tertiary"),
+)
+
+
+def merge_servo_images_into_full_obs(full_obs: dict[str, Any], servo: dict[str, Any]) -> bool:
+    """Copy scaled JPEG keys from a 4404 servo dict into a metadata-only 4401 obs (in-place)."""
+    if not servo:
+        return False
+    merged = False
+    for servo_key, full_key in _SERVO_TO_FULL_IMAGE:
+        if full_obs.get(full_key) is not None:
+            continue
+        blob = servo.get(servo_key)
+        if blob is None:
+            continue
+        full_obs[full_key] = blob
+        merged = True
+        shape_key = servo_key.replace("/color_image", "/color_image/shape")
+        if shape_key in servo:
+            full_obs[full_key.replace("/image", "/image/shape")] = servo[shape_key]
+        scale_key = servo_key.replace("/color_image", "/image_scaling")
+        if scale_key in servo:
+            full_obs[full_key.replace("/image", "/image_scaling")] = servo[scale_key]
+    for servo_k, full_k in _SERVO_TO_FULL_K:
+        if full_obs.get(full_k) is None and servo.get(servo_k) is not None:
+            full_obs[full_k] = servo[servo_k]
+    if merged:
+        expand_zmq_obs_image_aliases(full_obs)
+    return merged
+
+
 def _decode_jpg_if_needed(val: Any) -> np.ndarray | None:
     if val is None:
         return None
@@ -79,7 +134,10 @@ def _decode_jpg_if_needed(val: Any) -> np.ndarray | None:
     try:
         return compression.from_jpg(val)
     except Exception:
-        return None
+        try:
+            return compression.from_webp(val)
+        except Exception:
+            return None
 
 
 def decode_zmq_obs_images_inplace(obs: dict[str, Any]) -> bool:

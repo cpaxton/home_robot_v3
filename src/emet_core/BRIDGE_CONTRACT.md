@@ -12,6 +12,19 @@ Subclass `emet.core.server.BaseZmqServer` and implement the abstract methods.
 - **recv_port** 4402: actions (handle_action)
 - **send_state_port** 4403: lightweight state (get_state_message)
 - **send_servo_port** 4404: servo/visual stream (get_servo_message)
+- **send_h264_port** 4405 (optional): H.264 NAL side channel when `EMET_ZMQ_H264=1` (Innate Mars)
+
+## Publish rate caps (optional)
+
+Set maximum publish rates via env (not floors): `EMET_ZMQ_FULL_HZ`, `EMET_ZMQ_STATE_HZ`, `EMET_ZMQ_SERVO_HZ`. Unset = legacy unthrottled loop.
+
+## Image wire format (Innate Mars defaults)
+
+- **4401** full obs: half-res JPEG (default `EMET_ZMQ_IMAGE_SCALING=0.5`) with scaled intrinsics; optional metadata-only when `EMET_ZMQ_OBS_INCLUDE_IMAGES=0`.
+- **4404** servo: scaled JPEG preview when full obs omits images or when `EMET_ZMQ_SERVO_INCLUDE_IMAGES=1`; Mars launch defaults to **no** servo JPEG when 4401 carries images (`EMET_ZMQ_SERVO_INCLUDE_IMAGES=0`) to avoid double encode on Jetson.
+- Optional codecs: `EMET_ZMQ_WEBP_IMAGES`, `EMET_ZMQ_TURBOJPEG`, `EMET_ZMQ_JPEG_QUALITY`.
+- RTSP side channel: `EMET_MARS_VIDEO_RTSP=1` advertises `capabilities.video_streams` (viewer: `emet comm video`).
+- Metadata-only mode: `capabilities.zmq_obs_metadata_only`, `capabilities.zmq_images_on_port` (4404); clients merge servo JPEG into full obs (`merge_servo_images_into_full_obs`).
 
 ## Required methods
 
