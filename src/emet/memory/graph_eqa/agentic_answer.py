@@ -1140,10 +1140,11 @@ class AgenticAnswerMixin:
             if getattr(gm, "last_eqa_action_obs_id", None) is None:
                 gm.last_eqa_action_obs_id = missing_find[0]
             self._pin_eqa_look_obs(missing_find[0])
-        if count_mcq and missing_find and self._maybe_follow_unspent_find(submit_out, missing_find):
-            return True
+        # Confident non-None counts are done. Do not chase extra FIND hits (q88 lamps).
         if conf and not unknownish:
             return False
+        if count_mcq and missing_find and self._maybe_follow_unspent_find(submit_out, missing_find):
+            return True
         # Unconfident count + Action:N: the integer is from the attached (wrong) RGB.
         if not unknownish and not (count_mcq and not conf):
             return False
