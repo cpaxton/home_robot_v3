@@ -118,6 +118,21 @@ def test_aggregate_benchmark_decode_pct_uses_ms_units():
     assert stats["decode_pct_of_median_period"] == pytest.approx(1.0)  # 1ms vs 100ms period
 
 
+def test_aggregate_benchmark_single_frame_is_diagnostic():
+    sample = FrameSample(seq=0, t_recv=1.0, wire_bytes=500, payload_bytes=400, per_key={"rgb": 400}, step=3)
+    stats = aggregate_benchmark([sample])
+    assert stats["n_frames"] == 1
+    assert stats["fps"] == 0.0
+    assert stats["wire_bytes_per_frame"] == 500
+    assert stats["payload_bytes_per_frame"] == 400
+    assert stats["period_ms_avg"] == 0.0
+
+
+def test_aggregate_benchmark_empty_raises():
+    with pytest.raises(ValueError, match="no observation frames"):
+        aggregate_benchmark([])
+
+
 def test_run_benchmark_end_to_end(monkeypatch):
     import pickle
     import threading

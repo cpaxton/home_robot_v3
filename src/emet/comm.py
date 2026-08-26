@@ -83,7 +83,7 @@ def run_comm_benchmark(
     click.echo(f"Benchmarking ZMQ obs at tcp://{host}:{obs_port} …")
     try:
         result = run_benchmark(opts)
-    except TimeoutError as exc:
+    except (TimeoutError, ValueError) as exc:
         click.echo(str(exc), err=True)
         return 1
     click.echo(summarize(result, json_out=json_out))

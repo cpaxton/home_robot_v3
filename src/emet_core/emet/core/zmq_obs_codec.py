@@ -140,8 +140,26 @@ def _decode_jpg_if_needed(val: Any) -> np.ndarray | None:
             return None
 
 
+def decode_zmq_obs_depth_inplace(obs: dict[str, Any]) -> bool:
+    """JP2-decode ``depth`` to meters (H×W float32). Idempotent if already decoded."""
+    raw = obs.get("depth")
+    if raw is None or (isinstance(raw, tuple) and not raw):
+        return False
+    if isinstance(raw, np.ndarray) and raw.ndim == 2 and np.issubdtype(raw.dtype, np.floating):
+        return True
+    try:
+        decoded = compression.from_jp2(raw)
+    except Exception:
+        return False
+    if decoded is None or np.asarray(decoded).ndim != 2:
+        return False
+    obs["depth"] = np.ascontiguousarray(decoded, dtype=np.float32) / 1000.0
+    return True
+
+
 def decode_zmq_obs_images_inplace(obs: dict[str, Any]) -> bool:
-    """Expand aliases and JPEG-decode RGB streams. Returns False when primary RGB is missing."""
+    """Expand aliases, JPEG-decode RGB, JP2-decode depth. Returns False when primary RGB is missing."""
+    decode_zmq_obs_depth_inplace(obs)
     expand_zmq_obs_image_aliases(obs)
     rgb = _decode_jpg_if_needed(obs.get("rgb"))
     if rgb is None:

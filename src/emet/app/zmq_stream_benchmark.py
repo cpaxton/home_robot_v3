@@ -162,19 +162,22 @@ def _percentile(sorted_vals: list[float], q: float) -> float:
 
 def aggregate_benchmark(samples: list[FrameSample], *, wall_seconds: float | None = None) -> dict[str, Any]:
     """Collapse per-frame samples into summary stats (pure; no I/O)."""
-    if len(samples) < 2:
-        raise ValueError(f"need at least 2 samples, got {len(samples)}")
-    duration = wall_seconds if wall_seconds is not None else samples[-1].t_recv - samples[0].t_recv
-    duration = max(duration, 1e-6)
-
-    gaps = [samples[i].t_recv - samples[i - 1].t_recv for i in range(1, len(samples))]
-    gaps_sorted = sorted(gaps)
-
+    if not samples:
+        raise ValueError("no observation frames collected (need at least 1; try --warmup-frames 0)")
+    n = len(samples)
     wire_total = sum(s.wire_bytes for s in samples)
     payload_total = sum(s.payload_bytes for s in samples)
-
     pickle_ms = [s.pickle_ms for s in samples]
     decode_ms = [s.decode_ms for s in samples if s.decode_ms > 0]
+    if n == 1:
+        duration = wall_seconds if wall_seconds is not None else 1e-6
+        duration = max(duration, 1e-6)
+        gaps: list[float] = []
+    else:
+        duration = wall_seconds if wall_seconds is not None else samples[-1].t_recv - samples[0].t_recv
+        duration = max(duration, 1e-6)
+        gaps = [samples[i].t_recv - samples[i - 1].t_recv for i in range(1, n)]
+    gaps_sorted = sorted(gaps)
 
     per_key_bytes: dict[str, list[int]] = {}
     for s in samples:
@@ -205,25 +208,25 @@ def aggregate_benchmark(samples: list[FrameSample], *, wall_seconds: float | Non
                 dropped_steps += diff - 1
 
     return {
-        "n_frames": len(samples),
+        "n_frames": n,
         "duration_s": duration,
-        "fps": (len(samples) - 1) / duration,
+        "fps": 0.0 if n < 2 else (n - 1) / duration,
         "server_hz": server_hz,
-        "period_ms_avg": fmean(gaps) * 1000.0,
-        "period_ms_median": median(gaps) * 1000.0,
-        "period_ms_p95": _percentile(gaps_sorted, 0.95) * 1000.0,
-        "period_ms_max": gaps_sorted[-1] * 1000.0,
-        "period_ms_stdev": pstdev(gaps) * 1000.0,
+        "period_ms_avg": fmean(gaps) * 1000.0 if gaps else 0.0,
+        "period_ms_median": median(gaps) * 1000.0 if gaps else 0.0,
+        "period_ms_p95": _percentile(gaps_sorted, 0.95) * 1000.0 if gaps else 0.0,
+        "period_ms_max": gaps_sorted[-1] * 1000.0 if gaps else 0.0,
+        "period_ms_stdev": pstdev(gaps) * 1000.0 if len(gaps) >= 2 else 0.0,
         "wire_mbps": wire_total * 8.0 / duration / 1e6,
-        "wire_bytes_per_frame": wire_total / len(samples),
+        "wire_bytes_per_frame": wire_total / n,
         "payload_mbps": payload_total * 8.0 / duration / 1e6,
-        "payload_bytes_per_frame": payload_total / len(samples),
-        "pickle_ms_avg": fmean(pickle_ms),
-        "pickle_ms_max": max(pickle_ms),
+        "payload_bytes_per_frame": payload_total / n,
+        "pickle_ms_avg": fmean(pickle_ms) if pickle_ms else 0.0,
+        "pickle_ms_max": max(pickle_ms) if pickle_ms else 0.0,
         "decode_ms_avg": fmean(decode_ms) if decode_ms else None,
         "decode_ms_max": max(decode_ms) if decode_ms else None,
         "decode_pct_of_median_period": (
-            (fmean(decode_ms) / (median(gaps) * 1000.0) * 100.0) if decode_ms else None
+            (fmean(decode_ms) / (median(gaps) * 1000.0) * 100.0) if decode_ms and gaps else None
         ),
         "step_gaps": step_gaps,
         "dropped_steps": dropped_steps,
@@ -260,10 +263,9 @@ def format_benchmark_result(stats: dict[str, Any], *, robot_id: str | None = Non
     lines.append(f"unpickle     avg {stats['pickle_ms_avg']:.2f} ms  max {stats['pickle_ms_max']:.2f} ms")
     decode_avg = stats.get("decode_ms_avg")
     if decode_avg is not None:
-        lines.append(
-            f"decode (CPU) avg {decode_avg:.2f} ms  max {stats['decode_ms_max']:.2f} ms  "
-            f"({stats['decode_pct_of_median_period']:.1f}% of median period)"
-        )
+        pct = stats.get("decode_pct_of_median_period")
+        extra = f"  ({pct:.1f}% of median period)" if pct is not None else ""
+        lines.append(f"decode (CPU) avg {decode_avg:.2f} ms  max {stats['decode_ms_max']:.2f} ms{extra}")
     if stats.get("step_gaps"):
         lines.append(
             f"DROPS        {stats['step_gaps']} gaps / {stats['dropped_steps']} steps skipped "

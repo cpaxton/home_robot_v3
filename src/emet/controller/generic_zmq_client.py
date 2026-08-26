@@ -39,6 +39,7 @@ from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_obs_codec import (
+    decode_zmq_obs_depth_inplace,
     decode_zmq_obs_images_inplace,
     full_obs_has_wire_images,
     merge_servo_images_into_full_obs,
@@ -734,8 +735,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     )
                     continue
                 output["depth"] = None
-            else:
-                output["depth"] = compression.from_jp2(raw_depth) / 1000
+            elif not (isinstance(raw_depth, np.ndarray) and raw_depth.ndim == 2):
+                logger.warning("Observation depth failed to decode; skipping frame.")
+                continue
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
@@ -895,6 +897,8 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if caps.get("zmq_obs_metadata_only") and not full_obs_has_wire_images(obs) and servo is not None:
             merge_servo_images_into_full_obs(obs, servo)
             decode_zmq_obs_images_inplace(obs)
+        else:
+            decode_zmq_obs_depth_inplace(obs)
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")

@@ -35,6 +35,8 @@ MARS_ZMQ_PORTS: dict[int, str] = {
     4404: "servo",
     4405: "h264",
 }
+MARS_CORE_ZMQ_PORTS: frozenset[int] = frozenset({4401, 4402, 4403, 4404})
+MARS_OPTIONAL_ZMQ_PORTS: frozenset[int] = frozenset({4405})  # H.264, off unless EMET_ZMQ_H264=1
 
 
 def _mars_zmq_env_exports(
@@ -97,7 +99,7 @@ class MarsBridgeStatus:
 
     @property
     def all_ports_listening(self) -> bool:
-        return set(MARS_ZMQ_PORTS).issubset(self.listening_ports)
+        return MARS_CORE_ZMQ_PORTS.issubset(self.listening_ports)
 
     @property
     def ready_for_stream(self) -> bool:
@@ -191,7 +193,7 @@ def _remote_status_cmd() -> str:
     return (
         "pgrep -af 'innate_mars_zmq_server' 2>/dev/null || true; "
         "echo '---'; "
-        "ss -tlnH 2>/dev/null | grep -E ':440[1-4] ' || true; "
+        "ss -tlnH 2>/dev/null | grep -E ':440[1-5] ' || true; "
         "echo '---'; "
         f"tmux has-session -t {TMUX_SESSION} 2>/dev/null && "
         f"tmux capture-pane -t {TMUX_SESSION}:{TMUX_WINDOW} -p 2>/dev/null | tail -12 "
@@ -343,15 +345,17 @@ def _short_ros_message(line: str) -> str:
 
 
 def _compact_ports(status: MarsBridgeStatus) -> str:
-    expected = set(MARS_ZMQ_PORTS)
-    up = status.listening_ports & expected
-    n = len(up)
-    if n == len(expected):
-        return style("4401–4404", fg="green")
+    up_core = status.listening_ports & MARS_CORE_ZMQ_PORTS
+    n = len(up_core)
+    h264 = bool(status.listening_ports & MARS_OPTIONAL_ZMQ_PORTS)
+    if n == len(MARS_CORE_ZMQ_PORTS):
+        label = "4401–4404+h264" if h264 else "4401–4404"
+        return style(label, fg="green")
     if n == 0:
         return style("down", fg="red")
-    missing = ",".join(str(p) for p in sorted(expected - up))
-    return style(f"{n}/4 (missing {missing})", fg="yellow")
+    missing = ",".join(str(p) for p in sorted(MARS_CORE_ZMQ_PORTS - up_core))
+    extra = "+h264" if h264 else ""
+    return style(f"{n}/4 (missing {missing}){extra}", fg="yellow")
 
 
 def print_bridge_status(
