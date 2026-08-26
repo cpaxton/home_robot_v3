@@ -1157,6 +1157,7 @@ def run_agent_with_robot(
             # When that happens we feed the results back and let the LLM summarize.
             from emet.agent.tools import chat_wants_detail_zoom
 
+            context["parameters"] = parameters
             context["detail_zoom_query"] = chat_wants_detail_zoom(user_text)
             current_input = user_text
             turn_t0 = timeit.default_timer()

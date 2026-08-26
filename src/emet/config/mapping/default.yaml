@@ -77,6 +77,9 @@ eqa:
   agentic_max_tool_rounds: 8
   agentic_max_nav_steps: 8
   agentic_verify_min_sim: 0.28
+  # Blind center-crop zoom for clocks/labels. Off: HM-EQA clocks did not convert.
+  # Re-enable with EMET_EQA_CENTER_ZOOM=1 or eqa.center_zoom: true.
+  center_zoom: false
   # Action-outcome ledger (navigate/verify/manip attempts). Default off so HM-EQA /
   # OVMM paper paths are unchanged. Enable with true / {enabled: true, ...} or
   # EMET_EQA_ATTEMPT_LEDGER=1. Docs: docs/attempt_ledger.md

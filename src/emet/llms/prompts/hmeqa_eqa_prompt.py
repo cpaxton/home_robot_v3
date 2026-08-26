@@ -26,7 +26,7 @@ _HMEQA_HEADER = """
         Reply with ONLY a single JSON object (no markdown fences, no caption field) with keys:
         reasoning (string), answer (short semantic answer text), confidence (boolean),
         action ("" if done, an attached Image slot 1..K, a graph obs id to navigate, or
-        "read N" to zoom attached Image N),
+        "read N" to re-inspect attached Image N),
         confidence_reasoning (string).
         Copy the selected option text into "answer" without its letter label. Never leave
         "answer" blank. If uncertain, still give your best semantic answer and set
@@ -45,7 +45,7 @@ _HMEQA_HEADER = """
         - "" — done, or explore a new room when attached views are spent/risky.
         - N or "Image N" — if N is 1..K, inspect that attached slot; if N is a graph obs id
           from FIND_QUEUE / GRAPH_COUNT, navigate to that view (example: action: 37).
-        - "read N" — N is an attached slot 1..K only. Stay and zoom that frame. Do not
+        - "read N" — N is an attached slot 1..K only. Re-inspect that frame. Do not
           "read" a graph obs id.
 
         VIEW_STATUS lists per-Image investigation counters (visits, look/read picks, Unknown
@@ -129,10 +129,8 @@ _HMEQA_FORMAT_OVERRIDE = """
            and unambiguous. Do not guess. "confidence_reasoning" is one short sentence.
         5. For "What time is it now?" and other clock/time MCQs: do not guess a time bucket
            from a tiny clock in a wide frame. Use "read N" on the attached slot that shows
-           the clock, then read hour/minute hand positions from the zoomed frame on the next
-           turn. If this turn already attaches a zoomed crop, pick a time bucket or leave
-           action empty — do not emit read N again. Leave "action" empty only when the
-           hands or digits are clearly legible.
+           the clock, or set action to a FIND_QUEUE obs id for a closer view. Leave "action"
+           empty only when the hands or digits are clearly legible.
 
         You have a limited output budget. Spending it describing images instead of answering
         counts as a wrong answer.

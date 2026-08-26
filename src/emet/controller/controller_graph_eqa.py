@@ -720,15 +720,7 @@ class GraphEQAController(DynamemController):
                 except (TypeError, ValueError):
                     approach = None
             if approach is None:
-                parsed = getattr(self.graph_memory, "last_eqa_parsed", None)
-                action = str(parsed[3] or "") if parsed else ""
-                if action.strip().lower().startswith("read"):
-                    logger.info(
-                        "EQA nav: read action at FIND view (obs_id=%s); stay for center-zoom attach",
-                        oid,
-                    )
-                else:
-                    logger.info("EQA nav: FIND view already Image 1 (obs_id=%s); stay for close-up", oid)
+                logger.info("EQA nav: FIND view already Image 1 (obs_id=%s); stay for close-up", oid)
                 return answer, discord_text, relevant_images, confidence
             target_point = approach
             approaching_find = True

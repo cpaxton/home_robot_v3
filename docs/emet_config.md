@@ -77,6 +77,7 @@ mapping:
 | Key | Default | Notes |
 |-----|---------|--------|
 | `eqa.prompt_variant` | (unset) / harness `hmeqa` | `hmeqa` / `mcq` → JSON answers + prefill `{"reasoning":` |
+| `eqa.center_zoom` | **off** | Blind center-crop zoom on `read N` / clock questions when no detector bbox. Did not convert HM-EQA clocks; keep off until a better crop. Env: `EMET_EQA_CENTER_ZOOM`. |
 | `eqa.answer_format` | `json` if hmeqa/mcq else `labeled` | Override with `EMET_EQA_ANSWER_FORMAT`. JSON object keys: `reasoning`, `answer`, `confidence`, `action`, `confidence_reasoning`; labeled `Reasoning:/Answer:/…` scrape remains as fallback. |
 | `eqa.merged_memory` | **on** | Fold CONFIRMED_MEMORY into `SCENE_GRAPH` lines. HM-EQA paper row pins `false` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). Env: `EMET_EQA_MERGED_MEMORY`. |
 | `eqa.attempt_ledger` | **off** | Opt-in action-outcome ledger on `GraphEQAMemory`. Accepts `true` / `false` or a dict: `enabled`, `max_records` (default `512`), `persist_absent_claims` (default `false`). When on, nav/tool/manip/verify outcomes append `AttemptRecord` rows alongside per-node `nav_attempts` / `nav_failures`. Env: `EMET_EQA_ATTEMPT_LEDGER`, `EMET_ATTEMPT_LEDGER_MAX`, `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT`. Reference: [attempt_ledger.md](attempt_ledger.md); plan: [plans/2026-08-08_embodied_agent_planning.md](plans/2026-08-08_embodied_agent_planning.md). |

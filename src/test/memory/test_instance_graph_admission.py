@@ -912,6 +912,19 @@ def test_eqa_approach_attached_find_when_far_then_stay_when_close():
     close = mem.eqa_approach_attached_find(np.array([8.0, 8.0, 0.0]))
     assert close is None
     mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    # Zoom is off by default, so read N does not stay for a crop.
+    assert mem.eqa_approach_attached_find(np.array([0.0, 0.0, 0.0])) is not None
+
+
+def test_eqa_approach_stays_on_read_when_center_zoom_enabled(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_CENTER_ZOOM", "1")
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([8.0, 8.0, 1.5]), ["clock"])
+    mem._relevant_objects = ["clock"]
+    mem._relevant_phrases = ["clock"]
+    mem.last_eqa_obs_ids = [1]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
     assert mem.eqa_approach_attached_find(np.array([0.0, 0.0, 0.0])) is None
 
 
@@ -965,7 +978,8 @@ def test_eqa_should_stay_releases_on_unknown_find_not_read():
     assert mem.eqa_should_stay_on_attached_view(answer="Unknown", confidence=False) is False
 
 
-def test_eqa_should_stay_allows_read_unknown_until_spent():
+def test_eqa_should_stay_allows_read_unknown_until_spent(monkeypatch):
+    monkeypatch.setenv("EMET_EQA_CENTER_ZOOM", "1")
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sign"])
@@ -973,6 +987,15 @@ def test_eqa_should_stay_allows_read_unknown_until_spent():
     mem.last_eqa_obs_ids = [1, 2]
     mem.last_eqa_parsed = ("", "Unknown", False, "read 2", "too small")
     assert mem.eqa_should_stay_on_attached_view(answer="Unknown", confidence=False) is True
+
+
+def test_eqa_should_stay_releases_read_when_zoom_disabled():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sign"])
+    mem.last_eqa_obs_ids = [1]
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    assert mem.eqa_should_stay_on_attached_view(answer="Unknown", confidence=False) is False
 
 
 def test_graph_count_hint_prefers_visual_find_images():

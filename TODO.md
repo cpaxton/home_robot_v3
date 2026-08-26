@@ -181,18 +181,23 @@ q47 stays OK; q28/q78 OK via crop-as-Image1. Merged 2026-08-25 (PR #130).
       agent pins the FIND view and loops `read1`/`1` on it (up to 20 planning steps)
       instead of going after the second instance. q32/q51/q60 similarly stop early
       or answer from a partial view. **Mitigation (2026-08-25):** ATTACHED_INDEX,
-      FIND_QUEUE, off_prompt_find, `follow_unspent_find` (agentic only), classic-path
-      None-downgrade, `read N` slot-only + stay-for-zoom. Validated
+      FIND_QUEUE, off_prompt_find, `follow_unspent_find` (agentic only: ungrounded
+      count + spent attached views; never a confident non-None, never `read N`
+      unless attached views are already risky), classic-path
+      None-downgrade, `read N` slot-only. Validated
       `countclock_20260825_201933` on `23efa534`: **7/15**, tied with VIEW_STATUS
       baseline. **Gain q48** (Four→Six). **q12/q78 recovered** vs stale 3/13
       `75d22fc9` run. **Regress q88** (utensils; 20-step mix with a lamp xyz).
-      Clocks q33/q43/q84 still miss (zoom did not convert). q86 still 1-of-2.
+      Clocks q33/q43/q84 still miss. q86 still 1-of-2.
       Next slices: `EMET_EVAL_OUTPUT_PROFILE=lean` (default on this script).
-- [x] **Close-look / legibility**: center-zoom on `read N` when no detector bbox
-      (`center_zoom_crop` in `eqa_views.py`; primary attach on read turn for time/clock
-      questions). HM-EQA prompt forbids guessing time from tiny clocks in wide frames.
-- [x] **read N re-crop path**: zoom attach on read + optional extra close-up slot in
-      `query_answer` when `detail_zoom=True`.
+- [ ] **Close-look / clock legibility (center-zoom did not help):** blind
+      `center_zoom_crop` (frac 0.45, NEAREST upsample) on `read N` / time MCQs
+      did not convert q33/q43/q84 — wall clocks are often off-center, and the
+      crop can drop a better FIND view. **Disabled by default**
+      (`EMET_EQA_CENTER_ZOOM` / `eqa.center_zoom`, off). Helper remains in
+      `eqa_views.py`. Next investigation: detector/VLM-pointed crop (not frame
+      center), bilinear/Lanczos upsample, or navigate closer instead of cropping.
+      Re-enable a candidate with `EMET_EQA_CENTER_ZOOM=1` on the count/clock slice.
 
 ## OVMM agentic find — PR #110 / #111 follow-ups (validated 2026-08-11)
 

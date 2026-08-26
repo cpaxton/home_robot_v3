@@ -65,12 +65,14 @@ def chat_wants_detail_zoom(text: str) -> bool:
 
 
 def chat_head_rgb_for_reply(context: dict[str, Any], rgb: np.ndarray) -> tuple[np.ndarray, bool]:
-    """Return head RGB for Discord; center-zoom when the user asked for detail."""
+    """Return head RGB for Discord; center-zoom only when explicitly enabled."""
     arr = np.asarray(rgb).copy()
     if not context.get("detail_zoom_query"):
         return arr, False
-    from emet.memory.graph_eqa.eqa_views import center_zoom_crop
+    from emet.memory.graph_eqa.eqa_views import center_zoom_crop, center_zoom_enabled
 
+    if not center_zoom_enabled(context.get("parameters")):
+        return arr, False
     return center_zoom_crop(arr), True
 
 
@@ -375,10 +377,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     def send_image() -> str:
         robot = context.get("robot")
         image = None
+        zoomed = False
         if robot is not None and hasattr(robot, "get_observation"):
             obs = robot.get_observation()
             if obs is not None and getattr(obs, "rgb", None) is not None:
-                image, _zoomed = chat_head_rgb_for_reply(context, obs.rgb)
+                image, zoomed = chat_head_rgb_for_reply(context, obs.rgb)
         if image is not None:
             print_camera_frame_diagnostics(
                 "send_image (head obs rgb → Discord)",
@@ -388,7 +391,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if stash_discord_image(context, image):
             zoom_note = (
                 " Center-zoom crop for small detail (clock face, label, digits)."
-                if context.get("detail_zoom_query")
+                if zoomed
                 else ""
             )
             if context.get("discord_bot") is not None:

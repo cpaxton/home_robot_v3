@@ -28,8 +28,9 @@ EQA_SAME_OBS_PROGRESS_M = 1.0
 EQA_CROP_MAX_AREA_FRACTION = 0.85
 EQA_CROP_PADDING_FRAC = 0.12
 # Center-zoom fallback when no detector bbox (clocks, small text).
-# Default OFF. Re-enable with EMET_EQA_CENTER_ZOOM=1. Prefer the geometric
-# close-look map (docs/close_map.md) for clock/detail approaches.
+# Default OFF: 15-qid count/clock slice did not convert q33/q43/q84 (clocks are
+# often off-center; NEAREST upsample is blocky). Re-enable with EMET_EQA_CENTER_ZOOM=1.
+# Prefer the geometric close-look map (docs/close_map.md) for clock/detail approaches.
 EQA_CENTER_ZOOM_FRAC = 0.45
 EQA_CENTER_ZOOM_MIN_SIDE = 384
 _TRUE = ("1", "true", "yes", "on")

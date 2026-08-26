@@ -324,14 +324,13 @@ def test_describe_scene_delegates_to_agent():
     assert discord.pushed == []  # image is attached by the agent loop with the reply
 
 
-def test_prompt_routes_clock_and_sign_to_head_zoom():
+def test_prompt_routes_clock_and_sign_to_describe_scene():
     from emet.agent.prompt import build_agent_system_prompt
     from emet.agent.tools import get_tools
 
     prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
     lowered = prompt.lower()
     assert "what time is it" in lowered
-    assert "auto-zooms" in lowered or "head crop" in lowered
     assert "describe_scene" in lowered
     assert "navigate_to_obs" not in prompt
     import numpy as np
@@ -341,6 +340,45 @@ def test_prompt_routes_clock_and_sign_to_head_zoom():
     assert chat_wants_detail_zoom("What time is it on the clock?")
     assert not chat_wants_detail_zoom("Where is the sofa?")
     rgb = np.zeros((240, 320, 3), dtype=np.uint8)
+    out, used = chat_head_rgb_for_reply({"detail_zoom_query": True}, rgb)
+    assert used is False
+    assert out.shape == rgb.shape
+
+
+def test_chat_head_center_zoom_opt_in(monkeypatch):
+    import numpy as np
+
+    from emet.agent.tools import chat_head_rgb_for_reply
+
+    monkeypatch.setenv("EMET_EQA_CENTER_ZOOM", "1")
+    rgb = np.zeros((240, 320, 3), dtype=np.uint8)
     zoom, used = chat_head_rgb_for_reply({"detail_zoom_query": True}, rgb)
     assert used is True
     assert max(zoom.shape[0], zoom.shape[1]) >= 384
+
+
+def test_send_image_omits_zoom_note_when_center_zoom_off():
+    import numpy as np
+
+    from emet.agent.tools import get_tools
+    from emet.core.interfaces import Observations
+
+    class MockRobot:
+        def get_observation(self):
+            return Observations(
+                gps=np.zeros(2, dtype=np.float32),
+                compass=np.zeros(1, dtype=np.float32),
+                rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+                depth=np.zeros((8, 8), dtype=np.float32),
+            )
+
+    context = {
+        "robot": MockRobot(),
+        "detail_zoom_query": True,
+        "discord_bot": object(),
+    }
+    tools = get_tools(context)
+    send = next(t for t in tools if t.name == "send_image")
+    msg = send.func()
+    assert "queued for Discord" in msg
+    assert "Center-zoom" not in msg

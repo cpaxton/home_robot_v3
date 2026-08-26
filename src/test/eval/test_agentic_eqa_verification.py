@@ -497,6 +497,80 @@ def test_follow_eqa_action_after_confident_none_with_unattached_find():
     assert agent.graph_memory.last_eqa_look_obs_id == 168
 
 
+def test_follow_unspent_find_does_not_steal_confident_count():
+    """q88: extra FIND hits must not reopen a confident Two/Six."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    ex, agent, order = _follow_action_executor(
+        "How many utensils are on the counter? A) One B) Two C) Three D) None"
+    )
+    agent.graph_memory.last_eqa_action_obs_id = None
+    agent.graph_memory.last_eqa_obs_ids = [1]
+    agent.graph_memory.last_eqa_parsed = ("", "Two", True, "", "")
+    agent.graph_memory._obs_usable_for_eqa_image = MagicMock(return_value=True)
+    agent.graph_memory._count_candidate_nodes = MagicMock(
+        return_value=([SimpleNamespace(obs_id=1), SimpleNamespace(obs_id=88)], None)
+    )
+    agent.graph_memory._find_queue_candidate_obs_ids = MagicMock(return_value=[1, 88])
+    agent.graph_memory.next_unspent_eqa_obs_id = MagicMock(return_value=88)
+    agent.graph_memory.eqa_obs_is_risky = MagicMock(return_value=True)
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Two", "confidence": True})
+    assert followed is False
+    assert order == []
+    assert 88 not in ex._followed_eqa_actions
+
+
+def test_follow_unspent_find_stays_for_read_zoom():
+    """read N is not a reason to hop; leave only when attached views are spent/risky."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    ex, agent, order = _follow_action_executor(
+        "How many table lamps are there? A) One B) Two C) Three D) None"
+    )
+    agent.graph_memory.last_eqa_action_obs_id = None
+    agent.graph_memory.last_eqa_obs_ids = [1]
+    agent.graph_memory.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    agent.graph_memory._obs_usable_for_eqa_image = MagicMock(return_value=True)
+    agent.graph_memory._count_candidate_nodes = MagicMock(
+        return_value=([SimpleNamespace(obs_id=1), SimpleNamespace(obs_id=88)], None)
+    )
+    agent.graph_memory._find_queue_candidate_obs_ids = MagicMock(return_value=[1, 88])
+    agent.graph_memory.next_unspent_eqa_obs_id = MagicMock(return_value=88)
+    agent.graph_memory.eqa_obs_is_risky = MagicMock(return_value=False)
+    missing = ex._count_find_unattached_obs_ids()
+    assert 88 in missing
+    assert ex._maybe_follow_unspent_find({"ok": True, "answer": "Unknown"}, missing) is False
+    assert order == []
+    assert 88 not in ex._followed_eqa_actions
+
+
+def test_follow_unspent_find_visits_when_attached_spent():
+    """Spent attached views + unattached FIND: hop so count coverage can continue."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    ex, agent, order = _follow_action_executor(
+        "How many table lamps are there? A) One B) Two C) Three D) None"
+    )
+    agent.graph_memory.last_eqa_action_obs_id = None
+    agent.graph_memory.last_eqa_obs_ids = [1]
+    agent.graph_memory.last_eqa_parsed = ("", "One", False, "", "")
+    agent.graph_memory._obs_usable_for_eqa_image = MagicMock(return_value=True)
+    agent.graph_memory._count_candidate_nodes = MagicMock(
+        return_value=([SimpleNamespace(obs_id=1), SimpleNamespace(obs_id=88)], None)
+    )
+    agent.graph_memory._find_queue_candidate_obs_ids = MagicMock(return_value=[1, 88])
+    agent.graph_memory.next_unspent_eqa_obs_id = MagicMock(return_value=88)
+    agent.graph_memory.eqa_obs_is_risky = MagicMock(return_value=True)
+    followed = ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "One", "confidence": False})
+    assert followed is True
+    assert "nav" in order
+    assert 88 in ex._followed_eqa_actions
+    assert agent.graph_memory.last_eqa_look_obs_id == 88
+
+
 def test_follow_eqa_action_skips_unconfident_location_letter():
     """A location letter is a guess we can score; do not nav just because conf is false."""
     _require_agentic()
