@@ -78,3 +78,9 @@ def test_resolve_video_motion_paced_from_yaml():
     assert cfg.video_motion_paced is False
     assert cfg.export_video_substeps is False
     assert cfg.video_meters_per_frame == 0.25
+
+
+def test_full_profile_does_not_override_yaml_voxel_history():
+    cfg = resolve_episode_diagnostics_config()
+    assert cfg.export_voxel_history is False
+    assert cfg.export_rgb_frames is True

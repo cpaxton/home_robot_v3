@@ -25,7 +25,12 @@ def load_eval_diagnostics_from_parameters(
         subset = parameters.get("eval")
     if not isinstance(subset, dict):
         return EpisodeDiagnosticsConfig()
-    return draccus.decode(EpisodeDiagnosticsConfig, subset)
+    payload = {
+        key: value
+        for key, value in subset.items()
+        if key not in {"profile", "log_vl_progress", "log_eqa_prep"}
+    }
+    return draccus.decode(EpisodeDiagnosticsConfig, payload)
 
 
 def resolve_episode_diagnostics_config(
@@ -34,7 +39,8 @@ def resolve_episode_diagnostics_config(
 ) -> EpisodeDiagnosticsConfig:
     """Merge YAML ``eval:``, env vars, and explicit CLI/runner overrides.
 
-    Precedence (highest first): ``cli_overrides`` > env (when set) > YAML > defaults.
+    Precedence (highest first): ``cli_overrides`` > env (when set) > named
+    ``eval.profile`` / ``EMET_EVAL_OUTPUT_PROFILE`` > YAML fields > dataclass defaults.
     """
     from emet.eval.episode_diagnostics import (
         _env_int,
@@ -43,8 +49,20 @@ def resolve_episode_diagnostics_config(
         _env_map_video_stride,
         _env_truthy_or_none,
     )
+    from emet.eval.output_config import (
+        PROFILE_FULL,
+        profile_diagnostic_overrides,
+        resolve_eval_output_profile,
+    )
 
     yaml_cfg = load_eval_diagnostics_from_parameters(parameters)
+    profile = resolve_eval_output_profile(parameters)
+    # ``full`` is the historical default; do not let the profile dict override YAML
+    # (e.g. ``export_voxel_history: false`` in packaged eval YAML). Lean/metrics
+    # must beat YAML so a job env can disable frames without listing every flag.
+    profile_flags = (
+        profile_diagnostic_overrides(profile) if profile != PROFILE_FULL else {}
+    )
 
     def _bool(field: str, env_name: str, default: bool) -> bool:
         if field in cli_overrides and cli_overrides[field] is not None:
@@ -52,6 +70,8 @@ def resolve_episode_diagnostics_config(
         env_v = _env_truthy_or_none(env_name)
         if env_v is not None:
             return env_v
+        if field in profile_flags:
+            return bool(profile_flags[field])
         return bool(getattr(yaml_cfg, field, default))
 
     def _int(field: str, env_name: str, default: int, *, min_val: int | None = None) -> int:
@@ -105,6 +125,7 @@ def resolve_episode_diagnostics_config(
             else getattr(yaml_cfg, "video_fps", 6.0)
         ),
         export_video_substeps=_bool("export_video_substeps", "EMET_EVAL_EXPORT_VIDEO_SUBSTEPS", True),
+        export_frontier_picks=_bool("export_frontier_picks", "EMET_EVAL_EXPORT_FRONTIER_PICKS", True),
         video_motion_paced=_bool("video_motion_paced", "EMET_EVAL_VIDEO_MOTION_PACED", True),
         video_meters_per_frame=float(
             cli_overrides["video_meters_per_frame"]

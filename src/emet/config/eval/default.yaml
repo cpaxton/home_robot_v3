@@ -1,6 +1,7 @@
 # Episode diagnostics for Habitat / OVMM / SQA3D eval bundles.
-# Override: ``--set eval.export_map_video=false`` or ``EMET_EVAL_EXPORT_MAP_VIDEO=0``.
-# Precedence: CLI kwargs > env (when set) > YAML > dataclass defaults.
+# Named profile: ``EMET_EVAL_OUTPUT_PROFILE=lean|full|metrics`` (or ``eval.profile``).
+# Override one flag: ``--set eval.export_map_video=false`` or ``EMET_EVAL_EXPORT_MAP_VIDEO=0``.
+# Precedence: CLI kwargs > per-flag env > lean/metrics profile > YAML > dataclass defaults.
 
 export_map: true
 export_map_stride: 0

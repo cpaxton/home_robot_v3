@@ -151,6 +151,7 @@ class EpisodeDiagnosticsConfig:
     map_video_stride: int = 5
     video_fps: float = 6.0
     export_video_substeps: bool = True
+    export_frontier_picks: bool = True
     video_motion_paced: bool = True
     video_meters_per_frame: float = 0.25
     video_radians_per_frame: float = 0.1745329252  # 10 deg
@@ -703,13 +704,10 @@ def flush_episode_diagnostics(
 
 
 def habitat_export_voxel_history_default() -> bool:
-    """Habitat runners enable voxel history unless explicitly disabled."""
-    raw = os.environ.get("EMET_EVAL_EXPORT_VOXEL_HISTORY", "").strip().lower()
-    if raw in ("0", "false", "no", "off"):
-        return False
-    if raw in ("1", "true", "yes", "on"):
-        return True
-    return True
+    """Habitat runners enable voxel history unless lean/metrics or env disables it."""
+    from emet.eval.output_config import habitat_voxel_history_default
+
+    return habitat_voxel_history_default()
 
 
 def export_voxel_observation_history(

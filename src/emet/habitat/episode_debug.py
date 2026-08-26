@@ -484,28 +484,31 @@ def save_episode_debug_bundle(
 
     # Numbered frontier-pick panels written during explore_frontier.
     picks_dst = episode_dir / "frontier_picks"
-    picks_dst.mkdir(parents=True, exist_ok=True)
-    src_dirs: list[Path] = []
-    for key in ("_frontier_pick_dir", "_episode_debug_dir"):
-        raw = getattr(agent, key, None)
-        p_raw = coerce_path_string(raw)
-        if not p_raw:
-            continue
-        p = Path(p_raw)
-        if key == "_episode_debug_dir":
-            p = p / "frontier_picks"
-        if p.is_dir() and p.resolve() != picks_dst.resolve():
-            src_dirs.append(p)
-    for src in src_dirs:
-        for png in sorted(src.glob("iter_*.png")):
-            shutil.copy2(png, picks_dst / png.name)
-    for png_s in getattr(agent, "_frontier_pick_panels", None) or []:
-        png = Path(str(png_s))
-        # Panels may already live in picks_dst (agentic executor writes there
-        # directly); copying a file onto itself raises SameFileError and would
-        # abort the rest of the bundle export (maps, trajectory, floor metrics).
-        if png.is_file() and png.resolve() != (picks_dst / png.name).resolve():
-            shutil.copy2(png, picks_dst / png.name)
+    if getattr(cfg, "export_frontier_picks", True):
+        picks_dst.mkdir(parents=True, exist_ok=True)
+        src_dirs: list[Path] = []
+        for key in ("_frontier_pick_dir", "_episode_debug_dir"):
+            raw = getattr(agent, key, None)
+            p_raw = coerce_path_string(raw)
+            if not p_raw:
+                continue
+            p = Path(p_raw)
+            if key == "_episode_debug_dir":
+                p = p / "frontier_picks"
+            if p.is_dir() and p.resolve() != picks_dst.resolve():
+                src_dirs.append(p)
+        for src in src_dirs:
+            for png in sorted(src.glob("iter_*.png")):
+                shutil.copy2(png, picks_dst / png.name)
+        for png_s in getattr(agent, "_frontier_pick_panels", None) or []:
+            png = Path(str(png_s))
+            # Panels may already live in picks_dst (agentic executor writes there
+            # directly); copying a file onto itself raises SameFileError and would
+            # abort the rest of the bundle export (maps, trajectory, floor metrics).
+            if png.is_file() and png.resolve() != (picks_dst / png.name).resolve():
+                shutil.copy2(png, picks_dst / png.name)
+    elif picks_dst.is_dir():
+        shutil.rmtree(picks_dst)
 
     if gm is not None:
         from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty

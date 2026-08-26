@@ -32,6 +32,15 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def _log_eqa_prep(msg: str) -> None:
+    from emet.eval.output_config import eval_log_eqa_prep
+
+    if eval_log_eqa_prep():
+        _logger.info(msg)
+    else:
+        _logger.debug(msg)
+
+
 class GraphAnswerMixin:
     """query_answer, VLM description fill, and graph getters."""
 
@@ -80,14 +89,14 @@ class GraphAnswerMixin:
         )
 
         _t0 = _time.monotonic()
-        _logger.info("query_answer: ensure_llm_clients…")
+        _log_eqa_prep("query_answer: ensure_llm_clients…")
         self._ensure_llm_clients()
-        _logger.info("query_answer: extract_relevant_objects…")
+        _log_eqa_prep("query_answer: extract_relevant_objects…")
         self.extract_relevant_objects(question)
         if self.memory_summary_enabled:
             # Encoder may already be dropped by prepare_dynagraph_vram_for_eqa; refresh
             # is a no-op without it (uses cached phrase features when present).
-            _logger.info("query_answer: refresh_siglip_confirmed_memory…")
+            _log_eqa_prep("query_answer: refresh_siglip_confirmed_memory…")
             self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
@@ -376,7 +385,7 @@ class GraphAnswerMixin:
         # counterfactual can re-ask on the same images instead of silently no-op'ing.
         self.last_relevant_images = list(relevant_images)
 
-        _logger.info(
+        _log_eqa_prep(
             f"query_answer: calling eqa_client (n_images={len(relevant_images)} "
             f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f} "
             f"include_image_descriptions={include_image_descriptions} "
@@ -396,7 +405,7 @@ class GraphAnswerMixin:
             assistant_prefill = resolve_eqa_answer_prefill(self.parameters)
             if assistant_prefill:
                 eqa_kw["assistant_prefill"] = assistant_prefill
-            _logger.info(
+            _log_eqa_prep(
                 f"query_answer: eqa_kw max_new_tokens={eqa_kw.get('max_new_tokens')} "
                 f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r} "
                 f"answer_format={answer_format!r}"
@@ -406,7 +415,7 @@ class GraphAnswerMixin:
             except TypeError:
                 # Older / test doubles that only accept the command list.
                 raw = self.eqa_client(commands)
-            _logger.info(
+            _log_eqa_prep(
                 f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}"
             )
         except Exception as exc:

@@ -14,6 +14,7 @@
 #   CLOSE_LOOK     "0" -> EMET_EQA_AGENTIC_CLOSE_LOOK=0, pre-close-look baseline (default 1)
 #   MULTIVIEW      "1" -> EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=1 (default 0)
 #   RESUME         "0" -> overwrite the arm jsonl instead of resuming (default 1)
+#   OUTPUT_PROFILE lean (default) | full | metrics — see emet.eval.output_config
 #
 # Usage (prefer emet jobs — serializes on ~/runs/emet/gpu.lock):
 #   uv run emet jobs run --name countclock-postfix --need-mib 12000 -- \
@@ -62,8 +63,10 @@ else
     export EMET_EQA_AGENTIC_CLOSE_LOOK_MULTIVIEW=0
 fi
 RESUME="${RESUME:-1}"
+# Iterative slice: keep jsonl + eqa_history + one map. Paper H2H stays ``full``.
+export EMET_EVAL_OUTPUT_PROFILE="${OUTPUT_PROFILE:-lean}"
 
-log "run_id=$RUN_ID ids=$QUESTION_IDS methods=$METHODS siglip_evidence=${SIGLIP_EVIDENCE:-1} close_look=${CLOSE_LOOK:-1} multiview=${MULTIVIEW:-0} resume=$RESUME"
+log "run_id=$RUN_ID ids=$QUESTION_IDS methods=$METHODS siglip_evidence=${SIGLIP_EVIDENCE:-1} close_look=${CLOSE_LOOK:-1} multiview=${MULTIVIEW:-0} resume=$RESUME output_profile=${EMET_EVAL_OUTPUT_PROFILE}"
 log "out=$OUT_DIR"
 {
     echo "run_id=$RUN_ID"
@@ -73,6 +76,7 @@ log "out=$OUT_DIR"
     echo "close_look=${CLOSE_LOOK:-1}"
     echo "multiview=${MULTIVIEW:-0}"
     echo "resume=$RESUME"
+    echo "output_profile=${EMET_EVAL_OUTPUT_PROFILE}"
     echo "need_mib=$NEED_MIB"
     echo "git=$(git -C "$ROOT" rev-parse --short HEAD)"
 } | tee "$OUT_DIR/META.txt"

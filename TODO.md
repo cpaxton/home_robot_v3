@@ -179,13 +179,15 @@ q47 stays OK; q28/q78 OK via crop-as-Image1. Merged 2026-08-25 (PR #130).
 
 - [ ] **Exploration/coverage**: q86 (table lamps) still finds only 1 of 2 lamps. The
       agent pins the FIND view and loops `read1`/`1` on it (up to 20 planning steps)
-      instead of going after the second instance. q32/q48/q51/q60 similarly stop early
-      or answer from a partial view. **Mitigation landed (2026-08-25):** ATTACHED_INDEX,
-      FIND_QUEUE, off_prompt_find in VIEW_STATUS, `follow_unspent_find` in agentic_eqa
-      (opt-in `agentic_verify` only), classic-path None-downgrade when FIND views remain
-      unattached, `read N` slot-only + stay-for-zoom. Stale A/B `countclock_20260825_193427`
-      on `75d22fc9` was **3/11** with q12/q78 regressions (over-strict ATTACHED_INDEX).
-      Re-validate vs **7/15** baseline via managed `countclock-action-contract` job.
+      instead of going after the second instance. q32/q51/q60 similarly stop early
+      or answer from a partial view. **Mitigation (2026-08-25):** ATTACHED_INDEX,
+      FIND_QUEUE, off_prompt_find, `follow_unspent_find` (agentic only), classic-path
+      None-downgrade, `read N` slot-only + stay-for-zoom. Validated
+      `countclock_20260825_201933` on `23efa534`: **7/15**, tied with VIEW_STATUS
+      baseline. **Gain q48** (Four→Six). **q12/q78 recovered** vs stale 3/13
+      `75d22fc9` run. **Regress q88** (utensils; 20-step mix with a lamp xyz).
+      Clocks q33/q43/q84 still miss (zoom did not convert). q86 still 1-of-2.
+      Next slices: `EMET_EVAL_OUTPUT_PROFILE=lean` (default on this script).
 - [x] **Close-look / legibility**: center-zoom on `read N` when no detector bbox
       (`center_zoom_crop` in `eqa_views.py`; primary attach on read turn for time/clock
       questions). HM-EQA prompt forbids guessing time from tiny clocks in wide frames.

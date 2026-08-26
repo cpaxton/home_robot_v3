@@ -36,6 +36,14 @@ class DecodeProgressStop(StoppingCriteria):
         self._last_logged = 0
         self._t0 = time.monotonic()
         self._prefill_logged = False
+        self._log_progress: bool | None = None
+
+    def _progress_enabled(self) -> bool:
+        if self._log_progress is None:
+            from emet.eval.output_config import eval_log_vl_progress
+
+            self._log_progress = eval_log_vl_progress()
+        return self._log_progress
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
         n = int(input_ids.shape[-1]) - self._prompt_len
@@ -43,11 +51,12 @@ class DecodeProgressStop(StoppingCriteria):
             return False
         if not self._prefill_logged:
             self._prefill_logged = True
-            print(
-                f"[vl] decode started after prefill elapsed={time.monotonic() - self._t0:.1f}s",
-                flush=True,
-            )
-        if n - self._last_logged >= self._every_n or n == 1:
+            if self._progress_enabled():
+                print(
+                    f"[vl] decode started after prefill elapsed={time.monotonic() - self._t0:.1f}s",
+                    flush=True,
+                )
+        if self._progress_enabled() and (n - self._last_logged >= self._every_n or n == 1):
             self._last_logged = n
             print(
                 f"[vl] decode tokens={n} elapsed={time.monotonic() - self._t0:.1f}s",

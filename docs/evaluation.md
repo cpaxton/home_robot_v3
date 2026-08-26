@@ -122,7 +122,19 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 
 Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`, `HABITAT_EQA_MAP_STRIDE`.
 
-**Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → YAML → defaults. See [emet_config.md](emet_config.md).
+**Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → **lean/metrics profile** → YAML → defaults. See [emet_config.md](emet_config.md).
+
+### Episode diagnostics output profile
+
+Iterative HM-EQA slices do not need per-step RGB dumps. Set **`EMET_EVAL_OUTPUT_PROFILE`** (or YAML `eval.profile`):
+
+| Profile | Keep | Drop |
+|---------|------|------|
+| `full` (default / H2H) | frames, MP4, overlays, crops, evidence PNG, VL token prints | — |
+| `lean` (count/clock slice default) | results jsonl, `eqa_history.json`, `metrics.json`, one `topdown_map.png`, `trajectory.jsonl` | `frames/`, `episode_rgb.mp4`, `topdown_exploration.mp4`, overlay stride maps, object-crop mosaics, evidence-view PNGs, frontier-pick PNGs, voxel history, VL start/decode spam |
+| `metrics` | jsonl + `eqa_history.json` + `metrics.json` | maps too |
+
+The 30s `[vl] generate heartbeat` stays on in every profile so STALE_KILL still sees log mtime. Implementation: [`emet.eval.output_config.EvalOutputConfig`](../src/emet/eval/output_config.py). Count/clock: `OUTPUT_PROFILE=full ./scripts/run_hmeqa_countclock_slice.sh` restores dumps.
 
 **Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`. On Habitat, when `export_video_substeps` is on, `HabitatRobotClient` post-step hooks append one RGB frame per discrete sim action (smoother head-camera MP4 during navmesh following).
 

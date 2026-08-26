@@ -86,6 +86,13 @@ def resolve_vl_generate_timeout_s() -> float | None:
     return val
 
 
+def _log_vl_progress() -> bool:
+    """Per-call VL stdout (start/finish/decode tokens). Heartbeats are independent."""
+    from emet.eval.output_config import eval_log_vl_progress
+
+    return eval_log_vl_progress()
+
+
 def _generate_with_heartbeat(
     generate_fn: Callable[[], Any],
     *,
@@ -709,10 +716,11 @@ class Qwen3VLClient(AbstractVLLMClient):
             f"generate prompt={input_len} max_new={ntok} on {model_dev}"
             + (" prefix_cache" if (self.cache_system_prefix and sys_txt and not has_vision) else "")
         )
-        print(
-            f"[vl] generate start prompt={input_len} max_new={ntok} device={model_dev} vision={has_vision}",
-            flush=True,
-        )
+        if _log_vl_progress():
+            print(
+                f"[vl] generate start prompt={input_len} max_new={ntok} device={model_dev} vision={has_vision}",
+                flush=True,
+            )
         t_gen0 = timeit.default_timer()
 
         def _do_generate() -> torch.Tensor:
@@ -749,7 +757,8 @@ class Qwen3VLClient(AbstractVLLMClient):
             timeout_s=resolve_vl_generate_timeout_s(),
         )
         gen_s = timeit.default_timer() - t_gen0
-        print(f"[vl] generate finished in {gen_s:.1f}s", flush=True)
+        if _log_vl_progress():
+            print(f"[vl] generate finished in {gen_s:.1f}s", flush=True)
 
         if verbose and used_cache:
             print("VL prefix cache: used cached system KV")

@@ -31,7 +31,7 @@ Legacy basenames (`dynav_config.yaml`, `--agent-config`, `--dynav-config`) still
 | `sim` / `sim_config` | MuJoCo / Robocasa / MolmoSpaces launch (see [Simulation configs](sim_configs.md)) |
 | `embodied_agent` | Open-vocab scene graph + GraphEQA memory overlays |
 | `rerun` | Live Rerun viewer options |
-| `eval` | Episode diagnostics exports (maps, RGB frames, MP4) for Habitat/OVMM/SQA3D bundles — see [evaluation.md](evaluation.md) |
+| `eval` | Episode diagnostics exports (maps, RGB frames, MP4) for Habitat/OVMM/SQA3D bundles — see [evaluation.md](evaluation.md). Named profile: `EMET_EVAL_OUTPUT_PROFILE=lean`. |
 | `robots.<id>` | Per-robot overlays merged when robot is resolved |
 | `robot` | Optional fixed robot id (CLI `--robot` wins when set) |
 | `connection` | Named profile in `~/.stretch/connection.json` |
@@ -46,19 +46,15 @@ defaults:
   - eval: package://emet/config/eval/default.yaml
 ```
 
-Example **`eval:`** overrides (maps + videos):
+Example **`eval:`** overrides (maps + videos). For iterative HM-EQA slices prefer
+``profile: lean`` (or ``EMET_EVAL_OUTPUT_PROFILE=lean``) instead of listing every flag:
 
 ```yaml
 eval:
-  export_map_video: true
-  export_video: true
-  map_video_stride: 5
-  export_video_substeps: true   # Habitat: one RGB frame per sim.step during nav
-  video_motion_paced: true      # repeat frames by motion delta (m / rad)
-  video_meters_per_frame: 0.25
-  video_radians_per_frame: 0.1745329252  # 10 deg
-  video_crossfade_teleport_m: 1.5
+  profile: lean
 ```
+
+Paper/H2H dumps stay ``full`` (default). Per-flag env still wins over the profile.
 
 Example **`mapping.eqa:`** overrides for Habitat HM-EQA (runner applies these via `setdefault` when unset in `dynav_config.yaml`):
 

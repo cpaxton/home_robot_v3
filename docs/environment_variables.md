@@ -25,6 +25,10 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
 | `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip Stretch-style head pans (single `update()`). Non-Stretch robots (rby1) skip by default. |
 | `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force head pans even on rby1 / GenericZmqClient. |
+| `EMET_EVAL_OUTPUT_PROFILE` | Habitat / OVMM / SQA3D episode bundles + VL stdout | Named dump profile: `full` (default, frames+MP4+VL token prints), `lean` (jsonl + history + one map + trajectory; no per-step RGB/video), `metrics` (jsonl/history only). YAML: `eval.profile`. Per-flag `EMET_EVAL_EXPORT_*` still override. See [evaluation.md](evaluation.md#episode-diagnostics-output-profile). |
+| `EMET_EVAL_LOG_VL` | Qwen3-VL generate stdout | `1`/`0` force per-call `[vl] generate start/finished` and decode-token prints. Unset: on for `full`, off for `lean`/`metrics`. The 30s generate heartbeat always stays on (STALE_KILL). Alias: `EMET_VL_DECODE_PROGRESS`. |
+| `EMET_EVAL_LOG_EQA_PREP` | `GraphEQAMemory.query_answer` | `1`/`0` force `query_answer: ensure_llm_clients…` INFO lines. Unset follows the output profile. |
+| `EMET_EVAL_EXPORT_FRONTIER_PICKS` | Habitat episode bundles | Copy `frontier_picks/*.png` into the debug bundle (default on; off under `lean`). YAML: `eval.export_frontier_picks`. |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
 | `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). YAML: `eval.export_map_video`. |
