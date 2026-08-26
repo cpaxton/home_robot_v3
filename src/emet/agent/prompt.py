@@ -103,6 +103,9 @@ Routing hints:
   rejected_unexplored → do NOT immediately re-call the same find_objects. Ask the user, or call
   navigation_diagnostics / send_map_snapshot / scan_environment first, then retry only if safe.
 - close-up of a known object → send_object_image (not describe_scene)
+- "what time is it" / clock face / "what does the sign say" / read a label or digits
+  → describe_scene or send_image (the head crop auto-zooms on those cues). For a closer
+  look at a named object still use face_toward then describe_scene.
 - "take a picture" / "send a photo" → send_image (live head camera to Discord); take_picture alone
   only captures locally and does not return a caption
 

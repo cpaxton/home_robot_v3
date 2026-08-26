@@ -63,6 +63,15 @@ def test_hmeqa_prompt_teaches_read_action():
     assert "not legible" in lowered
 
 
+def test_hmeqa_prompt_separates_attached_slots_from_graph_obs():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert "attached_index" in lowered
+    assert "[graph obs" in lowered
+    assert '"action": "37"' in lowered
+    assert "read n" in lowered
+    assert "graph obs id" in lowered
+
+
 def test_hmeqa_prompt_teaches_view_status_risk():
     lowered = HMEQA_EQA_PROMPT.lower()
     assert "view_status" in lowered

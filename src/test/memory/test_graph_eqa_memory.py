@@ -1261,6 +1261,8 @@ def test_action_image_ref_accepts_graph_obs_id():
     assert mem._resolve_eqa_action_image_ref(1, [1]) == 1
     assert mem._resolve_eqa_action_image_ref(19, [1]) == 19
     assert mem._resolve_eqa_action_image_ref(99, [1]) is None
+    assert mem._resolve_eqa_action_image_ref(19, [1], slots_only=True) is None
+    assert mem._resolve_eqa_action_image_ref(1, [1], slots_only=True) == 1
 
 
 def test_query_answer_never_attaches_frontier_placeholder_rgb():
@@ -2111,3 +2113,88 @@ def test_attached_index_and_find_queue_in_prompt_hints():
     assert "FIND_QUEUE" in queue
     assert "obs2" in queue
     assert "attached=no" in queue
+
+
+def test_format_find_queue_prefers_unattached_over_attached_quota():
+    """Unattached FIND ids must appear even when attached views could fill max_entries."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    for i in range(5):
+        mem.add_observation(
+            rgb,
+            np.array([float(i) * 2.0, 0.0, 0.5]),
+            ["lamp"],
+            identity_key=f"lamp:{i + 1}",
+            countable_instance=True,
+        )
+    q = "How many table lamps are there? A) One B) Two C) Three D) Four. Answer:"
+    queue = mem.format_find_queue(q, attached_obs_ids=[1, 2, 3, 4], max_entries=4)
+    assert "FIND_QUEUE" in queue
+    assert "obs5" in queue
+    assert "attached=no" in queue
+
+
+def test_query_answer_read_attaches_full_frame_when_zoom_disabled():
+    """Center-zoom is off by default; read 1 attaches the full camera frame."""
+    rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+    captured: dict = {}
+
+    def fake_eqa(cmds):
+        captured["imgs"] = [np.asarray(c) for c in cmds if hasattr(c, "size")]
+        return (
+            "reasoning: clock still unclear\n"
+            "answer: Unknown\nconfidence: false\naction:\n"
+            "confidence_reasoning: need explore\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "clock",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["wall clock"])
+    mem.last_eqa_obs_ids = [1]
+    mem.last_eqa_look_obs_id = 1
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    q = "What time is it now? A) 1-3pm B) 6-8am C) 9-11pm D) 5-7pm. Answer:"
+    _r, _a, _c, _cr, _target, _imgs = mem.query_answer(q)
+    assert captured.get("imgs")
+    frame = captured["imgs"][0]
+    assert frame.shape[:2] == (480, 640)
+    assert mem.last_eqa_obs_ids[:1] == [1]
+
+
+def test_query_answer_read_attaches_zoom_when_enabled(monkeypatch):
+    """EMET_EQA_CENTER_ZOOM=1 restores the experimental center crop on read."""
+    from emet.memory.graph_eqa.eqa_views import center_zoom_crop
+
+    monkeypatch.setenv("EMET_EQA_CENTER_ZOOM", "1")
+    rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+    captured: dict = {}
+
+    def fake_eqa(cmds):
+        captured["imgs"] = [np.asarray(c) for c in cmds if hasattr(c, "size")]
+        captured["blob"] = "\n".join(str(c) for c in cmds if isinstance(c, str))
+        return (
+            "reasoning: zoomed clock still unclear\n"
+            "answer: Unknown\nconfidence: false\naction:\n"
+            "confidence_reasoning: need explore\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "clock",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["wall clock"])
+    mem.last_eqa_obs_ids = [1]
+    mem.last_eqa_look_obs_id = 1
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    q = "What time is it now? A) 1-3pm B) 6-8am C) 9-11pm D) 5-7pm. Answer:"
+    _r, _a, _c, _cr, target, _imgs = mem.query_answer(q)
+    assert target is None
+    assert captured.get("imgs")
+    zoom = captured["imgs"][0]
+    expect = center_zoom_crop(rgb)
+    assert zoom.shape == expect.shape
+    assert mem.last_eqa_obs_ids[:1] == [1]

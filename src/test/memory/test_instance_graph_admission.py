@@ -538,6 +538,63 @@ def test_query_answer_count_none_unconfident_when_find_views_unattached():
     assert mem.last_eqa_action_obs_id in {3, 4}
 
 
+def test_query_answer_none_unconfident_when_other_find_unattached():
+    """q12-style: one FIND attached is not enough to finalize None while others remain."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return (
+            "reasoning: no bedside tables in this living room\n"
+            "answer: None\nconfidence: true\naction:\n"
+            "confidence_reasoning: living room only\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
+    )
+    mem.add_observation(
+        rgb, np.array([0.0, 0.0, 0.5]), ["sofa"], identity_key="sofa:1"
+    )
+    mem.add_observation(
+        rgb,
+        np.array([8.0, 0.0, 0.5]),
+        ["nightstand"],
+        countable_instance=True,
+        identity_key="ns:1",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([10.0, 0.0, 0.5]),
+        ["nightstand"],
+        countable_instance=True,
+        identity_key="ns:2",
+    )
+    orig = mem._compose_eqa_answer_obs_ids
+
+    def only_sofa(**kwargs):
+        kwargs = dict(kwargs)
+        kwargs["pin_obs"] = []
+        kwargs["look_obs_id"] = None
+        kwargs["forced"] = [1]
+        kwargs["selected"] = [1]
+        return orig(**kwargs)
+
+    mem._compose_eqa_answer_obs_ids = only_sofa  # type: ignore[method-assign]
+    mem._select_relevant_obs_ids = lambda **_k: [1]  # type: ignore[method-assign]
+    q = (
+        "How many bedside tables are there in the bedroom with the white bedding? "
+        "A) Three B) One C) None D) Two. Answer:"
+    )
+    _r, answer, confidence, _cr, target, _imgs = mem.query_answer(q)
+    assert str(answer).strip().lower() == "none"
+    assert confidence is False
+    assert mem.last_eqa_obs_ids == [1]
+    assert mem.last_eqa_look_obs_id in {2, 3}
+    assert target is not None
+
+
 def test_query_answer_attaches_full_frame_then_labeled_detector_crop():
     """Image 1 is the scene; a leftover slot may add a close-up of that same view."""
     rgb = np.zeros((16, 16, 3), dtype=np.uint8)
@@ -854,6 +911,8 @@ def test_eqa_approach_attached_find_when_far_then_stay_when_close():
     assert float(np.linalg.norm(np.asarray(far[:2]) - np.array([0.0, 0.0]))) > 1.0
     close = mem.eqa_approach_attached_find(np.array([8.0, 8.0, 0.0]))
     assert close is None
+    mem.last_eqa_parsed = ("", "Unknown", False, "read 1", "too small")
+    assert mem.eqa_approach_attached_find(np.array([0.0, 0.0, 0.0])) is None
 
 
 def test_format_eqa_view_status_exposes_visit_counters():

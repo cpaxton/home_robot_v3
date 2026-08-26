@@ -351,7 +351,13 @@ class GraphAnswerMixin:
 
         relevant_images: list[Image.Image] = []
         for oid in obs_ids:
-            rgb = self._eqa_rgb_for_obs(int(oid))
+            oid_i = int(oid)
+            use_zoom_primary = oid_i in read_zoom_primary
+            rgb = None
+            if use_zoom_primary:
+                rgb = self._eqa_crop_for_obs(oid_i, detail_zoom=True)
+            if rgb is None:
+                rgb = self._eqa_rgb_for_obs(oid_i)
             if rgb is None:
                 continue
             im = Image.fromarray(rgb, mode="RGB")
@@ -640,16 +646,19 @@ class GraphAnswerMixin:
         missing_find: list[int] = []
         if _count_mcq and count_nodes:
             attached = {int(oid) for oid in obs_ids}
-            attached_find = False
             for node in count_nodes:
                 oid = int(node.obs_id)
                 if not self._obs_usable_for_eqa_image(oid):
                     continue
-                if oid in attached:
-                    attached_find = True
-                elif oid not in missing_find:
+                if oid not in attached and oid not in missing_find:
                     missing_find.append(oid)
-            if missing_find and not attached_find and count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
+            for oid in self._find_queue_candidate_obs_ids(question, pin_obs=pin_obs):
+                if int(oid) not in attached and int(oid) not in missing_find:
+                    missing_find.append(int(oid))
+            if (
+                missing_find
+                and count_answer_is_none_or_zero(str(answer or ""), parsed_choices)
+            ):
                 if confidence:
                     confidence = False
                     confidence_reasoning = (

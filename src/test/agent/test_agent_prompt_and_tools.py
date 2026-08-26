@@ -324,7 +324,16 @@ def test_describe_scene_delegates_to_agent():
     assert discord.pushed == []  # image is attached by the agent loop with the reply
 
 
-def test_chat_wants_detail_zoom_on_clock_questions():
+def test_prompt_routes_clock_and_sign_to_head_zoom():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
+    lowered = prompt.lower()
+    assert "what time is it" in lowered
+    assert "auto-zooms" in lowered or "head crop" in lowered
+    assert "describe_scene" in lowered
+    assert "navigate_to_obs" not in prompt
     import numpy as np
 
     from emet.agent.tools import chat_head_rgb_for_reply, chat_wants_detail_zoom

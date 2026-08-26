@@ -569,7 +569,14 @@ class GraphEqaObsMixin:
         return True
 
     def eqa_approach_attached_find(self, robot_xyt: Any | None = None) -> np.ndarray | None:
-        """Waypoint toward Image-1 FIND when the robot is still far; None to stay put."""
+        """Waypoint toward Image-1 FIND when the robot is still far; None to stay put.
+
+        ``read N`` must stay in place so the next ``query_answer`` can attach a zoom crop.
+        """
+        action = str(self.last_eqa_parsed[3] or "") if self.last_eqa_parsed else ""
+        kind, _disp = parse_eqa_action(action)
+        if kind == "read":
+            return None
         oid = self.eqa_attached_target_obs_id()
         if oid is None or self.eqa_obs_look_spent(oid):
             return None
