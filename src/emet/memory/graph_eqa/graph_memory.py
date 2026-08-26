@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from emet.memory.graph_eqa.graph_answer import GraphAnswerMixin
+from emet.memory.graph_eqa.graph_answer_trace import GraphAnswerTraceMixin
 from emet.memory.graph_eqa.graph_eqa_obs import GraphEqaObsMixin
 from emet.memory.graph_eqa.graph_hypotheses import GraphHypothesisMixin
 from emet.memory.graph_eqa.graph_init import GraphInitMixin
@@ -167,6 +168,7 @@ class GraphEQAMemory(
     GraphHypothesisMixin,
     GraphPromptMixin,
     GraphNavMixin,
+    GraphAnswerTraceMixin,
     GraphAnswerMixin,
 ):
     """

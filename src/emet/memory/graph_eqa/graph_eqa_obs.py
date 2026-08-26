@@ -18,6 +18,8 @@ from PIL import Image
 from emet.memory.graph_eqa.eqa_views import (
     EQA_SAME_OBS_MAX_VISITS,
     EQA_SAME_OBS_PROGRESS_M,
+    _FALSE,
+    _TRUE,
     center_zoom_crop,
     center_zoom_enabled,
     eqa_look_is_spent,
@@ -578,7 +580,9 @@ class GraphEqaObsMixin:
         attached_set = {int(x) for x in obs_ids}
         lines = [
             "CLOSE_LOOK_STATUS (geometric — did the camera get a close on-axis look at this XY? "
-            "Not the answer; occupancy/nearby alone is insufficient for clocks and small counts):",
+            "Not the answer; occupancy/nearby alone is insufficient for clocks and small counts. "
+            "If resolved=no on the view you are answering from, keep exploring or read closer "
+            "before setting confidence true):",
         ]
         for idx, oid in enumerate(obs_ids, start=1):
             lines.append(self._format_close_look_line(int(oid), voxel_map, slot=f"Image {idx}"))
@@ -669,19 +673,131 @@ class GraphEqaObsMixin:
     ) -> int | None:
         """Choose an already-attached scene whose detector crop is a useful extra view."""
         attached = {int(oid) for oid in obs_ids}
+        pin_set = {int(x) for x in pin_obs}
+        visual = set(self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=8))
         ordered: list[int] = []
         if look_obs_id is not None and int(look_obs_id) in attached:
             ordered.append(int(look_obs_id))
-        ordered.extend(int(oid) for oid in pin_obs if int(oid) in attached)
-        ordered.extend(int(oid) for oid in obs_ids)
+        for oid in pin_obs:
+            oi = int(oid)
+            if oi in attached and oi not in ordered:
+                ordered.append(oi)
+        for oid in obs_ids:
+            oi = int(oid)
+            if oi not in ordered:
+                ordered.append(oi)
+
+        def _priority(oid: int) -> tuple[int, int]:
+            rel = 0 if oid in pin_set and (not visual or oid in visual) else 1
+            try:
+                rank = ordered.index(oid)
+            except ValueError:
+                rank = 99
+            return rel, rank
+
+        candidates = [oid for oid in ordered if self._eqa_crop_for_obs(oid, detail_zoom=detail_zoom) is not None]
+        if not candidates:
+            return None
+        candidates.sort(key=_priority)
+        return int(candidates[0])
+
+    def _close_look_confidence_gate_enabled(self) -> bool:
+        env = os.environ.get("EMET_EQA_CLOSE_LOOK_CONFIDENCE_GATE", "").strip().lower()
+        if env in _TRUE:
+            return True
+        if env in _FALSE:
+            return False
+        return bool(self._eqa_cfg_value("close_look_confidence_gate", False))
+
+    def _decision_obs_for_close_look_gate(
+        self,
+        obs_ids: list[int],
+        pin_obs: list[int],
+        count_nodes: list[Any],
+    ) -> list[int]:
+        """Obs ids whose geometry should be close before we accept a confident answer."""
+        count_oids = {int(n.obs_id) for n in count_nodes}
+        attached = [int(x) for x in obs_ids]
+        pins = [int(x) for x in pin_obs if self._obs_usable_for_eqa_image(int(x))]
+        out: list[int] = []
         seen: set[int] = set()
-        for oid in ordered:
+        for oid in pins + [o for o in attached if o in count_oids] + attached:
             if oid in seen:
                 continue
             seen.add(oid)
-            if self._eqa_crop_for_obs(oid, detail_zoom=detail_zoom) is not None:
-                return oid
-        return None
+            out.append(oid)
+        return out[:4]
+
+    def _downgrade_confidence_unresolved_close_look(
+        self,
+        *,
+        obs_ids: list[int],
+        pin_obs: list[int],
+        count_nodes: list[Any],
+        voxel_map: Any | None,
+        confidence: bool,
+        confidence_reasoning: str,
+    ) -> tuple[bool, str]:
+        if not confidence or not self._close_look_confidence_gate_enabled():
+            return confidence, confidence_reasoning
+        if close_map_from_voxel_map(voxel_map) is None:
+            return confidence, confidence_reasoning
+        decision = self._decision_obs_for_close_look_gate(obs_ids, pin_obs, count_nodes)
+        unresolved: list[int] = []
+        for oid in decision:
+            q = self._close_look_query_for_obs(int(oid), voxel_map)
+            if q is None:
+                continue
+            if not q.resolved:
+                unresolved.append(int(oid))
+        if not unresolved:
+            return confidence, confidence_reasoning
+        note = (
+            " The target view is not close enough yet (CLOSE_LOOK_STATUS resolved=no for obs "
+            + ", ".join(str(x) for x in unresolved)
+            + "); move closer or read that view before confirming."
+        )
+        return False, (confidence_reasoning + note).strip()
+
+    def _dedupe_eqa_obs_ids(
+        self,
+        obs_ids: list[int],
+        *,
+        pin_obs: list[int],
+        selected: list[int],
+        max_images: int,
+    ) -> tuple[list[int], list[dict[str, int | str]]]:
+        from emet.memory.graph_eqa.eqa_views import dedupe_obs_ids_by_frame
+
+        def _viewer_xy(oid: int) -> np.ndarray | None:
+            obs = self._observation_by_id(int(oid))
+            if obs is None:
+                return None
+            v = getattr(obs, "viewer_xyz", None)
+            if v is not None:
+                return np.asarray(v, dtype=float)[:2]
+            return self._obs_xy(int(oid))
+
+        deduped, dropped = dedupe_obs_ids_by_frame(
+            obs_ids,
+            rgb_for_obs=self._eqa_rgb_for_obs,
+            viewer_xy_for_obs=_viewer_xy,
+        )
+        if len(deduped) >= len(obs_ids) or max_images <= 0:
+            return deduped, dropped
+        seen = set(deduped)
+        for pool in (pin_obs, selected):
+            for raw in pool:
+                oid = int(raw)
+                if oid in seen or not self._obs_usable_for_eqa_image(oid):
+                    continue
+                deduped.append(oid)
+                seen.add(oid)
+                if len(deduped) >= max_images:
+                    break
+            if len(deduped) >= max_images:
+                break
+        return deduped[:max_images], dropped
 
     def _eqa_reserve_closeup_slot(
         self,

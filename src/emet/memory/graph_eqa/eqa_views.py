@@ -175,6 +175,54 @@ def eqa_look_is_spent(
     return False
 
 
+def _rgb_frame_key(rgb: np.ndarray) -> str:
+    """Cheap fingerprint for duplicate camera frames (not cryptographic)."""
+    from PIL import Image
+
+    arr = rgb_uint8(rgb)
+    thumb = np.asarray(Image.fromarray(arr).resize((32, 32), resample=Image.Resampling.BILINEAR))
+    return thumb.tobytes().hex()[:24]
+
+
+def dedupe_obs_ids_by_frame(
+    obs_ids: Sequence[int],
+    *,
+    rgb_for_obs: Callable[[int], np.ndarray | None],
+    viewer_xy_for_obs: Callable[[int], np.ndarray | None] | None = None,
+    pose_eps_m: float = 0.08,
+) -> tuple[list[int], list[dict[str, int | str]]]:
+    """Drop later obs ids that repeat the same stored RGB (or same viewer pose)."""
+    out: list[int] = []
+    dropped: list[dict[str, int | str]] = []
+    seen_rgb: set[str] = set()
+    seen_pose: list[tuple[float, float]] = []
+    for raw in obs_ids:
+        oid = int(raw)
+        rgb = rgb_for_obs(oid)
+        if rgb is not None:
+            key = _rgb_frame_key(rgb)
+            if key in seen_rgb:
+                dropped.append({"dropped": oid, "kept": int(out[0]) if out else oid, "reason": "duplicate_rgb"})
+                continue
+            seen_rgb.add(key)
+        if viewer_xy_for_obs is not None:
+            vxy = viewer_xy_for_obs(oid)
+            if vxy is not None:
+                px, py = float(vxy[0]), float(vxy[1])
+                if any(abs(px - sx) <= pose_eps_m and abs(py - sy) <= pose_eps_m for sx, sy in seen_pose):
+                    dropped.append(
+                        {
+                            "dropped": oid,
+                            "kept": int(out[-1]) if out else oid,
+                            "reason": "duplicate_viewer_pose",
+                        }
+                    )
+                    continue
+                seen_pose.append((px, py))
+        out.append(oid)
+    return out, dropped
+
+
 def spread_obs_ids_xy(
     obs_ids: Sequence[int],
     xyz_xy: Callable[[int], np.ndarray | None],

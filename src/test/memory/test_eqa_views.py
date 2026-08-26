@@ -7,7 +7,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from emet.memory.graph_eqa.eqa_views import crop_rgb_tight_bbox, eqa_look_is_spent, spread_obs_ids_xy
+from emet.memory.graph_eqa.eqa_views import (
+    crop_rgb_tight_bbox,
+    dedupe_obs_ids_by_frame,
+    eqa_look_is_spent,
+    spread_obs_ids_xy,
+)
 from emet.memory.graph_eqa.graph_eqa_siglip import flatten_find_all_images
 
 
@@ -36,6 +41,36 @@ def test_spread_obs_ids_xy_picks_farthest_cluster_second():
     out = spread_obs_ids_xy([1, 2, 3], xyz.get, max_n=2)
     assert out[0] == 1
     assert out[1] == 3
+
+
+def test_dedupe_obs_ids_by_frame_drops_duplicate_rgb():
+    rgb_a = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_b = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_b[0, 0] = (255, 0, 0)
+    store = {1: rgb_a, 2: rgb_a, 3: rgb_b}
+
+    deduped, dropped = dedupe_obs_ids_by_frame([1, 2, 3], rgb_for_obs=store.get)
+    assert deduped == [1, 3]
+    assert len(dropped) == 1
+    assert dropped[0]["dropped"] == 2
+    assert dropped[0]["reason"] == "duplicate_rgb"
+
+
+def test_dedupe_obs_ids_by_frame_drops_duplicate_viewer_pose():
+    rgb_a = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_b = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_b[0, 0] = (0, 255, 0)
+    store = {1: rgb_a, 2: rgb_b}
+    poses = {1: np.array([1.0, 2.0]), 2: np.array([1.02, 2.01])}
+
+    deduped, dropped = dedupe_obs_ids_by_frame(
+        [1, 2],
+        rgb_for_obs=store.get,
+        viewer_xy_for_obs=poses.get,
+        pose_eps_m=0.08,
+    )
+    assert deduped == [1]
+    assert dropped[0]["reason"] == "duplicate_viewer_pose"
 
 
 def test_flatten_find_all_images_restores_score_order():
