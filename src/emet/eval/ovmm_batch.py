@@ -206,6 +206,16 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 manip_mode=manip,
             )
             tag = f"{ep.id}_{backend}"
+            ep_dir = output_dir / tag
+            ep_dir.mkdir(parents=True, exist_ok=True)
+            os.environ["EMET_EQA_EPISODE_DIR"] = str(ep_dir)
+            if os.environ.get("EMET_AGENTIC_QUERY_IMAGES", "1").strip().lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }:
+                os.environ.setdefault("EMET_AGENTIC_QUERY_IMAGES_DIR", str(ep_dir / "images"))
             label = f"Running {tag}" + (f" manip_mode={manip}" if opts.full else "") + " …"
             print(label, file=sys.stderr)
             try:

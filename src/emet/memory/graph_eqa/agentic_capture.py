@@ -18,6 +18,7 @@ from emet.memory.graph_eqa.agentic_config import (
 )
 from emet.memory.graph_eqa.agentic_policy import AgenticState
 from emet.memory.graph_eqa.graph_memory import NavHypothesis, question_stem_for_keywords
+from emet.memory.graph_eqa.query_images import dump_query_rgb
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -171,7 +172,8 @@ class AgenticCaptureMixin:
                 except Exception as exc:
                     _logger.warning(f"hypothesis refresh after capture failed: {exc}")
             self._last_capture_status = "OK"
-            self._append_trace({"tool": "capture_and_update", "ok": True, "obs_id": fresh})
+            cap_paths = dump_query_rgb(self, int(fresh), kind="capture")
+            self._append_trace({"tool": "capture_and_update", "ok": True, "obs_id": fresh, **cap_paths})
             return {"ok": True, "obs_id": fresh, "status": "NEW_OBS"}
 
         # Same obs_id but candidate RGB/evidence refreshed via spatial merge.
@@ -221,6 +223,7 @@ class AgenticCaptureMixin:
                 except Exception as exc:
                     _logger.warning(f"hypothesis refresh after content refresh failed: {exc}")
             self._last_capture_status = "CONTENT_REFRESHED"
+            cap_paths = dump_query_rgb(self, int(use_id), kind="capture")
             self._append_trace(
                 {
                     "tool": "capture_and_update",
@@ -228,6 +231,7 @@ class AgenticCaptureMixin:
                     "obs_id": use_id,
                     "status": "CONTENT_REFRESHED",
                     "refreshed_obs_ids": refreshed_ids,
+                    **cap_paths,
                 }
             )
             return {

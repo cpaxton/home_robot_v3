@@ -47,6 +47,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |
 | `EMET_OVMM_SKIP_TABLE_MAPPING_POSE` | `ovmm_find_phase.run_mapping_protocol` | Skip rby1 default-table backup + `look_front` before rotate scan (`1`/`true`). |
+| `EMET_OVMM_S0_PARITY` | `ovmm_find_phase.run_episode_find_phase` | Default **on** for S0 ``default_table*`` episodes: pytest-aligned oneshot path (`DynamemTaskExecutor` + live map, no scene cache, interactive dynagraph profile, phrase-only localize). Set `0`/`false` for full OVMM find-phase harness. |
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `scripts/eval_dynamic_exploration.py` | Dynamic exploration sweep output. Default `~/runs/emet/dynamic_exploration` (`configs/benchmarks/dynamic_exploration.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
@@ -105,6 +106,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_AGENTIC_VERIFIER` | `AgenticEQAExecutor` | Hybrid where-next backend for ranking places: `none`/`siglip` (paper-router / overnight default), `owlv2`, or `yoloe`. Answerability is Qwen `vlm_assess` on pixels (detector ABSENT/PRESENT is not fed into that prompt and does not unlock submit). |
 | `EMET_EQA_ANSWERABLE_CONFIRM` | `AgenticEQAExecutor` | Hybrid confirm before submit unlock (default **on**). Raw VLM `answerable` unlocks only after phrase/inventory corroboration **or** a second agreeing semantic choice on another obs. `0`/`false` restores legacy immediate unlock. `need_more_views` always defers. Trace: `answerable_deferred` / `answerable_confirmed`. |
 | `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
+| `EMET_EQA_EPISODE_DIR` | Agentic EQA / OVMM find | Episode artifact directory. OVMM batch sets this to ``OUT/<episode>_<backend>/`` so traces and query PNGs land next to the run JSON. |
+| `EMET_AGENTIC_QUERY_IMAGES` | `query_images.dump_query_rgb` | Default **on**. Write the RGB actually sent to Qwen (`vlm_assess` / `capture`) as PNGs. `0`/`false` disables. |
+| `EMET_AGENTIC_QUERY_IMAGES_DIR` | `query_images.dump_query_rgb` | Override dump directory. Default: ``$EMET_EQA_EPISODE_DIR/images`` (or next to the agentic trace). Files: ``rgb_<obs>.png`` plus ``<kind>_r<round>_obs<id>.png``. |
 | `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
 | `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
 | `EMET_USE_SCENE_MAP_CACHE` | OVMM find / dynamic explore | Load cached baseline and skip rotate/explore when present (default `1`). Set `0` or pass `--no-scene-cache`. |

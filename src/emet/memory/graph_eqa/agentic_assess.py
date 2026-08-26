@@ -20,6 +20,7 @@ from emet.memory.graph_eqa.agentic_config import (
 )
 from emet.memory.graph_eqa.agentic_types import AnswerEvidenceRecord
 from emet.memory.graph_eqa.graph_memory import question_stem_for_keywords
+from emet.memory.graph_eqa.query_images import dump_query_rgb
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -432,6 +433,7 @@ class AgenticAssessMixin:
             target_phrase=self._target_phrase or phrase,
             is_mcq=self._question_is_mcq(),
         )
+        query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
         vlm_event_id = self._persist_agentic_evidence(
             stage="vlm_assessment",
             outcome="present" if assessment.present else "absent",
@@ -621,6 +623,8 @@ class AgenticAssessMixin:
             "vlm_evidence_event_id": vlm_event_id or None,
             "verified_evidence_event_ids": list(self._verified_evidence_event_ids),
         }
+        if query_image_paths:
+            payload.update(query_image_paths)
         self._last_vlm_assess = payload
         answer_evidence = None
         if assessment.present:

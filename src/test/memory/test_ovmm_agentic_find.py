@@ -69,14 +69,29 @@ class _Node:
     is_viewpoint: bool = False
 
 
-def test_xyz_from_verified_obs():
+def test_xyz_from_verified_obs_prefers_matching_object_node():
+    """Object graph node centroid beats observation/camera XYZ for localize scoring."""
     agent = MagicMock()
     agent.graph_memory = MagicMock()
-    agent.graph_memory._observations = [_Obs(3, np.array([1.0, 2.0, 0.5]), ["jar"])]
-    agent.graph_memory.get_nodes.return_value = []
-    xyz = xyz_from_verified_obs(agent, 3)
+    agent.graph_memory._observations = [_Obs(3, np.array([0.0, 0.0, 0.05]), ["table"])]
+    agent.graph_memory.get_nodes.return_value = [
+        _Node(3, np.array([0.08, -0.55, 0.6]), ["red cylinder"]),
+        _Node(3, np.array([-0.02, -0.55, 0.6]), ["blue cube"]),
+    ]
+    xyz = xyz_from_verified_obs(agent, 3, phrases=["blue cube"])
     assert xyz is not None
-    assert np.allclose(xyz, [1.0, 2.0, 0.5])
+    assert np.allclose(xyz, [-0.02, -0.55, 0.6])
+
+
+def test_localize_phrases_from_question_and_meta():
+    from emet.eval.ovmm_agentic_find import _localize_phrases
+
+    phrases = _localize_phrases(
+        "Where is the red cylinder on the table?",
+        {"object": "red cylinder", "start_recep": "table"},
+    )
+    assert "red cylinder" in phrases
+    assert "table" in phrases
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
@@ -105,6 +120,35 @@ def test_run_ovmm_agentic_localize_maps_verified_obs(mock_run):
     assert out.n_retracted_claims == 0  # pre-existing claim is not this run's delta
     mock_run.assert_called_once()
     assert mock_run.call_args[0][1] == "Where is the cab?"
+    assert mock_run.call_args.kwargs.get("trace_path") is None
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_run_ovmm_agentic_localize_uses_episode_dir_trace(mock_run, tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="found",
+        answer="here",
+        confidence=True,
+        verified=True,
+        verified_obs_id=7,
+        n_rounds=1,
+    )
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = [_Obs(7, np.array([0.5, -0.2, 1.0]), ["cab"])]
+    agent.graph_memory._retracted_nav_claims = set()
+    agent.graph_memory.get_nodes.return_value = []
+
+    run_ovmm_agentic_localize(
+        agent,
+        "Where is the cab?",
+        trace_meta={"ovmm_phase": "find_object"},
+    )
+    trace = mock_run.call_args.kwargs["trace_path"]
+    assert trace is not None
+    assert trace.name == "find_object_agentic_trace.jsonl"
+    assert trace.parent == tmp_path
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")

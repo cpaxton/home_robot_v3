@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from emet.eval.ovmm_find_phase import (
+    FindPhaseEpisode,
     FindPhaseRunConfig,
     _query_variants,
     category_matches,
@@ -30,12 +31,14 @@ from emet.eval.ovmm_find_phase import (
     create_find_phase_agent,
     distance_to_placement_xy,
     horizontal_coords,
+    is_s0_default_table_episode,
     localization_detect_fields,
     localization_pred_fields,
     pick_find_object_gt_body,
     pred_xyz_to_json_list,
     query_find_phase_localization,
     resolve_find_phase_nav_step_timeout,
+    resolve_s0_parity_flags,
     score_find_object,
     score_find_recep,
     take_voxel_localize_stats,
@@ -198,6 +201,63 @@ def test_query_variants_language_only_no_gt_cats():
     assert all("handle" not in v.lower() for v in variants)
 
 
+def test_resolve_s0_parity_flags_for_default_table_s0():
+    ep = FindPhaseEpisode(
+        id="default_table_s0",
+        tier="S0",
+        sim="configs/sim/default_table_stretch.yaml",
+        object="red cylinder",
+        start_recep="table",
+        goal_recep="table",
+    )
+    assert is_s0_default_table_episode(ep)
+    parity, phrase = resolve_s0_parity_flags(
+        ep,
+        FindPhaseRunConfig(backend="dynagraph", agentic_find=False),
+        use_agentic=False,
+    )
+    assert parity is True
+    assert phrase is True
+    _, phrase_agentic = resolve_s0_parity_flags(
+        ep,
+        FindPhaseRunConfig(backend="dynagraph"),
+        use_agentic=True,
+    )
+    assert phrase_agentic is False
+
+
+def test_query_find_phase_phrase_only_skips_token_variants():
+    memory = _FakeMemory()
+
+    class _TokenVoxel:
+        def localize_text(self, text, debug=False, return_debug=False):
+            pt = [9.0, 9.0, 9.0] if str(text).lower() == "cylinder" else None
+            if return_debug:
+                return pt, ""
+            return pt
+
+    voxel = _TokenVoxel()
+    xyz, ok, _, _ = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        voxel_map=voxel,
+        prefer_voxel=True,
+        phrase_only=True,
+    )
+    assert ok is False
+    assert xyz is None
+    xyz2, ok2, q2, _ = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        voxel_map=voxel,
+        prefer_voxel=True,
+        phrase_only=False,
+    )
+    assert ok2 is True
+    assert q2 == "cylinder"
+    np.testing.assert_allclose(xyz2, [9.0, 9.0, 9.0])
+
+
 def test_score_find_object_unscored_without_gt_match():
     placements = {"table": {"cat": "table", "pos": [0.0, 0.0, 0.5]}}
     out = score_find_object(
@@ -310,6 +370,25 @@ def test_query_find_phase_localization_voxel_source():
     assert source == "voxel"
     assert xyz is not None
     assert q_used == "red cylinder"
+
+
+def test_query_find_phase_localization_skips_nav_transform_on_default_table():
+    """DynaMem voxel XYZ is already MuJoCo world; do not re-map via navigation_origin."""
+    memory = _FakeMemory()
+    world_xyz = [0.08, -0.55, 0.6]
+    voxel = _FakeVoxel(world_xyz)
+    session = {"navigation_origin_xyt": [1.0, 2.0, 0.0]}
+    xyz, ok, _, source = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        session=session,
+        voxel_map=voxel,
+        convert_nav_to_world=False,
+        prefer_voxel=True,
+    )
+    assert ok is True
+    assert source == "voxel"
+    np.testing.assert_allclose(xyz, world_xyz, rtol=0, atol=1e-6)
 
 
 def test_query_find_phase_localization_graph_near_recep_source():
@@ -475,7 +554,7 @@ def test_run_episode_find_phase_includes_timing_fields(
         explore_steps=3,
         success_radius_m=0.75,
     )
-    run_cfg = FindPhaseRunConfig(backend="dynamem", seed=7)
+    run_cfg = FindPhaseRunConfig(backend="dynamem", seed=7, s0_parity=False)
 
     with patch(
         "emet.memory.graph_eqa.sim_ground_truth_graph.read_sim_object_placements",
@@ -503,6 +582,8 @@ def test_run_episode_find_phase_includes_timing_fields(
     assert result["use_sensor_perception"] is False
     assert result["prefer_voxel"] is True
     assert result["seed"] == 7
-    # ZMQ must stay idle during SigLIP/YoloE load (Robocasa HWM wedge otherwise).
+    assert result["s0_parity"] is False
+    assert result["s0_phrase_only"] is False
+    # S0 parity disabled in this mock run (avoids DynamemTaskExecutor sim path).
     assert mock_robot_client.call_args.kwargs.get("start_immediately") is False
     mock_robot.set_velocity.assert_called_once()
