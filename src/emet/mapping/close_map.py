@@ -27,8 +27,6 @@ DEFAULT_QUERY_RADIUS_M = 0.35
 DEFAULT_ESCAPE_ATTEMPTS = 4
 DEFAULT_CHAT_ESCAPE_ATTEMPTS = 2
 
-_TRUE = frozenset({"1", "true", "yes", "on"})
-
 
 def _env_float(name: str, default: float) -> float:
     raw = os.environ.get(name, "").strip()

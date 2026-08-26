@@ -20,7 +20,13 @@ from emet.memory.graph_eqa.agentic_config import (
 )
 from emet.memory.graph_eqa.agentic_tools import coerce_room_label, normalize_current_room
 from emet.memory.graph_eqa.agentic_types import PlaceInspectRecord, PlaceInspectVisit
+from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
+from emet.memory.graph_eqa.place_approaches import (
+    footprint_from_xyz,
+    make_grid_converters,
+    sample_annulus_approach_xy,
+)
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     resolve_investigate_room_stamp,
@@ -122,13 +128,6 @@ class AgenticPlaceMixin:
         r_in = max(0.35, float(getattr(gm, "image_nav_min_approach_m", 0.35) or 0.35))
         if voxel_map is not None and hasattr(voxel_map, "get_2d_map"):
             try:
-                from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
-                from emet.memory.graph_eqa.place_approaches import (
-                    footprint_from_xyz,
-                    make_grid_converters,
-                    sample_annulus_approach_xy,
-                )
-
                 converters = make_grid_converters(voxel_map)
                 if converters is not None:
                     xy_to_ij, ij_to_xy, _res = converters

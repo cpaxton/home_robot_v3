@@ -6,7 +6,8 @@ This document describes the **mapping** package layout and how it fits with **me
 
 ```
 emet.mapping
-├── __init__.py       # Public API: grid, instance, scene_graph, voxel
+├── __init__.py       # Public API: grid, instance, scene_graph, voxel, close_map
+├── close_map.py      # Close-look 2D grid (min cam range + aimed); see docs/close_map.md
 ├── grid/             # 2D grid params and utilities (GridParams)
 ├── instance/         # Object instances: Instance, InstanceView, InstanceMemory
 ├── scene_graph/      # Scene graph over instances (SceneGraph)
@@ -29,6 +30,7 @@ So: **mapping** = spatial representation (grid, voxel, instances, scene graph). 
 - **Instance**: A detected object with point cloud, bounds, and views (cropped image, pose, score). Used by voxel (when `use_instance_memory=True`), scene graph, and controllers.
 - **Scene graph**: Nodes = instances; edges = spatial relations (near, on). Built from instances; used by operations and Rerun.
 - **Voxel map**: 2D/3D voxelized point cloud + optional instance memory. Base class in `voxel/voxel.py`; Dynamem variant in `voxel/voxel_dynamem.py`.
+- **Close-look map**: occupancy-aligned 2D grid of min camera range + aimed hits (`close_map.py`). Occupancy ≠ a resolved look at a small object — see [close_map.md](../close_map.md).
 
 ## Instance module
 

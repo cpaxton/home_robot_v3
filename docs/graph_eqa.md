@@ -19,6 +19,8 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 
 **Room timeline:** the same memory keeps a capped room-scoped event history (`stamp` / `verify_absent` / `coverage_closed`, …) for the agentic state card — agent-visible facts, not a nav escape latch. See [attempt_ledger.md](attempt_ledger.md#room-timeline-graph-history).
 
+**Close-look map:** occupancy is not a resolved look at a small object. A 2D grid aligned with the voxel map stores min camera range + aimed hits; agentic find stays on a place card until close or escape. See [close_map.md](close_map.md).
+
 ## When to use GraphEQA vs DynaMem EQA
 
 | | **EQA (DynaMem)** | **Graph EQA** |
@@ -176,7 +178,7 @@ All three memory models:
 |--------------|---------|--------|
 | **Sparse voxel map** | `emet.mapping.voxel` | `SparseVoxelMap`; base voxel map used by default agent. |
 | **DynaMem** | `emet.memory.dynamem` / `emet.mapping.voxel` | Re-exports `SparseVoxelMapDynamem`; VL + EQA voxel memory. |
-| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` facade in `graph_memory.py`; types in `graph_types.py`; methods in `graph_{init,mutate,rooms,eqa_obs,hypotheses,prompt,nav,answer}.py`. Agentic loop: `agentic_eqa.py` facade; mixins in `agentic_{init,run,router,answer,verify,assess,capture,investigate,place,explore,action}.py`. |
+| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` facade in `graph_memory.py`; types in `graph_types.py`; methods in `graph_{init,mutate,rooms,eqa_obs,hypotheses,prompt,nav,answer}.py`. Agentic loop: `agentic_eqa.py` facade; mixins in `agentic_{init,run,router,answer,verify,assess,capture,investigate,place,explore,action}.py`. Close-look occupancy grid: [close_map.md](close_map.md). |
 
 Other components:
 

@@ -31,6 +31,7 @@ from torch import Tensor
 import emet.utils.compression as compression
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
+from emet.mapping.close_map import CloseDistanceMap
 from emet.mapping.grid import GridParams
 from emet.mapping.instance import Instance, InstanceMemory
 from emet.motion import Footprint, HelloStretchIdx, PlanResult, RobotModel
@@ -321,10 +322,8 @@ class SparseVoxelMap:
 
     def _reset_close_map(self) -> None:
         """Occupancy-aligned close-look grid (min camera range + aimed)."""
-        from emet.mapping.close_map import CloseDistanceMap
-
         origin = self.grid_origin
-        if hasattr(origin, "detach"):
+        if isinstance(origin, Tensor):
             origin = origin.detach().cpu().numpy()
         origin_xy = np.asarray(origin, dtype=np.float64).reshape(-1)[:2]
         gs = self.grid_size
@@ -341,16 +340,12 @@ class SparseVoxelMap:
         valid: Tensor | np.ndarray | None = None,
     ) -> int:
         """Stamp the close-look map from one RGB-D view. Returns cells touched."""
-        cm = getattr(self, "close_map", None)
-        if cm is None:
-            self._reset_close_map()
-            cm = self.close_map
-        pose = camera_pose.detach().cpu().numpy() if hasattr(camera_pose, "detach") else np.asarray(camera_pose)
-        xyz = world_xyz.detach().cpu().numpy() if hasattr(world_xyz, "detach") else np.asarray(world_xyz)
+        pose = camera_pose.detach().cpu().numpy() if isinstance(camera_pose, Tensor) else np.asarray(camera_pose)
+        xyz = world_xyz.detach().cpu().numpy() if isinstance(world_xyz, Tensor) else np.asarray(world_xyz)
         mask = None
         if valid is not None:
-            mask = valid.detach().cpu().numpy() if hasattr(valid, "detach") else np.asarray(valid)
-        return int(cm.update_from_view(pose, xyz, mask))
+            mask = valid.detach().cpu().numpy() if isinstance(valid, Tensor) else np.asarray(valid)
+        return int(self.close_map.update_from_view(pose, xyz, mask))
 
     def get_instances(self) -> list[Instance]:
         """Return a list of all viewable instances.

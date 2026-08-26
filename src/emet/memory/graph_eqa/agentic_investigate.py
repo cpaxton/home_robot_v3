@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.controller.nav_attempt import nav_status_code
 from emet.mapping.close_map import (
     CloseLookDecision,
     close_map_from_voxel_map,
@@ -265,7 +266,7 @@ class AgenticInvestigateMixin:
                 rxy = self._robot_xyt_world()
                 if rxy is not None:
                     target_theta = float(np.arctan2(look_y - float(rxy[1]), look_x - float(rxy[0])))
-        except Exception:
+        except (TypeError, ValueError):
             target_theta = None
         try:
             nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid)
@@ -289,7 +290,6 @@ class AgenticInvestigateMixin:
         # common case and must not be treated as a failure. Use the NavOutcome
         # (reached/progress) as the "reached / progressing" signal.
         nav_progress = bool(nav_outcome.ok)
-        from emet.controller.nav_attempt import nav_status_code
 
         # Ledger dual-write is owned by DynamemController._log_nav_attempt
         # (sync_nav_attempt_to_ledger). Fallback only when no result was published.

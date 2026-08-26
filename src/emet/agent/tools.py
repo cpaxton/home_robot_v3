@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
 from emet.memory.graph_eqa.graph_stats import format_graph_size_report
 from emet.memory.graph_eqa.human_answer import HumanEQAResult, format_eqa_tool_response
 from emet.utils.logger import Logger
@@ -1148,8 +1149,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 return f"Tried to face {label!r} ({source}) but rotate failed."
             context["last_rotate_degrees"] = deg
             msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
-        from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
-
         hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
         if hint:
             msg = f"{msg} {hint}"

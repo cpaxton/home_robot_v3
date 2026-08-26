@@ -89,7 +89,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_ATTEMPT_LEDGER_MAX` | `GraphEQAMemory` | Cap on stored `AttemptRecord` rows (default `512`). Also `eqa.attempt_ledger.max_records`. |
 | `EMET_EQA_AGENTIC_MCQ_DEBIAS` | `AgenticEQAExecutor` | Default **on**. Unverified forced answers (budget exhaustion) run the letter-free debias (`vote_mcq_letter`: freeform + ≤2 rotation votes) before the ladder, fixing the last-option (D) bias seen in the trace audit. `0` restores the raw EQA letter. Also `eqa.agentic_mcq_debias`. |
 | `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Ask the per-episode VLM extract (keyword fallback) whether the question needs a close look (clock/state/count/detail); when it does, the router state says so and a 2+-frontier streak redirects to investigate/`look_around` instead of exploring forever (q84 time-question fix). `0` disables. Also `eqa.agentic_close_look`. |
-| `EMET_CLOSE_MAP_R_M` | `CloseDistanceMap` | Aimed camera range (m) that counts as a resolved close look (default `0.55`). Occupancy exploration is not enough for small objects. |
+| `EMET_CLOSE_MAP_R_M` | `CloseDistanceMap` | Aimed camera range (m) that counts as a resolved close look (default `0.55`). Occupancy exploration is not enough for small objects. See [close_map.md](close_map.md). |
 | `EMET_CLOSE_MAP_AIM_DEG` | `CloseDistanceMap` | Optical-axis cone (deg) for an “aimed” hit (default `25`). |
 | `EMET_CLOSE_MAP_QUERY_RADIUS_M` | `CloseDistanceMap` | XY neighborhood radius (m) when querying a place card (default `0.35`). |
 | `EMET_CLOSE_MAP_ESCAPE_ATTEMPTS` | `decide_close_look` | Agentic find: max approaches on an unresolved XY before escape (default `4`). |
