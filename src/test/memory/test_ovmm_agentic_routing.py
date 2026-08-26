@@ -1,8 +1,22 @@
 # Copyright (c) Chris Paxton 2026
 #
-# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""OVMM-scoped agentic routing helpers (no sim / VLM)."""
+"""Locate-question routing on the shared agentic executor (no sim / VLM).
+
+OVMM find only phrases ``Where is the X?`` — these tests must not depend on
+``ovmm_phase`` or GT placement seeds.
+"""
 
 from __future__ import annotations
 
@@ -10,44 +24,44 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from emet.memory.graph_eqa.agentic_config import question_is_locate
 from emet.memory.graph_eqa.agentic_eqa import (
     DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
     INVESTIGATE_ANNULUS_OUTER_M,
-    OVMM_NEAR_INVESTIGATE_M,
+    NEAR_INVESTIGATE_M,
     AgenticEQAExecutor,
 )
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, NavHypothesis
 
 
-def _executor(*, phase: str = "", meta: dict | None = None) -> AgenticEQAExecutor:
+def _executor(*, question: str = "Where is the microwave?") -> AgenticEQAExecutor:
     agent = MagicMock()
     agent.parameters = {}
     agent.robot = MagicMock()
-    trace = {"ovmm_phase": phase, **(meta or {})}
-    ex = AgenticEQAExecutor(
+    return AgenticEQAExecutor(
         agent,
-        "Where is the microwave?",
+        question,
         max_rounds=4,
         router=False,
-        trace_meta=trace,
     )
-    return ex
 
 
-def test_apply_ovmm_trace_target_find_recep():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "microwave"})
-    ex._apply_ovmm_trace_target()
-    assert ex._target_phrase == "microwave"
+def test_question_is_locate_for_ovmm_phrasing():
+    assert question_is_locate("Where is the microwave?")
+    assert question_is_locate("Where is the jar on the counter?")
+    assert not question_is_locate("Where did you see the soap dispenser? A) Above the sink B) On the toilet tank")
 
 
-def test_apply_ovmm_trace_target_find_object():
-    ex = _executor(phase="find_object", meta={"object": "red cylinder"})
-    ex._apply_ovmm_trace_target()
-    assert ex._target_phrase == "red cylinder"
+def test_locate_question_prefers_nearby_investigate():
+    ex = _executor(question="Where is the microwave?")
+    assert ex._prefers_nearby_investigate() is True
+    other = _executor(question="What color is the sofa? A) Red B) Blue")
+    assert other._prefers_nearby_investigate() is False
 
 
-def test_recall_nav_hypotheses_includes_sim_placement_seed():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "counter"})
+def test_recall_nav_hypotheses_boosts_target_phrase_not_gt():
+    ex = _executor(question="Where is the microwave?")
+    ex._target_phrase = "microwave"
     gm = MagicMock()
     gm.hypothesize_nav_targets.return_value = []
     gm.get_nodes.return_value = []
@@ -55,16 +69,18 @@ def test_recall_nav_hypotheses_includes_sim_placement_seed():
     ex.agent.robot.get_emet_session.return_value = {
         "is_simulation": True,
         "sim_object_placements": {
-            "counter_main": {"pos": [1.0, 2.0, 0.9], "cat": "counter"},
+            "microwave_gt": {"pos": [9.0, 9.0, 0.9], "cat": "microwave"},
         },
     }
     hyps = ex._recall_nav_hypotheses()
-    assert hyps
-    assert any("counter" in str(h.phrase).lower() for h in hyps)
+    assert all(int(h.obs_id) > -3_000_000 for h in hyps)
+    kwargs = gm.hypothesize_nav_targets.call_args.kwargs
+    boost = kwargs.get("boost_phrases") or []
+    assert any("microwave" in str(p).lower() for p in boost)
 
 
 def test_nearby_untried_investigate_hyp_prefers_close_card():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "table"})
+    ex = _executor(question="Where is the table?")
     ex._hypotheses = [
         NavHypothesis(
             phrase="table",
@@ -82,13 +98,14 @@ def test_nearby_untried_investigate_hyp_prefers_close_card():
         ),
     ]
     ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
-    near = ex._nearby_untried_investigate_hyp(max_dist_m=OVMM_NEAR_INVESTIGATE_M)
+    near = ex._nearby_untried_investigate_hyp(max_dist_m=NEAR_INVESTIGATE_M)
     assert near is not None
     assert int(near.obs_id) == 5
 
 
-def test_fallback_find_recep_prefers_nearby_investigate():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "cab"})
+def test_fallback_locate_prefers_nearby_investigate():
+    ex = _executor(question="Where is the cab?")
+    ex._target_phrase = "cab"
     ex._hypotheses = [
         NavHypothesis(
             phrase="cab",
@@ -104,25 +121,8 @@ def test_fallback_find_recep_prefers_nearby_investigate():
     assert args["obs_id"] == 2
 
 
-def test_fallback_find_object_prefers_nearby_investigate():
-    ex = _executor(phase="find_object", meta={"object": "jar"})
-    ex._hypotheses = [
-        NavHypothesis(
-            phrase="jar",
-            obs_id=7,
-            xyz=np.array([0.4, 0.1, 0.8]),
-            score=1.0,
-            source="graph",
-        ),
-    ]
-    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
-    name, args = ex._fallback_tool()
-    assert name == "investigate"
-    assert args["obs_id"] == 7
-
-
 def test_fallback_close_look_prefers_nearby_investigate():
-    ex = _executor()
+    ex = _executor(question="What time is it on the wall clock?")
     ex._close_look_required = True
     ex._hypotheses = [
         NavHypothesis(
@@ -152,18 +152,6 @@ def test_record_recent_action_includes_nav_outcome():
 
 
 def test_hypothesize_boost_phrases_prepended():
-    gm = MagicMock()
-    gm._confirmed_memory_phrases = MagicMock(return_value=[])
-    gm._relevant_objects = []
-    gm._observations = []
-    gm._nodes = []
-    gm.extract_relevant_objects = MagicMock()
-    gm._siglip_match_for_phrase = MagicMock(return_value=None)
-    gm._obs_is_frontier = MagicMock(return_value=False)
-    gm._obs_is_object_place = MagicMock(return_value=True)
-    gm._recall_rank_score = lambda h, q, r: h
-    gm._pack_diversified_hypotheses = lambda scored, k: scored[:k]
-
     from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
     real = GraphEQAMemory.__new__(GraphEQAMemory)
@@ -186,7 +174,8 @@ def test_hypothesize_boost_phrases_prepended():
 
 
 def test_prefer_explore_skipped_when_absent_at_non_target_fixture():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "microwave"})
+    ex = _executor(question="Where is the microwave?")
+    ex._target_phrase = "microwave"
     ex._prefer_explore = False
     hyp = NavHypothesis(
         phrase="brick wall",
@@ -215,15 +204,15 @@ def _graph_memory_stub() -> GraphEQAMemory:
 
 
 def test_investigate_target_xyz_synthetic_uses_standoff_not_raw_anchor():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "counter"})
-    oid = -3_000_000
+    ex = _executor(question="Where is the counter?")
+    oid = -2_000_000
     ex._hypotheses = [
         NavHypothesis(
             phrase="counter",
             obs_id=oid,
             xyz=np.array([2.0, 0.0, 0.9]),
             score=0.0,
-            source="graph",
+            source="siglip",
         ),
     ]
     ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
@@ -264,15 +253,15 @@ def test_investigate_target_xyz_falls_through_when_graph_waypoint_none():
 
 
 def test_synthetic_arrival_theta_faces_object_anchor():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "table"})
-    oid = -3_000_000
+    ex = _executor(question="Where is the table?")
+    oid = -2_000_000
     ex._hypotheses = [
         NavHypothesis(
             phrase="table",
             obs_id=oid,
             xyz=np.array([2.0, 0.0, 0.9]),
             score=0.0,
-            source="graph",
+            source="siglip",
         ),
     ]
     target = np.array([1.5, 0.0, 1.0])
@@ -284,8 +273,8 @@ def test_synthetic_arrival_theta_faces_object_anchor():
 
 
 def test_investigate_no_waypoint_marks_approach_tried():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "table"})
-    oid = -3_000_000
+    ex = _executor(question="Where is the table?")
+    oid = 41
     hyp = NavHypothesis(
         phrase="table",
         obs_id=oid,
@@ -306,16 +295,18 @@ def test_investigate_no_waypoint_marks_approach_tried():
 
 
 def test_investigate_annulus_outer_m_scoped():
-    assert _executor(phase="find_recep")._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
-    assert _executor(phase="find_object")._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
-    close_look = _executor()
+    assert _executor(question="Where is the cab?")._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
+    close_look = _executor(question="What time is it on the clock?")
     close_look._close_look_required = True
     assert close_look._investigate_annulus_outer_m() == INVESTIGATE_ANNULUS_OUTER_M
-    assert _executor()._investigate_annulus_outer_m() == DEFAULT_INVESTIGATE_ANNULUS_OUTER_M
+    assert (
+        _executor(question="What color is the sofa? A) Red B) Blue")._investigate_annulus_outer_m()
+        == DEFAULT_INVESTIGATE_ANNULUS_OUTER_M
+    )
 
 
 def test_investigate_target_xyz_forwards_tight_outer_radius_to_graph_annulus():
-    ex = _executor(phase="find_recep", meta={"goal_recep": "cab"})
+    ex = _executor(question="Where is the cab?")
     oid = 12
     ex._hypotheses = [
         NavHypothesis(

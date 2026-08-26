@@ -375,7 +375,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         executor._last_action_gate_decisions = list(snapshot.gate_decisions)
         return text
 
-    from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES
+    from emet.memory.graph_eqa.agentic_config import INVESTIGATE_SOURCES
     from emet.memory.graph_eqa.room_clusters import room_leave_needed
 
     policy = str(getattr(executor, "room_policy", "canonical") or "canonical").strip().lower()
@@ -508,6 +508,14 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             "state, fine detail) — prefer investigate(obs_id) or look_around over "
             "explore_frontier" + (f" [{source}]" if source else "")
         )
+    stay_fn = getattr(executor, "_close_map_stay_hypothesis", None)
+    if callable(stay_fn):
+        stay_hyp = stay_fn()
+        if stay_hyp is not None:
+            lines.append(
+                f"Close-look map: stay on investigate obs_id={int(stay_hyp.obs_id)} "
+                "until aimed close or the cell is unreachable — do not explore away yet."
+            )
     if (
         not getattr(executor, "_verified", False)
         and bool(getattr(executor, "_no_early_unverified", True))

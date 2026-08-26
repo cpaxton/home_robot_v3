@@ -176,7 +176,7 @@ All three memory models:
 |--------------|---------|--------|
 | **Sparse voxel map** | `emet.mapping.voxel` | `SparseVoxelMap`; base voxel map used by default agent. |
 | **DynaMem** | `emet.memory.dynamem` / `emet.mapping.voxel` | Re-exports `SparseVoxelMapDynamem`; VL + EQA voxel memory. |
-| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` in `graph_memory.py`. |
+| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` facade in `graph_memory.py`; types in `graph_types.py`; methods in `graph_{init,mutate,rooms,eqa_obs,hypotheses,prompt,nav,answer}.py`. Agentic loop: `agentic_eqa.py` facade; mixins in `agentic_{init,run,router,answer,verify,assess,capture,investigate,place,explore,action}.py`. |
 
 Other components:
 

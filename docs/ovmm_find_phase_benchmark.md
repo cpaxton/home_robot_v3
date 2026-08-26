@@ -126,6 +126,7 @@ Stretch episodes in `find_phase_episodes.yaml` remain for paper / overnight
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
 - `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `obj_max_cosine`, `recep_max_cosine`, `obj_yoloe_hit`, `recep_yoloe_hit` — oneshot voxel localize diagnostics (max SigLIP cosine; YoloE `compute_obj_coord` hit)
 - `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
 - `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - `use_sensor_perception`, `prefer_voxel` — mode flags (see above)

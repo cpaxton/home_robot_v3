@@ -30,6 +30,7 @@ from emet.eval.ovmm_find_phase import (
     create_find_phase_agent,
     distance_to_placement_xy,
     horizontal_coords,
+    localization_detect_fields,
     localization_pred_fields,
     pick_find_object_gt_body,
     pred_xyz_to_json_list,
@@ -37,6 +38,7 @@ from emet.eval.ovmm_find_phase import (
     resolve_find_phase_nav_step_timeout,
     score_find_object,
     score_find_recep,
+    take_voxel_localize_stats,
 )
 
 
@@ -343,6 +345,18 @@ def test_query_find_phase_localization_miss_source_none():
     assert ok is False
     assert xyz is None
     assert source is None
+
+
+def test_localization_detect_fields_from_voxel_stats():
+    voxel = _FakeVoxel(None)
+    voxel._last_localize_stats = {"query": "red cylinder", "max_cosine": 0.19, "yoloe_hit": True}
+    obj = take_voxel_localize_stats(voxel)
+    recep = take_voxel_localize_stats(None)
+    fields = localization_detect_fields(obj, recep)
+    assert fields["obj_max_cosine"] == 0.19
+    assert fields["obj_yoloe_hit"] is True
+    assert fields["recep_max_cosine"] is None
+    assert fields["recep_yoloe_hit"] is False
 
 
 def test_compute_find_phase_partial_success():

@@ -1140,13 +1140,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
-            return f"Already roughly facing {label!r} ({source})."
-        deg = float(np.clip(deg, -180.0, 180.0))
-        ok = executor([("rotate_base", str(deg))])
-        if not ok:
-            return f"Tried to face {label!r} ({source}) but rotate failed."
-        context["last_rotate_degrees"] = deg
-        return f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+            msg = f"Already roughly facing {label!r} ({source})."
+        else:
+            deg = float(np.clip(deg, -180.0, 180.0))
+            ok = executor([("rotate_base", str(deg))])
+            if not ok:
+                return f"Tried to face {label!r} ({source}) but rotate failed."
+            context["last_rotate_degrees"] = deg
+            msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+        from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
+
+        hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
+        if hint:
+            msg = f"{msg} {hint}"
+        return msg
 
     tools.append(
         Tool(

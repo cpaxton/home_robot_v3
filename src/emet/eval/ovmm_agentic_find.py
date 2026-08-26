@@ -4,8 +4,9 @@
 
 """OVMM find as questions into the shared AgenticEQAExecutor loop.
 
-Not a parallel find stack: episode language becomes an EQA-style question; navigate /
-verify / retract / explore stay in :mod:`emet.memory.graph_eqa.agentic_eqa`.
+Not a parallel find stack and not an OVMM policy inside the executor: the harness
+phrases FindObj / FindRec as EQA-style questions; navigate / verify / explore stay
+in :mod:`emet.memory.graph_eqa.agentic_eqa`. Trace metadata is logging only.
 """
 
 from __future__ import annotations

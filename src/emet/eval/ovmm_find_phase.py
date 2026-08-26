@@ -330,6 +330,48 @@ def localization_pred_fields(
     }
 
 
+def take_voxel_localize_stats(voxel_map: Any) -> dict[str, Any]:
+    """Copy last DynaMem localize diagnostics (max SigLIP cosine, YoloE hit)."""
+    stats = getattr(voxel_map, "_last_localize_stats", None) if voxel_map is not None else None
+    if not isinstance(stats, dict):
+        return {"max_cosine": None, "yoloe_hit": False, "query": None}
+    cos = stats.get("max_cosine")
+    return {
+        "max_cosine": float(cos) if cos is not None else None,
+        "yoloe_hit": bool(stats.get("yoloe_hit")),
+        "query": stats.get("query"),
+    }
+
+
+def _merge_voxel_localize_stats(acc: dict[str, Any], last: Any) -> dict[str, Any]:
+    if not isinstance(last, dict):
+        return acc
+    cos = last.get("max_cosine")
+    acc_cos = acc.get("max_cosine")
+    if cos is not None and (acc_cos is None or float(cos) > float(acc_cos)):
+        acc["max_cosine"] = float(cos)
+        if last.get("query") is not None:
+            acc["query"] = last.get("query")
+    if last.get("yoloe_hit"):
+        acc["yoloe_hit"] = True
+    return acc
+
+
+def localization_detect_fields(
+    obj_stats: dict[str, Any] | None,
+    recep_stats: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """YoloE / SigLIP audit fields for find-phase JSON (oneshot voxel localize)."""
+    obj_stats = obj_stats or {}
+    recep_stats = recep_stats or {}
+    return {
+        "obj_max_cosine": obj_stats.get("max_cosine"),
+        "obj_yoloe_hit": bool(obj_stats.get("yoloe_hit")) if obj_stats.get("yoloe_hit") is not None else False,
+        "recep_max_cosine": recep_stats.get("max_cosine"),
+        "recep_yoloe_hit": bool(recep_stats.get("yoloe_hit")) if recep_stats.get("yoloe_hit") is not None else False,
+    }
+
+
 def set_find_phase_run_seed(seed: int) -> None:
     """Best-effort RNG seeding for repeatable perception/mapping runs."""
     import random
@@ -500,13 +542,21 @@ def _voxel_localize(
     session: dict[str, Any] | None,
 ) -> tuple[np.ndarray | None, str]:
     """Voxel-map localization only (preferred for find-phase; avoids merged-graph centroid drift)."""
+    acc: dict[str, Any] = {"query": query, "max_cosine": None, "yoloe_hit": False}
+    found_xyz: np.ndarray | None = None
+    found_q = query
     for q in _query_variants(query):
         result = voxel_map.localize_text(q, debug=False, return_debug=True)
+        acc = _merge_voxel_localize_stats(acc, getattr(voxel_map, "_last_localize_stats", None))
         target = result[0] if isinstance(result, (list, tuple)) else result
         if target is not None:
             xyz = localize_point_to_world_xy(target, session)
-            if xyz is not None:
-                return xyz, q
+            if xyz is not None and found_xyz is None:
+                found_xyz = xyz
+                found_q = q
+    voxel_map._last_localize_stats = acc
+    if found_xyz is not None:
+        return found_xyz, found_q
     return None, query
 
 
@@ -953,7 +1003,7 @@ def _prepare_default_table_rby1_mapping_view(agent: Any) -> bool:
         return False
     robot = getattr(agent, "robot", None)
     assert robot is not None
-    timeout_fn = getattr(agent, "_find_phase_nav_step_timeout", None)
+    timeout_fn = getattr(agent, "_find_phase_nav_timeout", None)
     timeout = float(timeout_fn()) if callable(timeout_fn) else 30.0
     move = getattr(robot, "move_base_to", None)
     if callable(move):
@@ -985,25 +1035,13 @@ def run_mapping_protocol(
 ) -> int:
     """Rotate in place and optionally run frontier explore steps."""
     steps = 0
-    rotate_steps = mapping_rotate_steps
-    if _is_default_table_rby1_agent(agent):
-        # Horizontal ZED + wide rotate scan mostly maps floor; one pitched tabletop view is enough.
-        rotate_steps = 0
     if not not_rotate:
-        if rotate_steps == 0 and _is_default_table_rby1_agent(agent):
-            robot = getattr(agent, "robot", None)
-            if robot is not None and hasattr(robot, "move_to_nav_posture"):
-                robot.move_to_nav_posture()
-            if _prepare_default_table_rby1_mapping_view(agent):
-                update = getattr(agent, "update", None)
-                if callable(update):
-                    update()
-            steps += 1
-        else:
-            rotate = getattr(agent, "rotate_in_place", None)
-            if callable(rotate):
-                rotate(n_steps=rotate_steps)
-            steps += 1
+        # rotate_in_place backs up + look_front on default_table_rby1 via
+        # _prepare_default_table_rby1_mapping_view, then scans with update() each step.
+        rotate = getattr(agent, "rotate_in_place", None)
+        if callable(rotate):
+            rotate(n_steps=mapping_rotate_steps)
+        steps += 1
     seed_fn = getattr(agent, "_seed_local_radius_explored", None)
     vm = getattr(agent, "voxel_map", None)
     if vm is None and hasattr(agent, "get_voxel_map"):
@@ -1287,6 +1325,8 @@ def run_episode_find_phase(
         recep_ok = False
         recep_q_used = episode.goal_recep
         recep_source: LocalizeSource | None = None
+        obj_detect_stats: dict[str, Any] = {}
+        recep_detect_stats: dict[str, Any] = {}
 
         if run_cfg.backend == "ground_truth":
             # Oracle: localize directly from sim placements (upper bound for FindObj/FindRec).
@@ -1337,6 +1377,7 @@ def run_episode_find_phase(
                 worker_started = True
                 print(f"Managed OVMM VL worker ready for query: {vl_endpoint_used}", flush=True)
             # Same AgenticEQAExecutor loop as HM-EQA: phrase OVMM as questions.
+            # trace_meta is logging only — the executor does not branch on ovmm_phase.
             obj_q = ovmm_find_object_question(object_query, episode.start_recep)
             recep_q = ovmm_find_recep_question(episode.goal_recep)
             agentic_meta["obj_agentic_question"] = obj_q
@@ -1353,7 +1394,7 @@ def run_episode_find_phase(
                     "object": object_query,
                     "start_recep": episode.start_recep,
                     "goal_recep": episode.goal_recep,
-                    "object_gt_body": episode.object_gt_body,
+                    "gt_body_key": episode.object_gt_body,
                 },
             )
             # No oneshot rescue: agentic miss/timeout scores as FindObj fail (ablation: --oneshot-localize).
@@ -1379,7 +1420,6 @@ def run_episode_find_phase(
                     "object": object_query,
                     "start_recep": episode.start_recep,
                     "goal_recep": episode.goal_recep,
-                    "object_gt_body": episode.object_gt_body,
                 },
             )
             if recep_res.error:
@@ -1403,6 +1443,7 @@ def run_episode_find_phase(
                 convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
                 prefer_voxel=prefer_voxel,
             )
+            obj_detect_stats = take_voxel_localize_stats(vm)
             recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
                 memory,
                 episode.goal_recep,
@@ -1413,6 +1454,7 @@ def run_episode_find_phase(
                 convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
                 prefer_voxel=prefer_voxel,
             )
+            recep_detect_stats = take_voxel_localize_stats(vm)
 
         find_metrics = compute_find_phase_metrics(
             obj_pred_xyz=obj_xyz,
@@ -1473,6 +1515,7 @@ def run_episode_find_phase(
             "vl_endpoint": vl_endpoint_used,
             "seed": run_cfg.seed,
             **localization_pred_fields(obj_xyz, recep_xyz),
+            **localization_detect_fields(obj_detect_stats, recep_detect_stats),
             **find_metrics,
             **scaling,
             **gt_metrics,

@@ -376,7 +376,7 @@ def test_router_persists_exact_allowlist_and_nearby_caption_is_not_actionable():
 
     with (
         patch(
-            "emet.memory.graph_eqa.agentic_eqa.build_state_message",
+            "emet.memory.graph_eqa.agentic_router.build_state_message",
             side_effect=_rendered_state,
         ),
         patch.object(
