@@ -47,7 +47,7 @@ from emet.utils.image import scale_camera_matrix
 from innate_mars_bridge.onboard_da3 import create_onboard_da3_from_env, onboard_da3_enabled
 from innate_mars_bridge.onboard_dinov3 import create_onboard_dinov3_from_env, onboard_dinov3_enabled
 from innate_mars_bridge.remote import InnateMarsClient
-from innate_mars_bridge.video_rtsp import mars_rtsp_stream_urls, start_mars_rtsp_subprocess
+from innate_mars_bridge.video_rtsp import mars_rtsp_capabilities, start_mars_rtsp_subprocess
 
 
 class ZmqServer(BaseZmqServer):
@@ -106,7 +106,7 @@ class ZmqServer(BaseZmqServer):
         if not self._obs_include_images:
             caps["zmq_obs_metadata_only"] = True
             caps["zmq_images_on_port"] = 4404
-        video = mars_rtsp_stream_urls()
+        video = mars_rtsp_capabilities(self._rtsp_proc)
         if video is not None:
             caps["video_streams"] = video
         if self._h264_enabled:

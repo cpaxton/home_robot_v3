@@ -304,7 +304,7 @@ Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. 
 
 ```bash
 emet mars start --ip MARS_IP --username jetson1 --deploy
-emet mars start --connection mars --video-rtsp
+emet mars start --connection mars --video-rtsp   # experimental; site RTSP launcher on robot
 emet mars start --connection mars --metadata-only-obs
 emet mars status --connection mars
 emet mars stop --connection mars

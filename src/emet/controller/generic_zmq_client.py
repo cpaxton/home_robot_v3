@@ -506,12 +506,11 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 return False
             obs = self._obs
             servo = self._servo
-        sess = read_emet_session(obs) or read_emet_session(self._state)
-        caps = (sess or {}).get("capabilities") or {}
-        if caps.get("zmq_obs_metadata_only"):
-            if servo is None or servo.get("head_cam_left/color_image") is None:
-                return False
-            with self._obs_lock:
+            sess = read_emet_session(obs) or read_emet_session(self._state)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if servo is None or servo.get("head_cam_left/color_image") is None:
+                    return False
                 merge_servo_images_into_full_obs(self._obs, servo)
                 decode_zmq_obs_images_inplace(self._obs)
         return True
@@ -828,17 +827,19 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def _obs_ready_for_mapping(self) -> bool:
         with self._obs_lock:
             obs = self._obs
-            servo = self._servo
-        if obs is None:
-            return False
-        sess = read_emet_session(obs)
-        caps = (sess or {}).get("capabilities") or {}
-        if caps.get("zmq_obs_metadata_only"):
-            if not full_obs_has_wire_images(obs) and servo is not None:
-                merge_servo_images_into_full_obs(obs, servo)
+            if obs is None:
+                return False
+            sess = read_emet_session(obs)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if not full_obs_has_wire_images(obs):
+                    servo = self._servo
+                    if servo is None:
+                        return False
+                    merge_servo_images_into_full_obs(obs, servo)
                 decode_zmq_obs_images_inplace(obs)
-            return obs.get("rgb") is not None
-        return True
+                return obs.get("rgb") is not None
+            return True
 
     def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
@@ -888,17 +889,19 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def get_observation(self, max_iter: int = 5) -> Observations | None:
         """Get the latest observation from the server."""
         with self._obs_lock:
+            if self._obs is None:
+                return None
             obs = self._obs
             servo = self._servo
-        if obs is None:
-            return None
-        sess = read_emet_session(obs)
-        caps = (sess or {}).get("capabilities") or {}
-        if caps.get("zmq_obs_metadata_only") and not full_obs_has_wire_images(obs) and servo is not None:
-            merge_servo_images_into_full_obs(obs, servo)
-            decode_zmq_obs_images_inplace(obs)
-        else:
-            decode_zmq_obs_depth_inplace(obs)
+            sess = read_emet_session(obs)
+            caps = (sess or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                if not full_obs_has_wire_images(obs) and servo is not None:
+                    merge_servo_images_into_full_obs(obs, servo)
+                decode_zmq_obs_images_inplace(obs)
+            else:
+                decode_zmq_obs_depth_inplace(obs)
+            obs = dict(self._obs)
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")

@@ -3,22 +3,26 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 #
-# Innate Mars head stereo (+ EE) RTSP via GStreamer NVENC when available.
+# Experimental RTSP side channel for Innate Mars head/EE cameras.
 # Usage: mars_video_rtsp.sh [PORT]
-# Requires ROS image topics and Jetson GStreamer plugins (nvv4l2h264enc).
+#
+# Default Mars launch (--video-rtsp) sets EMET_MARS_VIDEO_RTSP=1 but does not ship a
+# working GStreamer pipeline here — configure a site launcher on the Jetson:
+#
+#   export EMET_MARS_VIDEO_RTSP_LAUNCHER=/path/to/your_rtsp_server.sh
+#   # or override the whole script path:
+#   export EMET_MARS_VIDEO_RTSP_SCRIPT=/path/to/your_rtsp_server.sh
+#
+# MediaMTX + a ROS image→RTSP republisher is the expected production layout.
 
 set -euo pipefail
 PORT="${1:-8554}"
 
-if ! command -v gst-launch-1.0 >/dev/null 2>&1; then
-  echo "gst-launch-1.0 not found; install GStreamer on the robot." >&2
-  exit 1
+if [[ -n "${EMET_MARS_VIDEO_RTSP_LAUNCHER:-}" ]]; then
+  exec bash "${EMET_MARS_VIDEO_RTSP_LAUNCHER}" "${PORT}"
 fi
 
-# Minimal RTSP server: one mount head_left (extend with multi-pipeline or MediaMTX for prod).
-exec gst-launch-1.0 -e \
-  rtspserver name=rtsp port="$PORT" \
-  rosimagesrc topic=/mars/main_camera/left/image_raw ! \
-  videoconvert ! video/x-raw,format=I420 ! \
-  nvv4l2h264enc maxperf-enable=1 bitrate=4000000 ! rtph264pay name=pay0 pt=96 \
-  rtsp.attach pay0
+echo "mars_video_rtsp: no RTSP launcher configured (port ${PORT})." >&2
+echo "Set EMET_MARS_VIDEO_RTSP_LAUNCHER to a site-specific script on the robot." >&2
+echo "See docs/environment_variables.md (EMET_MARS_VIDEO_RTSP_*)." >&2
+exit 1

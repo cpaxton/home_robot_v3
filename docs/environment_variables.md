@@ -180,9 +180,11 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ZMQ_TURBOJPEG` | `compression.to_jpg` | `1` → PyTurboJPEG encode when installed. |
 | `EMET_ZMQ_H264` | Innate Mars bridge | `1` → publish H.264 NAL on port 4405 (`capabilities.zmq_video_h264`). |
 | `EMET_ZMQ_H264_PORT` | Innate Mars bridge | H.264 SUB port (default `4405`). |
-| `EMET_MARS_VIDEO_RTSP` | Innate Mars bridge | `1` → start GStreamer RTSP side channel (`emet mars start --video-rtsp`). |
-| `EMET_MARS_VIDEO_RTSP_HOST` | Session `video_streams` URLs | Advertised RTSP host (set automatically on `emet mars start`). |
+| `EMET_MARS_VIDEO_RTSP` | Innate Mars bridge | `1` → attempt RTSP side channel (`emet mars start --video-rtsp`, experimental). |
+| `EMET_MARS_VIDEO_RTSP_HOST` | Session `video_streams` URLs | Advertised RTSP host (set automatically on `emet mars start`). Omitted from session when launcher fails. |
 | `EMET_MARS_VIDEO_RTSP_PORT` | RTSP server | Default `8554`. |
+| `EMET_MARS_VIDEO_RTSP_SCRIPT` | RTSP launcher | Path to shell script on robot (default: `mars_video_rtsp.sh` in bridge package). |
+| `EMET_MARS_VIDEO_RTSP_LAUNCHER` | RTSP launcher | Site-specific script invoked by `mars_video_rtsp.sh` when set. |
 | `EMET_NAVGRID_ASCII` | Dynamem / Dynagraph mapping | Terminal nav grid; see [dynagraph.md](dynagraph.md). |
 | `EMET_NAVGRID_MAX_SIDE` | Nav grid ASCII | Default 320. |
 | `EMET_NAVGRID_CONTEXTS` | Nav grid ASCII | Limit which hooks print. |
