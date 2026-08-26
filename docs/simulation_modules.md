@@ -19,8 +19,15 @@ Related user docs: [simulation.md](simulation.md), [molmospaces.md](molmospaces.
 | [`molmospaces_spawn_metadata`](../src/emet/simulation/molmospaces_spawn_metadata.py) | Runtime load of per-robot `molmospaces_spawn.json`. |
 | [`write_molmospaces_spawn_metadata`](../src/emet/app/write_molmospaces_spawn_metadata.py) | Offline measure + write spawn JSON (see [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md)). |
 | [`chase_camera`](../src/emet/simulation/chase_camera.py) | FREE chase cam off `base_link` for `--record-mp4` / `EMET_SIM_THIRD_PERSON` (raised lookat; avoids torso clip). |
+| [`scene_base_spawn`](../src/emet/simulation/scene_base_spawn.py) | Re-export shim for spawn helpers (original import path). |
+| [`spawn_geom`](../src/emet/simulation/spawn_geom.py) | Floor rays, collision clip, occupancy, exterior-tongue gates. |
+| [`spawn_settle`](../src/emet/simulation/spawn_settle.py) | Free-joint Z settle / restore / foot-clearance probes. |
+| [`spawn_debug`](../src/emet/simulation/spawn_debug.py) | ASCII/PNG occupancy maps when `EMET_MOLMOSPACES_SPAWN_DEBUG` is on. |
+| [`spawn_molmospaces`](../src/emet/simulation/spawn_molmospaces.py) | MolmoSpaces free-joint XY search (`find_molmospaces_freejoint_xyz`). |
+| [`spawn_planar`](../src/emet/simulation/spawn_planar.py) | Planar slide+yaw spawn (`find_planar_base_xyt`, `write_planar_base_xyt`). |
+| [`spawn_robocasa`](../src/emet/simulation/spawn_robocasa.py) | Robocasa free-joint autoplace (`find_robocasa_freejoint_xyz`). |
 
-Runtime wiring: [`robosuite_server.py`](../src/emet/simulation/robosuite_server.py), [`mujoco_serve_argv.py`](../src/emet/simulation/mujoco_serve_argv.py), [`scene_base_spawn.py`](../src/emet/simulation/scene_base_spawn.py).
+Runtime wiring: [`robosuite_server.py`](../src/emet/simulation/robosuite_server.py), [`mujoco_serve_argv.py`](../src/emet/simulation/mujoco_serve_argv.py), [`scene_base_spawn.py`](../src/emet/simulation/scene_base_spawn.py) (re-exports `spawn_geom` / `spawn_settle` / `spawn_debug` / `spawn_molmospaces` / `spawn_planar` / `spawn_robocasa`).
 
 ---
 

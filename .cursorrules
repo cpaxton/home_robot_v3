@@ -77,6 +77,7 @@
 ## Code quality
 - Use **ruff** for linting (see `[tool.ruff]` in pyproject.toml). Pre-commit is enabled for this repo.
 - Prefer project style (ruff/black/isort as configured); avoid ad-hoc formatting.
+- **File size:** first-party Python stays **under 3000 lines** (split before ~2000). Edit large files in chunks — see **`.cursor/rules/file-size.mdc`**. Exclude `third_party/` and generated numeric modules.
 - **Imports**: Place all imports at the top of the file. Use inline imports only when necessary (e.g. to avoid circular imports or to defer loading a heavy optional dependency).
 - **Avoid unnecessary defensiveness**: Prefer fixing `pyproject.toml` (dependencies, extras) over try/except for missing imports or optional features. Use try/except only when there is a real runtime contingency, not to paper over missing declared deps.
 - **Before committing** (see also `.cursor/rules/branch-consistency.mdc`):
@@ -89,6 +90,7 @@
   7. **Agent modes:** if changing skill packs / agentic EQA tools, keep CHAT vs EQA_EPISODE disjoint; run `src/test/agent/test_skill_packs.py`; see `.cursor/rules/agent-modes.mdc`.
   8. **Copyright:** new files must be Chris Paxton — never Hello Robot (`.cursor/rules/copyright.mdc`).
   9. Trim "AI slop"—unnecessary try/except, vague comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
+  10. **File size:** `wc -l` changed first-party `.py` files; none ≥3000 (`.cursor/rules/file-size.mdc`).
 
 ## Simulation
 - Default `./install.sh` profile is **full** (sim on when `third_party/robocasa` exists; use `--no-sim` or `--profile=minimal` for lightweight/CI). MolmoSpaces wrapper venv is still created when `packages/emet_molmospaces` exists unless `--no-molmospaces`.
@@ -100,4 +102,4 @@
 - **Install**: `./install.sh -y` (with default sim) also creates `.venv-molmospaces` when `packages/emet_molmospaces` exists; use `--no-molmospaces` to skip. Wrapper-only: `./install.sh --molmospaces -y`. Core emet delegates `merge-scene` / `list-scenes` to that wrapper (molmo-spaces needs mujoco 3.4 + numpy≥2.2, separate from main `.venv`).
 - **Usage**: `emet serve molmospaces --molmospaces-index 0 --headless` (or `emet serve mujoco --molmospaces-scene ithor …`) merges scene+robot then starts the ZMQ server; default robot is **stretch** when `--robot` is omitted. Use `--robot rby1` for Galaxea R1. `emet serve robocasa` is the Robocasa shortcut. `ensure_molmospaces_assets_dir_env()` sets default `MLSPACES_ASSETS_DIR` / `MLSPACES_CACHE_DIR` (sibling dirs under `~/.cache/molmospaces/`) if unset—do not point both at the same path.
 - **Testing after MolmoSpaces changes**: Run `uv run emet test src/test/cli/test_molmospaces_cli.py` (and `-- -q` if passing pytest flags). Optional integration: `RUN_MOLMOSPACES_TESTS=1 uv run emet test src/test/cli/test_molmospaces_cli.py -k ...` when `.venv-molmospaces` is installed. Wrapper unit tests: `uv run pytest packages/emet_molmospaces/tests/ -q`. Smoke: short `timeout 60 uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --headless` should reach “Server running” without MJCF load errors (default stretch; add `--robot rby1` to smoke Galaxea).
-- **Code touchpoints**: `src/emet/simulation/molmospaces_config.py` (defaults, `ensure_molmo_asset_layout_symlinks`, `galaxea_r1_assets_directory`), `src/emet/simulation/molmospaces_env.py` (`EMET_MOLMOSPACES_NAV_TELEPORT`, etc.), `src/emet/cli.py` (`--molmospaces-*`), `src/emet/simulation/mujoco_server.py` (load + symlink prep), `packages/emet_molmospaces/emet_molmospaces/runner.py` (merge, resource cache). Details: `docs/molmospaces.md`; env vars: `docs/molmospaces_environment_variables.md`.
+- **Code touchpoints**: `src/emet/simulation/molmospaces_config.py` (defaults, `ensure_molmo_asset_layout_symlinks`, `galaxea_r1_assets_directory`), `src/emet/simulation/molmospaces_env.py` (`EMET_MOLMOSPACES_NAV_TELEPORT`, etc.), `src/emet/cli.py` / `src/emet/cli_cmds/` (`--molmospaces-*`), `src/emet/simulation/mujoco_server.py` (load + symlink prep), `packages/emet_molmospaces/emet_molmospaces/runner.py` (merge, resource cache). Details: `docs/molmospaces.md`; env vars: `docs/molmospaces_environment_variables.md`.

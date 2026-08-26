@@ -1,0 +1,29 @@
+---
+description: First-party Python files stay under 3000 lines; edit large files in chunks
+alwaysApply: true
+---
+
+# File size (first-party Python)
+
+Do **not** grow first-party Python files past **3000 lines**. Split before **2000** when a natural seam exists.
+
+## In scope
+
+`src/emet/**`, `src/test/**`, `src/emet_core/**`, `scripts/**`, `packages/**` (and other first-party trees).
+
+## Out of scope
+
+`third_party/**`, vendored copies, and generated numeric modules (e.g. `simple_ik_equations_numba.py`).
+
+## Editing files over ~800 lines
+
+The crash risk is **LLM context**, not disk I/O:
+
+1. Map structure with `rg -n '^(def |class |    def )'` — do not `Read` the whole file.
+2. Read **≤150-line** chunks (`offset` + `limit`).
+3. Extract with line-range slices (`sed -n 'A,Bp'` or a short Python slice). Stamp new files with the Chris Paxton Apache stub (see [copyright.mdc](copyright.mdc)).
+4. Never copy Hello Robot headers onto new files.
+
+## Before finishing a change that grew a `.py` file
+
+Run `wc -l` on it. If it is **≥3000**, split in the same change. Prefer keeping modules under **2000**.
