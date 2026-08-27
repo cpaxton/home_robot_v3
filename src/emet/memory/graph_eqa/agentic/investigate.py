@@ -17,6 +17,7 @@ from emet.mapping.close_map import (
     close_map_from_voxel_map,
     decide_close_look,
 )
+from emet.mapping.voxel_localize import is_proposal_handle
 from emet.memory.graph_eqa.agentic.config import (
     INVESTIGATE_SOURCES,
     NAV_CONSECUTIVE_FAIL_LIMIT,
@@ -27,7 +28,6 @@ from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
-
 
 
 def _close_look_query(self, obs_id: int, hyp: NavHypothesis | None = None):
@@ -42,6 +42,7 @@ def _close_look_query(self, obs_id: int, hyp: NavHypothesis | None = None):
     if xy is None:
         return None
     return cm.query_xy(xy[0], xy[1])
+
 
 def _decide_close_look(
     self,
@@ -64,21 +65,36 @@ def _decide_close_look(
         is_chat=False,
     )
 
+
 def _close_map_unresolved_stay(self, obs_id: int) -> bool:
     """True when the close-map says stay on this XY (not close yet, still reachable)."""
     return bool(self._decide_close_look(int(obs_id), nav_blocked=False, increment=False).stay)
 
+
 def _close_map_stay_hypothesis(self) -> NavHypothesis | None:
+    """Stay on a card we already started approaching — never a camera-at-feet view."""
     visible = self._grounded_visible_place_obs()
+    best_det: NavHypothesis | None = None
+    best_other: NavHypothesis | None = None
     for h in self._investigate_hypotheses():
         oid = int(h.obs_id)
         if visible is not None and oid not in visible:
             continue
         if self._obs_already_verified(oid) or oid in self._unreachable_obs_ids:
             continue
-        if self._close_map_unresolved_stay(oid):
-            return h
-    return None
+        if int(self._close_map_attempts.get(oid, 0)) <= 0:
+            continue
+        if self._hypothesis_is_camera_pose_place(h):
+            continue
+        if not self._close_map_unresolved_stay(oid):
+            continue
+        if self._hypothesis_is_detection(h):
+            if best_det is None:
+                best_det = h
+        elif best_other is None:
+            best_other = h
+    return best_det or best_other
+
 
 def _apply_close_map_after_approach(
     self,
@@ -110,6 +126,7 @@ def _apply_close_map_after_approach(
         self._prefer_explore = False
         self._prefer_explore_reason = ""
     return decision
+
 
 def _tool_investigate(
     self,
@@ -211,12 +228,33 @@ def _tool_investigate(
         return {
             "ok": False,
             "error": (
-                f"obs_id={oid} is not in the Investigate list {listed}; "
-                "investigate a listed place or explore_frontier"
+                f"obs_id={oid} is not in the Investigate list {listed}; investigate a listed place or explore_frontier"
             ),
             "status": "OBS_NOT_IN_EVIDENCE",
             "obs_id": oid,
             "listed_obs_ids": listed,
+        }
+    unused = self._unused_detection_hypothesis()
+    if unused is not None and self._hypothesis_is_camera_pose_place(hyp):
+        redirect = int(unused.obs_id)
+        self._append_trace(
+            {
+                "tool": trace_tool,
+                "ok": False,
+                "obs_id": oid,
+                "status": "CAMERA_POSE_PLACE",
+                "redirect_obs_id": redirect,
+            }
+        )
+        return {
+            "ok": False,
+            "error": (
+                f"obs_id={oid} is a graph view at the current camera pose, not the object; "
+                f"investigate unused detection obs_id={redirect}"
+            ),
+            "status": "CAMERA_POSE_PLACE",
+            "obs_id": oid,
+            "redirect_obs_id": redirect,
         }
     phrase = self._target_phrase or self.query_text
     source = hyp.source if hyp is not None else "graph"
@@ -387,26 +425,32 @@ def _tool_investigate(
                 {"phrase": self._siglip_phrase(phrase), "obs_id": station_oid},
             )
         else:
-            # Arrived but capture did not advance — score the live arrival view
-            # (still facing the object) once, then block re-nav.
+            # Arrived but capture did not advance. Score the live arrival RGB
+            # (yaw already faces the object). Do not look_around — a sweep
+            # replaces that aimed view with wall/sky. Voxel handles remap to
+            # the current camera inside _verify_stalled_nav_view.
             verify_out = self._verify_stalled_nav_view(oid, phrase=phrase)
+            latest = self._latest_obs_id()
             flag = {
                 "obs_id": oid,
                 "visits": self._nav_to_obs_counts[oid],
                 "status": "STALLED_NAV_LOOP",
-                "look_around_on_no_new_obs": True,
+                "look_around_on_no_new_obs": False,
                 "verify_status": (verify_out or {}).get("status") if isinstance(verify_out, dict) else None,
                 "approach_index": int(next_ap),
+                "station_obs_id": latest,
             }
             self._nav_loop_flags.append(flag)
-            self._tried[oid] = f"STALLED_NAV_LOOP verify={flag.get('verify_status') or 'none'}"
+            if not is_proposal_handle(oid):
+                self._tried[oid] = f"STALLED_NAV_LOOP verify={flag.get('verify_status') or 'none'}"
             self._append_trace({"event": "nav_loop", **flag})
             _logger.warning(
-                f"agentic nav loop: obs_id={oid} visits={flag['visits']} verify={flag.get('verify_status')}"
+                f"agentic nav loop: obs_id={oid} visits={flag['visits']} "
+                f"verify={flag.get('verify_status')} station={latest}"
             )
 
-    # Sweep only for map coverage when the arrive-capture did not advance a fresh
-    # view. Never overwrite the verified arrival capture with a sweep pan.
+    # Sweep only for map coverage after verify. Never pan before assess —
+    # that replaced the aimed arrival RGB with wall/sky.
     if not cap_adv:
         self._tool_look_around(verify=False)
 
@@ -464,6 +508,7 @@ def _tool_investigate(
         "room_stamp": room_stamp,
         "close_map": close_map.as_dict(),
     }
+
 
 def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
     """Compat alias — ``navigate_to_obs`` shares the investigate approach path."""

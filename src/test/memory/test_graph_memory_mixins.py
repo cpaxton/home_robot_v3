@@ -48,7 +48,7 @@ def test_graph_memory_facade_stays_small() -> None:
 
 
 def test_memory_init_owns_graph_store() -> None:
-    mem = GraphEQAMemory()
+    mem = GraphEQAMemory(defer_llm_clients=True)
     assert isinstance(mem.store, GraphStore)
     assert mem._nodes is mem.store.nodes
     mem._nodes.append(GraphNode(node_id=1, labels=["cup"], xyz=np.zeros(3), obs_id=1))

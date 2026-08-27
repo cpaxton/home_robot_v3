@@ -19,7 +19,7 @@ from emet.eval.ovmm_agentic_find import (
     xyz_from_verified_obs,
 )
 from emet.mapping.voxel_localize import localize_text_xyz
-from emet.memory.graph_eqa.agentic_eqa import AgenticEQAResult
+from emet.memory.graph_eqa import AgenticEQAResult
 
 
 def _add_claim_and_return(claims: set, claim) -> AgenticEQAResult:
@@ -166,15 +166,14 @@ def test_run_ovmm_agentic_localize_voxel_fallback_when_unverified(mock_run):
         n_nav=1,
         n_explore=4,
         budget_hit=True,
+        voxel_xyz=(-0.02, -0.55, 0.6),
+        voxel_phrase="blue cube",
+        voxel_from_pin=False,
     )
 
     class _Voxel:
-        _last_localize_stats = {"query": "blue cube", "max_cosine": 0.17, "yoloe_hit": True}
-
-        def localize_text(self, text, debug=False, return_debug=False):
-            if "blue" in str(text).lower():
-                return np.array([-0.02, -0.55, 0.6])
-            return None
+        def localize_text(self, *_a, **_k):
+            raise AssertionError("scoring must not re-query localize_text")
 
     agent = MagicMock()
     agent.graph_memory = MagicMock()
@@ -188,6 +187,8 @@ def test_run_ovmm_agentic_localize_voxel_fallback_when_unverified(mock_run):
     assert out.xyz is not None
     assert np.allclose(out.xyz, [-0.02, -0.55, 0.6])
     assert out.extra.get("xyz_source") == "voxel"
+    assert out.extra.get("voxel_query_used") == "blue cube"
+    assert out.extra.get("from_pin") is False
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
@@ -223,6 +224,11 @@ def test_run_ovmm_agentic_localize_reuses_mapping_pin_when_live_misses(mock_run)
     vm = _Voxel()
     localize_text_xyz(vm, "blue cube")
     vm.hits.clear()
+
+    def _boom(*_a, **_k):
+        raise AssertionError("pin lookup must not live-query")
+
+    vm.localize_text = _boom
 
     agent = MagicMock()
     agent.graph_memory = MagicMock()
@@ -309,6 +315,111 @@ def test_run_ovmm_agentic_localize_find_object_ignores_recep_pin(mock_run):
     assert recep.xyz is not None
     assert np.allclose(recep.xyz, [-0.02, -0.55, 0.6])
     assert recep.extra.get("voxel_query_used") == "blue cube"
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_run_ovmm_agentic_localize_uses_loop_voxel_when_live_map_dead(mock_run):
+    """Submit releases SigLIP; score the loop's object-phrase XYZ, do not re-query."""
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="unknown",
+        answer="unknown",
+        confidence=False,
+        verified=False,
+        verified_obs_id=None,
+        n_rounds=6,
+        n_nav=4,
+        n_explore=1,
+        budget_hit=True,
+        voxel_xyz=(0.08, -0.55, 0.6),
+        voxel_phrase="red cylinder",
+        voxel_from_pin=True,
+    )
+
+    class _DeadVoxel:
+        def localize_text(self, text, debug=False, return_debug=False):
+            raise AssertionError("scoring must not live-query after SigLIP release")
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = []
+    agent.graph_memory._retracted_nav_claims = set()
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = _DeadVoxel()
+
+    out = run_ovmm_agentic_localize(
+        agent,
+        "Where is the red cylinder on the table?",
+        trace_meta={"ovmm_phase": "find_object", "object": "red cylinder"},
+    )
+    assert out.verified is False
+    assert out.xyz is not None
+    assert np.allclose(out.xyz, [0.08, -0.55, 0.6])
+    assert out.extra.get("xyz_source") == "voxel"
+    assert out.extra.get("from_pin") is True
+    assert out.extra.get("voxel_query_used") == "red cylinder"
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_run_ovmm_agentic_localize_rejects_fixture_wrap_loop_xyz(mock_run):
+    """A table 3-gram snapshot is not FindObj even if the loop stashed it."""
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="unknown",
+        answer="unknown",
+        confidence=False,
+        verified=False,
+        verified_obs_id=None,
+        n_rounds=6,
+        budget_hit=True,
+        voxel_xyz=(0.04, -0.55, 0.6),
+        voxel_phrase="red cylinder table",
+        voxel_from_pin=False,
+    )
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = []
+    agent.graph_memory._retracted_nav_claims = set()
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
+
+    out = run_ovmm_agentic_localize(
+        agent,
+        "Where is the red cylinder on the table?",
+        trace_meta={"ovmm_phase": "find_object", "object": "red cylinder"},
+    )
+    assert out.xyz is None
+    assert out.extra.get("xyz_source") is None
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_run_ovmm_agentic_localize_prefers_loop_voxel_over_graph_node(mock_run):
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="found",
+        answer="here",
+        confidence=True,
+        verified=True,
+        verified_obs_id=7,
+        n_rounds=3,
+        voxel_xyz=(0.08, -0.55, 0.6),
+        voxel_phrase="red cylinder",
+        voxel_from_pin=False,
+    )
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = []
+    agent.graph_memory._retracted_nav_claims = set()
+    agent.graph_memory.get_nodes.return_value = [
+        _Node(7, np.array([9.0, 9.0, 9.0]), ["red cylinder"]),
+    ]
+    agent.voxel_map = None
+
+    out = run_ovmm_agentic_localize(
+        agent,
+        "Where is the red cylinder on the table?",
+        trace_meta={"ovmm_phase": "find_object", "object": "red cylinder"},
+    )
+    assert out.xyz is not None
+    assert np.allclose(out.xyz, [0.08, -0.55, 0.6])
+    assert out.extra.get("xyz_source") == "voxel"
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")

@@ -11,6 +11,10 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import (
+    is_current_view_sentinel,
+    is_proposal_handle,
+)
 from emet.memory.graph_eqa.agentic.config import (
     SIGLIP_IMAGE_ABSENT_THRESHOLD,
     SIGLIP_IMAGE_PRESENT_THRESHOLD,
@@ -27,7 +31,6 @@ from emet.memory.graph_eqa.labels import _QUESTION_VERB_FILLERS
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
-
 
 
 def _dense_max_sim_for_rgb(self, phrase: str, rgb: np.ndarray | None) -> float | None:
@@ -65,6 +68,7 @@ def _dense_max_sim_for_rgb(self, phrase: str, rgb: np.ndarray | None) -> float |
     except Exception as e:
         _logger.warning(f"dense_max_sim_for_rgb failed: {e}")
         return None
+
 
 def _voxel_max_sim_for_obs(self, phrase: str, obs_id: int) -> tuple[float, str] | None:
     """Max per-point SigLIP cosine for *phrase* on voxel features in *obs_id*.
@@ -112,6 +116,7 @@ def _voxel_max_sim_for_obs(self, phrase: str, obs_id: int) -> tuple[float, str] 
             pass
     return float(a.max().item()), channel
 
+
 def _detector_for_verify(self) -> Any | None:
     if self._presence_detector_initialized:
         return self._presence_detector
@@ -136,11 +141,13 @@ def _detector_for_verify(self) -> Any | None:
         self._presence_detector = None
     return self._presence_detector
 
+
 def _graph_label_matches(self, phrase: str, obs_id: int) -> bool:
     gm = self.graph_memory
     stored = gm._observation_by_id(int(obs_id)) if gm is not None and hasattr(gm, "_observation_by_id") else None
     labels = getattr(stored, "labels", None) or []
     return any(label_matches_relevant_object(phrase, str(label)) for label in labels)
+
 
 def _relation_sufficient_for_obs(self, obs_id: int) -> bool:
     from emet.habitat.metrics import (
@@ -174,6 +181,7 @@ def _relation_sufficient_for_obs(self, obs_id: int) -> bool:
             return True
     return False
 
+
 def _inventory_labels(self, *, limit: int = 12) -> list[str]:
     gm = self.graph_memory
     labels: list[str] = []
@@ -188,6 +196,7 @@ def _inventory_labels(self, *, limit: int = 12) -> list[str]:
             if len(labels) >= limit:
                 return labels
     return labels
+
 
 def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]:
     gm = self.graph_memory
@@ -217,26 +226,33 @@ def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]
             )
             text = ranked[0] if ranked else self.question
     oid = obs_id
-    if oid is None or int(oid) < 0:
-        # No obs_id means "verify what the robot is looking at now". Motion tools call
-        # this right after capture_and_update, so the newest observation is the frame
-        # just taken; falling back to a hypothesis re-verified the same stale obs every
-        # round while the robot explored the far side of the scene (q104/q105).
+    if oid is None or is_current_view_sentinel(oid) or is_proposal_handle(oid):
+        # -1 = live camera; voxel handles are not frames. Score the current view, or fail.
         oid = self._latest_obs_id()
     if oid is None:
-        if self._hypotheses:
-            oid = int(self._hypotheses[min(self._hyp_i, len(self._hypotheses) - 1)].obs_id)
-        elif getattr(gm, "last_eqa_obs_ids", None):
-            oid = int(gm.last_eqa_obs_ids[0])
-        else:
-            return {"ok": False, "error": "no obs_id"}
+        return {
+            "ok": False,
+            "status": "NOT_A_VIEW",
+            "obs_id": obs_id,
+            "phrase": text,
+            "error": (
+                "obs_id is a detection handle or missing, and there is no captured "
+                "camera frame; investigate() to capture, then verify the new obs_id"
+            ),
+            "verified": self._verified,
+        }
     oid = int(oid)
+    if is_proposal_handle(oid):
+        return {
+            "ok": False,
+            "status": "NOT_A_VIEW",
+            "obs_id": oid,
+            "phrase": text,
+            "error": "cannot verify a detection handle; capture a real observation first",
+            "verified": self._verified,
+        }
     verify_target = self._action_target_for_obs(oid)
-    if (
-        self._router_enabled
-        and self._evidence_policy.state != AgenticState.VERIFY
-        and oid not in self._fresh_obs_ids
-    ):
+    if self._router_enabled and self._evidence_policy.state != AgenticState.VERIFY and oid not in self._fresh_obs_ids:
         return {
             "ok": False,
             "error": (f"obs_id {oid} is stale; SEARCH must APPROACH/capture a fresh view before VERIFY"),

@@ -178,3 +178,8 @@ class AgenticEQAResult:
     answer_provenance: str = ""
     answer_confidence: float = 0.0
     decision_rounds: int = 0
+    # Object-phrase ``localize_text`` hit from the loop (not a furniture wrap).
+    # OVMM scores this after submit releases SigLIP — do not re-query the map.
+    voxel_xyz: tuple[float, float, float] | None = None
+    voxel_phrase: str | None = None
+    voxel_from_pin: bool | None = None

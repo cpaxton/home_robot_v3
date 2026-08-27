@@ -24,7 +24,7 @@ from emet.memory.format import (
     load_memory,
     save_memory,
 )
-from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+from emet.memory.graph_eqa import GraphEQAMemory
 
 __all__ = [
     "GraphEQAMemory",

@@ -691,7 +691,7 @@ def main(
         from emet.utils.port_utils import release_zmq_ports
 
         rows: list[dict[str, Any]] = []
-        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+        from emet.memory.graph_eqa import agentic_verify_enabled
 
         agentic = agentic_verify_enabled(agent)
         # Answer-only: drop MuJoCo/EGL before Qwen load. Agentic verify keeps sim up for nav.
@@ -737,7 +737,7 @@ def main(
             t_q0 = time.monotonic()
             try:
                 if agentic:
-                    from emet.memory.graph_eqa.agentic_eqa import run_agentic_eqa
+                    from emet.memory.graph_eqa import run_agentic_eqa
 
                     discord_text, _imgs = run_agentic_eqa(
                         agent,

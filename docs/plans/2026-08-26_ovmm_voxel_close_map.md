@@ -81,7 +81,7 @@ CHAT already uses `get_voxel_map().localize_text` in `emet.agent.loop` /
 
 | Priority | Work | Why |
 |----------|------|-----|
-| P0 GPU | Agentic dynagraph rby1 S0 **without** harness GT-phrase pin. Voxel-card run `rby1_smoke_voxel_20260826_231837` was 0/0: card then wander. Job `20260826_235038_6e8928` used harness pin — ablation only, do not treat as the product. | End-to-end of agent `inspect_graph` + score. |
+| P0 GPU | **Done 11:17** `rby1_smoke_loop_20260827_111733`: FindObj **1/1** (voxel XYZ, err 0.0 m). FindRec still 0/1 (`blue cube` never localized). 10:12 had been FindObj 0/1 after SigLIP release. | Land this on `feat/tamp-ovmm-perf`, then rebase PR 142. FindRec is a cube `localize_text` miss, not scoring. |
 | P1 GPU | Stretch S0 dynamem oneshot (`dynamem_s0_20260826_231820`): cube voxel 0.37 m (miss vs 0.3 m), cylinder miss. rby1 oneshot was 1.0 / 0.0 m YoloE. Oneshot is mapping ablation, not the agent. | Instance separation / radius vs pytest 0.55 m. |
 | P1 | If Stretch voxel still collapses red/blue to one peak: **do not** expand `"red cylinder"` to `"cylinder"` on S0 (already `phrase_only` on oneshot). Check YoloE vocab / confidence on the two GT bodies. | Instance separation. |
 | P1 | Locate questions: allow VLM assess on the **mapping view** (drop “must APPROACH first”) *or* restore table mapping pose before the first investigate. | Stops frontier wander into sky/floor RGB. |

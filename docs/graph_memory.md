@@ -39,6 +39,11 @@ Live detections become nodes/observations on a **`GraphStore`**. Two EQA loops r
 
 `src/emet/memory/graph_eqa/` keeps this path. Facades stay small (≤250 lines) so the agent host can load them. Behavior lives in subpackages and is bound onto the facade. Old module paths (`graph_mutate`, `agentic_init`, …) are compatibility shims.
 
+Product callers import from the package::
+
+    from emet.memory.graph_eqa import GraphEQAMemory, AgenticEQAExecutor, run_agentic_eqa
+
+
 | Subpackage / module | Job |
 |---------------------|-----|
 | `graph_memory.py` | `GraphEQAMemory` facade: owns `GraphStore` + `WorldEvidenceStore`; delegates `add_observation` / `query_answer` / `hypothesize_nav_targets`. |

@@ -134,9 +134,7 @@ def init_executor(
     self.room_policy = resolve_room_policy(env_policy if env_policy is not None else cfg_policy)
     env_decision = env_eqa_agentic_decision_policy()
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
-    self.decision_policy = resolve_agentic_decision_policy(
-        env_decision if env_decision is not None else cfg_decision
-    )
+    self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
     graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
     history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
@@ -196,9 +194,7 @@ def init_executor(
     if raw_question_id is None:
         raw_question_id = self._trace_meta.get("qid")
     self._question_id = str(
-        raw_question_id
-        if raw_question_id is not None
-        else hashlib.sha1(self.question.encode("utf-8")).hexdigest()[:12]
+        raw_question_id if raw_question_id is not None else hashlib.sha1(self.question.encode("utf-8")).hexdigest()[:12]
     )
     raw_session_id = self._trace_meta.get("session_id")
     if raw_session_id is None:
@@ -227,6 +223,9 @@ def init_executor(
     self._vlm_assessed_obs_ids: set[int] = set()
     self._target_phrase: str = ""
     self._question_type: str = "other"
+    self._voxel_score_xyz: tuple[float, float, float] | None = None
+    self._voxel_score_phrase: str | None = None
+    self._voxel_score_from_pin: bool | None = None
     self._last_vlm_assess: dict[str, Any] | None = None
     self._not_present_streak = 0
     self._frontier_pick_waypoints: list[tuple[float, float]] = []
@@ -277,6 +276,7 @@ def init_executor(
     self._tools: list[Any] | None = None
     self._tool_names: set[str] = set()
     self._system_prompt: str = ""
+
 
 def _tool_obs_id_error(self, raw_obs_id: Any) -> dict[str, Any]:
     listed = sorted({int(h.obs_id) for h in self._hypotheses})

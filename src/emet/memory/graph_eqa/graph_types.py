@@ -6,6 +6,7 @@
 
 Prefer ``emet.memory.graph_eqa.types``, ``labels``, ``geom``, and ``count_mcq``.
 """
+
 from emet.memory.graph_eqa.count_mcq import (
     _COUNT_LEADING_WORDS,
     _COUNT_PHRASE_ALIASES,

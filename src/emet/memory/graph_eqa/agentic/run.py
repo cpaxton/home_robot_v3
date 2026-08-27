@@ -19,7 +19,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def run(self) -> AgenticEQAResult:
     t0 = time.monotonic()
     final: dict[str, Any] | None = None
@@ -56,6 +55,9 @@ def run(self) -> AgenticEQAResult:
     self._pending_answerable = None
     self._verified = False
     self._verified_obs_id = None
+    self._voxel_score_xyz = None
+    self._voxel_score_phrase = None
+    self._voxel_score_from_pin = None
     self._last_verify = None
     self._vlm_assessed_obs_ids = set()
     self._evidence_policy = EvidencePolicy()
@@ -158,8 +160,8 @@ def run(self) -> AgenticEQAResult:
         action_rewrite: dict[str, Any] | None = None
         # Close+VLM-absent → force explore so coverage grows before the next investigate.
         # Locate / close-look: keep investigating nearby place cards instead of frontier drift.
-        skip_prefer_explore = (
-            self._prefers_nearby_investigate() and self._nearby_untried_investigate_hyp() is not None
+        skip_prefer_explore = self._hold_detections_before_explore() and (
+            self._unused_detection_hypothesis() is not None or self._nearby_untried_investigate_hyp() is not None
         )
         if (
             self.decision_policy != "grounded_v2"
@@ -211,6 +213,36 @@ def run(self) -> AgenticEQAResult:
                 "selected": selected_calls,
                 "executed": calls,
             }
+        # Mapping-pose graph views are not objects: rewrite to an unused proposal.
+        unused_det = self._unused_detection_hypothesis()
+        if (
+            self.decision_policy != "grounded_v2"
+            and unused_det is not None
+            and self.mode == "answer"
+            and calls
+            and calls[0][0] in ("investigate", "navigate_to_obs")
+            and self._n_nav + self._n_explore < self.max_nav_steps
+        ):
+            try:
+                pick_oid = int((calls[0][1] or {}).get("obs_id"))
+            except (TypeError, ValueError):
+                pick_oid = None
+            pick_hyp = self._hypothesis_for_obs_id(pick_oid) if pick_oid is not None else None
+            if self._hypothesis_is_camera_pose_place(pick_hyp):
+                self._append_trace(
+                    {
+                        "event": "camera_pose_place_redirect",
+                        "from_obs_id": pick_oid,
+                        "to_obs_id": int(unused_det.obs_id),
+                    }
+                )
+                calls = [("investigate", {"obs_id": int(unused_det.obs_id)})]
+                picked_by = f"{picked_by}+camera_pose_place"
+                action_rewrite = {
+                    "reason": "camera_pose_place",
+                    "selected": selected_calls,
+                    "executed": calls,
+                }
         # Leave/ABSENT explore-only loops: after a streak of frontiers, force a close look.
         if (
             self.decision_policy != "grounded_v2"
@@ -349,6 +381,9 @@ def run(self) -> AgenticEQAResult:
         answer_provenance=provenance,
         answer_confidence=confidence_score,
         decision_rounds=self._round + 1,
+        voxel_xyz=self._voxel_score_xyz,
+        voxel_phrase=self._voxel_score_phrase,
+        voxel_from_pin=self._voxel_score_from_pin,
     )
     self._sync_scored_answer_to_graph_memory(result, final)
     # Always expose salvage CF for Habitat jsonl even when collect_trace is off.
@@ -375,6 +410,9 @@ def run(self) -> AgenticEQAResult:
             "final_decision": (
                 self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
             ),
+            "voxel_xyz": list(result.voxel_xyz) if result.voxel_xyz is not None else None,
+            "voxel_phrase": result.voxel_phrase,
+            "voxel_from_pin": result.voxel_from_pin,
         }
     )
     self.agent._agentic_eqa_summary = summary
@@ -409,6 +447,7 @@ def run(self) -> AgenticEQAResult:
     )
     self._flush_trace_to_agent(result)
     return result
+
 
 def _sync_scored_answer_to_graph_memory(
     self,
@@ -474,6 +513,7 @@ def _sync_scored_answer_to_graph_memory(
         }
     )
 
+
 def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
     """Stash trace rows on the agent so Habitat debug bundles can persist them."""
     if not self._collect_trace:
@@ -499,9 +539,7 @@ def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
         "decision_rounds": result.decision_rounds,
         "decision_policy": self.decision_policy,
         "effective_state_contract": self._effective_state_contract_knobs(),
-        "final_decision": (
-            self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
-        ),
+        "final_decision": (self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None),
     }
     gm = self.graph_memory
     if gm is not None:
