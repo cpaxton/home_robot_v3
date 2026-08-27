@@ -107,7 +107,7 @@ Cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_so
 
 **Where:** under ``robots.innate_mars.mapping`` / ``…filters`` (deep-merged into ``mapping`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config.
 
-**Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.add_observation()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
+**Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/dynamem/perception.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.process_rgbd_images()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
 
 **Disable / tighten** (tune per site — try one knob at a time):
 
