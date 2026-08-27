@@ -357,7 +357,7 @@ GPU A/B (ledger on vs off) must use `uv run emet jobs run …` — never inline 
 | Semantic work/equivalence/progress policy | `src/emet/memory/graph_eqa/action_history.py` |
 | Candidate filtering + semantic state rendering | `src/emet/memory/graph_eqa/agentic_state.py`, `agentic_eqa.py` |
 | Repeat / manip helpers | `src/emet/memory/graph_eqa/attempt_metrics.py` |
-| Store + dual-write | `src/emet/memory/graph_eqa/graph_memory.py` |
+| Store + dual-write | `src/emet/memory/graph_eqa/store.py` (ledger list) + `spatial/graph_rooms.py` (`record_nav_attempt`) |
 | ToolOutcome | `src/emet/agent/tool_outcome.py` |
 | Nav sync | `src/emet/controller/nav_attempt.py` |
 | Closer look | `src/emet/controller/manipulation/closer_look.py` |
@@ -370,7 +370,7 @@ GPU A/B (ledger on vs off) must use `uv run emet jobs run …` — never inline 
 ## Related docs
 
 - [AGENT_RUN.md](AGENT_RUN.md) — CHAT vs EQA_EPISODE
-- [graph_eqa.md](graph_eqa.md) / [dynagraph.md](dynagraph.md) — memory backends
+- [graph_eqa.md](graph_eqa.md) / [graph_memory.md](graph_memory.md) / [dynagraph.md](dynagraph.md) — memory backends
 - [ovmm_full_benchmark.md](ovmm_full_benchmark.md) — pick/place scoring + ledger hooks
 - [motion_planning.md](motion_planning.md) — base + arm planners
 - [emet_config.md](emet_config.md) / [environment_variables.md](environment_variables.md) — knobs

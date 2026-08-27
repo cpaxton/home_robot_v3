@@ -213,7 +213,7 @@ Run a robot agent or app.
 |-----|--------------|
 | `agent` | Embodied LLM agent + tools (optional Discord, opt-in Rerun). See [AGENT_RUN.md](AGENT_RUN.md). |
 | `dynamem` | DynaMem navigation + manipulation |
-| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
+| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md), [graph_memory.md](graph_memory.md)) |
 | `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)); **`--explore-loop`**, **`--export`**, **`--question`** |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |

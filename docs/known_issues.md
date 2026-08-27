@@ -46,7 +46,7 @@ Three changes address stationary hardware stream growth:
 
 1. **GraphObjectFusion fallback tier** (`fallback_spatial_merge_xy_m`, default **0.45 m**, aligned with `dynagraph_merge_xy_m`). When strict spatial/embedding/bounds gates fail, instance detections merge into the nearest object node within that XY radius.
 2. **Innate Mars fusion YAML wired correctly** — `attach_graph_object_fusion` now reads `graph_object_fusion` from `Parameters` / yacs config (controllers no longer pass `None` when parameters is not a plain `dict`). [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) supplies relaxed gates (embedding off, fallback **0.55 m**).
-3. **VLM sensor labels through fusion** — Qwen-extracted labels in [`dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/dynamem_graph_hooks.py) use `apply_detection` instead of `add_observation` with dedup disabled (~8 new nodes/step before).
+3. **VLM sensor labels through fusion** — Qwen-extracted labels in [`dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/ingest/dynamem_graph_hooks.py) use `apply_detection` instead of `add_observation` with dedup disabled (~8 new nodes/step before).
 
 **Stream status** now reports object / viewpoint / frontier breakdown: `graph 11 obj / 12 vp / 1 fr (24 total)` ([`stream_agent_factory.py`](../src/emet/app/stream_agent_factory.py)).
 
@@ -62,7 +62,7 @@ Several merge paths exist; on stream + hardware they appear **too weak** for noi
 |-----------|---------------|------------------------------|
 | **GraphObjectFusion** | [`graph_object_fusion`](../src/emet/config/agents/default_graph_object_fusion.yaml) in dynav (enabled on stream via [stream_agent_factory](../src/emet/app/stream_agent_factory.py)) | Merges when XY ≤ `spatial_merge_xy_m` (0.42 m), 3D centroid ≤ `min_centroid_dist_m` (0.55 m), bounds IoU, embedding cosine ≥ 0.62. **DA3 depth jitter** and pose/camera noise can push repeated views of the same object outside these gates → **new node every step**. See [fusion.py](../src/emet/memory/graph_eqa/graph_object_fusion/fusion.py) and [dynagraph.md § Configuration keys](dynagraph.md#configuration-keys). |
 | **Label-based pre-dedup** | `graph_instance_dedup_xy_m` (default **0.4 m**; [graph_eqa.md](graph_eqa.md)) | `_graph_dedup_skips` uses :func:`~emet.memory.graph_eqa.graph_stats.labels_compatible_for_dedup` (exact / substring / shared tokens / synonym groups) so ``mug`` vs ``coffee cup`` no longer bypasses XY dedup. See [controller_graph_eqa.py](../src/emet/controller/controller_graph_eqa.py). |
-| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges **compatible** labels within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([setup.py](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py)); fusion fallback covers that path. |
+| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges **compatible** labels within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([attach.py](../src/emet/memory/graph_eqa/graph_object_fusion/attach.py)); fusion fallback covers that path. |
 | **Staleness prune** | `dynagraph_staleness_horizon` (default **256**) | `maintain()` does not drop nodes until they are stale for hundreds of steps — fine for explore loops, **not** for short stationary streams. |
 
 Additional contributors:
@@ -94,7 +94,8 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ### Code touchpoints
 
-- `src/emet/memory/graph_eqa/graph_memory.py` — `add_observation`, `merge_object_detection`, `spatial_merge_m`
+- `src/emet/memory/graph_eqa/ingest/graph_mutate.py` — `add_observation`, `merge_object_detection`
+- `src/emet/memory/graph_eqa/store.py` — `spatial_merge_m` on `GraphStore`
 - `src/emet/memory/graph_eqa/graph_object_fusion/fusion.py` — merge gates
 - `src/emet/controller/controller_graph_eqa.py` — `_graph_dedup_skips`
 - `src/emet/app/stream_agent_factory.py` — `dynagraph_merge_xy_m` / `graph_object_fusion` defaults for stream
