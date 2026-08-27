@@ -38,11 +38,11 @@ def nav_agent(monkeypatch):
     agent._last_nav_attempt = None
     agent._episode_diagnostics_recorder = None
     monkeypatch.setattr(
-        "emet.controller.controller_dynamem.habitat_perfect_nav_enabled",
+        "emet.controller.dynamem.eqa.habitat_perfect_nav_enabled",
         lambda _p: False,
     )
     monkeypatch.setattr(
-        "emet.controller.controller_dynamem.is_habitat_robot_client",
+        "emet.controller.dynamem.eqa.is_habitat_robot_client",
         lambda _r: False,
     )
     return agent
@@ -79,15 +79,15 @@ def test_navigate_to_target_pose_uses_navmesh_when_enabled(monkeypatch):
         target_obs_id=None,
     )
     monkeypatch.setattr(
-        "emet.controller.controller_dynamem.habitat_perfect_nav_enabled",
+        "emet.controller.dynamem.eqa.habitat_perfect_nav_enabled",
         lambda _p: True,
     )
     monkeypatch.setattr(
-        "emet.controller.controller_dynamem.is_habitat_robot_client",
+        "emet.controller.dynamem.eqa.is_habitat_robot_client",
         lambda _r: True,
     )
     monkeypatch.setattr(
-        "emet.controller.controller_dynamem.habitat_navmesh_navigate",
+        "emet.controller.dynamem.eqa.habitat_navmesh_navigate",
         lambda *a, **k: nav_res,
     )
     finished = agent.navigate_to_target_pose(np.array([1.0, 2.0, 0.0]), np.array([0.0, 0.0, 0.0]))

@@ -205,7 +205,7 @@ Other components:
 | Dynagraph agent | `src/emet/controller/controller_dynagraph.py` — merge/staleness on `GraphEQAMemory`; see [dynagraph.md](dynagraph.md) |
 | Attempt ledger | `attempt_ledger.py` / `store.py` on `GraphEQAMemory` — [attempt_ledger.md](attempt_ledger.md) |
 | App entry point | `src/emet/app/run_graph_eqa.py` |
-| Dynagraph app | `src/emet/app/run_dynagraph.py` |
+| Dynagraph / LazyGraph app | `src/emet/app/run_dynagraph.py` / `run_lazy_graph.py` (shared CLI: `graph_nav_cli.py`) |
 | Plan (design) | [docs/plans/GRAPH_EQA_PLAN.md](plans/GRAPH_EQA_PLAN.md) (historical; see graph_memory.md for current layout) |
 
 ## Tests and contributing

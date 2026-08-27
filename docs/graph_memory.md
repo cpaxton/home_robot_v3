@@ -91,3 +91,19 @@ Loading a 7k-line module crashes the Cursor agent host. Edit the subpackage modu
 - Agentic tools: `agentic/{executor_init,run,router,answer,verify,assess,capture,investigate,place,explore,action}.py`
 
 `handle_tool` is a `dict` of handlers in `agentic.executor_init.TOOL_HANDLERS`.
+
+## Voxel-nav stack (DynaMem / Dynagraph / LazyGraph)
+
+Same robot loop, different memory policy. `DynamemController` is the voxel-nav parent; GraphEQA / Dynagraph / LazyGraph subclass it.
+
+| Piece | Role |
+|-------|------|
+| `emet.controller.dynamem` | `DynamemController` facade. Perception, describe, look, nav, EQA live in sibling modules and are bound onto the class. Import path `controller_dynamem` is a shim. |
+| `emet.utils.bind_methods` | Shared `bind_module_methods` (also used by graph memory). |
+| `mapping/voxel/voxel_dynamem.py` | DynaMem `SparseVoxelMap` core (RGB-D ingest, occupancy, pickle). |
+| `mapping/voxel/dynamem_localize.py` | Mixin: `localize_text`, SigLIP alignment, MLLM grounding. |
+| `mapping/voxel/dynamem_eqa.py` | Mixin: classic voxel `query_answer` / frontiers. |
+| `emet.app.graph_nav_cli` | Shared Click CLI for **Dynagraph** and **LazyGraph** (`configure_graph_nav`). |
+| `emet.app.graph_nav_gt` | Ground-truth ready + Rerun help (used by the CLI and `zmq_mapping_session`). |
+
+Do not merge CHAT vs EQA_EPISODE skill packs. EQA tool names stay stable.

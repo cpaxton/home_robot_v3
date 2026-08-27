@@ -16,6 +16,7 @@
 """Tests for the emet CLI."""
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -891,6 +892,29 @@ def test_run_dynagraph_help():
     assert r2.returncode == 0
     out2 = (r2.stdout + r2.stderr).lower()
     assert "staleness" in out2 or "merge" in out2
+
+
+def test_run_lazy_graph_help():
+    """emet run --help lists lazy-graph; shared CLI --help matches dynagraph flags."""
+    env = {**os.environ, "COLUMNS": "240"}
+    r1 = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "run", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert r1.returncode == 0
+    flat = "".join(r1.stdout.lower().split())
+    assert "lazy-graph" in flat
+    r2 = subprocess.run(
+        [sys.executable, "-m", "emet.app.run_lazy_graph", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert r2.returncode == 0
+    out2 = (r2.stdout + r2.stderr).lower()
+    assert "explore-loop" in out2 or "explore_loop" in out2
 
 
 def test_sync_help():

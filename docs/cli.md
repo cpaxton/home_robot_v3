@@ -215,6 +215,7 @@ Run a robot agent or app.
 | `dynamem` | DynaMem navigation + manipulation |
 | `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md), [graph_memory.md](graph_memory.md)) |
 | `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)); **`--explore-loop`**, **`--export`**, **`--question`** |
+| `lazy-graph` | Same CLI as dynagraph with LazyGraph memory ([lazy_graph.md](lazy_graph.md)); shared [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |
 | `chat` | LLM chat with robot |
