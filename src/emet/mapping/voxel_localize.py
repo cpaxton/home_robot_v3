@@ -20,7 +20,49 @@ from typing import Any
 import numpy as np
 
 VOXEL_HYP_OBS_BASE = -3_000_000
+# verify_siglip: live camera now. Not a stored obs and not a voxel handle.
+CURRENT_VIEW_OBS_ID = -1
 LOCALIZE_PINS_ATTR = "_emet_localize_pins"
+
+
+def is_current_view_sentinel(obs_id: Any) -> bool:
+    """True for ``verify_siglip`` ``obs_id=-1`` (current camera frame)."""
+    try:
+        return int(obs_id) == int(CURRENT_VIEW_OBS_ID)
+    except (TypeError, ValueError):
+        return False
+
+
+def is_proposal_handle(obs_id: Any) -> bool:
+    """True for voxel ``localize_text`` handles (``obs_id <= VOXEL_HYP_OBS_BASE``).
+
+    Other negative ids are not detections: SigLIP seeds (``-2_000_000``),
+    frontier keys (``-1_000_000``), and ``CURRENT_VIEW_OBS_ID`` (``-1``).
+    """
+    try:
+        return int(obs_id) <= int(VOXEL_HYP_OBS_BASE)
+    except (TypeError, ValueError):
+        return False
+
+
+def voxel_proposal_id(index: int = 0) -> int:
+    """Stable investigate() handle for the ``index``-th voxel detection this recall."""
+    return int(VOXEL_HYP_OBS_BASE) - int(index)
+
+
+def localize_confidence(stats: dict[str, Any] | None) -> float | None:
+    """1.0 on YoloE hit, else gated cosine if present."""
+    if not isinstance(stats, dict):
+        return None
+    if stats.get("yoloe_hit"):
+        return 1.0
+    cosine = stats.get("max_cosine")
+    try:
+        if cosine is None:
+            return None
+        return float(cosine)
+    except (TypeError, ValueError):
+        return None
 
 
 def _as_xyz(target: Any) -> np.ndarray | None:
@@ -226,3 +268,24 @@ def localize_text_xyz_from_phrases(
         if xyz is not None:
             return xyz, phrase, stats
     return None, None, last_stats
+
+
+def pinned_xyz_from_phrases(
+    voxel_map: Any,
+    phrases: list[str] | tuple[str, ...] | None,
+) -> tuple[np.ndarray | None, str | None, dict[str, Any]]:
+    """Pin-store lookup only. Never runs live ``localize_text`` (encoder may be gone)."""
+    seen: set[str] = set()
+    for raw in phrases or ():
+        phrase = str(raw or "").strip()
+        key = phrase.lower()
+        if not phrase or key in seen:
+            continue
+        seen.add(key)
+        pinned, pin_stats = pinned_localize_xyz(voxel_map, phrase)
+        if pinned is not None:
+            pin_stats.setdefault("from_pin", True)
+            if voxel_map is not None:
+                voxel_map._last_localize_stats = dict(pin_stats)
+            return pinned, phrase, pin_stats
+    return None, None, {}

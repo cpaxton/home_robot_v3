@@ -12,10 +12,13 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import is_proposal_handle, pin_localize_xyz
 from emet.memory.graph_eqa.agentic_config import (
+    CAMERA_POSE_PLACE_M,
     INVESTIGATE_SOURCES,
     NEAR_INVESTIGATE_M,
     env_eqa_hyp_recall_k,
+    question_has_mcq_options,
     question_is_locate,
 )
 from emet.memory.graph_eqa.agentic_tools import coerce_room_label, normalize_current_room
@@ -25,31 +28,84 @@ from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
 
+FIXTURE_LABEL_TOKENS = frozenset(
+    {
+        "cabinet",
+        "counter",
+        "shelf",
+        "table",
+        "desk",
+        "dresser",
+        "chest",
+        "drawer",
+        "stove",
+        "oven",
+        "refrigerator",
+        "fridge",
+        "microwave",
+        "countertop",
+    }
+)
+
+
+def phrase_is_support_fixture_wrap(phrase: str) -> bool:
+    """True when ``phrase`` is the object plus furniture (``red cylinder table``)."""
+    words = [w for w in str(phrase or "").lower().split() if w]
+    if len(words) < 2:
+        return False
+    fixtures = [w for w in words if w in FIXTURE_LABEL_TOKENS]
+    content = [w for w in words if w not in FIXTURE_LABEL_TOKENS]
+    return bool(fixtures) and bool(content)
+
+
+def phrase_is_fixture_only(phrase: str) -> bool:
+    """True when every token is furniture (``table``, ``kitchen cabinet``)."""
+    words = [w for w in str(phrase or "").lower().split() if w]
+    return bool(words) and all(w in FIXTURE_LABEL_TOKENS for w in words)
+
+
+def _hyp_catalog_row(h: NavHypothesis) -> dict[str, Any]:
+    """One inspect_graph row. Voxel ``obs_id <= -3_000_000`` is a detection handle."""
+    oid = int(h.obs_id)
+    source = str(h.source)
+    if source == "frontier":
+        kind = "frontier"
+    elif is_proposal_handle(oid) or source == "voxel":
+        kind = "proposal"
+    else:
+        kind = "view"
+    conf = getattr(h, "confidence", None)
+    try:
+        confidence = float(conf) if conf is not None else None
+    except (TypeError, ValueError):
+        confidence = None
+    if confidence is None and getattr(h, "siglip_sim", None) is not None:
+        try:
+            confidence = float(h.siglip_sim)
+        except (TypeError, ValueError):
+            confidence = None
+    return {
+        "obs_id": oid,
+        "kind": kind,
+        "phrase": h.phrase,
+        "xyz": [float(x) for x in np.asarray(h.xyz).reshape(-1)[:3]],
+        "source": source,
+        "confidence": confidence,
+        "siglip_sim": (float(h.siglip_sim) if getattr(h, "siglip_sim", None) is not None else None),
+    }
+
 
 class AgenticExploreMixin:
     """Explore_frontier, inspect_graph, and nearby-investigate preference."""
 
-    _FIXTURE_LABEL_TOKENS = frozenset(
-        {
-            "cabinet",
-            "counter",
-            "shelf",
-            "table",
-            "desk",
-            "dresser",
-            "chest",
-            "drawer",
-            "stove",
-            "oven",
-            "refrigerator",
-            "fridge",
-            "microwave",
-            "countertop",
-        }
-    )
+    _FIXTURE_LABEL_TOKENS = FIXTURE_LABEL_TOKENS
 
     def _target_boost_phrases(self) -> list[str]:
-        """Phrases to bias graph recall — from the question, not episode metadata."""
+        """Phrases to bias graph recall — from the question, not episode metadata.
+
+        Shorter compounds first so ``red cylinder`` is queried before a wrapping
+        3-gram like ``red cylinder table`` (heuristic fallback picks the 3-gram).
+        """
         ordered: list[str] = []
         phrase = str(getattr(self, "_target_phrase", "") or "").strip()
         if phrase:
@@ -60,7 +116,63 @@ class AgenticExploreMixin:
             val = str(raw or "").strip()
             if val and val not in ordered:
                 ordered.append(val)
+
+        def _rank(p: str) -> tuple[int, int, str]:
+            words = p.lower().split()
+            fixture = 1 if any(w in self._FIXTURE_LABEL_TOKENS for w in words) else 0
+            return (fixture, len(words), p.lower())
+
+        ordered.sort(key=_rank)
         return ordered
+
+    def _phrase_is_support_fixture_wrap(self, phrase: str) -> bool:
+        """True when ``phrase`` is the object plus furniture (``red cylinder table``)."""
+        return phrase_is_support_fixture_wrap(phrase)
+
+    def _alias_pin_voxel_xyz(
+        self,
+        voxel_map: Any,
+        phrase: str,
+        xyz: Any,
+        stats: dict[str, Any] | None,
+    ) -> None:
+        """Pin the hit and object-name aliases so scoring does not need a live query."""
+        if voxel_map is None:
+            return
+        pin_localize_xyz(voxel_map, phrase, xyz, stats)
+        aliases = list(self._target_boost_phrases())
+        target = str(getattr(self, "_target_phrase", "") or "").strip()
+        if target and target not in aliases:
+            aliases.append(target)
+        hit = str(phrase or "").strip()
+        for alias in aliases:
+            if not alias or alias.lower() == hit.lower():
+                continue
+            if phrase_is_support_fixture_wrap(alias) or phrase_is_fixture_only(alias):
+                continue
+            if label_matches_relevant_object(hit, alias) or label_matches_relevant_object(alias, hit):
+                pin_localize_xyz(voxel_map, alias, xyz, stats)
+
+    def _record_voxel_score_hit(
+        self,
+        phrase: str,
+        xyz: Any,
+        stats: dict[str, Any] | None,
+        voxel_map: Any = None,
+    ) -> None:
+        """Keep the most specific object-phrase voxel XYZ. Furniture wraps are not FindObj."""
+        if phrase_is_support_fixture_wrap(phrase) or phrase_is_fixture_only(phrase):
+            return
+        arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
+        if arr.size < 3 or not np.isfinite(arr[:3]).all():
+            return
+        n_new = len(str(phrase or "").split())
+        n_old = len(str(self._voxel_score_phrase or "").split())
+        if self._voxel_score_xyz is None or n_new > n_old:
+            self._voxel_score_xyz = (float(arr[0]), float(arr[1]), float(arr[2]))
+            self._voxel_score_phrase = str(phrase or "").strip() or None
+            self._voxel_score_from_pin = bool((stats or {}).get("from_pin"))
+        self._alias_pin_voxel_xyz(voxel_map, phrase, xyz, stats)
 
     def _recall_nav_hypotheses(self) -> list[NavHypothesis]:
         gm = self.graph_memory
@@ -95,6 +207,17 @@ class AgenticExploreMixin:
             return True
         return question_is_locate(self.question)
 
+    def _hold_detections_before_explore(self) -> bool:
+        """Finish unused proposals before frontier travel on open locate / close-look.
+
+        Location MCQ (``Where is X? A) kitchen B) bath``) must still change rooms
+        even if ``localize_text`` hit a keyword here. Close-look (clock/count/color),
+        including close-look MCQ, still holds — that view is the answer.
+        """
+        if question_has_mcq_options(self.question) and not bool(self._close_look_required):
+            return False
+        return self._prefers_nearby_investigate()
+
     def _investigate_matches_target(self, hyp: NavHypothesis | None, obs_id: int) -> bool:
         """Absent-at-close only nudges explore when this card matches the seek phrase."""
         target = str(getattr(self, "_target_phrase", "") or "").strip().lower()
@@ -116,9 +239,49 @@ class AgenticExploreMixin:
                         return True
         return False
 
-    def _nearby_untried_investigate_hyp(self, max_dist_m: float = NEAR_INVESTIGATE_M) -> NavHypothesis | None:
+    def _hypothesis_is_detection(self, hyp: NavHypothesis | None) -> bool:
+        """Voxel / inspect_graph proposal handle — metric XYZ, not a camera pose."""
+        if hyp is None:
+            return False
+        return str(hyp.source) == "voxel" or is_proposal_handle(hyp.obs_id)
+
+    def _hypothesis_is_camera_pose_place(self, hyp: NavHypothesis | None) -> bool:
+        """True when this card's XY is the current robot (mapping view, not an object)."""
+        if hyp is None or self._hypothesis_is_detection(hyp):
+            return False
+        dist = self._dist_to_anchor_m(int(hyp.obs_id), hyp)
+        return dist is not None and dist < float(CAMERA_POSE_PLACE_M)
+
+    def _unused_detection_hypothesis(self) -> NavHypothesis | None:
+        """Best unused localize_text / proposal card, if any remain to investigate."""
         best: NavHypothesis | None = None
-        best_d = float("inf")
+        best_key: tuple[float, float] | None = None
+        visible = self._grounded_visible_place_obs()
+        for h in self._investigate_hypotheses():
+            if not self._hypothesis_is_detection(h):
+                continue
+            oid = int(h.obs_id)
+            if visible is not None and oid not in visible:
+                continue
+            if self._obs_already_verified(oid) or self._hypothesis_nav_blocked(oid):
+                continue
+            if self._place_approaches_exhausted(oid):
+                continue
+            conf = getattr(h, "confidence", None)
+            try:
+                conf_v = float(conf) if conf is not None else 0.0
+            except (TypeError, ValueError):
+                conf_v = 0.0
+            key = (-conf_v, -float(h.score))
+            if best_key is None or key < best_key:
+                best = h
+                best_key = key
+        return best
+
+    def _nearby_untried_investigate_hyp(self, max_dist_m: float = NEAR_INVESTIGATE_M) -> NavHypothesis | None:
+        """Closest usable place card. Detections beat camera-pose-at-feet graph views."""
+        best: NavHypothesis | None = None
+        best_key: tuple[int, float] | None = None
         visible = self._grounded_visible_place_obs()
         for h in self._investigate_hypotheses():
             oid = int(h.obs_id)
@@ -128,17 +291,35 @@ class AgenticExploreMixin:
                 continue
             if self._place_approaches_exhausted(oid):
                 continue
+            if self._hypothesis_is_camera_pose_place(h):
+                continue
             d = self._dist_to_anchor_m(oid, h)
             if d is None or d > float(max_dist_m):
                 continue
-            if d < best_d:
-                best_d = d
+            # 0 = detection (localize_text XYZ); 1 = graph/siglip view of an object.
+            tier = 0 if self._hypothesis_is_detection(h) else 1
+            key = (tier, d)
+            if best_key is None or key < best_key:
+                best_key = key
                 best = h
         return best
 
     def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> dict[str, Any]:
         if self._n_nav + self._n_explore >= self.max_nav_steps:
             return {"ok": False, "error": "nav budget exhausted"}
+        unused = self._unused_detection_hypothesis()
+        if unused is not None and self._hold_detections_before_explore():
+            oid = int(unused.obs_id)
+            return {
+                "ok": False,
+                "status": "DETECTIONS_REMAIN",
+                "error": (
+                    "inspect_graph still lists a detection handle; investigate(obs_id) "
+                    "that XYZ before explore_frontier (camera-pose views are not object locations)"
+                ),
+                "obs_id": oid,
+                "detections": [_hyp_catalog_row(unused)],
+            }
         toward = (toward or "").strip()
         requested_frontier_id = str(frontier_id or "").strip()
         grounded = self.decision_policy == "grounded_v2"
@@ -564,26 +745,27 @@ class AgenticExploreMixin:
             gm.refresh_siglip_confirmed_memory()
         hypotheses = self._recall_nav_hypotheses()
         self._set_hypotheses(hypotheses)
+        catalog = [_hyp_catalog_row(h) for h in self._hypotheses]
+        detections = [row for row in catalog if row["kind"] == "proposal"]
+        views = [row for row in catalog if row["kind"] == "view"]
         out = {
             "ok": True,
+            "moved": False,
             "n_hypotheses": len(self._hypotheses),
-            "hypotheses": [
-                {
-                    "phrase": h.phrase,
-                    "obs_id": int(h.obs_id),
-                    "xyz": [float(x) for x in np.asarray(h.xyz).reshape(-1)[:3]],
-                    "source": h.source,
-                    "siglip_sim": (float(h.siglip_sim) if getattr(h, "siglip_sim", None) is not None else None),
-                }
-                for h in self._hypotheses
-            ],
+            "n_detections": len(detections),
+            "n_views": len(views),
+            "detections": detections,
+            "views": views,
+            "hypotheses": catalog,
         }
         self._append_trace(
             {
                 "tool": "inspect_graph",
                 "picked_by": "loop",
                 "policy_state": self._evidence_policy.state,
+                "moved": False,
                 "n_hypotheses": out["n_hypotheses"],
+                "n_detections": out["n_detections"],
                 "hypotheses": out["hypotheses"],
             }
         )

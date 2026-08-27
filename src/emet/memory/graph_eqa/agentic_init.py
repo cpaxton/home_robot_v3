@@ -230,6 +230,9 @@ class AgenticInitMixin:
         self._vlm_assessed_obs_ids: set[int] = set()
         self._target_phrase: str = ""
         self._question_type: str = "other"
+        self._voxel_score_xyz: tuple[float, float, float] | None = None
+        self._voxel_score_phrase: str | None = None
+        self._voxel_score_from_pin: bool | None = None
         self._last_vlm_assess: dict[str, Any] | None = None
         self._not_present_streak = 0
         self._frontier_pick_waypoints: list[tuple[float, float]] = []

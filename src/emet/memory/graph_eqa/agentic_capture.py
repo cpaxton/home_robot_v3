@@ -11,7 +11,14 @@ from typing import Any
 
 import numpy as np
 
-from emet.mapping.voxel_localize import VOXEL_HYP_OBS_BASE, localize_text_xyz_from_phrases
+from emet.mapping.voxel_localize import (
+    CURRENT_VIEW_OBS_ID,
+    is_current_view_sentinel,
+    is_proposal_handle,
+    localize_confidence,
+    localize_text_xyz,
+    voxel_proposal_id,
+)
 from emet.memory.graph_eqa.agentic_config import (
     INVESTIGATE_SOURCES,
     NAV_SAME_OBS_LOOP_LIMIT,
@@ -89,8 +96,20 @@ class AgenticCaptureMixin:
         )
 
     def _verify_stalled_nav_view(self, obs_id: int, *, phrase: str = "") -> dict[str, Any]:
-        """When capture does not advance, still score the current view once for the planner."""
+        """When capture does not advance, score the live arrival RGB (no sweep)."""
         oid = int(obs_id)
+        if is_proposal_handle(oid) or is_current_view_sentinel(oid):
+            latest = self._latest_obs_id()
+            if latest is not None:
+                oid = int(latest)
+            else:
+                return self.handle_tool(
+                    "verify_siglip",
+                    {
+                        "phrase": self._siglip_phrase(phrase),
+                        "obs_id": CURRENT_VIEW_OBS_ID,
+                    },
+                )
         # Allow verify despite REQUIRES_FRESH_VIEW — we intentionally revisit this station.
         self._fresh_obs_ids.add(oid)
         # Clear prior same-view skip so this stall path can record ABSENT/CANDIDATE.
@@ -269,35 +288,57 @@ class AgenticCaptureMixin:
         self._set_hypotheses(self._recall_nav_hypotheses())
 
     def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
-        """DynaMem ``localize_text`` place cards (YoloE / cosine-gated), not raw SigLIP argmax."""
+        """Query-only detections: where the voxel map sees each question phrase.
+
+        These are not camera views. ``obs_id`` is a handle for ``investigate``;
+        a closer look must capture a real observation before verify/assess.
+        """
         voxel_map, _ = self._voxel_planner()
-        phrases = list(self._target_boost_phrases())
+        phrases = [p for p in self._target_boost_phrases() if not self._phrase_is_support_fixture_wrap(p)]
         extra = str(self._siglip_phrase() or "").strip()
-        if extra and extra not in phrases:
+        if extra and extra not in phrases and not self._phrase_is_support_fixture_wrap(extra):
             phrases.append(extra)
-        xyz, phrase, stats = localize_text_xyz_from_phrases(voxel_map, phrases)
-        if xyz is None or phrase is None:
-            return []
-        cosine = stats.get("max_cosine")
-        try:
-            sim = float(cosine) if cosine is not None else None
-        except (TypeError, ValueError):
-            sim = None
-        score = 400.0
-        if sim is not None:
-            score += sim
-        if stats.get("yoloe_hit"):
-            score += 50.0
-        return [
-            NavHypothesis(
-                phrase=phrase,
-                obs_id=int(VOXEL_HYP_OBS_BASE),
-                xyz=xyz,
-                score=score,
-                source="voxel",
-                siglip_sim=sim,
+        out: list[NavHypothesis] = []
+        for phrase in phrases:
+            xyz, stats = localize_text_xyz(voxel_map, phrase)
+            if xyz is None:
+                continue
+            self._record_voxel_score_hit(phrase, xyz, stats, voxel_map)
+            xy = (float(xyz[0]), float(xyz[1]))
+            near = [h for h in out if abs(float(h.xyz[0]) - xy[0]) < 0.05 and abs(float(h.xyz[1]) - xy[1]) < 0.05]
+            if near:
+                # Keep the object 2-gram even if "cylinder table" / a wrapping
+                # 3-gram already landed on the same blob.
+                n_words = len(phrase.split())
+                fixture = any(w in self._FIXTURE_LABEL_TOKENS for w in phrase.lower().split())
+                shorter = any(n_words < len(str(h.phrase).split()) for h in near)
+                less_fixture = (not fixture) and any(
+                    any(w in self._FIXTURE_LABEL_TOKENS for w in str(h.phrase).lower().split()) for h in near
+                )
+                if not (shorter or less_fixture):
+                    continue
+            conf = localize_confidence(stats)
+            sim = conf if not stats.get("yoloe_hit") else None
+            try:
+                if stats.get("max_cosine") is not None:
+                    sim = float(stats["max_cosine"])
+            except (TypeError, ValueError):
+                pass
+            score = 400.0 + (float(conf) if conf is not None else 0.0)
+            if stats.get("yoloe_hit"):
+                score += 50.0
+            out.append(
+                NavHypothesis(
+                    phrase=phrase,
+                    obs_id=voxel_proposal_id(len(out)),
+                    xyz=xyz,
+                    score=score,
+                    source="voxel",
+                    confidence=conf,
+                    siglip_sim=sim,
+                )
             )
-        ]
+        return out
 
     def _receptacle_adjacent_hypotheses(self, gm: Any) -> list[NavHypothesis]:
         """Container/fixture nodes to look at when a receptacle phrase has no direct
@@ -428,6 +469,7 @@ class AgenticCaptureMixin:
         self._hypotheses = packed
         self._hyp_i = 0
         _SOURCE_PRIOR = {
+            "voxel": 0.6,
             "graph": 0.55,
             "confirmed": 0.5,
             "siglip": 0.4,
@@ -445,7 +487,12 @@ class AgenticCaptureMixin:
         gm = self.graph_memory
         observations = list(getattr(gm, "_observations", None) or [])
         for obs in reversed(observations):
-            oid = int(obs.obs_id)
+            try:
+                oid = int(obs.obs_id)
+            except (TypeError, ValueError):
+                continue
+            if oid <= 0 or is_proposal_handle(oid):
+                continue
             usable = getattr(gm, "_obs_usable_for_eqa_image", None)
             if usable is not None and not usable(oid):
                 continue
@@ -464,7 +511,10 @@ class AgenticCaptureMixin:
         tried = str(self._tried.get(oid) or "")
         if not tried or tried == "nav failed":
             return False
-        if tried.startswith("STALLED_NAV_LOOP") or tried.startswith("verify "):
+        if tried.startswith("STALLED_NAV_LOOP"):
+            # Detection handles are not views; a stalled capture is not a verify.
+            return not is_proposal_handle(oid)
+        if tried.startswith("verify "):
             return True
         # Legacy / unknown tried markers — preserve no-reverify.
         return True
@@ -503,9 +553,14 @@ class AgenticCaptureMixin:
             _logger.warning(f"evidence-policy approach rejected: {exc}")
 
     def _next_untried_hypothesis(self) -> NavHypothesis | None:
-        """Prefer Investigate cards with unused approach samples left."""
+        """Prefer unused detections, then other Investigate cards (not camera-at-feet)."""
+        det = self._unused_detection_hypothesis()
+        if det is not None:
+            return det
         for h in self._investigate_hypotheses():
             oid = int(h.obs_id)
+            if self._hypothesis_is_detection(h) or self._hypothesis_is_camera_pose_place(h):
+                continue
             if self._obs_already_verified(oid):
                 continue
             if self._place_approaches_exhausted(oid) or self._hypothesis_nav_blocked(oid):
@@ -515,6 +570,8 @@ class AgenticCaptureMixin:
                 return h
         for h in self._investigate_hypotheses():
             oid = int(h.obs_id)
+            if self._hypothesis_is_detection(h) or self._hypothesis_is_camera_pose_place(h):
+                continue
             if self._obs_already_verified(oid):
                 continue
             if self._place_approaches_exhausted(oid) or self._hypothesis_nav_blocked(oid):
@@ -533,7 +590,7 @@ class AgenticCaptureMixin:
         if self._next_approach_index(oid) is None:
             return True
         tried = str(self._tried.get(oid) or "")
-        if tried.startswith("STALLED_NAV_LOOP"):
+        if tried.startswith("STALLED_NAV_LOOP") and not is_proposal_handle(oid):
             return True
         # Consecutive planner misses marked this candidate unreachable.
         if oid in self._unreachable_obs_ids:

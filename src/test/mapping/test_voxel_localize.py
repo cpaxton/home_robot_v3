@@ -9,12 +9,19 @@ from __future__ import annotations
 import numpy as np
 
 from emet.mapping.voxel_localize import (
+    CURRENT_VIEW_OBS_ID,
+    VOXEL_HYP_OBS_BASE,
+    is_current_view_sentinel,
+    is_proposal_handle,
+    localize_confidence,
     localize_text_xyz,
     localize_text_xyz_from_phrases,
     pin_localize_xyz,
     pin_phrases_after_mapping,
     pinned_localize_xyz,
+    pinned_xyz_from_phrases,
     voxel_map_from_agent,
+    voxel_proposal_id,
 )
 
 
@@ -162,3 +169,37 @@ def test_pin_phrases_after_mapping_queries_each_phrase_once():
     assert np.allclose(xyz, [-0.02, -0.55, 0.6])
     assert stats["from_pin"] is True
     assert vm.n_live == 2
+
+
+def test_pinned_xyz_from_phrases_does_not_live_query():
+    vm = _Voxel({"red cylinder": [0.08, -0.55, 0.6]})
+    pin_localize_xyz(vm, "red cylinder", [0.08, -0.55, 0.6], {"yoloe_hit": True})
+    vm.hits.clear()
+
+    def _boom(*_a, **_k):
+        raise AssertionError("pin lookup must not call localize_text")
+
+    vm.localize_text = _boom
+    xyz, used, stats = pinned_xyz_from_phrases(vm, ["red cylinder", "cylinder"])
+    assert used == "red cylinder"
+    assert xyz is not None
+    assert np.allclose(xyz, [0.08, -0.55, 0.6])
+    assert stats["from_pin"] is True
+    assert vm.n_live == 0
+
+
+def test_proposal_handle_and_localize_confidence():
+    assert is_proposal_handle(VOXEL_HYP_OBS_BASE)
+    assert is_proposal_handle(voxel_proposal_id(1))
+    assert not is_proposal_handle(1)
+    assert not is_proposal_handle("nope")
+    assert not is_proposal_handle(CURRENT_VIEW_OBS_ID)
+    assert not is_proposal_handle(-2_000_000)
+    assert not is_proposal_handle(-1_000_000)
+    assert is_current_view_sentinel(CURRENT_VIEW_OBS_ID)
+    assert not is_current_view_sentinel(VOXEL_HYP_OBS_BASE)
+    assert voxel_proposal_id(0) == VOXEL_HYP_OBS_BASE
+    assert voxel_proposal_id(1) == VOXEL_HYP_OBS_BASE - 1
+    assert localize_confidence({"yoloe_hit": True, "max_cosine": 0.22}) == 1.0
+    assert localize_confidence({"yoloe_hit": False, "max_cosine": 0.31}) == 0.31
+    assert localize_confidence(None) is None

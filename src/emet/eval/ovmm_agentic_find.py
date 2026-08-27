@@ -77,6 +77,44 @@ def _localize_phrases(question: str, trace_meta: dict[str, Any] | None) -> list[
     return out
 
 
+def _xyz_from_loop_voxel(
+    result: Any,
+    phrases: list[str],
+) -> tuple[np.ndarray | None, str | None, bool | None]:
+    """Object-phrase ``localize_text`` XYZ the executor already queried.
+
+    VLM submit releases SigLIP; do not re-run the voxel encoder for the score.
+    Furniture wraps (``red cylinder table``) are rejected even if the loop
+    stashed them.
+    """
+    raw = getattr(result, "voxel_xyz", None)
+    if raw is None:
+        return None, None, None
+    try:
+        arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+    except (TypeError, ValueError):
+        return None, None, None
+    if arr.size < 3 or not np.isfinite(arr[:3]).all():
+        return None, None, None
+    phrase = str(getattr(result, "voxel_phrase", None) or "").strip() or None
+    if phrase:
+        from emet.memory.graph_eqa.agentic_explore import phrase_is_support_fixture_wrap
+
+        if phrase_is_support_fixture_wrap(phrase):
+            return None, None, None
+        phrase_list = [str(p or "").strip() for p in phrases if str(p or "").strip()]
+        if phrase_list:
+            from emet.memory.graph_eqa.graph_types import label_matches_relevant_object
+
+            if not any(
+                label_matches_relevant_object(p, phrase) or label_matches_relevant_object(phrase, p)
+                for p in phrase_list
+            ):
+                return None, None, None
+    from_pin = getattr(result, "voxel_from_pin", None)
+    return arr[:3].copy(), phrase, (None if from_pin is None else bool(from_pin))
+
+
 def xyz_from_verified_obs(
     agent: Any,
     obs_id: int | None,
@@ -159,8 +197,13 @@ def run_ovmm_agentic_localize(
     trace_path: Path | str | None = None,
     trace_meta: dict[str, Any] | None = None,
 ) -> OvmmAgenticLocalizeResult:
-    """Run :func:`run_agentic_eqa_result` and map verified obs → world XYZ."""
-    from emet.memory.graph_eqa.agentic_eqa import run_agentic_eqa_result
+    """Run :func:`run_agentic_eqa_result` and map the loop → world XYZ.
+
+    Prefer the loop's object-phrase voxel XYZ (captured before submit releases
+    SigLIP), then a mapping pin, then a phrase-matched graph node. Never live
+    ``localize_text`` after the encoder is dropped. Camera pose is never scored.
+    """
+    from emet.memory.graph_eqa import run_agentic_eqa_result
 
     q = str(question or "").strip()
     if not q:
@@ -200,14 +243,22 @@ def run_ovmm_agentic_localize(
 
     oid = result.verified_obs_id if result.verified else None
     localize_phrases = _localize_phrases(q, trace_meta)
-    xyz = xyz_from_verified_obs(agent, oid, phrases=localize_phrases) if oid is not None else None
-    xyz_source = "graph_node" if xyz is not None else None
+    xyz = None
+    xyz_source = None
     extra_q = None
     extra_stats: dict[str, Any] = {}
+    loop_xyz, loop_phrase, loop_from_pin = _xyz_from_loop_voxel(result, localize_phrases)
+    if loop_xyz is not None:
+        xyz = loop_xyz
+        xyz_source = "voxel"
+        extra_q = loop_phrase
+        extra_stats = {}
+        if loop_from_pin is not None:
+            extra_stats["from_pin"] = bool(loop_from_pin)
     if xyz is None:
-        from emet.mapping.voxel_localize import localize_text_xyz_from_phrases, voxel_map_from_agent
+        from emet.mapping.voxel_localize import pinned_xyz_from_phrases, voxel_map_from_agent
 
-        voxel_xyz, voxel_q, voxel_stats = localize_text_xyz_from_phrases(
+        voxel_xyz, voxel_q, voxel_stats = pinned_xyz_from_phrases(
             voxel_map_from_agent(agent),
             localize_phrases,
         )
@@ -216,6 +267,10 @@ def run_ovmm_agentic_localize(
             xyz_source = "voxel"
             extra_q = voxel_q
             extra_stats = dict(voxel_stats or {})
+    if xyz is None:
+        xyz = xyz_from_verified_obs(agent, oid, phrases=localize_phrases) if oid is not None else None
+        if xyz is not None:
+            xyz_source = "graph_node"
     extra = {
         "budget_hit": bool(result.budget_hit),
         "answer_provenance": str(result.answer_provenance or ""),
@@ -224,8 +279,10 @@ def run_ovmm_agentic_localize(
     if extra_q:
         extra["voxel_query_used"] = extra_q
     if extra_stats:
-        extra["from_pin"] = bool(extra_stats.get("from_pin"))
-        extra["yoloe_hit"] = bool(extra_stats.get("yoloe_hit"))
+        if "from_pin" in extra_stats:
+            extra["from_pin"] = bool(extra_stats.get("from_pin"))
+        if "yoloe_hit" in extra_stats:
+            extra["yoloe_hit"] = bool(extra_stats.get("yoloe_hit"))
         cosine = extra_stats.get("max_cosine")
         if cosine is not None:
             extra["max_cosine"] = cosine

@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.prompt import parse_tool_calls_response
+from emet.mapping.voxel_localize import is_proposal_handle
 from emet.memory.graph_eqa.agentic_config import (
     _FALSE,
     _TRUE,
@@ -170,6 +171,10 @@ class AgenticRouterMixin:
             stay = self._close_map_stay_hypothesis()
             if stay is not None:
                 return "investigate", {"obs_id": int(stay.obs_id)}
+        if budget_left and self._hold_detections_before_explore():
+            det = self._unused_detection_hypothesis()
+            if det is not None:
+                return "investigate", {"obs_id": int(det.obs_id)}
         if budget_left and self._prefers_nearby_investigate():
             near = self._nearby_untried_investigate_hyp()
             if near is not None:
@@ -190,8 +195,17 @@ class AgenticRouterMixin:
             and not self._rendered_action_allowlist()["frontier_ids"]
         ):
             frontiers_gone = True
-        if need_more and budget_left and not frontiers_gone:
-            return "explore_frontier", self._rendered_frontier_args()
+        if need_more and budget_left:
+            # A miss on this RGB is not a reason to leave a remaining detection.
+            h = (
+                self._next_rendered_hypothesis()
+                if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
+                else self._next_untried_hypothesis()
+            )
+            if h is not None and (str(h.source) == "voxel" or is_proposal_handle(h.obs_id)):
+                return "investigate", {"obs_id": int(h.obs_id)}
+            if not frontiers_gone:
+                return "explore_frontier", self._rendered_frontier_args()
         # After a close ABSENT look, grow coverage before the next investigate —
         # but only once; if we already explored this streak and place cards remain,
         # look closer instead of frontier-only loops.
@@ -222,6 +236,9 @@ class AgenticRouterMixin:
                 if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
                 else self._next_untried_hypothesis()
             )
+            # Location MCQ: a keyword voxel in this room is not a pin — explore instead.
+            if h is not None and self._hypothesis_is_detection(h) and not self._hold_detections_before_explore():
+                h = None
             if h is not None:
                 return "investigate", {"obs_id": int(h.obs_id)}
         # (1) keep exploring for new views while budget remains
@@ -621,33 +638,42 @@ class AgenticRouterMixin:
         Redirect invalid evidence ids to the best listed place card and force one
         exploration step when a selected place is exhausted or unusable.
         """
-        if (
-            tool not in ("navigate_to_obs", "investigate")
-            or out.get("ok")
-            or self.mode != "answer"
-            or self._n_nav + self._n_explore >= self.max_nav_steps
-        ):
+        if out.get("ok") or self.mode != "answer" or self._n_nav + self._n_explore >= self.max_nav_steps:
             return False
         status = str(out.get("status") or "")
-        invalid_pick = status in {"OBS_NOT_IN_EVIDENCE", "NOT_INVESTIGATE_CARD"}
-        blocked_pick = status in {
-            "NAV_LOOP_BLOCKED",
-            "STATION_OBS_NOT_PLACE",
-        }
-        if not invalid_pick and not blocked_pick:
+        if tool == "explore_frontier" and status == "DETECTIONS_REMAIN":
+            hyp = self._unused_detection_hypothesis() or self._next_untried_hypothesis()
+            if hyp is None:
+                return False
+            redirect_tool = "investigate"
+            redirect_args: dict[str, Any] = {"obs_id": int(hyp.obs_id)}
+        elif tool in ("navigate_to_obs", "investigate") and status == "CAMERA_POSE_PLACE":
+            hyp = self._unused_detection_hypothesis() or self._next_untried_hypothesis()
+            if hyp is None:
+                return False
+            redirect_tool = "investigate"
+            redirect_args = {"obs_id": int(hyp.obs_id)}
+        elif tool in ("navigate_to_obs", "investigate"):
+            invalid_pick = status in {"OBS_NOT_IN_EVIDENCE", "NOT_INVESTIGATE_CARD"}
+            blocked_pick = status in {
+                "NAV_LOOP_BLOCKED",
+                "STATION_OBS_NOT_PLACE",
+            }
+            if not invalid_pick and not blocked_pick:
+                return False
+            redirect_tool = "explore_frontier"
+            redirect_args = self._rendered_frontier_args(toward=self.query_text)
+            if invalid_pick:
+                hyp = (
+                    self._next_rendered_hypothesis()
+                    if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
+                    else self._next_untried_hypothesis()
+                )
+                if hyp is not None:
+                    redirect_tool = "investigate"
+                    redirect_args = {"obs_id": int(hyp.obs_id)}
+        else:
             return False
-
-        redirect_tool = "explore_frontier"
-        redirect_args = self._rendered_frontier_args(toward=self.query_text)
-        if invalid_pick:
-            hyp = (
-                self._next_rendered_hypothesis()
-                if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
-                else self._next_untried_hypothesis()
-            )
-            if hyp is not None:
-                redirect_tool = "investigate"
-                redirect_args = {"obs_id": int(hyp.obs_id)}
         if (
             self.action_progress_mode == "enforce"
             and redirect_tool == "explore_frontier"

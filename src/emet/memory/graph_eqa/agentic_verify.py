@@ -11,6 +11,10 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import (
+    is_current_view_sentinel,
+    is_proposal_handle,
+)
 from emet.memory.graph_eqa.agentic_config import (
     SIGLIP_IMAGE_ABSENT_THRESHOLD,
     SIGLIP_IMAGE_PRESENT_THRESHOLD,
@@ -219,20 +223,31 @@ class AgenticVerifyMixin:
                 )
                 text = ranked[0] if ranked else self.question
         oid = obs_id
-        if oid is None or int(oid) < 0:
-            # No obs_id means "verify what the robot is looking at now". Motion tools call
-            # this right after capture_and_update, so the newest observation is the frame
-            # just taken; falling back to a hypothesis re-verified the same stale obs every
-            # round while the robot explored the far side of the scene (q104/q105).
+        if oid is None or is_current_view_sentinel(oid) or is_proposal_handle(oid):
+            # -1 = live camera; voxel handles are not frames. Score the current view, or fail.
             oid = self._latest_obs_id()
         if oid is None:
-            if self._hypotheses:
-                oid = int(self._hypotheses[min(self._hyp_i, len(self._hypotheses) - 1)].obs_id)
-            elif getattr(gm, "last_eqa_obs_ids", None):
-                oid = int(gm.last_eqa_obs_ids[0])
-            else:
-                return {"ok": False, "error": "no obs_id"}
+            return {
+                "ok": False,
+                "status": "NOT_A_VIEW",
+                "obs_id": obs_id,
+                "phrase": text,
+                "error": (
+                    "obs_id is a detection handle or missing, and there is no captured "
+                    "camera frame; investigate() to capture, then verify the new obs_id"
+                ),
+                "verified": self._verified,
+            }
         oid = int(oid)
+        if is_proposal_handle(oid):
+            return {
+                "ok": False,
+                "status": "NOT_A_VIEW",
+                "obs_id": oid,
+                "phrase": text,
+                "error": "cannot verify a detection handle; capture a real observation first",
+                "verified": self._verified,
+            }
         verify_target = self._action_target_for_obs(oid)
         if (
             self._router_enabled

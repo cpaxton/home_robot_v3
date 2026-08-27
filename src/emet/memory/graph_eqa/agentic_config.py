@@ -70,6 +70,8 @@ NAV_CONSECUTIVE_FAIL_LIMIT = 2
 EXPLORE_STREAK_FORCE_INVESTIGATE = 2
 # Prefer investigate when a matching place card is this close (locate / close-look).
 NEAR_INVESTIGATE_M = 3.5
+# Graph view whose XY is the robot (mapping camera pose) is not an object place.
+CAMERA_POSE_PLACE_M = 0.35
 OVMM_NEAR_INVESTIGATE_M = NEAR_INVESTIGATE_M  # backward-compat alias
 # Investigate / close-look standoff: keep outer ring within approached_close (1.0m).
 INVESTIGATE_ANNULUS_OUTER_M = 1.0
@@ -120,16 +122,24 @@ _LOCATE_CUES = (
     "find the",
     "locate the",
 )
+# GraphEQA / HM-EQA choices: "A) kitchen B) living".
+_MCQ_OPTION_RE = re.compile(r"\b[A-Ea-e]\)")
+
+
+def question_has_mcq_options(question: str) -> bool:
+    """True when the prompt lists A)/B)/… choices (Habitat MCQ, not open locate)."""
+    return bool(_MCQ_OPTION_RE.search(str(question or "")))
 
 
 def question_is_locate(question: str) -> bool:
-    """True when the question is a find/localize prompt, not a close-look MCQ.
+    """True when the question is an open find/localize prompt, not an MCQ.
 
     Close-look (clock/count/color) stays on ``question_requires_close_look_keywords``.
     Locate questions still prefer a nearby matching place card over frontier drift.
+    HM-EQA ``Where is the sink? A) kitchen B) bath`` is MCQ, not locate.
     """
     q = str(question or "").strip().lower()
-    if not q:
+    if not q or question_has_mcq_options(q):
         return False
     return any(cue in q for cue in _LOCATE_CUES)
 

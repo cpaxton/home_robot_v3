@@ -18,9 +18,9 @@ The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.m
 
 ## Method
 
-The LLM decides. Python supplies **tools**, **structured outputs**, and **swappable prompt packs**. OVMM locate, Habitat MCQ EQA, and open-ended explore share the same EQA tool names (`inspect_graph`, `investigate`, `explore_frontier`, `vlm_assess`, `submit_answer`). Swap the prompt, not the finder. Do not fork `if ovmm:` policy in Python, and do not pin episode YAML phrases in `emet ovmm find`.
+The LLM decides. Python supplies **tools**, **structured outputs**, and **swappable prompt packs**. OVMM locate, Habitat MCQ EQA, and open-ended explore share the same EQA tool names (`inspect_graph`, `investigate`, `explore_frontier`, `verify_siglip`, `submit_answer`). `vlm_assess` is the assess JSON produced **inside** `verify_siglip` after a closer look — not a separate tool (traces keep `verify_siglip`). Swap the prompt, not the finder. Do not fork `if ovmm:` policy in Python, and do not pin episode YAML phrases in `emet ovmm find`.
 
-CHAT vs EQA_EPISODE packs stay disjoint ([AGENT_RUN.md](AGENT_RUN.md)). OVMM vs HM-EQA stay the **same EQA pack**.
+CHAT vs EQA_EPISODE packs stay disjoint ([AGENT_RUN.md](AGENT_RUN.md)). OVMM vs HM-EQA stay the **same EQA pack**. Interactive `emet run agent` is CHAT (`query_memory` / `face_toward`) and calls the same `localize_text` helper — it does not use `inspect_graph`.
 
 | We provide | The LLM uses |
 |------------|--------------|
@@ -28,35 +28,44 @@ CHAT vs EQA_EPISODE packs stay disjoint ([AGENT_RUN.md](AGENT_RUN.md)). OVMM vs 
 | Structured outputs: graph inventory, voxel/graph proposals, `ViewAssessment` JSON | The next belief and the answer |
 | Prompt packs (locate / MCQ / open explore / CHAT) | Same tools, different instructions |
 
-Geometry (voxels, fusion, close-map, room partition) is **evidence**, not a second policy.
+Geometry (voxels, fusion, [close-map](close_map.md), room partition) is **evidence**, not a second policy.
+
+### Query vs closer look
+
+| Tool | Motion? | What it is |
+|------|---------|------------|
+| `inspect_graph` | No | Query catalog. **Proposals** (`kind=proposal`, `source=voxel`, `obs_id < 0`) are metric `localize_text` XYZ. **Views** (`kind=view`) are graph observations. A view whose XYZ is the current camera pose is not the object. |
+| `investigate` | Yes | Closer look: drive to a listed handle, capture a **new** RGB, then `verify_siglip` / `vlm_assess` **that** frame (not the card id). |
+| `explore_frontier` | Yes | Map coverage. On **open locate / close-look** (including close-look MCQ), refused while an unused proposal remains (`DETECTIONS_REMAIN`). **Location MCQ** (`Where is X? A) kitchen B) bath`) may still explore to change rooms — a keyword voxel in this room is not a pin. Same EQA pack; question shape, not an OVMM YAML name. |
+
+Nearby-investigate and the deterministic fallback rank unused proposals above mapping-pose views. Camera-pose `investigate` is refused (`CAMERA_POSE_PLACE`) for locate **and** MCQ. Close-map **stay** keeps the robot on a card XY until an aimed look ≤ 0.55 m or escape. Each answer episode **starts** with `inspect_graph`.
 
 ### One EQA step
 
 ```mermaid
 flowchart TD
   rgbD[RGB-D capture] --> voxel[DynaMem voxel field]
-  rgbD --> obs[Graph observation]
-  voxel -->|"localize_text / YoloE boxes"| prop[In-view proposals]
-  graph[Graph nodes and pins] -->|"project XYZ to this camera"| prop
+  rgbD --> graph[Graph nodes]
+  voxel -->|"localize_text"| catalog[inspect_graph catalog]
+  graph -->|"views + pins"| catalog
   q[Question] --> vlm[VLM step]
+  catalog --> vlm
   rgbNow[Current RGB] --> vlm
-  ctx[Context images] --> vlm
-  inv[Neutral inventory of proposals] --> vlm
-  vlm -->|"confirm add retract"| pins[Graph pins / place cards]
-  pins --> graph
-  pins --> inves[investigate]
-  inves --> rgbD
-  pins -->|"locate / OVMM XYZ"| score[Score]
-  vlm -->|"answerable + letter"| score
+  vlm -->|"pick proposal handle"| inves[investigate]
+  inves --> stay[close-map stay]
+  stay --> rgbD
+  inves -->|"new RGB"| assess[verify_siglip / vlm_assess]
+  assess -->|"answerable + letter"| score[Score]
+  catalog -->|"proposal XYZ"| score
 ```
 
 | Layer | Owns | Does not own |
 |-------|------|----------------|
 | **Voxel (DynaMem)** | Metric occupancy + semantic cloud. Live `localize_text` (detector on this frame, else gated cosine). | Agent belief. Episode object names. EQA answers. |
 | **Graph (GraphEQA)** | Observations, instance nodes, frontiers, rooms, committed pins. | Replacing `localize_text`. Camera pose as object XYZ. |
-| **VLM** | Present / answerable / letter; which proposals to commit. | Being the only localizer. |
+| **VLM** | Present / answerable / letter; which catalog handle to look at next. | Being the only localizer. Committing product pins (`ViewAssessment.in_view` not shipped). |
 
-`inspect_graph` already prepends a `source=voxel` place card from live `localize_text` on question-derived phrases. That is the agent using the voxel tool — not the OVMM harness calling `localize_text(object_query)`.
+`inspect_graph` is a **query** (no motion). Voxel `obs_id < 0` is a detection handle, not Image N. That is the agent using the voxel tool — not the OVMM harness calling `localize_text(object_query)`.
 
 A first-hit cache on the voxel map (`_emet_localize_pins`) is a **retrieval cache**, not the product pin. Product pins are graph confirm/add from `vlm_assess` (**not shipped yet**).
 
@@ -97,7 +106,7 @@ flowchart TD
 |------|------------|
 | **Product (contract)** | Graph pin `{phrase, xyz, obs_id, evidence}` written only when the agent **confirms** or **adds** (`vlm_assess` `in_view`). Scoring / `inspect_graph` read committed pins first. |
 | **Not a pin** | Episode YAML `object_query` / `goal_recep` preloaded by `ovmm_find_phase`. |
-| **Retrieval cache (now)** | First successful `localize_text` for a string on the voxel object. Tests may call `pin_phrases_after_mapping`; the OVMM harness must not. |
+| **Retrieval cache (now)** | First successful `localize_text` for a string on the voxel object. The agentic loop snapshots that XYZ for OVMM scoring (submit drops SigLIP; do not live-query again). Tests may call `pin_phrases_after_mapping`; the OVMM harness must not. |
 
 ### Map sanity vs OVMM harness
 
@@ -113,9 +122,10 @@ flowchart TD
 | Now | Later |
 |-----|--------|
 | Shared EQA tool pack; OVMM phrased as questions | Graph-owned pins from `vlm_assess` confirm/add |
-| Voxel investigate cards from live `localize_text` | `ViewAssessment.in_view` (confirm / add / retract) |
+| `inspect_graph` query catalog (proposals vs views, no motion); `investigate` closer look; unused proposals beat camera-pose views; `explore_frontier` refused while a proposal remains | `ViewAssessment.in_view` (confirm / add / retract) |
+| Close-map stay on a card XY until aimed close or escape | Treat close-map `resolved` as localize success even if Qwen says unknown |
 | `room_clustering.partition` + `proximity` | `occupancy_cc` / `portal` + backend sweep |
-| FindObj/FindRec score voxel / phrase-matched graph XYZ, never camera pose | Sparse overlays of in-FOV labels on the assess image |
+| FindObj/FindRec score the loop's object-phrase voxel XYZ (survives SigLIP release at submit), then pin / live localize; never camera pose or ``red cylinder table`` wraps | Sparse overlays of in-FOV labels on the assess image |
 
 ## References
 
@@ -495,7 +505,13 @@ Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md)
 
 | Piece | Role |
 |-------|------|
+| [`src/emet/memory/graph_eqa/`](../src/emet/memory/graph_eqa/) | Public import surface: `from emet.memory.graph_eqa import GraphEQAMemory, AgenticEQAExecutor, run_agentic_eqa`. |
 | [`src/emet/controller/controller_dynagraph.py`](../src/emet/controller/controller_dynagraph.py) | `DynagraphController`: `maintain` + Rerun layout after each `update`. |
+| [`src/emet/mapping/voxel_localize.py`](../src/emet/mapping/voxel_localize.py) | Shared `localize_text_xyz` + first-hit retrieval cache + proposal `obs_id < 0`. |
+| [`src/emet/mapping/close_map.py`](../src/emet/mapping/close_map.py) | Aimed close-look grid; agentic stay/escape. See [close_map.md](close_map.md). |
+| [`src/emet/memory/graph_eqa/agentic_explore.py`](../src/emet/memory/graph_eqa/agentic_explore.py) | `inspect_graph` catalog, unused-proposal ranking, `explore_frontier` `DETECTIONS_REMAIN`. |
+| [`src/emet/memory/graph_eqa/agentic_investigate.py`](../src/emet/memory/graph_eqa/agentic_investigate.py) | Closer look + close-map stay; refuses camera-pose views while a proposal remains. |
+| [`src/emet/agent/skills/specs.py`](../src/emet/agent/skills/specs.py) | EQA tool names/schemas (keep stable for traces). |
 | [`src/emet/memory/graph_eqa/graph_memory.py`](../src/emet/memory/graph_eqa/graph_memory.py) | `GraphEQAMemory.set_graph_timestep`, merge in `add_observation`, `maintain`. |
 | [`src/emet/memory/graph_eqa/dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/dynamem_graph_hooks.py) | Optional `frame_step` forwarded to `set_graph_timestep`. |
 | [`src/emet/app/dynagraph_explore.py`](../src/emet/app/dynagraph_explore.py) | `dynagraph_explore_until_terminated` for scripted frontier batches. |

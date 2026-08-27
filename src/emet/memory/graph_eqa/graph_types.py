@@ -47,10 +47,11 @@ _RECALL_SOURCE_TIER: dict[str, float] = {
 
 @dataclass(frozen=True)
 class NavHypothesis:
-    """Retrieved navigation evidence card (graph / CONFIRMED_MEMORY / SigLIP / frontier).
+    """Retrieved navigation evidence card (voxel / graph / CONFIRMED_MEMORY / SigLIP / frontier).
 
     ``score`` is an internal recall rank key for top-K packing and ROUTER=0 fallback
-    order — not a policy signal for the VLM router.
+    order — not a policy signal for the VLM router. ``source=voxel`` /
+    ``obs_id <= -3_000_000`` is a localize_text handle, not a camera observation.
     """
 
     phrase: str
@@ -64,6 +65,8 @@ class NavHypothesis:
     path_cost: float = 0.0
     failure_risk: float = 0.0
     siglip_sim: float | None = None
+    # Voxel/detector detections: 1.0 = YoloE, else gated cosine. Not a camera view.
+    confidence: float | None = None
 
 
 @dataclass(frozen=True)

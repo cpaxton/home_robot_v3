@@ -76,6 +76,18 @@ class AgenticPlaceMixin:
 
     def _hypothesis_nav_anchor_xyz(self, obs_id: int) -> np.ndarray | None:
         """Object anchor for investigate standoff + arrival yaw (graph obs or synthetic hyp)."""
+        from emet.mapping.voxel_localize import is_proposal_handle
+
+        if is_proposal_handle(obs_id):
+            hyp = self._hypothesis_for_obs_id(obs_id)
+            if hyp is not None:
+                try:
+                    xyz = np.asarray(hyp.xyz, dtype=float).reshape(-1)
+                except (TypeError, ValueError):
+                    xyz = None
+                if xyz is not None and xyz.size >= 2 and np.isfinite(xyz[:2]).all():
+                    return xyz[:3].copy() if xyz.size >= 3 else np.array([xyz[0], xyz[1], 0.0], dtype=float)
+            return None
         gm = self.graph_memory
         if gm is not None and hasattr(gm, "_obs_nav_anchor"):
             try:

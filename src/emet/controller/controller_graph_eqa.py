@@ -818,9 +818,7 @@ class GraphEQAController(DynamemController):
                 target_point = alt
             else:
                 eff_key = goal_key_xy(resolved)
-                if stay and (
-                    eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)
-                ):
+                if stay and (eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)):
                     logger.info("EQA habitat: already at FIND/readout view; stay for close-up")
                     return answer, discord_text, relevant_images, confidence
                 if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved):
@@ -1021,7 +1019,7 @@ class GraphEQAController(DynamemController):
         When ``eqa.agentic_verify`` (or ``EMET_EQA_AGENTIC_VERIFY=1``) is set, uses the
         unified agentic explore/navigate/verify/answer loop instead.
         """
-        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+        from emet.memory.graph_eqa import agentic_verify_enabled, run_agentic_eqa
 
         effective_trace_meta = dict(getattr(self, "_eqa_trace_meta", None) or {})
         effective_trace_meta.update(dict(trace_meta or {}))

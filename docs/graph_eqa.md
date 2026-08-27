@@ -23,6 +23,21 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 
 **Close-look map:** occupancy is not a resolved look at a small object. A 2D grid aligned with the voxel map stores min camera range + aimed hits; agentic find stays on a place card until close or escape. See [close_map.md](close_map.md).
 
+## Public API
+
+Import from the package, not from mixin modules:
+
+```python
+from emet.memory.graph_eqa import (
+    GraphEQAMemory,
+    AgenticEQAExecutor,
+    NavHypothesis,
+    run_agentic_eqa,
+)
+```
+
+`graph_memory.py`, `agentic_eqa.py`, and `agentic_*.py` / `graph_*.py` are implementation. They stay importable for `mock.patch` and in-package code. New callers outside `emet.memory.graph_eqa` should use the package.
+
 ## When to use GraphEQA vs DynaMem EQA
 
 | | **EQA (DynaMem)** | **Graph EQA** |
