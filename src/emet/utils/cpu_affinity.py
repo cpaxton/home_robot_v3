@@ -14,6 +14,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def _cpu_sysfs_root() -> Path:
@@ -112,6 +113,66 @@ def apply_affinity(cpu_ids: list[int], pid: int | None = None) -> None:
     os.sched_setaffinity(target, set(cpu_ids))
 
 
+def apply_eval_affinity(
+    *,
+    pid: int | None = None,
+    exclude_min_mhz: float | None = None,
+    fail_closed: bool = True,
+) -> dict[str, Any]:
+    """Pin ``pid`` (default current) away from turbo CPUs; optionally fail closed.
+
+    Stdlib + sysfs only — safe to call from a job wrapper after MuJoCo/Habitat
+    teardown, unlike ``emet eval affinity`` which used to import ``emet.eval``.
+    """
+    if exclude_min_mhz is None:
+        exclude_min_mhz = float(os.environ.get("EMET_EXCLUDE_CPU_MIN_MHZ", "6000") or "6000")
+    if str(os.environ.get("EMET_SKIP_CPU_AFFINITY", "0")).strip() == "1":
+        return {"skipped": True, "reason": "EMET_SKIP_CPU_AFFINITY=1"}
+
+    mhz = exclude_min_mhz if exclude_min_mhz > 0 else None
+    turbo = cpus_at_or_above_mhz(mhz) if mhz else []
+    kept = safe_cpu_ids(exclude_min_mhz=mhz)
+    compact = format_taskset_list(kept)
+    target = os.getpid() if pid is None else int(pid)
+    apply_affinity(kept, pid=target)
+
+    try:
+        actual = sorted(os.sched_getaffinity(target))
+    except (AttributeError, OSError, PermissionError) as exc:
+        if fail_closed:
+            raise RuntimeError(f"could not verify CPU affinity for pid {target}: {exc}") from exc
+        return {"applied": compact, "turbo_cpus": turbo, "verified": False, "error": str(exc)}
+
+    leaked = sorted(set(actual) & set(turbo)) if turbo else []
+    summary = {
+        "applied": compact,
+        "turbo_cpus": turbo,
+        "kept": kept,
+        "actual": actual,
+        "leaked_turbo": leaked,
+        "verified": not leaked,
+        "pid": target,
+    }
+    if leaked and fail_closed:
+        raise RuntimeError(
+            f"CPU affinity still includes turbo CPUs {leaked}; wanted mask {compact} (exclude >={exclude_min_mhz} MHz)"
+        )
+    return summary
+
+
+def affinity_summary_dict() -> dict[str, Any]:
+    mhz = float(os.environ.get("EMET_EXCLUDE_CPU_MIN_MHZ", "6000") or "6000")
+    turbo = cpus_at_or_above_mhz(mhz) if mhz > 0 else []
+    kept = safe_cpu_ids(exclude_min_mhz=mhz if mhz > 0 else None)
+    return {
+        "exclude_min_mhz": mhz,
+        "online": online_cpu_ids(),
+        "turbo_cpus": turbo,
+        "kept": kept,
+        "taskset": format_taskset_list(kept),
+    }
+
+
 def _parse_int_list(raw: str | None) -> list[int] | None:
     if raw is None or not str(raw).strip():
         return None
@@ -192,9 +253,19 @@ def main(argv: list[str] | None = None) -> int:
         print(compact)
 
     if args.apply or args.apply_pid is not None:
-        apply_affinity(kept, pid=args.apply_pid)
+        try:
+            summary = apply_eval_affinity(pid=args.apply_pid, exclude_min_mhz=exclude_mhz, fail_closed=True)
+        except RuntimeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        if summary.get("skipped"):
+            print(f"affinity skipped: {summary.get('reason')}", file=sys.stderr)
+            return 0
         if not args.print_csv and not args.print_json:
-            print(f"applied affinity pid={args.apply_pid or os.getpid()} cpus={compact}", file=sys.stderr)
+            print(
+                f"applied affinity pid={summary.get('pid')} cpus={summary.get('applied')}",
+                file=sys.stderr,
+            )
 
     return 0
 

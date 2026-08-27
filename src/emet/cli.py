@@ -34,14 +34,83 @@ from emet.cli_cmds.eval_status import register as register_eval_status
 from emet.cli_cmds.habitat import register as register_habitat
 from emet.cli_cmds.hmeqa import register as register_hmeqa
 from emet.cli_cmds.jobs import register as register_jobs
+from emet.cli_cmds.lazy_group import LazyClickGroup
 from emet.cli_cmds.molmospaces import register as register_molmospaces
 from emet.cli_cmds.run_sync import register as register_run_sync
 from emet.cli_cmds.serve import register as register_serve
+
+# Import these only when the user actually invokes them. Registering at
+# import time pulled MuJoCo via export-sim-gt / eval-dynagraph and SIGSEGV'd
+# ``emet jobs`` / ``emet eval`` right after a sim job released the GPU lock.
+_LAZY_APP_COMMANDS: dict[str, tuple[str, str, str]] = {
+    "capture": (
+        "emet.app.capture",
+        "main",
+        "One ZMQ frame + metadata (shortcut: zmq_obs capture profile)",
+    ),
+    "stream": (
+        "emet.app.stream",
+        "main",
+        "Live ZMQ → Rerun (shortcut: zmq_obs stream profile)",
+    ),
+    "debug-da3-depth": (
+        "emet.app.debug_da3_depth",
+        "main",
+        "Live DA3 depth + point cloud from ZMQ (Rerun)",
+    ),
+    "debug-lingbot-depth": (
+        "emet.app.debug_lingbot_depth",
+        "main",
+        "Live LingBot-Map depth + pose from ZMQ (Rerun)",
+    ),
+    "export-sim-gt": (
+        "emet.app.export_sim_gt",
+        "main",
+        "Export Robocasa sim GT objects (3D bounds + head 2D boxes)",
+    ),
+    "tune-graph-fusion": (
+        "emet.app.tune_graph_fusion",
+        "main",
+        "Grid-search GraphObjectFusion vs GT + calibration frames",
+    ),
+    "eval-calibration": (
+        "emet.app.eval_calibration",
+        "main",
+        "Score calibration frames vs sim GT (spatial recall)",
+    ),
+    "eval-dynagraph": (
+        "emet.app.eval_dynagraph",
+        "main",
+        "Unified Dynagraph episode eval (explore, graph, fusion, EQA)",
+    ),
+    "eval-sqa3d": (
+        "emet.app.eval_sqa3d",
+        "eval_sqa3d_main",
+        "Score SQA3D QA predictions (EM@1)",
+    ),
+    "sqa3d": (
+        "emet.app.eval_sqa3d",
+        "sqa3d_group",
+        "SQA3D embodied QA (ScanNet / DynaMem / Dynagraph)",
+    ),
+    "ovmm": (
+        "emet.app.eval_ovmm",
+        "ovmm_group",
+        "OVMM find / full / sweep paper paths",
+    ),
+    "robovista": (
+        "emet.app.eval_robovista",
+        "robovista_group",
+        "RoboVista offline robot-centric MCQ-VQA",
+    ),
+}
 
 __all__ = ["main", "_jobs_run_id_from_output"]
 
 
 @click.group(
+    cls=LazyClickGroup,
+    lazy_subcommands=_LAZY_APP_COMMANDS,
     context_settings=_CONTEXT_SETTINGS,
     epilog=_MAIN_EPILOG,
 )
@@ -113,61 +182,6 @@ def install_completion(shell: str | None) -> None:
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
 
-
-from emet.app.capture import main as _capture_app  # noqa: E402
-
-_capture_app.short_help = "One ZMQ frame + metadata (shortcut: zmq_obs capture profile)"
-main.add_command(_capture_app)
-
-from emet.app.stream import main as _stream_app  # noqa: E402
-
-_stream_app.short_help = "Live ZMQ → Rerun (shortcut: zmq_obs stream profile)"
-main.add_command(_stream_app)
-
-# Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.
-from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
-
-_debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
-main.add_command(_debug_da3_depth_app)
-
-from emet.app.debug_lingbot_depth import main as _debug_lingbot_depth_app  # noqa: E402
-
-_debug_lingbot_depth_app.short_help = "Live LingBot-Map depth + pose from ZMQ (Rerun)"
-main.add_command(_debug_lingbot_depth_app)
-
-from emet.app.export_sim_gt import main as _export_sim_gt_app  # noqa: E402
-
-_export_sim_gt_app.short_help = "Export Robocasa sim GT objects (3D bounds + head 2D boxes)"
-main.add_command(_export_sim_gt_app)
-
-from emet.app.tune_graph_fusion import main as _tune_graph_fusion_app  # noqa: E402
-
-_tune_graph_fusion_app.short_help = "Grid-search GraphObjectFusion vs GT + calibration frames"
-main.add_command(_tune_graph_fusion_app)
-
-from emet.app.eval_calibration import main as _eval_calibration_app  # noqa: E402
-
-_eval_calibration_app.short_help = "Score calibration frames vs sim GT (spatial recall)"
-main.add_command(_eval_calibration_app)
-
-from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
-
-_eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
-main.add_command(_eval_dynagraph_app)
-
-from emet.app.eval_ovmm import ovmm_group as _ovmm_group  # noqa: E402
-from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
-from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
-
-_eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
-main.add_command(_eval_sqa3d_app)
-main.add_command(_sqa3d_group)
-main.add_command(_ovmm_group)
-
-from emet.app.eval_robovista import robovista_group as _robovista_group  # noqa: E402
-
-_robovista_group.short_help = "RoboVista offline robot-centric MCQ-VQA"
-main.add_command(_robovista_group)
 
 if __name__ == "__main__":
     main()

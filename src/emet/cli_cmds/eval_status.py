@@ -224,7 +224,7 @@ def eval_clean_bundles(keep: int, max_age_days: float, apply: bool) -> None:
 )
 def eval_affinity(as_json: bool, do_apply: bool, pid: int | None, fail_open: bool) -> None:
     """Exclude logical CPUs whose max freq is ≥ ``EMET_EXCLUDE_CPU_MIN_MHZ`` (default 6000)."""
-    from emet.eval.harness import affinity_summary_dict, apply_eval_affinity
+    from emet.utils.cpu_affinity import affinity_summary_dict, apply_eval_affinity
 
     if do_apply:
         try:
@@ -270,7 +270,7 @@ def eval_affinity(as_json: bool, do_apply: bool, pid: int | None, fail_open: boo
 )
 def eval_recover(need_mib: int | None, skip_wait: bool, max_rounds: int | None) -> None:
     """One-shot recovery gate after agent death / host reboot / failed HM-EQA job."""
-    from emet.eval.harness import affinity_summary_dict
+    from emet.utils.cpu_affinity import affinity_summary_dict
     from emet.utils.gpu_preflight import (
         diagnose_eval_environment,
         format_status_lines,
