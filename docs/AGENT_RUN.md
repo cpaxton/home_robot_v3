@@ -57,7 +57,7 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 | **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, `scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`, Discord send_*, … (metadata in `CHAT_SKILL_SPECS`; funcs bind in `build_chat_tools`) | User turns; explore is turn-blocking |
 | **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify`; OVMM find (dynagraph) via same executor | `investigate` / `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` (`EQA_SKILL_SPECS`) | VLM-assess answerable → submit (or explore `finish`); detectors are proposals only |
 
-OVMM find questions (`Where is the jar on the counter?`) use the **same** `AgenticEQAExecutor` as HM-EQA — not a parallel find loop. One-shot voxel localize is ablation-only (`--oneshot-localize` / `agentic_find: false`). See [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md).
+OVMM find questions (`Where is the jar on the counter?`) use the **same** `AgenticEQAExecutor` as HM-EQA — not a parallel find loop. `--oneshot-localize` is a leftover mapping ablation, not the method. See [dynagraph.md](dynagraph.md#method) and [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md).
 
 `--eqa-eval` still bypasses the chat tool-router and uses the Habitat harness episode path (not CHAT). Do not expect Discord chat turns to score Habitat MCQ. See [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning) and [agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current) (evidence-card recall, frontier retirement).
 

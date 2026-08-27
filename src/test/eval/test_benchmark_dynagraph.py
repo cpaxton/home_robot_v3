@@ -42,6 +42,20 @@ def test_ovmm_find_phase_profile_tighter_than_interactive():
     assert params.get("dynagraph_staleness_horizon") == interactive["dynagraph_staleness_horizon"]
 
 
+def test_s0_parity_oneshot_uses_interactive_merge_agentic_keeps_find_phase():
+    interactive = profile_settings("interactive")
+    find_phase = apply_ovmm_backend_dynagraph(get_parameters("dynav_config.yaml"), "dynagraph")
+    oneshot = apply_backend_parameters(
+        get_parameters("dynav_config.yaml"), "dynagraph", s0_parity=True, use_agentic=False
+    )
+    agentic = apply_backend_parameters(
+        get_parameters("dynav_config.yaml"), "dynagraph", s0_parity=True, use_agentic=True
+    )
+    assert oneshot.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
+    assert agentic.get("dynagraph_merge_xy_m") == find_phase.get("dynagraph_merge_xy_m")
+    assert agentic.get("dynagraph_merge_xy_m") < interactive["dynagraph_merge_xy_m"]
+
+
 def test_sqa3d_tuned_uses_interactive_merge():
     params = apply_sqa3d_dynagraph(get_parameters("dynav_config.yaml"), method="dynagraph", profile="tuned")
     interactive = profile_settings("interactive")

@@ -24,6 +24,8 @@ mapping:
     room_policy: "canonical"
     room_target_hints: true
     room_stamp_investigate: false
+    room_clustering:
+      backend: proximity
     # off=no durable rows/history; shadow=collect but hide; agent=expose grounded
     # recent outcomes, loop flags, per-place summaries, and global attempt rows.
     attempt_ledger_mode: "off"

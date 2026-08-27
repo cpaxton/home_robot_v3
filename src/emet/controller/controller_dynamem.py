@@ -111,6 +111,29 @@ DYNAMEM_HEAD_SWEEP_SPEED_TOL = 0.20
 DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL = 0.04
 DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD = 0.35
 DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S = 0.08
+# Keep default-table rby1 scans on the workspace instead of 45° floor turns.
+DEFAULT_TABLE_MAPPING_YAW_HALF_RAD = float(np.deg2rad(25.0))
+
+
+def default_table_mapping_relative_yaws(n_extra: int) -> list[float]:
+    """Relative yaw steps that stay on the default-table workspace (±25°).
+
+    ``n_extra`` is the number of turns *after* the initial heading has already
+    been captured. For the OVMM 4-view scan that is 3: +25°, −50°, +25° (back
+    to the table-facing heading).
+    """
+    n = max(0, int(n_extra))
+    if n == 0:
+        return []
+    half = DEFAULT_TABLE_MAPPING_YAW_HALF_RAD
+    if n == 1:
+        return [half]
+    if n == 2:
+        return [half, -2.0 * half]
+    seq = [half, -2.0 * half, half]
+    while len(seq) < n:
+        seq.append(half)
+    return seq[:n]
 
 
 def _finite_xyz_traj_target(traj_target_point: Any) -> bool:
@@ -1022,11 +1045,7 @@ class DynamemController(BaseController):
                 )
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
-        if (
-            self._run_full_perception()
-            and self.graph_memory is not None
-            and getattr(self, "_lazy_graph_mode", False)
-        ):
+        if self._run_full_perception() and self.graph_memory is not None and getattr(self, "_lazy_graph_mode", False):
             from emet.memory.graph_eqa.lazy_graph_commit import record_lazy_graph_viewpoint
 
             record_lazy_graph_viewpoint(
@@ -1600,17 +1619,47 @@ class DynamemController(BaseController):
             time.sleep(0.04)
 
     def look_around(self):
+        """Look around for mapping / agentic capture.
+
+        Stretch's narrow Realsense FOV needs head pans. Galaxea rby1 and other
+        ``GenericZmqClient`` robots already have a wide enough camera that a
+        single ``update()`` is enough — pan sweeps dominate OVMM find wall time
+        on Stretch (15–45 s each) and must not be the default for routine agentic
+        experiments. Force sweeps with ``EMET_FORCE_HEAD_SWEEP=1``; force skip with
+        ``EMET_SKIP_HEAD_SWEEP=1``.
         """
-        Let the robot look around to check its surroudings.
-        Rotating the robot head to compensate for the narrow field of view of realsense head camera
-        """
-        self.announce_action("Look around: sweeping head")
-        tilt = float(motion_constants.look_front[1])
+        force_sweep = os.environ.get("EMET_FORCE_HEAD_SWEEP", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        skip_sweep = (not force_sweep) and (
+            os.environ.get("EMET_SKIP_HEAD_SWEEP", "").strip().lower()
+            in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            or not isinstance(self.robot, StretchZmqClient)
+        )
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
             import traceback
 
             tb = " | ".join(f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=6)[:-1])
-            print(f"[sweep] fast_lookaround={getattr(self, '_fast_explore_lookaround', False)} caller={tb}", flush=True)
+            print(
+                f"[sweep] skip={skip_sweep} fast_lookaround={getattr(self, '_fast_explore_lookaround', False)} "
+                f"caller={tb}",
+                flush=True,
+            )
+        if skip_sweep:
+            self.announce_action("Look around: single capture (no head sweep)")
+            self.update()
+            return
+
+        self.announce_action("Look around: sweeping head")
+        tilt = float(motion_constants.look_front[1])
         # Four pans for Realsense FOV coverage (left → right-ish). Soft-wait exits on settle.
         # Explore-loop / smoke: two extremes ~halves wall time (~100s → ~50s per excursion).
         # In fast-sim (teleport) eval mode the 4-pan sweep dominates wall time, so always
@@ -1638,7 +1687,7 @@ class DynamemController(BaseController):
             return default
         return float(raw)
 
-    def rotate_in_place(self):
+    def rotate_in_place(self, *, n_steps: int | None = None):
         self.announce_action("Looking around: rotating in place")
         nav_timeout = self._find_phase_nav_timeout()
         if self.save_rerun:
@@ -1646,27 +1695,54 @@ class DynamemController(BaseController):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
         self.robot.move_to_nav_posture()
-        self.announce_motion_progress("Looking around: nav posture + look_front")
-        self.robot.look_front(blocking=True, timeout=nav_timeout)
+        from emet.eval.ovmm_find_phase import _prepare_default_table_rby1_mapping_view
+
+        table_view = _prepare_default_table_rby1_mapping_view(self)
+        if not table_view:
+            self.announce_motion_progress("Looking around: nav posture + look_front")
+            self.robot.look_front(blocking=True, timeout=nav_timeout)
+        else:
+            self.announce_motion_progress("Looking around: default-table mapping view + look_front")
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
         wait_obs = getattr(self.robot, "wait_for_obs", None)
         if callable(wait_obs):
             wait_obs(timeout=nav_timeout)
-        n_steps = 8
-        logger.info("rotate_in_place: %d× relative +45° yaw (no XY translation)", n_steps)
-        for step_i in range(n_steps):
-            self.announce_motion_progress(f"Looking around: scan step {step_i + 1}/{n_steps}")
+        if n_steps is None:
+            env_n = os.environ.get("EMET_ROTATE_SCAN_STEPS", "").strip()
+            n_steps = int(env_n) if env_n.isdigit() and int(env_n) > 0 else 8
+        else:
+            n_steps = int(n_steps)
+        n_steps = max(1, min(n_steps, 16))
+
+        def _capture() -> None:
+            # Mapping must store every scan pose, including when realtime threads exist.
+            self.update()
+
+        # Map the prepared heading first. The old loop yawed +45° before any
+        # update(), so default-table rby1 never stored the table-facing frame.
+        self.announce_motion_progress(f"Looking around: scan step 1/{n_steps} (current heading)")
+        _capture()
+        extra = n_steps - 1
+        if table_view:
+            yaws = default_table_mapping_relative_yaws(extra)
+            logger.info(
+                "rotate_in_place: table scan "
+                f"{n_steps} views, extra yaw deg={[round(float(np.rad2deg(y))) for y in yaws]}"
+            )
+        else:
+            yaws = [np.pi / 4.0] * extra
+            logger.info(f"rotate_in_place: {n_steps} views, {extra}× relative +45° yaw (no XY translation)")
+        for step_i, yaw in enumerate(yaws):
+            self.announce_motion_progress(f"Looking around: scan step {step_i + 2}/{n_steps}")
             self.robot.move_base_to(
-                [0.0, 0.0, np.pi / 4.0],
+                [0.0, 0.0, float(yaw)],
                 relative=True,
                 blocking=True,
                 timeout=nav_timeout,
             )
-            if not self._realtime_updates:
-                self.update()
-            # Discord: mid + done only (avoid 8 spam messages); terminal already has every step.
-            if step_i in (3, 7):
-                self.announce_action(f"Looking around: scan step {step_i + 1}/{n_steps}")
+            _capture()
+            if step_i in (2, 6):
+                self.announce_action(f"Looking around: scan step {step_i + 2}/{n_steps}")
         self.announce_motion_progress("Looking around: rotate-in-place done")
         self.rerun_iter += 1
         self._maybe_emit_navgrid_ascii(context="rotate_in_place")

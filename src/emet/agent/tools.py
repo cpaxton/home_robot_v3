@@ -20,6 +20,8 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
+from emet.mapping.voxel_localize import localize_text_xyz, voxel_map_from_agent
 from emet.memory.graph_eqa.graph_stats import format_graph_size_report
 from emet.memory.graph_eqa.human_answer import HumanEQAResult, format_eqa_tool_response
 from emet.utils.logger import Logger
@@ -304,17 +306,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 pass
             except AttributeError as e:
                 _logger.warning(f"query_memory backend call failed ({e}); using localize_text fallback.")
-        # Fallback: check if the object is in the voxel map via localize_text
+        # Fallback: same gated localize_text helper as agentic investigate cards.
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
-            voxel_map = executor.agent.get_voxel_map()
-            if voxel_map is not None and hasattr(voxel_map, "localize_text"):
-                result = voxel_map.localize_text(question, return_debug=True)
-                point = result[0] if isinstance(result, (list, tuple)) else result
-                if point is not None:
-                    coords = point.squeeze()
-                    return f"Yes, found at approximately ({coords[0]:.2f}, {coords[1]:.2f}, {coords[2]:.2f})."
-                return "I haven't seen that in my memory."
+            xyz, _stats = localize_text_xyz(voxel_map_from_agent(executor.agent), question)
+            if xyz is not None:
+                return f"Yes, found at approximately ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})."
+            return "I haven't seen that in my memory."
         return "Memory not available."
 
     tools.append(
@@ -1140,13 +1138,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
-            return f"Already roughly facing {label!r} ({source})."
-        deg = float(np.clip(deg, -180.0, 180.0))
-        ok = executor([("rotate_base", str(deg))])
-        if not ok:
-            return f"Tried to face {label!r} ({source}) but rotate failed."
-        context["last_rotate_degrees"] = deg
-        return f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+            msg = f"Already roughly facing {label!r} ({source})."
+        else:
+            deg = float(np.clip(deg, -180.0, 180.0))
+            ok = executor([("rotate_base", str(deg))])
+            if not ok:
+                return f"Tried to face {label!r} ({source}) but rotate failed."
+            context["last_rotate_degrees"] = deg
+            msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+        hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
+        if hint:
+            msg = f"{msg} {hint}"
+        return msg
 
     tools.append(
         Tool(

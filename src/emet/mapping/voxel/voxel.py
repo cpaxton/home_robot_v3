@@ -31,6 +31,7 @@ from torch import Tensor
 import emet.utils.compression as compression
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
+from emet.mapping.close_map import CloseDistanceMap
 from emet.mapping.grid import GridParams
 from emet.mapping.instance import Instance, InstanceMemory
 from emet.motion import Footprint, HelloStretchIdx, PlanResult, RobotModel
@@ -317,6 +318,34 @@ class SparseVoxelMap:
         # Store 2d map information
         # This is computed from our various point clouds
         self._map2d = None
+        self._reset_close_map()
+
+    def _reset_close_map(self) -> None:
+        """Occupancy-aligned close-look grid (min camera range + aimed)."""
+        origin = self.grid_origin
+        if isinstance(origin, Tensor):
+            origin = origin.detach().cpu().numpy()
+        origin_xy = np.asarray(origin, dtype=np.float64).reshape(-1)[:2]
+        gs = self.grid_size
+        self.close_map = CloseDistanceMap(
+            grid_size=(int(gs[0]), int(gs[1])),
+            origin_xy=origin_xy,
+            resolution_m=float(self.grid_resolution),
+        )
+
+    def update_close_map_from_view(
+        self,
+        camera_pose: Tensor | np.ndarray,
+        world_xyz: Tensor | np.ndarray,
+        valid: Tensor | np.ndarray | None = None,
+    ) -> int:
+        """Stamp the close-look map from one RGB-D view. Returns cells touched."""
+        pose = camera_pose.detach().cpu().numpy() if isinstance(camera_pose, Tensor) else np.asarray(camera_pose)
+        xyz = world_xyz.detach().cpu().numpy() if isinstance(world_xyz, Tensor) else np.asarray(world_xyz)
+        mask = None
+        if valid is not None:
+            mask = valid.detach().cpu().numpy() if isinstance(valid, Tensor) else np.asarray(valid)
+        return int(self.close_map.update_from_view(pose, xyz, mask))
 
     def get_instances(self) -> list[Instance]:
         """Return a list of all viewable instances.
@@ -545,6 +574,8 @@ class SparseVoxelMap:
                 plt.subplot(122)
                 plt.imshow(valid_depth_mask.cpu().numpy() * rgb.cpu().numpy().astype(np.uint8))
                 plt.show()
+
+        self.update_close_map_from_view(camera_pose, full_world_xyz, valid_depth)
 
         # Add instance views to memory
         if self.use_instance_memory:

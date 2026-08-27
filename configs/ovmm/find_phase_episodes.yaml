@@ -87,3 +87,28 @@ episodes:
     goal_recep: sofa
     success_radius_m: 0.75
     explore_steps: 0
+
+  # ---------------------------------------------------------------------------
+  # Fast agentic gate (rby1): no Stretch Realsense head-sweep tax. Prefer these
+  # for routine OVMM find validation; Stretch episodes stay paper / overnight.
+  # See docs/experiments/ovmm_agentic_find_teleport.md and
+  # scripts/run_ovmm_find_recep_slice.sh (PROFILE=smoke).
+  # ---------------------------------------------------------------------------
+  - id: default_table_rby1_s0_distinct_recep
+    tier: S0
+    sim: configs/sim/default_table_rby1.yaml
+    object: red cylinder
+    start_recep: table
+    goal_recep: blue cube
+    success_radius_m: 0.30
+    explore_steps: 0
+
+  - id: robocasa_rby1_pp_s1
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_rby1.yaml
+    object: jar
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.50
+    explore_steps: 0

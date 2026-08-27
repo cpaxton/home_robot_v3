@@ -73,3 +73,28 @@ def test_head_camera_geomgroup_mask_hides_robot_only():
     assert int(mask[2]) == 0 and int(mask[3]) == 0
     # Scene groups stay rendered.
     assert int(mask[0]) == 1 and int(mask[1]) == 1
+
+
+def test_robosuite_primary_camera_applies_self_body_geom_mask():
+    """RobosuiteZmqServer must mask robot geoms for the primary mapping camera only."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model = _tiny_model()
+    spec = Rby1Backend().get_spec()
+    server = RobosuiteZmqServer.__new__(RobosuiteZmqServer)
+    server._spec = spec
+    server._mjmodel = model
+
+    scene_option = SimpleNamespace(geomgroup=np.ones(6, dtype=np.uint8))
+    renderer = SimpleNamespace(_scene_option=scene_option)
+
+    server._configure_renderer_geomgroups_for_camera(renderer, spec.camera_names[0])
+    assert scene_option.geomgroup.tolist() == [1, 1, 0, 0, 1, 1]
+
+    server._configure_renderer_geomgroups_for_camera(renderer, spec.camera_names[1])
+    assert scene_option.geomgroup.tolist() == [1, 1, 1, 1, 1, 1]

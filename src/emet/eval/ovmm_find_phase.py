@@ -120,6 +120,10 @@ class FindPhaseRunConfig:
     use_scene_cache: bool = True
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
+    # None → full 8-step rotate_in_place; 4 is a fast rby1 gate (~table sweep).
+    mapping_rotate_steps: int | None = None
+    # None → on for S0 default-table episodes (pytest-aligned sim + interactive profile).
+    s0_parity: bool | None = None
 
 
 def resolve_find_phase_nav_step_timeout(
@@ -169,6 +173,42 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
         if out[-1].manip_mode is not None and out[-1].manip_mode not in MANIP_MODES:
             raise ValueError(f"invalid manip_mode={out[-1].manip_mode!r} in {full}")
     return out
+
+
+def is_s0_default_table_episode(episode: FindPhaseEpisode) -> bool:
+    """True for Stretch default-table S0 rows in ``find_phase_episodes.yaml``."""
+    if str(episode.tier or "").strip().upper() != "S0":
+        return False
+    sim = str(episode.sim or "").lower()
+    return "default_table" in sim
+
+
+def resolve_s0_parity_flags(
+    episode: FindPhaseEpisode,
+    run_cfg: FindPhaseRunConfig,
+    *,
+    use_agentic: bool,
+) -> tuple[bool, bool]:
+    """Return ``(sim_and_profile_parity, phrase_only_localize)`` for S0 default table.
+
+    *sim_and_profile_parity* aligns harness startup with pytest / ``DynamemTaskExecutor``
+    (interactive dynagraph profile, no ZMQ throttle, etc.). *phrase_only_localize* skips
+    ``_query_variants`` token expansion on the oneshot memory-query path.
+    """
+    import os
+
+    env_raw = os.environ.get("EMET_OVMM_S0_PARITY", "").strip().lower()
+    if env_raw in ("0", "false", "no"):
+        return False, False
+    if run_cfg.s0_parity is False:
+        return False, False
+    if run_cfg.s0_parity is True:
+        return True, not use_agentic
+    if run_cfg.backend == "ground_truth":
+        return False, False
+    if not is_s0_default_table_episode(episode):
+        return False, False
+    return True, not use_agentic
 
 
 def resolve_object_query(
@@ -325,6 +365,48 @@ def localization_pred_fields(
     return {
         "pred_obj_xyz": pred_xyz_to_json_list(obj_pred_xyz),
         "pred_recep_xyz": pred_xyz_to_json_list(recep_pred_xyz),
+    }
+
+
+def take_voxel_localize_stats(voxel_map: Any) -> dict[str, Any]:
+    """Copy last DynaMem localize diagnostics (max SigLIP cosine, YoloE hit)."""
+    stats = getattr(voxel_map, "_last_localize_stats", None) if voxel_map is not None else None
+    if not isinstance(stats, dict):
+        return {"max_cosine": None, "yoloe_hit": False, "query": None}
+    cos = stats.get("max_cosine")
+    return {
+        "max_cosine": float(cos) if cos is not None else None,
+        "yoloe_hit": bool(stats.get("yoloe_hit")),
+        "query": stats.get("query"),
+    }
+
+
+def _merge_voxel_localize_stats(acc: dict[str, Any], last: Any) -> dict[str, Any]:
+    if not isinstance(last, dict):
+        return acc
+    cos = last.get("max_cosine")
+    acc_cos = acc.get("max_cosine")
+    if cos is not None and (acc_cos is None or float(cos) > float(acc_cos)):
+        acc["max_cosine"] = float(cos)
+        if last.get("query") is not None:
+            acc["query"] = last.get("query")
+    if last.get("yoloe_hit"):
+        acc["yoloe_hit"] = True
+    return acc
+
+
+def localization_detect_fields(
+    obj_stats: dict[str, Any] | None,
+    recep_stats: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """YoloE / SigLIP audit fields for find-phase JSON (oneshot voxel localize)."""
+    obj_stats = obj_stats or {}
+    recep_stats = recep_stats or {}
+    return {
+        "obj_max_cosine": obj_stats.get("max_cosine"),
+        "obj_yoloe_hit": bool(obj_stats.get("yoloe_hit")) if obj_stats.get("yoloe_hit") is not None else False,
+        "recep_max_cosine": recep_stats.get("max_cosine"),
+        "recep_yoloe_hit": bool(recep_stats.get("yoloe_hit")) if recep_stats.get("yoloe_hit") is not None else False,
     }
 
 
@@ -496,15 +578,27 @@ def _voxel_localize(
     query: str,
     *,
     session: dict[str, Any] | None,
+    phrase_only: bool = False,
 ) -> tuple[np.ndarray | None, str]:
     """Voxel-map localization only (preferred for find-phase; avoids merged-graph centroid drift)."""
-    for q in _query_variants(query):
+    acc: dict[str, Any] = {"query": query, "max_cosine": None, "yoloe_hit": False}
+    found_xyz: np.ndarray | None = None
+    found_q = query
+    variants = [str(query or "").strip()] if phrase_only else _query_variants(query)
+    for q in variants:
+        if not q:
+            continue
         result = voxel_map.localize_text(q, debug=False, return_debug=True)
+        acc = _merge_voxel_localize_stats(acc, getattr(voxel_map, "_last_localize_stats", None))
         target = result[0] if isinstance(result, (list, tuple)) else result
         if target is not None:
             xyz = localize_point_to_world_xy(target, session)
-            if xyz is not None:
-                return xyz, q
+            if xyz is not None and found_xyz is None:
+                found_xyz = xyz
+                found_q = q
+    voxel_map._last_localize_stats = acc
+    if found_xyz is not None:
+        return found_xyz, found_q
     return None, query
 
 
@@ -529,6 +623,7 @@ def query_find_phase_localization(
     convert_nav_to_world: bool = False,
     prefer_voxel: bool = True,
     planar_frame: PlanarFrame = "mujoco_xy",
+    phrase_only: bool = False,
 ) -> tuple[np.ndarray | None, bool, str, LocalizeSource | None]:
     """
     Query memory for FindObj/FindRec localization with query variants and fallbacks.
@@ -540,7 +635,7 @@ def query_find_phase_localization(
     sess = session if convert_nav_to_world else None
 
     if prefer_voxel and voxel_map is not None and hasattr(voxel_map, "localize_text"):
-        xyz, q_used = _voxel_localize(voxel_map, query, session=sess)
+        xyz, q_used = _voxel_localize(voxel_map, query, session=sess, phrase_only=phrase_only)
         if xyz is not None:
             return xyz, True, q_used, "voxel"
 
@@ -556,7 +651,10 @@ def query_find_phase_localization(
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
             return xyz, True, query, "graph_near_anchor"
-    for q in _query_variants(query):
+    fallback_variants = [str(query or "").strip()] if phrase_only else _query_variants(query)
+    for q in fallback_variants:
+        if not q:
+            continue
         if planar_frame == "habitat_xz":
             nodes = _graph_nodes_matching(memory, q)
             if nodes:
@@ -795,8 +893,25 @@ def apply_backend_parameters(
     *,
     merge_xy_m: float | None = None,
     staleness_horizon: int | None = None,
+    s0_parity: bool = False,
+    use_agentic: bool = False,
 ) -> Any:
-    """Configure dynagraph merge/staleness for backend comparison runs."""
+    """Configure dynagraph merge/staleness for backend comparison runs.
+
+    ``s0_parity`` + oneshot uses the interactive profile so pytest / DynamemTaskExecutor
+    match. Agentic find keeps the tighter ``ovmm_find_phase`` merge (0.15 m) so tabletop
+    instances are not glued into a 0.45 m blob.
+    """
+    if s0_parity and backend != "dynamem" and not use_agentic:
+        from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
+
+        apply_dynagraph_profile(parameters, "interactive")
+        if merge_xy_m is not None:
+            parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
+        if staleness_horizon is not None:
+            parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
+        return parameters
+
     from emet.eval.benchmark_dynagraph import apply_ovmm_backend_dynagraph
 
     return apply_ovmm_backend_dynagraph(
@@ -816,6 +931,7 @@ def create_find_phase_agent(
     compare_to_gt: bool = False,
     use_sensor_perception: bool = False,
     graph_memory_input_path: str | None = None,
+    s0_parity: bool = False,
 ):
     """Instantiate the controller for a memory backend.
 
@@ -826,7 +942,8 @@ def create_find_phase_agent(
     from emet.memory.format import VOXEL_PICKLE_FILENAME
 
     backend = normalize_benchmark_backend(backend)
-    harness_kw = harness_controller_kwargs(parameters, harness="ovmm_find_phase", method=str(backend))
+    harness_name = "interactive" if s0_parity else "ovmm_find_phase"
+    harness_kw = harness_controller_kwargs(parameters, harness=harness_name, method=str(backend))
     use_instance_graph = bool(
         harness_kw.get(
             "use_instance_graph",
@@ -835,6 +952,34 @@ def create_find_phase_agent(
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
     input_path = str(graph_memory_input_path) if graph_memory_input_path else None
+    if s0_parity and backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH):
+        from emet.eval.stack import build_memory_agent
+
+        agent = build_memory_agent(
+            robot=robot,
+            parameters=parameters,
+            backend=backend,
+            harness="interactive",
+            server_ip="127.0.0.1",
+            cpu_only=cpu_only,
+            manipulation_only=manipulation_only,
+            use_instance_graph=use_instance_graph,
+            use_sensor_perception=use_sensor_perception,
+            eqa=False,
+            defer_eqa_vllm=True,
+            apply_harness_profile=False,
+        )
+        if input_path and backend != "dynamem":
+            from emet.memory.format import VOXEL_PICKLE_FILENAME
+
+            voxel_pickle = Path(input_path) / VOXEL_PICKLE_FILENAME
+            vm = getattr(agent, "voxel_map", None)
+            if voxel_pickle.is_file() and vm is not None and hasattr(vm, "read_from_pickle"):
+                vm.read_from_pickle(str(voxel_pickle))
+        if hasattr(agent, "_fast_explore_lookaround"):
+            agent._fast_explore_lookaround = True
+        agent.start()
+        return agent
     if backend == "dynamem":
         from emet.controller.controller_dynamem import DynamemController
 
@@ -917,17 +1062,85 @@ def get_memory_backend_for_agent(agent: Any, backend: MemoryBackendName):
     )
 
 
+def _is_default_table_rby1_agent(agent: Any) -> bool:
+    """True when agent runs on Galaxea / rby1 in the default MuJoCo table scene."""
+    robot = getattr(agent, "robot", None)
+    if robot is None:
+        return False
+    get_sess = getattr(robot, "get_emet_session", None)
+    if not callable(get_sess):
+        return False
+    from emet.simulation.sim_object_placements import is_default_table_environment
+
+    sess = get_sess() or {}
+    env = sess.get("environment") or {}
+    env_kind = env.get("kind")
+    if not is_default_table_environment(env_kind if isinstance(env_kind, str) else None):
+        return False
+    rid = str(sess.get("emet_robot_id") or getattr(robot, "name", "") or "").lower()
+    return rid in ("rby1", "galaxea_r1")
+
+
+def _prepare_default_table_rby1_mapping_view(agent: Any) -> bool:
+    """Back up and face the default-table workspace so the horizontal ZED sees tabletop objects.
+
+    Galaxea R1 / rby1 spawn near the origin with a level ZED; Stretch ``look_front`` pitches
+    the head down ~30°. Without backing up (~2.5 m toward +Y) and pitching torso1, SigLIP
+    voxel memory never gets points on object1/object2 (false floor/sky matches instead).
+    """
+    import os
+
+    if os.environ.get("EMET_OVMM_SKIP_TABLE_MAPPING_POSE", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    if not _is_default_table_rby1_agent(agent):
+        return False
+    robot = getattr(agent, "robot", None)
+    assert robot is not None
+    timeout_fn = getattr(agent, "_find_phase_nav_timeout", None)
+    timeout = float(timeout_fn()) if callable(timeout_fn) else 30.0
+    move = getattr(robot, "move_base_to", None)
+    if callable(move):
+        # Episode frame: face −world Y (table at y≈−1). y≈1.5 m keeps tabletop depth < max_depth (2.5 m).
+        move(
+            np.array([0.0, 1.5, np.pi], dtype=np.float64),
+            relative=False,
+            blocking=True,
+            timeout=timeout,
+        )
+    look_front = getattr(robot, "look_front", None)
+    if callable(look_front):
+        look_front(blocking=True, timeout=timeout)
+    wait_obs = getattr(robot, "wait_for_obs", None)
+    if callable(wait_obs):
+        wait_obs(timeout=timeout)
+    from emet.controller.controller_dynamem import DYNAMEM_HEAD_SETTLE_S
+
+    time.sleep(DYNAMEM_HEAD_SETTLE_S)
+    return True
+
+
 def run_mapping_protocol(
     agent: Any,
     *,
     explore_steps: int,
     not_rotate: bool,
+    mapping_rotate_steps: int | None = None,
 ) -> int:
     """Rotate in place and optionally run frontier explore steps."""
     steps = 0
     if not not_rotate:
-        agent.rotate_in_place()
+        # rotate_in_place backs up + look_front on default_table_rby1 via
+        # _prepare_default_table_rby1_mapping_view, then scans with update() each step.
+        rotate = getattr(agent, "rotate_in_place", None)
+        if callable(rotate):
+            rotate(n_steps=mapping_rotate_steps)
         steps += 1
+    seed_fn = getattr(agent, "_seed_local_radius_explored", None)
+    vm = getattr(agent, "voxel_map", None)
+    if vm is None and hasattr(agent, "get_voxel_map"):
+        vm = agent.get_voxel_map()
+    if callable(seed_fn) and vm is not None:
+        seed_fn(vm)
     for _ in range(max(0, int(explore_steps))):
         agent.execute_action("")
         steps += 1
@@ -974,6 +1187,7 @@ def run_episode_find_phase(
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.core.parameters import get_parameters
+    from emet.eval.ovmm_agentic_find import should_use_agentic_find
     from emet.memory.graph_eqa.sim_ground_truth_graph import (
         gt_graph_completeness,
         instance_gt_association_recall,
@@ -981,6 +1195,9 @@ def run_episode_find_phase(
     )
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
     from emet.utils.process_tree import popen_session, terminate_process_tree
+
+    use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
+    s0_parity, s0_phrase_only = resolve_s0_parity_flags(episode, run_cfg, use_agentic=use_agentic)
 
     if run_cfg.seed is not None:
         set_find_phase_run_seed(int(run_cfg.seed))
@@ -994,11 +1211,12 @@ def run_episode_find_phase(
     env["PYTHONPATH"] = str(repo / "src") + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("MUJOCO_GL", "egl")
     env["PYTHONUNBUFFERED"] = "1"
-    # Image encoding/rendering must not run in unbounded busy loops while the
-    # simulator is also executing navigation. These rates are ample for mapping.
-    env.setdefault("EMET_ZMQ_FULL_HZ", "5")
-    env.setdefault("EMET_ZMQ_STATE_HZ", "30")
-    env.setdefault("EMET_ZMQ_SERVO_HZ", "10")
+    if not s0_parity:
+        # Image encoding/rendering must not run in unbounded busy loops while the
+        # simulator is also executing navigation. These rates are ample for mapping.
+        env.setdefault("EMET_ZMQ_FULL_HZ", "5")
+        env.setdefault("EMET_ZMQ_STATE_HZ", "30")
+        env.setdefault("EMET_ZMQ_SERVO_HZ", "10")
     if run_cfg.cpu_only:
         env["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -1043,6 +1261,8 @@ def run_episode_find_phase(
             run_cfg.backend,
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
+            s0_parity=s0_parity,
+            use_agentic=use_agentic,
         )
         # Keep the shared SigLIP encoder (get_shared_mask_siglip_encoder, load-once)
         # so the voxel semantic memory gets per-point features — the agentic find
@@ -1093,13 +1313,13 @@ def run_episode_find_phase(
                 f"sim server did not bind port {recv_port} (port_offset={port_offset}, "
                 f"exit={rc}, sim={episode.sim})" + (f":\n{err_tail}" if err_tail.strip() else "")
             )
-        settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
-        if run_cfg.cpu_only:
+        settle = 2.0 if s0_parity else (25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0)
+        if run_cfg.cpu_only and not s0_parity:
             settle += 15.0
         time.sleep(settle)
 
         robot_kind = str(getattr(sim_cfg, "robot", "stretch"))
-        # Defer ZMQ start until DynamemController is ready (same as run_dynagraph/run_agent).
+        # Defer ZMQ start until controller is ready unless S0 parity (pytest-style).
         robot = create_robot_client_from_cli(
             robot_kind,
             "127.0.0.1",
@@ -1111,26 +1331,46 @@ def run_episode_find_phase(
 
         cache_dir = None
         map_source = "live"
-        # Perception backends benefit from a prebuilt map; GT oracle uses placements.
-        if run_cfg.use_scene_cache and run_cfg.backend != "ground_truth" and not episode.floor_object:
+        # S0 parity always maps live (pytest path); cached find_phase maps skew localize.
+        use_scene_cache = bool(run_cfg.use_scene_cache) and not s0_parity
+        if use_scene_cache and run_cfg.backend != "ground_truth" and not episode.floor_object:
             from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
 
             cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
             if cache_dir is not None:
                 map_source = "cache"
 
+        s0_oneshot_pytest = s0_parity and not use_agentic and run_cfg.backend != "ground_truth" and cache_dir is None
+        s0_executor = None
         t_init0 = time.monotonic()
-        agent = create_find_phase_agent(
-            robot,
-            parameters,
-            run_cfg.backend,
-            cpu_only=run_cfg.cpu_only,
-            compare_to_gt=run_cfg.compare_to_gt,
-            use_sensor_perception=run_cfg.use_sensor_perception,
-            graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
-        )
-        # Controller already started ZMQ + nav posture; apply eval velocity after.
-        robot.set_velocity(v=30.0, w=15.0)
+        if s0_oneshot_pytest:
+            from emet.controller.task.dynamem import DynamemTaskExecutor
+
+            s0_executor = DynamemTaskExecutor(
+                robot,
+                parameters,
+                skip_confirmations=True,
+                cpu_only=run_cfg.cpu_only,
+                memory_backend=str(run_cfg.backend),
+            )
+            agent = s0_executor.agent
+        else:
+            agent = create_find_phase_agent(
+                robot,
+                parameters,
+                run_cfg.backend,
+                cpu_only=run_cfg.cpu_only,
+                compare_to_gt=run_cfg.compare_to_gt,
+                use_sensor_perception=run_cfg.use_sensor_perception,
+                graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
+                s0_parity=bool(s0_parity and not use_agentic),
+            )
+        ep_dir = os.environ.get("EMET_EQA_EPISODE_DIR", "").strip()
+        if ep_dir:
+            agent._episode_debug_dir = ep_dir
+        if not s0_parity:
+            # Controller already started ZMQ + nav posture; apply eval velocity after.
+            robot.set_velocity(v=30.0, w=15.0)
         init_wall_s = time.monotonic() - t_init0
         if episode.floor_object:
             placements_before_floor = read_sim_object_placements(robot.get_emet_session()) or {}
@@ -1164,11 +1404,16 @@ def run_episode_find_phase(
             # Baseline already mapped; skip rotate/explore.
             explore_steps = 0
             not_rotate = True
-        n_steps = run_mapping_protocol(
-            agent,
-            explore_steps=explore_steps,
-            not_rotate=not_rotate,
-        )
+        if s0_executor is not None:
+            s0_executor([("rotate_in_place", "")])
+            n_steps = 1
+        else:
+            n_steps = run_mapping_protocol(
+                agent,
+                explore_steps=explore_steps,
+                not_rotate=not_rotate,
+                mapping_rotate_steps=run_cfg.mapping_rotate_steps,
+            )
         mapping_wall_s = time.monotonic() - t_map0
 
         session = robot.get_emet_session()
@@ -1183,10 +1428,8 @@ def run_episode_find_phase(
             ovmm_find_object_question,
             ovmm_find_recep_question,
             run_ovmm_agentic_localize,
-            should_use_agentic_find,
         )
 
-        use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
         agentic_meta: dict[str, Any] = {
@@ -1204,6 +1447,8 @@ def run_episode_find_phase(
         recep_ok = False
         recep_q_used = episode.goal_recep
         recep_source: LocalizeSource | None = None
+        obj_detect_stats: dict[str, Any] = {}
+        recep_detect_stats: dict[str, Any] = {}
 
         if run_cfg.backend == "ground_truth":
             # Oracle: localize directly from sim placements (upper bound for FindObj/FindRec).
@@ -1254,6 +1499,7 @@ def run_episode_find_phase(
                 worker_started = True
                 print(f"Managed OVMM VL worker ready for query: {vl_endpoint_used}", flush=True)
             # Same AgenticEQAExecutor loop as HM-EQA: phrase OVMM as questions.
+            # trace_meta is logging only — the executor does not branch on ovmm_phase.
             obj_q = ovmm_find_object_question(object_query, episode.start_recep)
             recep_q = ovmm_find_recep_question(episode.goal_recep)
             agentic_meta["obj_agentic_question"] = obj_q
@@ -1264,18 +1510,33 @@ def run_episode_find_phase(
                 max_rounds=run_cfg.agentic_max_rounds,
                 max_nav_steps=run_cfg.agentic_max_nav_steps,
                 require_verified=True,
-                trace_meta={"ovmm_phase": "find_object", "episode_id": episode.id},
+                trace_meta={
+                    "ovmm_phase": "find_object",
+                    "episode_id": episode.id,
+                    "object": object_query,
+                    "start_recep": episode.start_recep,
+                    "goal_recep": episode.goal_recep,
+                    "gt_body_key": episode.object_gt_body,
+                },
             )
-            # No oneshot rescue: agentic miss/timeout scores as FindObj fail (ablation: --oneshot-localize).
+            # Voxel localize is the FindObj/FindRec coordinate: agentic loop uses it as an
+            # investigate card + close-map stay. Do not require VLM verify to score.
             if obj_res.error:
                 agentic_meta["agentic_find_error"] = obj_res.error
             obj_xyz = obj_res.xyz
-            obj_ok = bool(obj_res.verified and obj_res.xyz is not None)
+            obj_ok = obj_xyz is not None
             obj_q_used = object_query
-            obj_source = "agentic_verify" if obj_ok else None
+            obj_source = (obj_res.extra or {}).get("xyz_source")
+            if not obj_source and obj_ok:
+                obj_source = "agentic_verify" if obj_res.verified else None
             agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
             agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
             agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
+            if obj_res.extra:
+                agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
+                agentic_meta["obj_from_pin"] = obj_res.extra.get("from_pin")
+                if obj_res.extra.get("voxel_query_used"):
+                    obj_q_used = str(obj_res.extra["voxel_query_used"])
 
             recep_res = run_ovmm_agentic_localize(
                 agent,
@@ -1283,17 +1544,30 @@ def run_episode_find_phase(
                 max_rounds=run_cfg.agentic_max_rounds,
                 max_nav_steps=run_cfg.agentic_max_nav_steps,
                 require_verified=True,
-                trace_meta={"ovmm_phase": "find_recep", "episode_id": episode.id},
+                trace_meta={
+                    "ovmm_phase": "find_recep",
+                    "episode_id": episode.id,
+                    "object": object_query,
+                    "start_recep": episode.start_recep,
+                    "goal_recep": episode.goal_recep,
+                },
             )
             if recep_res.error:
                 agentic_meta["agentic_find_error_recep"] = recep_res.error
             recep_xyz = recep_res.xyz
-            recep_ok = bool(recep_res.verified and recep_res.xyz is not None)
+            recep_ok = recep_xyz is not None
             recep_q_used = episode.goal_recep
-            recep_source = "agentic_verify" if recep_ok else None
+            recep_source = (recep_res.extra or {}).get("xyz_source")
+            if not recep_source and recep_ok:
+                recep_source = "agentic_verify" if recep_res.verified else None
             agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
             agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
             agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
+            if recep_res.extra:
+                agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
+                agentic_meta["recep_from_pin"] = recep_res.extra.get("from_pin")
+                if recep_res.extra.get("voxel_query_used"):
+                    recep_q_used = str(recep_res.extra["voxel_query_used"])
         else:
             # Ablation: one-shot memory localize (voxel-first when prefer_voxel).
             obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
@@ -1303,9 +1577,11 @@ def run_episode_find_phase(
                 session=session,
                 near_recep=episode.start_recep,
                 voxel_map=vm,
-                convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+                convert_nav_to_world=nav_world,
                 prefer_voxel=prefer_voxel,
+                phrase_only=s0_phrase_only,
             )
+            obj_detect_stats = take_voxel_localize_stats(vm)
             recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
                 memory,
                 episode.goal_recep,
@@ -1313,9 +1589,11 @@ def run_episode_find_phase(
                 session=session,
                 near_recep=episode.goal_recep,
                 voxel_map=vm,
-                convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+                convert_nav_to_world=nav_world,
                 prefer_voxel=prefer_voxel,
+                phrase_only=s0_phrase_only,
             )
+            recep_detect_stats = take_voxel_localize_stats(vm)
 
         find_metrics = compute_find_phase_metrics(
             obj_pred_xyz=obj_xyz,
@@ -1362,6 +1640,9 @@ def run_episode_find_phase(
             "perfect_depth": bool(run_cfg.perfect_depth),
             "use_sensor_perception": bool(run_cfg.use_sensor_perception),
             "prefer_voxel": bool(prefer_voxel),
+            "s0_parity": bool(s0_parity),
+            "s0_phrase_only": bool(s0_phrase_only),
+            "s0_oneshot_pytest": bool(s0_executor is not None),
             **agentic_meta,
             "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
@@ -1376,6 +1657,7 @@ def run_episode_find_phase(
             "vl_endpoint": vl_endpoint_used,
             "seed": run_cfg.seed,
             **localization_pred_fields(obj_xyz, recep_xyz),
+            **localization_detect_fields(obj_detect_stats, recep_detect_stats),
             **find_metrics,
             **scaling,
             **gt_metrics,

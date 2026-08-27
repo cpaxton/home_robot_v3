@@ -107,12 +107,26 @@ uv run python scripts/eval_ovmm_find_phases.py --tier S2 --backend dynagraph \
 
 Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggregate_<backends>.csv`.
 
+### Teleport sim (routine agentic regression)
+
+**Default robot for agentic find iteration is rby1** (wide FOV; no Stretch head-sweep
+tax). Use `scripts/run_ovmm_find_recep_slice.sh` (`PROFILE=smoke` or `slice`).
+
+For fast dynagraph agentic find regression set `EMET_SIM_NAV_TELEPORT=1` and prefer
+`--not-rotate`. The find-phase harness already enables `_fast_explore_lookaround`;
+non-Stretch robots skip head pans in `look_around` entirely.
+
+Stretch episodes in `find_phase_episodes.yaml` remain for paper / overnight
+(`PROFILE=stretch-legacy`). See
+[experiments/ovmm_agentic_find_teleport.md](experiments/ovmm_agentic_find_teleport.md).
+
 ### Metrics
 
 - `find_object_success`, `find_recep_success` @ `success_radius_m`
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
 - `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `obj_max_cosine`, `recep_max_cosine`, `obj_yoloe_hit`, `recep_yoloe_hit` — oneshot voxel localize diagnostics (max SigLIP cosine; YoloE `compute_obj_coord` hit)
 - `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
 - `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - `use_sensor_perception`, `prefer_voxel` — mode flags (see above)
@@ -150,8 +164,8 @@ Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perceptio
 
 Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
 
-**Default find path (dynagraph): same agentic loop as HM-EQA.**
-Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py) — navigate → close look → VLM verify → retract claim on ABSENT → explore. Verified obs XYZ is scored against GT. One-shot voxel localize (`prefer_voxel` / `oneshot_localize`) is an **ablation**, not the product path. Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`.
+**Default find path (dynagraph): same AgenticEQA loop as HM-EQA.**
+Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py). The agent may call `inspect_graph` → live `localize_text` as an investigate card; close-map stays on that XY; VLM verify is a check. **FindObj/FindRec score XYZ the agent produced** (phrase-matched graph node or voxel), never camera pose and never a harness pin of episode YAML. `--oneshot-localize` / `agentic_find: false` is a leftover **mapping ablation**, not the product path and not the map-sanity check (that is pytest `test_red_cylinder_detected_in_sim`). Method: [dynagraph.md](dynagraph.md#method). Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`. See [plans/2026-08-26_ovmm_voxel_close_map.md](plans/2026-08-26_ovmm_voxel_close_map.md).
 
 **Query / scoring notes (agent language, no GT query leakage):**
 - The agent localizes with **episode task language** (`object` / `goal_recep`), not sim GT fixture paths.

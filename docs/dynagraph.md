@@ -16,6 +16,107 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 
 The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.md](rerun.md)) so the voxel map (`world/point_cloud`, `world/obstacles`, `world/explored`), boxes, and dynagraph nodes do not spin when the robot turns. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
 
+## Method
+
+The LLM decides. Python supplies **tools**, **structured outputs**, and **swappable prompt packs**. OVMM locate, Habitat MCQ EQA, and open-ended explore share the same EQA tool names (`inspect_graph`, `investigate`, `explore_frontier`, `vlm_assess`, `submit_answer`). Swap the prompt, not the finder. Do not fork `if ovmm:` policy in Python, and do not pin episode YAML phrases in `emet ovmm find`.
+
+CHAT vs EQA_EPISODE packs stay disjoint ([AGENT_RUN.md](AGENT_RUN.md)). OVMM vs HM-EQA stay the **same EQA pack**.
+
+| We provide | The LLM uses |
+|------------|--------------|
+| Tools (stable names) plus metric helpers they call (`localize_text`, close-map stay, `room_clustering.partition`) | Which tool, which observation, when to explore or answer |
+| Structured outputs: graph inventory, voxel/graph proposals, `ViewAssessment` JSON | The next belief and the answer |
+| Prompt packs (locate / MCQ / open explore / CHAT) | Same tools, different instructions |
+
+Geometry (voxels, fusion, close-map, room partition) is **evidence**, not a second policy.
+
+### One EQA step
+
+```mermaid
+flowchart TD
+  rgbD[RGB-D capture] --> voxel[DynaMem voxel field]
+  rgbD --> obs[Graph observation]
+  voxel -->|"localize_text / YoloE boxes"| prop[In-view proposals]
+  graph[Graph nodes and pins] -->|"project XYZ to this camera"| prop
+  q[Question] --> vlm[VLM step]
+  rgbNow[Current RGB] --> vlm
+  ctx[Context images] --> vlm
+  inv[Neutral inventory of proposals] --> vlm
+  vlm -->|"confirm add retract"| pins[Graph pins / place cards]
+  pins --> graph
+  pins --> inves[investigate]
+  inves --> rgbD
+  pins -->|"locate / OVMM XYZ"| score[Score]
+  vlm -->|"answerable + letter"| score
+```
+
+| Layer | Owns | Does not own |
+|-------|------|----------------|
+| **Voxel (DynaMem)** | Metric occupancy + semantic cloud. Live `localize_text` (detector on this frame, else gated cosine). | Agent belief. Episode object names. EQA answers. |
+| **Graph (GraphEQA)** | Observations, instance nodes, frontiers, rooms, committed pins. | Replacing `localize_text`. Camera pose as object XYZ. |
+| **VLM** | Present / answerable / letter; which proposals to commit. | Being the only localizer. |
+
+`inspect_graph` already prepends a `source=voxel` place card from live `localize_text` on question-derived phrases. That is the agent using the voxel tool — not the OVMM harness calling `localize_text(object_query)`.
+
+A first-hit cache on the voxel map (`_emet_localize_pins`) is a **retrieval cache**, not the product pin. Product pins are graph confirm/add from `vlm_assess` (**not shipped yet**).
+
+### Instances then rooms
+
+```mermaid
+flowchart TD
+  yoloe[YoloE proposals per frame] --> fusion[GraphObjectFusion]
+  voxelHit[localize_text XYZ] --> fusion
+  vlmAdd[VLM add/confirm] --> fusion
+  fusion --> inst[Instance nodes and pins]
+  inst --> partition[Room partition tool]
+  partition --> rooms[Room clusters]
+  rooms --> stamp[VLM room name stamp]
+  inst --> locateQ[Where is the red cylinder]
+  rooms --> openQ[What is in the living room]
+```
+
+| Layer | Code | Job |
+|-------|------|-----|
+| **Instance cluster** | `graph_object_fusion/` | One node per object, not one per YoloE flicker. Keep **tight** merge on agentic OVMM (~0.15 m); interactive 0.45 m glued cylinder+cube. |
+| **Room cluster** | `room_clustering.partition` | Belonging: which instances share a region. Config backend, not “CC of `near` forever.” |
+| **Room stamp** | `resolve_investigate_room_stamp` | **Name** the region. Separate from how it was cut. Off for the paper-router of record. |
+
+**Backends** (`eqa.room_clustering.backend` / `EMET_EQA_ROOM_CLUSTERING_BACKEND`):
+
+| Backend | Status | Idea |
+|---------|--------|------|
+| `proximity` | **Implemented** (default) | XY radius + `near` edges. Cheap; walks through walls. |
+| `occupancy_cc` | Contract only | Flood-fill free/explored cells; assign nodes to occupancy CCs. |
+| `portal` | Contract only | Occupancy CCs cut at narrow passages / doors. |
+
+`room_clusters.py` is the naming/stamp facade. `near` remains a **prompt relation**. Room membership goes through `partition`.
+
+### Pins
+
+| Kind | What it is |
+|------|------------|
+| **Product (contract)** | Graph pin `{phrase, xyz, obs_id, evidence}` written only when the agent **confirms** or **adds** (`vlm_assess` `in_view`). Scoring / `inspect_graph` read committed pins first. |
+| **Not a pin** | Episode YAML `object_query` / `goal_recep` preloaded by `ovmm_find_phase`. |
+| **Retrieval cache (now)** | First successful `localize_text` for a string on the voxel object. Tests may call `pin_phrases_after_mapping`; the OVMM harness must not. |
+
+### Map sanity vs OVMM harness
+
+| Path | Role |
+|------|------|
+| Pytest `test_red_cylinder_detected_in_sim` | Does DynaMem still `localize_text`? |
+| `emet ovmm find` (dynagraph) | Same agent as HM-EQA; score XYZ the **agent** produced |
+
+`--oneshot-localize` is a leftover **mapping ablation**, not the method and not the map-sanity story.
+
+### Implemented now vs contract
+
+| Now | Later |
+|-----|--------|
+| Shared EQA tool pack; OVMM phrased as questions | Graph-owned pins from `vlm_assess` confirm/add |
+| Voxel investigate cards from live `localize_text` | `ViewAssessment.in_view` (confirm / add / retract) |
+| `room_clustering.partition` + `proximity` | `occupancy_cc` / `portal` + backend sweep |
+| FindObj/FindRec score voxel / phrase-matched graph XYZ, never camera pose | Sparse overlays of in-FOV labels on the assess image |
+
 ## References
 
 - **GraphEQA** (graph memory + EQA): [paper (arXiv:2412.14480)](https://arxiv.org/abs/2412.14480), [project site](https://saumyasaxena.github.io/graph-eqa/). This repo’s re-implementation is described in [graph_eqa.md](graph_eqa.md).

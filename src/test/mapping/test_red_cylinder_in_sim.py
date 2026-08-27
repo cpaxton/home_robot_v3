@@ -94,6 +94,7 @@ def test_red_cylinder_detected_in_sim(sim_robot: str):
         from emet.app.robot_cli import create_robot_client_from_cli
         from emet.controller.task.dynamem import DynamemTaskExecutor
         from emet.core.parameters import get_parameters
+        from emet.mapping.close_map import close_map_from_voxel_map
 
         if sim_robot == "stretch":
             from emet.controller.zmq_client import StretchZmqClient
@@ -122,6 +123,26 @@ def test_red_cylinder_detected_in_sim(sim_robot: str):
         executor([("rotate_in_place", "")])
 
         voxel_map = executor.agent.get_voxel_map()
+
+        expected_red = np.array([0.08, -0.55, 0.6], dtype=np.float64)
+        expected_blue = np.array([-0.02, -0.55, 0.6], dtype=np.float64)
+        cm = close_map_from_voxel_map(voxel_map)
+        assert cm is not None, "SparseVoxelMap should stamp CloseDistanceMap during rotate_in_place"
+        assert cm.n_updates >= 1, f"close_map got no RGB-D stamps: {cm.summary()}"
+        q_red = cm.query_xy(float(expected_red[0]), float(expected_red[1]))
+        q_blue = cm.query_xy(float(expected_blue[0]), float(expected_blue[1]))
+        print(
+            f"close_map after mapping spin: updates={cm.n_updates} "
+            f"red hits={q_red.n_hit_cells} resolved={q_red.resolved} "
+            f"min_cam={q_red.min_cam_dist_m} aimed={q_red.aimed_hit}; "
+            f"blue hits={q_blue.n_hit_cells} resolved={q_blue.resolved} "
+            f"min_cam={q_blue.min_cam_dist_m}",
+            flush=True,
+        )
+        assert q_red.n_hit_cells >= 1, (
+            f"close-look map should hit the red-cylinder XY after a mapping spin; got {q_red}"
+        )
+
         result = voxel_map.localize_text("red cylinder", return_debug=True)
         point, debug_text = result[0], result[1]
 
@@ -130,8 +151,6 @@ def test_red_cylinder_detected_in_sim(sim_robot: str):
         assert target.shape == (3,), "target should be 3D (x, y, z)"
 
         # Default scene: red cylinder (object2) at (0.08, -0.55, 0.6), blue cube (object1) at (-0.02, -0.55, 0.6)
-        expected_red = np.array([0.08, -0.55, 0.6], dtype=np.float64)
-        expected_blue = np.array([-0.02, -0.55, 0.6], dtype=np.float64)
         # Sim voxel localize can be ~0.5 m off GT table coords after one spin; memory checks below are tighter.
         np.testing.assert_allclose(
             target.cpu().numpy() if hasattr(target, "cpu") else target,

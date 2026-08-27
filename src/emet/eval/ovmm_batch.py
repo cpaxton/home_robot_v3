@@ -67,6 +67,7 @@ class OvmmBatchOptions:
     oneshot_localize: bool = False
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
+    mapping_rotate_steps: int | None = None
     manip_mode: str | None = None
     full: bool = False
     # TAMP floor suite: run only episodes with floor_object=True.
@@ -199,11 +200,22 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 agentic_find=agentic,
                 agentic_max_rounds=opts.agentic_max_rounds,
                 agentic_max_nav_steps=opts.agentic_max_nav_steps,
+                mapping_rotate_steps=opts.mapping_rotate_steps,
                 explore_steps_override=opts.explore_steps,
                 use_scene_cache=not opts.no_scene_cache,
                 manip_mode=manip,
             )
             tag = f"{ep.id}_{backend}"
+            ep_dir = output_dir / tag
+            ep_dir.mkdir(parents=True, exist_ok=True)
+            os.environ["EMET_EQA_EPISODE_DIR"] = str(ep_dir)
+            if os.environ.get("EMET_AGENTIC_QUERY_IMAGES", "1").strip().lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }:
+                os.environ["EMET_AGENTIC_QUERY_IMAGES_DIR"] = str(ep_dir / "images")
             label = f"Running {tag}" + (f" manip_mode={manip}" if opts.full else "") + " …"
             print(label, file=sys.stderr)
             try:

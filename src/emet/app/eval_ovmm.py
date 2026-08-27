@@ -68,6 +68,7 @@ def _batch_options_from_click(
     oneshot_localize: bool = False,
     agentic_max_rounds: int | None = None,
     agentic_max_nav_steps: int | None = None,
+    mapping_rotate_steps: int | None = None,
     full: bool = False,
 ) -> OvmmBatchOptions:
     return OvmmBatchOptions(
@@ -94,6 +95,7 @@ def _batch_options_from_click(
         oneshot_localize=oneshot_localize,
         agentic_max_rounds=agentic_max_rounds,
         agentic_max_nav_steps=agentic_max_nav_steps,
+        mapping_rotate_steps=mapping_rotate_steps,
         full=full,
     )
 
@@ -218,6 +220,12 @@ def ovmm_group(ctx: click.Context) -> None:
     default=None,
     help="Agentic find: cap nav steps per question (default: eqa.agentic_max_nav_steps)",
 )
+@click.option(
+    "--mapping-rotate-steps",
+    type=int,
+    default=None,
+    help="Mapping rotate_in_place scan steps (default 8; use 4 for fast rby1 gate)",
+)
 def ovmm_find(
     episodes: str,
     backends: tuple[str, ...],
@@ -241,6 +249,7 @@ def ovmm_find(
     oneshot_localize: bool,
     agentic_max_rounds: int | None,
     agentic_max_nav_steps: int | None,
+    mapping_rotate_steps: int | None,
 ) -> None:
     """Run find-phase episodes (same path as scripts/eval_ovmm_find_phases.py).
 
@@ -270,6 +279,7 @@ def ovmm_find(
         oneshot_localize=oneshot_localize,
         agentic_max_rounds=agentic_max_rounds,
         agentic_max_nav_steps=agentic_max_nav_steps,
+        mapping_rotate_steps=mapping_rotate_steps,
         full=False,
     )
     raise SystemExit(run_ovmm_batch(opts, repo_root=_project_root()))

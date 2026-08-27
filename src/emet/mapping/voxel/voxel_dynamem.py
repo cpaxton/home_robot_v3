@@ -760,6 +760,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_depth = torch.logical_and(depth < self.max_depth, depth > self.min_depth)
         valid_depth = valid_depth & (median_filter_error < 0.01).bool()
         mask = ~valid_depth
+        self.update_close_map_from_view(pose, world_xyz, valid_depth)
 
         # Update semantic memory (skipped when encoder is None, e.g. manipulation_only mapping)
         self.semantic_memory.clear_points(
@@ -1082,6 +1083,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         points, _, _, _ = self.semantic_memory.get_pointcloud()
         alignments = self.find_alignment_over_model(text)
         if alignments is None or points is None:
+            self._last_localize_stats = {"query": text, "max_cosine": None, "yoloe_hit": False}
             msg = "Map has no points yet; run exploration first."
             if not debug:
                 return None
@@ -1094,6 +1096,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         obs_id = obs_counts[alignments.argmax(dim=-1)].detach().cpu()
         debug_text = ""
         target_point = None
+        max_cosine = float(alignments.max().item()) if alignments.numel() else None
 
         if obs_id <= 0 or obs_id > len(self.observations):
             res = None
@@ -1103,21 +1106,29 @@ class SparseVoxelMap(SparseVoxelMapBase):
             depth = self.observations[obs_id - 1].depth
             K = self.observations[obs_id - 1].camera_K
 
-            rgb = cv2.cvtColor(rgb.numpy(), cv2.COLOR_RGB2BGR)
+            rgb_t = rgb if isinstance(rgb, torch.Tensor) else torch.as_tensor(rgb)
+            rgb_np = rgb_t.detach().cpu().numpy()
+            bgr = cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR)
             debug_dir = os.path.join(self.log, DEBUG_SUBDIR)
             os.makedirs(debug_dir, exist_ok=True)
             cv2.imwrite(
                 os.path.join(debug_dir, "rgb" + text + "_" + str(obs_id.item() - 1) + ".png"),
-                rgb,
+                bgr,
             )
 
-            res = self.detection_model.compute_obj_coord(text, rgb, depth, K, pose)
+            det = self.detection_model
+            res = det.compute_obj_coord(text, rgb_t, depth, K, pose) if det is not None else None
 
+        self._last_localize_stats = {
+            "query": text,
+            "max_cosine": max_cosine,
+            "yoloe_hit": res is not None,
+        }
         if res is not None:
             target_point = res
             debug_text += "#### - Object is detected in observations . **😃** Directly navigate to it.\n"
         else:
-            cosine_similarity_check = alignments.max().item() > 0.21
+            cosine_similarity_check = max_cosine is not None and max_cosine > 0.21
             if cosine_similarity_check:
                 target_point = point
 
@@ -1246,6 +1257,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
             if self.use_median_filter:
                 valid_depth = valid_depth & (median_filter_error < self.median_filter_max_error).bool()
+
+        self.update_close_map_from_view(camera_pose, full_world_xyz, valid_depth)
 
         # Add instance views to memory (for UI icons / scene graph)
         if self.use_instance_memory and instance_image is not None:

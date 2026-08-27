@@ -107,6 +107,10 @@ eqa:
   # Frontier VLM always re-asks the Question (no frozen question_area).
   # Override: EMET_EQA_ROOM_POLICY=canonical|llm
   room_policy: canonical
+  # Room partition backend. Only proximity (near + XY radius) is implemented.
+  # occupancy_cc / portal: later. Override: EMET_EQA_ROOM_CLUSTERING_BACKEND.
+  room_clustering:
+    backend: proximity
   collect_agentic_trace: false
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
