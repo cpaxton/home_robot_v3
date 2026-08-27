@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import importlib
 import inspect
 
 from emet.app.graph_nav_cli import configure_graph_nav, main
@@ -74,3 +75,25 @@ def test_graph_nav_cli_configure_restores_previous():
         assert _product() == "LazyGraph"
     assert _controller_cls() is DynagraphController
     assert _product() == "Dynagraph"
+
+
+def test_graph_nav_entry_modules_configure_controller():
+    """``emet run lazy-graph`` must not silently fall back to DynagraphController."""
+    from emet.app.graph_nav_cli import _controller_cls, _product
+
+    prev_cls = _controller_cls()
+    prev_product = _product()
+    try:
+        import emet.app.run_lazy_graph as lazy_mod
+
+        importlib.reload(lazy_mod)
+        assert _controller_cls() is LazyGraphController
+        assert _product() == "LazyGraph"
+
+        import emet.app.run_dynagraph as dyna_mod
+
+        importlib.reload(dyna_mod)
+        assert _controller_cls() is DynagraphController
+        assert _product() == "Dynagraph"
+    finally:
+        configure_graph_nav(prev_cls, product=prev_product)
