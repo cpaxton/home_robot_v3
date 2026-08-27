@@ -35,10 +35,31 @@ _GRAPH_NAV: dict[str, Any] = {
 }
 
 
-def configure_graph_nav(controller_cls: type, *, product: str = "Dynagraph") -> None:
-    """Select controller + product name before invoking ``main`` (used by lazy-graph)."""
-    _GRAPH_NAV["controller_cls"] = controller_cls
-    _GRAPH_NAV["product"] = str(product)
+class _GraphNavScope:
+    """Applies ``configure_graph_nav``; restores the previous selection on ``with`` exit."""
+
+    def __init__(self, controller_cls: type, *, product: str) -> None:
+        self._prev_cls = _GRAPH_NAV.get("controller_cls")
+        self._prev_product = _GRAPH_NAV.get("product")
+        _GRAPH_NAV["controller_cls"] = controller_cls
+        _GRAPH_NAV["product"] = str(product)
+
+    def __enter__(self) -> _GraphNavScope:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        _GRAPH_NAV["controller_cls"] = self._prev_cls
+        _GRAPH_NAV["product"] = self._prev_product
+
+
+def configure_graph_nav(controller_cls: type, *, product: str = "Dynagraph") -> _GraphNavScope:
+    """Select controller + product name for the shared Click ``main``.
+
+    Call as a statement for process-lifetime config (``run_dynagraph`` /
+    ``run_lazy_graph``). Use ``with configure_graph_nav(...)`` to restore the
+    previous selection on exit.
+    """
+    return _GraphNavScope(controller_cls, product=product)
 
 
 def _product() -> str:
@@ -52,10 +73,6 @@ def _controller_cls() -> type:
 
         return DynagraphController
     return cls
-
-
-# Backward-compatible name for zmq_mapping_session / tests.
-_ensure_ground_truth_ready = ensure_ground_truth_ready
 
 
 @click.command()
@@ -771,7 +788,7 @@ def main(
         return (dict(env) if isinstance(env, dict) else None, dict(spawn) if isinstance(spawn, dict) else None)
 
     if ground_truth:
-        _ensure_ground_truth_ready(agent, context="export" if export_dir else "interactive")
+        ensure_ground_truth_ready(agent, context="export" if export_dir else "interactive")
 
     def _save_dump() -> None:
         if not dump_memory:

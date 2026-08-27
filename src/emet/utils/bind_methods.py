@@ -33,7 +33,11 @@ _SKIP_NAMES = frozenset(
 
 
 def bind_module_methods(cls: type, mod: ModuleType, *, skip: frozenset[str] | None = None) -> None:
-    """Attach ``self``/``cls`` functions and descriptors defined in ``mod`` onto ``cls``."""
+    """Attach ``self``/``cls`` functions and descriptors defined in ``mod`` onto ``cls``.
+
+    Recalculates ABC abstracts afterward so methods bound after the class body
+    (for example ``get_voxel_map``) are treated as implemented.
+    """
     deny = _SKIP_NAMES | (skip or frozenset())
     for name, obj in vars(mod).items():
         if name in deny or name.startswith("__"):
@@ -51,6 +55,4 @@ def bind_module_methods(cls: type, mod: ModuleType, *, skip: frozenset[str] | No
             continue
         if name == "_FIXTURE_LABEL_TOKENS":
             setattr(cls, name, obj)
-    # Binding happens after the class body, so ABC still thinks methods like
-    # ``get_voxel_map`` are abstract until we recalculate.
     abc.update_abstractmethods(cls)

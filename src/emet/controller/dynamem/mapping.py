@@ -1,7 +1,7 @@
 # Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Encoder, detector, voxel map, and navigation space construction."""
+"""Encoder, detector, voxel map, navigation space, and ``get_voxel_map``."""
 
 from __future__ import annotations
 
@@ -215,3 +215,8 @@ def create_obstacle_map(self, parameters):
         )
         print("Dynamem create_obstacle_map: GraphEQA memory ready", flush=True)
     print("Dynamem create_obstacle_map: complete", flush=True)
+
+
+def get_voxel_map(self):
+    """Return the voxel map used for occupancy and open-vocab localize."""
+    return self.voxel_map

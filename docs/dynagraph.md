@@ -517,7 +517,7 @@ Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md)
 | [`src/emet/memory/graph_eqa/ingest/graph_mutate.py`](../src/emet/memory/graph_eqa/ingest/graph_mutate.py) | `add_observation` spatial merge. |
 | [`src/emet/memory/graph_eqa/ingest/dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/ingest/dynamem_graph_hooks.py) | Optional `frame_step` forwarded to `set_graph_timestep`. |
 | [`src/emet/app/dynagraph_explore.py`](../src/emet/app/dynagraph_explore.py) | `dynagraph_explore_until_terminated` for scripted frontier batches. |
-| [`src/emet/app/run_dynagraph.py`](../src/emet/app/run_dynagraph.py) | CLI entry (`emet run dynagraph`); implementation is [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py). |
+| [`src/emet/app/run_dynagraph.py`](../src/emet/app/run_dynagraph.py) | CLI entry (`emet run dynagraph`); shared Click app is [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) (`configure_graph_nav`). |
 | [`src/emet/controller/dynamem/`](../src/emet/controller/dynamem/) | Shared DynaMem controller (parent of Dynagraph / LazyGraph). |
 | [`src/emet/simulation/sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py) | Session **`sim_object_placements`** + MJCF body scan for live sim GT. |
 | [`src/emet/memory/graph_eqa/eval/sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/eval/sim_ground_truth_graph.py) | GT graph upsert, alignment reports, instance→GT association. |

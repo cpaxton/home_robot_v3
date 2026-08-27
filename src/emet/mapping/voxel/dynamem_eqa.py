@@ -1,7 +1,7 @@
 # Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Classic voxel query_answer, image ranking, and frontier helpers."""
+"""Classic voxel query_answer, image ranking, frontiers, and active-view selection."""
 
 from __future__ import annotations
 
@@ -12,10 +12,12 @@ from typing import Any
 import numpy as np
 import torch
 from PIL import Image
+from scipy.ndimage import maximum_filter
 from torch import Tensor
 
 from emet.llms.vllm_factory import dynamem_vllm_call
 from emet.utils.morphology import get_edges
+from emet.utils.voxel import scatter3d
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,7 @@ DEBUG_SUBDIR = "debug"
 
 
 class DynamemVoxelEQAMixin:
-    """Classic voxel query_answer, image ranking, and frontier helpers."""
+    """Classic voxel query_answer, image ranking, frontiers, and active-view selection."""
 
     def extract_relevant_objects(self, question: str):
         """
@@ -207,6 +209,35 @@ class DynamemVoxelEQAMixin:
             confidence_reasoning,
             self.get_target_point_from_image_id(action, xyt, planner) if action is not None else None,
             relevant_images,
+        )
+
+    def get_active_image_descriptions(self):
+        """Return descriptions still tied to at least one voxel (obs ids are 1-indexed)."""
+        if self.voxel_pcd._points is None:
+            return None
+
+        obs_ids = self.voxel_pcd._obs_counts
+        xyz, _, _, _ = self.voxel_pcd.get_pointcloud()
+        xyz = ((xyz / self.grid_resolution) + self.grid_origin + 0.5).long()
+        xyz[xyz[:, -1] < 0, -1] = 0
+
+        max_height = int(self.obs_max_height / self.grid_resolution)
+        grid_size = self.grid_size + [max_height]
+        obs_ids = obs_ids[:, None]
+
+        history_ids = scatter3d(xyz, obs_ids, grid_size, "max")
+        history = torch.max(history_ids, dim=-1).values
+        history = torch.from_numpy(maximum_filter(history.float().numpy(), size=5))
+        history[0:35, :] = history.max().item()
+        history[-35:, :] = history.max().item()
+        history[:, 0:35] = history.max().item()
+        history[:, -35:] = history.max().item()
+
+        selected_images = torch.unique(history).int()
+        return (
+            history,
+            selected_images,
+            [self.image_descriptions[selected_image.item() - 1] for selected_image in selected_images],
         )
 
     def get_image_descriptions_str(self, xyt, planner, obs_ids):

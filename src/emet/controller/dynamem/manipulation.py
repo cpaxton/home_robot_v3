@@ -96,11 +96,6 @@ def place(
     return True
 
 
-def get_voxel_map(self):
-    """Return the voxel map"""
-    return self.voxel_map
-
-
 def manipulate(
     self,
     text,

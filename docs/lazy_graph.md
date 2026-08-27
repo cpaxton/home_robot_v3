@@ -11,7 +11,7 @@ uv run emet run lazy-graph --robot-ip 127.0.0.1
 uv run emet run agent --memory-backend lazy_graph
 ```
 
-Options mirror `emet run dynagraph`. Both apps call [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) via `configure_graph_nav` (LazyGraph swaps the controller class; no monkeypatch).
+Options mirror `emet run dynagraph`. Both apps call [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) via `configure_graph_nav` at import (process-lifetime; no monkeypatch). Tests should use `with configure_graph_nav(...)` so the previous controller is restored.
 
 ## vs dynagraph
 
@@ -24,7 +24,7 @@ Options mirror `emet run dynagraph`. Both apps call [`graph_nav_cli.py`](../src/
 ## Implementation
 
 - Controller: `emet.controller.controller_lazy_graph.LazyGraphController`
-- CLI: `emet.app.run_lazy_graph` → `emet.app.graph_nav_cli.configure_graph_nav`
+- CLI: `emet.app.run_lazy_graph` → `emet.app.graph_nav_cli.configure_graph_nav` (context manager; restores on `with` exit)
 - Commit helper: `emet.memory.graph_eqa.ingest.lazy_graph_commit` (shim: `emet.memory.graph_eqa.lazy_graph_commit`)
 - Graph memory layout: [graph_memory.md](graph_memory.md)
 - Voxel-nav parent: `emet.controller.dynamem.DynamemController`

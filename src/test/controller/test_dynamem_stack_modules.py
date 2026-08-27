@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+import inspect
+
 from emet.app.graph_nav_cli import configure_graph_nav, main
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_dynamem import DynamemController
 from emet.controller.controller_lazy_graph import LazyGraphController
+from emet.controller.dynamem import mapping as dynamem_mapping
 from emet.controller.dynamem.controller import DynamemController as Packed
 from emet.mapping.voxel.dynamem_eqa import DynamemVoxelEQAMixin
 from emet.mapping.voxel.dynamem_localize import DynamemVoxelLocalizeMixin
@@ -22,6 +25,7 @@ def test_dynamem_controller_is_concrete_after_bind():
     agent = DynamemController.__new__(DynamemController)
     agent.voxel_map = object()
     assert agent.get_voxel_map() is agent.voxel_map
+    assert inspect.getmodule(DynamemController.get_voxel_map) is dynamem_mapping
 
 
 def test_dynamem_controller_facade_is_shim():
@@ -37,6 +41,7 @@ def test_dynamem_controller_facade_is_shim():
         "describe_head_camera_scene_text",
         "_head_to_sweep",
         "_normalize_scene_rgb_u8",
+        "get_voxel_map",
     ):
         assert hasattr(DynamemController, name), name
 
@@ -52,15 +57,20 @@ def test_voxel_map_uses_localize_and_eqa_mixins():
     assert hasattr(SparseVoxelMap, "localize_text")
     assert hasattr(SparseVoxelMap, "query_answer")
     assert hasattr(SparseVoxelMap, "find_alignment_over_model")
+    assert SparseVoxelMap.get_active_image_descriptions is DynamemVoxelEQAMixin.get_active_image_descriptions
 
 
-def test_graph_nav_cli_configure_swaps_controller():
-    configure_graph_nav(LazyGraphController, product="LazyGraph")
-    try:
-        from emet.app.graph_nav_cli import _controller_cls, _product
+def test_graph_nav_cli_configure_restores_previous():
+    configure_graph_nav(DynagraphController, product="Dynagraph")
+    from emet.app.graph_nav_cli import _controller_cls, _product
 
+    with configure_graph_nav(LazyGraphController, product="LazyGraph"):
         assert _controller_cls() is LazyGraphController
         assert _product() == "LazyGraph"
         assert main is not None
-    finally:
-        configure_graph_nav(DynagraphController, product="Dynagraph")
+        with configure_graph_nav(DynagraphController, product="inner"):
+            assert _product() == "inner"
+        assert _controller_cls() is LazyGraphController
+        assert _product() == "LazyGraph"
+    assert _controller_cls() is DynagraphController
+    assert _product() == "Dynagraph"
