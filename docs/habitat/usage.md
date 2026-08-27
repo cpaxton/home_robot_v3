@@ -150,7 +150,7 @@ The Habitat runner enables navmesh pathing and frontier exploration by default (
 | `habitat_explore_frontiers` | `true` | When uncertain, prefer frontier targets over spin-in-place |
 | `image_nav_min_approach_m` | `0.35` | Standoff distance when navigating to an **Image N** target and the robot is already at the capture viewpoint |
 
-**Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/graph_memory.py` (`_navigation_waypoint_for_obs`).
+**Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/eqa/graph_nav.py` (`_navigation_waypoint_for_obs`). Package map: [graph_memory.md](../graph_memory.md).
 
 **Mapping overrides (HM-EQA only):** `_configure_habitat_mapping` sets `max_depth=4.5` and, temporarily, **no obstacle dilation** (`pad_obstacles=0`, `filters.smooth_kernel_size=0`) so open-plan doorways are less likely to seal under morphological padding. Real-robot / Robocasa dynav defaults are unchanged. Restore prior Habitat padding with `EMET_HABITAT_PAD_OBSTACLES=1` (and non-zero smooth follows when pad &gt; 0). Frontier graph nodes also snap to a **reachable cell adjacent to the cluster** (not the arc centroid), so explore goals sit on the free-space rim instead of mid-floor.
 

@@ -308,7 +308,8 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | Doc | When to use |
 |-----|-------------|
 | [dynamem.md](docs/dynamem.md) | Voxel map / open-vocab manipulation (`emet run dynamem`) |
-| [graph_eqa.md](docs/graph_eqa.md) | GraphEQA memory + classic planning loop |
+| [graph_eqa.md](docs/graph_eqa.md) | GraphEQA how-to (`emet run graph-eqa`) |
+| [graph_memory.md](docs/graph_memory.md) | Graph memory **code structure** (`emet.memory.graph_eqa`, `GraphStore`, two EQA loops) |
 | [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |

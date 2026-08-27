@@ -12,16 +12,13 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from emet.controller.controller_graph_eqa import GraphEQAController
-from emet.memory.graph_eqa.agentic_tools import (
-    build_graph_eqa_system_prompt,
-    coerce_room_label,
-    sanitize_room_phrase,
-)
+from emet.memory.graph_eqa.agentic_tools import build_graph_eqa_system_prompt
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     resolve_room_policy,
     room_leave_needed,
 )
+from emet.memory.graph_eqa.room_labels import coerce_room_label, sanitize_room_phrase
 
 
 def test_sanitize_preserves_weird_phrases():

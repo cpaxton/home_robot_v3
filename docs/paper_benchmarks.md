@@ -41,7 +41,7 @@ Defined in `src/emet/eval/memory_backends.py`:
 | `dynagraph` | ✓ | ✓ (default) | Voxel + graph, default merge/staleness |
 | `ground_truth` | ✓ (oracle) | — | Graph from sim GT placements |
 
-Use the **same backend names** in sweep commands and paper tables. CLI Choices still accept `graph_eqa` → normalize to `static_graph` (one warning per process).
+Use the **same backend names** in sweep commands and paper tables. CLI Choices still accept `graph_eqa` → normalize to `static_graph` (one warning per process). `static_graph` and `dynagraph` share `emet.memory.graph_eqa` ([graph_memory.md](graph_memory.md)).
 
 **Detector vs semantics (methods):** YoloE/OWL at low `detection.confidence_threshold` supplies **high-recall instance/graph proposals**. Semantic answers come from the **VLM** and **memory backends**. You *can* raise the mapping threshold if eval shows net benefit; treat that as a recall/precision trade-off on OVMM/graph tasks. Chat-only tightening uses `describe_confidence_threshold` (separate knob). See [dynamem.md](dynamem.md), [graph_eqa.md](graph_eqa.md) (implementation package), [AGENT_RUN.md](AGENT_RUN.md).
 

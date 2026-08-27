@@ -3,7 +3,7 @@
 
 from emet.core import get_parameters
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+from emet.memory.graph_eqa.graph_object_fusion.attach import attach_graph_object_fusion
 
 
 def test_attach_fusion_loads_default_yaml_when_parameters_empty():

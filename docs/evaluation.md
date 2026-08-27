@@ -27,7 +27,7 @@ the image + neutral inventory.
 ``AgentMode.CHAT`` (`emet run agent`). Scored verify/explore is ``AgentMode.EQA_EPISODE``
 (`build_agentic_eqa_tools` / `AgenticEQAExecutor`). Shared skill membership lives in
 [`src/emet/agent/skills/`](../src/emet/agent/skills/). Habitat MCQ scoring never routes through
-Discord chat turns; use `run_eqa` / `emet-habitat` / `--eqa-eval`. See [AGENT_RUN.md](AGENT_RUN.md#skill-library-vs-orchestrator-modes).
+Discord chat turns; use `run_eqa` / `emet-habitat` / `--eqa-eval`. See [AGENT_RUN.md](AGENT_RUN.md#skill-library-vs-orchestrator-modes). Graph memory package map: [graph_memory.md](graph_memory.md).
 
 **Action-outcome ledger (opt-in, default off):** tool and nav outcomes can append
 `AttemptRecord` rows on `GraphEQAMemory` (`EMET_EQA_ATTEMPT_LEDGER=1`) without changing
