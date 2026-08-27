@@ -215,7 +215,7 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 "no",
                 "off",
             }:
-                os.environ.setdefault("EMET_AGENTIC_QUERY_IMAGES_DIR", str(ep_dir / "images"))
+                os.environ["EMET_AGENTIC_QUERY_IMAGES_DIR"] = str(ep_dir / "images")
             label = f"Running {tag}" + (f" manip_mode={manip}" if opts.full else "") + " …"
             print(label, file=sys.stderr)
             try:

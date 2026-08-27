@@ -894,9 +894,15 @@ def apply_backend_parameters(
     merge_xy_m: float | None = None,
     staleness_horizon: int | None = None,
     s0_parity: bool = False,
+    use_agentic: bool = False,
 ) -> Any:
-    """Configure dynagraph merge/staleness for backend comparison runs."""
-    if s0_parity and backend != "dynamem":
+    """Configure dynagraph merge/staleness for backend comparison runs.
+
+    ``s0_parity`` + oneshot uses the interactive profile so pytest / DynamemTaskExecutor
+    match. Agentic find keeps the tighter ``ovmm_find_phase`` merge (0.15 m) so tabletop
+    instances are not glued into a 0.45 m blob.
+    """
+    if s0_parity and backend != "dynamem" and not use_agentic:
         from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
 
         apply_dynagraph_profile(parameters, "interactive")
@@ -1256,6 +1262,7 @@ def run_episode_find_phase(
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
             s0_parity=s0_parity,
+            use_agentic=use_agentic,
         )
         # Keep the shared SigLIP encoder (get_shared_mask_siglip_encoder, load-once)
         # so the voxel semantic memory gets per-point features — the agentic find
@@ -1356,7 +1363,7 @@ def run_episode_find_phase(
                 compare_to_gt=run_cfg.compare_to_gt,
                 use_sensor_perception=run_cfg.use_sensor_perception,
                 graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
-                s0_parity=s0_parity,
+                s0_parity=bool(s0_parity and not use_agentic),
             )
         ep_dir = os.environ.get("EMET_EQA_EPISODE_DIR", "").strip()
         if ep_dir:
@@ -1512,16 +1519,23 @@ def run_episode_find_phase(
                     "gt_body_key": episode.object_gt_body,
                 },
             )
-            # No oneshot rescue: agentic miss/timeout scores as FindObj fail (ablation: --oneshot-localize).
+            # Voxel localize is the FindObj/FindRec coordinate: agentic loop uses it as an
+            # investigate card + close-map stay. Do not require VLM verify to score.
             if obj_res.error:
                 agentic_meta["agentic_find_error"] = obj_res.error
             obj_xyz = obj_res.xyz
-            obj_ok = bool(obj_res.verified and obj_res.xyz is not None)
+            obj_ok = obj_xyz is not None
             obj_q_used = object_query
-            obj_source = "agentic_verify" if obj_ok else None
+            obj_source = (obj_res.extra or {}).get("xyz_source")
+            if not obj_source and obj_ok:
+                obj_source = "agentic_verify" if obj_res.verified else None
             agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
             agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
             agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
+            if obj_res.extra:
+                agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
+                if obj_res.extra.get("voxel_query_used"):
+                    obj_q_used = str(obj_res.extra["voxel_query_used"])
 
             recep_res = run_ovmm_agentic_localize(
                 agent,
@@ -1540,12 +1554,18 @@ def run_episode_find_phase(
             if recep_res.error:
                 agentic_meta["agentic_find_error_recep"] = recep_res.error
             recep_xyz = recep_res.xyz
-            recep_ok = bool(recep_res.verified and recep_res.xyz is not None)
+            recep_ok = recep_xyz is not None
             recep_q_used = episode.goal_recep
-            recep_source = "agentic_verify" if recep_ok else None
+            recep_source = (recep_res.extra or {}).get("xyz_source")
+            if not recep_source and recep_ok:
+                recep_source = "agentic_verify" if recep_res.verified else None
             agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
             agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
             agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
+            if recep_res.extra:
+                agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
+                if recep_res.extra.get("voxel_query_used"):
+                    recep_q_used = str(recep_res.extra["voxel_query_used"])
         else:
             # Ablation: one-shot memory localize (voxel-first when prefer_voxel).
             obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(

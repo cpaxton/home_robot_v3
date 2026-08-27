@@ -66,6 +66,7 @@ def test_recall_nav_hypotheses_boosts_target_phrase_not_gt():
     gm.hypothesize_nav_targets.return_value = []
     gm.get_nodes.return_value = []
     ex.agent.graph_memory = gm
+    ex.agent.voxel_map = None
     ex.agent.robot.get_emet_session.return_value = {
         "is_simulation": True,
         "sim_object_placements": {
@@ -77,6 +78,37 @@ def test_recall_nav_hypotheses_boosts_target_phrase_not_gt():
     kwargs = gm.hypothesize_nav_targets.call_args.kwargs
     boost = kwargs.get("boost_phrases") or []
     assert any("microwave" in str(p).lower() for p in boost)
+
+
+def test_recall_prepends_voxel_localize_over_graph_tv():
+    """Gated DynaMem localize_text is an investigate card even when graph has junk nodes."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    gm = MagicMock()
+    gm.hypothesize_nav_targets.return_value = [
+        NavHypothesis(
+            phrase="tv",
+            obs_id=6,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+
+    class _Voxel:
+        _last_localize_stats = {"query": "red cylinder", "max_cosine": 0.22, "yoloe_hit": True}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            assert "red cylinder" in str(text).lower()
+            return np.array([0.08, -0.55, 0.6])
+
+    ex.agent.voxel_map = _Voxel()
+    hyps = ex._recall_nav_hypotheses()
+    assert hyps[0].source == "voxel"
+    assert np.allclose(hyps[0].xyz, [0.08, -0.55, 0.6])
+    assert any(h.source == "graph" and int(h.obs_id) == 6 for h in hyps)
 
 
 def test_nearby_untried_investigate_hyp_prefers_close_card():

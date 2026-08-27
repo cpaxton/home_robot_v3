@@ -45,6 +45,7 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 | Router observability | `nav_outcome` in Recent actions |
 | **Efficiency** | rby1 episodes + skip head sweep on non-Stretch + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
 | Close-look map | Occupancy-aligned min camera range + aimed flag; investigate **stays** on a place card until aimed-close or **escapes** when unreachable / attempts exhausted |
+| Voxel localize | `localize_text` (YoloE / cosine) is an investigate card (`source=voxel`) and the FindObj/FindRec coordinate; camera pose is not scored |
 
 ## Acceptance (rby1 smoke / slice)
 

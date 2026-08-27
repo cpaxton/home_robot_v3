@@ -138,7 +138,7 @@ def question_is_locate(question: str) -> bool:
 DEFAULT_HYP_RECALL_K = 6
 
 # Investigate vs explore: place-card sources worth a closer look.
-INVESTIGATE_SOURCES = frozenset({"graph", "confirmed", "siglip"})
+INVESTIGATE_SOURCES = frozenset({"graph", "confirmed", "siglip", "voxel"})
 PLACE_INSPECT_RECENT_K = 3
 # Compact tool outcomes shown to the VLM router (avoid re-picking stuck loops).
 RECENT_ACTIONS_K = 6

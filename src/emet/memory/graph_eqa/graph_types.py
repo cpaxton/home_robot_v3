@@ -37,6 +37,7 @@ _WEAK_SIGLIP_FIND_TOKENS = frozenset({"time", "hour", "now", "today", "moment"})
 
 # Source tiers for hyp *recall* only (not a VLM decision policy).
 _RECALL_SOURCE_TIER: dict[str, float] = {
+    "voxel": 400.0,
     "graph": 300.0,
     "confirmed": 200.0,
     "siglip": 100.0,
@@ -56,7 +57,7 @@ class NavHypothesis:
     obs_id: int
     xyz: np.ndarray
     score: float
-    source: str  # "graph" | "confirmed" | "siglip" | "frontier"
+    source: str  # "voxel" | "graph" | "confirmed" | "siglip" | "frontier"
     answerability_gain: float = 0.0
     belief_reduction: float = 0.0
     revisit_change_value: float = 0.0

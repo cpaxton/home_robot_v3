@@ -94,6 +94,15 @@ def test_localize_phrases_from_question_and_meta():
     assert "table" in phrases
 
 
+def test_xyz_from_verified_obs_ignores_camera_pose():
+    """Camera XYZ is a viewpoint, not an object — do not score it as FindRec."""
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = [_Obs(3, np.array([-0.78, 0.47, 0.0]), ["table"])]
+    agent.graph_memory.get_nodes.return_value = []
+    assert xyz_from_verified_obs(agent, 3, phrases=["blue cube"]) is None
+
+
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
 def test_run_ovmm_agentic_localize_maps_verified_obs(mock_run):
     mock_run.return_value = AgenticEQAResult(
@@ -110,17 +119,56 @@ def test_run_ovmm_agentic_localize_maps_verified_obs(mock_run):
     agent.graph_memory = MagicMock()
     agent.graph_memory._observations = [_Obs(7, np.array([0.5, -0.2, 1.0]), ["cab"])]
     agent.graph_memory._retracted_nav_claims = {("1", "jar")}
-    agent.graph_memory.get_nodes.return_value = []
+    agent.graph_memory.get_nodes.return_value = [
+        _Node(7, np.array([0.08, -0.55, 0.6]), ["cab"]),
+    ]
 
     out = run_ovmm_agentic_localize(agent, "Where is the cab?")
     assert out.verified is True
     assert out.verified_obs_id == 7
     assert out.xyz is not None
-    assert np.allclose(out.xyz, [0.5, -0.2, 1.0])
+    assert np.allclose(out.xyz, [0.08, -0.55, 0.6])
+    assert out.extra.get("xyz_source") == "graph_node"
     assert out.n_retracted_claims == 0  # pre-existing claim is not this run's delta
     mock_run.assert_called_once()
     assert mock_run.call_args[0][1] == "Where is the cab?"
     assert mock_run.call_args.kwargs.get("trace_path") is None
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_run_ovmm_agentic_localize_voxel_fallback_when_unverified(mock_run):
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="unknown",
+        answer="unknown",
+        confidence=False,
+        verified=False,
+        verified_obs_id=None,
+        n_rounds=6,
+        n_nav=1,
+        n_explore=4,
+        budget_hit=True,
+    )
+
+    class _Voxel:
+        _last_localize_stats = {"query": "blue cube", "max_cosine": 0.17, "yoloe_hit": True}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            if "blue" in str(text).lower():
+                return np.array([-0.02, -0.55, 0.6])
+            return None
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._observations = []
+    agent.graph_memory._retracted_nav_claims = set()
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = _Voxel()
+
+    out = run_ovmm_agentic_localize(agent, "Where is the blue cube?")
+    assert out.verified is False
+    assert out.xyz is not None
+    assert np.allclose(out.xyz, [-0.02, -0.55, 0.6])
+    assert out.extra.get("xyz_source") == "voxel"
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
@@ -139,6 +187,7 @@ def test_run_ovmm_agentic_localize_uses_episode_dir_trace(mock_run, tmp_path, mo
     agent.graph_memory._observations = [_Obs(7, np.array([0.5, -0.2, 1.0]), ["cab"])]
     agent.graph_memory._retracted_nav_claims = set()
     agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
 
     run_ovmm_agentic_localize(
         agent,
@@ -161,6 +210,7 @@ def test_run_ovmm_agentic_localize_counts_new_retractions(mock_run):
     agent.graph_memory._observations = [_Obs(7, np.array([0.5, -0.2, 1.0]), ["cab"])]
     agent.graph_memory._retracted_nav_claims = claims
     agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
 
     out = run_ovmm_agentic_localize(agent, "Where is the cab?")
     assert out.verified is True

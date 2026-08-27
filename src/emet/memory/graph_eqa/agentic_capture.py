@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import VOXEL_HYP_OBS_BASE, localize_text_xyz_from_phrases
 from emet.memory.graph_eqa.agentic_config import (
     INVESTIGATE_SOURCES,
     NAV_SAME_OBS_LOOP_LIMIT,
@@ -265,11 +266,38 @@ class AgenticCaptureMixin:
 
     def _refresh_hypotheses_from_graph(self) -> None:
         """Re-retrieve nav evidence cards after voxel/graph grew — no VLM extract."""
-        gm = self.graph_memory
-        if gm is None or not hasattr(gm, "hypothesize_nav_targets"):
-            return
-        hypotheses = self._recall_nav_hypotheses()
-        self._set_hypotheses(hypotheses)
+        self._set_hypotheses(self._recall_nav_hypotheses())
+
+    def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
+        """DynaMem ``localize_text`` place cards (YoloE / cosine-gated), not raw SigLIP argmax."""
+        voxel_map, _ = self._voxel_planner()
+        phrases = list(self._target_boost_phrases())
+        extra = str(self._siglip_phrase() or "").strip()
+        if extra and extra not in phrases:
+            phrases.append(extra)
+        xyz, phrase, stats = localize_text_xyz_from_phrases(voxel_map, phrases)
+        if xyz is None or phrase is None:
+            return []
+        cosine = stats.get("max_cosine")
+        try:
+            sim = float(cosine) if cosine is not None else None
+        except (TypeError, ValueError):
+            sim = None
+        score = 400.0
+        if sim is not None:
+            score += sim
+        if stats.get("yoloe_hit"):
+            score += 50.0
+        return [
+            NavHypothesis(
+                phrase=phrase,
+                obs_id=int(VOXEL_HYP_OBS_BASE),
+                xyz=xyz,
+                score=score,
+                source="voxel",
+                siglip_sim=sim,
+            )
+        ]
 
     def _receptacle_adjacent_hypotheses(self, gm: Any) -> list[NavHypothesis]:
         """Container/fixture nodes to look at when a receptacle phrase has no direct

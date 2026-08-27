@@ -154,8 +154,8 @@ def run_agentic_eqa_result(
 ) -> AgenticEQAResult:
     """Run the unified agentic loop; return the full :class:`AgenticEQAResult`.
 
-    OVMM find phrases the episode as a question and reads ``verified_obs_id`` / pose
-    from this result — same executor as HM-EQA, not a parallel find loop.
+    OVMM find phrases the episode as a question and reads ``verified_obs_id`` plus
+    voxel/graph XYZ from the result — same executor as HM-EQA, not a parallel find loop.
     """
     ex = build_agentic_eqa_executor(
         agent,

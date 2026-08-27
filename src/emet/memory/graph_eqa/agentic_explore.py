@@ -64,22 +64,29 @@ class AgenticExploreMixin:
 
     def _recall_nav_hypotheses(self) -> list[NavHypothesis]:
         gm = self.graph_memory
-        if gm is None:
-            return []
-        boost = self._target_boost_phrases()
-        try:
-            hypotheses = gm.hypothesize_nav_targets(
-                self.query_text,
-                max_k=env_eqa_hyp_recall_k(),
-                robot_xyt=self._robot_xyt_world(),
-                boost_phrases=boost or None,
-            )
-        except TypeError:
-            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k())
-        if not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
+        hypotheses: list[NavHypothesis] = []
+        if gm is not None and hasattr(gm, "hypothesize_nav_targets"):
+            boost = self._target_boost_phrases()
+            try:
+                hypotheses = list(
+                    gm.hypothesize_nav_targets(
+                        self.query_text,
+                        max_k=env_eqa_hyp_recall_k(),
+                        robot_xyt=self._robot_xyt_world(),
+                        boost_phrases=boost or None,
+                    )
+                    or []
+                )
+            except TypeError:
+                hypotheses = list(gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k()) or [])
+        voxel_hyps = self._voxel_localize_hypotheses()
+        if voxel_hyps:
+            # Always prefer a gated DynaMem localize over unlabeled graph "tv"/"box" cards.
+            hypotheses = list(voxel_hyps) + hypotheses
+        elif gm is not None and not any(str(h.source) in INVESTIGATE_SOURCES for h in hypotheses):
             adjacent = self._receptacle_adjacent_hypotheses(gm)
             if adjacent:
-                hypotheses = adjacent + list(hypotheses)
+                hypotheses = adjacent + hypotheses
         return hypotheses
 
     def _prefers_nearby_investigate(self) -> bool:

@@ -71,7 +71,7 @@ def xyz_from_verified_obs(
     *,
     phrases: list[str] | None = None,
 ) -> np.ndarray | None:
-    """World XYZ for a verified view — prefer matching object graph nodes over obs pose."""
+    """World XYZ for a verified view — matching object graph nodes only (never camera pose)."""
     if obs_id is None:
         return None
     gm = getattr(agent, "graph_memory", None)
@@ -101,22 +101,6 @@ def xyz_from_verified_obs(
                     arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
                     if arr.size >= 3:
                         return arr[:3]
-    for node in object_nodes:
-        xyz = getattr(node, "xyz", None)
-        if xyz is None:
-            continue
-        arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
-        if arr.size >= 3:
-            return arr[:3]
-    for o in getattr(gm, "_observations", None) or []:
-        if int(getattr(o, "obs_id", -1)) != oid:
-            continue
-        xyz = getattr(o, "xyz", None)
-        if xyz is None:
-            continue
-        arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
-        if arr.size >= 3:
-            return arr[:3]
     return None
 
 
@@ -205,6 +189,29 @@ def run_ovmm_agentic_localize(
     oid = result.verified_obs_id if result.verified else None
     localize_phrases = _localize_phrases(q, trace_meta)
     xyz = xyz_from_verified_obs(agent, oid, phrases=localize_phrases) if oid is not None else None
+    xyz_source = "graph_node" if xyz is not None else None
+    if xyz is None:
+        from emet.mapping.voxel_localize import localize_text_xyz_from_phrases, voxel_map_from_agent
+
+        voxel_xyz, voxel_q, _stats = localize_text_xyz_from_phrases(
+            voxel_map_from_agent(agent),
+            localize_phrases,
+        )
+        if voxel_xyz is not None:
+            xyz = voxel_xyz
+            xyz_source = "voxel"
+            extra_q = voxel_q
+        else:
+            extra_q = None
+    else:
+        extra_q = None
+    extra = {
+        "budget_hit": bool(result.budget_hit),
+        "answer_provenance": str(result.answer_provenance or ""),
+        "xyz_source": xyz_source,
+    }
+    if extra_q:
+        extra["voxel_query_used"] = extra_q
     return OvmmAgenticLocalizeResult(
         question=q,
         verified=bool(result.verified),
@@ -216,10 +223,7 @@ def run_ovmm_agentic_localize(
         n_retracted_claims=n_retracted,
         answer=str(result.answer or ""),
         discord_text=str(result.discord_text or ""),
-        extra={
-            "budget_hit": bool(result.budget_hit),
-            "answer_provenance": str(result.answer_provenance or ""),
-        },
+        extra=extra,
     )
 
 
