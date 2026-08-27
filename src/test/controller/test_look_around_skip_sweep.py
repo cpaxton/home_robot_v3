@@ -55,7 +55,7 @@ def test_look_around_sweeps_for_stretch(monkeypatch):
     monkeypatch.delenv("EMET_FORCE_HEAD_SWEEP", raising=False)
     monkeypatch.delenv("EMET_SKIP_HEAD_SWEEP", raising=False)
     monkeypatch.setenv("EMET_SIM_NAV_TELEPORT", "1")
-    monkeypatch.setattr("emet.controller.controller_dynamem.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     robot = MagicMock(spec=StretchZmqClient)
     agent = _look_around_on(robot)
     agent.look_around()
@@ -66,7 +66,7 @@ def test_look_around_sweeps_for_stretch(monkeypatch):
 def test_look_around_force_sweep_overrides_rby1(monkeypatch):
     monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
     monkeypatch.setenv("EMET_SIM_NAV_TELEPORT", "1")
-    monkeypatch.setattr("emet.controller.controller_dynamem.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     robot = MagicMock(spec=GenericZmqClient)
     agent = _look_around_on(robot)
     agent.look_around()
@@ -90,7 +90,7 @@ def _relative_yaws(robot: MagicMock) -> list[float]:
 
 
 def test_rotate_in_place_captures_heading_before_table_yaw(monkeypatch):
-    monkeypatch.setattr("emet.controller.controller_dynamem.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view",
         lambda _agent: True,
@@ -104,7 +104,7 @@ def test_rotate_in_place_captures_heading_before_table_yaw(monkeypatch):
 
 
 def test_rotate_in_place_non_table_still_uses_45deg_after_capture(monkeypatch):
-    monkeypatch.setattr("emet.controller.controller_dynamem.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view",
         lambda _agent: False,
@@ -118,7 +118,7 @@ def test_rotate_in_place_non_table_still_uses_45deg_after_capture(monkeypatch):
 
 
 def test_rotate_in_place_updates_even_when_realtime(monkeypatch):
-    monkeypatch.setattr("emet.controller.controller_dynamem.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view",
         lambda _agent: True,

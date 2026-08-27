@@ -22,7 +22,7 @@ env vars (`EMET_EQA_AGENTIC_*`), so defaults are shared unless the caller overri
 | **HM-EQA** (Habitat) | `controller_graph_eqa.py:840` → `run_agentic_eqa` | A–D MCQ | paper-router preset (`--preset paper-router` → `agentic_verifier=none`, `require_verified=0`, `agentic_router=1`); holdout headline uses router **off** (`EMET_EQA_AGENTIC_ROUTER=0`) | of-record slices holdout-8 / bal-32 |
 | **OVMM find** (robocasa/molmo/table) | `ovmm_agentic_find.py:123` → `run_agentic_eqa_result` | open "Where is the X?" / "X on the Y?" | explicit `router=` arg (often `0` deterministic) | verified obs → world XYZ for success scoring |
 | **Dynamic explore** (world-change) | `dynamic_exploration_runner.py:548` → `run_agentic_eqa` | open per-question | `agentic_verify_enabled(agent)` default | keeps sim connected mid-loop |
-| **run_dynagraph CLI** | `app/run_dynagraph.py:741` → `run_agentic_eqa` | answer-only or open | `agentic_verify_enabled(agent)` | trace → `agentic_trace.jsonl` |
+| **run_dynagraph CLI** | `app/graph_nav_cli.py` → `run_agentic_eqa` | answer-only or open | `agentic_verify_enabled(agent)` | trace → `agentic_trace.jsonl` |
 
 Shared env knobs: `EMET_EQA_AGENTIC_ROUTER`, `EMET_EQA_AGENTIC_VERIFIER`,
 `EMET_EQA_AGENTIC_REQUIRE_VERIFIED`, `EMET_EQA_HYP_RECALL_K` (default 6),

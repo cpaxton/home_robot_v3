@@ -32,6 +32,8 @@ To complete "Pick up A and Place it on B", it will call 4 commands sequentially:
 Besides these commands, Dynamem also provides exploration module
 - `explore()`
 
+Controller code lives in [`emet.controller.dynamem`](../src/emet/controller/dynamem/) (`DynamemController` facade; `controller_dynamem` is a shim). Voxel localize / classic EQA (including `get_active_image_descriptions`) are mixins on [`voxel_dynamem.py`](../src/emet/mapping/voxel/voxel_dynamem.py). Dynagraph and LazyGraph share [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) (`configure_graph_nav`). See [graph_memory.md](graph_memory.md#voxel-nav-stack-dynamem--dynagraph--lazygraph).
+
 ## Navigation and exploration
 Dynamem stores (two) voxelized pointcloud for navigation and exploration. The first pointcloud is used to generate obstacle map for running A* path planning while another is used to store vision language features for visual grounding and generate value map for exploration. Planners, configs, and offline tests: [motion_planning.md](motion_planning.md).
 

@@ -1,21 +1,14 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton 2026
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
+"""DynaMem robot controller package.
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
+``DynamemController`` is the voxel-nav parent of GraphEQA / Dynagraph / LazyGraph.
+Callers keep importing ``emet.controller.controller_dynamem``.
+"""
 
-"""Compatibility shim: DynaMem controller lives in ``emet.controller.dynamem``."""
-
-from emet.controller.dynamem import (  # noqa: F401
+from emet.controller.dynamem.constants import (
     _DESCRIBE_SCENE_OWL_QUERIES,
     _DESCRIBE_SCENE_YOLOE_LABELS,
     DEFAULT_TABLE_MAPPING_YAW_HALF_RAD,
@@ -34,10 +27,9 @@ from emet.controller.dynamem import (  # noqa: F401
     INIT_WRIST_PITCH,
     INIT_WRIST_ROLL,
     INIT_WRIST_YAW,
-    DynamemController,
-    RobotAgent,
     default_table_mapping_relative_yaws,
 )
+from emet.controller.dynamem.controller import DynamemController, RobotAgent
 
 __all__ = [
     "DEFAULT_TABLE_MAPPING_YAW_HALF_RAD",

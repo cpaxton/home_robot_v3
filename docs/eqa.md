@@ -43,7 +43,7 @@ This module shares or extends core dependencies (mapping, perception, llms) with
 | [`src/emet/app/run_eqa.py`](../src/emet/app/run_eqa.py)       |       Entry point for EQA module                       |
 | [`src/emet/controller/task/dynamem/dynamem_task.py`](../src/emet/controller/task/dynamem/dynamem_task.py)  | An executor wrapper for EQA module (`EQAExecuter`) |
 | [`src/emet/controller/robot_agent_dynamem.py`](../src/emet/controller/robot_agent_dynamem.py) | Robot agent (DynaMem) used for EQA; graph memory: [graph_eqa.md](graph_eqa.md) / [graph_memory.md](graph_memory.md) |
-| [`src/emet/mapping/voxel/voxel_dynamem.py`](../src/emet/mapping/voxel/voxel_dynamem.py#928)         | We added EQA utilities to [DynaMem voxel.py](../src/emet/mapping/voxel/voxel_dynamem.py)            |
+| [`src/emet/mapping/voxel/dynamem_eqa.py`](../src/emet/mapping/voxel/dynamem_eqa.py) | Classic voxel `query_answer` / frontiers (mixin on DynaMem `SparseVoxelMap`) |
 
 ## Instructions
 
