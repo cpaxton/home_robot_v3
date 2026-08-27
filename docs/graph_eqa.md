@@ -17,6 +17,8 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 
 **Action-outcome ledger (opt-in):** `GraphEQAMemory` can store structured attempt rows (failed nav, verify ABSENT, pick/place, closer look) next to the scene graph. Default **off** for paper HM-EQA / OVMM. See [attempt_ledger.md](attempt_ledger.md).
 
+**Two memories, one agent:** DynaMem voxels **retrieve** (`localize_text`, occupancy). The graph **holds belief** (instance nodes, rooms, committed pins). The VLM chooses tools. Method: [dynagraph.md](dynagraph.md#method).
+
 **Room timeline:** the same memory keeps a capped room-scoped event history (`stamp` / `verify_absent` / `coverage_closed`, …) for the agentic state card — agent-visible facts, not a nav escape latch. See [attempt_ledger.md](attempt_ledger.md#room-timeline-graph-history).
 
 **Close-look map:** occupancy is not a resolved look at a small object. A 2D grid aligned with the voxel map stores min camera range + aimed hits; agentic find stays on a place card until close or escape. See [close_map.md](close_map.md).
@@ -125,7 +127,7 @@ emet run graph-eqa --robot-ip 127.0.0.1
 ```
 
 - By default, the robot does an **initial rotation-in-place** to scan the room and build the first graph nodes from what the camera sees.
-- Object nodes are also grouped into **room clusters** (`near` edges + planar link radius + VLM-stamped names; see `emet.memory.graph_eqa.room_clusters`) so agentic routing can show `Current room (graph)` / a compact `Rooms:` line, tag evidence cards with `room=`, and paint labels on saved top-down maps. This stands in for Hydra Layer 4 (belonging + hierarchical room→place guidance). It does **not** hard-force leave-wrong-room explore.
+- Object nodes are also grouped into **room clusters** via `room_clustering.partition` (default backend `proximity`: `near` edges + planar radius; names from VLM stamps — see `emet.memory.graph_eqa.room_clusters` for naming). Agentic routing can show `Current room (graph)` / a compact `Rooms:` line, tag evidence cards with `room=`, and paint labels on saved top-down maps. This stands in for Hydra Layer 4 (belonging + hierarchical room→place guidance). It does **not** hard-force leave-wrong-room explore. Voxels retrieve (`localize_text`); the graph holds committed belief. Method: [dynagraph.md](dynagraph.md#method).
 - To skip the initial scan: `emet run graph-eqa --robot-ip 127.0.0.1 -N`
 - To save Rerun logs: add `--save_rerun` (or `--SR`).
 - CPU-only: the app uses the same encoder as DynaMem; if you need CPU, you may need to set config/CLI options that disable GPU-heavy models (see [simulation.md](simulation.md) for DynaMem CPU notes).

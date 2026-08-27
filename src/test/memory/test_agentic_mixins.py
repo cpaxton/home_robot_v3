@@ -82,3 +82,29 @@ def test_investigate_and_place_mixins_stay_under_limit() -> None:
     for mod in (agentic_investigate, agentic_place):
         n = sum(1 for _ in Path(mod.__file__).open(encoding="utf-8"))
         assert n <= _MIXIN_MAX_LINES, f"{Path(mod.__file__).name} is {n} lines; split further"
+
+
+def test_voxel_planner_uses_get_voxel_map_when_attr_has_no_localize() -> None:
+    class _Occupancy:
+        pass
+
+    class _Semantic:
+        def localize_text(self, *args, **kwargs):
+            return None
+
+    semantic = _Semantic()
+
+    class _Agent:
+        voxel_map = _Occupancy()
+        planner = object()
+
+        def get_voxel_map(self):
+            return semantic
+
+    class _Ex(AgenticPlaceMixin):
+        def __init__(self) -> None:
+            self.agent = _Agent()
+
+    vm, planner = _Ex()._voxel_planner()
+    assert vm is semantic
+    assert planner is _Agent.planner

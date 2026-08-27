@@ -52,6 +52,17 @@ class GraphRoomsMixin:
         except Exception:
             return 3.0
 
+    def _room_clustering_backend(self) -> str:
+        env = os.environ.get("EMET_EQA_ROOM_CLUSTERING_BACKEND", "").strip()
+        if env:
+            return env
+        nested = self._eqa_cfg_value("room_clustering")
+        if isinstance(nested, dict):
+            raw = str(nested.get("backend") or "").strip()
+            if raw:
+                return raw
+        return "proximity"
+
     def set_room_connectivity_checker(
         self,
         checker: Callable[[tuple[float, float], tuple[float, float]], bool] | None,
@@ -60,14 +71,16 @@ class GraphRoomsMixin:
         self._room_connectivity_fn = checker
 
     def refresh_room_clusters(self) -> list[Any]:
-        """Recompute near+planar connected components over object nodes."""
-        from emet.memory.graph_eqa.room_clusters import cluster_object_nodes
+        """Recompute room clusters via ``room_clustering.partition`` (default: proximity)."""
+        from emet.memory.graph_eqa.room_clustering import partition
 
-        clusters = cluster_object_nodes(
+        clusters = partition(
             self._nodes,
             self._edges,
+            backend=self._room_clustering_backend(),
             link_radius_m=self._room_link_radius_m(),
             connectivity_fn=self._room_connectivity_fn,
+            voxel_map=getattr(self, "_voxel_map", None),
         )
         if self.world_evidence.enabled:
             self._reindex_world_entities()

@@ -45,10 +45,22 @@ def ovmm_find_recep_question(goal_recep: str) -> str:
 
 
 def _localize_phrases(question: str, trace_meta: dict[str, Any] | None) -> list[str]:
-    """Target object/recep phrases for graph-node XYZ lookup after verify."""
+    """Target object/recep phrases for graph-node / voxel XYZ after the loop.
+
+    Phase metadata selects **one** OVMM target so a mapping-time pin for the
+    cube cannot be scored as FindObj (or the reverse). ``start_recep`` is the
+    support surface, not a coordinate.
+    """
     out: list[str] = []
     meta = trace_meta or {}
-    for key in ("object", "goal_recep", "start_recep"):
+    phase = str(meta.get("ovmm_phase") or "").strip().lower()
+    if phase == "find_recep":
+        keys = ("goal_recep",)
+    elif phase == "find_object":
+        keys = ("object",)
+    else:
+        keys = ("object", "goal_recep")
+    for key in keys:
         text = str(meta.get(key) or "").strip()
         if text and text not in out:
             out.append(text)
@@ -190,10 +202,12 @@ def run_ovmm_agentic_localize(
     localize_phrases = _localize_phrases(q, trace_meta)
     xyz = xyz_from_verified_obs(agent, oid, phrases=localize_phrases) if oid is not None else None
     xyz_source = "graph_node" if xyz is not None else None
+    extra_q = None
+    extra_stats: dict[str, Any] = {}
     if xyz is None:
         from emet.mapping.voxel_localize import localize_text_xyz_from_phrases, voxel_map_from_agent
 
-        voxel_xyz, voxel_q, _stats = localize_text_xyz_from_phrases(
+        voxel_xyz, voxel_q, voxel_stats = localize_text_xyz_from_phrases(
             voxel_map_from_agent(agent),
             localize_phrases,
         )
@@ -201,10 +215,7 @@ def run_ovmm_agentic_localize(
             xyz = voxel_xyz
             xyz_source = "voxel"
             extra_q = voxel_q
-        else:
-            extra_q = None
-    else:
-        extra_q = None
+            extra_stats = dict(voxel_stats or {})
     extra = {
         "budget_hit": bool(result.budget_hit),
         "answer_provenance": str(result.answer_provenance or ""),
@@ -212,6 +223,12 @@ def run_ovmm_agentic_localize(
     }
     if extra_q:
         extra["voxel_query_used"] = extra_q
+    if extra_stats:
+        extra["from_pin"] = bool(extra_stats.get("from_pin"))
+        extra["yoloe_hit"] = bool(extra_stats.get("yoloe_hit"))
+        cosine = extra_stats.get("max_cosine")
+        if cosine is not None:
+            extra["max_cosine"] = cosine
     return OvmmAgenticLocalizeResult(
         question=q,
         verified=bool(result.verified),

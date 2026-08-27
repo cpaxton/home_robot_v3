@@ -1,7 +1,9 @@
 # OVMM find: voxel localize + close-map (2026-08-26)
 
-**Status:** First slice landed (investigate cards + score from `localize_text`). Stretch
-S0 GPU oneshot still the empirical gate.
+**Status:** Checkpoint on `feat/tamp-ovmm-perf` — voxel investigate cards +
+phase-aware scoring; **no** harness `pin_phrases_after_mapping` of episode YAML.
+Map sanity is pytest `test_red_cylinder_detected_in_sim`. Method of record:
+[dynagraph.md](../dynagraph.md#method).
 
 ## What used to work
 
@@ -62,12 +64,16 @@ CHAT already uses `get_voxel_map().localize_text` in `emet.agent.loop` /
 
 ## Landed in this change
 
-1. `emet.mapping.voxel_localize.localize_text_xyz` — shared helper.
+1. `emet.mapping.voxel_localize.localize_text_xyz` — shared helper. **First live
+   hit pins phrase→XYZ on the voxel map**; later calls reuse the pin so explore
+   cannot erase a mapping-time localize. CHAT `query_memory` / `face_toward` and
+   agentic `_voxel_planner` use `voxel_map_from_agent` (attribute or
+   `get_voxel_map()`).
 2. Agentic recall **prepends** a `source=voxel` investigate card when
    `localize_text` hits, even if the graph already has junk nodes.
-3. OVMM agentic scoring: phrase-matched **graph node**, else **voxel XYZ**.
-   Camera pose is never a FindObj/FindRec coordinate. Unverified + voxel hit
-   still scores (the loop may still go look).
+3. OVMM agentic scoring: phrase-matched **graph node**, else **voxel XYZ**
+   (including a mapping-time pin). Camera pose is never a FindObj/FindRec
+   coordinate. Unverified + voxel hit still scores (the loop may still go look).
 4. Agentic S0 no longer switches to interactive 0.45 m merge / harness.
 5. Per-episode query PNG dir (no sticky `setdefault` across episodes).
 
@@ -75,10 +81,11 @@ CHAT already uses `get_voxel_map().localize_text` in `emet.agent.loop` /
 
 | Priority | Work | Why |
 |----------|------|-----|
-| P0 GPU | `emet ovmm find --backend dynamem` on Stretch S0 `default_table_s0_distinct_recep` and rby1 S0. Phrase-only oneshot. Compare to pytest 0.55 m vs OVMM 0.3 m. | Prove dynamem still localizes after mapping. |
-| P0 GPU | Agentic dynagraph S0 after this slice. Expect FindRec if voxel hits the cube; FindObj if cylinder cosine/YoloE recovers. | End-to-end of voxel card + close-map + score. |
+| P0 GPU | Agentic dynagraph rby1 S0 **without** harness GT-phrase pin. Voxel-card run `rby1_smoke_voxel_20260826_231837` was 0/0: card then wander. Job `20260826_235038_6e8928` used harness pin — ablation only, do not treat as the product. | End-to-end of agent `inspect_graph` + score. |
+| P1 GPU | Stretch S0 dynamem oneshot (`dynamem_s0_20260826_231820`): cube voxel 0.37 m (miss vs 0.3 m), cylinder miss. rby1 oneshot was 1.0 / 0.0 m YoloE. Oneshot is mapping ablation, not the agent. | Instance separation / radius vs pytest 0.55 m. |
 | P1 | If Stretch voxel still collapses red/blue to one peak: **do not** expand `"red cylinder"` to `"cylinder"` on S0 (already `phrase_only` on oneshot). Check YoloE vocab / confidence on the two GT bodies. | Instance separation. |
 | P1 | Locate questions: allow VLM assess on the **mapping view** (drop “must APPROACH first”) *or* restore table mapping pose before the first investigate. | Stops frontier wander into sky/floor RGB. |
+| P2 | Graph-owned pins from `vlm_assess` confirm/add (`in_view`); first-hit voxel cache is not the product pin. | Wander must not erase a **confirmed** pin. |
 | P2 | When close-map `resolved` at voxel XY, treat that as localize success even if Qwen says unknown. | Geometry over EQA letter. |
 | P2 | Dump query PNGs and fail the episode loudly if `vlm_assess` text looks like gradient/sky. | Catch camera-off-table. |
 | P3 | stretch_ai diff of `localize_with_feature_similarity` cosine 0.21 / YoloE `compute_obj_coord` vs current `voxel_dynamem.py` — only if P0 GPU misses. | True regression vs Hello Robot. |
@@ -89,8 +96,9 @@ CHAT already uses `get_voxel_map().localize_text` in `emet.agent.loop` /
 - Do not make `--oneshot-localize` the product path; oneshot is the **mapping
   ablation**. Agentic should **call** voxel, not skip the loop.
 - Do not stack Habitat/HM-EQA on the same GPU night as this S0 gate.
-- Do not treat VLM “The tv is at (x,y,z)” as a pose — that string is graph
-  dumping, which is why we score `localize_text` instead.
+- Do not add OVMM-harness-only localize rescues (`s0_parity` oneshot, camera
+  pose, interactive merge on agentic, `pin_phrases_after_mapping` of episode
+  YAML). Score through the agent (`inspect_graph` / graph node / live voxel).
 
 ## Commands
 

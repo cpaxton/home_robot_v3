@@ -1534,6 +1534,7 @@ def run_episode_find_phase(
             agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
             if obj_res.extra:
                 agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
+                agentic_meta["obj_from_pin"] = obj_res.extra.get("from_pin")
                 if obj_res.extra.get("voxel_query_used"):
                     obj_q_used = str(obj_res.extra["voxel_query_used"])
 
@@ -1564,6 +1565,7 @@ def run_episode_find_phase(
             agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
             if recep_res.extra:
                 agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
+                agentic_meta["recep_from_pin"] = recep_res.extra.get("from_pin")
                 if recep_res.extra.get("voxel_query_used"):
                     recep_q_used = str(recep_res.extra["voxel_query_used"])
         else:

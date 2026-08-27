@@ -164,8 +164,8 @@ Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perceptio
 
 Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
 
-**Default find path (dynagraph): agentic loop + DynaMem voxel XYZ.**
-Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py) — voxel `localize_text` becomes an investigate card, close-map stays on that XY, VLM verify is a check. **FindObj/FindRec score the voxel (or phrase-matched graph node) XYZ**, never camera pose. One-shot voxel without the loop (`--oneshot-localize` / `agentic_find: false`) remains an ablation of mapping quality. Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`. See [plans/2026-08-26_ovmm_voxel_close_map.md](plans/2026-08-26_ovmm_voxel_close_map.md).
+**Default find path (dynagraph): same AgenticEQA loop as HM-EQA.**
+Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py). The agent may call `inspect_graph` → live `localize_text` as an investigate card; close-map stays on that XY; VLM verify is a check. **FindObj/FindRec score XYZ the agent produced** (phrase-matched graph node or voxel), never camera pose and never a harness pin of episode YAML. `--oneshot-localize` / `agentic_find: false` is a leftover **mapping ablation**, not the product path and not the map-sanity check (that is pytest `test_red_cylinder_detected_in_sim`). Method: [dynagraph.md](dynagraph.md#method). Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`. See [plans/2026-08-26_ovmm_voxel_close_map.md](plans/2026-08-26_ovmm_voxel_close_map.md).
 
 **Query / scoring notes (agent language, no GT query leakage):**
 - The agent localizes with **episode task language** (`object` / `goal_recep`), not sim GT fixture paths.

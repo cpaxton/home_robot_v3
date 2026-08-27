@@ -11,6 +11,9 @@ import numpy as np
 from emet.mapping.voxel_localize import (
     localize_text_xyz,
     localize_text_xyz_from_phrases,
+    pin_localize_xyz,
+    pin_phrases_after_mapping,
+    pinned_localize_xyz,
     voxel_map_from_agent,
 )
 
@@ -19,8 +22,10 @@ class _Voxel:
     def __init__(self, hits: dict[str, list[float] | None]) -> None:
         self.hits = {k.lower(): v for k, v in hits.items()}
         self._last_localize_stats: dict[str, object] = {}
+        self.n_live = 0
 
     def localize_text(self, text, debug=False, return_debug=False):
+        self.n_live += 1
         q = str(text or "").strip().lower()
         pt = self.hits.get(q)
         self._last_localize_stats = {
@@ -71,3 +76,89 @@ def test_voxel_map_from_agent_uses_attribute_or_getter():
 
     assert voxel_map_from_agent(_Getter()) is not None
     assert voxel_map_from_agent(None) is None
+
+
+def test_voxel_map_from_agent_uses_getter_when_attr_lacks_localize():
+    class _Occupancy:
+        pass
+
+    semantic = _Voxel({"blue cube": [-0.02, -0.55, 0.6]})
+
+    class _Agent:
+        voxel_map = _Occupancy()
+
+        def get_voxel_map(self):
+            return semantic
+
+    assert voxel_map_from_agent(_Agent()) is semantic
+
+
+def test_localize_text_xyz_pins_first_hit_and_ignores_later_live():
+    vm = _Voxel({"red cylinder": [0.08, -0.55, 0.6]})
+    xyz, stats = localize_text_xyz(vm, "red cylinder")
+    assert xyz is not None
+    assert stats["from_pin"] is False
+    assert vm.n_live == 1
+
+    vm.hits["red cylinder"] = [9.0, 9.0, 9.0]
+    xyz2, stats2 = localize_text_xyz(vm, "red cylinder")
+    assert xyz2 is not None
+    assert np.allclose(xyz2, [0.08, -0.55, 0.6])
+    assert stats2["from_pin"] is True
+    assert vm.n_live == 1
+
+
+def test_localize_text_xyz_pin_survives_live_miss():
+    vm = _Voxel({"blue cube": [-0.02, -0.55, 0.6]})
+    localize_text_xyz(vm, "blue cube")
+    vm.hits.clear()
+    xyz, stats = localize_text_xyz(vm, "blue cube")
+    assert xyz is not None
+    assert np.allclose(xyz, [-0.02, -0.55, 0.6])
+    assert stats["from_pin"] is True
+    assert vm.n_live == 1
+
+
+def test_localize_text_xyz_from_phrases_prefers_pin_over_other_live_hits():
+    vm = _Voxel(
+        {
+            "red cylinder": [0.08, -0.55, 0.6],
+            "cylinder": [9.0, 9.0, 9.0],
+        }
+    )
+    pin_localize_xyz(vm, "red cylinder", [0.08, -0.55, 0.6], {"yoloe_hit": True})
+    vm.hits["red cylinder"] = None
+    xyz, used, stats = localize_text_xyz_from_phrases(vm, ["red cylinder", "cylinder"])
+    assert used == "red cylinder"
+    assert xyz is not None
+    assert np.allclose(xyz, [0.08, -0.55, 0.6])
+    assert stats["from_pin"] is True
+    assert vm.n_live == 0
+
+
+def test_pinned_localize_xyz_roundtrip():
+    vm = _Voxel({})
+    assert pinned_localize_xyz(vm, "table")[0] is None
+    pin_localize_xyz(vm, "table", [0.0, -0.5, 0.7])
+    xyz, stats = pinned_localize_xyz(vm, "table")
+    assert xyz is not None
+    assert np.allclose(xyz, [0.0, -0.5, 0.7])
+    assert stats["from_pin"] is True
+
+
+def test_pin_phrases_after_mapping_queries_each_phrase_once():
+    vm = _Voxel(
+        {
+            "red cylinder": [0.08, -0.55, 0.6],
+            "blue cube": [-0.02, -0.55, 0.6],
+        }
+    )
+    hits = pin_phrases_after_mapping(vm, ["red cylinder", "blue cube", "red cylinder"])
+    assert hits == {"red cylinder": True, "blue cube": True}
+    assert vm.n_live == 2
+    vm.hits.clear()
+    xyz, stats = localize_text_xyz(vm, "blue cube")
+    assert xyz is not None
+    assert np.allclose(xyz, [-0.02, -0.55, 0.6])
+    assert stats["from_pin"] is True
+    assert vm.n_live == 2

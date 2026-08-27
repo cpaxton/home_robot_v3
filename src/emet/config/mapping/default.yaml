@@ -87,6 +87,12 @@ eqa:
   #   persist_absent_claims: false
   # VLM router picks tools via the shared JSON tool-calling contract; false = deterministic fallback only.
   agentic_vlm_router: true
+  room_policy: canonical
+  # Room partition backend (geometry). Only proximity is implemented.
+  # occupancy_cc / portal are stubs for a later sweep. Override:
+  # EMET_EQA_ROOM_CLUSTERING_BACKEND=proximity
+  room_clustering:
+    backend: proximity
   collect_agentic_trace: false
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000

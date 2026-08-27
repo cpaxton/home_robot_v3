@@ -39,7 +39,7 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 
 | Area | Change |
 |------|--------|
-| Hypothesis recall | `_recall_nav_hypotheses()` + OVMM GT placement seeds |
+| Hypothesis recall | `_recall_nav_hypotheses()`; voxel `localize_text` cards from the **question**, not episode YAML / GT placement seeds |
 | find_recep routing | Nearby investigate bias; skip `_prefer_explore` when recep card is close |
 | Trace meta | richer OVMM `trace_meta` |
 | Router observability | `nav_outcome` in Recent actions |

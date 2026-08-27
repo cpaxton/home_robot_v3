@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import voxel_map_from_agent
 from emet.memory.graph_eqa.agentic_config import (
     DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
     INVESTIGATE_ANNULUS_OUTER_M,
@@ -432,7 +433,9 @@ class AgenticPlaceMixin:
 
     def _voxel_planner(self) -> tuple[Any | None, Any | None]:
         agent = self.agent
-        voxel_map = getattr(agent, "voxel_map", None)
+        voxel_map = voxel_map_from_agent(agent)
+        if voxel_map is None:
+            voxel_map = getattr(agent, "voxel_map", None)
         planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
         return voxel_map, planner
 

@@ -324,6 +324,10 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [ ] **Robot self-filter lost in DynaMem `add()`**: `voxel_dynamem.py:1109` copies base `voxel.py:403` minus the URDF mesh self-filter — the robot may see itself on real hardware. Reintroduce or document why it is off.
 - [ ] **Split `query_answer` + de-dup renumber/rebuild blocks**: `build_eqa_prompt_text` is extracted (#104); `query_answer` is still ~477 lines — still need `run_eqa_prompt(commands)` / `finalize_eqa_answer(parsed)`. The renumber+rebuild block in `maintain`/`_drop_nodes_near`/`absorb_object_node` is copy-pasted 5×.
 - [ ] **Rooms as first-class nodes**: runtime `RoomCluster` + prompt `Rooms:` / `(room)` tags exist; still recompute every refresh. Persist room id / name / bounds on nodes and in `graph.json` exports.
+- [x] **`room_clustering/` + `partition()` + `proximity`**: naive `near` + XY radius; `room_clusters.py` is the naming/stamp facade.
+- [ ] **`occupancy_cc` room backend**: flood-fill free/explored cells on the voxel 2D map; assign instance nodes to occupancy CCs (respects mapped walls).
+- [ ] **`portal` room backend**: occupancy CCs cut at narrow passages / doors.
+- [ ] **Room clustering backend sweep** once a second geometry backend exists (`eqa.room_clustering.backend` / `EMET_EQA_ROOM_CLUSTERING_BACKEND`). Do not mix with OVMM S0 instance labeling.
 - [ ] **Bound voxel memory growth**: `observations` never pruned, `semantic_memory` keeps every subsampled point, pickles dump everything. Trim frames + downsample old semantic points on a schedule.
 - [ ] **Prefix-KV timeout leaves a live CUDA worker** (`qwen3_vl_client.py:549-569` raises while the generate thread keeps running): next generate can race. Serialize on a lock or hard-kill the worker.
 - [ ] **Silent exception hygiene**: ~23 `except Exception` in graph_memory.py — at least `_logger.debug` with node/obs context. (Bare `except:` in `voxel_dynamem.list_objects_in_an_image` now logs and retries.)
