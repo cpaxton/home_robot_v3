@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from emet.utils.cpu_affinity import (
+    apply_eval_affinity,
     cpus_at_or_above_mhz,
     format_taskset_list,
     safe_cpu_ids,
@@ -62,3 +63,10 @@ def test_safe_cpu_ids_never_empty(tmp_path: Path) -> None:
     # Excluding everything falls back to online rather than pinning nowhere.
     kept = safe_cpu_ids(exclude_min_mhz=6000.0, sysfs_root=tmp_path)
     assert kept == [0, 1]
+
+
+def test_apply_eval_affinity_honors_skip(monkeypatch) -> None:
+    monkeypatch.setenv("EMET_SKIP_CPU_AFFINITY", "1")
+    summary = apply_eval_affinity()
+    assert summary["skipped"] is True
+    assert "EMET_SKIP_CPU_AFFINITY" in str(summary["reason"])

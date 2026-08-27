@@ -149,7 +149,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `NATIVE_CRASH_RETRIES` | H2H | Retries of the same qid after a native crash under `skip` (default `1`). |
 | `NATIVE_CRASH_SETTLE_SEC` | H2H | Sleep after native crash before retry/next (default `60`). |
 | `NATIVE_CRASH_STREAK_ABORT` | H2H / `emet hmeqa --streak-abort` | Under `skip`, abort after N **consecutive** native crashes (default `2`; early exit when harness is wedged). `0` = never. |
-| `EMET_SKIP_CPU_AFFINITY` | H2H / `emet eval affinity` | Set `1` to skip pinning away from turbo P-cores (default: affinity **on** / fail-closed). |
+| `EMET_SKIP_CPU_AFFINITY` | H2H / `emet eval affinity` / `python -m emet.utils.cpu_affinity` / `emet jobs --cpu-safe` | Set `1` to skip pinning away from turbo P-cores (default: affinity **on** / fail-closed). |
 | `EMET_EXCLUDE_CPU_MIN_MHZ` | `emet.utils.cpu_affinity` / `emet eval affinity` | Exclude logical CPUs whose sysfs `cpuinfo_max_freq` is ≥ this many MHz (default `6000`). On the i9-14900KF that removes CPUs **8–11**. Do **not** use `taskset -c 0-7,10-31`. |
 | `EMET_CPU_EXCLUDE` / `EMET_CPU_ALLOW` | `emet.utils.cpu_affinity` | Optional extra exclude list, or explicit allow list (csv / ranges). |
 | `EPISODE_COOLDOWN_SEC` | H2H / `emet hmeqa --cooldown` | Seconds to `sync` + sleep after each episode (default `20`; `0` disables). |

@@ -16,6 +16,7 @@
 """Tests for the emet CLI."""
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -41,6 +42,41 @@ def test_cli_help():
     assert "jobs" in result.stdout
     assert "hmeqa" in result.stdout
     assert "debug-da3-depth" in result.stdout
+    assert "export-sim-gt" in result.stdout
+    assert "ovmm" in result.stdout
+
+
+def _assert_cli_argv_does_not_import_mujoco(argv: list[str]) -> None:
+    code = (
+        "import os\n"
+        "import sys\n"
+        "os.environ['EMET_UV_RUN'] = '1'\n"
+        "from click.testing import CliRunner\n"
+        "from emet.cli import main\n"
+        f"r = CliRunner().invoke(main, {argv!r})\n"
+        "assert r.exit_code == 0, r.output\n"
+        "assert 'mujoco' not in sys.modules\n"
+        "assert 'emet.app.export_sim_gt' not in sys.modules\n"
+        "assert 'emet.simulation.mujoco_gt_objects' not in sys.modules\n"
+        "assert 'emet.app.eval_ovmm' not in sys.modules\n"
+    )
+    env = os.environ.copy()
+    env["EMET_UV_RUN"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+
+def test_cli_import_and_help_do_not_load_mujoco():
+    """jobs/eval/--help must not import MuJoCo (post-sim wrapper SIGSEGV)."""
+    _assert_cli_argv_does_not_import_mujoco(["--help"])
+    _assert_cli_argv_does_not_import_mujoco(["jobs", "--help"])
+    _assert_cli_argv_does_not_import_mujoco(["eval", "--help"])
+    _assert_cli_argv_does_not_import_mujoco(["eval", "affinity"])
 
 
 def test_eval_group_help():
@@ -578,6 +614,59 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
     assert "jobs register --job-id" in wrapper
     assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
+
+
+def test_jobs_run_cpu_safe_wrapper_uses_light_affinity(tmp_path):
+    """cpu-safe must not invoke the full emet CLI (MuJoCo import after sim teardown)."""
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "out"
+    marker = out_dir / "child-ran"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_SKIP_CPU_AFFINITY"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "cpu-safe-light-affinity",
+            "--cpu-safe",
+            "--no-gpu-exclusive",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    job_id = result.stdout.strip().splitlines()[-1]
+    record_path = jobs_dir / f"{job_id}.json"
+
+    deadline = time.monotonic() + 10.0
+    record = {}
+    while time.monotonic() < deadline:
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            if record.get("status") in {"done", "failed"}:
+                break
+        time.sleep(0.05)
+
+    assert record.get("status") == "done", record
+    assert marker.read_text(encoding="utf-8") == "ok"
+    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "emet.utils.cpu_affinity" in wrapper
+    assert "eval affinity --apply" not in wrapper
 
 
 def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):

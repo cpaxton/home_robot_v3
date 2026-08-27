@@ -18,11 +18,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from emet.utils.cpu_affinity import (
-    apply_affinity,
-    cpus_at_or_above_mhz,
-    format_taskset_list,
-    online_cpu_ids,
-    safe_cpu_ids,
+    affinity_summary_dict as affinity_summary_dict,
+)
+from emet.utils.cpu_affinity import (
+    apply_eval_affinity as apply_eval_affinity,
 )
 from emet.utils.job_registry import write_progress_file
 from emet.utils.process_tree import kill_process_tree, popen_session, terminate_process_tree
@@ -117,49 +116,6 @@ def native_signal_name(returncode: int) -> str | None:
         except (ValueError, AttributeError):
             return f"signal_{sig}"
     return None
-
-
-def apply_eval_affinity(
-    *,
-    pid: int | None = None,
-    exclude_min_mhz: float | None = None,
-    fail_closed: bool = True,
-) -> dict[str, Any]:
-    """Pin ``pid`` (default current) away from turbo CPUs; optionally fail closed."""
-    if exclude_min_mhz is None:
-        exclude_min_mhz = float(os.environ.get("EMET_EXCLUDE_CPU_MIN_MHZ", "6000") or "6000")
-    if str(os.environ.get("EMET_SKIP_CPU_AFFINITY", "0")).strip() == "1":
-        return {"skipped": True, "reason": "EMET_SKIP_CPU_AFFINITY=1"}
-
-    mhz = exclude_min_mhz if exclude_min_mhz > 0 else None
-    turbo = cpus_at_or_above_mhz(mhz) if mhz else []
-    kept = safe_cpu_ids(exclude_min_mhz=mhz)
-    compact = format_taskset_list(kept)
-    target = os.getpid() if pid is None else int(pid)
-    apply_affinity(kept, pid=target)
-
-    try:
-        actual = sorted(os.sched_getaffinity(target))
-    except (AttributeError, OSError, PermissionError) as exc:
-        if fail_closed:
-            raise RuntimeError(f"could not verify CPU affinity for pid {target}: {exc}") from exc
-        return {"applied": compact, "turbo_cpus": turbo, "verified": False, "error": str(exc)}
-
-    leaked = sorted(set(actual) & set(turbo)) if turbo else []
-    summary = {
-        "applied": compact,
-        "turbo_cpus": turbo,
-        "kept": kept,
-        "actual": actual,
-        "leaked_turbo": leaked,
-        "verified": not leaked,
-        "pid": target,
-    }
-    if leaked and fail_closed:
-        raise RuntimeError(
-            f"CPU affinity still includes turbo CPUs {leaked}; wanted mask {compact} (exclude >={exclude_min_mhz} MHz)"
-        )
-    return summary
 
 
 def run_timed_command(
@@ -366,19 +322,6 @@ def resolve_hmeqa_out(explicit: str | Path | None = None) -> Path:
         if cands:
             return cands[0].resolve()
     raise FileNotFoundError("Could not resolve HM-EQA OUT; pass an explicit path or set EMET_HMEQA_OUT")
-
-
-def affinity_summary_dict() -> dict[str, Any]:
-    mhz = float(os.environ.get("EMET_EXCLUDE_CPU_MIN_MHZ", "6000") or "6000")
-    turbo = cpus_at_or_above_mhz(mhz) if mhz > 0 else []
-    kept = safe_cpu_ids(exclude_min_mhz=mhz if mhz > 0 else None)
-    return {
-        "exclude_min_mhz": mhz,
-        "online": online_cpu_ids(),
-        "turbo_cpus": turbo,
-        "kept": kept,
-        "taskset": format_taskset_list(kept),
-    }
 
 
 def settle_after_crash(

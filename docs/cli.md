@@ -1,6 +1,6 @@
 # Emet CLI Tool
 
-The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below). Click groups live under `emet.cli_cmds`; [`src/emet/cli.py`](../src/emet/cli.py) is the registrar (`emet.cli:main`).
+The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below). Click groups live under `emet.cli_cmds`; [`src/emet/cli.py`](../src/emet/cli.py) is the registrar (`emet.cli:main`). Sim-heavy top-level commands (`export-sim-gt`, `eval-dynagraph`, `ovmm`, `debug-da3-depth`, …) are **lazy**: `emet jobs`, `emet eval`, and `emet --help` do not import MuJoCo.
 
 ## Installation
 
@@ -773,7 +773,7 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. **cpu-safe** pins via `python -m emet.utils.cpu_affinity` (not `emet eval affinity`) so the wrapper does not import MuJoCo after the previous sim job releases the lock. |
 
 `emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. The host-wide `flock` is the serialization authority for exclusive jobs; the launcher does not infer and wait on unrelated active GPU PIDs. Only explicit `--wait-pid` prerequisites are waited, and all PID, lock, and optional pre-command GPU waits are bounded (defaults: six hours for PID/lock, 120 GPU polling rounds). The canonical shared lock is `~/runs/emet/gpu.lock` (`EMET_GPU_LOCK`); `EMET_GPU_LOCK_FILE` is a compatibility alias. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
@@ -831,7 +831,7 @@ Canonical GPU preflight for paper evals and overnight smokes (Python implementat
 | `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
 | `emet eval wait [--need-mib N] [--max-rounds N]` | Wait until free VRAM is stably above N, bounded by 120 rounds by default |
 | `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
-| `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask |
+| `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask (stdlib affinity helpers only; does not import OVMM/MuJoCo) |
 | `emet eval recover [--need-mib N] [--max-rounds N]` | `status` + `diagnose` + bounded `wait` one-shot (post-crash / post-reboot) |
 
 Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [known_issues.md](known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals), and [environment_variables.md](environment_variables.md).
