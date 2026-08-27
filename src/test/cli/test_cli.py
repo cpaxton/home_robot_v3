@@ -1133,7 +1133,7 @@ def test_install_completion_help():
 
 
 def test_ovmm_help():
-    """emet ovmm --help lists find/full/prepare/sweep/rates/status."""
+    """emet ovmm --help lists find/full/prepare/sweep/rates/status/probe-map/probe-verify."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "ovmm", "--help"],
         capture_output=True,
@@ -1147,6 +1147,8 @@ def test_ovmm_help():
     assert "sweep" in out
     assert "rates" in out
     assert "status" in out
+    assert "probe-map" in out
+    assert "probe-verify" in out
 
 
 def test_sqa3d_help():

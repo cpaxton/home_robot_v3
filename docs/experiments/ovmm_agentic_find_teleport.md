@@ -10,12 +10,37 @@ North star: raise **FindObj** and **FindRec** under teleport dynagraph — but
 
 | Profile | Episodes | Rounds | Target wall |
 |---------|----------|--------|-------------|
-| `smoke` (default) | `default_table_rby1_s0_distinct_recep` | 4 | ~5–15 min |
-| `slice` | + `robocasa_rby1_pp_s1` | 4 | ~15–40 min |
+| `oneshot` | `default_table_rby1_s0_distinct_recep` | mapping + voxel localize only | ~1–3 min |
+| `verify` | Robocasa rby1 PickPlace | GT drive-up + YOLOE/SigLIP on current RGB | ~5–15 min |
+| `smoke` (default) | same S0 table, agentic | 6 | ~5–15 min |
+| `slice` | + `robocasa_rby1_pp_s1` | 6 | ~15–40 min |
 | `stretch-legacy` | old Stretch S0/S1/S2 trio | 8 | hours — overnight only |
 
+**Iterate here, not on Stretch `molmo-robocasa-find8`.** The table episode backs up and looks at the workspace (`_prepare_default_table_rby1_mapping_view`) so red cylinder / blue cube are in view after a 4-step spin. This morning’s rby1 smoke: FindObj **1/1** in **106 s** (voxel XYZ). Stretch kitchen find8 is ~3 h/episode with head sweeps and `goal_recep: cab` (VLM looks for the word “cab”). PickPlace `obj_main` is often a sugar cube — `emet ovmm probe-verify` skips that and aims from spawn at a jar/bottle/bowl-class body (`emet.eval.ovmm_probe_targets`). Offline dumps: `emet ovmm probe-map`.
+
+Saved maps (no new sim): `~/.cache/emet/scene_maps/<key>/voxel_map.pkl` + `graph.json`. Probe without MuJoCo:
+
 ```bash
-# Routine (preferred):
+uv run emet ovmm probe-map --list
+uv run emet ovmm probe-map --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+# SigLIP on the pickle (GPU, still no sim):
+uv run emet jobs run --name ovmm-probe-map-voxel --need-mib 8000 --gpu-exclusive -- \
+  uv run emet ovmm probe-map --voxel --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+```
+
+The July Robocasa L1 Stretch GT cache has **cabinet/counter** nodes and **zero `jar` labels** — graph FindObj cannot succeed until mapping actually names the object. Live `category_matches` is a substring, so query `cab` still hits `cabinet`.
+
+```bash
+# Fastest GPU inner loop (spin + voxel localize, no 8-round VLM wander):
+PROFILE=oneshot uv run emet jobs run --name ovmm-find-rby1-oneshot --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+
+# Live kitchen: teleport to GT jar/cabinet and verify on the head camera (no AgenticEQA):
+PROFILE=verify uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+# or: uv run emet ovmm probe-verify --out OUT
+
+# Routine agentic gate:
 uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- \
   ./scripts/run_ovmm_find_recep_slice.sh
 

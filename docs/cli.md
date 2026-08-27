@@ -581,8 +581,10 @@ OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). D
 | `sweep` | `prepare` → find → full → `rates` (paper multi-env path) |
 | `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
 | `status` | Per-episode outcomes + bind-fail counts |
+| `probe-map` | Query a saved scene map (`graph.json` / optional `voxel_map.pkl`) with no sim |
+| `probe-verify` | Spawn Robocasa, aim from a navigable floor pose, score YOLOE + SigLIP on head RGB |
 
-**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find is the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions) — method in [dynagraph.md](dynagraph.md#method). `localize_text` is an investigate card and the scored XYZ (never camera pose). The harness does **not** pin episode YAML phrases. Preset `agentic_find: true`. `--oneshot-localize` / `emet ovmm full --oneshot-localize` is a leftover **mapping ablation**, not the product path. Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find is the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions) — method in [dynagraph.md](dynagraph.md#method). `localize_text` is an investigate card and the scored XYZ (never camera pose). The harness does **not** pin episode YAML phrases. Preset `agentic_find: true`. `--oneshot-localize` / `emet ovmm full --oneshot-localize` is a leftover **mapping ablation**, not the product path. Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident). `emet ovmm probe-map` matches find phrases against a dumped map. `emet ovmm probe-verify` is the live drive-up check (rby1 + teleport, no AgenticEQA).
 
 **Examples:**
 ```bash
@@ -597,6 +599,11 @@ uv run emet ovmm full --episodes OUT/full_episodes.yaml --backend dynagraph --ma
   --port-stride 4 --output-dir OUT/full
 uv run emet ovmm rates --out OUT
 uv run emet ovmm status --out OUT
+uv run emet ovmm probe-map --list
+uv run emet ovmm probe-map --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+# Live Robocasa: drive up to GT jar/cabinet and verify on the current view
+uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusive -- \
+  uv run emet ovmm probe-verify
 ```
 
 Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.

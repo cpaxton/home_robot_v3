@@ -6,19 +6,26 @@
 # Fast OVMM agentic-find gate (rby1; no Stretch head sweeps).
 #
 # Profiles (env PROFILE):
-#   smoke (default)  1x rby1 S0, mapping-rotate-steps 4, max 4 rounds (~5-15 min)
-#   slice            2x rby1 (S0 + RoboCasa S1), max 4 rounds (~15-40 min)
+#   oneshot          1x rby1 S0, 4-step spin, --oneshot-localize (no AgenticEQA)
+#                    ~1–3 min. Inner loop: is the object in the voxel map?
+#   verify           Robocasa rby1 drive-up + YOLOE/SigLIP on current RGB (~5–15 min)
+#   smoke (default)  1x rby1 S0, mapping-rotate-steps 4, max 6 rounds (~5-15 min)
+#   slice            2x rby1 (S0 + RoboCasa S1), max 6 rounds (~15-40 min)
 #   stretch-legacy   old Stretch 3-ep slice (hours — overnight / paper only)
 #
 # Usage (GPU-mutexed):
+#   PROFILE=verify uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusive -- \
+    #     ./scripts/run_ovmm_find_recep_slice.sh
+#   PROFILE=oneshot uv run emet jobs run --name ovmm-find-rby1-oneshot --need-mib 8000 --gpu-exclusive -- \
+    #     ./scripts/run_ovmm_find_recep_slice.sh
 #   uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- ./scripts/run_ovmm_find_recep_slice.sh
 #   PROFILE=slice uv run emet jobs run --name ovmm-find-rby1-slice --need-mib 8000 --gpu-exclusive -- ./scripts/run_ovmm_find_recep_slice.sh
 #
 # Env:
 #   OUT_DIR               artifact dir
-#   PROFILE               smoke | slice | stretch-legacy
-#   AGENTIC_MAX_ROUNDS    default 4 (smoke/slice); stretch-legacy uses 8
-#   MAPPING_ROTATE_STEPS  default 4 (smoke/slice); use 8 for voxel-coverage checks
+#   PROFILE               oneshot | verify | smoke | slice | stretch-legacy
+#   AGENTIC_MAX_ROUNDS    default 6 (smoke/slice); stretch-legacy uses 8
+#   MAPPING_ROTATE_STEPS  default 4 (smoke/slice/oneshot); use 8 for voxel-coverage checks
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,7 +45,15 @@ export EMET_SKIP_HEAD_SWEEP=1
 MAP_ROTATE="${MAPPING_ROTATE_STEPS:-4}"
 EXTRA=()
 
-if [[ "$PROFILE" == "smoke" ]]; then
+if [[ "$PROFILE" == "oneshot" ]]; then
+    EPISODES=(default_table_rby1_s0_distinct_recep)
+    ROUNDS="${AGENTIC_MAX_ROUNDS:-1}"
+    EXTRA=(--mapping-rotate-steps "$MAP_ROTATE" --oneshot-localize)
+elif [[ "$PROFILE" == "verify" ]]; then
+    echo "PROFILE=verify OUT=$OUT"
+    export EMET_SIM_NAV_TELEPORT=1
+    exec uv run emet ovmm probe-verify --out "$OUT"
+elif [[ "$PROFILE" == "smoke" ]]; then
     EPISODES=(default_table_rby1_s0_distinct_recep)
     ROUNDS="${AGENTIC_MAX_ROUNDS:-6}"
     EXTRA=(--mapping-rotate-steps "$MAP_ROTATE")
@@ -52,7 +67,7 @@ elif [[ "$PROFILE" == "stretch-legacy" ]]; then
     EXTRA=()
     unset EMET_SKIP_HEAD_SWEEP
 else
-    echo "FATAL: unknown PROFILE=$PROFILE (want smoke|slice|stretch-legacy)" >&2
+    echo "FATAL: unknown PROFILE=$PROFILE (want oneshot|verify|smoke|slice|stretch-legacy)" >&2
     exit 2
 fi
 
