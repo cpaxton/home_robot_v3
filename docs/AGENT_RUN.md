@@ -55,7 +55,7 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 | Orchestrator mode | Entry | Pack | Stop / answer |
 |-------------------|-------|------|----------------|
 | **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, `scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`, Discord send_*, … (metadata in `CHAT_SKILL_SPECS`; funcs bind in `build_chat_tools`) | User turns; explore is turn-blocking |
-| **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify`; OVMM find (dynagraph) via same executor | `investigate` / `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` (`EQA_SKILL_SPECS`) | VLM-assess answerable → submit (or explore `finish`); detectors are proposals only |
+| **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify`; OVMM find (dynagraph) via same executor | `inspect_graph`, `investigate` / `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` (`EQA_SKILL_SPECS`) | VLM-assess answerable → submit (or explore `finish`); detectors are proposals only |
 
 OVMM find questions (`Where is the jar on the counter?`) use the **same** `AgenticEQAExecutor` as HM-EQA — not a parallel find loop. `--oneshot-localize` is a leftover mapping ablation, not the method. See [dynagraph.md](dynagraph.md#method) and [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md).
 
@@ -99,7 +99,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | `open_vocab` | `DynamemController` | OpenVocabSceneGraph only (`emet run scene-graph`) |
 | `dynamem` | `DynamemController` | Voxels only (no graph plug-in) |
 
-Nested `embodied_agent.*.enabled` flags are **coerced** from this enum so OpenVocab and GraphEQA are never both live. Tuning (instance graph, fusion, OV config name) still lives under `embodied_agent:`.
+The Python package is `emet.memory.graph_eqa` for both `dynagraph` and `static_graph` (code layout: [graph_memory.md](graph_memory.md)). Nested `embodied_agent.*.enabled` flags are **coerced** from this enum so OpenVocab and GraphEQA are never both live. Tuning (instance graph, fusion, OV config name) still lives under `embodied_agent:`.
 
 **Mapping keys** live under **`mapping:`** in config. Reference: [Dynav / mapping configuration](dynav_config.md).
 

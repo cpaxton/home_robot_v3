@@ -62,7 +62,7 @@ from emet.mapping.voxel import (
 )
 from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
-from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
+from emet.memory.graph_eqa.ingest.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion import constants as motion_constants
 from emet.motion.algo.a_star import AStar, default_min_clearance_m
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
@@ -442,7 +442,7 @@ class DynamemController(BaseController):
         gm = self.graph_memory
         if gm is None or not getattr(gm, "frontier_nodes_enabled", False):
             return
-        from emet.memory.graph_eqa.dynamem_graph_hooks import sync_graph_frontier_nodes
+        from emet.memory.graph_eqa.ingest.dynamem_graph_hooks import sync_graph_frontier_nodes
 
         question = getattr(self, "_eqa_question", None)
         sync_graph_frontier_nodes(
@@ -498,7 +498,7 @@ class DynamemController(BaseController):
         gm = getattr(self, "graph_memory", None)
         if gm is None or not getattr(gm, "frontier_nodes_enabled", True):
             return None
-        from emet.memory.graph_eqa.frontier_nodes import exploration_keywords_from_text, keyword_overlap_score
+        from emet.memory.graph_eqa.spatial.frontier_nodes import exploration_keywords_from_text, keyword_overlap_score
 
         frontier_nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
         if not frontier_nodes:
@@ -705,7 +705,7 @@ class DynamemController(BaseController):
                 self._graph_dedup_xy_m = float(
                     parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
                 )
-            from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+            from emet.memory.graph_eqa.graph_object_fusion.attach import attach_graph_object_fusion
 
             self._graph_object_fusion = attach_graph_object_fusion(
                 self.graph_memory,
@@ -1046,7 +1046,7 @@ class DynamemController(BaseController):
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
         if self._run_full_perception() and self.graph_memory is not None and getattr(self, "_lazy_graph_mode", False):
-            from emet.memory.graph_eqa.lazy_graph_commit import record_lazy_graph_viewpoint
+            from emet.memory.graph_eqa.ingest.lazy_graph_commit import record_lazy_graph_viewpoint
 
             record_lazy_graph_viewpoint(
                 graph_memory=self.graph_memory,
@@ -1060,7 +1060,7 @@ class DynamemController(BaseController):
             and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler)
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
-                from emet.memory.graph_eqa.dynamem_graph_hooks import (
+                from emet.memory.graph_eqa.ingest.dynamem_graph_hooks import (
                     update_graph_memory_ground_truth_from_observation,
                 )
 
@@ -1071,7 +1071,9 @@ class DynamemController(BaseController):
                     frame_step=self.obs_count,
                 )
             else:
-                from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+                from emet.memory.graph_eqa.ingest.dynamem_graph_hooks import (
+                    update_graph_memory_from_dynamem_observation,
+                )
 
                 update_graph_memory_from_dynamem_observation(
                     graph_memory=self.graph_memory,

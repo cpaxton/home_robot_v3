@@ -1,5 +1,7 @@
 # GraphEQA: Plan for Adding a Graph-Based Memory Model
 
+> **Historical (2025).** `GraphEQAExecuter` never shipped. Current package layout, `GraphStore`, and the two EQA loops are in **[graph_memory.md](../graph_memory.md)**. Do not treat this file as the live architecture.
+
 This document outlines the plan to add **GraphEQA** as a separate memory model for Embodied Question Answering (EQA), similar to DynaMem but using a **graph-based semantic memory** instead of a voxel-based one. The implementation is a **re-implementation** inspired by the [GraphEQA paper](https://arxiv.org/abs/2412.14480) and the [graph_eqa repository](https://github.com/SaumyaSaxena/graph_eqa); the original code is not open, so we do not copy it.
 
 ## Motivation
