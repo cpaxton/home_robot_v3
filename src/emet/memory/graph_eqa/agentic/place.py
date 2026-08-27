@@ -37,9 +37,9 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def _investigate_hypotheses(self) -> list[NavHypothesis]:
     return [h for h in self._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+
 
 def _place_anchor_xy(self, obs_id: int, hyp: NavHypothesis | None) -> tuple[float, float] | None:
     if hyp is not None:
@@ -55,12 +55,14 @@ def _place_anchor_xy(self, obs_id: int, hyp: NavHypothesis | None) -> tuple[floa
                 return float(xyz[0]), float(xyz[1])
     return None
 
+
 def _dist_to_anchor_m(self, obs_id: int, hyp: NavHypothesis | None) -> float | None:
     anchor = self._place_anchor_xy(obs_id, hyp)
     robot = self._robot_xyt_world()
     if anchor is None or robot is None:
         return None
     return float(np.hypot(float(robot[0]) - anchor[0], float(robot[1]) - anchor[1]))
+
 
 def _hypothesis_for_obs_id(self, obs_id: int) -> NavHypothesis | None:
     oid = int(obs_id)
@@ -72,8 +74,21 @@ def _hypothesis_for_obs_id(self, obs_id: int) -> NavHypothesis | None:
             return h
     return None
 
+
 def _hypothesis_nav_anchor_xyz(self, obs_id: int) -> np.ndarray | None:
     """Object anchor for investigate standoff + arrival yaw (graph obs or synthetic hyp)."""
+    from emet.mapping.voxel_localize import is_proposal_handle
+
+    if is_proposal_handle(obs_id):
+        hyp = self._hypothesis_for_obs_id(obs_id)
+        if hyp is not None:
+            try:
+                xyz = np.asarray(hyp.xyz, dtype=float).reshape(-1)
+            except (TypeError, ValueError):
+                xyz = None
+            if xyz is not None and xyz.size >= 2 and np.isfinite(xyz[:2]).all():
+                return xyz[:3].copy() if xyz.size >= 3 else np.array([xyz[0], xyz[1], 0.0], dtype=float)
+        return None
     gm = self.graph_memory
     if gm is not None and hasattr(gm, "_obs_nav_anchor"):
         try:
@@ -97,10 +112,12 @@ def _hypothesis_nav_anchor_xyz(self, obs_id: int) -> np.ndarray | None:
             return xyz[:3].copy() if xyz.size >= 3 else np.array([xyz[0], xyz[1], 0.0], dtype=float)
     return None
 
+
 def _investigate_annulus_outer_m(self) -> float:
     if self._prefers_nearby_investigate():
         return INVESTIGATE_ANNULUS_OUTER_M
     return DEFAULT_INVESTIGATE_ANNULUS_OUTER_M
+
 
 def _investigate_arrival_look_at_xy(self, obs_id: int, target: np.ndarray) -> tuple[float, float]:
     anchor = self._hypothesis_nav_anchor_xyz(obs_id)
@@ -108,6 +125,7 @@ def _investigate_arrival_look_at_xy(self, obs_id: int, target: np.ndarray) -> tu
         return float(anchor[0]), float(anchor[1])
     t_arr = np.asarray(target, dtype=float).reshape(-1)
     return float(t_arr[0]), float(t_arr[1])
+
 
 def _sample_investigate_waypoint_at_anchor(
     self,
@@ -176,6 +194,7 @@ def _sample_investigate_waypoint_at_anchor(
         return _as_xy(gm._standoff_waypoint_toward(robot_xy, anchor))
     return _as_xy(anchor)
 
+
 def _record_place_inspect(
     self,
     obs_id: int,
@@ -186,9 +205,7 @@ def _record_place_inspect(
 ) -> PlaceInspectRecord:
     oid = int(obs_id)
     rec = self._place_inspect.get(oid) or PlaceInspectRecord()
-    dist = (
-        float(closest_m) if closest_m is not None else (float(rec.closest_m) if rec.closest_m is not None else 99.0)
-    )
+    dist = float(closest_m) if closest_m is not None else (float(rec.closest_m) if rec.closest_m is not None else 99.0)
     if rec.closest_m is None or dist < float(rec.closest_m):
         rec.closest_m = dist
     verify_status = ""
@@ -237,12 +254,14 @@ def _record_place_inspect(
         self._prefer_explore_reason = "absent"
     return rec
 
+
 def _place_approaches_exhausted(self, obs_id: int) -> bool:
     """True when the fixed approach sample budget is spent."""
     rec = self._place_inspect.get(int(obs_id))
     if rec is None:
         return False
     return int(rec.approaches_left) <= 0
+
 
 def _next_approach_index(self, obs_id: int, *, prefer: int | None = None) -> int | None:
     """Next unused approach sample index, or None if count-exhausted."""
@@ -257,6 +276,7 @@ def _next_approach_index(self, obs_id: int, *, prefer: int | None = None) -> int
             return i
     return None
 
+
 def _place_close_and_absent(self, obs_id: int) -> bool:
     rec = self._place_inspect.get(int(obs_id))
     if rec is None or not rec.approached_close or rec.investigate_count <= 0:
@@ -266,6 +286,7 @@ def _place_close_and_absent(self, obs_id: int) -> bool:
     if rec.last_assess_present is False:
         return True
     return str(rec.last_verify).upper() in {"ABSENT", "SKIPPED_SAME_VIEW"}
+
 
 def _labels_for_room_stamp(self, obs_id: int, hyp: NavHypothesis | None = None) -> list[str]:
     """Local labels for room stamping: hyp node labels + this obs only.
@@ -291,6 +312,7 @@ def _labels_for_room_stamp(self, obs_id: int, hyp: NavHypothesis | None = None) 
                     labels.append(s)
             break
     return labels[:48]
+
 
 def _stamp_room_after_investigate(
     self,
@@ -429,6 +451,7 @@ def _stamp_room_after_investigate(
         )
     return payload
 
+
 def _voxel_planner(self) -> tuple[Any | None, Any | None]:
     agent = self.agent
     voxel_map = voxel_map_from_agent(agent)
@@ -436,6 +459,7 @@ def _voxel_planner(self) -> tuple[Any | None, Any | None]:
         voxel_map = getattr(agent, "voxel_map", None)
     planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
     return voxel_map, planner
+
 
 def _known_room_for_event(self) -> str:
     """Canonical room label for timeline writes; empty when unknown (never invent)."""
@@ -446,6 +470,7 @@ def _known_room_for_event(self) -> str:
         if room != "unknown":
             return room
     return ""
+
 
 def _record_room_timeline(
     self,
@@ -479,6 +504,7 @@ def _record_room_timeline(
         _logger.warning(f"record_room_event failed: {e}")
         return None
 
+
 def _refresh_place_coverage(self, obs_id: int) -> PlaceInspectRecord:
     """Update Investigate-card coverage= from footprint ∩ unexplored frontier."""
     oid = int(obs_id)
@@ -510,6 +536,7 @@ def _refresh_place_coverage(self, obs_id: int) -> PlaceInspectRecord:
         )
     return rec
 
+
 def _mark_approach_tried(
     self,
     obs_id: int,
@@ -527,6 +554,7 @@ def _mark_approach_tried(
         if all(math.hypot(xy[0] - p[0], xy[1] - p[1]) > 0.25 for p in rec.tried_xy):
             rec.tried_xy.append(xy)
     self._place_inspect[oid] = rec
+
 
 def _investigate_target_xyz(self, obs_id: int, approach_index: int) -> np.ndarray | None:
     gm = self.graph_memory
@@ -630,6 +658,7 @@ def _investigate_target_xyz(self, obs_id: int, approach_index: int) -> np.ndarra
             _logger.debug(f"synthetic approach sample failed for obs_id={obs_id}: {e}")
         return _as_xy(anchor_xyz)
     return None
+
 
 def _maybe_retract_claim_after_station(
     self,

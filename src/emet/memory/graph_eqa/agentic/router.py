@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.prompt import parse_tool_calls_response
+from emet.mapping.voxel_localize import is_proposal_handle
 from emet.memory.graph_eqa.agentic.config import (
     _FALSE,
     _TRUE,
@@ -24,6 +25,7 @@ from emet.memory.graph_eqa.agentic.tools import (
     build_agentic_eqa_tools,
     build_graph_eqa_system_prompt,
     build_state_message,
+    coerce_room_label,
 )
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.memory.graph_eqa.spatial.room_clusters import (
@@ -32,11 +34,9 @@ from emet.memory.graph_eqa.spatial.room_clusters import (
     room_leave_needed,
     room_mismatches_question,
 )
-from emet.memory.graph_eqa.spatial.room_labels import coerce_room_label
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
-
 
 
 def _rendered_action_allowlist(self) -> dict[str, tuple[Any, ...]]:
@@ -48,11 +48,13 @@ def _rendered_action_allowlist(self) -> dict[str, tuple[Any, ...]]:
         "event_ids": tuple(getattr(snapshot, "visible_event_ids", ()) or ()),
     }
 
+
 def _grounded_visible_place_obs(self) -> set[int] | None:
     """Rendered place-card obs ids, or None when grounded_v2 is not filtering."""
     if self.decision_policy != "grounded_v2" or self._last_agent_state_snapshot is None:
         return None
     return {int(item) for item in self._rendered_action_allowlist()["place_obs_ids"]}
+
 
 def _next_rendered_hypothesis(self) -> NavHypothesis | None:
     visible = self._grounded_visible_place_obs() or set()
@@ -67,6 +69,7 @@ def _next_rendered_hypothesis(self) -> NavHypothesis | None:
     ]
     return candidates[0] if candidates else None
 
+
 def _rendered_frontier_args(self, *, toward: str = "") -> dict[str, Any]:
     args: dict[str, Any] = {}
     frontiers = self._rendered_action_allowlist()["frontier_ids"]
@@ -75,6 +78,7 @@ def _rendered_frontier_args(self, *, toward: str = "") -> dict[str, Any]:
     if toward:
         args["toward"] = toward
     return args
+
 
 def _validate_rendered_tool_calls(
     self,
@@ -146,6 +150,7 @@ def _validate_rendered_tool_calls(
         accepted.append((name, args))
     return accepted, rejected
 
+
 def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
     """Deterministic tool when VLM emits nothing parseable (or router is off).
 
@@ -168,6 +173,10 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         stay = self._close_map_stay_hypothesis()
         if stay is not None:
             return "investigate", {"obs_id": int(stay.obs_id)}
+    if budget_left and self._hold_detections_before_explore():
+        det = self._unused_detection_hypothesis()
+        if det is not None:
+            return "investigate", {"obs_id": int(det.obs_id)}
     if budget_left and self._prefers_nearby_investigate():
         near = self._nearby_untried_investigate_hyp()
         if near is not None:
@@ -188,8 +197,17 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         and not self._rendered_action_allowlist()["frontier_ids"]
     ):
         frontiers_gone = True
-    if need_more and budget_left and not frontiers_gone:
-        return "explore_frontier", self._rendered_frontier_args()
+    if need_more and budget_left:
+        # A miss on this RGB is not a reason to leave a remaining detection.
+        h = (
+            self._next_rendered_hypothesis()
+            if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
+            else self._next_untried_hypothesis()
+        )
+        if h is not None and (str(h.source) == "voxel" or is_proposal_handle(h.obs_id)):
+            return "investigate", {"obs_id": int(h.obs_id)}
+        if not frontiers_gone:
+            return "explore_frontier", self._rendered_frontier_args()
     # After a close ABSENT look, grow coverage before the next investigate —
     # but only once; if we already explored this streak and place cards remain,
     # look closer instead of frontier-only loops.
@@ -220,6 +238,9 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
             if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
             else self._next_untried_hypothesis()
         )
+        # Location MCQ: a keyword voxel in this room is not a pin — explore instead.
+        if h is not None and self._hypothesis_is_detection(h) and not self._hold_detections_before_explore():
+            h = None
         if h is not None:
             return "investigate", {"obs_id": int(h.obs_id)}
     # (1) keep exploring for new views while budget remains
@@ -238,6 +259,7 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         prefer = str(self._last_vlm_assess.get("suggested_answer") or "").strip()
     return "submit_answer", ({"answer": prefer} if prefer else {})
 
+
 def _ensure_router_prompt(self) -> None:
     """Build the tool registry + fixed system prompt once (stable string → prefix-cache hits)."""
     if self._tools is None:
@@ -248,6 +270,7 @@ def _ensure_router_prompt(self) -> None:
             room_policy=self.room_policy,
             decision_policy=self.decision_policy,
         )
+
 
 def _live_rgb(self) -> np.ndarray | None:
     robot = getattr(self.agent, "robot", None)
@@ -266,6 +289,7 @@ def _live_rgb(self) -> np.ndarray | None:
             if isinstance(rgb, np.ndarray) and rgb.ndim == 3:
                 return np.asarray(rgb)
     return None
+
 
 def _room_visual_pack(self) -> tuple[list[Any], list[dict[str, Any]], str]:
     """Live RGB + nearby object RGBs for multimodal router room judgment.
@@ -327,6 +351,7 @@ def _room_visual_pack(self) -> tuple[list[Any], list[dict[str, Any]], str]:
         prefix = "Room context images (use for current_room):\n" + "\n".join(captions) + "\n\n"
     return parts, nearby_meta, prefix
 
+
 def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict[str, Any]]:
     """One routing turn: state (+ optional room images) → VLM → tool calls.
 
@@ -357,20 +382,17 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     self._refresh_graph_room_estimate()
     img_parts, nearby_meta, img_prefix = self._room_visual_pack()
     state = build_state_message(self)
-    from emet.memory.graph_eqa.agentic.state import state_text_digest
+    from emet.memory.graph_eqa.agentic_state import state_text_digest
 
     self._router_call_seq += 1
     router_call_id = f"{self._question_id}:router:{self._router_call_seq:04d}"
     pose = self._robot_xyt_world()
-    pose_list = (
-        [float(value) for value in np.asarray(pose, dtype=float).reshape(-1)[:3]] if pose is not None else None
-    )
+    pose_list = [float(value) for value in np.asarray(pose, dtype=float).reshape(-1)[:3]] if pose is not None else None
     if pose_list is not None:
         if self._router_path_world:
             self._router_path_m += float(
                 np.linalg.norm(
-                    np.asarray(pose_list[:2], dtype=float)
-                    - np.asarray(self._router_path_world[-1][:2], dtype=float)
+                    np.asarray(pose_list[:2], dtype=float) - np.asarray(self._router_path_world[-1][:2], dtype=float)
                 )
             )
         self._router_path_world.append(pose_list)
@@ -469,9 +491,7 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
         "graph+router_vlm"
         if graph_room != "unknown" and vlm_room != "unknown"
         else (
-            "router_vlm"
-            if vlm_room != "unknown"
-            else ("graph_current_pose" if graph_room != "unknown" else "unknown")
+            "router_vlm" if vlm_room != "unknown" else ("graph_current_pose" if graph_room != "unknown" else "unknown")
         )
     )
     self._room_estimate_stale = room == "unknown"
@@ -578,6 +598,7 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     )
     return calls, "vlm", meta
 
+
 def _auto_submit_allowed(self, *, round_idx: int) -> bool:
     """May the ANSWER state auto-submit at this round?
 
@@ -588,6 +609,7 @@ def _auto_submit_allowed(self, *, round_idx: int) -> bool:
     if self._verified or not self._no_early_unverified:
         return True
     return round_idx >= self.max_rounds - 1
+
 
 def _finalize_at_budget(self) -> dict[str, Any]:
     """Produce the scored answer once rounds / nav budget are spent.
@@ -611,6 +633,7 @@ def _finalize_at_budget(self) -> dict[str, Any]:
         final = self._do_submit_answer()
     return final
 
+
 def _recover_failed_router_motion(self, *, tool: str, out: dict[str, Any]) -> bool:
     """Recover a router turn that selected an unusable navigation target.
 
@@ -619,33 +642,42 @@ def _recover_failed_router_motion(self, *, tool: str, out: dict[str, Any]) -> bo
     Redirect invalid evidence ids to the best listed place card and force one
     exploration step when a selected place is exhausted or unusable.
     """
-    if (
-        tool not in ("navigate_to_obs", "investigate")
-        or out.get("ok")
-        or self.mode != "answer"
-        or self._n_nav + self._n_explore >= self.max_nav_steps
-    ):
+    if out.get("ok") or self.mode != "answer" or self._n_nav + self._n_explore >= self.max_nav_steps:
         return False
     status = str(out.get("status") or "")
-    invalid_pick = status in {"OBS_NOT_IN_EVIDENCE", "NOT_INVESTIGATE_CARD"}
-    blocked_pick = status in {
-        "NAV_LOOP_BLOCKED",
-        "STATION_OBS_NOT_PLACE",
-    }
-    if not invalid_pick and not blocked_pick:
+    if tool == "explore_frontier" and status == "DETECTIONS_REMAIN":
+        hyp = self._unused_detection_hypothesis() or self._next_untried_hypothesis()
+        if hyp is None:
+            return False
+        redirect_tool = "investigate"
+        redirect_args: dict[str, Any] = {"obs_id": int(hyp.obs_id)}
+    elif tool in ("navigate_to_obs", "investigate") and status == "CAMERA_POSE_PLACE":
+        hyp = self._unused_detection_hypothesis() or self._next_untried_hypothesis()
+        if hyp is None:
+            return False
+        redirect_tool = "investigate"
+        redirect_args = {"obs_id": int(hyp.obs_id)}
+    elif tool in ("navigate_to_obs", "investigate"):
+        invalid_pick = status in {"OBS_NOT_IN_EVIDENCE", "NOT_INVESTIGATE_CARD"}
+        blocked_pick = status in {
+            "NAV_LOOP_BLOCKED",
+            "STATION_OBS_NOT_PLACE",
+        }
+        if not invalid_pick and not blocked_pick:
+            return False
+        redirect_tool = "explore_frontier"
+        redirect_args = self._rendered_frontier_args(toward=self.query_text)
+        if invalid_pick:
+            hyp = (
+                self._next_rendered_hypothesis()
+                if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
+                else self._next_untried_hypothesis()
+            )
+            if hyp is not None:
+                redirect_tool = "investigate"
+                redirect_args = {"obs_id": int(hyp.obs_id)}
+    else:
         return False
-
-    redirect_tool = "explore_frontier"
-    redirect_args = self._rendered_frontier_args(toward=self.query_text)
-    if invalid_pick:
-        hyp = (
-            self._next_rendered_hypothesis()
-            if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
-            else self._next_untried_hypothesis()
-        )
-        if hyp is not None:
-            redirect_tool = "investigate"
-            redirect_args = {"obs_id": int(hyp.obs_id)}
     if (
         self.action_progress_mode == "enforce"
         and redirect_tool == "explore_frontier"
@@ -676,6 +708,7 @@ def _recover_failed_router_motion(self, *, tool: str, out: dict[str, Any]) -> bo
     self.handle_tool(redirect_tool, redirect_args)
     self._action_selected_by = selected_by
     return True
+
 
 def _effective_state_contract_knobs(self) -> dict[str, Any]:
     return {

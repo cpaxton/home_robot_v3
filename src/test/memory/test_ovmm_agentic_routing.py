@@ -24,14 +24,18 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from emet.memory.graph_eqa.agentic_config import question_is_locate
+from emet.controller.habitat_nav import NavOutcome
+from emet.memory.graph_eqa import (
+    AgenticEQAExecutor,
+    GraphEQAMemory,
+    NavHypothesis,
+    question_is_locate,
+)
 from emet.memory.graph_eqa.agentic_eqa import (
     DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
     INVESTIGATE_ANNULUS_OUTER_M,
     NEAR_INVESTIGATE_M,
-    AgenticEQAExecutor,
 )
-from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, NavHypothesis
 
 
 def _executor(*, question: str = "Where is the microwave?") -> AgenticEQAExecutor:
@@ -50,13 +54,24 @@ def test_question_is_locate_for_ovmm_phrasing():
     assert question_is_locate("Where is the microwave?")
     assert question_is_locate("Where is the jar on the counter?")
     assert not question_is_locate("Where did you see the soap dispenser? A) Above the sink B) On the toilet tank")
+    assert not question_is_locate("Where is the sink? A) kitchen B) bath")
+    assert not question_is_locate("Where is the clock? A) Above the sink B) On the wall")
 
 
 def test_locate_question_prefers_nearby_investigate():
     ex = _executor(question="Where is the microwave?")
     assert ex._prefers_nearby_investigate() is True
+    assert ex._hold_detections_before_explore() is True
     other = _executor(question="What color is the sofa? A) Red B) Blue")
     assert other._prefers_nearby_investigate() is False
+    assert other._hold_detections_before_explore() is False
+    where_mcq = _executor(question="Where is the sink? A) kitchen B) bath")
+    assert where_mcq._prefers_nearby_investigate() is False
+    assert where_mcq._hold_detections_before_explore() is False
+    clock_mcq = _executor(question="What time is it? A) 3 B) 4")
+    clock_mcq._close_look_required = True
+    assert clock_mcq._prefers_nearby_investigate() is True
+    assert clock_mcq._hold_detections_before_explore() is True
 
 
 def test_recall_nav_hypotheses_boosts_target_phrase_not_gt():
@@ -101,14 +116,493 @@ def test_recall_prepends_voxel_localize_over_graph_tv():
         _last_localize_stats = {"query": "red cylinder", "max_cosine": 0.22, "yoloe_hit": True}
 
         def localize_text(self, text, debug=False, return_debug=False):
-            assert "red cylinder" in str(text).lower()
+            q = str(text or "").strip().lower()
+            if "red cylinder" not in q:
+                return None
             return np.array([0.08, -0.55, 0.6])
 
     ex.agent.voxel_map = _Voxel()
     hyps = ex._recall_nav_hypotheses()
     assert hyps[0].source == "voxel"
     assert np.allclose(hyps[0].xyz, [0.08, -0.55, 0.6])
+    assert int(hyps[0].obs_id) < 0
+    assert hyps[0].confidence == 1.0
     assert any(h.source == "graph" and int(h.obs_id) == 6 for h in hyps)
+    cylinder = [h for h in hyps if h.source == "voxel" and "red cylinder" in str(h.phrase).lower()]
+    assert cylinder, "first-hit 3-gram must not skip the object phrase pin"
+
+
+def test_voxel_localize_skips_fixture_wrap_phrases():
+    """A table 3-gram must not become the cylinder card (nopin S0 scored 0/0 that way)."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    # Heuristic extract picks the 3-gram first; voxel cards use the object 2-gram.
+    ex._target_phrase = "red cylinder table"
+    gm = MagicMock()
+    gm.hypothesize_nav_targets.return_value = []
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+
+    class _Voxel:
+        def __init__(self) -> None:
+            self.hits = {
+                "red cylinder table": np.array([0.04, -0.55, 0.6]),
+                "red cylinder": np.array([0.08, -0.55, 0.6]),
+                "blue cube": np.array([-0.02, -0.55, 0.6]),
+            }
+            self.queries: list[str] = []
+            self._last_localize_stats: dict[str, object] = {}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            q = str(text or "").strip().lower()
+            self.queries.append(q)
+            pt = self.hits.get(q)
+            self._last_localize_stats = {
+                "query": text,
+                "max_cosine": 0.22 if pt is not None else 0.05,
+                "yoloe_hit": pt is not None,
+            }
+            return None if pt is None else pt
+
+    vm = _Voxel()
+    ex.agent.voxel_map = vm
+    boost = ex._target_boost_phrases()
+    assert boost[0] == "red cylinder"
+    hyps = ex._voxel_localize_hypotheses()
+    phrases = {str(h.phrase).lower() for h in hyps}
+    assert "red cylinder" in phrases
+    assert "red cylinder table" not in phrases
+    assert "red cylinder table" not in vm.queries
+    xyz = next(h.xyz for h in hyps if str(h.phrase).lower() == "red cylinder")
+    assert np.allclose(xyz, [0.08, -0.55, 0.6])
+    assert ex._voxel_score_xyz is not None
+    assert np.allclose(ex._voxel_score_xyz, [0.08, -0.55, 0.6])
+    assert ex._voxel_score_phrase == "red cylinder"
+
+
+def test_voxel_hit_alias_pins_object_phrase():
+    """Unigram target still pins ``red cylinder`` so scoring does not live-query."""
+    from emet.mapping.voxel_localize import pinned_localize_xyz
+
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "cylinder"
+    gm = MagicMock()
+    gm.hypothesize_nav_targets.return_value = []
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+
+    class _Voxel:
+        def __init__(self) -> None:
+            self.hits = {"cylinder": np.array([0.08, -0.55, 0.6])}
+            self._last_localize_stats: dict[str, object] = {}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            q = str(text or "").strip().lower()
+            pt = self.hits.get(q)
+            self._last_localize_stats = {
+                "query": text,
+                "max_cosine": 0.22 if pt is not None else 0.05,
+                "yoloe_hit": pt is not None,
+            }
+            return None if pt is None else pt
+
+    vm = _Voxel()
+    ex.agent.voxel_map = vm
+    hyps = ex._voxel_localize_hypotheses()
+    assert hyps
+    xyz, stats = pinned_localize_xyz(vm, "red cylinder")
+    assert xyz is not None
+    assert np.allclose(xyz, [0.08, -0.55, 0.6])
+    assert stats["from_pin"] is True
+    assert ex._voxel_score_phrase == "red cylinder"
+
+
+def test_fixture_wrap_hit_is_not_findobj_xyz():
+    """Table-blob localize must not be scored as the cylinder."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder table"
+    gm = MagicMock()
+    gm.hypothesize_nav_targets.return_value = []
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+
+    class _Voxel:
+        _last_localize_stats: dict[str, object] = {}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            q = str(text or "").strip().lower()
+            self._last_localize_stats = {"query": text, "max_cosine": 0.22, "yoloe_hit": True}
+            if q == "red cylinder table":
+                return np.array([0.04, -0.55, 0.6])
+            return None
+
+    ex.agent.voxel_map = _Voxel()
+    hyps = ex._voxel_localize_hypotheses()
+    assert hyps == []
+    assert ex._voxel_score_xyz is None
+
+
+def test_inspect_graph_returns_query_catalog_without_moving():
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    gm = MagicMock()
+    gm.hypothesize_nav_targets.return_value = []
+    gm.get_nodes.return_value = []
+    gm.image_description_client = None
+    gm.memory_summary_enabled = False
+    ex.agent.graph_memory = gm
+
+    class _Voxel:
+        _last_localize_stats = {"query": "red cylinder", "max_cosine": 0.22, "yoloe_hit": True}
+
+        def localize_text(self, text, debug=False, return_debug=False):
+            return np.array([0.08, -0.55, 0.6])
+
+    ex.agent.voxel_map = _Voxel()
+    gm.hypothesize_nav_targets.return_value = [
+        NavHypothesis(
+            phrase="tv",
+            obs_id=6,
+            xyz=np.array([0.0, 1.5, 0.0]),
+            score=1.0,
+            source="graph",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_inspect_graph()
+    assert out["ok"] is True
+    assert out["moved"] is False
+    assert out["n_detections"] == 1
+    det = out["detections"][0]
+    assert det["kind"] == "proposal"
+    assert int(det["obs_id"]) < 0
+    assert det["confidence"] == 1.0
+    assert out["n_views"] == 1
+    assert int(out["views"][0]["obs_id"]) == 6
+    assert all(int(row["obs_id"]) != 6 for row in out["detections"])
+
+
+def test_verify_rejects_detection_handle_when_no_camera_frame():
+    ex = _executor(question="Where is the red cylinder?")
+    ex.agent.graph_memory = MagicMock()
+    ex._latest_obs_id = lambda: None  # type: ignore[method-assign]
+    out = ex._tool_verify_siglip("red cylinder", -3_000_000)
+    assert out["ok"] is False
+    assert out["status"] == "NOT_A_VIEW"
+
+
+def test_stalled_voxel_detection_stays_investigable():
+    ex = _executor(question="Where is the red cylinder on the table?")
+    hyp = NavHypothesis(
+        phrase="red cylinder",
+        obs_id=-3_000_000,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=400.0,
+        source="voxel",
+        confidence=1.0,
+    )
+    ex._hypotheses = [hyp]
+    ex._tried[-3_000_000] = "STALLED_NAV_LOOP verify=REQUIRES_FRESH_VIEW"
+    assert ex._obs_already_verified(-3_000_000) is False
+    assert ex._hypothesis_nav_blocked(-3_000_000) is False
+    nxt = ex._next_untried_hypothesis()
+    assert nxt is not None
+    assert int(nxt.obs_id) == -3_000_000
+
+
+def test_siglip_seed_is_not_a_voxel_detection():
+    """Ungated SigLIP -2M seeds must not block explore the way localize_text does."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    seed = NavHypothesis(
+        phrase="siglip red cylinder",
+        obs_id=-2_000_000,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=0.0,
+        source="siglip",
+    )
+    ex._hypotheses = [seed]
+    gm = MagicMock()
+    gm.get_nodes.return_value = [MagicMock(is_frontier=True, is_viewpoint=False)]
+    ex.agent.graph_memory = gm
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    assert ex._hypothesis_is_detection(seed) is False
+    assert ex._unused_detection_hypothesis() is None
+    out = ex._tool_explore_frontier()
+    assert out.get("status") != "DETECTIONS_REMAIN"
+
+
+def test_stalled_voxel_investigate_scores_current_view_without_look_around():
+    """Arrival yaw faces the object — do not pan before assess."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    oid = -3_000_000
+    hyp = NavHypothesis(
+        phrase="red cylinder",
+        obs_id=oid,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=400.0,
+        source="voxel",
+        confidence=1.0,
+    )
+    ex._hypotheses = [hyp]
+    ex.agent.graph_memory = MagicMock()
+    ex.agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
+    ex.agent._last_nav_attempt = None
+    events: list[str] = []
+    verified: list[dict] = []
+
+    def _look(**_kwargs: object) -> dict:
+        events.append("look")
+        return {"ok": True}
+
+    def _handle(name: str, args: dict) -> dict:
+        if name == "verify_siglip":
+            events.append("verify")
+            verified.append(dict(args))
+            return {"ok": True, "status": "CANDIDATE"}
+        return {"ok": True}
+
+    ex.handle_tool = _handle  # type: ignore[method-assign]
+    ex._tool_look_around = _look  # type: ignore[method-assign]
+    ex._tool_capture_and_update = lambda: {"ok": True}  # type: ignore[method-assign]
+    ex._latest_obs_id = lambda: 6  # type: ignore[method-assign]
+    ex._robot_xyt = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ex._investigate_target_xyz = lambda *_a, **_k: np.array([0.5, 0.0, 1.0])  # type: ignore[method-assign]
+    rec = MagicMock()
+    rec.as_dict.return_value = {}
+    rec.coverage = "unknown"
+    rec.local_frontier_cells = 0
+    rec.card_bits.return_value = "investigated=1"
+    rec.approaches_left = 3
+    ex._apply_close_map_after_approach = lambda *_a, **_k: rec  # type: ignore[method-assign]
+    ex._record_place_inspect = lambda *_a, **_k: rec  # type: ignore[method-assign]
+    ex._refresh_place_coverage = lambda *_a, **_k: rec  # type: ignore[method-assign]
+    ex._maybe_retract_claim_after_station = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._stamp_room_after_investigate = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._pin_eqa_look_obs = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._refresh_room_after_motion = lambda: None  # type: ignore[method-assign]
+    ex._attach_gt = lambda *_a, **_k: None  # type: ignore[method-assign]
+    out = ex._tool_investigate(oid)
+    assert out["ok"] is True
+    assert "verify" in events
+    assert events.index("verify") == 0
+    assert verified
+    assert int(verified[0]["obs_id"]) == 6
+
+
+def test_fallback_need_more_investigates_voxel_detection_not_frontier():
+    """A miss on this RGB must not dump a remaining voxel detection for explore."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    gm = MagicMock()
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+    ex._last_vlm_assess = {"need_more_views": True, "present": False}
+    ex._n_nav = 1
+    ex._n_explore = 0
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="red cylinder",
+            obs_id=-3_000_000,
+            xyz=np.array([20.0, 20.0, 0.6]),
+            score=400.0,
+            source="voxel",
+            confidence=1.0,
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    name, args = ex._fallback_tool()
+    assert name == "investigate"
+    assert args["obs_id"] == -3_000_000
+
+
+def test_fallback_prefers_voxel_detection_over_graph_at_camera_pose():
+    """Mapping-view graph XYZ is the camera, not the object (dynagraph method)."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    gm = MagicMock()
+    gm.get_nodes.return_value = []
+    ex.agent.graph_memory = gm
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="tv",
+            obs_id=6,
+            xyz=np.array([0.0, 1.5, 0.0]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="red cylinder",
+            obs_id=-3_000_000,
+            xyz=np.array([0.08, -0.55, 0.6]),
+            score=400.0,
+            source="voxel",
+            confidence=1.0,
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    near = ex._nearby_untried_investigate_hyp(max_dist_m=NEAR_INVESTIGATE_M)
+    assert near is not None
+    assert int(near.obs_id) == -3_000_000
+    name, args = ex._fallback_tool()
+    assert name == "investigate"
+    assert args["obs_id"] == -3_000_000
+    nxt = ex._next_untried_hypothesis()
+    assert nxt is not None
+    assert int(nxt.obs_id) == -3_000_000
+
+
+def test_explore_frontier_refuses_while_detection_unused():
+    """explore_frontier is coverage, not a substitute for localize_text XYZ."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    gm = MagicMock()
+    gm.get_nodes.return_value = [MagicMock(is_frontier=True, is_viewpoint=False)]
+    ex.agent.graph_memory = gm
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="red cylinder",
+            obs_id=-3_000_000,
+            xyz=np.array([0.08, -0.55, 0.6]),
+            score=400.0,
+            source="voxel",
+            confidence=1.0,
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_explore_frontier()
+    assert out["ok"] is False
+    assert out["status"] == "DETECTIONS_REMAIN"
+    assert int(out["obs_id"]) == -3_000_000
+
+
+def test_mcq_allows_explore_while_detection_unused():
+    """HM-EQA must still change rooms; voxel keyword hits are not an OVMM pin."""
+    ex = _executor(question="Where is the sink? A) kitchen B) bath")
+    view, _cyl = _table_hyps_at_spawn()
+    det = NavHypothesis(
+        phrase="sink",
+        obs_id=-3_000_000,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=400.0,
+        source="voxel",
+        confidence=1.0,
+    )
+    gm = MagicMock()
+    gm.get_nodes.return_value = [MagicMock(is_frontier=True, is_viewpoint=False)]
+    ex.agent.graph_memory = gm
+    ex._hypotheses = [view, det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_explore_frontier()
+    assert out.get("status") != "DETECTIONS_REMAIN"
+    name, _args = ex._fallback_tool()
+    assert name == "explore_frontier"
+
+
+def test_close_look_mcq_holds_detection_before_explore():
+    """Clock/count MCQ still needs the close view; do not wander first."""
+    ex = _executor(question="What time is it? A) 3 B) 4")
+    ex._close_look_required = True
+    gm = MagicMock()
+    gm.get_nodes.return_value = [MagicMock(is_frontier=True, is_viewpoint=False)]
+    ex.agent.graph_memory = gm
+    _view, det = _table_hyps_at_spawn()
+    det = NavHypothesis(
+        phrase="clock",
+        obs_id=-3_000_000,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=400.0,
+        source="voxel",
+        confidence=1.0,
+    )
+    ex._hypotheses = [det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_explore_frontier()
+    assert out["ok"] is False
+    assert out["status"] == "DETECTIONS_REMAIN"
+    name, args = ex._fallback_tool()
+    assert name == "investigate"
+    assert int(args["obs_id"]) == -3_000_000
+
+
+def test_mcq_still_refuses_camera_pose_view_when_detection_unused():
+    """Camera pose is never the object — same pack for locate and MCQ."""
+    ex = _executor(question="Where is the sink? A) kitchen B) bath")
+    view, det = _table_hyps_at_spawn()
+    ex.agent.graph_memory = MagicMock()
+    ex._hypotheses = [view, det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_investigate(6)
+    assert out["ok"] is False
+    assert out["status"] == "CAMERA_POSE_PLACE"
+    assert int(out["redirect_obs_id"]) == -3_000_000
+
+
+def _table_hyps_at_spawn() -> tuple[NavHypothesis, NavHypothesis]:
+    view = NavHypothesis(
+        phrase="tv",
+        obs_id=6,
+        xyz=np.array([0.0, 1.5, 0.0]),
+        score=1.0,
+        source="graph",
+    )
+    det = NavHypothesis(
+        phrase="red cylinder",
+        obs_id=-3_000_000,
+        xyz=np.array([0.08, -0.55, 0.6]),
+        score=400.0,
+        source="voxel",
+        confidence=1.0,
+    )
+    return view, det
+
+
+def test_investigate_refuses_camera_pose_view_when_detection_unused():
+    """Last smoke: VLM picked graph obs_id=6 at the mapping pose."""
+    ex = _executor(question="Where is the red cylinder on the table?")
+    ex._target_phrase = "red cylinder"
+    view, det = _table_hyps_at_spawn()
+    ex.agent.graph_memory = MagicMock()
+    ex._hypotheses = [view, det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_investigate(6)
+    assert out["ok"] is False
+    assert out["status"] == "CAMERA_POSE_PLACE"
+    assert int(out["redirect_obs_id"]) == -3_000_000
+
+
+def test_close_map_stay_skips_unapproached_and_camera_pose():
+    ex = _executor(question="Where is the red cylinder on the table?")
+    view, det = _table_hyps_at_spawn()
+    ex._hypotheses = [view, det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    ex._close_map_unresolved_stay = lambda _oid: True  # type: ignore[method-assign]
+    assert ex._close_map_stay_hypothesis() is None
+    ex._close_map_attempts[6] = 1
+    assert ex._close_map_stay_hypothesis() is None
+    ex._close_map_attempts[-3_000_000] = 1
+    stay = ex._close_map_stay_hypothesis()
+    assert stay is not None
+    assert int(stay.obs_id) == -3_000_000
+
+
+def test_recover_camera_pose_place_investigates_detection():
+    ex = _executor(question="Where is the red cylinder on the table?")
+    view, det = _table_hyps_at_spawn()
+    ex._hypotheses = [view, det]
+    ex._robot_xyt_world = lambda: np.array([0.0, 1.5, 0.0])  # type: ignore[method-assign]
+    called: list[tuple[str, dict]] = []
+
+    def _handle(name: str, args: dict) -> dict:
+        called.append((name, dict(args)))
+        return {"ok": True}
+
+    ex.handle_tool = _handle  # type: ignore[method-assign]
+    ok = ex._recover_failed_router_motion(
+        tool="investigate",
+        out={"ok": False, "status": "CAMERA_POSE_PLACE", "obs_id": 6},
+    )
+    assert ok is True
+    assert called == [("investigate", {"obs_id": -3_000_000})]
 
 
 def test_nearby_untried_investigate_hyp_prefers_close_card():
@@ -184,8 +678,6 @@ def test_record_recent_action_includes_nav_outcome():
 
 
 def test_hypothesize_boost_phrases_prepended():
-    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
-
     real = GraphEQAMemory.__new__(GraphEQAMemory)
     real._observations = []
     real._nodes = []

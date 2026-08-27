@@ -17,15 +17,6 @@ from typing import TYPE_CHECKING, Any
 
 from emet.agent.skills import AgentMode, build_skill_pack
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
-from emet.memory.graph_eqa.spatial import room_labels as _room_labels
-
-ROOM_CANONICAL = _room_labels.ROOM_CANONICAL
-coerce_room_label = _room_labels.coerce_room_label
-normalize_current_room = _room_labels.normalize_current_room
-question_implies_indoor = _room_labels.question_implies_indoor
-room_bucket = _room_labels.room_bucket
-room_is_outdoor = _room_labels.room_is_outdoor
-sanitize_room_phrase = _room_labels.sanitize_room_phrase
 from emet.utils.logger import Logger
 
 if TYPE_CHECKING:
@@ -38,7 +29,12 @@ _logger = Logger(__name__)
 # for Qwen3-VL system-prefix KV cache hits. Canonical vs LLM share rule atoms
 # below; compose once at import so the final strings stay stable.
 _EQA_RULE_INVESTIGATE = (
-    "- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).\n"
+    "- inspect_graph is a QUERY (no motion): where do you see X? It returns detections\n"
+    "  with confidence. Those obs_id values are handles, not camera frames.\n"
+    "- investigate(obs_id): closer look at a listed detection or graph place card.\n"
+    "  Drive there, capture a NEW picture, then verify/assess that frame.\n"
+    "  Prefer source=voxel detection handles (metric localize_text XYZ). A graph view whose\n"
+    "  xyz is the current camera pose is not the object — do not treat it as a place.\n"
     "  Do not investigate frontiers — those are Explore-only.\n"
 )
 _EQA_RULE_RECENT_ACTIONS = "- Use Recent actions to avoid repeating a stuck investigate/explore loop.\n"
@@ -78,15 +74,14 @@ _EQA_FORMAT_BLOCK_CANONICAL = (
     "  places look fruitless. toward= is weak coverage bias ONLY —\n"
     "  never a substitute for investigate(obs_id).\n"
     + _EQA_RULE_RECENT_ACTIONS
-    + "- After a close look where VLM assess says present=false, prefer explore_frontier\n"
-    "  once to grow coverage, then investigate remaining Question-relevant place cards.\n"
-    + _EQA_RULES_ANSWERABILITY
-    + "\n"
+    + "- After a close look where VLM assess says present=false: if Investigate still\n"
+    "  lists detections or place cards, investigate another approach of that card.\n"
+    "  explore_frontier only when Investigate is empty or exhausted.\n" + _EQA_RULES_ANSWERABILITY + "\n"
     "# Examples\n"
     "State: Investigate obs_id=3 phrase='sink' room=kitchen source=graph investigated=0 approaches=0/4 coverage=open\n"
     '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}\n'
-    "State: Recent actions: r0 investigate obs=3 assess present=false; Prefer explore_frontier\n"
-    '{"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}\n'
+    "State: Recent actions: r0 investigate obs=3 assess present=false; Investigate still lists detections\n"
+    '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}\n'
     "State: Question about dining chairs; Investigate dining-table card room=kitchen available\n"
     '{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}\n'
     "State: VLM assess answerable=true (vlm_answerable); place card corroborated\n"
@@ -118,9 +113,9 @@ _EQA_FORMAT_BLOCK_LLM = (
     "  never a substitute for investigate(obs_id). Prefer leaving toward= empty and\n"
     "  letting the frontier VLM pick from the Question + images.\n"
     + _EQA_RULE_RECENT_ACTIONS
-    + "- After a close look where VLM assess says present=false, prefer explore_frontier\n"
-    "  once to grow coverage, then investigate remaining Question-relevant place cards\n"
-    "  (do not explore forever).\n"
+    + "- After a close look where VLM assess says present=false: if Investigate still\n"
+    "  lists detections or place cards, investigate another approach of that card.\n"
+    "  explore_frontier only when Investigate is empty or exhausted.\n"
     "- in_target_area=false means leave OR look closer at a listed Investigate card that\n"
     '  could answer the Question — never "explore_frontier only" while place cards exist.\n'
     + _EQA_RULES_ANSWERABILITY
@@ -169,6 +164,140 @@ nearby objects) is context for you — use it, then decide. Each turn: investiga
 promising place for a closer look, or explore to grow coverage when places are
 exhausted or none look good. Prefer cards/views that help answer the Question.
 Do NOT output reasoning — only JSON."""
+
+# Canonical room labels for router current_room (aliases normalize into these).
+ROOM_CANONICAL = frozenset(
+    {
+        "patio",
+        "outdoor",
+        "kitchen",
+        "living_room",
+        "dining_room",
+        "bedroom",
+        "bathroom",
+        "hallway",
+        "garage",
+        "unknown",
+    }
+)
+_OUTDOOR_ROOMS = frozenset({"patio", "outdoor"})
+_OUTDOOR_ALIASES = frozenset(
+    {
+        "patio",
+        "outdoor",
+        "outdoors",
+        "outside",
+        "yard",
+        "deck",
+        "porch",
+        "garden",
+        "brick_patio",
+        "courtyard",
+    }
+)
+_INDOOR_QUESTION_CUES = frozenset(
+    {
+        "clock",
+        "wall clock",
+        "kitchen",
+        "living",
+        "living room",
+        "dining",
+        "bedroom",
+        "bathroom",
+        "bowl",
+        "fruit bowl",
+        "microwave",
+        "refrigerator",
+        "fridge",
+        "sofa",
+        "couch",
+        "fireplace",
+        "cabinet",
+        "indoor",
+        "inside",
+    }
+)
+
+
+def sanitize_room_phrase(raw: Any, *, max_chars: int = 48) -> str:
+    """Light cleanup for room labels. Preserves canonical buckets; free-text stays phrases."""
+    if raw is None:
+        return "unknown"
+    s = str(raw).strip().lower()
+    if not s or s in {"unknown", "none", "n/a", "null"}:
+        return "unknown"
+    token = "_".join(s.replace("-", " ").replace("/", " ").replace("_", " ").split())
+    if token in ROOM_CANONICAL:
+        return token
+    phrase = " ".join(s.replace("_", " ").replace("-", " ").replace("/", " ").split())
+    if not phrase:
+        return "unknown"
+    if len(phrase) > int(max_chars):
+        phrase = phrase[: max(0, int(max_chars) - 1)].rstrip() + "…"
+    return phrase
+
+
+def normalize_current_room(raw: Any) -> str:
+    """Map free-text router ``current_room`` onto a small vocabulary (canonical policy / metrics)."""
+    if raw is None:
+        return "unknown"
+    s = str(raw).strip().lower().replace("-", " ").replace("/", " ")
+    s = "_".join(s.split())
+    if not s:
+        return "unknown"
+    if s in ROOM_CANONICAL:
+        return s
+    if s in _OUTDOOR_ALIASES or any(a in s for a in ("patio", "outdoor", "yard", "deck", "porch")):
+        return "outdoor" if "patio" not in s else "patio"
+    if "living" in s:
+        return "living_room"
+    if "dining" in s:
+        return "dining_room"
+    if "kitchen" in s:
+        return "kitchen"
+    if "bed" in s:
+        return "bedroom"
+    if "bath" in s:
+        return "bathroom"
+    if "hall" in s or "corridor" in s:
+        return "hallway"
+    if "garage" in s:
+        return "garage"
+    return "unknown"
+
+
+# Metrics / histogram alias — same as normalize; not used for LLM-policy decisions.
+room_bucket = normalize_current_room
+
+
+def coerce_room_label(raw: Any, *, room_policy: str = "canonical") -> str:
+    """Policy-aware room identity: closed vocab vs free-text phrase."""
+    if str(room_policy or "").strip().lower() == "llm":
+        return sanitize_room_phrase(raw)
+    return normalize_current_room(raw)
+
+
+def room_is_outdoor(room: str) -> bool:
+    return normalize_current_room(room) in _OUTDOOR_ROOMS
+
+
+def question_implies_indoor(question: str) -> bool:
+    """True when the embodied question is likely about an indoor place/object."""
+    q = str(question or "").strip().lower()
+    if not q:
+        return False
+    if any(cue in q for cue in _INDOOR_QUESTION_CUES):
+        return True
+    # Location MCQ options often name rooms.
+    try:
+        from emet.memory.graph_eqa.graph_memory import location_mcq_landmark_phrases
+
+        landmarks = location_mcq_landmark_phrases(question)
+    except Exception:
+        landmarks = []
+    indoor_landmarks = ("kitchen", "living", "dining", "bedroom", "bathroom", "hall")
+    return any(any(tok in str(lm).lower() for tok in indoor_landmarks) for lm in landmarks)
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
@@ -227,7 +356,7 @@ def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
-        from emet.memory.graph_eqa.agentic.state import (
+        from emet.memory.graph_eqa.agentic_state import (
             compile_agent_state,
             render_agent_state,
             rendered_state_allowlists,
@@ -250,6 +379,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         executor._last_action_gate_decisions = list(snapshot.gate_decisions)
         return text
 
+    from emet.mapping.voxel_localize import is_proposal_handle
     from emet.memory.graph_eqa.agentic.config import INVESTIGATE_SOURCES
     from emet.memory.graph_eqa.spatial.room_clusters import room_leave_needed
 
@@ -312,7 +442,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         used_spatial = False
         if getattr(gm, "_spatial_rag_enabled", lambda: False)():
             try:
-                from emet.memory.graph_eqa.spatial.spatial_rag import (
+                from emet.memory.graph_eqa.spatial_rag import (
                     format_regions_compact,
                     select_spatial_regions,
                 )
@@ -404,18 +534,28 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
     if getattr(executor, "_prefer_explore", False):
-        reason = str(getattr(executor, "_prefer_explore_reason", "") or "")
-        if reason == "absent":
+        unused_fn = getattr(executor, "_unused_detection_hypothesis", None)
+        unused = unused_fn() if callable(unused_fn) else None
+        hold_fn = getattr(executor, "_hold_detections_before_explore", None)
+        hold = bool(hold_fn()) if callable(hold_fn) else True
+        if unused is not None and hold:
             lines.append(
-                "Prefer explore_frontier once: last close look VLM assess present=false — "
-                "grow coverage, then investigate remaining Question-relevant place cards "
-                "(do not explore forever)."
+                f"Unused detection obs_id={int(unused.obs_id)} kind=proposal — "
+                "investigate that localize_text XYZ; do not explore_frontier yet."
             )
         else:
-            lines.append(
-                "Prefer explore_frontier once to grow coverage, then investigate a place card "
-                "if any remain for the Question."
-            )
+            reason = str(getattr(executor, "_prefer_explore_reason", "") or "")
+            if reason == "absent":
+                lines.append(
+                    "Prefer explore_frontier once: last close look VLM assess present=false — "
+                    "grow coverage, then investigate remaining Question-relevant place cards "
+                    "(do not explore forever)."
+                )
+            else:
+                lines.append(
+                    "Prefer explore_frontier once to grow coverage, then investigate a place card "
+                    "if any remain for the Question."
+                )
     leave = room_leave_needed(
         room_policy=policy,
         current_room=last_room or graph_room,
@@ -439,8 +579,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             f"status={last.get('status')} — pick another investigate card or explore_frontier"
         )
     lines.append(
-        "Choose: investigate(obs_id) for a closer look at a place (prefer room-relevant "
-        "cards), OR explore_frontier if no place is worth it / places are exhausted."
+        "Choose: inspect_graph to query detections, investigate(obs_id) for a closer look "
+        "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
+        "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
     )
     inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
@@ -462,6 +603,12 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             sim_bit = ""
             if isinstance(sim, (int, float)):
                 sim_bit = f" siglip_sim={float(sim):.3f}"
+            conf = getattr(h, "confidence", None)
+            conf_bit = ""
+            if isinstance(conf, (int, float)):
+                conf_bit = f" conf={float(conf):.2f}"
+            kind = "proposal" if is_proposal_handle(h.obs_id) or str(h.source) == "voxel" else "view"
+            kind_bit = f" kind={kind}"
             rec = ledger.get(oid)
             bits = (
                 rec.card_bits()
@@ -482,9 +629,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 if ledger_bits:
                     bits += f" [attempts: {ledger_bits}]"
             lines.append(
-                f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
+                f"- obs_id={oid} phrase={h.phrase!r} source={h.source}{kind_bit} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
-                f"{room_bit}{label_bit}{sim_bit} {bits}"
+                f"{room_bit}{label_bit}{sim_bit}{conf_bit} {bits}"
             )
     else:
         lines.append("Investigate: (none — explore or look_around first)")

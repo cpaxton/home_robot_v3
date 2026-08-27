@@ -36,4 +36,6 @@ Docs: [AGENT_RUN.md](../../docs/AGENT_RUN.md#skill-library-vs-orchestrator-modes
 
 ## Giant files (do not ingest whole)
 
+Callers outside this package import `GraphEQAMemory` / `AgenticEQAExecutor` / `run_agentic_eqa` from [`emet.memory.graph_eqa`](../../src/emet/memory/graph_eqa/__init__.py), not from mixin or subpackage modules.
+
 [`agentic_eqa.py`](../../src/emet/memory/graph_eqa/agentic_eqa.py) is a thin facade (~200 lines). Behavior lives in `agentic/{executor_init,run,router,answer,verify,assess,capture,investigate,place,explore,action}.py`; episode fields live on `AgenticSession`. [`graph_memory.py`](../../src/emet/memory/graph_eqa/graph_memory.py) is a thin facade (~200 lines) over `GraphStore`. Types live in `types.py` (`graph_types.py` is a shim). Package map: [graph_memory.md](../../docs/graph_memory.md). Loading a 7k-line module in full (or in many parallel chunks) crashes the Cursor agent host (Mode B / V8 `invalid opcode`). Edit the subpackage that owns the method, not the facade. Do not dump agent transcripts or previous crash UIs into the next prompt.
