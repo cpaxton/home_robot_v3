@@ -274,9 +274,9 @@ def _resolve_eqa_action_image_ref(self, display_index: int, obs_ids: list[int] |
     """Map ``Action: Image N`` to a graph observation id.
 
     Prompt-attached images are renumbered 1..K (``obs_ids`` order). SCENE_GRAPH
-    lines use the raw ``[Image {obs_id}]``, so models often emit that id (e.g.
-    ``Navigate to Image 19``). Accept both when a real ``GraphObservation``
-    exists — not viewpoint-only nav-sample anchors without RGB history.
+    lines use ``[graph obs {obs_id}]``, so models often emit that id (e.g.
+    ``action: 19``). Accept both a 1..K slot and a real ``GraphObservation``
+    id — not viewpoint-only nav-sample anchors without RGB history.
     """
     idx = int(display_index)
     if idx < 1:
@@ -382,10 +382,10 @@ def _graph_count_hint(self, question: str) -> str:
     phrase = target.phrase if target is not None else "target"
     visual = self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=6)
     if visual:
-        labeled = "; ".join(f"[Image {int(oid)}]" for oid in visual)
+        labeled = "; ".join(f"[graph obs {int(oid)}]" for oid in visual)
         return (
             f"GRAPH_COUNT: views to look at for '{phrase}' "
-            f"(go look at these Image ids; not an exact count): {labeled}. "
+            f"(go look at these graph obs ids; not an exact count): {labeled}. "
             "Count from attached images after looking; "
             "do not use this list length as the answer."
         )
@@ -402,7 +402,7 @@ def _graph_count_hint(self, question: str) -> str:
     labeled = format_graph_node_candidates(matches, max_nodes=6)
     return (
         f"GRAPH_COUNT: views to look at for '{phrase}' "
-        f"(go look at these Image ids; not an exact count): {labeled}."
+        f"(go look at these graph obs ids; not an exact count): {labeled}."
         f"{scope_note} Count from attached images after looking; "
         "do not use this list length as the answer."
     )

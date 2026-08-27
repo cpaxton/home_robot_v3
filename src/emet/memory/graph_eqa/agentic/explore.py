@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.close_map import close_map_catalog_fields
 from emet.mapping.voxel_localize import is_proposal_handle, pin_localize_xyz
 from emet.memory.graph_eqa.agentic.config import (
     CAMERA_POSE_PLACE_M,
@@ -65,7 +66,7 @@ def phrase_is_fixture_only(phrase: str) -> bool:
     return bool(words) and all(w in FIXTURE_LABEL_TOKENS for w in words)
 
 
-def _hyp_catalog_row(h: NavHypothesis) -> dict[str, Any]:
+def _hyp_catalog_row(h: NavHypothesis, *, voxel_map: Any | None = None) -> dict[str, Any]:
     """One inspect_graph row. Voxel ``obs_id <= -3_000_000`` is a detection handle."""
     oid = int(h.obs_id)
     source = str(h.source)
@@ -85,7 +86,12 @@ def _hyp_catalog_row(h: NavHypothesis) -> dict[str, Any]:
             confidence = float(h.siglip_sim)
         except (TypeError, ValueError):
             confidence = None
-    return {
+    yoloe = getattr(h, "yoloe_hit", None)
+    if yoloe is None and kind == "proposal" and confidence is not None and float(confidence) >= 1.0:
+        yoloe = True
+    elif yoloe is None and kind == "proposal":
+        yoloe = False
+    row: dict[str, Any] = {
         "obs_id": oid,
         "kind": kind,
         "phrase": h.phrase,
@@ -93,7 +99,14 @@ def _hyp_catalog_row(h: NavHypothesis) -> dict[str, Any]:
         "source": source,
         "confidence": confidence,
         "siglip_sim": (float(h.siglip_sim) if getattr(h, "siglip_sim", None) is not None else None),
+        "yoloe_hit": (bool(yoloe) if yoloe is not None else None),
     }
+    xyz = np.asarray(h.xyz, dtype=float).reshape(-1)
+    if xyz.size >= 2:
+        cm = close_map_catalog_fields(voxel_map, float(xyz[0]), float(xyz[1]))
+        if cm is not None:
+            row["close_map"] = cm
+    return row
 
 
 _FIXTURE_LABEL_TOKENS = FIXTURE_LABEL_TOKENS
@@ -764,7 +777,14 @@ def _tool_inspect_graph(self) -> dict[str, Any]:
         gm.refresh_siglip_confirmed_memory()
     hypotheses = self._recall_nav_hypotheses()
     self._set_hypotheses(hypotheses)
-    catalog = [_hyp_catalog_row(h) for h in self._hypotheses]
+    voxel_map = None
+    planner_fn = getattr(self, "_voxel_planner", None)
+    if callable(planner_fn):
+        try:
+            voxel_map, _ = planner_fn()
+        except Exception:
+            voxel_map = None
+    catalog = [_hyp_catalog_row(h, voxel_map=voxel_map) for h in self._hypotheses]
     detections = [row for row in catalog if row["kind"] == "proposal"]
     views = [row for row in catalog if row["kind"] == "view"]
     out = {

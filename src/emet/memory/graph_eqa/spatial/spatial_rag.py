@@ -285,7 +285,7 @@ def format_regions_for_prompt(
         label_str = ", ".join(r.labels) if r.labels else "object"
         if len(label_str) > max_label_chars:
             label_str = label_str[: max_label_chars - 3] + "..."
-        near = f"Image {r.image_ids[0]}" if r.image_ids else "no image"
+        near = f"graph obs {r.image_ids[0]}" if r.image_ids else "no image"
         lines.append(f"REGION {r.region_id} (near {near}): {label_str}")
         imgs = ", ".join(str(i) for i in r.image_ids) if r.image_ids else "-"
         lines.append(f"  anchor ({r.anchor_xy[0]:.2f}, {r.anchor_xy[1]:.2f}); images: {imgs}")
@@ -293,7 +293,7 @@ def format_regions_for_prompt(
         lbl = ", ".join(_label_list(n)) or "frontier"
         xy = _xy(n)
         oid = int(getattr(n, "obs_id", -1) or -1)
-        lines.append(f"Frontier {getattr(n, 'node_id', '?')}: {lbl} at ({xy[0]:.2f}, {xy[1]:.2f}) [Image {oid}]")
+        lines.append(f"Frontier {getattr(n, 'node_id', '?')}: {lbl} at ({xy[0]:.2f}, {xy[1]:.2f}) [graph obs {oid}]")
     return "\n".join(lines)
 
 

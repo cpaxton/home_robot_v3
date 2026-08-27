@@ -37,7 +37,11 @@ log() { echo "[$(date -Is)] $*" | tee -a "$OUT_DIR/run.log"; }
 
 # --- VRAM gate: fail loudly before loading anything when the GPU is contended. ---
 log "vram gate: need >= ${NEED_MIB} MiB free"
-VRAM_OK="$(uv run python -c "
+PY_GATE="${ROOT}/.venv/bin/python"
+if [[ ! -x "${PY_GATE}" ]]; then
+    PY_GATE="$(command -v python3)"
+fi
+VRAM_OK="$("${PY_GATE}" -c "
 from emet.utils.gpu_preflight import check_gpu_memory
 ok, msg = check_gpu_memory(int('$NEED_MIB'))
 print(msg)

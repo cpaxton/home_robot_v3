@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from emet.controller.habitat_nav import NavOutcome
+from emet.mapping.close_map import CloseDistanceMap
 from emet.memory.graph_eqa import (
     AgenticEQAExecutor,
     GraphEQAMemory,
@@ -127,6 +128,7 @@ def test_recall_prepends_voxel_localize_over_graph_tv():
     assert np.allclose(hyps[0].xyz, [0.08, -0.55, 0.6])
     assert int(hyps[0].obs_id) < 0
     assert hyps[0].confidence == 1.0
+    assert hyps[0].yoloe_hit is True
     assert any(h.source == "graph" and int(h.obs_id) == 6 for h in hyps)
     cylinder = [h for h in hyps if h.source == "voxel" and "red cylinder" in str(h.phrase).lower()]
     assert cylinder, "first-hit 3-gram must not skip the object phrase pin"
@@ -257,7 +259,14 @@ def test_inspect_graph_returns_query_catalog_without_moving():
         def localize_text(self, text, debug=False, return_debug=False):
             return np.array([0.08, -0.55, 0.6])
 
-    ex.agent.voxel_map = _Voxel()
+    voxel = _Voxel()
+    cm = CloseDistanceMap(grid_size=(32, 32), origin_xy=(16.0, 16.0), resolution_m=0.1)
+    pose = np.eye(4, dtype=np.float64)
+    pose[:3, 3] = (0.08 - 0.30, -0.55, 0.4)
+    pose[:3, 2] = (1.0, 0.0, 0.0)
+    assert cm.update_from_view(pose, np.array([[0.08, -0.55, 0.4]], dtype=np.float64)) >= 1
+    voxel.close_map = cm
+    ex.agent.voxel_map = voxel
     gm.hypothesize_nav_targets.return_value = [
         NavHypothesis(
             phrase="tv",
@@ -276,6 +285,10 @@ def test_inspect_graph_returns_query_catalog_without_moving():
     assert det["kind"] == "proposal"
     assert int(det["obs_id"]) < 0
     assert det["confidence"] == 1.0
+    assert det["yoloe_hit"] is True
+    assert det["close_map"]["resolved"] is True
+    assert det["close_map"]["aimed"] is True
+    assert det["close_map"]["min_cam_m"] is not None
     assert out["n_views"] == 1
     assert int(out["views"][0]["obs_id"]) == 6
     assert all(int(row["obs_id"]) != 6 for row in out["detections"])

@@ -985,7 +985,7 @@ def _relevant_memory_summary(self) -> str:
         return ""
     header = (
         "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
-        "candidate Image N to look at; CANDIDATE/weak SigLIP are navigation hints. "
+        "candidate graph obs N to look at; CANDIDATE/weak SigLIP are navigation hints. "
         "Detector class names are proposals for WHERE to look. Identify and count "
         "from attached RGB; if images contradict memory, trust the images and keep "
         "exploring; for location MCQs, prefer option landmarks visible in Image 1 "

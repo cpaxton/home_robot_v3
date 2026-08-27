@@ -263,6 +263,13 @@ def query_answer(
         )
 
     extra_hints: list[str] = []
+    if obs_ids:
+        extra_hints.append(
+            "ATTACHED_INDEX: " + ", ".join(f"Image {i}=obs{int(oid)}" for i, oid in enumerate(obs_ids, start=1))
+        )
+    room_ctx = self.format_eqa_room_context(question, obs_ids)
+    if room_ctx:
+        extra_hints.append(room_ctx)
     if count_hint:
         extra_hints.append(count_hint)
     if crop_oid is not None:

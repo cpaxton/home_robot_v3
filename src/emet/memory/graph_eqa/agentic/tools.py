@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from emet.agent.skills import AgentMode, build_skill_pack
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
 from emet.utils.logger import Logger
@@ -379,6 +381,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         executor._last_action_gate_decisions = list(snapshot.gate_decisions)
         return text
 
+    from emet.mapping.close_map import close_map_catalog_fields
     from emet.mapping.voxel_localize import is_proposal_handle
     from emet.memory.graph_eqa.agentic.config import INVESTIGATE_SOURCES
     from emet.memory.graph_eqa.spatial.room_clusters import room_leave_needed
@@ -587,6 +590,13 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
     ledger = getattr(executor, "_place_inspect", {}) or {}
     refresh = getattr(executor, "_refresh_place_coverage", None)
+    voxel_map = None
+    planner_fn = getattr(executor, "_voxel_planner", None)
+    if callable(planner_fn):
+        try:
+            voxel_map, _ = planner_fn()
+        except Exception:
+            voxel_map = None
     if inv:
         lines.append("Investigate (place cards — use investigate):")
         for h in inv:
@@ -609,6 +619,22 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 conf_bit = f" conf={float(conf):.2f}"
             kind = "proposal" if is_proposal_handle(h.obs_id) or str(h.source) == "voxel" else "view"
             kind_bit = f" kind={kind}"
+            yoloe = getattr(h, "yoloe_hit", None)
+            yoloe_bit = ""
+            if yoloe is True:
+                yoloe_bit = " yoloe_hit=true"
+            elif yoloe is False and kind == "proposal":
+                yoloe_bit = " yoloe_hit=false"
+            cm_bit = ""
+            xyz = np.asarray(getattr(h, "xyz", None), dtype=float).reshape(-1)
+            if xyz.size >= 2:
+                cm = close_map_catalog_fields(voxel_map, float(xyz[0]), float(xyz[1]))
+                if cm is not None:
+                    d = cm.get("min_cam_m")
+                    d_s = "none" if d is None else f"{float(d):.2f}"
+                    cm_bit = (
+                        f" close_map=resolved={cm['resolved']} aimed={cm['aimed']} min_cam={d_s}"
+                    )
             rec = ledger.get(oid)
             bits = (
                 rec.card_bits()
@@ -631,7 +657,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             lines.append(
                 f"- obs_id={oid} phrase={h.phrase!r} source={h.source}{kind_bit} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
-                f"{room_bit}{label_bit}{sim_bit}{conf_bit} {bits}"
+                f"{room_bit}{label_bit}{sim_bit}{conf_bit}{yoloe_bit}{cm_bit} {bits}"
             )
     else:
         lines.append("Investigate: (none — explore or look_around first)")

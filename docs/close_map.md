@@ -42,9 +42,14 @@ does not orbit furniture forever.
 
 See [environment_variables.md](environment_variables.md) (`EMET_CLOSE_MAP_*`).
 
-Do not confuse this with `EMET_EQA_AGENTIC_CLOSE_LOOK`, which only asks the VLM
-whether the *question* needs a close look (clock/count/detail). This map is
-geometric.
+Do not confuse this with `EMET_EQA_AGENTIC_CLOSE_LOOK`, which asks whether the
+*question* needs a close look (VLM extract **OR** count/clock/state keywords).
+This map is geometric. Classic HM-EQA `query_answer` does **not** dump a
+`CLOSE_LOOK_STATUS` prompt block; agentic `inspect_graph` rows carry compact
+`close_map: {resolved, aimed, min_cam_m}` when the map exists.
+
+Tune `EMET_CLOSE_MAP_*` one knob at a time — see
+[countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time).
 
 ## Layout
 

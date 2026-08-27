@@ -225,6 +225,28 @@ def format_eqa_history_outcome(
         f"action={act_bit or '-'} salvage={1 if salvage else 0}{obs_bit} | {reason}"
     )
 
+_PINNED_HISTORY_MARKERS: tuple[str, ...] = (
+    "not a bedroom",
+    "not the bedroom",
+    "not in the bedroom",
+    "living room, not",
+    "wrong room",
+    "different room",
+    "navigate to graph obs",
+    "find_queue",
+    "before answering none",
+    "doorway",
+    "through the door",
+    "not a kitchen",
+    "not the kitchen",
+)
+
+@classmethod
+def _eqa_history_line_is_pinned(cls, line: str) -> bool:
+    """Keep room-mismatch / navigation lessons when HISTORY is budget-trimmed."""
+    blob = (line or "").lower()
+    return any(m in blob for m in _PINNED_HISTORY_MARKERS)
+
 @staticmethod
 def estimate_eqa_prompt_tokens(text: str) -> int:
     from emet.llms.eqa_vl_settings import estimate_eqa_prompt_tokens
@@ -319,10 +341,17 @@ def build_eqa_prompt_text(
     if max_tok <= 0 or _tok(parts) <= max_tok:
         return parts
 
-    # 1) Drop oldest HISTORY entries.
+    # 1) Drop oldest droppable HISTORY entries (keep room-mismatch lessons).
     while history and _tok(_parts(history, mem, graph)) > max_tok:
-        history = history[1:]
-        history_start_index += 1
+        drop_i = next(
+            (i for i, h in enumerate(history) if not cls._eqa_history_line_is_pinned(h)),
+            None,
+        )
+        if drop_i is None:
+            break
+        history.pop(drop_i)
+        if drop_i == 0:
+            history_start_index += 1
     parts = _parts(history, mem, graph)
     if _tok(parts) <= max_tok:
         return parts

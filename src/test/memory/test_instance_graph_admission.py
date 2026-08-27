@@ -152,8 +152,8 @@ def test_confirmed_memory_lists_views_without_detector_class_names():
     mem._relevant_objects = ["table lamps"]
     mem._relevant_phrases = ["table lamps"]
     summary = mem._relevant_memory_summary()
-    assert "[Image 1] at (4.8, 5.1)" in summary
-    assert "[Image 2] at (3.1, 5.0)" in summary
+    assert "[graph obs 1] at (4.8, 5.1)" in summary
+    assert "[graph obs 2] at (3.1, 5.0)" in summary
     assert "lamp at" not in summary.split("nearest:")[0]
     assert "table at" not in summary.split("nearest:")[0]
     assert "4 graph node(s)" not in summary
@@ -162,7 +162,7 @@ def test_confirmed_memory_lists_views_without_detector_class_names():
     assert ": PRESENT" not in summary
     mem.record_close_look_label(1, "table lamp")
     looked = mem._relevant_memory_summary()
-    assert "table lamp [Image 1] at (4.8, 5.1)" in looked
+    assert "table lamp [graph obs 1] at (4.8, 5.1)" in looked
     q = "How many table lamps are there in the bedroom? A) Three B) Four C) One D) Two. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT: 4" not in hint
@@ -333,7 +333,7 @@ def test_count_hint_matches_close_look_name_not_just_detector():
     assert target is not None
     assert [int(n.obs_id) for n in nodes] == [1]
     hint = mem._graph_count_hint(q)
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "GRAPH_COUNT: 1" not in hint
 
 
@@ -425,7 +425,7 @@ def test_count_candidates_match_head_noun_lamp_for_table_lamps():
     assert target is not None
     assert [int(n.obs_id) for n in nodes] == [1]
     hint = mem._graph_count_hint(q)
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "GRAPH_COUNT: 1" not in hint
 
 
@@ -932,7 +932,7 @@ def test_graph_count_hint_prefers_visual_find_images():
     mem.set_visual_find_fn(lambda phrase, max_n: [(0.40, 2)])
     q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
     hint = mem._graph_count_hint(q)
-    assert "[Image 2]" in hint
+    assert "[graph obs 2]" in hint
     assert "GRAPH_COUNT: 1" not in hint
 
 

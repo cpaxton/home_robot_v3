@@ -340,6 +340,7 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
                 source="voxel",
                 confidence=conf,
                 siglip_sim=sim,
+                yoloe_hit=bool(stats.get("yoloe_hit")),
             )
         )
     return out

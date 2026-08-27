@@ -13,6 +13,7 @@ import numpy as np
 from emet.mapping.close_map import (
     CloseDistanceMap,
     CloseLookQuery,
+    close_map_catalog_fields,
     close_map_from_voxel_map,
     decide_close_look,
     format_close_map_hint,
@@ -104,3 +105,9 @@ def test_close_map_from_voxel_map_and_hint() -> None:
     hint = format_close_map_hint(cm, 0.0, 0.0)
     assert "NOT resolved" in hint
     assert format_close_map_hint(None, 0.0, 0.0) == ""
+    fields = close_map_catalog_fields(voxel, 0.0, 0.0)
+    assert fields is not None
+    assert fields["resolved"] is False
+    assert "aimed" in fields
+    assert "min_cam_m" in fields
+    assert close_map_catalog_fields(None, 0.0, 0.0) is None

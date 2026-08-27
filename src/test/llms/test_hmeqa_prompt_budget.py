@@ -63,6 +63,21 @@ def test_hmeqa_prompt_teaches_read_action():
     assert "not legible" in lowered
 
 
+def test_hmeqa_prompt_separates_attached_slots_from_graph_obs():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert "attached_index" in lowered
+    assert "[graph obs" in lowered
+    assert '"action": "37"' in lowered
+    assert "read n" in lowered
+    assert "graph obs id" in lowered
+
+
+def test_hmeqa_prompt_omits_close_look_status():
+    lowered = HMEQA_EQA_PROMPT.lower()
+    assert "close_look_status" not in lowered
+    assert "find_queue" not in lowered
+
+
 def test_hmeqa_prompt_teaches_view_status_risk():
     lowered = HMEQA_EQA_PROMPT.lower()
     assert "view_status" in lowered
@@ -309,6 +324,28 @@ def test_build_eqa_prompt_text_truncates_history_first():
     assert GraphEQAMemory.estimate_eqa_prompt_tokens(joined) <= 80
     iters = [p for p in parts if p.startswith("Iteration_")]
     assert len(iters) < len(history)
+
+
+def test_build_eqa_prompt_text_preserves_pinned_room_history():
+    history = [
+        "Iter: answer=Unknown conf=false action=- salvage=0 | filler " + ("x" * 200),
+        "Iter: answer=Unknown conf=false action=83 salvage=0 | Attached Image 1 is a living room, not the bedroom.",
+        "Iter: answer=Unknown conf=false action=- salvage=0 | more filler " + ("y" * 200),
+    ]
+    graph = "SCENE_GRAPH:\n" + "\n".join(
+        f"Node {i}: object{i} at (0.00, 0.00, 0.00) [Image {i}]" for i in range(1, 25)
+    )
+    parts = GraphEQAMemory.build_eqa_prompt_text(
+        question_line="Question: How many bedside tables in the bedroom?",
+        history_entries=history,
+        history_start_index=0,
+        graph_str=graph,
+        img_desc_str="Attached images: none",
+        max_tokens=90,
+    )
+    joined = "\n".join(parts)
+    assert "living room, not the bedroom" in joined
+    assert GraphEQAMemory.estimate_eqa_prompt_tokens(joined) <= 90
 
 
 def test_build_eqa_prompt_text_preserves_graph_count_after_merged_tail_trim():

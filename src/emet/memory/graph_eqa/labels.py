@@ -318,7 +318,7 @@ def format_graph_node_candidates(nodes: list[GraphNode], *, max_nodes: int = 6) 
     bits: list[str] = []
     for node in nodes[:max_nodes]:
         xyz = np.asarray(node.xyz, dtype=np.float64).reshape(-1)
-        loc = f"[Image {int(node.obs_id)}] at ({float(xyz[0]):.1f}, {float(xyz[1]):.1f})"
+        loc = f"[graph obs {int(node.obs_id)}] at ({float(xyz[0]):.1f}, {float(xyz[1]):.1f})"
         looked = str(getattr(node, "close_look_label", None) or "").strip()
         if looked:
             bits.append(f"{looked} {loc}")

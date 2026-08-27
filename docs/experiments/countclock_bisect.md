@@ -88,11 +88,48 @@ uv run python scripts/audit_close_map_eqa_slice.py \
   --jsonl ~/.cache/habitat_eqa/results/bisect_<shortsha>_dynagraph_qwen3_vl.jsonl
 ```
 
-## Split plan
+## Split plan (`feat/eqa-prompt-context`)
 
-- **Infra PR** (`feat/eqa-decision-traces`): `eqa_decisions/` export, audit columns,
-  inspection pack, HISTORY `obs=` ids — **no** dedupe, **no** CLOSE_LOOK behavior.
-- **Prompt-first PR** (on peak + infra): `QUESTION_ROOM`, pinned HISTORY, CLOSE_LOOK
-  header docs — **no** server-side confidence gates.
-- **Defer / revert** until bisect confirms: frame dedupe, default center-zoom off,
-  `close_look_confidence_gate`.
+Do **not** dump `CLOSE_LOOK_STATUS` into classic `query_answer` prompts — that block
+correlated with the 7→5 cliff (confident “None” when every view said `resolved=no`).
+Close-look geometry lives on the voxel [close-map](../close_map.md) and on
+`inspect_graph` catalog rows, not in the HM-EQA system prompt.
+
+| Slice | Status | What |
+|-------|--------|------|
+| Infra | Done on this branch | `eqa_decisions/` export, close-map **audit** columns, inspection pack, HISTORY `obs=` ids. No frame dedupe. No confidence gate. |
+| Classic SCENE_GRAPH | This change | `ATTACHED_INDEX` (Image 1..K ↔ obs id). SCENE_GRAPH / GRAPH_COUNT tag `[graph obs N]`, not `[Image {obs_id}]`. `QUESTION_ROOM` + pinned HISTORY. No `FIND_QUEUE` duplicate of GRAPH_COUNT. No `CLOSE_LOOK_STATUS`. |
+| Agentic find | This change | `inspect_graph` is the query for “where do you see X, and how well does voxel/SigLIP match” (`yoloe_hit`, `siglip_sim`, compact `close_map`). Close-look **required** from the question (VLM extract **OR** count/clock/state keywords). Stay via close-map on `investigate`. Same tool names. |
+| Defer | Until canary confirms | Frame dedupe, default center-zoom off, `close_look_confidence_gate`. |
+
+Live method: [dynagraph.md](../dynagraph.md) (LLM picks tools; Python supplies `localize_text` + close-map stay).
+
+## Tuning ladder (one knob at a time)
+
+CPU first, then the 5-qid canary (`12,47,48,86,93`), then the 15-qid slice. Do **not**
+retune on full-113. Peak to beat: **7/15** at `23efa534`.
+
+| Knob | Default | What it changes | Gate |
+|------|---------|-----------------|------|
+| `EMET_CLOSE_MAP_R_M` | 0.55 | Aimed range that counts as resolved | red-cylinder + countclock canary (too tight → never leave; too loose → doorway “resolved”) |
+| `EMET_CLOSE_MAP_AIM_DEG` | 25 | On-axis cone (q12 doorway: aimed=false at ~0.41 m) | same |
+| `EMET_CLOSE_MAP_QUERY_RADIUS_M` | 0.35 | Neighborhood around card XY | OVMM FindObj err vs 0.3 m |
+| `EMET_CLOSE_MAP_ESCAPE_ATTEMPTS` | 4 | Approaches before escape | agentic loop length |
+| Voxel SigLIP gate | 0.21 (localize) / image 0.12 | Proposal vs miss | `test_voxel_localize` + oneshot S0 |
+| First-hit pin vs `refresh=True` | pin | Explore must not erase mapping hit | OVMM FindObj 1/1 regression |
+| `EMET_EQA_AGENTIC_CLOSE_LOOK` | on | Task close-look classifier (VLM **OR** keywords) | count/clock vs location MCQ explore |
+| `EMET_EQA_HYP_RECALL_K` | 6 | Catalog size | `inspect_graph` `n_detections` |
+
+**CPU pack (every code change):**
+
+```bash
+uv run emet test --no-sim src/test/llms/test_hmeqa_prompt_budget.py \
+  src/test/memory/test_ovmm_agentic_routing.py src/test/memory/test_ovmm_agentic_find.py \
+  src/test/mapping/test_voxel_localize.py src/test/mapping/test_close_map.py \
+  src/test/agent/test_skill_packs.py src/test/memory/test_graph_eqa_memory.py -q
+```
+
+**GPU** (jobs only, after CPU green): `emet habitat safe-start`, then the canary via
+[`scripts/run_hmeqa_countclock_slice.sh`](../../scripts/run_hmeqa_countclock_slice.sh).
+Audit with [`scripts/audit_close_map_eqa_slice.py`](../../scripts/audit_close_map_eqa_slice.py)
+(geometry vs score — not a prompt dump).
