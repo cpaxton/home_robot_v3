@@ -99,7 +99,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | `open_vocab` | `DynamemController` | OpenVocabSceneGraph only (`emet run scene-graph`) |
 | `dynamem` | `DynamemController` | Voxels only (no graph plug-in) |
 
-Nested `embodied_agent.*.enabled` flags are **coerced** from this enum so OpenVocab and GraphEQA are never both live. Tuning (instance graph, fusion, OV config name) still lives under `embodied_agent:`.
+The Python package is `emet.memory.graph_eqa` for both `dynagraph` and `static_graph` (code layout: [graph_memory.md](graph_memory.md)). Nested `embodied_agent.*.enabled` flags are **coerced** from this enum so OpenVocab and GraphEQA are never both live. Tuning (instance graph, fusion, OV config name) still lives under `embodied_agent:`.
 
 **Mapping keys** live under **`mapping:`** in config. Reference: [Dynav / mapping configuration](dynav_config.md).
 

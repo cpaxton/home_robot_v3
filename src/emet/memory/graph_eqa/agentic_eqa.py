@@ -2,22 +2,33 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Unified agentic GraphEQA loop: thin facade over mixins.
+"""Unified agentic GraphEQA loop: facade over implementation modules.
 
-Implementation lives in ``agentic_{init,run,router,answer,verify,assess,capture,
-investigate,place,explore,action}.py``. Callers and tests keep importing from this module.
+Implementation lives in ``agentic/{executor_init,run,router,answer,verify,assess,
+capture,investigate,place,explore,action}.py``. Callers keep importing from this module.
 """
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from typing import Any
 
-from emet.memory.graph_eqa.agentic_action import AgenticActionMixin
-from emet.memory.graph_eqa.agentic_answer import AgenticAnswerMixin
-from emet.memory.graph_eqa.agentic_assess import AgenticAssessMixin
-from emet.memory.graph_eqa.agentic_capture import AgenticCaptureMixin
-from emet.memory.graph_eqa.agentic_config import (
+from emet.memory.graph_eqa._bind import bind_module_methods
+from emet.memory.graph_eqa.agentic import (
+    action,
+    answer,
+    assess,
+    capture,
+    executor_init,
+    explore,
+    investigate,
+    place,
+    router,
+    run,
+    verify,
+)
+from emet.memory.graph_eqa.agentic.config import (
     DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
     ESCAPE_MIN_TRAVEL_M,
     EXPLORE_STREAK_FORCE_INVESTIGATE,
@@ -34,21 +45,15 @@ from emet.memory.graph_eqa.agentic_config import (
     agentic_verify_enabled,
     question_requires_close_look_keywords,
 )
-from emet.memory.graph_eqa.agentic_explore import AgenticExploreMixin
-from emet.memory.graph_eqa.agentic_init import AgenticInitMixin
-from emet.memory.graph_eqa.agentic_investigate import AgenticInvestigateMixin
-from emet.memory.graph_eqa.agentic_place import AgenticPlaceMixin
-from emet.memory.graph_eqa.agentic_policy import AgenticState
-from emet.memory.graph_eqa.agentic_router import AgenticRouterMixin
-from emet.memory.graph_eqa.agentic_run import AgenticRunMixin
-from emet.memory.graph_eqa.agentic_tools import build_state_message
-from emet.memory.graph_eqa.agentic_types import (
+from emet.memory.graph_eqa.agentic.policy import AgenticState, EvidencePhase
+from emet.memory.graph_eqa.agentic.session import AgenticSession
+from emet.memory.graph_eqa.agentic.tools import build_state_message
+from emet.memory.graph_eqa.agentic.types import (
     AgenticEQAResult,
     AnswerEvidenceRecord,
     FinalAnswerDecision,
     PlaceInspectRecord,
 )
-from emet.memory.graph_eqa.agentic_verify import AgenticVerifyMixin
 
 __all__ = [
     "DEFAULT_INVESTIGATE_ANNULUS_OUTER_M",
@@ -64,7 +69,9 @@ __all__ = [
     "SIGLIP_IMAGE_PRESENT_THRESHOLD",
     "AgenticEQAExecutor",
     "AgenticEQAResult",
+    "AgenticSession",
     "AgenticState",
+    "EvidencePhase",
     "AnswerEvidenceRecord",
     "FinalAnswerDecision",
     "PlaceInspectRecord",
@@ -77,20 +84,58 @@ __all__ = [
 ]
 
 
-class AgenticEQAExecutor(
-    AgenticInitMixin,
-    AgenticRunMixin,
-    AgenticRouterMixin,
-    AgenticAnswerMixin,
-    AgenticVerifyMixin,
-    AgenticAssessMixin,
-    AgenticCaptureMixin,
-    AgenticInvestigateMixin,
-    AgenticPlaceMixin,
-    AgenticExploreMixin,
-    AgenticActionMixin,
-):
+class AgenticEQAExecutor:
     """Bounded tool loop for post-explore / world-change EQA."""
+
+    def __init__(self, *args, **kwargs):
+        object.__setattr__(self, "session", AgenticSession())
+        executor_init.init_executor(self, *args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "session":
+            raise AttributeError(name)
+        try:
+            sess = object.__getattribute__(self, "session")
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+        try:
+            return getattr(sess, name)
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "session":
+            object.__setattr__(self, name, value)
+            return
+        cls_attr = type(self).__dict__.get(name)
+        if inspect.isfunction(cls_attr) or isinstance(cls_attr, (staticmethod, classmethod)):
+            object.__setattr__(self, name, value)
+            return
+        try:
+            sess = object.__getattribute__(self, "session")
+        except AttributeError:
+            object.__setattr__(self, name, value)
+            return
+        setattr(sess, name, value)
+
+    def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+        return executor_init.handle_tool(self, name, args)
+
+
+for _mod in (
+    executor_init,
+    run,
+    router,
+    answer,
+    verify,
+    assess,
+    capture,
+    investigate,
+    place,
+    explore,
+    action,
+):
+    bind_module_methods(AgenticEQAExecutor, _mod, skip=frozenset({"handle_tool"}))
 
 
 def build_agentic_eqa_executor(
@@ -135,7 +180,7 @@ def build_agentic_eqa_executor(
         trace_path=trace_path,
         trace_meta=trace_meta,
         router=router,
-        require_verified=require_verified,  # None → env/config inside executor
+        require_verified=require_verified,
     )
 
 
@@ -152,11 +197,7 @@ def run_agentic_eqa_result(
     router: bool | None = None,
     require_verified: bool | None = None,
 ) -> AgenticEQAResult:
-    """Run the unified agentic loop; return the full :class:`AgenticEQAResult`.
-
-    OVMM find phrases the episode as a question and reads ``verified_obs_id`` plus
-    voxel/graph XYZ from the result — same executor as HM-EQA, not a parallel find loop.
-    """
+    """Run the unified agentic loop; return the full :class:`AgenticEQAResult`."""
     ex = build_agentic_eqa_executor(
         agent,
         question,
@@ -191,12 +232,7 @@ def run_agentic_eqa(
     trace_meta: dict[str, Any] | None = None,
     router: bool | None = None,
 ) -> tuple[str, list[Any]]:
-    """Run the unified agentic loop; returns (discord_text, images) like ``run_eqa``.
-
-    With ``question=None`` the executor runs in explore mode: the VLM router drives
-    ``explore_frontier`` / ``look_around`` until frontiers or the nav budget are
-    exhausted, then ``finish`` returns a coverage summary instead of an answer.
-    """
+    """Run the unified agentic loop; returns (discord_text, images) like ``run_eqa``."""
     result = run_agentic_eqa_result(
         agent,
         question,
