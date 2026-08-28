@@ -83,6 +83,10 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 | find_recep routing | Nearby investigate bias; skip `_prefer_explore` when recep card is close |
 | Trace meta | richer OVMM `trace_meta` (mapping `n_explore` / wall time in episode JSON) |
 | Router observability | `nav_outcome` in Recent actions |
+| **SigLIP per-phase re-attach** | `_do_submit_answer` releases the voxel encoder for Qwen; the OVMM harness re-attaches it (`re_attach_siglip_encoder`) before **each** find phase so FindRec can still `localize_text` the finished map (before: second phase silently returned nothing — `siglip-seed sim=None`). HM-EQA keeps released-SigLIP behavior. |
+| **One-shot proposals** | A voxel proposal (`obs_id < 0`) is blocked after one real nav attempt (`_hypothesis_nav_blocked`): a close ABSENT is decisive, so the router/fallback cannot re-chase the same wall XYZ. The loop re-localizes from the grown map. |
+| **Unpin on ABSENT** | A close ABSENT also removes the retrieval pin (`unpin_localize_xyz`) so a disproven point is never scored by the `pinned_xyz_from_phrases` fallback. |
+| **Explore no-progress block** | A nav that moved < 0.10 m blocks that frontier XY (`_habitat_recent_goals`/`_blocked_goals`) so the next pick rotates to a different frontier or falls to multi-goal explore (fixes the kitchen re-pick-the-same-frontier stall). |
 | **Efficiency** | rby1 episodes, or Stretch with `EMET_SKIP_HEAD_SWEEP=1`, + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
 | Close-look map | Occupancy-aligned min camera range + aimed flag; investigate **stays** on a place card until aimed-close or **escapes** when unreachable / attempts exhausted |
 | Voxel localize | `localize_text` (YoloE / cosine) is an investigate card (`source=voxel`) and the FindObj/FindRec coordinate; camera pose is not scored |
@@ -91,7 +95,8 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 
 | Step | Gate |
 |------|------|
-| `PROFILE=smoke` | Completes &lt; 20 min; FindObj or FindRec ≥ 1 on the S0 episode |
+| `PROFILE=smoke` | Completes < 20 min; FindObj ≥ 1 on the S0 episode (measured: **FindObj 4/4**, FindRec 2/4, both voxel err 0.0 when found) |
 | `PROFILE=slice` | FindRec ≥ 1/2 on rby1 S0+S1 |
+| Mixed gate | `scripts/run_habitat_ovmm_joint_gate.sh` — HM-EQA countclock stays at **gateAB 7/15** while OVMM S0 gains the fixes |
 
 Stretch 9-episode matrix is **not** the default validation ladder.

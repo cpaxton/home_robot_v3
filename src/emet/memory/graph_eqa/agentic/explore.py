@@ -307,6 +307,9 @@ def _unused_detection_hypothesis(self) -> NavHypothesis | None:
             continue
         if self._place_approaches_exhausted(oid):
             continue
+        # A proposal tested up close and ABSENT is blocked by
+        # _hypothesis_nav_blocked; here rely on that (not a bare nav count) so
+        # HM-EQA count/locate targets stay re-approachable from a new bearing.
         conf = getattr(h, "confidence", None)
         try:
             conf_v = float(conf) if conf is not None else 0.0
@@ -566,6 +569,29 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         nav_status = nav_status_code(nav_result)
     else:
         nav_status = nav_outcome_str or ("ok" if ok else "failed")
+    # A nav that moved little means this frontier clamped to the robot (sample
+    # pulled the goal back to the explored-disk edge) or is a no-op re-navigate.
+    # Block the FRONTIER XY (not the clamped goal) so the next pick chooses a
+    # different frontier — otherwise the loop re-picks the same spot forever
+    # (OVMM kitchen stall) instead of falling through to multi-goal explore.
+    # Keep the bar at ~0 m: legitimate short approaches (0.1–0.2 m) must not
+    # be blocked, or EQA coverage regresses (countclock q47).
+    nav_dist_m = float(getattr(nav_result, "dist_m", 0.0) or 0.0) if nav_result is not None else 0.0
+    if used_nav_target and ok and nav_dist_m < 0.10:
+        try:
+            from emet.controller.habitat_nav import goal_key_xy
+
+            recent = getattr(agent, "_habitat_recent_goals", None)
+            blocked = getattr(agent, "_habitat_blocked_goals", None)
+            if frontier_xyz is not None:
+                key = goal_key_xy(np.asarray(frontier_xyz, dtype=float).reshape(-1)[:2])
+                if recent is not None:
+                    recent.append(key)
+                    del recent[:-8]
+                if blocked is not None:
+                    blocked.add(key)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning(f"explore no-progress goal block failed: {exc}")
     if motion_progress:
         self._refresh_room_after_motion()
         # Face frontier and capture at arrival with a level head (look_ahead

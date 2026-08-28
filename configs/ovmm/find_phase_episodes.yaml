@@ -111,4 +111,8 @@ episodes:
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
-    explore_steps: 0
+    # No scene cache exists for the rby1 kitchen; rotate-only mapping leaves a
+    # ~1 m² disk and find cannot localize a jar. Live agentic explore (the
+    # unified OVMM mapping path) is the coverage that makes this leg runnable;
+    # 8 hops (~4 m) still stopped short of the counter, so budget 20.
+    explore_steps: 20

@@ -1152,8 +1152,17 @@ def run_mapping_protocol(
         has_stack = gm is not None
         # Keep S0 rotate-only: S0 episodes have explore_steps==0, so they never
         # reach here. Kitchen / robocasa mapping with explore_steps>0 is
-        # coverage-only and must not depend on an 8-way spawn spin.
+        # coverage-only and must not depend on an 8-way spawn spin — but it does
+        # need a seeded disk: without any scan the explored area is just the
+        # ~0.5 m ``local_radius`` seed, every frontier is outside the reachable
+        # map, and sample_navigation clamps every explore goal to ~0 m (nav
+        # "happens" but never moves). A 4-step rotate seed fixes that.
         if has_stack:
+            if not not_rotate:
+                rotate = getattr(agent, "rotate_in_place", None)
+                if callable(rotate):
+                    rotate(n_steps=mapping_rotate_steps)
+                    steps += 1
             seed_fn = getattr(agent, "_seed_local_radius_explored", None)
             if callable(seed_fn) and vm is not None:
                 try:
@@ -1171,12 +1180,18 @@ def run_mapping_protocol(
                     goal="explore and map the environment",
                     max_nav_steps=n_explore,
                     max_rounds=n_explore + 1,
+                    # Coverage mapping must not require the VLM router — the VL
+                    # worker only starts at find query time. Deterministic
+                    # explore_frontier / finish fallback is exactly the coverage
+                    # policy (uncovered-first frontier picks).
+                    router=False,
                     trace_meta=meta,
                 )
-                steps = int(getattr(result, "n_explore", 0) + getattr(result, "n_nav", 0))
                 # Stash for per-episode JSON (jobs report ``map=`` already exists).
                 agent._ovmm_mapping_result = result  # type: ignore[attr-defined]
-                if steps > 0:
+                n_agentic = int(getattr(result, "n_explore", 0) + getattr(result, "n_nav", 0))
+                steps += n_agentic
+                if n_agentic > 0:
                     if backend_uses_ground_truth(agent):
                         refresh = getattr(agent, "refresh_ground_truth", None)
                         if callable(refresh):
@@ -1186,7 +1201,7 @@ def run_mapping_protocol(
             except Exception as exc:
                 _logger.warning(f"agentic mapping failed, falling back to execute_action: {exc}")
 
-    if not not_rotate:
+    if not not_rotate and steps == 0:
         # rotate_in_place backs up + look_front on default_table_rby1 via
         # _prepare_default_table_rby1_mapping_view, then scans with update() each step.
         rotate = getattr(agent, "rotate_in_place", None)

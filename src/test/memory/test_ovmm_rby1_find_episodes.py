@@ -84,16 +84,20 @@ def test_run_mapping_protocol_agentic_explore_for_non_s0():
 
         n = run_mapping_protocol(agent, explore_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
 
-        assert n == 3
+        # 1 rotate seed + 2 explore + 1 nav
+        assert n == 4
         agent.execute_action.assert_not_called()
-        # Kitchen mapping must not spin in place; S0 rotate-only is explore_steps==0.
-        agent.rotate_in_place.assert_not_called()
+        # A 4-step rotate seeds the explored disk so explore frontiers are
+        # reachable (no 8-way spin, but not zero mapping). S0 is rotate-only.
+        agent.rotate_in_place.assert_called_once_with(n_steps=None)
         mock_run.assert_called_once()
         # coverage only: question None, no object toward
         assert mock_run.call_args[0][1] is None
         assert mock_run.call_args.kwargs["goal"] == "explore and map the environment"
         assert mock_run.call_args.kwargs["max_nav_steps"] == 3
         assert mock_run.call_args.kwargs["max_rounds"] == 4
+        # Coverage mapping must not require the VLM router (not loaded yet).
+        assert mock_run.call_args.kwargs["router"] is False
 
 
 def test_run_mapping_protocol_falls_back_when_agentic_maps_zero_steps():
@@ -118,7 +122,7 @@ def test_run_mapping_protocol_falls_back_when_agentic_maps_zero_steps():
 
         n = run_mapping_protocol(agent, explore_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
 
-    assert n == 4  # 1 rotate + 3 execute_action
+    assert n == 4  # 1 rotate (agentic seed) + 3 execute_action, no double rotate
     agent.rotate_in_place.assert_called_once()
     assert agent.execute_action.call_count == 3
     assert agent._ovmm_mapping_result is mock_result
@@ -228,3 +232,106 @@ def test_voxel_proposal_beats_camera_pose_view():
     nearby = ex._nearby_untried_investigate_hyp(max_dist_m=3.5)
     assert nearby is not None
     assert int(nearby.obs_id) == int(voxel_h.obs_id)
+
+
+def test_proposal_blocked_after_one_nav_attempt():
+    """A voxel proposal is one-shot: after 1 nav attempt it is nav-blocked, so the
+    router/fallback cannot re-chase the same ABSENT wall XYZ."""
+    from unittest.mock import MagicMock
+
+    import numpy as np
+
+    from emet.mapping.voxel_localize import voxel_proposal_id
+    from emet.memory.graph_eqa.agentic.types import PlaceInspectRecord
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = MagicMock()
+    agent.planner = MagicMock()
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose = MagicMock(return_value=np.array([0.0, 0.0, 0.0]))
+    agent.navigate_to_target_pose = MagicMock(return_value=MagicMock(finished=True, ok=True, __bool__=lambda s: True))
+
+    ex = AgenticEQAExecutor(agent, question="Where is the blue cube?", max_rounds=8, max_nav_steps=8, router=False)
+    ex._robot_xyt_world = MagicMock(return_value=np.array([0.0, 0.0, 0.0]))
+    oid = voxel_proposal_id(0)
+    voxel_h = NavHypothesis(phrase="blue cube", obs_id=oid, xyz=np.array([0.05, 0.05, 0.5]), score=400, source="voxel")
+    ex._hypotheses = [voxel_h]
+    ex._nav_to_obs_counts = {}
+    ex._place_inspect = {}
+    ex._tried = {}
+    ex._unreachable_obs_ids = set()
+    ex.action_progress_mode = "off"
+    ex.decision_policy = "legacy"
+    ex._place_approaches_exhausted = MagicMock(return_value=False)
+    ex._next_approach_index = MagicMock(return_value=0)
+
+    # Fresh proposal is not blocked and is the unused detection.
+    assert ex._hypothesis_nav_blocked(oid) is False
+    assert ex._unused_detection_hypothesis() is not None
+
+    # After one nav attempt that did NOT close-ABSENT, the proposal stays
+    # eligible (HM-EQA count/locate targets need a second approach bearing).
+    ex._nav_to_obs_counts[oid] = 1
+    assert ex._hypothesis_nav_blocked(oid) is False
+    assert ex._unused_detection_hypothesis() is not None
+
+    # After a close ABSENT (investigate recorded it) the proposal is blocked.
+    ex._place_inspect[oid] = PlaceInspectRecord(last_verify="ABSENT")
+    assert ex._hypothesis_nav_blocked(oid) is True
+    assert ex._unused_detection_hypothesis() is None
+    # Nearby / next-untried searches must also skip it.
+    assert ex._nearby_untried_investigate_hyp(max_dist_m=3.5) is None
+    assert ex._next_untried_hypothesis() is None
+
+    # Non-proposal cards are not one-shot-gated by this rule.
+    ex._hypotheses = [
+        NavHypothesis(phrase="blue cube", obs_id=7, xyz=np.array([0.05, 0.05, 0.5]), score=10, source="graph")
+    ]
+    ex._nav_to_obs_counts = {7: 1}
+    assert ex._hypothesis_nav_blocked(7) is False
+
+
+def test_close_absent_unpins_voxel_localize():
+    """A close ABSENT on a proposal must unpin the voxel XYZ so the harness
+    never scores a disproven point (pinned_xyz_from_phrases fallback)."""
+    from unittest.mock import MagicMock
+
+    from emet.mapping.voxel_localize import pin_localize_xyz, pinned_localize_xyz, unpin_localize_xyz
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    voxel = MagicMock()
+    pin_localize_xyz(voxel, "blue cube", [0.05, 0.05, 0.5])
+    pinned, _ = pinned_localize_xyz(voxel, "blue cube")
+    assert pinned is not None
+    assert unpin_localize_xyz(voxel, "blue cube") is True
+    assert pinned_localize_xyz(voxel, "blue cube")[0] is None
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = voxel
+    agent._voxel_score_phrase = "blue cube"
+    agent._voxel_score_xyz = (0.05, 0.05, 0.5)
+    agent._voxel_score_from_pin = True
+
+    ex = AgenticEQAExecutor(agent, question="Where is the blue cube?", max_rounds=4, max_nav_steps=4, router=False)
+    ex._target_phrase = "blue cube"
+    ex.decision_policy = "legacy"
+    # Simulate the close-ABSENT retract path (mocked graph retract returns a dict).
+    ex.graph_memory.retract_phrase_claim_at_obs = MagicMock(return_value={"phrase": "blue cube", "ok": True})
+    ex._observation_room = MagicMock(return_value="")
+    ex._known_room_for_event = MagicMock(return_value="")
+    ex._append_trace = MagicMock()
+
+    ex._maybe_retract_claim_after_station(
+        -3_000_000,
+        closest_m=0.5,
+        verify_out={"status": "ABSENT", "phrase": "blue cube", "obs_id": 99},
+    )
+    # The voxel pin and the loop-scored voxel record are cleared.
+    assert pinned_localize_xyz(voxel, "blue cube")[0] is None
+    assert ex._voxel_score_xyz is None
+    assert ex._voxel_score_phrase is None
+    assert ex._voxel_score_from_pin is None

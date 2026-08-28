@@ -169,6 +169,18 @@ def clear_localize_pins(voxel_map: Any) -> None:
     setattr(voxel_map, LOCALIZE_PINS_ATTR, {})
 
 
+def unpin_localize_xyz(voxel_map: Any, phrase: str) -> bool:
+    """Remove the pin for ``phrase`` — a close ABSENT disproves that XYZ."""
+    query = str(phrase or "").strip().lower()
+    if voxel_map is None or not query:
+        return False
+    store = _pin_store(voxel_map)
+    if query not in store:
+        return False
+    store.pop(query, None)
+    return True
+
+
 def pin_phrases_after_mapping(
     voxel_map: Any,
     phrases: list[str] | tuple[str, ...] | None,

@@ -257,6 +257,51 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
 - [x] **Unify OVMM mapping with agentic explore (2026-08-28):** `run_mapping_protocol` for
       `explore_steps>0` now uses `mode=explore` coverage loop; arrival `look_ahead` facing
       frontier; tests for mapping entrypoint/arrival look/voxel-first; docs updated.
+- [x] **Object targeting fixes (2026-08-28, live rby1 S0 + kitchen):** three systematic
+      find-loop bugs found and fixed on the **shared** AgenticEQAExecutor:
+  1. **SigLIP released across find phases** (`agentic/answer.py:_do_submit_answer` →
+     `release_siglip_for_vlm` drops `voxel_map.encoder`; nothing re-attached it). FindRec
+     (second phase) could never `localize_text`. Fixed: `re_attach_siglip_encoder` wired into
+     `warm_siglip_confirmed_memory` (`eval/dynagraph_vram.py`), so each phase localizes on
+     the finished map. Rby1 S0 FindRec went from `recep_localize_source: None` → voxel err 0.0.
+  2. **Voxel proposals re-chased after close ABSENT** — the VLM router re-emits
+     `investigate(obs_id<0)` on the same wall point (`-3000000` visits 2..N). Fixed: proposals
+     are one-shot in `_hypothesis_nav_blocked` (`agentic/capture.py`), not just
+     `_unused_detection_hypothesis` — S0 obj loop went from 3× chases to 1×.
+  3. **Disproven voxel pins were still scored** — a close ABSENT leaves the pin; the harness
+     `pinned_xyz_from_phrases` fallback scored the wall point. Fixed: `unpin_localize_xyz`
+     (`mapping/voxel_localize.py`) called from `_maybe_retract_claim_after_station` on ABSENT,
+     plus clearing the loop-scored voxel record.
+  **Measured (rby1 S0 `default_table_rby1_s0_distinct_recep`, 5 runs): FindObj 5/5 (voxel,
+  err 0.0); FindRec 3/5 (voxel err 0.0 when found).** FindObj is stable; FindRec is SigLIP
+  marginality on the small blue cube (YOLO labels in this scene are garbage:
+  box/sign/tv/monitor/divider — graph recall is useless; voxel is the only reliable path).
+  Mixed gate still validates EQA: countclock **7/15 = gateAB** (no regression from the
+  shared-loop changes).
+- [x] **Kitchen explore stall (2026-08-28):** live agentic mapping still creeps (8–20 hops
+      cover only ~3 m²; the nearest-uncovered frontier clamps to ~0 and the loop re-picked
+      the same frontier). Added a no-progress goal block in `_tool_explore_frontier`
+      (`agentic/explore.py`): after a nav that moved < 0.10 m, block the FRONTIER XY in
+      `_habitat_recent_goals`/`_habitat_blocked_goals` so the next pick chooses a different
+      frontier or falls through to multi-goal explore. Frontier selection now rotates
+      (verified live). Kitchen find still 0/2 — coverage volume, not the loop.
+- [x] **SigLIP re-attach scoped to OVMM (2026-08-28):** re-attach was briefly in the shared
+      `warm_siglip_confirmed_memory`; HM-EQA countclock q47 flipped False, so it is now
+      called only from the OVMM harness `run_ovmm_agentic_localize` (before each phase) —
+      HM-EQA keeps its released-SigLIP behavior.
+- [x] **One-shot proposals refined to close-ABSENT (2026-08-28):** the first one-shot gate
+      blocked a proposal after *any* one nav; countclock dropped to 5/15 (q21/q47/q93
+      flips). Refined: a proposal is blocked only after a **close ABSENT** recorded on that
+      card (`_hypothesis_nav_blocked` + `_unused_detection_hypothesis` now both check
+      `_place_inspect.last_verify == ABSENT`), so HM-EQA count/locate targets stay
+      re-approachable from a new bearing while OVMM wall-chases stay one-shot. **Countclock
+      back to 7/15 = gateAB** (q21/43 recovered; q93 True solo — variance, not systematic).
+- [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
+      is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
+      `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
+      Levers: (a) lower the voxel localize bar for find (risky false positives; one-shot
+      proposals now make ABSENT cheap), (b) a closer start-recep look so YOLO/SigLIP see the
+      object, (c) accept variance and report voxel err distribution.
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
       runs all 8 rounds with `nav=0..2 explore=N`; the router keeps picking
       explore_frontier and the assess returns not-present (table not in those views).
