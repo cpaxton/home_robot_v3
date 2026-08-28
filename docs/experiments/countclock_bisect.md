@@ -11,6 +11,9 @@ Frozen 15-qid set: `12,21,28,32,33,43,47,48,51,60,78,84,86,88,93` via
 | `countclock_20260825_201933` | `23efa534` | **7/15** | 2 | **Peak** — action contract; `resume=1` |
 | `countclock_20260826_084546` | `c1591698` | **5/15** | 5 | +`CLOSE_LOOK_STATUS`, lean profile |
 | `countclock_close_look_ctx_*` | `a32271b3` | **3/15** | 7 | +frame dedupe + `eqa_decisions/` |
+| `20260828_15_gateA` | `a438e65e` | **6/15** | — | Location missing-FIND gate (A); `4/5` canary |
+| `20260828_15_gateAB` | `a438e65e`+`close_map` | **7/15** | — | **Ties peak** — A + voxel close-map resolved (default) |
+| `20260828_15_gateAC` | `a438e65e`+`img_strict` | **5/15** | — | A + image-landmark strict (off by default) |
 
 Per-qid grid (OK = correct):
 
