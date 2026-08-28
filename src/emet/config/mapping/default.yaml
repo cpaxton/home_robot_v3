@@ -28,6 +28,14 @@ remove_visited_from_obstacles: False
 min_depth: 0.25
 max_depth: 2.5
 
+# ``look_around`` head pans. Default off (single look_front capture) for every
+# robot that loads this file — including hardware Stretch. That is intentional
+# for now (OVMM/sim iteration); restore 4-pan Realsense coverage with
+# ``EMET_FORCE_HEAD_SWEEP=1`` or ``--set mapping.look_around_head_sweep=true``.
+# The StretchZmqClient fallback in look_around_should_sweep only applies when
+# this key is omitted.
+look_around_head_sweep: false
+
 # Depth for voxel mapping: ``sensor`` (ZMQ/real depth), ``da3`` (Depth Anything 3 from RGB), ``auto`` (sensor if present else DA3).
 # depth-anything-3 ships with default ``uv sync``; ZMQ clients may need ``allow_missing_depth`` when the server omits depth.
 # ``da3_process_res``: lower = faster; default 378 with DA3-SMALL when depth uses DA3 / auto fallback.

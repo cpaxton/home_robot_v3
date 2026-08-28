@@ -161,7 +161,7 @@ def run(self) -> AgenticEQAResult:
         # Close+VLM-absent → force explore so coverage grows before the next investigate.
         # Locate / close-look: keep investigating nearby place cards instead of frontier drift.
         skip_prefer_explore = self._hold_detections_before_explore() and (
-            self._unused_detection_hypothesis() is not None or self._nearby_untried_investigate_hyp() is not None
+            self._unused_detection_hypothesis() is not None
         )
         if (
             self.decision_policy != "grounded_v2"

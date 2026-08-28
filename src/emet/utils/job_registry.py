@@ -635,6 +635,9 @@ def resolve_report_out_dir(job: JobRecord) -> Path | None:
             or list(path.glob("*_q*.jsonl"))
             or list(path.glob("*.progress"))
             or (path / "progress.json").is_file()
+            or (path / "summary.json").is_file()
+            or next(path.glob("find/*_dynagraph.json"), None) is not None
+            or next(path.glob("*_dynagraph.json"), None) is not None
         ):
             return path
     for path in candidates:
@@ -995,9 +998,17 @@ class EpisodeScore:
     answerable: bool | None = None  # agentic policy ANSWER (from summary/trace)
     answer_provenance: str | None = None  # forced-answer / submit channel tag
     path: str | None = None
+    episode_id: str | None = None  # OVMM find JSON (not an HM-EQA qid)
+    find_object_success: bool | None = None
+    find_recep_success: bool | None = None
+    steps_note: str | None = None  # map=… oRnNeN rRnNeN
 
     @property
     def result_label(self) -> str:
+        if self.find_object_success is not None or self.find_recep_success is not None:
+            o = 1 if self.find_object_success else 0
+            r = 1 if self.find_recep_success else 0
+            return f"{o + r}/2"
         if self.correct is True:
             return "ok"
         if self.correct is False:
@@ -1191,8 +1202,117 @@ def _collect_episode_scores_from_consolidated(
     return scores
 
 
+def _ovmm_int(row: dict[str, Any], key: str) -> int | None:
+    raw = row.get(key)
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    return None
+
+
+def _ovmm_phase_steps_note(prefix: str, row: dict[str, Any]) -> str:
+    rounds = _ovmm_int(row, f"{prefix}_agentic_rounds")
+    nav = _ovmm_int(row, f"{prefix}_n_nav")
+    expl = _ovmm_int(row, f"{prefix}_n_explore")
+    letter = "o" if prefix == "obj" else "r"
+    if rounds is None and nav is None:
+        return ""
+    if nav is None:
+        return f"{letter}{int(rounds or 0)}"
+    return f"{letter}{int(rounds or 0)}n{int(nav or 0)}e{int(expl or 0)}"
+
+
+def _ovmm_steps_note(row: dict[str, Any]) -> str | None:
+    parts: list[str] = []
+    ctrl = _ovmm_int(row, "n_controller_steps")
+    exp = _ovmm_int(row, "explore_steps")
+    if ctrl is not None:
+        parts.append(f"map={ctrl}" + (f"/{exp}exp" if exp is not None else ""))
+    obj = _ovmm_phase_steps_note("obj", row)
+    recep = _ovmm_phase_steps_note("recep", row)
+    if obj:
+        parts.append(obj)
+    if recep:
+        parts.append(recep)
+    return " ".join(parts) or None
+
+
+def _episode_score_from_ovmm_row(row: dict[str, Any], *, path: Path, qid: int) -> EpisodeScore | None:
+    eid = str(row.get("episode_id") or "").strip()
+    if not eid:
+        return None
+    obj_raw = row.get("find_object_success")
+    recep_raw = row.get("find_recep_success")
+    obj_ok = obj_raw if isinstance(obj_raw, bool) else None
+    recep_ok = recep_raw if isinstance(recep_raw, bool) else None
+    both = (obj_ok is True) and (recep_ok is True)
+    neither_scored = obj_ok is None and recep_ok is None
+    ctrl = _ovmm_int(row, "n_controller_steps")
+    return EpisodeScore(
+        arm=str(row.get("backend") or "ovmm").lower(),
+        question_id=qid,
+        correct=None if neither_scored else both,
+        predicted=str(row.get("object_query") or "").strip() or None,
+        gold=str(row.get("goal_recep") or "").strip() or None,
+        planning_steps=ctrl,
+        path=str(path),
+        episode_id=eid,
+        find_object_success=obj_ok,
+        find_recep_success=recep_ok,
+        steps_note=_ovmm_steps_note(row),
+    )
+
+
+def _iter_ovmm_result_jsons(root: Path) -> list[Path]:
+    found: list[Path] = []
+    seen: set[str] = set()
+    for path in [*sorted(root.glob("find/*_dynagraph.json")), *sorted(root.glob("*_dynagraph.json"))]:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen or not path.is_file():
+            continue
+        seen.add(key)
+        found.append(path)
+    return found
+
+
+def _collect_ovmm_episode_scores(out_dir: Path) -> list[EpisodeScore]:
+    """Load OVMM find-phase JSON (``find/*_dynagraph.json`` or ``summary.json`` rows)."""
+    scores: list[EpisodeScore] = []
+    files = _iter_ovmm_result_jsons(out_dir)
+    if files:
+        for i, path in enumerate(files, start=1):
+            try:
+                row = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(row, dict):
+                continue
+            score = _episode_score_from_ovmm_row(row, path=path, qid=i)
+            if score is not None:
+                scores.append(score)
+        return scores
+    summary = out_dir / "summary.json"
+    if not summary.is_file():
+        return []
+    try:
+        payload = json.loads(summary.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    for i, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            continue
+        score = _episode_score_from_ovmm_row(row, path=summary, qid=i)
+        if score is not None:
+            scores.append(score)
+    return scores
+
+
 def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
-    """Load scored episodes from H2H ``{arm}_q{id}.jsonl`` and consolidated slice jsonls."""
+    """Load scored episodes from H2H ``{arm}_q{id}.jsonl``, consolidated slice jsonls, and OVMM find JSON."""
     if not out_dir:
         return []
     root = Path(out_dir).expanduser()
@@ -1234,7 +1354,13 @@ def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
             continue
         scores.append(score)
         seen.add(key)
-    scores.sort(key=lambda s: (s.arm, s.question_id))
+    for score in _collect_ovmm_episode_scores(root):
+        key = (score.arm, score.question_id)
+        if key in seen:
+            continue
+        scores.append(score)
+        seen.add(key)
+    scores.sort(key=lambda s: (s.arm, s.episode_id or "", s.question_id))
     return scores
 
 
@@ -1407,15 +1533,31 @@ def format_job_report(
         lines.append("")
         if fail_only:
             lines.append(f"fails only ({sum(1 for e in table_eps if e.correct is False)}):")
-        lines.append(f"{'Q':>4}  {'arm':<8}  {'result':<5}  {'pred/gold':<10}  {'steps':>5}  conf")
-        for e in table_eps:
-            pg = f"{e.predicted or '—'}/{e.gold or '—'}"
-            steps = "-" if e.planning_steps is None else str(e.planning_steps)
-            lines.append(f"{e.question_id:>4}  {e.arm:<8}  {e.result_label:<5}  {pg:<10}  {steps:>5}  {e.conf_cell()}")
+        ovmm_eps = [e for e in table_eps if e.episode_id]
+        hmeqa_eps = [e for e in table_eps if not e.episode_id]
+        if ovmm_eps:
+            lines.append("ovmm: map=controller steps (1 rotate + N explore)  o/r=rounds or rounds/nav/explore")
+            lines.append(f"{'episode':<34} {'Obj/Rec':<6} steps")
+            for e in ovmm_eps:
+                obj_mark = "Y" if e.find_object_success else ("—" if e.find_object_success is None else "N")
+                recep_mark = "Y" if e.find_recep_success else ("—" if e.find_recep_success is None else "N")
+                steps = e.steps_note or ("-" if e.planning_steps is None else str(e.planning_steps))
+                label = e.episode_id or str(e.question_id)
+                if len(label) > 34:
+                    label = label[:31] + "..."
+                lines.append(f"{label:<34} {obj_mark}/{recep_mark:<4} {steps}")
+        if hmeqa_eps:
+            lines.append(f"{'Q':>4}  {'arm':<8}  {'result':<5}  {'pred/gold':<10}  {'steps':>5}  conf")
+            for e in hmeqa_eps:
+                pg = f"{e.predicted or '—'}/{e.gold or '—'}"
+                steps = "-" if e.planning_steps is None else str(e.planning_steps)
+                lines.append(
+                    f"{e.question_id:>4}  {e.arm:<8}  {e.result_label:<5}  {pg:<10}  {steps:>5}  {e.conf_cell()}"
+                )
+            if any(e.verified is not None or e.confident is not None for e in hmeqa_eps):
+                lines.append("conf: v=verify-gate  e=EQA Confidence: (a=answerable only if ≠ v)")
         if not table_eps and fail_only:
             lines.append("(no incorrect episodes)")
-        if any(e.verified is not None or e.confident is not None for e in episodes):
-            lines.append("conf: v=verify-gate  e=EQA Confidence: (a=answerable only if ≠ v)")
         lines.append("tip:  emet jobs report JOB --question ID --rooms")
     else:
         lines.append("")
@@ -1933,9 +2075,7 @@ def format_eqa_history_investigation_lines(inv: dict[str, Any] | None, *, verbos
     ]
     per_action = inv.get("per_action") or {}
     for action, stats in sorted(per_action.items(), key=lambda kv: -kv[1].get("count", 0)):
-        lines.append(
-            f"  action {action}: count={stats.get('count')} unknown={stats.get('unknown')}"
-        )
+        lines.append(f"  action {action}: count={stats.get('count')} unknown={stats.get('unknown')}")
     for flag in inv.get("red_flags") or []:
         lines.append(f"  RED: {flag}")
     if verbose and not per_action:
@@ -2006,9 +2146,7 @@ def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> di
         bundle = row.get("debug_bundle_dir")
         hist_iters = _load_eqa_history_iterations(str(bundle) if bundle else None)
         payload["view_investigation"] = analyze_eqa_history_investigation(hist_iters)
-        payload["eqa_history_path"] = (
-            str(Path(str(bundle)).expanduser() / "eqa_history.json") if bundle else None
-        )
+        payload["eqa_history_path"] = str(Path(str(bundle)).expanduser() / "eqa_history.json") if bundle else None
     if trace is not None:
         rooms = trace.get("rooms")
         if isinstance(rooms, dict) and not rooms.get("question_target_rooms"):

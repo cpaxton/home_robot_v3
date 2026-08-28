@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from emet.eval.ovmm_map_probe import graph_hits_for_query, probe_graph, unique_labels
+from emet.eval.ovmm_map_probe import graph_hits_for_query, probe_graph, probe_voxel_device, unique_labels
 from emet.memory.format import GRAPH_FILENAME
 
 
@@ -53,3 +53,10 @@ def test_probe_graph_reads_json(tmp_path: Path) -> None:
     assert by_q["apple"] == 0
     labels = unique_labels([{"labels": ["Cabinet", "cabinet"]}, {"labels": ["jar"]}])
     assert {x.lower() for x in labels} == {"cabinet", "jar"}
+
+
+def test_probe_voxel_device_cpu_only_and_fallback() -> None:
+    assert probe_voxel_device(cpu_only=True) == "cpu"
+    # Without forcing CPU, CUDA is used only when torch reports it.
+    auto = probe_voxel_device(cpu_only=False)
+    assert auto in {"cpu", "cuda"}

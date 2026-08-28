@@ -1151,6 +1151,19 @@ def test_ovmm_help():
     assert "probe-verify" in out
 
 
+def test_ovmm_probe_map_help():
+    """emet ovmm probe-map --help lists --voxel and --cpu-only."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "probe-map", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "--voxel" in out
+    assert "--cpu-only" in out
+
+
 def test_sqa3d_help():
     """emet sqa3d --help lists embodied subcommands."""
     result = subprocess.run(

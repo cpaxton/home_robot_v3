@@ -477,6 +477,9 @@ def ovmm_status(out_dir: Path, backend: str, as_json: bool) -> None:
 @click.option("--voxel", "do_voxel", is_flag=True, default=False, help="Also run SigLIP localize_text on voxel_map.pkl")
 @click.option("--list", "list_caches", is_flag=True, default=False, help="List cached maps and exit")
 @click.option(
+    "--cpu-only", is_flag=True, default=False, help="Run --voxel SigLIP on CPU (also used when CUDA is absent)"
+)
+@click.option(
     "--out",
     "out_path",
     type=click.Path(dir_okay=False, path_type=Path),
@@ -489,6 +492,7 @@ def ovmm_probe_map(
     queries: tuple[str, ...],
     do_voxel: bool,
     list_caches: bool,
+    cpu_only: bool,
     out_path: Path | None,
 ) -> None:
     """Query a dumped scene map with no simulator.
@@ -513,7 +517,7 @@ def ovmm_probe_map(
     target = resolve_map_dir(map_dir=map_dir, cache_key=cache_key)
     report: dict = {"graph": probe_graph(target, phrases)}
     if do_voxel:
-        report["voxel"] = probe_voxel(target, phrases)
+        report["voxel"] = probe_voxel(target, phrases, cpu_only=cpu_only)
     text = json.dumps(report, indent=2)
     click.echo(text)
     if out_path is not None:

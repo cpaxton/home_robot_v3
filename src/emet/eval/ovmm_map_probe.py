@@ -142,9 +142,22 @@ def probe_graph(
     }
 
 
+def probe_voxel_device(*, cpu_only: bool = False) -> str:
+    """SigLIP device for ``probe-map --voxel``: CUDA when available unless ``cpu_only``."""
+    if cpu_only:
+        return "cpu"
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def probe_voxel(
     map_dir: Path | str,
     queries: list[str],
+    *,
+    cpu_only: bool = False,
 ) -> dict[str, Any]:
     """Load ``voxel_map.pkl`` and run ``localize_text`` (SigLIP; no MuJoCo).
 
@@ -160,9 +173,10 @@ def probe_voxel(
     if not pkl.is_file():
         raise FileNotFoundError(f"missing {pkl}")
     parameters = get_parameters("dynav_config.yaml")
+    device = probe_voxel_device(cpu_only=cpu_only)
     encoder = get_shared_mask_siglip_encoder(
         version="so400m",
-        device="cuda",
+        device=device,
         feature_matching_threshold=0.14,
     )
     voxel_map = SparseVoxelMap(
@@ -194,4 +208,4 @@ def probe_voxel(
                 "yoloe_hit": bool(stats.get("yoloe_hit")) if isinstance(stats, dict) else False,
             }
         )
-    return {"map_dir": str(Path(map_dir).expanduser().resolve()), "queries": rows}
+    return {"map_dir": str(Path(map_dir).expanduser().resolve()), "queries": rows, "device": device}

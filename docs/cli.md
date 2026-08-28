@@ -581,10 +581,10 @@ OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). D
 | `sweep` | `prepare` → find → full → `rates` (paper multi-env path) |
 | `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
 | `status` | Per-episode outcomes + bind-fail counts |
-| `probe-map` | Query a saved scene map (`graph.json` / optional `voxel_map.pkl`) with no sim |
+| `probe-map` | Query a saved scene map (`graph.json` / optional `voxel_map.pkl`) with no sim. `--voxel` runs SigLIP (CUDA if available; `--cpu-only` forces CPU) |
 | `probe-verify` | Spawn Robocasa, aim from a navigable floor pose, score YOLOE + SigLIP on head RGB |
 
-**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find is the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions) — method in [dynagraph.md](dynagraph.md#method). `localize_text` is an investigate card and the scored XYZ (never camera pose). The harness does **not** pin episode YAML phrases. Preset `agentic_find: true`. `--oneshot-localize` / `emet ovmm full --oneshot-localize` is a leftover **mapping ablation**, not the product path. Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident). `emet ovmm probe-map` matches find phrases against a dumped map. `emet ovmm probe-verify` is the live drive-up check (rby1 + teleport, no AgenticEQA).
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find is the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions) — method in [dynagraph.md](dynagraph.md#method). `localize_text` is an investigate card and the scored XYZ (never camera pose). The harness does **not** pin episode YAML phrases. Preset `agentic_find: true`. `--oneshot-localize` / `emet ovmm full --oneshot-localize` is a leftover **mapping ablation**, not the product path. Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident). `emet ovmm probe-map` matches find phrases against a dumped map. `emet ovmm probe-verify` is the live drive-up check (rby1 + teleport, no AgenticEQA). Fast gates: `scripts/run_ovmm_find_recep_slice.sh` (`PROFILE=smoke` rby1; `PROFILE=stretch` / `stretch-kitchen` skip Stretch head pans via `EMET_SKIP_HEAD_SWEEP=1`).
 
 **Examples:**
 ```bash
@@ -601,6 +601,9 @@ uv run emet ovmm rates --out OUT
 uv run emet ovmm status --out OUT
 uv run emet ovmm probe-map --list
 uv run emet ovmm probe-map --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+# SigLIP on the pickle (CUDA if available; --cpu-only to force CPU; still no sim):
+uv run emet jobs run --name ovmm-probe-map-voxel --need-mib 8000 --gpu-exclusive -- \
+  uv run emet ovmm probe-map --voxel --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
 # Live Robocasa: drive up to GT jar/cabinet and verify on the current view
 uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusive -- \
   uv run emet ovmm probe-verify
@@ -779,7 +782,7 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
 | `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
-| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters). `--fail-only` lists incorrect rows; `--out-dir PATH` reports without a registry id |
+| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters). OVMM find JSON shows **steps** (`map=` rotate+explore controller steps; `o`/`r` = FindObj/FindRec agentic rounds, plus `n`/`e` nav/explore when recorded). `--fail-only` lists incorrect rows; `--out-dir PATH` reports without a registry id |
 | `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive with sections: **view investigation** (eqa_history action/Unknown loops), **rooms** (merged/vlm/graph timeline, `Rooms:` line, MCQ targets, mismatch/redirects), router picks, investigate/station/explore, assess, verify, red flags. Flags: `--rooms` (rooms focus), `-s/--section`, `--brief`, `-v/--verbose`, `--json` |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled; prints resume hint + warns if unmanaged eval PIDs remain |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |

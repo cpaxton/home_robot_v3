@@ -14,16 +14,18 @@ North star: raise **FindObj** and **FindRec** under teleport dynagraph — but
 | `verify` | Robocasa rby1 PickPlace | GT drive-up + YOLOE/SigLIP on current RGB | ~5–15 min |
 | `smoke` (default) | same S0 table, agentic | 6 | ~5–15 min |
 | `slice` | + `robocasa_rby1_pp_s1` | 6 | ~15–40 min |
-| `stretch-legacy` | old Stretch S0/S1/S2 trio | 8 | hours — overnight only |
+| `stretch` | Stretch table S0, **no head pan** | 6 | rby1-smoke-like; known-good look_front camera |
+| `stretch-kitchen` | Stretch `robocasa_pp_s1`, **no head pan** | 6 | kitchen camera check without 40–80s sweeps |
+| `stretch-legacy` | old Stretch S0/S1/S2 trio **with** pans | 8 | hours — overnight only |
 
-**Iterate here, not on Stretch `molmo-robocasa-find8`.** The table episode backs up and looks at the workspace (`_prepare_default_table_rby1_mapping_view`) so red cylinder / blue cube are in view after a 4-step spin. This morning’s rby1 smoke: FindObj **1/1** in **106 s** (voxel XYZ). Stretch kitchen find8 is ~3 h/episode with head sweeps and `goal_recep: cab` (VLM looks for the word “cab”). PickPlace `obj_main` is often a sugar cube — `emet ovmm probe-verify` skips that and aims from spawn at a jar/bottle/bowl-class body (`emet.eval.ovmm_probe_targets`). Offline dumps: `emet ovmm probe-map`.
+**Iterate here, not on Stretch `molmo-robocasa-find8`.** The table episode backs up and looks at the workspace (`_prepare_default_table_rby1_mapping_view`) so red cylinder / blue cube are in view after a 4-step spin. This morning’s rby1 smoke: FindObj **1/1** in **106 s** (voxel XYZ). Stretch kitchen find8 is ~3 h/episode with head sweeps and `goal_recep: cab` (VLM looks for the word “cab”). The 4-pan `look_around` is optional: `EMET_SKIP_HEAD_SWEEP=1` (kept by `PROFILE=stretch` / `stretch-kitchen`) captures one frame at the current pose instead. PickPlace `obj_main` is often a sugar cube — `emet ovmm probe-verify` skips that and aims from spawn at a jar/bottle/bowl-class body (`emet.eval.ovmm_probe_targets`). Offline dumps: `emet ovmm probe-map`.
 
 Saved maps (no new sim): `~/.cache/emet/scene_maps/<key>/voxel_map.pkl` + `graph.json`. Probe without MuJoCo:
 
 ```bash
 uv run emet ovmm probe-map --list
 uv run emet ovmm probe-map --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
-# SigLIP on the pickle (GPU, still no sim):
+# SigLIP on the pickle (CUDA if available; still no sim). `--cpu-only` forces CPU:
 uv run emet jobs run --name ovmm-probe-map-voxel --need-mib 8000 --gpu-exclusive -- \
   uv run emet ovmm probe-map --voxel --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
 ```
@@ -48,11 +50,21 @@ uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive
 PROFILE=slice uv run emet jobs run --name ovmm-find-rby1-slice --need-mib 8000 --gpu-exclusive -- \
   ./scripts/run_ovmm_find_recep_slice.sh
 
+# Stretch, no 4-pan look_around (look_front camera; faster than find8):
+PROFILE=stretch uv run emet jobs run --name ovmm-find-stretch-nosweep --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+PROFILE=stretch-kitchen uv run emet jobs run --name ovmm-find-stretch-kitchen-nosweep --need-mib 8000 --gpu-exclusive -- \
+  ./scripts/run_ovmm_find_recep_slice.sh
+
 uv run python scripts/summarize_ovmm_agentic_traces.py --out-dir OUT
 ```
 
-Controller: `DynamemController.look_around` skips head pans for non-Stretch robots
-(rby1 / GenericZmqClient). Override with `EMET_FORCE_HEAD_SWEEP=1`.
+Controller: `look_around` reads `mapping.look_around_head_sweep` from the
+`robots.<id>` overlay in [`configs/emet/default.yaml`](../../configs/emet/default.yaml)
+(Stretch and rby1 default **false** = single look_front capture). Env:
+`EMET_SKIP_HEAD_SWEEP=1` still skips; `EMET_FORCE_HEAD_SWEEP=1` pans
+(`PROFILE=stretch-legacy`). `--set mapping.look_around_head_sweep=true` for a
+one-off Realsense coverage sweep.
 
 ## Historical Stretch baseline (do not use for iteration)
 
@@ -64,11 +76,14 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 
 | Area | Change |
 |------|--------|
-| Hypothesis recall | `_recall_nav_hypotheses()`; voxel `localize_text` cards from the **question**, not episode YAML / GT placement seeds |
+| **Mapping** | `run_mapping_protocol` with `explore_steps>0` uses `AgenticEQAExecutor` `mode=explore` (coverage, `question=None`, no object `toward`); `S0` `explore_steps=0` stays rotate-only. Frontier picks are uncovered-first / VLM among frontier RGBs — object-biased mapping is wrong for random OVMM placement. |
+| Arrival capture | `_tool_explore_frontier` after nav: face frontier (`target_theta`), `look_ahead` (tilt 0) then `capture_and_update` at arrival; no pre-move `look_around` sweep and not `look_front` −30°. Hop-until-arrival in `navigate_to_target_pose` finishes 27-wp kitchen paths. |
+| Hypothesis recall | `_recall_nav_hypotheses()`; voxel `localize_text` cards from the **question**, not episode YAML / GT placement seeds. Voxel proposal beats camera-pose-at-feet graph view (`CAMERA_POSE_PLACE` redirect). |
+| Find voxel-first | `localize_text` on finished voxel map, then `investigate` that XYZ; do not pin-hunt object while mapping. If no voxel hit, one `explore_frontier` rather than 150 wall nodes. |
 | find_recep routing | Nearby investigate bias; skip `_prefer_explore` when recep card is close |
-| Trace meta | richer OVMM `trace_meta` |
+| Trace meta | richer OVMM `trace_meta` (mapping `n_explore` / wall time in episode JSON) |
 | Router observability | `nav_outcome` in Recent actions |
-| **Efficiency** | rby1 episodes + skip head sweep on non-Stretch + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
+| **Efficiency** | rby1 episodes, or Stretch with `EMET_SKIP_HEAD_SWEEP=1`, + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
 | Close-look map | Occupancy-aligned min camera range + aimed flag; investigate **stays** on a place card until aimed-close or **escapes** when unreachable / attempts exhausted |
 | Voxel localize | `localize_text` (YoloE / cosine) is an investigate card (`source=voxel`) and the FindObj/FindRec coordinate; camera pose is not scored |
 

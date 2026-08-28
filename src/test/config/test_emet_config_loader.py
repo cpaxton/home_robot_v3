@@ -48,6 +48,18 @@ def test_robot_overlay_merges_innate_mars_mapping():
     assert filters["voxel_pcd_dbscan_min_samples"] == 6
 
 
+def test_stretch_overlay_look_around_head_sweep_off():
+    cfg = load_config(default_config_path())
+    merged = merge_robot_overlay(cfg.raw, "stretch")
+    assert merged["mapping"]["look_around_head_sweep"] is False
+    from emet.core.parameters import get_parameters
+
+    stretch = get_parameters("dynav_config.yaml", robot="stretch")
+    assert stretch.get("look_around_head_sweep") is False
+    rby1 = get_parameters("dynav_config.yaml", robot="rby1")
+    assert rby1.get("look_around_head_sweep") is False
+
+
 def test_dot_override_wins_over_file():
     cfg = load_config(default_config_path(), overrides=["mapping.voxel_size=0.08"])
     assert cfg.mapping_dict["voxel_size"] == 0.08

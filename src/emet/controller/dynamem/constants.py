@@ -42,6 +42,12 @@ DYNAMEM_HEAD_SWEEP_SPEED_TOL = 0.20
 DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL = 0.04
 DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD = 0.35
 DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S = 0.08
+
+# A* is executed in 8-waypoint chunks so look-around can grow the map along a
+# long path. Leftover must be resumed (empty-text explore used to drop it and
+# pick a new frontier). One investigate/explore call hops until arrival.
+DYNAMEM_NAV_CHUNK_WPS = 8
+DYNAMEM_NAV_MAX_HOPS = 8
 # Keep default-table rby1 scans on the workspace instead of 45° floor turns.
 DEFAULT_TABLE_MAPPING_YAW_HALF_RAD = float(np.deg2rad(25.0))
 

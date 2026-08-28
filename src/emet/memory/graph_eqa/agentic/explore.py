@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +241,18 @@ def _hold_detections_before_explore(self) -> bool:
     if question_has_mcq_options(self.question) and not bool(self._close_look_required):
         return False
     return self._prefers_nearby_investigate()
+
+
+def _defer_nearby_for_prefer_explore(self) -> bool:
+    """True when a close ABSENT look should grow coverage before another nearby card.
+
+    Locate questions otherwise pin unused graph views within NEAR_INVESTIGATE_M
+    (~3.5 m). After mapping a kitchen that is always true, so explore never runs
+    and the map stops growing. One explore hop after ``_prefer_explore`` first.
+    """
+    if not bool(getattr(self, "_prefer_explore", False)):
+        return False
+    return int(getattr(self, "_n_consecutive_explore", 0) or 0) < 1
 
 
 def _investigate_matches_target(self, hyp: NavHypothesis | None, obs_id: int) -> bool:
@@ -493,10 +507,23 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
     start = self._robot_xyt_world()
     if start is None:
         start = np.array([0.0, 0.0, 0.0])
+    # Arrival should face the frontier so the arrival RGB looks into
+    # uncovered space (tilt 0 via look_ahead), not at the floor.
+    target_theta: float | None = None
+    if frontier_xyz is not None:
+        try:
+            arr = np.asarray(frontier_xyz, dtype=float).reshape(-1)
+            if arr.size >= 2 and start.size >= 2:
+                dx = float(arr[0] - float(start[0]))
+                dy = float(arr[1] - float(start[1]))
+                if math.hypot(dx, dy) > 1e-6:
+                    target_theta = float(math.atan2(dy, dx))
+        except Exception:
+            target_theta = None
     if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
         used_nav_target = True
         try:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
+            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta)
         except TypeError:
             nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
         nav_outcome_str = str(nav_outcome)
@@ -541,6 +568,38 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         nav_status = nav_outcome_str or ("ok" if ok else "failed")
     if motion_progress:
         self._refresh_room_after_motion()
+        # Face frontier and capture at arrival with a level head (look_ahead
+        # tilt 0) so arrival RGB carries SigLIP features — not a
+        # pre-move sweep and not look_front (-30°).
+        robot = getattr(agent, "robot", None)
+        if robot is not None:
+            try:
+                la = getattr(robot, "look_ahead", None)
+                if callable(la):
+                    try:
+                        la(blocking=True, timeout=10.0)
+                    except TypeError:
+                        la(blocking=True)
+                else:
+                    head_to = getattr(robot, "head_to", None)
+                    if callable(head_to):
+                        from emet.motion.constants import look_ahead
+
+                        try:
+                            head_to(float(look_ahead[0]), float(look_ahead[1]), blocking=True)
+                        except TypeError:
+                            head_to(float(look_ahead[0]), float(look_ahead[1]))
+                from emet.controller.dynamem.constants import DYNAMEM_HEAD_SETTLE_S
+
+                time.sleep(float(DYNAMEM_HEAD_SETTLE_S))
+                wait_obs = getattr(robot, "wait_for_obs", None)
+                if callable(wait_obs):
+                    try:
+                        wait_obs(timeout=5.0)
+                    except TypeError:
+                        wait_obs()
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(f"explore arrival look_ahead failed: {exc}")
     cap = self._tool_capture_and_update()
     look_retry = False
     # After a successful explore nav, a mid-floor / already-mapped goal often yields
