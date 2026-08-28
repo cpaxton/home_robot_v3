@@ -26,6 +26,7 @@ from emet.memory.graph_eqa.graph_types import (
     GraphObservation,
     parse_eqa_action,
 )
+from emet.memory.graph_eqa.labels import finder_label_texts, label_matches_relevant_object
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -629,7 +630,16 @@ def query_answer(
     missing_find: list[int] = []
     # Gate A: location missing_find — same sane stay as count (q47).
     # Location MCQs downgrade if an unattached FIND view remains.
-    _loc_gate = True
+    # Env A/B/C so overnight A/B queue can compare without branching.
+    import os as _os_gate
+
+    _loc_gate = _os_gate.environ.get("EMET_EQA_LOCATION_MISSING_FIND", "1") != "0"
+    _close_gate = _os_gate.environ.get("EMET_EQA_CLOSE_MAP_GATE", "0") == "1"
+    _img_strict = _os_gate.environ.get("EMET_EQA_IMG_STRICT", "0") == "1"
+    # Default gate A on (1); B/C off unless queued overnight.
+    if _close_gate or _img_strict:
+        # B/C imply A — they are additions, not replacements.
+        _loc_gate = True
     if _count_mcq or (_loc_gate and location_q):
         attached_for_find = list(obs_ids)
         if crop_oid is not None:
@@ -658,6 +668,58 @@ def query_answer(
             confidence_reasoning = (confidence_reasoning + extra).strip()
             if self.last_eqa_look_obs_id is None:
                 self.last_eqa_look_obs_id = missing_find[0]
+    # Gate B: voxel close_map — require resolved close view, not just FIND queue empty.
+    if _close_gate and location_q and confidence:
+        try:
+            from emet.mapping.close_map import close_map_catalog_fields
+
+            vm = getattr(self, "voxel_map", None)
+            if vm is None and hasattr(self, "_voxel_map"):
+                vm = getattr(self, "_voxel_map", None)
+            # planner may carry voxel_map (controller_graph_eqa)
+            if vm is None and planner is not None:
+                vm = getattr(planner, "voxel_map", None)
+            has_resolved = False
+            # need robot_xy to query
+            robot_xy_b = self._robot_planar_xy(xyt)  # type: ignore[attr-defined]
+            if vm is not None and robot_xy_b is not None:
+                for obj in self._confirmed_memory_phrases():  # type: ignore[attr-defined]
+                    # best matching node for this phrase
+                    best = None
+                    for n in self._nodes:  # type: ignore[attr-defined]
+                        if n.is_frontier or n.is_viewpoint:
+                            continue
+                        texts = finder_label_texts(n)  # type: ignore[name-defined]
+                        if any(label_matches_relevant_object(obj, t) for t in texts):  # type: ignore[name-defined]
+                            best = n
+                            break
+                    if best is None:
+                        continue
+                    cm = close_map_catalog_fields(vm, float(best.xyz[0]), float(best.xyz[1]))
+                    if cm is not None and bool(cm.get("resolved")) and bool(cm.get("aimed")):
+                        has_resolved = True
+                        break
+            if not has_resolved:
+                confidence = False
+                confidence_reasoning = (
+                    confidence_reasoning + " No resolved close_map view yet; approach the FIND view before confirming."
+                ).strip()
+        except Exception:
+            pass
+    # Gate C: image-landmark strict — location letter must match attached image landmarks.
+    if _img_strict and location_q and confidence:
+        parsed_letter = extract_mcq_letter(str(answer or ""), parsed_choices)
+        img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)  # type: ignore[attr-defined]
+        if parsed_letter and img_letter and parsed_letter != img_letter:
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning + " Image landmarks disagree with answer; inspect closer before confirming."
+            ).strip()
+        elif parsed_letter and not img_letter:
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning + " No landmark in attached images to confirm location; keep exploring."
+            ).strip()
     raw_answer = answer
     self.last_eqa_parsed = (reasoning, raw_answer, confidence, action, confidence_reasoning)
     human = format_human_eqa_answer(
