@@ -124,6 +124,11 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
     \multicolumn{5}{@{}l@{}}{\textit{Ablations (not method defaults)}} \\
     Canonical-8 + debias & dynagraph & Qwen2.5-VL-3B & 8 & 62.5\% \\
     Held-out random-8 & dynagraph (explore off) & Qwen3-VL-8B & 8 & 100.0\% \\
+    \midrule
+    \multicolumn{5}{@{}l@{}}{\textit{Location-confidence gates (count/clock-15 slice)}} \\
+    Count/clock-15 & dynagraph, gate A (location missing-FIND) & Qwen3-VL-8B & 15 & 40.0\% \\
+    Count/clock-15 & dynagraph, gates A+B (close-map resolved) & Qwen3-VL-8B & 15 & 46.7\% \\
+    Count/clock-15 & dynagraph, gate C (image landmark strict) & Qwen3-VL-8B & 15 & 33.3\% \\
     \bottomrule
   \end{tabular}
 \end{table}

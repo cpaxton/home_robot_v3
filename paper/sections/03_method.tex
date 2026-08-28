@@ -87,6 +87,7 @@ Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph ins
 \paragraph{Classic planning loop.}
 The default path inherits GraphEQA-style iteration: optional rotation-in-place scan, navigate toward frontiers or graph-guided Image-$N$ waypoints, call \texttt{query\_answer} (graph + task-relevant RGB) for a letter/confidence, and repeat until confident or the planning budget is exhausted.
 Each iteration is a monolithic VLM call that jointly decides whether to answer or where to go next; there is no explicit verify gate before committing an answer.
+\emph{Confidence gates} (default on; env/`eqa.` ablations): a location-MCQ letter is downgraded to \emph{explore further} while an unattached FIND view (instance-node / SigLIP view matching the question phrase, filtered by target room and doorway glimmers) remains unvisited (\texttt{EMET\_EQA\_LOCATION\_MISSING\_FIND}), and while the voxel close-map at the candidate view is not \emph{resolved+aimed} ($\le$\,0.55\,m aimed cone; \texttt{EMET\_EQA\_CLOSE\_MAP\_GATE}); the strict image-landmark variant requiring the attached-view landmark letter to equal the parsed letter is off by default (\texttt{EMET\_EQA\_IMG\_STRICT}).
 
 \paragraph{Agentic tool loop.}
 Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}), \texttt{run\_eqa} switches to a bounded tool-calling loop (\texttt{AgenticEQAExecutor}).
