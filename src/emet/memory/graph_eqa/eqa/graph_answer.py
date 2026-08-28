@@ -31,7 +31,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def query_answer(
     self,
     question: str,
@@ -130,6 +129,17 @@ def query_answer(
         for oid in visual_pins:
             if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
                 pin_obs.append(int(oid))
+        # Instance FIND (count nodes + LOOK) even when visual-find returned spawn RGB.
+        for oid in self._eqa_find_obs_ids(
+            question,
+            attached_obs_ids=(),
+            robot_xyt=xyt,
+            max_n=max_images,
+            count_mcq_only=bool(count_q),
+            include_visual=False,
+        ):
+            if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
+                pin_obs.append(int(oid))
     # YoloE instance nodes are FIND only when SigLIP retrieved nothing.
     if not pin_obs:
         for node in count_nodes:
@@ -160,6 +170,7 @@ def query_answer(
             max_images=max_images,
             choices=parsed_choices if parsed_choices else None,
             attribute_question=attribute_q,
+            question=question,
         )
         if self._obs_usable_for_eqa_image(oid)
     ]
@@ -206,7 +217,11 @@ def query_answer(
         record_prompt_count=True,
         merge_confirmed=merge_confirmed,
     )
-    count_hint = self._graph_count_hint(question)
+    count_hint = self._graph_count_hint(
+        question,
+        attached_obs_ids=list(obs_ids) + ([int(crop_oid)] if crop_oid is not None else []),
+        robot_xyt=xyt,
+    )
     # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
     # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
     nav_fallback_tail: list[GraphNavigationSample] = []
@@ -612,24 +627,29 @@ def query_answer(
                 confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
             ).strip()
     missing_find: list[int] = []
-    if _count_mcq and count_nodes:
-        attached = {int(oid) for oid in obs_ids}
-        attached_find = False
-        for node in count_nodes:
-            oid = int(node.obs_id)
-            if not self._obs_usable_for_eqa_image(oid):
-                continue
-            if oid in attached:
-                attached_find = True
-            elif oid not in missing_find:
-                missing_find.append(oid)
-        if missing_find and not attached_find and count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
-            if confidence:
-                confidence = False
-                confidence_reasoning = (
-                    confidence_reasoning
-                    + " FIND views were not attached; look at those RGB frames before answering None."
-                ).strip()
+    if _count_mcq:
+        attached_for_find = list(obs_ids)
+        if crop_oid is not None:
+            attached_for_find.append(int(crop_oid))
+        missing_find = [
+            oid
+            for oid in self._eqa_find_obs_ids(
+                question,
+                attached_obs_ids=attached_for_find,
+                robot_xyt=xyt,
+                max_n=6,
+                count_mcq_only=True,
+            )
+            if not self.eqa_obs_look_spent(int(oid))
+        ]
+        if missing_find and confidence:
+            confidence = False
+            extra = (
+                " FIND views were not attached; look at those RGB frames before confirming a count."
+            )
+            if count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
+                extra = " FIND views were not attached; look at those RGB frames before answering None."
+            confidence_reasoning = (confidence_reasoning + extra).strip()
             if self.last_eqa_look_obs_id is None:
                 self.last_eqa_look_obs_id = missing_find[0]
     raw_answer = answer
@@ -689,6 +709,13 @@ def query_answer(
         self.last_eqa_action_obs_id = nxt
         if nxt is not None and target_point is None:
             target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
+    elif not confidence and missing_find:
+        attached_set = {int(oid) for oid in action_obs_ids}
+        if self.last_eqa_action_obs_id is not None and int(self.last_eqa_action_obs_id) in attached_set:
+            nxt = self.next_unspent_eqa_obs_id(missing_find)
+            if nxt is not None:
+                self.last_eqa_action_obs_id = nxt
+                target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
     pending_look = self.last_eqa_action_obs_id
     if pending_look is not None and (not obs_ids or int(obs_ids[0]) != int(pending_look)):
         self.last_eqa_look_obs_id = int(pending_look)

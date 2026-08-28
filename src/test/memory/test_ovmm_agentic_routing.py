@@ -867,3 +867,54 @@ def test_investigate_target_xyz_forwards_tight_outer_radius_to_graph_annulus():
     assert wp is not None
     assert spy.call_args is not None
     assert spy.call_args.kwargs.get("radius_outer_m") == INVESTIGATE_ANNULUS_OUTER_M
+
+
+def test_count_find_obs_ids_uses_shared_helper_not_spawn_visual():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stove", "kitchen cabinets"])
+    mem.add_observation(rgb, np.array([0.16, -2.54, 0.05]), ["bed"])
+    mem._relevant_objects = ["bedside tables", "bedroom white bedding"]
+    mem._relevant_phrases = ["bedside tables", "bedroom white bedding"]
+    mem.set_visual_find_fn(lambda phrase, max_n: [(0.9, 1)])
+    q = "How many bedside tables are there in the bedroom? A) One B) Two C) Three D) None. Answer:"
+    mem._question = q
+    ex = _executor(question=q)
+    ex.agent.graph_memory = mem
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ids = ex._count_find_obs_ids()
+    assert 2 in ids
+    assert 1 not in ids
+    mem.last_eqa_obs_ids = [1]
+    assert ex._count_find_unattached_obs_ids() == [oid for oid in ids if oid != 1]
+    assert ex._downgrade_unattached_count_none("Two", True) is False
+    assert mem.last_eqa_action_obs_id == 2
+
+
+def test_inspect_graph_views_prefer_object_place_over_camera_pose():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["microwave"],
+        identity_key="near",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([4.0, 1.0, 0.5]),
+        ["microwave"],
+        identity_key="far",
+    )
+    mem._relevant_objects = ["microwave"]
+    mem._relevant_phrases = ["microwave"]
+    ex = _executor(question="Where is the microwave?")
+    ex.agent.graph_memory = mem
+    ex.agent.voxel_map = None
+    ex._target_phrase = "microwave"
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_inspect_graph()
+    view_ids = [int(r["obs_id"]) for r in out["views"]]
+    assert 2 in view_ids
+    if 1 in view_ids:
+        assert view_ids.index(2) < view_ids.index(1)

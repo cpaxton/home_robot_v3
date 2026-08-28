@@ -207,6 +207,10 @@ def _recall_nav_hypotheses(self) -> list[NavHypothesis]:
             )
         except TypeError:
             hypotheses = list(gm.hypothesize_nav_targets(self.query_text, max_k=env_eqa_hyp_recall_k()) or [])
+    if hypotheses:
+        places = [h for h in hypotheses if not self._hypothesis_is_camera_pose_place(h)]
+        cams = [h for h in hypotheses if self._hypothesis_is_camera_pose_place(h)]
+        hypotheses = places + cams
     voxel_hyps = self._voxel_localize_hypotheses()
     if voxel_hyps:
         # Always prefer a gated DynaMem localize over unlabeled graph "tv"/"box" cards.

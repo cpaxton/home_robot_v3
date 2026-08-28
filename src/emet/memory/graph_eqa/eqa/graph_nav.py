@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -24,6 +25,7 @@ from emet.memory.graph_eqa.graph_types import (
     _count_target_from_stem,
     _count_tokens,
     _strip_count_wrappers,
+    countable_primary_label_matches,
     finder_label_texts,
     format_graph_node_candidates,
     is_ground_truth_node,
@@ -34,6 +36,8 @@ from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
 
+# Match agentic CAMERA_POSE_PLACE_M: spawn RGB is not an object place.
+_FIND_CAMERA_POSE_M = 0.35
 
 
 def _node_for_obs_id(self, obs_id: int) -> GraphNode | None:
@@ -376,30 +380,152 @@ def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountT
         unique.setdefault(key, node)
     return _collapse_count_nodes_spatially(list(unique.values())), target
 
-def _graph_count_hint(self, question: str) -> str:
-    """List views to inspect for count MCQs; never assert an exact integer."""
+def _look_candidate_nodes(self) -> list[GraphNode]:
+    """CONFIRMED_MEMORY LOOK matches: phrase → instance node (same as the prompt row)."""
+    object_nodes = [
+        n
+        for n in self._nodes
+        if not n.is_frontier and not n.is_viewpoint and not is_ground_truth_node(n)
+    ]
+    out: list[GraphNode] = []
+    seen: set[int] = set()
+    for obj in self._confirmed_memory_phrases():
+        matches = [n for n in object_nodes if countable_primary_label_matches(obj, n)]
+        if not matches:
+            matches = [
+                n
+                for n in object_nodes
+                if any(label_matches_relevant_object(obj, lab) for lab in (n.labels or []))
+            ]
+        for node in matches:
+            oid = int(node.obs_id)
+            if oid in seen:
+                continue
+            seen.add(oid)
+            out.append(node)
+    return out
+
+def _obs_is_camera_pose_place(self, obs_id: int, robot_xyt: Any | None) -> bool:
+    """True when this observation's XY is the current robot (mapping view, not an object)."""
+    robot_xy = self._robot_planar_xy(robot_xyt)
+    if robot_xy is None:
+        return False
+    xy = self._obs_xy(int(obs_id))
+    if xy is None:
+        vp = self._viewpoint_xyz_for_obs(int(obs_id))
+        if vp is None:
+            return False
+        xy = np.asarray(vp, dtype=float).reshape(-1)[:2]
+    delta = np.asarray(xy, dtype=float).reshape(-1)[:2] - np.asarray(robot_xy, dtype=float)
+    return float(np.linalg.norm(delta)) < float(_FIND_CAMERA_POSE_M)
+
+def _eqa_find_obs_ids(
+    self,
+    question: str,
+    *,
+    attached_obs_ids: Sequence[int] | None = None,
+    robot_xyt: Any | None = None,
+    max_n: int = 6,
+    count_mcq_only: bool = False,
+    include_visual: bool = True,
+) -> list[int]:
+    """Unattached FIND views: instance nodes first, then visual extras.
+
+    Visual-find must not replace node / LOOK ids. Empty means nowhere to navigate.
+    """
+    count_nodes, target = self._count_candidate_nodes(question)
+    if count_mcq_only and target is None and not count_nodes:
+        return []
+
+    ordered: list[int] = []
+    seen: set[int] = set()
+
+    def _add(oid: int | None) -> None:
+        if oid is None:
+            return
+        oi = int(oid)
+        if oi <= 0 or oi in seen:
+            return
+        if not self._obs_usable_for_eqa_image(oi):
+            return
+        seen.add(oi)
+        ordered.append(oi)
+
+    for node in count_nodes:
+        _add(getattr(node, "obs_id", None))
+    for node in self._look_candidate_nodes():
+        _add(getattr(node, "obs_id", None))
+    if not count_mcq_only:
+        for node in self._location_finder_nodes():
+            _add(getattr(node, "obs_id", None))
+    if include_visual:
+        for oid in self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=max(int(max_n) * 2, 8)):
+            _add(oid)
+
+    attached = {int(x) for x in (attached_obs_ids or ())}
+    ids = [oid for oid in ordered if oid not in attached]
+    places = [oid for oid in ids if self._obs_is_object_place(oid)]
+    if places:
+        ids = places
+    if robot_xyt is not None:
+        away = [oid for oid in ids if not self._obs_is_camera_pose_place(oid, robot_xyt)]
+        if away:
+            ids = away
+    from emet.memory.graph_eqa.spatial.room_clusters import normalize_current_room, question_target_rooms
+
+    targets = {normalize_current_room(t) for t in question_target_rooms(question)}
+    targets.discard("unknown")
+    if targets:
+        in_room: list[int] = []
+        for oid in ids:
+            room = normalize_current_room(self._obs_estimated_room(oid))
+            if room == "unknown" or room in targets:
+                in_room.append(oid)
+        if in_room:
+            ids = in_room
+    interior = [oid for oid in ids if not self._obs_looks_like_doorway_glimpse(oid)]
+    if interior:
+        ids = interior
+    return self._spread_obs_xy(ids, max_n=max(1, int(max_n)))
+
+def _graph_count_hint(
+    self,
+    question: str,
+    *,
+    attached_obs_ids: Sequence[int] | None = None,
+    robot_xyt: Any | None = None,
+) -> str:
+    """List unattached views to inspect for count MCQs; never assert an exact integer."""
     matches, target = self._count_candidate_nodes(question)
-    phrase = target.phrase if target is not None else "target"
-    visual = self._visual_find_obs_ids(self._eqa_find_phrases(), max_n=6)
-    if visual:
-        labeled = "; ".join(f"[graph obs {int(oid)}]" for oid in visual)
-        return (
-            f"GRAPH_COUNT: views to look at for '{phrase}' "
-            f"(go look at these graph obs ids; not an exact count): {labeled}. "
-            "Count from attached images after looking; "
-            "do not use this list length as the answer."
-        )
-    if not matches:
+    find_ids = self._eqa_find_obs_ids(
+        question,
+        attached_obs_ids=attached_obs_ids,
+        robot_xyt=robot_xyt,
+        max_n=6,
+        count_mcq_only=True,
+    )
+    if not find_ids:
         return ""
+    phrase = target.phrase if target is not None else "target"
+    node_by_obs: dict[int, GraphNode] = {}
+    for node in list(matches) + self._look_candidate_nodes():
+        node_by_obs.setdefault(int(node.obs_id), node)
+    labeled_nodes = [node_by_obs[oid] for oid in find_ids if oid in node_by_obs]
+    leftover = [oid for oid in find_ids if oid not in node_by_obs]
+    bits: list[str] = []
+    if labeled_nodes:
+        bits.append(format_graph_node_candidates(labeled_nodes, max_nodes=6))
+    if leftover:
+        bits.append("; ".join(f"[graph obs {int(oid)}]" for oid in leftover))
+    labeled = "; ".join(bits)
     scope_note = ""
     if target is not None and target.scope_tokens:
         room_by_id = self._node_room_by_id()
-        if not (room_by_id and all(int(node.node_id) in room_by_id for node in matches)):
+        if not (room_by_id and matches and all(int(node.node_id) in room_by_id for node in matches)):
             scope_note = (
                 f" Scope '{target.scope_phrase}' is not grounded in the graph; "
                 "look at these scene-wide candidate views."
             )
-    labeled = format_graph_node_candidates(matches, max_nodes=6)
     return (
         f"GRAPH_COUNT: views to look at for '{phrase}' "
         f"(go look at these graph obs ids; not an exact count): {labeled}."

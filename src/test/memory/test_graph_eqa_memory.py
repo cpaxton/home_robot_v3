@@ -988,6 +988,7 @@ def test_query_answer_injects_count_hint_as_prompt_hint():
     mem = GraphEQAMemory(
         eqa_client=fake_eqa,
         image_description_client=lambda _x: "umbrella",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
     )
     mem.add_observation(
         rgb,
@@ -1008,7 +1009,8 @@ def test_query_answer_injects_count_hint_as_prompt_hint():
     count_lines = [str(c) for c in captured["cmds"] if isinstance(c, str) and "GRAPH_COUNT:" in c]
     assert count_lines
     hint = count_lines[0]
-    assert "[graph obs 1]" in hint
+    assert "[graph obs 2]" in hint
+    assert "[graph obs 1]" not in hint
     assert hint.startswith("GRAPH_COUNT:") or "GRAPH_COUNT:" in hint
     assert "GRAPH_COUNT: 2" not in hint
     assert "do not use this list length as the answer" in hint
