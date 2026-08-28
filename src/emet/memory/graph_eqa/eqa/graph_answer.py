@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -628,17 +629,14 @@ def query_answer(
                 confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
             ).strip()
     missing_find: list[int] = []
-    # Gate A: location missing_find — same sane stay as count (q47).
-    # Location MCQs downgrade if an unattached FIND view remains.
-    # Env A/B/C so overnight A/B queue can compare without branching.
-    import os as _os_gate
-
-    _loc_gate = _os_gate.environ.get("EMET_EQA_LOCATION_MISSING_FIND", "1") != "0"
-    _close_gate = _os_gate.environ.get("EMET_EQA_CLOSE_MAP_GATE", "0") == "1"
-    _img_strict = _os_gate.environ.get("EMET_EQA_IMG_STRICT", "0") == "1"
-    # Default gate A on (1); B/C off unless queued overnight.
+    # Gate AB: location needs a FIND view and a resolved close-map.
+    # A: location missing_find (mirror count, q47) — default ON (4/5 canary, 6/15).
+    # B: voxel close_map resolved — default ON (AB 7/15 vs A 6/15, q47/q86 stable).
+    # C: image-landmark strict — default OFF (5/15).
+    _loc_gate = os.environ.get("EMET_EQA_LOCATION_MISSING_FIND", "1") != "0"
+    _close_gate = os.environ.get("EMET_EQA_CLOSE_MAP_GATE", "1") != "0"
+    _img_strict = os.environ.get("EMET_EQA_IMG_STRICT", "0") == "1"
     if _close_gate or _img_strict:
-        # B/C imply A — they are additions, not replacements.
         _loc_gate = True
     if _count_mcq or (_loc_gate and location_q):
         attached_for_find = list(obs_ids)

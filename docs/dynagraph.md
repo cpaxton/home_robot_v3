@@ -44,7 +44,7 @@ Close-look **required** is predicted from the **task**: per-episode `extract_tar
 
 Nearby-investigate and the deterministic fallback rank unused proposals above mapping-pose views. Camera-pose `investigate` is refused (`CAMERA_POSE_PLACE`) for locate **and** MCQ. Close-map **stay** keeps the robot on a card XY until an aimed look ≤ 0.55 m or escape. Each answer episode **starts** with `inspect_graph`.
 
-Classic `query_answer` SCENE_GRAPH uses `ATTACHED_INDEX` (Image 1..K ↔ obs id) and `[graph obs N]` tags for navigation handles — not `[Image {obs_id}]`. Tunable knobs: [countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time).
+Classic `query_answer` SCENE_GRAPH uses `ATTACHED_INDEX` (Image 1..K ↔ obs id) and `[graph obs N]` tags for navigation handles — not `[Image {obs_id}]`. **Classic gates (AB default, `src/emet/memory/graph_eqa/eqa/graph_answer.py:630`):** `A` location `missing_find` mirrors count (q47 `wall clock` needs an unattached FIND view before confident), `B` voxel `close_map resolved` (`src/emet/mapping/close_map.py:1` `R_M 0.55` `min_cam`/`aimed`) stabilizes `q47/q86` to `7/15` (`6/15` A alone, `5/15` C `img strict` off). Env ablations: `EMET_EQA_LOCATION_MISSING_FIND=0`, `EMET_EQA_CLOSE_MAP_GATE=0`, `EMET_EQA_IMG_STRICT=1` ([environment_variables.md](environment_variables.md)). Tunable knobs: [countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time).
 
 ### One EQA step
 
