@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import os
 import time
+from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 
 from emet.controller.dynamem.constants import (
     DYNAMEM_HEAD_SETTLE_S,
@@ -25,6 +25,7 @@ from emet.controller.dynamem.constants import (
 from emet.controller.zmq_client import StretchZmqClient
 from emet.motion import constants as motion_constants
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -166,13 +167,33 @@ def _find_phase_nav_timeout(self, default: float = 10.0) -> float:
     return float(raw)
 
 
+def maybe_save_rerun_recording(self) -> None:
+    """Write ``logs/…/data_N.rrd`` without resetting a live ``RerunVisualizer`` stream.
+
+    ``rr.init`` during live ``rr.serve`` starts a new recording and empties the
+    websocket view. Only init when there is no live visualizer (offline dump).
+    """
+    if not self.save_rerun:
+        return
+    # Deferred: rerun-sdk native extensions.
+    import rerun as rr
+
+    os.makedirs(self.log, exist_ok=True)
+    dest = os.path.join(self.log, f"data_{self.rerun_iter}.rrd")
+    live = visualizer_is_enabled(self.rerun_visualizer)
+    if live:
+        logger.info(f"save_rerun: writing {dest} (keeping live Rerun recording)")
+        rr.save(dest)
+        return
+    spawn = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.environ.get("WAYLAND_SOCKET"))
+    rr.init("Stretch_robot", recording_id=uuid4(), spawn=spawn)
+    rr.save(dest)
+
+
 def rotate_in_place(self, *, n_steps: int | None = None):
     self.announce_action("Looking around: rotating in place")
     nav_timeout = self._find_phase_nav_timeout()
-    if self.save_rerun:
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
     self.robot.move_to_nav_posture()
     from emet.eval.ovmm_find_phase import _prepare_default_table_rby1_mapping_view
 

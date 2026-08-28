@@ -294,6 +294,7 @@ def query_answer(
         img_desc_str=img_desc_str,
         max_tokens=prompt_max_tokens,
     )
+    self.last_eqa_prompt_text = "\n".join(str(t) for t in text_blocks)
     commands: list[Any] = list(text_blocks)
 
     relevant_images: list[Image.Image] = []

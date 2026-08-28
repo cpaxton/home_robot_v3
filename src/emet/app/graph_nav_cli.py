@@ -108,7 +108,7 @@ def _controller_cls() -> type:
     "--save_rerun",
     "--SR",
     is_flag=True,
-    help="Whether to save Rerun rrd",
+    help="Write logs/…/data_N.rrd on rotate/navigate/EQA (does not reset a live viewer)",
 )
 @click.option(
     "--headless",

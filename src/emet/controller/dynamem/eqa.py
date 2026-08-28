@@ -5,12 +5,9 @@
 
 from __future__ import annotations
 
-import os
 import time
-from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 import torch
 from PIL import Image
 
@@ -23,7 +20,6 @@ from emet.controller.habitat_nav import (
     is_habitat_robot_client,
 )
 from emet.utils.logger import Logger
-from emet.visualization.rerun import has_display
 
 logger = Logger(__name__)
 
@@ -56,12 +52,7 @@ def run_eqa(self, question, max_planning_steps: int = 5):
     """
     API for calling EQA module
     """
-    # See navigate(): avoid rr.init during live Rerun streaming (would reset the recording).
-    if self.save_rerun:
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
 
     self.robot.switch_to_navigation_mode()
 

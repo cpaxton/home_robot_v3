@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
@@ -273,10 +274,12 @@ def _make_controller(
     graph_perception = use_real_vlm and not hm3d_sem
     # When harness enables use_instance_graph, GraphEQAController loads YoloE via
     # use_instance_memory even if manipulation_only (nav-only Habitat stacks).
+    # ``no_rerun`` only skips the ``.rrd`` dump. Live viewer is ``EMET_EVAL_RERUN`` / ``--rerun``.
     common = {
         "robot": robot,
         "parameters": params,
         "save_rerun": not no_rerun,
+        "enable_live_rerun": eval_rerun_enabled(),
         "cpu_only": not use_real_vlm,
         "use_sensor_perception": graph_perception,
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),

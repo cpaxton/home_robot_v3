@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -230,6 +231,13 @@ def _diagnostics_cli_options(fn):
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write episode JSONL")
 @click.option("--rotate-in-place/--no-rotate-in-place", default=True, help="Sweep heading before EQA")
 @click.option(
+    "--rerun",
+    "enable_rerun",
+    is_flag=True,
+    default=False,
+    help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+)
+@click.option(
     "--extra-instruction",
     default=None,
     type=str,
@@ -263,6 +271,7 @@ def run_episode(
     data_dir: Path | None,
     output: Path | None,
     rotate_in_place: bool,
+    enable_rerun: bool,
     extra_instruction: str | None,
     use_hm3d_semantics: bool | None,
     use_enrich_labels: bool,
@@ -282,6 +291,8 @@ def run_episode(
     explore_when_uncovered: str | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
+    if enable_rerun:
+        os.environ["EMET_EVAL_RERUN"] = "1"
     if dataset != "hmeqa":
         raise click.ClickException(f"Unsupported dataset {dataset!r}")
     if mock_llm_explore and not mock_llm:

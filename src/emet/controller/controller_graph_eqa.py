@@ -44,12 +44,17 @@ from emet.controller.habitat_nav import (
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
-from emet.utils.logger import Logger
-
-logger = Logger(__name__)
 from emet.memory.graph_eqa.ingest.instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
 )
+from emet.utils.logger import Logger
+from emet.visualization.dynagraph_context import (
+    log_vlm_context_to_visualizer,
+    send_graph_memory_rerun_blueprint,
+)
+from emet.visualization.null_visualizer import visualizer_is_enabled
+
+logger = Logger(__name__)
 
 
 def _parse_image_pick(reply: str, n_candidates: int) -> int | None:
@@ -70,12 +75,15 @@ class GraphEQAController(DynamemController):
     feeds the graph memory on each update and uses it in run_eqa.
     """
 
+    ground_truth_mode = False
+
     def __init__(
         self,
         robot: AbstractRobotClient,
         parameters: Parameters | dict,
         semantic_sensor=None,
         save_rerun: bool = False,
+        enable_live_rerun: bool = False,
         use_instance_graph: bool = True,
         realtime_updates: bool = False,
         re: int = 3,
@@ -101,6 +109,7 @@ class GraphEQAController(DynamemController):
             parameters=parameters,
             semantic_sensor=semantic_sensor,
             save_rerun=save_rerun,
+            enable_live_rerun=enable_live_rerun,
             use_instance_memory=use_instance_graph,
             realtime_updates=realtime_updates,
             re=re,
@@ -197,6 +206,23 @@ class GraphEQAController(DynamemController):
         )
         self._habitat_blocked_goals: set[tuple[float, float]] = set()
         self._habitat_recent_goals: list[tuple[float, float]] = []
+
+    def setup_custom_blueprint(self) -> None:
+        """Context (VLM) + EQA mosaic — same column as live Dynagraph, including ``emet run graph-eqa``."""
+        send_graph_memory_rerun_blueprint(self.rerun_visualizer)
+
+    def _log_graph_eqa_rerun(self) -> None:
+        if self.graph_memory is None or not visualizer_is_enabled(self.rerun_visualizer):
+            return
+        self.rerun_visualizer.log_dynagraph_state(
+            self.graph_memory,
+            ground_truth_mode=self.ground_truth_mode,
+        )
+        log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
+
+    def update(self) -> None:
+        super().update()
+        self._log_graph_eqa_rerun()
 
     def look_around(self):
         """Habitat has no head actuators — rotate the base to build coverage."""
@@ -664,6 +690,8 @@ class GraphEQAController(DynamemController):
         )
         self._rerun_monologue_base = answer_output
         self._rerun_refresh_monologue_panel()
+        if self.graph_memory is not None and visualizer_is_enabled(self.rerun_visualizer):
+            log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
         if relevant_images and hasattr(self, "_patch_images"):
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)

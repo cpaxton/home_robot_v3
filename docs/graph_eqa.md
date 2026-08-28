@@ -69,7 +69,7 @@ Other options (mirroring `run_eqa`):
 
 - `--not_rotate_in_place` / `-N`: skip initial rotation-in-place scan.
 - `--discord` / `-D`: use the Discord bot (task `graph_eqa`).
-- `--save_rerun` / `--SR`: save Rerun logs under `graph_eqa_log/`.
+- `--save_rerun` / `--SR`: write `graph_eqa_log/…/data_N.rrd` on rotate / navigate / EQA (live viewer stays up).
 
 Example:
 

@@ -26,6 +26,7 @@ from typing import Any, Literal
 import numpy as np
 import yaml
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.memory_backends import (
     DYNAGRAPH,
     GROUND_TRUTH,
@@ -952,6 +953,7 @@ def create_find_phase_agent(
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
     input_path = str(graph_memory_input_path) if graph_memory_input_path else None
+    live_rerun = eval_rerun_enabled()
     if s0_parity and backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH):
         from emet.eval.stack import build_memory_agent
 
@@ -987,6 +989,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             use_instance_memory=True,
             cpu_only=cpu_only,
             eqa=False,
@@ -1004,6 +1007,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             use_instance_graph=use_instance_graph,
             cpu_only=cpu_only,
             use_sensor_perception=use_sensor_perception,
@@ -1017,6 +1021,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             cpu_only=cpu_only,
             use_instance_graph=use_instance_graph,
             use_sensor_perception=use_sensor_perception,
@@ -1031,6 +1036,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             cpu_only=cpu_only,
             use_instance_graph=use_instance_graph,
             use_sensor_perception=False,
@@ -1324,7 +1330,7 @@ def run_episode_find_phase(
             robot_kind,
             "127.0.0.1",
             port_offset=port_offset,
-            enable_rerun_server=False,
+            enable_rerun_server=eval_rerun_enabled(),
             start_immediately=False,
             allow_missing_depth=True,
         )

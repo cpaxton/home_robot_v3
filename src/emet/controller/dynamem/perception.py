@@ -19,6 +19,7 @@ from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_de
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -157,7 +158,7 @@ def _rerun_live_status_markdown(self) -> str:
 
 def _rerun_refresh_monologue_panel(self) -> None:
     """Push ``robot_monologue`` = stored plan/EQA text plus live mapping status."""
-    if not getattr(self.rerun_visualizer, "enabled", True):
+    if not visualizer_is_enabled(self.rerun_visualizer):
         return
     base = (self._rerun_monologue_base or "").strip()
     if not base:
@@ -177,6 +178,16 @@ def _run_full_perception(self) -> bool:
     A* has current obstacles; only object-level recall lags by one cadence.
     """
     return self._perception_every_n <= 1 or (self.obs_count - 1) % self._perception_every_n == 0
+
+
+def _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=None) -> None:
+    """Habitat / eval robots have no ZMQ Rerun thread — log head RGB from ``update()``."""
+    vis = self.rerun_visualizer
+    if not visualizer_is_enabled(vis):
+        return
+    if getattr(self.robot, "_rerun_thread", None) is not None:
+        return
+    vis.log_head_camera(obs, mapping_depth=mapping_depth)
 
 
 def update(self):
@@ -251,6 +262,7 @@ def update(self):
                 max_depth=float(self.parameters.get("max_depth", 2.5)),
             )
     self.robot.set_mapping_depth_for_rerun(depth)
+    _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=depth)
     base_xyt = None
     if obs.gps is not None and obs.compass is not None:
         g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
@@ -297,7 +309,7 @@ def update(self):
                 getattr(obs, "emet_session", None),
             )
             robot_xy = (float(wxyt[0]), float(wxyt[1]))
-    if getattr(self.rerun_visualizer, "enabled", True):
+    if visualizer_is_enabled(self.rerun_visualizer):
         self.rerun_visualizer.log_topdown_map_snapshot(self.voxel_map, robot_base_xy=robot_xy)
     if self.voxel_map.voxel_pcd._points is not None:
         self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)

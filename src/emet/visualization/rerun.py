@@ -84,6 +84,8 @@ def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
 #   world/dynagraph/edges  LineStrips3D (near / on / on_floor relations)
 #   world/dynagraph/gallery TextDocument (markdown list + recording:// links to crops)
 #   world/dynagraph/summary TextDocument (tree view)
+#   world/dynagraph/context TextDocument (always-on VLM prompt / Image-N / router state)
+#   world/dynagraph/context/mosaic Image (numbered EQA attachments)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
 #   world/ee_camera        same for end-effector camera
@@ -789,23 +791,6 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
             print("Total time to log robot transforms (ms): ", 1000 * (t2 - t0))
 
 
-class NullVisualizer:
-    """Drop-in replacement for RerunVisualizer that silently ignores all calls.
-
-    Used when rerun is disabled (no display, headless without server, etc.) so
-    that callers don't need null-checks at every call site.
-    """
-
-    enabled = False
-
-    def __getattr__(self, name):
-        return _null_noop
-
-
-def _null_noop(*args, **kwargs):
-    return None
-
-
 def _sim_step_counter(obs: Any) -> int:
     """Simulation step from a ZMQ observation dict (``step``) or ``Observations.seq_id``."""
     if isinstance(obs, dict):
@@ -1089,6 +1074,7 @@ class RerunVisualizer:
         self.step_delay_s = 0.3
         self.collapse_panels = collapse_panels
         self._memory_view = memory_view
+        # Direct RerunVisualizer(...) (show-memory / read-map) still honors the env force-on.
         self._dynagraph_rerun_crops = bool(dynagraph_rerun_crops) or (
             os.environ.get("EMET_DYNAGRAPH_RERUN_CROPS", "").strip().lower() in ("1", "true", "yes", "on")
         )

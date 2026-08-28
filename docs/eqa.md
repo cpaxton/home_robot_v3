@@ -85,7 +85,7 @@ Other options
 
 - `--not_rotate_in_place`, `-N` : skip initial rotation-in-place scan
 - `--discord`, `-D`: launch Discord bot for a better interface than the terminal and command line
-- `--save_rerun`, `--SR`: save Rerun log files to `dynamem_log/debug_*` as rrd file for offline replay (but rerun window online streaming would be disabled)
+- `--save_rerun`, `--SR`: write `logs/…/data_N.rrd` on rotate / navigate / EQA. Live websocket viewing stays up (`rr.save` only; no extra `rr.init`).
 
 **Example runs**:
 Assume your robot ip is `192.168.1.42`.

@@ -1,0 +1,39 @@
+---
+description: Put Python imports at the top of the file; lazy-import only for cycles or native/optional deps
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Imports at module top
+
+Place all imports at the **top of the file** (after the copyright stub and module docstring). Do not hide `emet.*` imports inside functions to “look safer.”
+
+```python
+# ❌ BAD — first-party import buried in a method
+def update(self):
+    from emet.visualization.null_visualizer import visualizer_is_enabled
+    if not visualizer_is_enabled(self.rerun_visualizer):
+        return
+
+# ✅ GOOD
+from emet.visualization.null_visualizer import visualizer_is_enabled
+
+def update(self):
+    if not visualizer_is_enabled(self.rerun_visualizer):
+        return
+```
+
+## Allowed inline imports (comment why)
+
+1. **Circular imports** that cannot be broken by moving a helper.
+2. **Heavy optional / native extensions** that CPU tests must not load. In this repo that is **`rerun` / `rerun.blueprint` / `emet.visualization.rerun`** (`rerun-sdk` native modules can SIGSEGV on turbo P-cores). Also torch CUDA stacks, Habitat-Sim, MuJoCo EGL, VLM clients.
+3. **Plugin / backend branches** that would otherwise import every controller (e.g. `build_memory_agent` selecting Dynagraph vs GraphEQA).
+
+```python
+# ✅ OK — defer rerun-sdk; CPU tests import this module without native extensions
+def maybe_save_rerun_recording(self) -> None:
+    import rerun as rr
+    rr.save(dest)
+```
+
+Do **not** lazy-import `NullVisualizer`, `visualizer_is_enabled`, `eval_rerun_enabled`, or `dynagraph_context` helpers — those modules are CPU-safe.

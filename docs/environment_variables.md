@@ -16,6 +16,20 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 |----------|---------|---------|
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
+## Rerun
+
+Live viewer, entity paths, YAML `rerun:` keys, and CLI defaults: **[rerun.md](rerun.md)**.
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `RERUN_HEADLESS` | `RerunVisualizer` | `1` — web server only (no native spawn / auto-open browser). Same as `--headless`. |
+| `RERUN_NATIVE_VIEWER` | `RerunVisualizer` / `build_rerun_visualizer_kwargs` | `1` — native desktop viewer (needs DISPLAY). Exclusive with web `rr.serve`. |
+| `RERUN_BIND_ALL` | `RerunVisualizer` / `--rerun-bind` | `1` — bind HTTP/WS to `0.0.0.0` for remote viewing. |
+| `EMET_RERUN_HEAD_DEPTH` | `RerunVisualizer.log_head_camera` | `1` — log `world/head_camera/depth` on the live stream (off by default). |
+| `EMET_DYNAGRAPH_RERUN_CROPS` | `build_rerun_visualizer_kwargs` | `1` — per-node crop images + mosaic (forces on even if YAML `log_crops: false`). |
+| `EMET_DYNAGRAPH_RERUN_EDGES` | `build_rerun_visualizer_kwargs` | `1` — graph edge line strips (same on-only override as crops). |
+| `EMET_EVAL_RERUN` | OVMM / Habitat / sim eval | `1` — live VLM-context viewer during eval (default **off**). Same as `emet ovmm find\|full --rerun` or `emet-habitat run-episode --rerun`. |
+
 ## Benchmarks
 
 Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight smoke + diagnostics:** [evaluation.md](evaluation.md).

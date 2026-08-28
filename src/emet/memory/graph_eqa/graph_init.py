@@ -54,6 +54,8 @@ def init_memory(
     self.last_eqa_prompt_node_count: int = 0
     self.last_eqa_prompt_regions: int = 0
     self.last_eqa_spatial_rag: dict[str, Any] | None = None
+    self.last_eqa_prompt_text: str = ""
+    self.last_router_state_text: str = ""
     self.last_room_clusters: list[Any] = []
     self.last_nav_result_note: str = ""
     self.last_eqa_nav_fallback_count: int = 0
@@ -411,6 +413,8 @@ def clear_eqa_working_memory(self) -> None:
     self.last_eqa_prompt_node_count = 0
     self.last_eqa_prompt_regions = 0
     self.last_eqa_spatial_rag = None
+    self.last_eqa_prompt_text = ""
+    self.last_router_state_text = ""
     self.last_eqa_nav_fallback_count = 0
     self.last_eqa_model_confident = False
     self.last_relevant_images = []

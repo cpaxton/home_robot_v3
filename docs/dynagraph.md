@@ -271,6 +271,8 @@ On **`--export DIR`**, the exporter writes:
 
 The default 3D view uses ``origin=world`` with ``contents=world/**`` (see [rerun.md](rerun.md)) so map layers stay fixed while ``world/robot`` moves. Do **not** default to ``origin=world/robot`` or the map co-rotates on in-place turns. Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
 
+**VLM context (always on):** the Dynagraph Rerun column shows `world/dynagraph/context` (last EQA prompt, Image 1…N → `obs_id`, agentic router state, graph health) and `world/dynagraph/context/mosaic` (numbered attachment thumbnails). Use that panel to debug “what did the model see?” without turning on heavy crop/edge streams. Full entity list: [rerun.md](rerun.md).
+
 Opt back into those heavy channels in agent/dynav YAML:
 
 ```yaml
@@ -280,7 +282,7 @@ rerun:
     log_edges: true
 ```
 
-Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` (env overrides YAML when set). Defaults and other viewer keys: `src/emet/config/agents/default_rerun.yaml`.
+Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` to force those two channels **on** even when YAML is `false`. Defaults and other viewer keys: `src/emet/config/agents/default_rerun.yaml`. Full entity list, CLI defaults, and precedence: [rerun.md](rerun.md).
 
 ### Autonomous frontier exploration (heuristic)
 
