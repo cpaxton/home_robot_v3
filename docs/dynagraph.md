@@ -32,13 +32,19 @@ Geometry (voxels, fusion, [close-map](close_map.md), room partition) is **eviden
 
 ### Query vs closer look
 
+`inspect_graph` is the query for **where do you see X, and how well does voxel/SigLIP match**. It does not move. Classic HM-EQA `query_answer` prompts do **not** duplicate close-map as a `CLOSE_LOOK_STATUS` block (that dump correlated with confident-wrong “None”). Geometry stays on the voxel [close-map](close_map.md) and on catalog rows.
+
 | Tool | Motion? | What it is |
 |------|---------|------------|
-| `inspect_graph` | No | Query catalog. **Proposals** (`kind=proposal`, `source=voxel`, `obs_id < 0`) are metric `localize_text` XYZ. **Views** (`kind=view`) are graph observations. A view whose XYZ is the current camera pose is not the object. |
+| `inspect_graph` | No | Query catalog. **Proposals** (`kind=proposal`, `source=voxel`, `obs_id < 0`) are metric `localize_text` XYZ. **Views** (`kind=view`) are graph observations. Each row carries match quality (`yoloe_hit`, `siglip_sim` / `confidence`) and, when the map exists, compact `close_map: {resolved, aimed, min_cam_m}`. Ranking only — not the answer. A view whose XYZ is the current camera pose is not the object. |
 | `investigate` | Yes | Closer look: drive to a listed handle, capture a **new** RGB, then `verify_siglip` / `vlm_assess` **that** frame (not the card id). |
 | `explore_frontier` | Yes | Map coverage. On **open locate / close-look** (including close-look MCQ), refused while an unused proposal remains (`DETECTIONS_REMAIN`). **Location MCQ** (`Where is X? A) kitchen B) bath`) may still explore to change rooms — a keyword voxel in this room is not a pin. Same EQA pack; question shape, not an OVMM YAML name. |
 
+Close-look **required** is predicted from the **task**: per-episode `extract_target_from_question` (`requires_close_look`) **OR** count/clock/state keywords, so a VLM false-negative cannot disable stay / `DETECTIONS_REMAIN` on “how many” / “what time”. `EMET_EQA_AGENTIC_CLOSE_LOOK=0` turns the classifier off.
+
 Nearby-investigate and the deterministic fallback rank unused proposals above mapping-pose views. Camera-pose `investigate` is refused (`CAMERA_POSE_PLACE`) for locate **and** MCQ. Close-map **stay** keeps the robot on a card XY until an aimed look ≤ 0.55 m or escape. Each answer episode **starts** with `inspect_graph`.
+
+Classic `query_answer` SCENE_GRAPH uses `ATTACHED_INDEX` (Image 1..K ↔ obs id) and `[graph obs N]` tags for navigation handles — not `[Image {obs_id}]`. **Classic gates (AB default, `src/emet/memory/graph_eqa/eqa/graph_answer.py:630`):** `A` location `missing_find` mirrors count (q47 `wall clock` needs an unattached FIND view before confident), `B` voxel `close_map resolved` (`src/emet/mapping/close_map.py:1` `R_M 0.55` `min_cam`/`aimed`) stabilizes `q47/q86` to `7/15` (`6/15` A alone, `5/15` C `img strict` off). Env ablations: `EMET_EQA_LOCATION_MISSING_FIND=0`, `EMET_EQA_CLOSE_MAP_GATE=0`, `EMET_EQA_IMG_STRICT=1` ([environment_variables.md](environment_variables.md)). Tunable knobs: [countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time).
 
 ### One EQA step
 
@@ -65,7 +71,7 @@ flowchart TD
 | **Graph (GraphEQA)** | Observations, instance nodes, frontiers, rooms, committed pins. | Replacing `localize_text`. Camera pose as object XYZ. |
 | **VLM** | Present / answerable / letter; which catalog handle to look at next. | Being the only localizer. Committing product pins (`ViewAssessment.in_view` not shipped). |
 
-`inspect_graph` is a **query** (no motion). Voxel `obs_id < 0` is a detection handle, not Image N. That is the agent using the voxel tool — not the OVMM harness calling `localize_text(object_query)`.
+`inspect_graph` is a **query** (no motion). Voxel `obs_id < 0` is a detection handle, not Image N. That is the agent using the voxel tool — not the OVMM harness calling `localize_text(object_query)`. Catalog `siglip_sim` / `yoloe_hit` rank WHERE to look next; `vlm_assess` on the post-investigate RGB decides answerability.
 
 A first-hit cache on the voxel map (`_emet_localize_pins`) is a **retrieval cache**, not the product pin. Product pins are graph confirm/add from `vlm_assess` (**not shipped yet**).
 
@@ -122,8 +128,8 @@ flowchart TD
 | Now | Later |
 |-----|--------|
 | Shared EQA tool pack; OVMM phrased as questions | Graph-owned pins from `vlm_assess` confirm/add |
-| `inspect_graph` query catalog (proposals vs views, no motion); `investigate` closer look; unused proposals beat camera-pose views; `explore_frontier` refused while a proposal remains | `ViewAssessment.in_view` (confirm / add / retract) |
-| Close-map stay on a card XY until aimed close or escape | Treat close-map `resolved` as localize success even if Qwen says unknown |
+| `inspect_graph` catalog (proposals vs views, `yoloe_hit` / `siglip_sim` / compact `close_map`); `investigate` closer look; unused proposals beat camera-pose views; `explore_frontier` refused while a proposal remains; close-look required = VLM extract **OR** keywords | `ViewAssessment.in_view` (confirm / add / retract) |
+| Close-map stay on a card XY until aimed close or escape; classic prompts do not dump `CLOSE_LOOK_STATUS` | Treat close-map `resolved` as localize success even if Qwen says unknown |
 | `room_clustering.partition` + `proximity` | `occupancy_cc` / `portal` + backend sweep |
 | FindObj/FindRec score the loop's object-phrase voxel XYZ (survives SigLIP release at submit), then pin / live localize; never camera pose or ``red cylinder table`` wraps | Sparse overlays of in-FOV labels on the assess image |
 

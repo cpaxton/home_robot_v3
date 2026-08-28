@@ -201,7 +201,7 @@ def test_merged_memory_outside_budget_preserves_present(monkeypatch):
     # Budget 1: keyword matches win the slot; the towel-rack node is fully truncated.
     s = mem.to_string(max_object_nodes=1, merge_confirmed=True, question_keywords=["cup"])
     assert "- towel: LOOK" in s
-    assert "[Image 3] at (1.0, 1.0)" in s
+    assert "[graph obs 3] at (1.0, 1.0)" in s
     assert "towel rack at (1.0, 1.0)" not in s
     assert "1 graph node(s) at (1.0, 1.0)" not in s
     assert "nearest: sofa at (0.8, 1.2)" in s

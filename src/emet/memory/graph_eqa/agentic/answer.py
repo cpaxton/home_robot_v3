@@ -776,17 +776,28 @@ def _count_find_obs_ids(self) -> list[int]:
 
     _add(getattr(gm, "last_eqa_look_obs_id", None))
     _add(getattr(gm, "last_eqa_action_obs_id", None))
-    fn = getattr(gm, "_count_candidate_nodes", None)
-    if callable(fn):
-        try:
-            found = fn(self.question)
-        except Exception:
-            found = None
-        nodes = found[0] if isinstance(found, tuple) and found else ()
-        if not isinstance(nodes, (list, tuple)):
-            nodes = ()
-        for node in nodes:
-            _add(getattr(node, "obs_id", None))
+    find_fn = getattr(gm, "_eqa_find_obs_ids", None)
+    if callable(find_fn):
+        for oid in find_fn(
+            self.question,
+            attached_obs_ids=(),
+            robot_xyt=self._robot_xyt_world(),
+            max_n=6,
+            count_mcq_only=True,
+        ):
+            _add(oid)
+    else:
+        fn = getattr(gm, "_count_candidate_nodes", None)
+        if callable(fn):
+            try:
+                found = fn(self.question)
+            except Exception:
+                found = None
+            nodes = found[0] if isinstance(found, tuple) and found else ()
+            if not isinstance(nodes, (list, tuple)):
+                nodes = ()
+            for node in nodes:
+                _add(getattr(node, "obs_id", None))
     return out
 
 def _count_find_unattached_obs_ids(self) -> list[int]:
@@ -795,11 +806,9 @@ def _count_find_unattached_obs_ids(self) -> list[int]:
     return [oid for oid in self._count_find_obs_ids() if oid not in attached]
 
 def _downgrade_unattached_count_none(self, answer: str, confidence: bool) -> bool:
-    """Do not score confident None while stool/lamp FIND RGB was never attached."""
+    """Do not score a confident count while FIND RGB was never attached."""
     choices = parse_mcq_choices_from_question(self.question)
     if not choices_are_count_mcq(choices):
-        return confidence
-    if not count_answer_is_none_or_zero(str(answer or ""), choices):
         return confidence
     missing = self._count_find_unattached_obs_ids()
     if not missing:

@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from emet.controller.habitat_nav import NavOutcome
+from emet.mapping.close_map import CloseDistanceMap
 from emet.memory.graph_eqa import (
     AgenticEQAExecutor,
     GraphEQAMemory,
@@ -127,6 +128,7 @@ def test_recall_prepends_voxel_localize_over_graph_tv():
     assert np.allclose(hyps[0].xyz, [0.08, -0.55, 0.6])
     assert int(hyps[0].obs_id) < 0
     assert hyps[0].confidence == 1.0
+    assert hyps[0].yoloe_hit is True
     assert any(h.source == "graph" and int(h.obs_id) == 6 for h in hyps)
     cylinder = [h for h in hyps if h.source == "voxel" and "red cylinder" in str(h.phrase).lower()]
     assert cylinder, "first-hit 3-gram must not skip the object phrase pin"
@@ -257,7 +259,14 @@ def test_inspect_graph_returns_query_catalog_without_moving():
         def localize_text(self, text, debug=False, return_debug=False):
             return np.array([0.08, -0.55, 0.6])
 
-    ex.agent.voxel_map = _Voxel()
+    voxel = _Voxel()
+    cm = CloseDistanceMap(grid_size=(32, 32), origin_xy=(16.0, 16.0), resolution_m=0.1)
+    pose = np.eye(4, dtype=np.float64)
+    pose[:3, 3] = (0.08 - 0.30, -0.55, 0.4)
+    pose[:3, 2] = (1.0, 0.0, 0.0)
+    assert cm.update_from_view(pose, np.array([[0.08, -0.55, 0.4]], dtype=np.float64)) >= 1
+    voxel.close_map = cm
+    ex.agent.voxel_map = voxel
     gm.hypothesize_nav_targets.return_value = [
         NavHypothesis(
             phrase="tv",
@@ -276,6 +285,10 @@ def test_inspect_graph_returns_query_catalog_without_moving():
     assert det["kind"] == "proposal"
     assert int(det["obs_id"]) < 0
     assert det["confidence"] == 1.0
+    assert det["yoloe_hit"] is True
+    assert det["close_map"]["resolved"] is True
+    assert det["close_map"]["aimed"] is True
+    assert det["close_map"]["min_cam_m"] is not None
     assert out["n_views"] == 1
     assert int(out["views"][0]["obs_id"]) == 6
     assert all(int(row["obs_id"]) != 6 for row in out["detections"])
@@ -854,3 +867,54 @@ def test_investigate_target_xyz_forwards_tight_outer_radius_to_graph_annulus():
     assert wp is not None
     assert spy.call_args is not None
     assert spy.call_args.kwargs.get("radius_outer_m") == INVESTIGATE_ANNULUS_OUTER_M
+
+
+def test_count_find_obs_ids_uses_shared_helper_not_spawn_visual():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stove", "kitchen cabinets"])
+    mem.add_observation(rgb, np.array([0.16, -2.54, 0.05]), ["bed"])
+    mem._relevant_objects = ["bedside tables", "bedroom white bedding"]
+    mem._relevant_phrases = ["bedside tables", "bedroom white bedding"]
+    mem.set_visual_find_fn(lambda phrase, max_n: [(0.9, 1)])
+    q = "How many bedside tables are there in the bedroom? A) One B) Two C) Three D) None. Answer:"
+    mem._question = q
+    ex = _executor(question=q)
+    ex.agent.graph_memory = mem
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    ids = ex._count_find_obs_ids()
+    assert 2 in ids
+    assert 1 not in ids
+    mem.last_eqa_obs_ids = [1]
+    assert ex._count_find_unattached_obs_ids() == [oid for oid in ids if oid != 1]
+    assert ex._downgrade_unattached_count_none("Two", True) is False
+    assert mem.last_eqa_action_obs_id == 2
+
+
+def test_inspect_graph_views_prefer_object_place_over_camera_pose():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["microwave"],
+        identity_key="near",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([4.0, 1.0, 0.5]),
+        ["microwave"],
+        identity_key="far",
+    )
+    mem._relevant_objects = ["microwave"]
+    mem._relevant_phrases = ["microwave"]
+    ex = _executor(question="Where is the microwave?")
+    ex.agent.graph_memory = mem
+    ex.agent.voxel_map = None
+    ex._target_phrase = "microwave"
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    out = ex._tool_inspect_graph()
+    view_ids = [int(r["obs_id"]) for r in out["views"]]
+    assert 2 in view_ids
+    if 1 in view_ids:
+        assert view_ids.index(2) < view_ids.index(1)

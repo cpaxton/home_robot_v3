@@ -38,7 +38,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def hypothesize_nav_targets(
     self,
     question: str,
@@ -136,6 +135,44 @@ def hypothesize_nav_targets(
                         source="graph",
                     )
                 )
+    find_fn = getattr(self, "_eqa_find_obs_ids", None)
+    if callable(find_fn):
+        for oid in find_fn(
+            question,
+            attached_obs_ids=(),
+            robot_xyt=robot_xyt,
+            max_n=max_k,
+            count_mcq_only=False,
+            include_visual=False,
+        ):
+            if oid in seen:
+                continue
+            if self._obs_is_frontier(oid) or not self._obs_is_object_place(oid):
+                continue
+            obs = self._observation_by_id(int(oid))
+            node = None
+            for n in self._nodes:
+                if int(n.obs_id) != int(oid) or n.is_frontier or n.is_viewpoint:
+                    continue
+                node = n
+                break
+            xyz = None
+            if node is not None:
+                xyz = np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
+            elif obs is not None and obs.xyz is not None:
+                xyz = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
+            if xyz is None:
+                continue
+            seen.add(int(oid))
+            scored.append(
+                NavHypothesis(
+                    phrase=phrases[0] if phrases else "",
+                    obs_id=int(oid),
+                    xyz=xyz.copy(),
+                    score=0.0,
+                    source="graph",
+                )
+            )
     for phrase in phrases:
         sig = self._siglip_match_for_phrase(phrase)
         if sig is None:
@@ -502,6 +539,7 @@ def _select_relevant_obs_ids(
     max_images: int = 6,
     choices: list[str] | None = None,
     attribute_question: bool = False,
+    question: str | None = None,
 ) -> list[int]:
     """Select a diverse set of observation IDs for the EQA prompt (1-based).
 
@@ -514,8 +552,8 @@ def _select_relevant_obs_ids(
     When ``choices`` are location MCQ options, prefer views whose labels match
     option landmarks (refrigerator, treadmill, …) *before* SigLIP nearest —
     false CONFIRMED_MEMORY coords must not steal Image 1. Count / clock / other
-    questions rank stored RGB by visual FIND (DynaMem ``find_all_images`` /
-    SigLIP top-k) first; YoloE class strings are leftover recall only, spread
+    questions rank stored RGB by instance FIND (count nodes + LOOK) first, then
+    visual FIND extras; YoloE class strings are leftover recall only, spread
     in XY so one cluster cannot fill the budget.
 
     For attribute/state questions, prefer views with lamp/light/curtain labels
@@ -611,9 +649,16 @@ def _select_relevant_obs_ids(
             if take(oid):
                 return selected
 
-    # Visual FIND (DynaMem SigLIP top-k) before YoloE/caption labels.
+    # Object-place FIND (nodes + LOOK) first; visual-find is extras, not a replacement.
     phrases = self._eqa_find_phrases()
-    for oid in self._visual_find_obs_ids(phrases, max_n=keyword_budget):
+    qtext = str(question or getattr(self, "_question", "") or "")
+    for oid in self._eqa_find_obs_ids(
+        qtext,
+        attached_obs_ids=(),
+        max_n=keyword_budget,
+        count_mcq_only=False,
+        include_visual=True,
+    ):
         if take(oid):
             return selected
 
@@ -985,7 +1030,7 @@ def _relevant_memory_summary(self) -> str:
         return ""
     header = (
         "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
-        "candidate Image N to look at; CANDIDATE/weak SigLIP are navigation hints. "
+        "candidate graph obs N to look at; CANDIDATE/weak SigLIP are navigation hints. "
         "Detector class names are proposals for WHERE to look. Identify and count "
         "from attached RGB; if images contradict memory, trust the images and keep "
         "exploring; for location MCQs, prefer option landmarks visible in Image 1 "

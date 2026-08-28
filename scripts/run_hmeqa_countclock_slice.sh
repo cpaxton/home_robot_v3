@@ -35,9 +35,28 @@ HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
 
 log() { echo "[$(date -Is)] $*" | tee -a "$OUT_DIR/run.log"; }
 
+# Refuse a shared .venv-habitat that still points at a bisect worktree.
+PY_HAB="${ROOT}/.venv-habitat/bin/python"
+if [[ ! -x "${PY_HAB}" ]]; then
+    log "FATAL: missing ${PY_HAB}; run ./scripts/install_habitat.sh"
+    exit 2
+fi
+EMET_SRC="$("${PY_HAB}" -c "import emet, pathlib; print(pathlib.Path(emet.__file__).resolve())")"
+ROOT_RES="$(readlink -f "${ROOT}")"
+if [[ "${EMET_SRC}" != "${ROOT_RES}"/* ]]; then
+    log "FATAL: .venv-habitat emet is ${EMET_SRC} (expected under ${ROOT_RES})"
+    log "Reinstall: ${PY_HAB} -m pip install --no-deps -e ${ROOT_RES} && ${PY_HAB} -m pip install --no-deps -e ${ROOT_RES}/packages/emet_habitat"
+    exit 2
+fi
+log "habitat emet=${EMET_SRC}"
+
 # --- VRAM gate: fail loudly before loading anything when the GPU is contended. ---
 log "vram gate: need >= ${NEED_MIB} MiB free"
-VRAM_OK="$(uv run python -c "
+PY_GATE="${ROOT}/.venv/bin/python"
+if [[ ! -x "${PY_GATE}" ]]; then
+    PY_GATE="$(command -v python3)"
+fi
+VRAM_OK="$("${PY_GATE}" -c "
 from emet.utils.gpu_preflight import check_gpu_memory
 ok, msg = check_gpu_memory(int('$NEED_MIB'))
 print(msg)
