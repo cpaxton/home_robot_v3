@@ -21,7 +21,9 @@ if [[ ! -e "${WT}/.git" ]]; then
 fi
 
 # Worktrees must not uv-sync in isolation (submodules + duplicate venvs fail).
-# Share parent envs and reinstall editable emet at the bisect commit.
+# Share parent envs, but do **not** ``pip install -e`` the worktree into the
+# shared ``.venv-habitat`` — that retargets ``emet-habitat`` for every other
+# checkout (2026-08-27 canary ran 290e54e5 while v2 HEAD was 2ce587b7).
 unset VIRTUAL_ENV UV_PROJECT
 for d in .venv .venv-habitat; do
   parent="${PARENT_ROOT}/${d}"
@@ -38,6 +40,7 @@ for d in .venv .venv-habitat; do
   fi
   ln -s "${parent}" "${target}"
 done
+export PYTHONPATH="${WT}/src:${WT}/packages/emet_habitat${PYTHONPATH:+:${PYTHONPATH}}"
 # Git worktrees do not init submodules; symlink populated third_party from parent.
 for sub in segment-anything-2 robocasa robosuite ok-robot; do
   src="${PARENT_ROOT}/third_party/${sub}"
@@ -52,19 +55,8 @@ if [[ ! -x "${PY_HAB}" ]]; then
   echo "FATAL: missing ${PY_HAB}; run ./scripts/install_habitat.sh in ${PARENT_ROOT}" >&2
   exit 2
 fi
-echo "Reinstalling editable emet @ $(git -C "${WT}" rev-parse --short HEAD) into habitat venv"
-"${PY_HAB}" -m pip install -q --no-deps -e "${WT}"
-"${PY_HAB}" -m pip install -q --no-deps -e "${WT}/packages/emet_habitat"
-# pip install overwrites emet-habitat with a plain entrypoint; restore libstdc++ wrapper.
-HAB_ENV="$(cd "$(dirname "${PY_HAB}")/.." && pwd)"
-cat > "${HAB_ENV}/bin/emet-habitat" <<'WRAP'
-#!/usr/bin/env bash
-# Restored by run_hmeqa_bisect_canary.sh (install_habitat.sh sets LD_LIBRARY_PATH).
-ENV_PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
-export LD_LIBRARY_PATH="$ENV_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-exec "$ENV_PREFIX/bin/python" -m emet_habitat.cli "$@"
-WRAP
-chmod +x "${HAB_ENV}/bin/emet-habitat"
+echo "Using worktree source via PYTHONPATH @ $(git -C "${WT}" rev-parse --short HEAD) (shared habitat venv unchanged)"
+"${PY_HAB}" -c "import emet, pathlib; p=pathlib.Path(emet.__file__).resolve(); print('emet', p); assert str(p).startswith(str(pathlib.Path('${WT}').resolve())), p"
 
 cd "${WT}"
 echo "Bisect canary: commit=$(git rev-parse --short HEAD) worktree=${WT}"
