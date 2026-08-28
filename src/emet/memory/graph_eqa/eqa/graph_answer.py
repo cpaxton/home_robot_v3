@@ -627,7 +627,10 @@ def query_answer(
                 confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
             ).strip()
     missing_find: list[int] = []
-    if _count_mcq:
+    # Gate A: location missing_find — same sane stay as count (q47).
+    # Location MCQs downgrade if an unattached FIND view remains.
+    _loc_gate = True
+    if _count_mcq or (_loc_gate and location_q):
         attached_for_find = list(obs_ids)
         if crop_oid is not None:
             attached_for_find.append(int(crop_oid))
@@ -638,17 +641,20 @@ def query_answer(
                 attached_obs_ids=attached_for_find,
                 robot_xyt=xyt,
                 max_n=6,
-                count_mcq_only=True,
+                count_mcq_only=bool(_count_mcq),
             )
             if not self.eqa_obs_look_spent(int(oid))
         ]
         if missing_find and confidence:
             confidence = False
-            extra = (
-                " FIND views were not attached; look at those RGB frames before confirming a count."
-            )
-            if count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
-                extra = " FIND views were not attached; look at those RGB frames before answering None."
+            if _loc_gate and location_q:
+                extra = " FIND views were not attached; look at those RGB frames before confirming a location."
+            else:
+                extra = (
+                    " FIND views were not attached; look at those RGB frames before confirming a count."
+                )
+                if count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
+                    extra = " FIND views were not attached; look at those RGB frames before answering None."
             confidence_reasoning = (confidence_reasoning + extra).strip()
             if self.last_eqa_look_obs_id is None:
                 self.last_eqa_look_obs_id = missing_find[0]
