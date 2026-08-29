@@ -46,7 +46,10 @@ OVMM_S0_OK="skipped"
 if [[ "$RUN_HMEQA" == "1" ]]; then
     echo "--- phase 1/3: HM-EQA paper-113 no-semantics (METHODS=${HAB_METHODS}) ---"
     set +e
-    env RUN_ID="${RUN_ID}_hmeqa" METHODS="$HAB_METHODS" OUT_DIR="$OUT_BASE/hmeqa" \
+    # flash-attn is not installed here; the VLM must load via PyTorch SDPA.
+    # Without EMET_ALLOW_SDPA_ATTN=1 every episode fails at LLM client init
+    # (batch summary accuracy 0.0, all qids 'failed: Flash-Attn 2 required').
+    env EMET_ALLOW_SDPA_ATTN=1 RUN_ID="${RUN_ID}_hmeqa" METHODS="$HAB_METHODS" OUT_DIR="$OUT_BASE/hmeqa" \
         ./scripts/run_hmeqa_paper113_h2h.sh
     rc=$?
     set -e
