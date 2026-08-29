@@ -1,8 +1,12 @@
 # PYTHONPATH sanitizer
 
 `emet.utils.pythonpath` rewrites `PYTHONPATH` / `sys.path` so **this repo’s `.venv` wins**
-when `emet` launches a child process (`emet serve mujoco`, `emet run …`) or when
+when `emet` launches a child (`emet serve mujoco`, `emet run …`) or when
 `mujoco_server` starts.
+
+**Why it exists, which function to call, and the call sites** are in the module
+docstring of [`src/emet/utils/pythonpath.py`](../src/emet/utils/pythonpath.py).
+This page is the operator checklist.
 
 It is **not** an `EMET_*` toggle. The shell `PYTHONPATH` is the input; the sanitizer
 filters and prepends.
