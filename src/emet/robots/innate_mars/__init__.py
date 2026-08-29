@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from emet.robots.base import RobotBackend, RobotSpec
+from emet.robots.base import ArmChain, RobotBackend, RobotSpec
 from emet.robots.footprint import Footprint
 from emet.utils.assets import get_robot_mjcf_path
 
@@ -73,6 +73,15 @@ INNATE_MARS_ACTUATOR_NAMES = [
 
 INNATE_MARS_CAMERA_NAMES = ["head_left", "head_right", "camera_arm"]
 
+# Curated arm chain (MJCF joints/bodies): the six 6-DOF arm joints only — excludes the
+# ``joint6M`` mimic and ``joint_head`` that the auto-discovery heuristic would include.
+INNATE_MARS_ARM_CHAIN = ArmChain(
+    joint_names=("joint1", "joint2", "joint3", "joint4", "joint5", "joint6"),
+    ee_body="ee_link",
+    actuator_names=("joint1", "joint2", "joint3", "joint4", "joint5", "joint6"),
+    link_bodies=("link1", "link2", "link3", "link4", "link5", "ee_link"),
+)
+
 
 class InnateMarsBackend(RobotBackend):
     """Innate Mars / Maurice-style mobile manipulator."""
@@ -87,6 +96,8 @@ class InnateMarsBackend(RobotBackend):
             mjcf_path=_innate_mars_mjcf_path(),
             actuator_names=list(INNATE_MARS_ACTUATOR_NAMES),
             base_link_name="base_link",
+            arm_chain=INNATE_MARS_ARM_CHAIN,
+            advertise_kinematic_manip=True,
             footprint=Footprint(width=0.48, length=0.48, width_offset=0.0, length_offset=0.0),
             optional_uv_extras=(),
             dynamem_depth_source_hint="da3",

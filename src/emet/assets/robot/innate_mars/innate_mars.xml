@@ -156,18 +156,18 @@
 
   <actuator>
     <!-- Velocity control actuators -->
-    <velocity joint="base_x" kv="100"/>
-    <velocity joint="base_y" kv="100"/>
-    <velocity joint="base_yaw" kv="100"/>
+    <velocity joint="base_x" name="base_x" kv="100"/>
+    <velocity joint="base_y" name="base_y" kv="100"/>
+    <velocity joint="base_yaw" name="base_yaw" kv="100"/>
 
     <!-- Position control actuators for the arm joints -->
-    <position joint="joint1" kp="1000"/>
-    <position joint="joint2" kp="1000"/>
-    <position joint="joint3" kp="1000"/>
-    <position joint="joint4" kp="1000"/>
-    <position joint="joint5" kp="1000"/>
-    <position joint="joint6" kp="1000"/>
-    <position joint="joint_head" kp="800"/>
+    <position joint="joint1" name="joint1" kp="1000"/>
+    <position joint="joint2" name="joint2" kp="1000"/>
+    <position joint="joint3" name="joint3" kp="1000"/>
+    <position joint="joint4" name="joint4" kp="1000"/>
+    <position joint="joint5" name="joint5" kp="1000"/>
+    <position joint="joint6" name="joint6" kp="1000"/>
+    <position joint="joint_head" name="joint_head" kp="800"/>
     <!-- joint6M is controlled via equality constraint, no separate actuator needed -->
   </actuator>
 </mujoco>

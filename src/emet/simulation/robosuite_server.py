@@ -90,6 +90,39 @@ from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops, chain_pinhole
 
 logger = log.Logger(__name__)
 
+# Cached per-robot decision for the ``kinematic_manip`` capability so the
+# ArmManipProfile MJCF load happens once per server (not per session build).
+_KINEMATIC_MANIP_OK: dict[str, bool] = {}
+
+
+def _robot_supports_kinematic_manip(robot_name: str) -> bool:
+    """True when the robot opts into latch pick/place and an ArmManipProfile resolves.
+
+    :attr:`RobotSpec.advertise_kinematic_manip` is the opt-in (default False). Offline
+    IK discovery for xlerobot/franka/stretch must not flip live DynaMem/OVMM from
+    teleport to kinematic latch.
+    """
+    key = str(robot_name or "").lower().strip()
+    if not key:
+        return False
+    cached = _KINEMATIC_MANIP_OK.get(key)
+    if cached is not None:
+        return cached
+    ok = False
+    try:
+        from emet.motion.arm_manip_profile import ArmManipProfile
+        from emet.robots import get_robot_spec
+
+        spec = get_robot_spec(key)
+        if spec is not None and bool(getattr(spec, "advertise_kinematic_manip", False)):
+            ArmManipProfile.for_robot(key, arm="left")
+            ok = True
+    except Exception:  # noqa: BLE001  (KeyError / spec / MJCF discovery failures)
+        ok = False
+    _KINEMATIC_MANIP_OK[key] = ok
+    return ok
+
+
 # One ``mujoco.Renderer`` / GL context: multiple resolutions each call ``mjr_makeContext`` and often
 # hit GL_INVALID_OPERATION (0x502) on EGL. Primary + servo reuse one renderer; servo resizes in CPU.
 _PRIMARY_RW, _PRIMARY_RH = 640, 480
@@ -952,8 +985,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         robot_name = str(getattr(self._spec, "name", "") or "").lower()
-        # Only robots with an ArmManipProfile (rby1 / galaxea_r1) support kinematic pick/place.
-        kinematic_ok = robot_name in ("rby1", "galaxea_r1")
+        # Opt-in via RobotSpec.advertise_kinematic_manip + a resolvable ArmManipProfile.
+        kinematic_ok = _robot_supports_kinematic_manip(robot_name)
         caps: dict[str, Any] = {
             "teleport_base": self._teleport_base_supported(),
             "nav_velocity_drive": True,

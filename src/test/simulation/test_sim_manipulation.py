@@ -85,7 +85,8 @@ def test_robot_sim_body_pose_teleport_supported_caps():
     assert not prefer_kinematic_manip(robot, manip_mode="kinematic", visual_servo=False)
     assert can_use_sim_gt_manip(robot, manip_mode="kinematic", visual_servo=False)
 
-    # Cap alone is not enough — need a registered ArmManipProfile (rby1 / galaxea_r1).
+    # Cap alone is not enough — need a resolvable ArmManipProfile (registered profile,
+    # declarative RobotSpec.arm_chain, or auto-discovery).
     kin_no_id = _R(
         {
             "is_simulation": True,
@@ -113,5 +114,5 @@ def test_robot_sim_body_pose_teleport_supported_caps():
             "capabilities": {"sim_set_body_pose": True, "kinematic_manip": True},
         }
     )
-    assert not prefer_kinematic_manip(mars, manip_mode="kinematic", visual_servo=False)
+    assert prefer_kinematic_manip(mars, manip_mode="kinematic", visual_servo=False)
     assert can_use_sim_gt_manip(mars, manip_mode="kinematic", visual_servo=False)

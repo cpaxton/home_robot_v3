@@ -22,10 +22,31 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from emet.controller.emotes.backend import EmoteBackend
     from emet.core.robot import AbstractRobotClient
+    from emet.motion.arm_manip_profile import ArmManipProfile
     from emet.motion.robot import RobotModel
     from emet.simulation.mujoco_stationary_control import MujocoStationaryControl
 
 from emet.robots.footprint import Footprint
+
+
+@dataclass(frozen=True)
+class ArmChain:
+    """Declarative arm kinematics for a robot (used by :class:`ArmManipProfile`).
+
+    Names refer to the robot's **MJCF** joints/bodies (the kinematic model the
+    executor drives), not the high-level ``RobotSpec.joint_names`` API names.
+    ``actuator_names`` are the subset of ``RobotSpec.actuator_names`` that drive the
+    arm; when empty, the arm joints are used directly. ``home_arm_q`` overrides the
+    MJCF qpos0 home when non-empty.
+    """
+
+    joint_names: tuple[str, ...]
+    ee_body: str
+    actuator_names: tuple[str, ...] = ()
+    link_bodies: tuple[str, ...] = ()
+    gripper_bodies: tuple[str, ...] = ()
+    home_arm_q: tuple[float, ...] = ()
+    base_freejoint_name: str = "base_freejoint"
 
 
 @dataclass
@@ -50,6 +71,17 @@ class RobotSpec:
     mjcf_path: str | None = None
     actuator_names: list[str] = field(default_factory=list)
     base_link_name: str = "base_link"
+    # Curated arm kinematics (MJCF joint/body names) for kinematic pick/place. When set,
+    # :meth:`ArmManipProfile.for_robot` uses it before MJCF auto-discovery. Optional: the
+    # backend may instead implement :meth:`RobotBackend.build_arm_manip_profile`.
+    arm_chain: "ArmChain | None" = None
+    # Per-arm chains for bimanual robots; ``arm_chains[arm]`` wins over ``arm_chain``.
+    arm_chains: "dict[str, ArmChain]" = field(default_factory=dict)
+    advertise_kinematic_manip: bool = False
+    """If True, :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer` advertises
+    ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
+    also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
+    switch live DynaMem/OVMM pick/place from teleport to latch."""
     # --- Optional install / app hints (names match pyproject [project.optional-dependencies]) ---
     optional_uv_extras: tuple[str, ...] = ()
     """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""
@@ -141,5 +173,14 @@ class RobotBackend(ABC):
         """Optional MuJoCo ``ctrl``/hold policy for :class:`emet.simulation.robosuite_server.RobosuiteZmqServer`.
 
         Return ``None`` to use :class:`emet.simulation.mujoco_stationary_control.DefaultMujocoStationaryControl`.
+        """
+        return None
+
+    def build_arm_manip_profile(self, arm: str = "left") -> "ArmManipProfile | None":
+        """Optional code fallback for building an :class:`ArmManipProfile`.
+
+        Declarative ``RobotSpec.arm_chain`` is preferred; implement this only when a
+        robot needs custom logic (e.g. derived actuator mapping). Return ``None`` to
+        fall through to MJCF auto-discovery.
         """
         return None
