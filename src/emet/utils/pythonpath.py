@@ -13,7 +13,18 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Sanitize PYTHONPATH / sys.path so project venv wins over ROS-shaded packages (e.g. broken cv2)."""
+"""Sanitize PYTHONPATH / sys.path so the project venv wins.
+
+Two failure modes this module exists for:
+
+* **ROS ``cv2``:** ``PYTHONPATH`` includes ``/opt/ros/...`` so ``import cv2`` is a stub
+  without ``resize`` / ``imencode``.
+* **Mixed interpreter site-packages:** a 3.10 venv that still contains
+  ``.venv/lib/python3.12/site-packages`` would glob-prepend ABI-mismatched scipy/numpy
+  and break ``emet serve mujoco`` on import.
+
+Docs: ``docs/pythonpath.md``.
+"""
 
 from __future__ import annotations
 
@@ -76,7 +87,12 @@ def _is_ros_or_conflicting_pythonpath_entry(path: str) -> bool:
 
 
 def sanitize_emet_subprocess_env(env: dict[str, str] | None = None) -> dict[str, str]:
-    """Return env with ROS entries removed from PYTHONPATH and project src/venv prepended."""
+    """Return env with ROS entries stripped from PYTHONPATH and project src/venv prepended.
+
+    Venv prepend is the active interpreter's ``python{tag}/site-packages`` only
+    (see :func:`_venv_site_packages_paths`). Use this for every ``Popen`` of
+    ``emet.simulation.mujoco_server`` / ``uv run emet serve``.
+    """
     out = (env or os.environ).copy()
     pp = out.get("PYTHONPATH", "")
     filtered = [p for p in pp.split(os.pathsep) if p and not _is_ros_or_conflicting_pythonpath_entry(p)]

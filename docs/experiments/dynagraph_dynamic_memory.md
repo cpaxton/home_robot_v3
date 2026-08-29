@@ -17,7 +17,7 @@ Tracks from the paper plan (`paper/sections/04b_dynamic_exploration.tex`) for **
 
 ## Environment notes (Robocasa / Molmo smokes)
 
-- Unset ROS ``PYTHONPATH`` when launching evals (``env -u PYTHONPATH …``) so a broken system ``cv2`` cannot shadow the venv.
+- Unset ROS ``PYTHONPATH`` when launching evals (``env -u PYTHONPATH …``) so a broken system ``cv2`` cannot shadow the venv. ``emet`` also sanitizes child ``PYTHONPATH`` (ROS drop + ABI-matched site-packages): [pythonpath.md](../pythonpath.md).
 - Do **not** install ``opencv-python`` alongside ``opencv-contrib-python`` (cv2 becomes a namespace stub). ``pyproject.toml`` overrides block the non-contrib packages.
 - After ``uv sync``, reinstall editable sim forks with ``uv pip install --no-deps -e third_party/robosuite -e third_party/robocasa -e third_party/robosuite_models`` and ensure ``gymnasium`` is present (``uv pip install 'gymnasium>=0.29,<1'``).
 - ``scripts/run_dynagraph_dynamic_memory_eval.sh`` waits for free VRAM and does **not** run ``gpu_preflight --kill-stale`` (that would pkill in-flight ``mujoco_server``).
