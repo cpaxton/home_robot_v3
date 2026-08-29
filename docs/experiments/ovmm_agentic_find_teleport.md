@@ -97,6 +97,6 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 |------|------|
 | `PROFILE=smoke` | Completes < 20 min; FindObj ≥ 1 on the S0 episode (measured: **FindObj 4/4**, FindRec 2/4, both voxel err 0.0 when found) |
 | `PROFILE=slice` | FindRec ≥ 1/2 on rby1 S0+S1 |
-| Mixed gate | `scripts/run_habitat_ovmm_joint_gate.sh` — HM-EQA countclock stays at **gateAB 7/15** while OVMM S0 gains the fixes |
+| Mixed gate | `scripts/run_habitat_ovmm_joint_gate.sh` — HM-EQA countclock stays at **gateAB 7/15** while OVMM S0 gains the fixes. Both phases always run; the process exits non-zero if a requested phase failed (`emet jobs` marks the gate red). |
 
 Stretch 9-episode matrix is **not** the default validation ladder.

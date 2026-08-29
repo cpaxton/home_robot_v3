@@ -81,14 +81,18 @@ PY
 fi
 
 arm_args() {
-    # Per-arm emet ovmm find args (one deliberate axis).
-    local arm="$1"
+    # Fill a nameref with per-episode emet ovmm find tokens.
+    # Echoing a single string into an array assignment collapses every flag
+    # into one argv entry and Click rejects the invocation.
+    local -n _argv="$1"
     local ep="$2"
-    echo --episodes configs/ovmm/find_phase_episodes.yaml \
-        --backend "$BACKEND" \
-        --agentic-max-rounds "$ROUNDS" \
-        --mapping-rotate-steps 4 \
+    _argv=(
+        --episodes configs/ovmm/find_phase_episodes.yaml
+        --backend "$BACKEND"
+        --agentic-max-rounds "$ROUNDS"
+        --mapping-rotate-steps 4
         --episode-id "$ep"
+    )
 }
 
 status_open "$OUT" "ovmm-ab"
@@ -108,7 +112,8 @@ for arm in "${ARM_LIST[@]}"; do
         ep_out="$arm_out/$ep"
         mkdir -p "$ep_out"
         rm -f "$marker"
-        args=("$(arm_args "$arm" "$ep")")
+        args=()
+        arm_args args "$ep"
         if [[ "$arm" == "unified" ]]; then
             args+=(--explore-steps "$EXPLORE_STEPS" --no-scene-cache)
         fi

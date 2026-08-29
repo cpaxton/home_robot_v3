@@ -19,6 +19,8 @@
 #   HAB_METHODS   HM-EQA methods (default dynagraph)
 #   HAB_RESUME    "1"/"0" passed to the HM-EQA runner (default 0)
 #   RUN_ID        base run id; phases get _hab / _ovmm suffixes
+#
+# Both phases always run. Exit is non-zero if a requested phase failed.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -77,6 +79,11 @@ fi
 printf '{"habitat":"%s","ovmm":"%s"}\n' "$HAB_OK" "$OVMM_OK" | tee "$OUT_BASE/summary.json"
 echo "=== joint gate ${RUN_ID} done: habitat=${HAB_OK} ovmm=${OVMM_OK} (OUT=${OUT_BASE}) ==="
 
-# The gate is a diagnostic harness: a phase failure is reported, not fatal,
-# so a Habitat regression does not hide OVMM results (and vice versa).
-exit 0
+# Both phases always run so a Habitat miss does not hide OVMM (and vice versa).
+# The process exit is non-zero if any *requested* phase failed, so ``emet jobs``
+# marks the gate red instead of treating summary.json "fail" as a green run.
+gate_rc=0
+if [[ "$HAB_OK" == "fail" || "$OVMM_OK" == "fail" ]]; then
+    gate_rc=1
+fi
+exit "$gate_rc"

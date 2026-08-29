@@ -14,7 +14,7 @@
 # Env:
 #   RUN_HMEQA    "1"/"0" (default 1) — paper-113 no-semantics (METHODS from HAB_METHODS)
 #   RUN_OVMM     "1"/"0" (default 1) — OVMM find multi-env sweep (S1+S2)
-#   RUN_OVMM_S0  "1"/"0" (default 1) — OVMM find S0 table (rby1 gate)
+#   RUN_OVMM_S0  "1"/"0" (default 1) — OVMM find S0 table (rby1 PROFILE=smoke)
 #   HAB_METHODS  HM-EQA methods (default "dynagraph")
 #   OVMM_PRESET  OVMM sweep preset (default molmo-robocasa)
 #   RUN_ID       base run id; phases get suffixes
@@ -72,7 +72,9 @@ fi
 if [[ "$RUN_OVMM_S0" == "1" ]]; then
     echo "--- phase 3/3: OVMM find S0 table (rby1 gate) ---"
     set +e
-    env PROFILE=slice OUT_DIR="$OUT_BASE/ovmm_s0" RUN_ID="${RUN_ID}_ovmm_s0" \
+    # PROFILE=smoke is the single S0 table episode. PROFILE=slice also runs
+    # kitchen S1 and would mislabel artifacts under ovmm_s0.
+    env PROFILE=smoke OUT_DIR="$OUT_BASE/ovmm_s0" RUN_ID="${RUN_ID}_ovmm_s0" \
         ./scripts/run_ovmm_find_recep_slice.sh
     rc=$?
     set -e
@@ -83,4 +85,11 @@ fi
 
 printf '{"hmeqa":"%s","ovmm":"%s","ovmm_s0":"%s"}\n' "$HMEQA_OK" "$OVMM_OK" "$OVMM_S0_OK" | tee "$OUT_BASE/summary.json"
 echo "=== paper matrix ${RUN_ID} done: hmeqa=${HMEQA_OK} ovmm=${OVMM_OK} ovmm_s0=${OVMM_S0_OK} (OUT=${OUT_BASE}) ==="
-exit 0
+matrix_rc=0
+for st in "$HMEQA_OK" "$OVMM_OK" "$OVMM_S0_OK"; do
+    if [[ "$st" == "fail" ]]; then
+        matrix_rc=1
+        break
+    fi
+done
+exit "$matrix_rc"

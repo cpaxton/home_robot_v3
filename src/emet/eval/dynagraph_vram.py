@@ -50,14 +50,24 @@ def re_attach_siglip_encoder(agent: Any) -> Any | None:
     ``encoder=None`` voxel) and the loop can only explore. ``warm_*`` snapshots
     cached ranks but does not restore the live encoder, so call this from the warm
     path.
+
+    Device follows the agent (``cpu_only`` / ``device``) and falls back to CUDA
+    when it is available, otherwise CPU. Find-phase ``cpu_only`` episodes still
+    need ``localize_text`` on FindRec after FindObj's ``submit_answer``.
     """
     import torch
 
-    if not torch.cuda.is_available():
-        return None
+    cpu_only = bool(getattr(agent, "cpu_only", False))
+    want = getattr(agent, "device", None)
+    if cpu_only or (isinstance(want, str) and want.strip().lower() == "cpu"):
+        device = "cpu"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
     from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
 
-    enc = get_shared_mask_siglip_encoder(version="so400m", device="cuda", feature_matching_threshold=0.14)
+    enc = get_shared_mask_siglip_encoder(version="so400m", device=device, feature_matching_threshold=0.14)
     if enc is None:
         return None
     agent.encoder = enc
