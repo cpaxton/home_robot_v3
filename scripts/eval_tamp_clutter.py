@@ -168,6 +168,13 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--battery-robots", type=str, default="nori", help="comma list (default: nori)")
     p.add_argument("--battery-scenes", type=str, default="0,1", help="comma list of iTHOR scene indices")
+    p.add_argument(
+        "--rerun",
+        action="store_true",
+        help="Stream the scene + scattered objects + robot to the Rerun viewer "
+        "(http://localhost:9090?url=ws://localhost:9877) so operators can inspect "
+        "clutter scenes across robots.",
+    )
     return p.parse_args()
 
 
@@ -392,7 +399,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             ep.robot,
             "127.0.0.1",
             port_offset=port_offset,
-            enable_rerun_server=False,
+            enable_rerun_server=bool(args.rerun),
             start_immediately=True,
             allow_missing_depth=True,
         )

@@ -101,6 +101,11 @@ NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
 
 # Problem-set build: resolve scatter + validity probe into a snapshot YAML
 uv run python scripts/eval_tamp_clutter.py --generate --output-dir ~/runs/emet/tamp_clutter/gen
+
+# Visualize (GUI): stream the scene + scattered objects + robot to the Rerun viewer
+# (http://localhost:9090?url=ws://localhost:9877) — any robot (rby1, innate_mars, nori,
+# stretch) and any scene index.
+uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3 --rerun
 ```
 
 Output: per-episode JSON + `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT`
