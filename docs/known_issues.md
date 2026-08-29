@@ -2,7 +2,25 @@
 
 Tracked bugs and investigation notes.
 
-**See also:** [cli.md](cli.md) · [zmq_obs.md](zmq_obs.md) · [dynagraph.md](dynagraph.md) · [graph_eqa.md](graph_eqa.md) · [robots/innate_mars.md](robots/innate_mars.md) · [robots/innate_mars_hardware.md](robots/innate_mars_hardware.md) · [environment_variables.md](environment_variables.md)
+**See also:** [cli.md](cli.md) · [pythonpath.md](pythonpath.md) · [zmq_obs.md](zmq_obs.md) · [dynagraph.md](dynagraph.md) · [graph_eqa.md](graph_eqa.md) · [robots/innate_mars.md](robots/innate_mars.md) · [robots/innate_mars_hardware.md](robots/innate_mars_hardware.md) · [environment_variables.md](environment_variables.md)
+
+---
+
+## `emet serve mujoco` dies on `import scipy` / numpy ABI
+
+**Status:** Mitigated · **Seen:** 2026-08 (sim server child)
+
+### Symptoms
+
+`uv run emet serve mujoco` (or a harness that `Popen`s `python -m emet.simulation.mujoco_server`) fails at import with scipy/numpy ABI errors (`undefined symbol`, `module compiled against API version …`), while `uv run python -c "import scipy"` in the same checkout works.
+
+### Cause
+
+`sanitize_emet_subprocess_env` used to prepend **every** `.venv/lib/python*/site-packages` glob. A leftover `python3.12` directory inside a 3.10 venv put 3.12 wheels on `PYTHONPATH` ahead of the venv’s own. `mujoco_server` imports numpy at **module load**, before in-process `ensure_venv_site_packages_first()`.
+
+### Fix
+
+Prepend only `python{tag}/site-packages` for the tag in `.venv/pyvenv.cfg` `version_info`. Details and debug commands: [pythonpath.md](pythonpath.md).
 
 ---
 

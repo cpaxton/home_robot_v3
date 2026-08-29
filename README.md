@@ -302,6 +302,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [emet_config.md](docs/emet_config.md) | Nested YAML (`configs/emet/default.yaml`), `--set` / `-O`, robot overlays |
 | [TESTING.md](docs/TESTING.md) | `uv run emet test`, memory-backend smokes, Dynagraph harnesses |
 | [known_issues.md](docs/known_issues.md) | Open bugs, Habitat EGL / agent segfault notes |
+| [pythonpath.md](docs/pythonpath.md) | `PYTHONPATH` sanitizer: ROS `cv2` + mixed `python3.12` site-packages in a 3.10 venv |
 
 ### Memory, EQA, and agents
 

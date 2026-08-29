@@ -42,6 +42,8 @@ uv run emet run debug-da3-depth --robot innate_mars
 
 If port 4401 is already in use: `uv run emet kill-mujoco-server` then retry, or `uv run emet serve mujoco --port-offset 100`.
 
+If `emet serve mujoco` fails on `import scipy` / numpy ABI errors while `uv run python -c "import scipy"` works: leftover `python3.12` site-packages in a 3.10 `.venv` — see [pythonpath.md](pythonpath.md) and [known_issues.md](known_issues.md).
+
 ## Commands
 
 ### `emet serve [backend]`
