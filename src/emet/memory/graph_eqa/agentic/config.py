@@ -106,11 +106,14 @@ _CLOSE_LOOK_CUES = (
 def question_requires_close_look_keywords(question: str) -> bool:
     """Cheap heuristic: does answering need a close look (clock/count/state/detail)?
 
-    Used as the pre-VLM shortcut and the no-VLM fallback for the close-look flag;
-    the VLM classifier (``extract_target_from_question``) is the authoritative path.
+    OR'd with the VLM extract so a false-negative cannot disable stay /
+    ``DETECTIONS_REMAIN`` on count/clock/state. Location questions (``where is`` /
+    ``where did``) stay off — those MCQs may still explore to change rooms.
     """
     q = str(question or "").strip().lower()
     if not q:
+        return False
+    if q.startswith("where ") or q.startswith("where's"):
         return False
     return any(cue in q for cue in _CLOSE_LOOK_CUES)
 

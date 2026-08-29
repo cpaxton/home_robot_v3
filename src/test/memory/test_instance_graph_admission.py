@@ -152,8 +152,8 @@ def test_confirmed_memory_lists_views_without_detector_class_names():
     mem._relevant_objects = ["table lamps"]
     mem._relevant_phrases = ["table lamps"]
     summary = mem._relevant_memory_summary()
-    assert "[Image 1] at (4.8, 5.1)" in summary
-    assert "[Image 2] at (3.1, 5.0)" in summary
+    assert "[graph obs 1] at (4.8, 5.1)" in summary
+    assert "[graph obs 2] at (3.1, 5.0)" in summary
     assert "lamp at" not in summary.split("nearest:")[0]
     assert "table at" not in summary.split("nearest:")[0]
     assert "4 graph node(s)" not in summary
@@ -162,7 +162,7 @@ def test_confirmed_memory_lists_views_without_detector_class_names():
     assert ": PRESENT" not in summary
     mem.record_close_look_label(1, "table lamp")
     looked = mem._relevant_memory_summary()
-    assert "table lamp [Image 1] at (4.8, 5.1)" in looked
+    assert "table lamp [graph obs 1] at (4.8, 5.1)" in looked
     q = "How many table lamps are there in the bedroom? A) Three B) Four C) One D) Two. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT: 4" not in hint
@@ -241,7 +241,7 @@ def test_query_answer_pins_count_candidate_views():
     mem._select_relevant_obs_ids = lambda **_k: [2]  # type: ignore[method-assign]
     mem.query_answer("How many umbrellas are there? A) One B) Two C) Three D) Four. Answer:")
     assert mem.last_eqa_obs_ids[0] == 1
-    assert any(isinstance(c, str) and "GRAPH_COUNT:" in c and "views to look at" in c for c in captured["cmds"])
+    # The only umbrella FIND view is already Image 1 — do not advertise it as a nav target.
 
 
 def test_query_answer_count_pins_survive_forced_single_image():
@@ -333,7 +333,7 @@ def test_count_hint_matches_close_look_name_not_just_detector():
     assert target is not None
     assert [int(n.obs_id) for n in nodes] == [1]
     hint = mem._graph_count_hint(q)
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "GRAPH_COUNT: 1" not in hint
 
 
@@ -425,7 +425,7 @@ def test_count_candidates_match_head_noun_lamp_for_table_lamps():
     assert target is not None
     assert [int(n.obs_id) for n in nodes] == [1]
     hint = mem._graph_count_hint(q)
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "GRAPH_COUNT: 1" not in hint
 
 
@@ -932,8 +932,137 @@ def test_graph_count_hint_prefers_visual_find_images():
     mem.set_visual_find_fn(lambda phrase, max_n: [(0.40, 2)])
     q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
     hint = mem._graph_count_hint(q)
-    assert "[Image 2]" in hint
+    assert "[graph obs 2]" in hint
+    assert "[graph obs 1]" in hint
     assert "GRAPH_COUNT: 1" not in hint
+
+
+def test_eqa_find_obs_ids_does_not_replace_nodes_with_visual_spawn():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="hall-lamp",
+    )
+    mem.add_observation(rgb, np.array([4.0, 4.0, 0.5]), ["decorative object"])
+    mem._relevant_objects = ["table lamp"]
+    mem._relevant_phrases = ["table lamp"]
+    mem.set_visual_find_fn(lambda phrase, max_n: [(0.40, 2)])
+    q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
+    ids = mem._eqa_find_obs_ids(q, attached_obs_ids=(), count_mcq_only=True)
+    assert 1 in ids
+    assert 2 in ids
+    attached = mem._eqa_find_obs_ids(q, attached_obs_ids=[1], count_mcq_only=True)
+    assert 1 not in attached
+    assert 2 in attached
+
+
+def test_eqa_find_obs_ids_includes_look_bed_and_drops_wrong_room():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stove", "kitchen cabinets"])
+    mem.add_observation(rgb, np.array([0.16, -2.54, 0.05]), ["bed"])
+    mem.add_observation(
+        rgb,
+        np.array([2.0, -2.75, 0.99]),
+        ["nightstand"],
+        countable_instance=True,
+        identity_key="ns1",
+    )
+    mem._relevant_objects = ["bedside tables", "bedroom white bedding"]
+    mem._relevant_phrases = ["bedside tables", "bedroom white bedding"]
+    mem.set_visual_find_fn(lambda phrase, max_n: [(0.9, 1)])
+    q = "How many bedside tables are there in the bedroom? A) One B) Two C) Three D) None. Answer:"
+    ids = mem._eqa_find_obs_ids(q, attached_obs_ids=[1], count_mcq_only=True)
+    assert 1 not in ids
+    assert 2 in ids
+    hint = mem._graph_count_hint(q, attached_obs_ids=[1])
+    assert "[graph obs 2]" in hint
+    assert "[graph obs 1]" not in hint
+    assert mem._graph_count_hint("Where is the lamp? A) Kitchen B) Bedroom C) Hall D) Bath. Answer:") == ""
+
+
+def test_eqa_find_obs_ids_drops_camera_pose_when_object_place_exists():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(
+        rgb,
+        np.array([0.0, 0.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="near",
+    )
+    mem.add_observation(
+        rgb,
+        np.array([4.0, 4.0, 0.5]),
+        ["lamp"],
+        countable_instance=True,
+        identity_key="far",
+    )
+    mem._relevant_objects = ["table lamp"]
+    mem._relevant_phrases = ["table lamp"]
+    q = "How many table lamps are there? A) One B) Two C) Three D) None. Answer:"
+    ids = mem._eqa_find_obs_ids(q, attached_obs_ids=(), robot_xyt=[0.0, 0.0, 0.0], count_mcq_only=True)
+    assert 2 in ids
+    assert 1 not in ids
+
+
+def test_query_answer_confident_count_navigates_to_unattached_find():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    def fake_eqa(_cmds):
+        return (
+            "reasoning: four chairs in image 1\n"
+            "answer: Four\nconfidence: true\naction:\n"
+            "confidence_reasoning: counted in living room\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "",
+        parameters={"eqa_vl": {"eqa_max_images": 2}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"], identity_key="sofa")
+    mem.add_observation(
+        rgb,
+        np.array([5.0, 1.0, 0.5]),
+        ["chair"],
+        countable_instance=True,
+        identity_key="c1",
+    )
+    orig = mem._compose_eqa_answer_obs_ids
+
+    def drop_find(**kwargs):
+        kwargs = dict(kwargs)
+        kwargs["pin_obs"] = []
+        kwargs["look_obs_id"] = None
+        return orig(**kwargs)
+
+    mem._compose_eqa_answer_obs_ids = drop_find  # type: ignore[method-assign]
+    mem._select_relevant_obs_ids = lambda **_k: [1]  # type: ignore[method-assign]
+    q = "How many dining chairs are there? A) Two B) Four C) Six D) Eight. Answer:"
+    _r, _answer, confidence, _cr, target, _imgs = mem.query_answer(q)
+    assert confidence is False
+    assert str(mem.last_eqa_parsed[1]).strip().lower() == "four"
+    assert mem.last_eqa_action_obs_id == 2
+    assert target is not None
+
+
+def test_hypothesize_nav_includes_look_object_place():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stove"])
+    mem.add_observation(rgb, np.array([0.16, -2.54, 0.05]), ["bed"])
+    mem._relevant_objects = ["bedroom white bedding"]
+    mem._relevant_phrases = ["bedroom white bedding"]
+    hyps = mem.hypothesize_nav_targets(
+        "How many bedside tables are there in the bedroom? A) One B) Two C) None D) Three. Answer:",
+        robot_xyt=np.array([0.0, 0.0, 0.0]),
+    )
+    assert 2 in {int(h.obs_id) for h in hyps}
 
 
 def test_query_answer_highlight_adds_clock_when_time_phrase_misses():

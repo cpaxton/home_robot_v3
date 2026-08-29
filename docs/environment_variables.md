@@ -2,6 +2,8 @@
 
 Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpaces. Most apps read these at startup; export in the shell before `emet serve` / `emet run`.
 
+**`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
+
 ## MolmoSpaces
 
 **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** — spawn, autoplace, occupancy map, navigation teleport (`EMET_MOLMOSPACES_NAV_TELEPORT`), asset paths, and related test knobs.
@@ -14,6 +16,7 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
+| `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
 ## Rerun
@@ -103,7 +106,10 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT` | `GraphEQAMemory.clear_retracted_nav_claims` | When `1`, keep close-look ABSENT claim blacklists across questions (ledger rows always persist when the ledger is on). Default **off**. Also `eqa.attempt_ledger.persist_absent_claims`. |
 | `EMET_ATTEMPT_LEDGER_MAX` | `GraphEQAMemory` | Cap on stored `AttemptRecord` rows (default `512`). Also `eqa.attempt_ledger.max_records`. |
 | `EMET_EQA_AGENTIC_MCQ_DEBIAS` | `AgenticEQAExecutor` | Default **on**. Unverified forced answers (budget exhaustion) run the letter-free debias (`vote_mcq_letter`: freeform + ≤2 rotation votes) before the ladder, fixing the last-option (D) bias seen in the trace audit. `0` restores the raw EQA letter. Also `eqa.agentic_mcq_debias`. |
-| `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Ask the per-episode VLM extract (keyword fallback) whether the question needs a close look (clock/state/count/detail); when it does, the router state says so and a 2+-frontier streak redirects to investigate/`look_around` instead of exploring forever (q84 time-question fix). `0` disables. Also `eqa.agentic_close_look`. |
+| `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Per-episode close-look flag: VLM `extract_target_from_question` **OR** count/clock/state keywords (so a VLM false-negative cannot disable stay on “how many” / “what time”). Router state + `DETECTIONS_REMAIN` / close-map stay. `0` disables. Also `eqa.agentic_close_look`. Tune with other close-map knobs one at a time — [countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time). |
+| `EMET_EQA_LOCATION_MISSING_FIND` | `GraphEQAMemory.query_answer` | Default **on** (`eqa.location_missing_find`; env escape hatch). Location MCQs downgrade while an unattached FIND view (`_eqa_find_obs_ids` `count_mcq_only=False`) remains (mirror count, q47 `wall clock`). `0` disables (6/15 vs 4/5 canary). |
+| `EMET_EQA_CLOSE_MAP_GATE` | `GraphEQAMemory.query_answer` | Default **on** (`eqa.close_map_gate`; env escape hatch). Location MCQs also require voxel `close_map resolved` (`close_map_catalog_fields` `R_M 0.55` `aimed`) before confident (AB `7/15` vs A `6/15`). `0` disables. |
+| `EMET_EQA_IMG_STRICT` | `GraphEQAMemory.query_answer` | Default **off** (`eqa.img_strict`; env escape hatch). Require attached image landmark (`_location_letter_from_attached_images`) to match parsed letter before location confident (`5/15`). `1` enables. |
 | `EMET_CLOSE_MAP_R_M` | `CloseDistanceMap` | Aimed camera range (m) that counts as a resolved close look (default `0.55`). Occupancy exploration is not enough for small objects. See [close_map.md](close_map.md). |
 | `EMET_CLOSE_MAP_AIM_DEG` | `CloseDistanceMap` | Optical-axis cone (deg) for an “aimed” hit (default `25`). |
 | `EMET_CLOSE_MAP_QUERY_RADIUS_M` | `CloseDistanceMap` | XY neighborhood radius (m) when querying a place card (default `0.35`). |

@@ -321,6 +321,19 @@ def close_map_from_voxel_map(voxel_map: Any) -> CloseDistanceMap | None:
     return cm if isinstance(cm, CloseDistanceMap) else None
 
 
+def close_map_catalog_fields(voxel_map: Any, x: float, y: float) -> dict[str, Any] | None:
+    """Compact inspect_graph row: resolved / aimed / min camera range at XY."""
+    cm = close_map_from_voxel_map(voxel_map)
+    if cm is None:
+        return None
+    q = cm.query_xy(float(x), float(y))
+    return {
+        "resolved": bool(q.resolved),
+        "aimed": bool(q.aimed_hit),
+        "min_cam_m": (None if q.min_cam_dist_m is None else float(q.min_cam_dist_m)),
+    }
+
+
 def close_map_from_agent(agent: Any) -> CloseDistanceMap | None:
     if agent is None:
         return None

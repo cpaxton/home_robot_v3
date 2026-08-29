@@ -429,7 +429,105 @@ def format_eqa_view_status(self, obs_ids: list[int]) -> str:
             parts.append("spent=yes")
         if risky:
             parts.append("risky=yes")
+        if self._obs_looks_like_doorway_glimpse(oid_i):
+            parts.append("doorway_glimpse=yes")
         lines.append(f"  Image {idx} (obs {oid_i}): " + ", ".join(parts))
+    return "\n".join(lines)
+
+def _obs_label_blob(self, obs_id: int) -> str:
+    node = self._node_for_obs(int(obs_id))
+    if node is not None and node.labels:
+        labels = list(node.labels)
+    else:
+        obs = self._observation_by_id(int(obs_id))
+        labels = list(getattr(obs, "labels", None) or [])
+    return " ".join(str(x) for x in labels).lower()
+
+def _obs_looks_like_doorway_glimpse(self, obs_id: int) -> bool:
+    blob = self._obs_label_blob(int(obs_id))
+    if not blob:
+        return False
+    has_door = any(k in blob for k in ("doorframe", "door frame", "doorway", "wooden door"))
+    if not has_door:
+        return False
+    roomish = sum(
+        1 for k in ("sofa", "couch", "kitchen", "bed", "bathroom", "living", "bedroom") if k in blob
+    )
+    return roomish >= 2
+
+def _obs_estimated_room(self, obs_id: int) -> str:
+    from emet.memory.graph_eqa.spatial.room_clusters import (
+        estimate_room_at_xy,
+        normalize_current_room,
+        room_from_observation_labels,
+    )
+
+    room_fn = getattr(self, "observation_room", None)
+    if callable(room_fn):
+        _rid, persisted = room_fn(int(obs_id))
+        if persisted and str(persisted).strip().lower() not in ("", "unknown"):
+            return normalize_current_room(persisted)
+    node = self._node_for_obs(int(obs_id))
+    labels = list(node.labels) if node is not None and node.labels else []
+    from_labels = room_from_observation_labels(labels)
+    if from_labels != "unknown":
+        return from_labels
+    if not getattr(self, "_room_clusters", None):
+        self.refresh_room_clusters()
+    xy = self._obs_xy(int(obs_id))
+    if xy is None:
+        return "unknown"
+    return normalize_current_room(
+        estimate_room_at_xy(
+            self._room_clusters,
+            xy,
+            max_dist_m=self._room_assign_max_m(),
+        )
+    )
+
+def format_eqa_room_context(self, question: str, obs_ids: list[int]) -> str:
+    """Target-room scope + per-attached room estimate for classic EQA prompts."""
+    from emet.memory.graph_eqa.spatial.room_clusters import normalize_current_room, question_target_rooms
+
+    targets = sorted(question_target_rooms(question))
+    if not targets and not obs_ids:
+        return ""
+    lines: list[str] = []
+    if targets:
+        lines.append(
+            "QUESTION_ROOM (scope — count/attribute answers must come from views inside "
+            "this room, not a doorway glimpse or a different room): "
+            + ", ".join(targets)
+        )
+    if obs_ids:
+        room_bits: list[str] = []
+        glimpse_slots: list[str] = []
+        mismatches: list[str] = []
+        target_set = {normalize_current_room(t) for t in targets}
+        for idx, raw in enumerate(obs_ids, start=1):
+            oid = int(raw)
+            room = self._obs_estimated_room(oid)
+            room_bits.append(f"Image {idx}=obs{oid} room≈{room}")
+            if self._obs_looks_like_doorway_glimpse(oid):
+                glimpse_slots.append(str(idx))
+            if targets and room != "unknown" and room not in target_set:
+                mismatches.append(f"Image {idx} ({room})")
+        if room_bits:
+            lines.append("ATTACHED_ROOM: " + "; ".join(room_bits))
+        if mismatches:
+            lines.append(
+                "ROOM_MISMATCH: attached "
+                + ", ".join(mismatches)
+                + f" do not match question room(s) {', '.join(targets)} — navigate to an "
+                "interior GRAPH_COUNT view in the target room before answering confidently."
+            )
+        if glimpse_slots:
+            lines.append(
+                "DOORWAY_GLIMPSE: Image "
+                + ",".join(glimpse_slots)
+                + " mixes doorframe with other-room objects — peek from outside, not an "
+                "interior count/read view."
+            )
     return "\n".join(lines)
 
 def eqa_should_stay_on_attached_view(self, *, answer: str, confidence: bool) -> bool:
@@ -864,7 +962,7 @@ def to_string(
                 status_tag = " candidate"
         lines.append(
             f"{kind} {n.node_id}{room_tag}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) "
-            f"[Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}{status_tag}{nearest_tag}"
+            f"[graph obs {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}{status_tag}{nearest_tag}"
         )
     for a, b, rel in self._edges:
         if int(a) not in keep_ids:
@@ -876,7 +974,7 @@ def to_string(
     if tail_lines:
         lines.append(
             "CONFIRMED_MEMORY (index of views to look at, not the answer; "
-            "LOOK = candidate Image N to look at; CANDIDATE/weak SigLIP are "
+            "LOOK = candidate graph obs N to look at; CANDIDATE/weak SigLIP are "
             "navigation hints; if images contradict memory, trust the images):"
         )
         lines.extend(tail_lines)

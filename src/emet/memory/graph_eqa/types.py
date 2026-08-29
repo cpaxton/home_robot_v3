@@ -46,6 +46,7 @@ class NavHypothesis:
     siglip_sim: float | None = None
     # Voxel/detector detections: 1.0 = YoloE, else gated cosine. Not a camera view.
     confidence: float | None = None
+    yoloe_hit: bool | None = None
 
 
 @dataclass(frozen=True)

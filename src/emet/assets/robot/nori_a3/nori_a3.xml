@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="nori">
+  <compiler angle="radian" />
+
+  <worldbody>
+    <body name="base_link" pos="0 0 0"><freejoint name="base_freejoint" /><geom name="base_body" type="box" size="0.225 0.225 0.10" pos="-0.113 0 0.10" mass="12.0" rgba="0.30 0.31 0.33 1" /><geom size="0.175 0.1 0.02" pos="-0.133275 0 0.105828" type="box" rgba="0.8 0.81 0.83 1" />
+    <geom size="0.0254" pos="-0.273275 0.075 0.0254" rgba="0.07 0.07 0.08 1" />
+    <geom size="0.0254" pos="-0.273275 -0.075 0.0254" rgba="0.07 0.07 0.08 1" />
+    <geom size="0.0193763 0.0344513 0.2575" pos="-0.113523 0 0.428928" type="box" rgba="0.34 0.35 0.37 1" />
+    <geom size="0.0278 0.02065" pos="0.00422459 0 0.196478" type="cylinder" rgba="0.18 0.19 0.21 1" />
+    <geom size="0.002625 0.001925 0.0006" pos="0.0184336 -0.0809077 0.134028" type="box" rgba="0.18 0.19 0.21 1" />
+    <body name="left_wheel_link" pos="0 0.15 0.0762">
+      <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.437" diaginertia="0.00126871 0.000657848 0.000657848" />
+      <geom size="0.0762 0.0127" quat="0.707107 0.707107 0 0" type="cylinder" rgba="0.07 0.07 0.08 1" />
+    </body>
+    <body name="right_wheel_link" pos="0 -0.15 0.0762">
+      <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.437" diaginertia="0.00126871 0.000657848 0.000657848" />
+      <geom size="0.0762 0.0127" quat="0.707107 0.707107 0 0" type="cylinder" rgba="0.07 0.07 0.08 1" />
+    </body>
+    <body name="lift_top_link" pos="-0.113523 0 0.428928">
+      <inertial pos="0 -0.0564311 0" mass="4.31" diaginertia="0.0829775 0.0468633 0.0419389" />
+      <joint name="lift_extension_joint" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.7" actuatorfrcrange="-1 1" damping="1" />
+      <geom size="0.0253762 0.0404513 0.2575" type="box" rgba="0.34 0.35 0.37 1" />
+      <body name="left_shoulder_pitch_link" pos="-2.23e-06 0.125 0.0869827" quat="0 0 0 1">
+        <inertial pos="0 -0.0235 0" quat="0 0.707107 0 0.707107" mass="0.4" diaginertia="0.000176679 0.00015184 0.000122428" />
+        <joint name="left_shoulder_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+        <geom size="0.0278 0.0235 0.01913" pos="0 -0.0235 0" type="box" rgba="0.16 0.17 0.18 1" />
+        <body name="left_shoulder_roll_link" pos="0 -0.0567 0" quat="0.707107 -0.707107 0 0">
+          <inertial pos="0 0 -0.0455" quat="0.707107 0 0 0.707107" mass="0.252" diaginertia="0.000529493 0.00042525 0.000189293" />
+          <joint name="left_shoulder_roll_joint" pos="0 0 0" axis="1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+          <geom size="0.0418 0.0225 0.0675" pos="0 0 -0.0455" type="box" rgba="0.16 0.17 0.18 1" />
+          <body name="left_bicep_yaw_link" pos="0 0 -0.115">
+            <inertial pos="0 0 -0.04163" mass="0.175" diaginertia="0.000143778 0.000122442 6.40301e-05" />
+            <joint name="left_bicep_yaw_joint" pos="0 0 0" axis="0 0 1" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+            <geom size="0.01913 0.02705 0.04163" pos="0 0 -0.04163" type="box" rgba="0.16 0.17 0.18 1" />
+            <body name="left_elbow_pitch_link" pos="0 0 -0.06736">
+              <inertial pos="0 0 -0.0455" mass="0.254" diaginertia="0.000533695 0.000428625 0.000190795" />
+              <joint name="left_elbow_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+              <geom size="0.0418 0.0225 0.0675" pos="0 0 -0.0455" quat="0.707107 0 0 0.707107" type="box" rgba="0.16 0.17 0.18 1" />
+              <body name="left_forearm_yaw_link" pos="0 0 -0.115">
+                <inertial pos="0 0 -0.0282" mass="0.148" diaginertia="7.00652e-05 5.45133e-05 4.61148e-05" />
+                <joint name="left_forearm_yaw_joint" pos="0 0 0" axis="0 0 1" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+                <geom size="0.0176 0.025 0.0282" pos="0 0 -0.0282" type="box" rgba="0.16 0.17 0.18 1" />
+                <body name="left_wrist_pitch_link" pos="0 0 -0.0462">
+                  <inertial pos="0 0 -0.033" mass="0.09" diaginertia="9.08967e-05 7.95e-05 4.88967e-05" />
+                  <joint name="left_wrist_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                  <geom size="0.025 0.0317 0.045" pos="0 0 -0.033" type="box" rgba="0.16 0.17 0.18 1" />
+                  <body name="left_wrist_roll_link" pos="0 0 -0.0678" quat="0 0 0 1">
+                    <inertial pos="0 0 -0.0188922" quat="0.707107 0.707107 0 0" mass="0.142" diaginertia="9.27362e-05 8.36868e-05 8.12934e-05" />
+                    <joint name="left_wrist_roll_joint" pos="0 0 0" axis="-1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                    <geom size="0.027625 0.0317 0.0308922" pos="0 0 -0.0188922" type="box" rgba="0.16 0.17 0.18 1" />
+                    <body name="left_gripper_link" pos="0.0174 -0.0089 -0.0322843" quat="0 0 0 1">
+                      <inertial pos="0 -0.023 -0.035" mass="0.013" diaginertia="1.53617e-05 1.29697e-05 4.89667e-06" />
+                      <joint name="left_gripper_joint" pos="0 0 0" axis="0 1 0" range="0 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                      <geom size="0.017 0.029 0.052" pos="0 -0.023 -0.035" type="box" rgba="0.16 0.17 0.18 1" />
+                    </body>
+                    <body name="left_gripper_idler_link" pos="-0.0126 -0.0089 -0.0322843" quat="0 0 0 1">
+                      <inertial pos="0 -0.023 -0.035" mass="0.013" diaginertia="1.53617e-05 1.29697e-05 4.89667e-06" />
+                      <joint name="left_gripper_idler_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 0" actuatorfrcrange="-4 4" damping="0.1" />
+                      <geom size="0.017 0.029 0.052" pos="0 -0.023 -0.035" type="box" rgba="0.16 0.17 0.18 1" />
+                    </body>
+                  <camera name="left_gripper_camera" pos="0.0 -0.02 -0.05" mode="fixed" xyaxes="0 1 0  0 0 1" /></body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="right_shoulder_pitch_link" pos="-2.23e-06 -0.125 0.0869827" quat="0 0 0 1">
+        <inertial pos="0 0.0235 0" quat="0 0.707107 0 0.707107" mass="0.4" diaginertia="0.000176679 0.00015184 0.000122428" />
+        <joint name="right_shoulder_pitch_joint" pos="0 0 0" axis="0 1 0" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+        <geom size="0.0278 0.0235 0.01913" pos="0 0.0235 0" type="box" rgba="0.16 0.17 0.18 1" />
+        <body name="right_shoulder_roll_link" pos="0 0.0567 0" quat="0.707107 0.707107 0 0">
+          <inertial pos="0 0 -0.0455" quat="0.707107 0 0 0.707107" mass="0.252" diaginertia="0.000529493 0.00042525 0.000189293" />
+          <joint name="right_shoulder_roll_joint" pos="0 0 0" axis="1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+          <geom size="0.0418 0.0225 0.0675" pos="0 0 -0.0455" type="box" rgba="0.16 0.17 0.18 1" />
+          <body name="right_bicep_yaw_link" pos="0 0 -0.115">
+            <inertial pos="0 0 -0.04163" mass="0.175" diaginertia="0.000143778 0.000122442 6.40301e-05" />
+            <joint name="right_bicep_yaw_joint" pos="0 0 0" axis="0 0 1" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+            <geom size="0.01913 0.02705 0.04163" pos="0 0 -0.04163" type="box" rgba="0.16 0.17 0.18 1" />
+            <body name="right_elbow_pitch_link" pos="0 0 -0.06736">
+              <inertial pos="0 0 -0.0455" mass="0.254" diaginertia="0.000533695 0.000428625 0.000190795" />
+              <joint name="right_elbow_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+              <geom size="0.0418 0.0225 0.0675" pos="0 0 -0.0455" quat="0.707107 0 0 0.707107" type="box" rgba="0.16 0.17 0.18 1" />
+              <body name="right_forearm_yaw_link" pos="0 0 -0.115">
+                <inertial pos="0 0 -0.0282" mass="0.148" diaginertia="7.00652e-05 5.45133e-05 4.61148e-05" />
+                <joint name="right_forearm_yaw_joint" pos="0 0 0" axis="0 0 1" range="-3.14159 3.14159" actuatorfrcrange="-4 4" damping="0.1" />
+                <geom size="0.0176 0.025 0.0282" pos="0 0 -0.0282" type="box" rgba="0.16 0.17 0.18 1" />
+                <body name="right_wrist_pitch_link" pos="0 0 -0.0462">
+                  <inertial pos="0 0 -0.033" mass="0.09" diaginertia="9.08967e-05 7.95e-05 4.88967e-05" />
+                  <joint name="right_wrist_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                  <geom size="0.025 0.0317 0.045" pos="0 0 -0.033" type="box" rgba="0.16 0.17 0.18 1" />
+                  <body name="right_wrist_roll_link" pos="0 0 -0.0678" quat="0 0 0 1">
+                    <inertial pos="0 0 -0.0188922" quat="0.707107 0.707107 0 0" mass="0.142" diaginertia="9.27362e-05 8.36868e-05 8.12934e-05" />
+                    <joint name="right_wrist_roll_joint" pos="0 0 0" axis="-1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                    <geom size="0.027625 0.0317 0.0308922" pos="0 0 -0.0188922" type="box" rgba="0.16 0.17 0.18 1" />
+                    <body name="right_gripper_link" pos="0.0174 0.0089 -0.0322843" quat="0 0 0 1">
+                      <inertial pos="0 0.023 -0.035" mass="0.013" diaginertia="1.53617e-05 1.29697e-05 4.89667e-06" />
+                      <joint name="right_gripper_joint" pos="0 0 0" axis="0 1 0" range="0 1.5708" actuatorfrcrange="-4 4" damping="0.1" />
+                      <geom size="0.017 0.029 0.052" pos="0 0.023 -0.035" type="box" rgba="0.16 0.17 0.18 1" />
+                    </body>
+                    <body name="right_gripper_idler_link" pos="-0.0126 0.0089 -0.0322843" quat="0 0 0 1">
+                      <inertial pos="0 0.023 -0.035" mass="0.013" diaginertia="1.53617e-05 1.29697e-05 4.89667e-06" />
+                      <joint name="right_gripper_idler_joint" pos="0 0 0" axis="0 1 0" range="-1.5708 0" actuatorfrcrange="-4 4" damping="0.1" />
+                      <geom size="0.017 0.029 0.052" pos="0 0.023 -0.035" type="box" rgba="0.16 0.17 0.18 1" />
+                    </body>
+                  <camera name="right_gripper_camera" pos="0.0 0.02 -0.05" mode="fixed" xyaxes="0 1 0  0 0 1" /></body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    <camera name="head_camera" pos="0.05 0 0.10" mode="fixed" xyaxes="0 1 0  0 0 1" /><camera name="neck_camera" pos="-0.02 0 0.02" mode="fixed" xyaxes="0 1 0  0 0 1" /></body>
+    <body name="lift_middle_link" pos="-0.113523 0 0.428928">
+      <inertial pos="0 0 0" mass="2.268" diaginertia="0.0511879 0.0505061 0.00143889" />
+      <joint name="lift_middle_joint" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.35" actuatorfrcrange="-1 1" damping="1" />
+      <geom size="0.0223763 0.0374512 0.2575" type="box" rgba="0.34 0.35 0.37 1" />
+    </body>
+  </body></worldbody>
+<actuator><position joint="lift_extension_joint" name="lift_extension_joint" kp="800" /><position joint="left_shoulder_pitch_joint" name="left_shoulder_pitch_joint" kp="1000" /><position joint="left_shoulder_roll_joint" name="left_shoulder_roll_joint" kp="1000" /><position joint="left_bicep_yaw_joint" name="left_bicep_yaw_joint" kp="1000" /><position joint="left_elbow_pitch_joint" name="left_elbow_pitch_joint" kp="1000" /><position joint="left_forearm_yaw_joint" name="left_forearm_yaw_joint" kp="1000" /><position joint="left_wrist_pitch_joint" name="left_wrist_pitch_joint" kp="1000" /><position joint="left_wrist_roll_joint" name="left_wrist_roll_joint" kp="1000" /><position joint="right_shoulder_pitch_joint" name="right_shoulder_pitch_joint" kp="1000" /><position joint="right_shoulder_roll_joint" name="right_shoulder_roll_joint" kp="1000" /><position joint="right_bicep_yaw_joint" name="right_bicep_yaw_joint" kp="1000" /><position joint="right_elbow_pitch_joint" name="right_elbow_pitch_joint" kp="1000" /><position joint="right_forearm_yaw_joint" name="right_forearm_yaw_joint" kp="1000" /><position joint="right_wrist_pitch_joint" name="right_wrist_pitch_joint" kp="1000" /><position joint="right_wrist_roll_joint" name="right_wrist_roll_joint" kp="1000" /><position joint="left_gripper_joint" name="left_gripper_joint" kp="200" /><position joint="right_gripper_joint" name="right_gripper_joint" kp="200" /></actuator><equality><joint name="left_gripper_idler_joint_mimic" joint1="left_gripper_joint" joint2="left_gripper_idler_joint" polycoef="0 -1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001" /><joint name="right_gripper_idler_joint_mimic" joint1="right_gripper_joint" joint2="right_gripper_idler_joint" polycoef="0 -1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001" /><joint name="lift_middle_joint_mimic" joint1="lift_extension_joint" joint2="lift_middle_joint" polycoef="0 0.5 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001" /></equality></mujoco>

@@ -60,9 +60,27 @@ def _extract_vlm_target(self) -> None:
     extracted = extract_target_from_question(client, self.question, fallback_phrase=str(fallback or ""))
     self._target_phrase = extracted.target_phrase
     self._question_type = extracted.question_type
-    self._close_look_required = bool(extracted.requires_close_look)
-    self._close_look_source = "vlm"
-    self._append_trace({"event": "vlm_target_extract", "source": "vlm", **extracted.to_dict()})
+    if self._close_look:
+        keyword = question_requires_close_look_keywords(self.question)
+        vlm_flag = bool(extracted.requires_close_look)
+        self._close_look_required = bool(vlm_flag or keyword)
+        if vlm_flag and keyword:
+            self._close_look_source = "vlm+keyword"
+        elif vlm_flag:
+            self._close_look_source = "vlm"
+        elif keyword:
+            self._close_look_source = "keyword"
+        else:
+            self._close_look_source = "vlm"
+    self._append_trace(
+        {
+            "event": "vlm_target_extract",
+            "source": "vlm",
+            **extracted.to_dict(),
+            "requires_close_look": self._close_look_required,
+            "close_look_source": self._close_look_source,
+        }
+    )
 
 def _apply_close_look_fallback(self) -> None:
     """Keyword heuristic when no VLM is available (or the classifier is off)."""

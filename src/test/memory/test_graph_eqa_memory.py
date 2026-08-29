@@ -126,7 +126,7 @@ def test_relevant_memory_summary_surfaces_observed_objects():
     assert "CONFIRMED_MEMORY" in summary
     assert "red: LOOK" in summary
     present_line = next(ln for ln in summary.splitlines() if ln.startswith("- red:"))
-    assert "[Image 1]" in present_line
+    assert "[graph obs 1]" in present_line
     assert "2 graph node(s)" not in present_line.split("nearest:")[0]
     assert "sofa: LOOK" in summary
 
@@ -988,6 +988,7 @@ def test_query_answer_injects_count_hint_as_prompt_hint():
     mem = GraphEQAMemory(
         eqa_client=fake_eqa,
         image_description_client=lambda _x: "umbrella",
+        parameters={"eqa_vl": {"eqa_max_images": 1}},
     )
     mem.add_observation(
         rgb,
@@ -1008,10 +1009,14 @@ def test_query_answer_injects_count_hint_as_prompt_hint():
     count_lines = [str(c) for c in captured["cmds"] if isinstance(c, str) and "GRAPH_COUNT:" in c]
     assert count_lines
     hint = count_lines[0]
-    assert "[Image 1]" in hint
+    assert "[graph obs 2]" in hint
+    assert "[graph obs 1]" not in hint
     assert hint.startswith("GRAPH_COUNT:") or "GRAPH_COUNT:" in hint
     assert "GRAPH_COUNT: 2" not in hint
     assert "do not use this list length as the answer" in hint
+    attached = [str(c) for c in captured["cmds"] if isinstance(c, str) and "ATTACHED_INDEX:" in c]
+    assert attached
+    assert "Image 1=obs" in attached[0]
 
 
 def test_graph_covers_uses_phrase_not_every_token():
@@ -1244,7 +1249,7 @@ def test_display_image_index_maps_to_selected_obs_ids():
 
 
 def test_action_image_ref_accepts_graph_obs_id():
-    """SCENE_GRAPH ``[Image 19]`` must resolve even when prompt only has Images 1..K."""
+    """SCENE_GRAPH ``[graph obs 19]`` must resolve even when prompt only has Images 1..K."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
@@ -1828,8 +1833,8 @@ def test_graph_count_hint_aggregates_label_matching_nodes():
     q = "How many umbrellas are there in the ceramic vase? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert hint.startswith("GRAPH_COUNT:")
-    assert "[Image 1]" in hint and "[Image 2]" in hint and "[Image 3]" in hint
-    assert "[Image 4]" not in hint
+    assert "[graph obs 1]" in hint and "[graph obs 2]" in hint and "[graph obs 3]" in hint
+    assert "[graph obs 4]" not in hint
     assert "umbrella at" not in hint
     assert "GRAPH_COUNT: 3" not in hint
     assert "not an exact count" in hint
@@ -1858,8 +1863,8 @@ def test_graph_count_hint_matches_target_phrase_not_stem_tokens():
     q = "How many chairs are in the dining room? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image 1]" in hint
-    assert "[Image 2]" not in hint
+    assert "[graph obs 1]" in hint
+    assert "[graph obs 2]" not in hint
     assert "chair at" not in hint
     assert "GRAPH_COUNT: 1" not in hint
 
@@ -1881,8 +1886,8 @@ def test_graph_count_hint_matches_target_phrase_not_stem_tokens():
     q = "How many red pillows did I leave on the living room sofa? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image 1]" in hint
-    assert "[Image 2]" not in hint
+    assert "[graph obs 1]" in hint
+    assert "[graph obs 2]" not in hint
     assert "red pillow at" not in hint
     assert "GRAPH_COUNT: 1" not in hint
 
@@ -1915,7 +1920,7 @@ def test_graph_count_hint_uses_stable_identity_not_distance():
     q = "How many chairs are there? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image" in hint
+    assert "[graph obs" in hint
     assert "chair at" not in hint
     assert "GRAPH_COUNT: 2" not in hint
     assert "do not use this list length as the answer" in hint
@@ -1955,7 +1960,7 @@ def test_graph_count_hint_matches_bedside_table_nightstand_alias():
     )
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "nightstand at" not in hint
     assert "GRAPH_COUNT: 2" not in hint
 
@@ -1975,7 +1980,7 @@ def test_graph_count_hint_collapses_nearby_duplicate_instances():
     q = "How many chairs are there? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert hint.count("[Image") == 2
+    assert hint.count("[graph obs") == 2
     assert "GRAPH_COUNT: 2" not in hint
 
 
@@ -2000,8 +2005,8 @@ def test_graph_count_hint_handles_plural_forms_and_boundaries():
     q = "How many shelves are there? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image 1]" in hint
-    assert "[Image 2]" not in hint
+    assert "[graph obs 1]" in hint
+    assert "[graph obs 2]" not in hint
     assert "GRAPH_COUNT: 1" not in hint
     q = "How many lamps are there? A) One B) Two C) Three D) Four. Answer:"
     assert mem._graph_count_hint(q) == ""
@@ -2021,7 +2026,7 @@ def test_graph_count_hint_preserves_counted_bowl_noun():
     q = "How many bowls are there? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
-    assert "[Image 1]" in hint
+    assert "[graph obs 1]" in hint
     assert "bowl at" not in hint
     assert "GRAPH_COUNT: 1" not in hint
 

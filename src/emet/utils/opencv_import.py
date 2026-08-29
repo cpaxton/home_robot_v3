@@ -15,7 +15,11 @@
 #
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 
-"""Detect a broken or shadowed ``cv2`` (not real OpenCV) before sim / ZMQ image paths run."""
+"""Detect a broken or shadowed ``cv2`` (not real OpenCV) before sim / ZMQ image paths run.
+
+ROS ``PYTHONPATH`` is the usual culprit; mixed venv interpreter tags are a
+separate scipy/numpy ABI issue. Both: ``docs/pythonpath.md``.
+"""
 
 from __future__ import annotations
 
@@ -28,6 +32,7 @@ def assert_cv2_is_real_opencv() -> None:
     Common case: ``PYTHONPATH`` includes ``/opt/ros/.../dist-packages`` so ``import cv2`` resolves
     to a minimal ``cv2`` without ``resize`` / ``imencode``. Fix: run with ``uv run emet ...`` from
     the repo, or unset ``PYTHONPATH`` / put the project ``.venv`` site-packages first.
+    See ``docs/pythonpath.md``.
     """
     from emet.utils.pythonpath import ensure_venv_site_packages_first
 

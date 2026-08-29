@@ -135,8 +135,10 @@ def test_close_look_keywords():
 
     assert question_requires_close_look_keywords(Q_TIME)
     assert question_requires_close_look_keywords(Q_COUNT)
+    assert question_requires_close_look_keywords("How many bedside tables are in the bedroom?")
     assert question_requires_close_look_keywords("Is the microwave on or off? A) On B) Off")
     assert not question_requires_close_look_keywords(Q_WHERE)
+    assert not question_requires_close_look_keywords("Where is the sink? A) kitchen B) bath")
 
 
 def test_close_look_fallback_keyword():
@@ -169,7 +171,7 @@ def test_extract_vlm_target_captures_close_look():
     )
     ex._extract_vlm_target()
     assert ex._close_look_required
-    assert ex._close_look_source == "vlm"
+    assert ex._close_look_source == "vlm+keyword"
     assert ex._target_phrase == "wall clock"
 
 
@@ -179,3 +181,23 @@ def test_extract_vlm_target_close_look_default_false():
     ex._extract_vlm_target()
     assert not ex._close_look_required
     assert ex._close_look_source == "vlm"
+
+
+def test_extract_vlm_target_keyword_or_overrides_false_vlm():
+    """Count/clock stay on even when the VLM extract returns requires_close_look false."""
+    q_tables = "How many bedside tables are in the bedroom? A) One B) Two C) Three D) Four"
+    ex_count, gm_count = _executor(q_tables, close_look=True, mcq_debias=False)
+    gm_count.eqa_client = MagicMock(
+        return_value='{"target_phrase": "bedside tables", "question_type": "count", "requires_close_look": false}'
+    )
+    ex_count._extract_vlm_target()
+    assert ex_count._close_look_required
+    assert ex_count._close_look_source == "keyword"
+
+    ex_time, gm_time = _executor(Q_TIME, close_look=True, mcq_debias=False)
+    gm_time.eqa_client = MagicMock(
+        return_value='{"target_phrase": "clock", "question_type": "state", "requires_close_look": false}'
+    )
+    ex_time._extract_vlm_target()
+    assert ex_time._close_look_required
+    assert ex_time._close_look_source == "keyword"

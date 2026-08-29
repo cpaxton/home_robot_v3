@@ -302,6 +302,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [emet_config.md](docs/emet_config.md) | Nested YAML (`configs/emet/default.yaml`), `--set` / `-O`, robot overlays |
 | [TESTING.md](docs/TESTING.md) | `uv run emet test`, memory-backend smokes, Dynagraph harnesses |
 | [known_issues.md](docs/known_issues.md) | Open bugs, Habitat EGL / agent segfault notes |
+| [pythonpath.md](docs/pythonpath.md) | `PYTHONPATH` sanitizer: ROS `cv2` + mixed `python3.12` site-packages in a 3.10 venv |
 
 ### Memory, EQA, and agents
 
@@ -360,6 +361,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | Doc | When to use |
 |-----|-------------|
 | [robots/supported_robots.md](docs/robots/supported_robots.md) | Registry of embodiments |
+| [robots/nori.md](docs/robots/nori.md) | Nori A3 bimanual backend (vendored MJCF, ArmChains, nori-sdk follow-up) |
 | [robots/innate_mars.md](docs/robots/innate_mars.md) | Innate Mars bridge / sim / DA3 |
 | [robots/sourccey.md](docs/robots/sourccey.md) | Sourccey sim support (Vulcan Robotics) |
 | [start_with_docker_plus_virtenv.md](docs/start_with_docker_plus_virtenv.md) | Stretch GPU client + robot install |

@@ -26,10 +26,10 @@ from emet.memory.graph_eqa.graph_types import (
     GraphObservation,
     parse_eqa_action,
 )
+from emet.memory.graph_eqa.labels import finder_label_texts, label_matches_relevant_object
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
-
 
 
 def query_answer(
@@ -130,6 +130,17 @@ def query_answer(
         for oid in visual_pins:
             if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
                 pin_obs.append(int(oid))
+        # Instance FIND (count nodes + LOOK) even when visual-find returned spawn RGB.
+        for oid in self._eqa_find_obs_ids(
+            question,
+            attached_obs_ids=(),
+            robot_xyt=xyt,
+            max_n=max_images,
+            count_mcq_only=bool(count_q),
+            include_visual=False,
+        ):
+            if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
+                pin_obs.append(int(oid))
     # YoloE instance nodes are FIND only when SigLIP retrieved nothing.
     if not pin_obs:
         for node in count_nodes:
@@ -160,6 +171,7 @@ def query_answer(
             max_images=max_images,
             choices=parsed_choices if parsed_choices else None,
             attribute_question=attribute_q,
+            question=question,
         )
         if self._obs_usable_for_eqa_image(oid)
     ]
@@ -206,7 +218,11 @@ def query_answer(
         record_prompt_count=True,
         merge_confirmed=merge_confirmed,
     )
-    count_hint = self._graph_count_hint(question)
+    count_hint = self._graph_count_hint(
+        question,
+        attached_obs_ids=list(obs_ids) + ([int(crop_oid)] if crop_oid is not None else []),
+        robot_xyt=xyt,
+    )
     # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
     # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
     nav_fallback_tail: list[GraphNavigationSample] = []
@@ -263,6 +279,13 @@ def query_answer(
         )
 
     extra_hints: list[str] = []
+    if obs_ids:
+        extra_hints.append(
+            "ATTACHED_INDEX: " + ", ".join(f"Image {i}=obs{int(oid)}" for i, oid in enumerate(obs_ids, start=1))
+        )
+    room_ctx = self.format_eqa_room_context(question, obs_ids)
+    if room_ctx:
+        extra_hints.append(room_ctx)
     if count_hint:
         extra_hints.append(count_hint)
     if crop_oid is not None:
@@ -357,6 +380,25 @@ def query_answer(
         self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
         self.last_eqa_model_raw = raw
         self.last_eqa_model_parsed = self.last_eqa_parsed
+        self._record_eqa_decision_trace(
+            iteration=len(self._history_outputs) + 1,
+            question=question,
+            text_blocks=text_blocks,
+            obs_ids=list(obs_ids),
+            crop_obs_id=crop_oid,
+            nav_fallback_count=len(nav_fallback_tail),
+            relevant_images=relevant_images,
+            view_status=view_status,
+            close_look_status="",
+            vlm_raw=f"Error: {exc}",
+            parsed={
+                "reasoning": str(exc),
+                "answer": "Unknown",
+                "confidence": False,
+                "action": "",
+                "confidence_reasoning": str(exc),
+            },
+        )
         self._append_eqa_history(
             self.format_eqa_history_outcome(
                 answer="Unknown",
@@ -364,6 +406,7 @@ def query_answer(
                 action="",
                 reasoning=str(exc),
                 salvage=False,
+                obs_ids=list(obs_ids),
             )
         )
         return (
@@ -586,26 +629,96 @@ def query_answer(
                 confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
             ).strip()
     missing_find: list[int] = []
-    if _count_mcq and count_nodes:
-        attached = {int(oid) for oid in obs_ids}
-        attached_find = False
-        for node in count_nodes:
-            oid = int(node.obs_id)
-            if not self._obs_usable_for_eqa_image(oid):
-                continue
-            if oid in attached:
-                attached_find = True
-            elif oid not in missing_find:
-                missing_find.append(oid)
-        if missing_find and not attached_find and count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
-            if confidence:
-                confidence = False
-                confidence_reasoning = (
-                    confidence_reasoning
-                    + " FIND views were not attached; look at those RGB frames before answering None."
-                ).strip()
+    # Gate AB: location needs a FIND view and a resolved close-map.
+    # A: location missing_find (mirror count, q47) — default ON (4/5 canary, 6/15).
+    # B: voxel close_map resolved — default ON (AB 7/15 vs A 6/15, q47/q86 stable).
+    # C: image-landmark strict — default OFF (5/15).
+    # _eqa_override_gate reads eqa.<key> then EMET_EQA_<KEY> (env escape hatch).
+    _loc_gate = self._eqa_override_gate("location_missing_find", True)
+    _close_gate = self._eqa_override_gate("close_map_gate", True)
+    _img_strict = self._eqa_override_gate("img_strict", False)
+    if _close_gate or _img_strict:
+        _loc_gate = True
+    if _count_mcq or (_loc_gate and location_q):
+        attached_for_find = list(obs_ids)
+        if crop_oid is not None:
+            attached_for_find.append(int(crop_oid))
+        missing_find = [
+            oid
+            for oid in self._eqa_find_obs_ids(
+                question,
+                attached_obs_ids=attached_for_find,
+                robot_xyt=xyt,
+                max_n=6,
+                count_mcq_only=bool(_count_mcq),
+            )
+            if not self.eqa_obs_look_spent(int(oid))
+        ]
+        if missing_find and confidence:
+            confidence = False
+            if _loc_gate and location_q:
+                extra = " FIND views were not attached; look at those RGB frames before confirming a location."
+            else:
+                extra = (
+                    " FIND views were not attached; look at those RGB frames before confirming a count."
+                )
+                if count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
+                    extra = " FIND views were not attached; look at those RGB frames before answering None."
+            confidence_reasoning = (confidence_reasoning + extra).strip()
             if self.last_eqa_look_obs_id is None:
                 self.last_eqa_look_obs_id = missing_find[0]
+    # Gate B: voxel close_map — require resolved close view, not just FIND queue empty.
+    if _close_gate and location_q and confidence:
+        try:
+            from emet.mapping.close_map import close_map_catalog_fields
+
+            vm = getattr(self, "voxel_map", None)
+            if vm is None and hasattr(self, "_voxel_map"):
+                vm = getattr(self, "_voxel_map", None)
+            # planner may carry voxel_map (controller_graph_eqa)
+            if vm is None and planner is not None:
+                vm = getattr(planner, "voxel_map", None)
+            has_resolved = False
+            # need robot_xy to query
+            robot_xy_b = self._robot_planar_xy(xyt)  # type: ignore[attr-defined]
+            if vm is not None and robot_xy_b is not None:
+                for obj in self._confirmed_memory_phrases():  # type: ignore[attr-defined]
+                    # best matching node for this phrase
+                    best = None
+                    for n in self._nodes:  # type: ignore[attr-defined]
+                        if n.is_frontier or n.is_viewpoint:
+                            continue
+                        texts = finder_label_texts(n)  # type: ignore[name-defined]
+                        if any(label_matches_relevant_object(obj, t) for t in texts):  # type: ignore[name-defined]
+                            best = n
+                            break
+                    if best is None:
+                        continue
+                    cm = close_map_catalog_fields(vm, float(best.xyz[0]), float(best.xyz[1]))
+                    if cm is not None and bool(cm.get("resolved")) and bool(cm.get("aimed")):
+                        has_resolved = True
+                        break
+            if not has_resolved:
+                confidence = False
+                confidence_reasoning = (
+                    confidence_reasoning + " No resolved close_map view yet; approach the FIND view before confirming."
+                ).strip()
+        except Exception:
+            pass
+    # Gate C: image-landmark strict — location letter must match attached image landmarks.
+    if _img_strict and location_q and confidence:
+        parsed_letter = extract_mcq_letter(str(answer or ""), parsed_choices)
+        img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)  # type: ignore[attr-defined]
+        if parsed_letter and img_letter and parsed_letter != img_letter:
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning + " Image landmarks disagree with answer; inspect closer before confirming."
+            ).strip()
+        elif parsed_letter and not img_letter:
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning + " No landmark in attached images to confirm location; keep exploring."
+            ).strip()
     raw_answer = answer
     self.last_eqa_parsed = (reasoning, raw_answer, confidence, action, confidence_reasoning)
     human = format_human_eqa_answer(
@@ -663,9 +776,35 @@ def query_answer(
         self.last_eqa_action_obs_id = nxt
         if nxt is not None and target_point is None:
             target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
+    elif not confidence and missing_find:
+        attached_set = {int(oid) for oid in action_obs_ids}
+        if self.last_eqa_action_obs_id is not None and int(self.last_eqa_action_obs_id) in attached_set:
+            nxt = self.next_unspent_eqa_obs_id(missing_find)
+            if nxt is not None:
+                self.last_eqa_action_obs_id = nxt
+                target_point = self._navigation_waypoint_for_obs(int(nxt), xyt)
     pending_look = self.last_eqa_action_obs_id
     if pending_look is not None and (not obs_ids or int(obs_ids[0]) != int(pending_look)):
         self.last_eqa_look_obs_id = int(pending_look)
+    self._record_eqa_decision_trace(
+        iteration=len(self._history_outputs) + 1,
+        question=question,
+        text_blocks=text_blocks,
+        obs_ids=list(obs_ids),
+        crop_obs_id=crop_oid,
+        nav_fallback_count=len(nav_fallback_tail),
+        relevant_images=relevant_images,
+        view_status=view_status,
+        close_look_status="",
+        vlm_raw=str(raw or ""),
+        parsed={
+            "reasoning": reasoning,
+            "answer": raw_answer,
+            "confidence": bool(confidence),
+            "action": hist_action,
+            "confidence_reasoning": confidence_reasoning,
+        },
+    )
     self._append_eqa_history(
         self.format_eqa_history_outcome(
             answer=raw_answer,
@@ -673,6 +812,7 @@ def query_answer(
             action=hist_action,
             reasoning=reasoning,
             salvage=bool(self.last_eqa_salvage_used),
+            obs_ids=list(obs_ids),
         )
     )
 
