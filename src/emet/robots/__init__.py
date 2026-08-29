@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-"""Robot backends for EMET — Stretch, Mobile ALOHA, Galaxea R1 / RB-Y1, Innate Mars, YOR."""
+"""Robot backends for EMET — Stretch, Mobile ALOHA, Galaxea R1 / RB-Y1, Innate Mars, Nori A3, YOR."""
 
 import importlib
 from typing import Any
@@ -27,29 +27,40 @@ ROBOT_REGISTRY = {
     "franka": "emet.robots.franka_fr3",
     "sourccey": "emet.robots.sourccey",
     "yor": "emet.robots.yor",
+    "nori": "emet.robots.nori",  # Nori A3 bimanual mobile manipulator
+    "nori_a3": "emet.robots.nori",
 }
+
+
+def _backend_class_from_module(mod) -> type[RobotBackend] | None:
+    """First :class:`RobotBackend` subclass defined on ``mod`` (not the ABC itself)."""
+    for attr_name in dir(mod):
+        attr = getattr(mod, attr_name)
+        if isinstance(attr, type) and issubclass(attr, RobotBackend) and attr is not RobotBackend:
+            return attr
+    return None
 
 
 def get_robot_spec(robot: str) -> RobotSpec | None:
     """Return :class:`RobotSpec` for a CLI robot name (``stretch``, ``innate_mars``, …), or None if unknown."""
+    backend = get_robot_backend(robot)
+    return None if backend is None else backend.get_spec()
+
+
+def get_robot_backend(robot: str) -> RobotBackend | None:
+    """Return the :class:`RobotBackend` instance for a CLI robot name, or None if unknown."""
     key = robot.lower().replace("-", "_")
     if key == "stretch":
         from emet.robots.stretch import StretchBackend
 
-        return StretchBackend().get_spec()
+        return StretchBackend()
     mod_name = ROBOT_REGISTRY.get(key)
     if mod_name is None:
         return None
-    mod = importlib.import_module(mod_name)
-    backend_cls = None
-    for attr_name in dir(mod):
-        attr = getattr(mod, attr_name)
-        if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
-            backend_cls = attr
-            break
+    backend_cls = _backend_class_from_module(importlib.import_module(mod_name))
     if backend_cls is None:
         return None
-    return backend_cls().get_spec()
+    return backend_cls()
 
 
 # Global default for ``emet run dynamem --dynav-config`` (shared ``dynav_config.yaml`` unless overridden).
@@ -89,6 +100,7 @@ __all__ = [
     "RobotSpec",
     "format_robot_runtime_notes",
     "format_uv_sync_extras_hint",
+    "get_robot_backend",
     "get_robot_spec",
     "resolve_dynav_config_yaml",
 ]

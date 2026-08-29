@@ -361,6 +361,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | Doc | When to use |
 |-----|-------------|
 | [robots/supported_robots.md](docs/robots/supported_robots.md) | Registry of embodiments |
+| [robots/nori.md](docs/robots/nori.md) | Nori A3 bimanual backend (vendored MJCF, ArmChains, nori-sdk follow-up) |
 | [robots/innate_mars.md](docs/robots/innate_mars.md) | Innate Mars bridge / sim / DA3 |
 | [robots/sourccey.md](docs/robots/sourccey.md) | Sourccey sim support (Vulcan Robotics) |
 | [start_with_docker_plus_virtenv.md](docs/start_with_docker_plus_virtenv.md) | Stretch GPU client + robot install |

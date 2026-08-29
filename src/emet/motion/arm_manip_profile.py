@@ -46,10 +46,24 @@ class ArmManipProfile:
         for profile in _all_profiles():
             if key in profile.robot_ids and profile.arm == arm_l:
                 return profile
-        # Fall back to discovery from the robot's own spec + vendored MJCF so any
-        # registry robot with an arm gets motion planning without a hardcoded table.
+        # Fall back to the robot's own spec + vendored MJCF so any registry robot with
+        # an arm gets motion planning without a hardcoded table. Resolution order:
+        #   1. declarative ``RobotSpec.arm_chain`` (curated per-robot)
+        #   2. backend ``build_arm_manip_profile`` hook (code fallback)
+        #   3. MJCF auto-discovery heuristic
         spec = _spec_for_robot_id(key)
         if spec is not None:
+            chains = getattr(spec, "arm_chains", None) or {}
+            chain = chains.get(arm_l) or getattr(spec, "arm_chain", None)
+            if chain is not None:
+                found = _profile_from_arm_chain(spec, chain, arm=arm_l)
+                if found is not None:
+                    return found
+            backend = _backend_for_robot_id(key)
+            if backend is not None:
+                built = backend.build_arm_manip_profile(arm=arm_l)
+                if built is not None:
+                    return built
             found = ArmManipProfile.discover_from_spec(spec, arm=arm_l)
             if found is not None:
                 return found
@@ -119,6 +133,78 @@ def _spec_for_robot_id(robot_id: str):
         return get_robot_spec(robot_id)
     except Exception:
         return None
+
+
+def _backend_for_robot_id(robot_id: str):
+    """Return the ``RobotBackend`` for a registry robot id, or None (unknown)."""
+    try:
+        from emet.robots import get_robot_backend
+    except Exception:
+        return None
+    try:
+        return get_robot_backend(robot_id)
+    except Exception:
+        return None
+
+
+def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
+    """Build an :class:`ArmManipProfile` from a declarative ``RobotSpec.arm_chain``.
+
+    Returns ``None`` when the spec lacks a usable MJCF (the chain then stays inactive,
+    e.g. Stretch before the merged-MJCF robosuite path lands).
+    """
+    mjcf = getattr(spec, "mjcf_path", None)
+    if not mjcf or not Path(str(mjcf)).is_file():
+        return None
+    joints = list(getattr(chain, "joint_names", ()) or ())
+    if not joints:
+        return None
+    ee_body = str(getattr(chain, "ee_body", "") or "")
+    if not ee_body:
+        return None
+    act_names = list(getattr(chain, "actuator_names", ()) or ()) or [j for j in joints if _actuator_joint(spec, j)]
+    if not act_names:
+        act_names = [j for j in joints if _actuator_joint(spec, j)]
+    if not act_names:
+        return None
+
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_path(str(mjcf))
+    home_arm_q = list(getattr(chain, "home_arm_q", ()) or ()) or list(_home_q_from_mjcf(model, joints))
+    # home_cmd aligned to the arm actuators actually driven (executor indexes home_cmd[i]
+    # by profile.actuator_names order).
+    home_cmd: list[float] = []
+    for aname in act_names:
+        jn = _actuator_joint(spec, aname)
+        if jn in joints:
+            j = joints.index(jn)
+            home_cmd.append(float(home_arm_q[j]) if j < len(home_arm_q) else 0.0)
+        else:
+            home_cmd.append(0.0)
+
+    link_bodies = list(getattr(chain, "link_bodies", ()) or ())
+    if not link_bodies:
+        # Derive the arm subtree bodies so collision sampling is not EE-only.
+        root = _find_arm_root(model, joints)
+        if root is not None:
+            chain_bodies = _arm_chain_bodies(model, root)
+            link_bodies = [b for b in chain_bodies if b != root] or [ee_body]
+        else:
+            link_bodies = [ee_body]
+    gripper_bodies = list(getattr(chain, "gripper_bodies", ()) or ()) or [ee_body]
+    return ArmManipProfile(
+        robot_ids=(str(getattr(spec, "name", "") or ""),),
+        ee_body=ee_body,
+        joint_names=tuple(joints),
+        link_bodies=tuple(link_bodies),
+        actuator_names=tuple(act_names),
+        home_cmd=tuple(home_cmd),
+        base_freejoint_name=str(getattr(chain, "base_freejoint_name", "base_freejoint")),
+        arm=arm,
+        home_arm_q=tuple(home_arm_q),
+        gripper_bodies=tuple(gripper_bodies),
+    )
 
 
 # Side tokens for arm-joint discovery: (prefix, suffix). A joint matches the

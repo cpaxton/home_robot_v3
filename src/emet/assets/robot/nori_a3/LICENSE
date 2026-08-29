@@ -1,0 +1,65 @@
+NORI A3 ROBOT DESCRIPTION — LICENSE
+===================================
+
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+(CC BY-NC-SA 4.0), for everything in this package.
+
+  Full text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+  SPDX-License-Identifier: CC-BY-NC-SA-4.0
+  Summary:   https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+
+WHAT YOU MAY DO
+---------------
+Use this model in simulation and visualisation. Load it, drive it, modify it,
+convert it to MJCF, USD, glTF or anything else, and share your version - with
+attribution, and licensed under these same terms.
+
+Converting the model to another format and publishing that conversion is
+expressly fine. That is what this is for.
+
+
+WHAT YOU MAY NOT DO
+-------------------
+Use it commercially, or redistribute it commercially. Non-commercial sharing is
+allowed and encouraged; putting it in a product, a paid service, or a commercial
+dataset is not.
+
+If you want to use it commercially, ask. We would rather say yes to a specific
+request than publish terms that stop you asking.
+
+    info@norirobotics.com
+
+
+ONE LICENSE, NOT TWO
+--------------------
+An earlier draft split this: a permissive license on the description and a
+non-commercial one on the meshes. That is a common arrangement and it is what
+several robot vendors ship, but it does not fit here - a permissive license
+allows commercial redistribution of the part it covers, which is the one thing
+these terms are meant to prevent. A single license across the package is also
+simply easier to reason about.
+
+
+PATENTS
+-------
+No patent rights are granted. CC BY-NC-SA 4.0 licenses copyright only, and says
+so explicitly (Section 2(b)(2): "Patent and trademark rights are not licensed
+under this Public License").
+
+This is deliberate. A permissive software license such as Apache-2.0 carries an
+express patent grant, which would have granted rights in inventions embodied in
+this robot before any application was filed.
+
+
+NOT OPEN SOURCE — AND WE SAY SO
+-------------------------------
+The NonCommercial condition means this does NOT meet the Open Source Initiative's
+definition of open source, which forbids restricting fields of use. Please
+describe it as "source available", or "free for research and simulation" - not as
+open source.
+
+
+THIRD-PARTY CONTENT
+-------------------
+None. See NOTICE.

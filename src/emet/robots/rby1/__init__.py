@@ -49,6 +49,7 @@ class Rby1Backend(RobotBackend):
             base_link_name="base_link",
             footprint=Footprint(width=0.56, length=0.50, width_offset=0.0, length_offset=0.0),
             spawn=robot_spawn_spec_from_metadata("rby1"),
+            advertise_kinematic_manip=True,
         )
 
     def create_client(self, robot_ip: str, **kwargs):
