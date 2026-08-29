@@ -1,0 +1,93 @@
+% Copyright (c) Chris Paxton 2026
+% Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+\section{TAMP clutter-clearance benchmark}
+\label{app:tamp_clutter}
+
+Task and motion planning (TAMP) is the ability to \emph{interact with the world as part
+of a plan}. We propose a lightweight sim benchmark on MolmoSpaces iTHOR across four
+robots (Galaxea R1 \texttt{rby1}, Stretch, Innate Mars, Nori A3) where each episode
+starts the robot surrounded by small floor objects that must be moved out of the way.
+
+\subsection{Tasks}
+\begin{description}
+  \item[Cleanup] \emph{``Clean up the room.''} Relocate all scattered objects to a drop
+    receptacle (bin). Success requires every scattered object to end up at the bin.
+  \item[Nav-to-landmark] \emph{``Get to the sofa.''} Clear a path of objects, then navigate
+    the base to a scene landmark (static furniture). The landmark is fixed per episode and
+    varied across the set (sofa, fridge, table, \ldots) so goals differ in distance and
+    direction from the start; \texttt{auto} samples one uniformly at eval time.
+\end{description}
+
+\subsection{Episode generation}
+The committed 200-row YAML is an \textbf{offline template} (scene, robot, $N$, landmark);
+scatter and the GT probe run at \textbf{eval time}:
+\begin{enumerate}
+  \item Launch the scene, read \texttt{sim\_object\_placements}, record the robot start.
+  \item Pick $N$ pickable objects (grasp-asset bodies) and \textbf{scatter} them in a ring
+    around the robot at radius $r \pm$ jitter, biased toward the goal bearing
+    (\texttt{emet.eval.tamp\_clutter.scatter\_ring\_targets}); positions are applied via
+    \texttt{sim\_set\_body\_pose} at floor height ($z \approx 0.02$\,m).
+  \item Run the \textbf{GT validity probe} (\texttt{clutter\_blocks\_path}): build a
+    synthetic occupancy grid from the scattered objects dilated by the navigation
+    clearance gate ($\sim$0.22\,m) and run 8-connected search from start to goal. The
+    episode is \textbf{valid} iff no path exists without manipulation (for cleanup:
+    at least one object within 1.5\,m).
+\end{enumerate}
+
+Cleanup uses an open ring ($N\in\{3,6\}$). Scored \texttt{nav\_goal} uses a \textbf{tight
+closed ring} ($N{=}8$ at $0.5$\,m, \texttt{tight\_ring}) matching the GT+MCTS battery.
+If the probe does not report blocked, the row is \texttt{skipped\_invalid} and is
+excluded from the success denominator (it remains in the YAML/JSON). A 24-episode
+battery (tight ring vs.\ $N{=}0$ pure nav; teleport oracle) is the blocked-route gate
+(\texttt{docs/experiments/tamp\_clutter\_testing.md}).
+
+The template set spans \textbf{200} rows across MolmoSpaces iTHOR FloorPlan indices
+(rby1: 0--21; Stretch, Innate Mars, and Nori A3: 0--5)
+(\texttt{scripts/generate\_tamp\_clutter\_registry.py}).
+
+\subsection{Grasp latch contract}
+Each grasp is \textbf{approach $+$ close $+$ sim latch}: the end-effector reaches the
+object's grasp frame (IK), the gripper closes, and the simulator \texttt{attach} welds
+the object to the gripper; success is verified by end-effector-vs-object-frame tolerance
+after the lift. No contact-friction or grasp-stability physics is required, so the metric
+isolates TAMP (what to move, where, in what order) from grasp robustness. Manip modes:
+\texttt{latch} (kinematic IK + attach; rby1 default), \texttt{sim} (teleport oracle;
+stretch / Innate Mars / Nori on floor clutter --- Nori IK bottoms out at
+$z\approx 0.29$\,m), \texttt{attempt} (real visual servo; strict reference). Live
+\texttt{kinematic\_manip} is opt-in per \texttt{RobotSpec.advertise\_kinematic\_manip}
+(rby1, Innate Mars, Nori); Stretch stays on the teleport oracle until it moves onto the
+shared robosuite server.
+
+\subsection{Multi-object TAMP chain}
+\texttt{emet.controller.task.tamp.clutter\_chain.plan\_clear\_clutter} relocates each
+object to the bin by repeatedly grounding and executing a pick-and-place plan
+(MCTS task assignment via \texttt{plan\_pick\_place\_mcts}, then
+\texttt{execute\_task\_plan}), \textbf{re-reading} \texttt{sim\_object\_placements}
+after each move (stale-plan guard). Failures are per-object so one flaky grasp does not
+abort the episode. For \texttt{nav\_goal}, the base then navigates to the landmark
+approach pose and \texttt{goal\_reached} is scored within a success radius. An
+LLM-agent variant parses the same commands and drives the CHAT tool loop
+(\texttt{scene\_tasks}/\texttt{plan\_pick\_place}/\texttt{execute\_pick\_place\_plan}/
+\texttt{find\_objects}).
+
+\subsection{Metrics}
+Task success (cleanup: all relocated; nav: goal reached and not
+\texttt{skipped\_invalid}), objects cleared/relocated, manipulation success rate,
+motion failures (grasp/place execution), planner vs.\ manipulation wall time, and the
+recorded \texttt{episode\_valid} probe flag. Per-run JSON plus an aggregate CSV
+(\texttt{aggregate\_tamp\_clutter.csv}); not directly comparable to OVMM find-phase or
+SQA3D.
+
+\subsection{Protocol}
+\begin{enumerate}
+  \item Unit: \texttt{uv run emet test src/test/eval/test\_tamp\_clutter\_config.py -q}.
+  \item Optional snapshot: \texttt{uv run python scripts/eval\_tamp\_clutter.py --generate}
+    $\rightarrow$ resolved YAML with scatter + validity probe.
+  \item Smoke (gate): \texttt{uv run python scripts/eval\_tamp\_clutter.py --smoke}.
+  \item Blocked-route battery: \texttt{uv run python scripts/eval\_tamp\_clutter.py --test-battery}.
+  \item Full registry: \texttt{NEED\_MIB=8000 uv run emet jobs run --name tamp-clutter
+    --need-mib 8000 -- uv run python scripts/eval\_tamp\_clutter.py}.
+  \item Fill Table~\ref{tab:tamp_clutter} from \texttt{aggregate\_tamp\_clutter.csv}
+    (use the scored denominator, excluding \texttt{skipped\_invalid}).
+\end{enumerate}

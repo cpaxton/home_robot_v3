@@ -338,6 +338,61 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
 
+## TAMP clutter benchmark + Nori A3 (follow-ups)
+
+Benchmark: [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) ·
+`scripts/eval_tamp_clutter.py` · `scripts/generate_tamp_clutter_registry.py` (200 episodes,
+4 robots: rby1 / stretch / innate_mars / nori). Nori backend: [docs/robots/nori.md](docs/robots/nori.md).
+GT+MCTS battery: [docs/experiments/tamp_clutter_testing.md](docs/experiments/tamp_clutter_testing.md).
+
+- [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
+      pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
+- [ ] **Integrate TAMP into the agent** — the real blocker now that MCTS pick/place works.
+      The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
+      `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
+      exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a
+      `clear_clutter` CHAT skill (resolve scattered objects from scene graph/memory → run the
+      MCTS chain to the bin → optional landmark nav) so the LLM agent can parse "clean up the
+      room" / "get to the sofa" and drive TAMP end-to-end; reuse `AgentTaskRef`/`AgentPlanBuild`
+      handles and the same no-AI test battery for the agent path.
+- [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1, innate_mars, and nori
+      `--episode-id ithor_*_<robot>_n3` on iTHOR to validate the kinematic chain end-to-end
+      against the real RobosuiteZmqServer (unit/offline verification already passes).
+- [x] **innate_mars actuator naming**: the innate_mars MJCF actuators are *unnamed*, and the
+      robosuite server applies `{"joint": vec}` via `mj_name2id(mjOBJ_ACTUATOR, aname)` —
+      unnamed actuators never receive ctrl from `set_actuator_positions`. Name them (like
+      nori_a3.xml) so the kinematic streaming path actually drives the arm.
+- [ ] **Nori real-hardware client**: implement an `AbstractRobotClient` adapter over
+      `nori-sdk` (WebRTC jog streams → emet motion contract). The SDK is teleop-oriented;
+      absolute-joint moves need the action-completion path.
+- [ ] **Nori MolmoSpaces spawn metadata**: `emet molmospaces write-spawn-metadata --robot nori`
+      → commit `molmospaces_spawn.json`; then `emet serve mujoco --scene ithor --robot nori
+      --headless` smoke (see supported_robots.md extension checklist).
+- [ ] **Nori RoboCasa** row: strip-replace handling / spawn guards if kitchen scenes are wanted.
+- [ ] **Stretch `latch`** via the combined robosuite server — see next section.
+
+## TAMP clutter: kinematic `latch` on Stretch via the combined robosuite server (follow-up)
+
+The capability gate + per-robot arm parser (Phases 1–2) landed **innate_mars** `latch`
+(capability gate in `robosuite_server.py`, curated `ArmChain` on the innate_mars spec);
+Stretch is deferred. Stretch `latch` needs:
+
+- [ ] Point `get_robot_spec("stretch").mjcf_path` at `src/emet/assets/robot/stretch.xml`
+      (or `stretch_mj_3.3.0.xml`) so `ArmManipProfile` can build an offline IK model and
+      `KinematicPickPlaceExecutor._ensure_model()` succeeds.
+- [ ] Fill the Stretch `ArmChain.actuator_names` (MJCF actuators are unnamed today) once
+      the mjcf_path is set.
+- [ ] Route Stretch iTHOR / Robocasa scenes through `RobosuiteZmqServer` (the merged-MJCF
+      path rby1 / innate_mars use) instead of `MujocoZmqServer` — "combine the Stretch sim
+      server". Harness uses `GenericZmqClient` for stretch sim (`EMET_STRETCH_GENERIC_ZMQ=1`
+      already exists). Keep **default-table Stretch on `MujocoZmqServer`** so existing tests /
+      interactive behavior are untouched; gate the switch on scene kind or env.
+- [ ] Enable `ROBOT_DEFAULT_MANIP_MODE["stretch"] = "latch"` after a stretch iTHOR `latch`
+      smoke (`plan_clear_clutter`) passes.
+- [ ] Risks: stretch telescoping prismatic arm IK + RRT; the curated arm chain already
+      lands in Phase 2; verify no regressions on MujocoZmqServer stretch tests
+      (`emet test --no-sim` gate).
+
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
 Offline units + scripted table smokes exist; these are the remaining **real / integration** and product gaps.

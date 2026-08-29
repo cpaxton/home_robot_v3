@@ -12,6 +12,7 @@ Maintainer index: \texttt{docs/experiments/README.md} (experiment matrix, smokes
   \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{static\_graph}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
   \item \textbf{Dynamic exploration:} Active frontier exploration and world-change staleness on Robocasa / MolmoSpaces (Section~\ref{sec:dynamic_exploration}); metrics not comparable to OVMM or SQA3D.
+  \item \textbf{TAMP clutter clearance:} The robot starts surrounded by small floor objects and must move them out of the way as part of a plan --- cleanup (\emph{clean up the room}) or navigation to a scene landmark (\emph{get to the sofa}) --- on MolmoSpaces iTHOR (Section~\ref{sec:tamp_clutter}; Appendix~\ref{app:tamp_clutter}).
 \end{enumerate}
 
 \subsection{Methods compared}
@@ -73,6 +74,7 @@ Operator index: \texttt{docs/experiments/README.md}.
     OVMM find-phase (Habitat) & same & \texttt{\textasciitilde/runs/emet/ovmm\_habitat} \\
     SQA3D & \texttt{configs/sqa3d/benchmark.yaml} & \texttt{\textasciitilde/runs/emet/sqa3d} \\
     Dynamic exploration & \texttt{configs/benchmarks/dynamic\_exploration.yaml} & \texttt{\textasciitilde/runs/emet/dynamic\_exploration} \\
+    TAMP clutter & \texttt{configs/ovmm/clutter\_episodes.yaml} & \texttt{\textasciitilde/runs/emet/tamp\_clutter} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -98,6 +100,7 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_FULL
     Emet sim (S1--S2) & \texttt{eval\_dynamic\_exploration.py} & Dynamic exploration (Section~\ref{sec:dynamic_exploration}) \\
     Robocasa & \texttt{emet serve robocasa} & Kitchen objects, GT finding \\
     MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration (S2) \\
+    MolmoSpaces iTHOR & \texttt{scripts/eval\_tamp\_clutter.py} & TAMP clutter clearance (Section~\ref{sec:tamp_clutter}) \\
     Default table & \texttt{emet serve mujoco} & Sanity / CI (S0) \\
     \bottomrule
   \end{tabular}
@@ -119,6 +122,7 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_FULL
     OVMM find-phase & localization error (m); FindObj / FindRec @\,$r$; partial success \\
     GT object finding & XY error, instance$\rightarrow$GT recall, perception$\rightarrow$GT recall @\,$r$ \\
     Dynagraph sim & spatial/label recall, graph nodes, explored area \\
+    TAMP clutter & task success, objects cleared, manipulation success rate, motion failures \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -248,6 +252,41 @@ Pilot S0 fair-default runs (rotate only, voxel path) yield $\sim$0.08\,m object 
 \textbf{Metrics.}
 \texttt{localization\_err\_obj\_m}, \texttt{localization\_err\_recep\_m}, FindObj/FindRec success, partial success, \texttt{obj\_localize\_source} / \texttt{recep\_localize\_source}, graph node count, voxel explored area (m$^2$), wall time, \texttt{n\_placements}.
 See \texttt{docs/ovmm\_find\_phase\_benchmark.md} and \texttt{docs/paper\_benchmarks.md}.
+
+\subsection{TAMP clutter clearance}
+\label{sec:tamp_clutter}
+
+\textit{Results pending.}
+Task and motion planning (TAMP) asks a robot to \emph{interact with the world as part of
+a plan}: in each episode the robot starts surrounded by small floor objects that must be
+moved out of the way to complete a task. Two modes share the same harness:
+\textbf{cleanup} (\emph{clean up the room}) relocates all scattered objects to a bin, and
+\textbf{nav\_goal} (\emph{get to the sofa}) clears a path of objects, then navigates to a
+scene landmark (sampled across static furniture so goals vary in distance and direction).
+At eval time objects are scattered in a ring around the robot and a \textbf{GT validity
+probe} (clearance-aware navigation over the clutter) records whether the route is
+blocked. Cleanup uses an open ring ($N\in\{3,6\}$). Scored \texttt{nav\_goal} uses a
+\textbf{tight closed ring} ($N{=}8$ at $0.5$\,m) so the probe is expected to report
+blocked; rows that are not blocked are flagged \texttt{skipped\_invalid} and excluded
+from the success denominator (they are not dropped from the YAML). A 24-episode
+GT+MCTS battery (tight ring vs.\ $N{=}0$ pure nav; teleport oracle) is the blocked-route
+gate. Grasp success follows a \textbf{latch contract}: the end-effector reaches
+the object's grasp frame, the gripper closes, and the simulator \texttt{attach} welds the
+object, so we isolate task/motion planning from grasp robustness. Manip modes are
+\texttt{latch} (kinematic IK + attach; rby1 default), \texttt{sim} (teleport oracle;
+stretch / Innate Mars / Nori floor clutter --- Nori IK bottoms out at $z\approx 0.29$\,m),
+and \texttt{attempt} (visual servo). A deterministic multi-object TAMP chain
+(\texttt{plan\_clear\_clutter}) relocates each object to the bin via
+MCTS+\emph{plan-pick-place}, re-reading placements after every move. The single-object
+pick/place tools (\texttt{scene\_tasks}/\texttt{plan\_pick\_place}/\texttt{find\_objects})
+are exposed to the LLM agent; exposing the multi-object clear chain as an agent tool is
+current work (TODO).
+The registry spans \textbf{200} live-scatter \textbf{templates} across MolmoSpaces iTHOR
+FloorPlan indices and four robots (Galaxea R1 \texttt{rby1} with latch; Stretch, Innate
+Mars, and Nori A3 with the teleport oracle on floor objects).
+
+Full spec (episode schema, scatter protocol, probe, metrics, protocol): Appendix~\ref{app:tamp_clutter}.
+Runbook: \texttt{docs/experiments/tamp\_clutter.md}. Results: Section~\ref{sec:tamp_clutter_results}.
 
 \subsection{Scaling to large scenes}
 \label{sec:scaling_large_scenes}

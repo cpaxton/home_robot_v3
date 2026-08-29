@@ -1,0 +1,106 @@
+# TAMP clutter-clearance benchmark episodes.
+#
+# Each episode starts the robot surrounded by small floor objects that must be moved
+# (picked up and relocated to a drop receptacle / bin) as part of a plan.
+#
+#   cleanup  — "clean up the room": relocate all scattered objects to `bin_query`.
+#   nav_goal — "get to <landmark>": clear a path of objects to reach a sampled scene
+#              landmark (static furniture). `goal_landmark` may be a category or "auto"
+#              to sample one at eval time.
+#
+# `sim` is a scene config under configs/sim/ (MolmoSpaces iTHOR for multi-object
+# clutter). `clutter`, `robot_start_xy`, `goal_xy`, and `episode_valid` are populated by
+# the GT offline generator at problem-set build time (see scripts/eval_tamp_clutter.py
+# --generate) and are optional here.
+#
+# manip_mode: latch (default; kinematic IK + sim attach) | sim (teleport oracle) | attempt
+episodes:
+  # ---- Cleanup: relocate scattered objects to a bin ----
+  - id: ithor_cleanup_s1_bin_n3
+    tier: S1
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: cleanup
+    n_objects: 3
+    bin_query: GarbageCan
+    scatter_radius_m: 0.8
+    success_radius_m: 0.5
+    manip_mode: latch
+    seed: 0
+
+  - id: ithor_cleanup_s2_bin_n6
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: cleanup
+    n_objects: 6
+    bin_query: GarbageCan
+    scatter_radius_m: 1.1
+    success_radius_m: 0.5
+    manip_mode: latch
+    seed: 1
+
+  - id: ithor_cleanup_s2_bin_n6_sim
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: cleanup
+    n_objects: 6
+    bin_query: GarbageCan
+    scatter_radius_m: 1.1
+    success_radius_m: 0.5
+    manip_mode: sim
+    seed: 1
+
+  # ---- Nav-goal: clear a path to a landmark ----
+  - id: ithor_nav_goal_s1_sofa_n3
+    tier: S1
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: nav_goal
+    n_objects: 3
+    goal_landmark: Sofa
+    bin_query: GarbageCan
+    scatter_radius_m: 0.8
+    success_radius_m: 0.6
+    manip_mode: latch
+    seed: 2
+
+  - id: ithor_nav_goal_s1_fridge_n3
+    tier: S1
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: nav_goal
+    n_objects: 3
+    goal_landmark: Fridge
+    bin_query: GarbageCan
+    scatter_radius_m: 0.8
+    success_radius_m: 0.6
+    manip_mode: latch
+    seed: 3
+
+  - id: ithor_nav_goal_s2_table_n6
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    robot: rby1
+    mode: nav_goal
+    n_objects: 6
+    goal_landmark: auto
+    bin_query: GarbageCan
+    scatter_radius_m: 1.1
+    success_radius_m: 0.6
+    manip_mode: latch
+    seed: 4
+
+  # ---- Stretch reference (slower; fewer runs per night) ----
+  - id: ithor_cleanup_s1_bin_n3_stretch
+    tier: S1
+    sim: configs/sim/molmospaces_ithor_train_stretch_0.yaml
+    robot: stretch
+    mode: cleanup
+    n_objects: 3
+    bin_query: GarbageCan
+    scatter_radius_m: 0.8
+    success_radius_m: 0.5
+    manip_mode: sim
+    seed: 5
