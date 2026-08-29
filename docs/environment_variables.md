@@ -2,6 +2,8 @@
 
 Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpaces. Most apps read these at startup; export in the shell before `emet serve` / `emet run`.
 
+**`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
+
 ## MolmoSpaces
 
 **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** — spawn, autoplace, occupancy map, navigation teleport (`EMET_MOLMOSPACES_NAV_TELEPORT`), asset paths, and related test knobs.
@@ -14,6 +16,7 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
+| `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
 ## Benchmarks

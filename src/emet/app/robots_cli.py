@@ -171,4 +171,5 @@ def robots_preview_cameras(ctx: click.Context, robot: str) -> None:
     key = _resolve_robot_key(robot)
     venv_py = _venv_python()
     cmd = [str(venv_py or sys.executable), "-m", "emet.app.preview_robot_cameras", "--robot", key, *list(ctx.args)]
+    # Same child PYTHONPATH rewrite as emet serve / emet run (see pythonpath.py).
     sys.exit(subprocess.call(cmd, env=sanitize_emet_subprocess_env()))
