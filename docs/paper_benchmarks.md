@@ -24,6 +24,7 @@ repo root. The build uses local `latexmk` or falls back to Docker
 | **GT object finding** | Sim oracle localization | XY error, recall @ $r$ | episode exports | `emet run dynagraph --ground-truth` + `scripts/eval_dynagraph_ground_truth.py` | manual / `emet eval-dynagraph` |
 | **Dynagraph sim** | Explore + fusion + EQA | spatial/label recall, graph size | question bank yaml | `emet eval-dynagraph`, `run_dynagraph_benchmark_smoke.py` | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
 | **Dynamic exploration** | Frontier explore + world-change + lifelong cycles | coverage, EQA, staleness, churn | `configs/benchmarks/dynamic_exploration.yaml` | `scripts/eval_dynamic_exploration.py` | `aggregate_dynamic_exploration.csv` |
+| **TAMP clutter** | Move scattered floor objects out of the way as part of a plan (cleanup / nav-to-landmark) | `task_success`, `n_cleared`, `manip_success_rate` | `configs/ovmm/clutter_episodes.yaml` | `scripts/eval_tamp_clutter.py` | `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT` |
 | **Backend localization figure** | Single-scene GT vs prediction | XY error, @0.5 m hit | Robocasa seed 0 | `scripts/smoke_backend_localization_figure.py` | PNG + `smoke_results.json` |
 | **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | [habitat_eqa_results.md](experiments/habitat_eqa_results.md) |
 | **RoboVista** | Offline robot-centric MCQ-VQA (static images) | MC accuracy (overall + domain) | HF `sy-xie/robovista` | `emet robovista run-batch` | not comparable to HM-EQA |
@@ -105,6 +106,7 @@ CLI overrides: OVMM `--merge-xy-m` / `--staleness-horizon`; Habitat `emet-habita
 | `EMET_OVMM_OUTPUT_HABITAT` | `~/runs/emet/ovmm_habitat` | `eval_habitat_ovmm_find_phases.py` |
 | `EMET_SQA3D_OUTPUT` | `~/runs/emet/sqa3d` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `~/runs/emet/dynamic_exploration` | `scripts/eval_dynamic_exploration.py` |
+| `EMET_TAMP_CLUTTER_OUTPUT` | `~/runs/emet/tamp_clutter` | `scripts/eval_tamp_clutter.py` |
 | `EMET_SCENE_MAP_CACHE_DIR` | `~/.cache/emet/scene_maps` | Prebuilt graph+voxel baselines (`build_scene_map_cache.py`) |
 
 Caches (not under `runs/`): `SQA3D_DATA_DIR`, `SCANNET_ROOT`, `HABITAT_EQA_DATA_DIR`, `HM3D_DATA_PATH`, scene maps under `EMET_SCENE_MAP_CACHE_DIR` — see [environment_variables.md](environment_variables.md).
@@ -233,6 +235,40 @@ uv run python scripts/eval_dynamic_exploration.py \
 ```
 
 Aggregates: `aggregate_dynamic_exploration.csv`, `aggregate_dynamic_exploration_world_change.csv`, `aggregate_dynamic_exploration_lifelong.csv` under `EMET_DYNAMIC_EXPLORE_OUTPUT` (default `~/runs/emet/dynamic_exploration`).
+
+---
+
+## TAMP clutter clearance
+
+**Paper:** `sec:tamp_clutter`, Table `tab:tamp_clutter`.
+**Doc:** [experiments/tamp_clutter.md](experiments/tamp_clutter.md).
+**CLI:** `scripts/eval_tamp_clutter.py`.
+
+```bash
+uv run emet test src/test/eval/test_tamp_clutter_config.py -q
+
+# Dry run
+uv run python scripts/eval_tamp_clutter.py --dry-run
+
+# Fast gate (rby1 iTHOR, N=3 cleanup)
+uv run python scripts/eval_tamp_clutter.py --smoke
+
+# Full registry (via emet jobs on GPU)
+NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py
+
+# Problem-set build: resolve scatter + validity probe into a deterministic registry
+uv run python scripts/eval_tamp_clutter.py --generate --output-dir ~/runs/emet/tamp_clutter/gen
+```
+
+Episode registry: `configs/ovmm/clutter_episodes.yaml` (7 episodes) and the generated
+`configs/ovmm/clutter_episodes_large.yaml` (200 live-scatter templates across iTHOR
+indices and rby1 / stretch / innate_mars / nori; nav_goal is an 8-object tight ring;
+regenerate with `scripts/generate_tamp_clutter_registry.py`). Scored nav_goal excludes
+`skipped_invalid` (probe did not show a blocked route). Aggregates:
+`aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT` (default
+`~/runs/emet/tamp_clutter`). Table `tab:tamp_clutter` is still placeholders until the
+post-merge GPU queue (E1–E5 in [experiments/tamp_clutter.md](experiments/tamp_clutter.md)).
 
 ---
 
@@ -426,6 +462,7 @@ Edit `paper/sections/05_results.tex`:
 | `tab:dynamic_explore_phase1` | `aggregate_dynamic_exploration.csv` (explored_fraction, eqa_accuracy, …) |
 | `tab:dynamic_explore_world_change` | `aggregate_dynamic_exploration_world_change.csv` |
 | `tab:dynamic_explore_lifelong` | `aggregate_dynamic_exploration_lifelong.csv` (per-cycle eqa_accuracy, node counts, moves adapted/stale) |
+| `tab:tamp_clutter` | `aggregate_tamp_clutter.csv`: `task_success` / `n_cleared` / `manip_success_rate` by mode × manip_mode × tier |
 | Habitat / HM-EQA | `tab:hmeqa_vs_prior`, `tab:hmeqa_preliminary`, Appendix `tab:habitat_interim_results` | **[experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md)** (JSONL under `~/.cache/habitat_eqa/results/`) |
 
 Replace `--` placeholders; keep caption disclaimers (not comparable to official leaderboards where noted).

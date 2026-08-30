@@ -338,6 +338,91 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
 
+## TAMP clutter benchmark + Nori A3 (follow-ups)
+
+Benchmark: [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) ·
+`scripts/eval_tamp_clutter.py` · `scripts/generate_tamp_clutter_registry.py` (200 episodes,
+4 robots: rby1 / stretch / innate_mars / nori). Nori backend: [docs/robots/nori.md](docs/robots/nori.md).
+GT+MCTS battery: [docs/experiments/tamp_clutter_testing.md](docs/experiments/tamp_clutter_testing.md).
+
+**Eval code is merge-ready** (blocked-nav scoring, chord-sampled no-snap, reachable
+landmarks, sim default manip for mars/nori). **#150** / **#151** already on `main`.
+Remaining items are **GPU experiments / product**, not code blockers. Operator table:
+[docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) Remaining experiments
+(E1 battery → E5 latch → E3 small YAML → E4 large registry → fill `tab:tamp_clutter`).
+
+- [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
+      pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
+      That run predates chord-collision + reachable-landmark; re-run below before citing it.
+- [ ] **GPU GT+MCTS battery re-run** (after chord-sample / 12 m landmark cap). Furniture on
+      the spawn→landmark chord can now fail `navclear`. Queue, do not run inline:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py --test-battery \
+        --battery-robots nori --battery-scenes 0,1
+      ```
+
+      Then optionally `--battery-robots nori,innate_mars,rby1 --battery-scenes 0,1`.
+- [ ] **Fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (scored denominator;
+      exclude `skipped_invalid`). Results section is still placeholders.
+- [ ] **Large registry (200 templates)** via `emet jobs`:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py \
+        --episodes configs/ovmm/clutter_episodes_large.yaml
+      ```
+
+- [ ] **rby1 latch paper row**: default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
+      large-registry rby1 `latch` episodes. Stretch / mars / nori stay `sim` on floor clutter.
+- [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1 default latch
+      `--episode-id ithor_cleanup_s1_bin_n3`. Mars/nori floor objects need `--manip-mode latch`
+      (expected weak: Nori IK bottoms out ~0.29 m vs z≈0.02 floor). Unit/offline path already
+      passes.
+- [ ] **Integrate TAMP into the agent** — the real product blocker now that MCTS pick/place
+      works. The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
+      `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
+      exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a
+      `clear_clutter` CHAT skill (resolve scattered objects from scene graph/memory → run the
+      MCTS chain to the bin → optional landmark nav) so the LLM agent can parse "clean up the
+      room" / "get to the sofa" and drive TAMP end-to-end; reuse `AgentTaskRef`/`AgentPlanBuild`
+      handles and the same no-AI test battery for the agent path.
+- [x] **innate_mars actuator naming**: the innate_mars MJCF actuators are *unnamed*, and the
+      robosuite server applies `{"joint": vec}` via `mj_name2id(mjOBJ_ACTUATOR, aname)` —
+      unnamed actuators never receive ctrl from `set_actuator_positions`. Name them (like
+      nori_a3.xml) so the kinematic streaming path actually drives the arm.
+- [ ] **Nori real-hardware client**: implement an `AbstractRobotClient` adapter over
+      `nori-sdk` (WebRTC jog streams → emet motion contract). The SDK is teleop-oriented;
+      absolute-joint moves need the action-completion path.
+- [ ] **Nori MolmoSpaces spawn metadata**: `emet molmospaces write-spawn-metadata --robot nori`
+      → commit `molmospaces_spawn.json`; then `emet serve mujoco --scene ithor --robot nori
+      --headless` smoke (see supported_robots.md extension checklist).
+- [ ] **Nori RoboCasa** row: strip-replace handling / spawn guards if kitchen scenes are wanted.
+- [ ] **Stretch `latch`** via the combined robosuite server — see next section.
+
+## TAMP clutter: kinematic `latch` on Stretch via the combined robosuite server (follow-up)
+
+The capability gate + per-robot arm parser (Phases 1–2) landed **innate_mars** `latch`
+(capability gate in `robosuite_server.py`, curated `ArmChain` on the innate_mars spec);
+Stretch is deferred. Stretch `latch` needs:
+
+- [ ] Point `get_robot_spec("stretch").mjcf_path` at `src/emet/assets/robot/stretch.xml`
+      (or `stretch_mj_3.3.0.xml`) so `ArmManipProfile` can build an offline IK model and
+      `KinematicPickPlaceExecutor._ensure_model()` succeeds.
+- [ ] Fill the Stretch `ArmChain.actuator_names` (MJCF actuators are unnamed today) once
+      the mjcf_path is set.
+- [ ] Route Stretch iTHOR / Robocasa scenes through `RobosuiteZmqServer` (the merged-MJCF
+      path rby1 / innate_mars use) instead of `MujocoZmqServer` — "combine the Stretch sim
+      server". Harness uses `GenericZmqClient` for stretch sim (`EMET_STRETCH_GENERIC_ZMQ=1`
+      already exists). Keep **default-table Stretch on `MujocoZmqServer`** so existing tests /
+      interactive behavior are untouched; gate the switch on scene kind or env.
+- [ ] Enable `ROBOT_DEFAULT_MANIP_MODE["stretch"] = "latch"` after a stretch iTHOR `latch`
+      smoke (`plan_clear_clutter`) passes.
+- [ ] Risks: stretch telescoping prismatic arm IK + RRT; the curated arm chain already
+      lands in Phase 2; verify no regressions on MujocoZmqServer stretch tests
+      (`emet test --no-sim` gate).
+
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 
 Offline units + scripted table smokes exist; these are the remaining **real / integration** and product gaps.

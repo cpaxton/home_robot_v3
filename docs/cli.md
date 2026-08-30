@@ -601,6 +601,8 @@ uv run emet ovmm status --out OUT
 
 Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.
 
+TAMP clutter-clearance (MolmoSpaces iTHOR; not an `emet` subcommand): `scripts/eval_tamp_clutter.py` — [tamp_clutter.md](experiments/tamp_clutter.md).
+
 ---
 
 ### `emet sqa3d <subcommand>`

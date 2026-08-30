@@ -58,6 +58,8 @@ Results JSONL: `~/.cache/habitat_eqa/results/`. Numbers + planned sweeps: [habit
 | Track | Paper ref | Doc | Smoke command | Default output | Example figures |
 |-------|-----------|-----|---------------|----------------|-----------------|
 | **Backend localization** | qualitative / appendix | [backend_localization.md](backend_localization.md) | `uv run python scripts/smoke_backend_localization_figure.py --quick` | `~/runs/emet/backend_localization_smoke/` | `backend_localization_topdown.png`, `backend_localization_metrics_bar.png` |
+| **TAMP clutter** | `sec:tamp_clutter` | [tamp_clutter.md](tamp_clutter.md) (E1–E5 GPU queue) | `uv run python scripts/eval_tamp_clutter.py --smoke` | `~/runs/emet/tamp_clutter` | per-episode JSON + `aggregate_tamp_clutter.csv` |
+| **TAMP GT+MCTS battery** | no-AI smoke | [tamp_clutter_testing.md](tamp_clutter_testing.md) | `uv run python scripts/eval_tamp_clutter.py --test-battery` | `~/runs/emet/tamp_clutter` | `battery_summary.json` |
 | **Dynamic exploration P1** | `tab:dynamic_explore_phase1` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `uv run python scripts/eval_dynamic_exploration.py --smoke --dry-run` | `~/runs/emet/dynamic_exploration/` | Rerun map from export dir |
 | **Dynamic exploration P2** | `tab:dynamic_explore_world_change` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `--phase world-change --cpu-only` | same | — |
 | **Dynamic exploration P3** | `tab:dynamic_explore_lifelong` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `--phase lifelong --cpu-only` | same | — |
