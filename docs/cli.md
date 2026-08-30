@@ -292,6 +292,16 @@ uv run emet mars start --connection mars --deploy
 
 **LAN LLM/VLM (AGX Orin, ~64 GiB unified memory):**
 
+JetPack 7 / L4T r39: native cu130 serve on the Orin (`./scripts/run_jetson_vlm_native.sh --detach`), then:
+
+```bash
+uv run emet llm health --host ORIN_IP
+uv run emet llm smoke --host ORIN_IP
+uv run emet run chat --host ORIN_IP --vl --once "Describe briefly"
+```
+
+JetPack 5 Docker deploy (Qwen2-VL) is still:
+
 ```bash
 uv run emet deploy llm --host ORIN_HOST                         # unified-7b (Qwen2-VL-7B on :8000)
 uv run emet deploy llm --host ORIN_HOST --profile dual-2b       # text :8000 + VL-2B :8001
@@ -299,7 +309,7 @@ uv run emet llm health --host ORIN_HOST
 uv run emet llm smoke --host ORIN_HOST --vl-only
 ```
 
-Details: [llm_serve.md](llm_serve.md). Shell helper: `./scripts/deploy_caliban_vl.sh --host ORIN_HOST --profile unified-7b` (script name is historical).
+Details: [llm_serve.md](llm_serve.md) / [jetson.md](jetson.md). Shell helper: `./scripts/deploy_caliban_vl.sh --host ORIN_HOST --profile unified-7b` (script name is historical).
 
 ### `emet mars [start|status|stop]`
 

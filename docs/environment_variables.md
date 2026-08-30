@@ -240,8 +240,11 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
-| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
-| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` (only supported on JP5 Tegra image). `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md) § Quantization. |
+| `EMET_JETSON_VLM_VENV` | `run_jetson_vlm_native.sh` | Native JP7 CUDA venv (default `$REPO/.venv-vlm`). |
+| `EMET_LLM_SERVE_MODEL` | Jetson native / container serve | HF model id override (native VL default `Qwen/Qwen3-VL-8B-Instruct`). |
+| `EMET_LLM_SERVE_DTYPE` | `run_jetson_vlm_native.sh` | Load dtype: `float16` (default), `float32`, or `bfloat16`. |
+| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port (default `8000`; dual-2b VL uses `8001`). |
+| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` only on this server. `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md). |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |
