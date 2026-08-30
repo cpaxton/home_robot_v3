@@ -9,7 +9,7 @@ fp16 served on the Orin `caliban` over `EMET_VL_ENDPOINT`).
 | Slice | int4 (local) | fp16 (caliban) | Delta |
 |-------|--------------|----------------|-------|
 | count/clock-15 (`12,21,28,32,33,43,47,48,51,60,78,84,86,88,93`) | 6/15 | **10/15** | **+4 (+66%)** |
-| 30-qid subset (count/clock-15 + `0,7,14,29,30,37,42,50,56,82,92,100,104,108,110`) | 14/30 | 10/15 + 15 new (pending) | — |
+| **30-qid subset** (`12,21,28,32,33,43,47,48,51,60,78,84,86,88,93,0,7,14,29,30,37,42,50,56,82,92,100,104,108,110`) | **9/30** | **16/30** | **+7 (+78%)** |
 
 The fp16 8B reads fine detail (clock hands, shelf counts, mat placement) that int4
 distorts. This is a real, repeatable lift on the same model — the precision, not
