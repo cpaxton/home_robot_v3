@@ -112,28 +112,57 @@ uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3 
 Output: per-episode JSON + `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT`
 (default `~/runs/emet/tamp_clutter`). The runner prints `scored=` / `skipped_invalid=`.
 
-## Remaining experiments (not merge blockers)
+## Remaining experiments (post-merge, GPU)
 
-Queue on GPU via `emet jobs` (never as an agent turn). Full checklist: `TODO.md` (TAMP clutter).
+Code + units are the merge gate. Paper numbers are **not** in this PR — queue these via
+`emet jobs` (never as an agent turn). Product follow-ups (`clear_clutter` CHAT skill,
+Stretch latch, Nori hardware) stay in `TODO.md`.
+
+Preflight once: `uv run emet eval status` then `NEED_MIB=8000 uv run emet eval wait`.
+Outputs: `~/runs/emet/tamp_clutter/` (`EMET_TAMP_CLUTTER_OUTPUT`).
+
+| ID | What | Command | Fills |
+|----|------|---------|-------|
+| **E1** | GT+MCTS protocol battery (nori, iTHOR 0–1). Re-run after chord-sampled no-snap; the 2026-08-28 24/24 predates that. | `emet jobs run --name tamp-gt-battery --need-mib 8000 -- uv run python scripts/eval_tamp_clutter.py --test-battery --battery-robots nori --battery-scenes 0,1` | `battery_summary.json`; not `tab:tamp_clutter` |
+| **E2** | Same battery, three robots (optional, after E1 green). | `--battery-robots nori,innate_mars,rby1 --battery-scenes 0,1` | protocol confidence |
+| **E3** | Small YAML (7 episodes): rby1 cleanup + nav_goal + stretch sim. | `emet jobs run --name tamp-small --need-mib 8000 -- uv run python scripts/eval_tamp_clutter.py` | draft rby1 rows of `tab:tamp_clutter` |
+| **E4** | Large 200-template registry (live scatter + probe at eval). | `emet jobs run --name tamp-clutter --need-mib 8000 -- uv run python scripts/eval_tamp_clutter.py --episodes configs/ovmm/clutter_episodes_large.yaml` | **paper** `tab:tamp_clutter` |
+| **E5** | rby1 latch smoke before E3/E4. | `emet jobs run --name tamp-latch-rby1 --need-mib 8000 -- uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3` | latch sanity |
+
+Copy-paste:
 
 ```bash
-# Re-run GT+MCTS battery after chord-collision / reachable-landmark (old 24/24 is 2026-08-28)
 NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
   uv run python scripts/eval_tamp_clutter.py --test-battery \
   --battery-robots nori --battery-scenes 0,1
 
-# Large 200-episode registry
+NEED_MIB=8000 uv run emet jobs run --name tamp-latch-rby1 --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3
+
+NEED_MIB=8000 uv run emet jobs run --name tamp-small --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py
+
 NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
   uv run python scripts/eval_tamp_clutter.py \
   --episodes configs/ovmm/clutter_episodes_large.yaml
-
-# rby1 latch smoke (small YAML)
-NEED_MIB=8000 uv run emet jobs run --name tamp-latch-rby1 --need-mib 8000 -- \
-  uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3
 ```
 
-Fill `tab:tamp_clutter` from `aggregate_tamp_clutter.csv` (scored denominator, drop
-`skipped_invalid`).
+### Fill `tab:tamp_clutter`
+
+From `aggregate_tamp_clutter.csv`: drop `skipped_invalid`, keep scored rows. Group
+**rby1** by `mode` × `tier` × `manip_mode`. Means: `task_success`, `n_cleared`,
+`manip_success_rate`, wall (`planning_wall_s` + `manip_wall_s`).
+
+| Paper row | Source |
+|-----------|--------|
+| cleanup S1 latch | E3 `ithor_cleanup_s1_bin_n3` and/or E4 rby1 cleanup, S1 (scene 0–1), n=3 |
+| cleanup S2 latch | E3 `ithor_cleanup_s2_bin_n6` and/or E4 rby1 cleanup, S2 (scene ≥ 2) |
+| cleanup S2 sim | **E3 only** (`ithor_cleanup_s2_bin_n6_sim`; large registry rby1 is latch) |
+| nav_goal S1 latch | E3 sofa+fridge n8 mean, and/or E4 rby1 nav_goal S1 |
+| nav_goal S2 latch | E3 `ithor_nav_goal_s2_auto_n8` and/or E4 rby1 nav_goal S2 |
+
+Paste into `paper/sections/05_results.tex` (`tab:tamp_clutter`). Stretch / mars / nori
+E4 rows are appendix / extra, not that table.
 
 ## LLM-agent mode
 

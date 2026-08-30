@@ -268,7 +268,7 @@ regenerate with `scripts/generate_tamp_clutter_registry.py`). Scored nav_goal ex
 `skipped_invalid` (probe did not show a blocked route). Aggregates:
 `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT` (default
 `~/runs/emet/tamp_clutter`). Table `tab:tamp_clutter` is still placeholders until the
-GPU battery + large registry are queued (`emet jobs`; see `TODO.md`).
+post-merge GPU queue (E1–E5 in [experiments/tamp_clutter.md](experiments/tamp_clutter.md)).
 
 ---
 

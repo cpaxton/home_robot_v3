@@ -345,10 +345,11 @@ Benchmark: [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) 
 4 robots: rby1 / stretch / innate_mars / nori). Nori backend: [docs/robots/nori.md](docs/robots/nori.md).
 GT+MCTS battery: [docs/experiments/tamp_clutter_testing.md](docs/experiments/tamp_clutter_testing.md).
 
-**PR #152 code is done** (blocked-nav scoring, chord-sampled no-snap, reachable landmarks,
-sim default manip for mars/nori). **#150** (PYTHONPATH ABI) and **#151** (Nori + kinematic
-gate) already landed on `main`. Remaining items are **experiments / product**, not merge
-blockers.
+**Eval code is merge-ready** (blocked-nav scoring, chord-sampled no-snap, reachable
+landmarks, sim default manip for mars/nori). **#150** / **#151** already on `main`.
+Remaining items are **GPU experiments / product**, not code blockers. Operator table:
+[docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) Remaining experiments
+(E1 battery → E5 latch → E3 small YAML → E4 large registry → fill `tab:tamp_clutter`).
 
 - [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
       pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
