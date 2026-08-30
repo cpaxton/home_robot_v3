@@ -463,6 +463,7 @@ def plan_pick_place_mcts(
         }
 
     best: TaskPlan | None = None
+    last_fail: str | None = None
     for cand in cands:
         obj_body = str(cand["object_gt_body"])
         recep_body = str(cand.get("receptacle_gt_body") or "")
@@ -493,16 +494,20 @@ def plan_pick_place_mcts(
         )
         plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())
+        if not plan.success:
+            # Keep the most informative failure for diagnostics.
+            last_fail = str(plan.message or "")
         if plan.success and (best is None or len(best.steps) <= len(plan.steps)):
             best = plan
     if best is not None:
         return best
+    detail = f"last_grounding={last_fail}" if last_fail else f"candidates={len(cands)}"
     return TaskPlan(
         steps=[],
         object_body="",
         receptacle_body=None,
         success=False,
-        message="no_reachable_task",
+        message=f"no_reachable_task:{detail}",
         expanded_nodes=[c.get("object_query", "") for c in cands],
     )
 

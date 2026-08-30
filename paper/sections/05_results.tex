@@ -308,6 +308,34 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
   \end{tabular}
 \end{table}
 
+\subsection{TAMP clutter clearance}
+\label{sec:tamp_clutter_results}
+
+\textit{Results pending.} The robot starts surrounded by small floor objects and must
+move them (relocate to a bin) as part of a plan --- \texttt{cleanup} ("clean up the
+room") or \texttt{nav\_goal} ("get to the sofa", clear a path then reach a scene
+landmark). See Section~\ref{sec:tamp_clutter} and Appendix~\ref{app:tamp_clutter}.
+Fill from \texttt{aggregate\_tamp\_clutter.csv}.
+
+\begin{table}[t]
+  \centering
+  \caption{TAMP clutter clearance on MolmoSpaces iTHOR (rby1): task success, objects cleared, and
+  manipulation success rate by mode $\times$ manip mode $\times$ tier.}
+  \label{tab:tamp_clutter}
+  \small
+  \begin{tabular}{@{}lllcccc@{}}
+    \toprule
+    Mode & Tier & Manip & Task succ. & Obj. cleared & Manip rate & Wall (s) \\
+    \midrule
+    cleanup & S1 & latch & -- & -- & -- & -- \\
+    cleanup & S2 & latch & -- & -- & -- & -- \\
+    cleanup & S2 & sim & -- & -- & -- & -- \\
+    nav\_goal & S1 & latch & -- & -- & -- & -- \\
+    nav\_goal & S2 & latch & -- & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \subsection{Other planned results}
 
 \textit{Results pending. Placeholder for:}
