@@ -39,9 +39,10 @@ teleport oracle or a raised drop; pass `--manip-mode latch` for a latch experime
 
 | Column | Meaning |
 |--------|---------|
-| `task_success` | cleanup: all objects relocated; nav_goal: goal reached and not `skipped_invalid` |
+| `task_success` | cleanup: all objects relocated; nav_goal: goal reached, post-clear route open (`nav_path_open`), and not `skipped_invalid` |
 | `skipped_invalid` | cluttered nav_goal whose GT probe did **not** show a blocked route (excluded from the scored success rate) |
 | `goal_reached` | nav_goal: base reached the landmark within `success_radius_m` |
+| `nav_path_open` | after TAMP, densified teleport-chord samples (~2 cm) are footprint-clear of leftover clutter/furniture (otherwise the runner refuses to snap) |
 | `n_cleared` / `n_relocated` | how many scattered objects were moved to the bin |
 | `manip_success_rate` | relocated / total |
 | `motion_failures` | grasp/place execution failures |

@@ -65,15 +65,19 @@ object to the bin by repeatedly grounding and executing a pick-and-place plan
 (MCTS task assignment via \texttt{plan\_pick\_place\_mcts}, then
 \texttt{execute\_task\_plan}), \textbf{re-reading} \texttt{sim\_object\_placements}
 after each move (stale-plan guard). Failures are per-object so one flaky grasp does not
-abort the episode. For \texttt{nav\_goal}, the base then navigates to the landmark
-approach pose and \texttt{goal\_reached} is scored within a success radius. An
+abort the episode. For \texttt{nav\_goal}, the teleport chord to the landmark is
+sampled and footprint-checked against live GT placements; a collision refuses
+the snap. Only then is \texttt{goal\_reached} scored within a success radius. An
 LLM-agent variant parses the same commands and drives the CHAT tool loop
 (\texttt{scene\_tasks}/\texttt{plan\_pick\_place}/\texttt{execute\_pick\_place\_plan}/
 \texttt{find\_objects}).
 
 \subsection{Metrics}
-Task success (cleanup: all relocated; nav: goal reached and not
-\texttt{skipped\_invalid}), objects cleared/relocated, manipulation success rate,
+Task success (cleanup: all relocated; nav: goal reached, the post-clear
+occupancy probe reports an open route, and not \texttt{skipped\_invalid}).
+MolmoSpaces \texttt{move\_base\_to} teleports by default, so the runner
+interpolates the snap chord at $\sim$2\,cm and \textbf{refuses} it when any
+step's footprint hits leftover clutter or furniture. Objects cleared/relocated, manipulation success rate,
 motion failures (grasp/place execution), planner vs.\ manipulation wall time, and the
 recorded \texttt{episode\_valid} probe flag. Per-run JSON plus an aggregate CSV
 (\texttt{aggregate\_tamp\_clutter.csv}); not directly comparable to OVMM find-phase or

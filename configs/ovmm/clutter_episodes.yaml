@@ -52,43 +52,47 @@ episodes:
     manip_mode: sim
     seed: 1
 
-  # ---- Nav-goal: clear a path to a landmark ----
-  - id: ithor_nav_goal_s1_sofa_n3
+  # ---- Nav-goal: clear a tight blocking ring to a landmark (paper protocol:
+  # 8 objects @ 0.5 m tight_ring; rows that do not probe blocked are skipped_invalid) ----
+  - id: ithor_nav_goal_s1_sofa_n8
     tier: S1
     sim: configs/sim/molmospaces_ithor_train_0.yaml
     robot: rby1
     mode: nav_goal
-    n_objects: 3
+    n_objects: 8
     goal_landmark: Sofa
     bin_query: GarbageCan
-    scatter_radius_m: 0.8
+    scatter_radius_m: 0.5
     success_radius_m: 0.6
+    tight_ring: true
     manip_mode: latch
     seed: 2
 
-  - id: ithor_nav_goal_s1_fridge_n3
+  - id: ithor_nav_goal_s1_fridge_n8
     tier: S1
     sim: configs/sim/molmospaces_ithor_train_0.yaml
     robot: rby1
     mode: nav_goal
-    n_objects: 3
+    n_objects: 8
     goal_landmark: Fridge
     bin_query: GarbageCan
-    scatter_radius_m: 0.8
+    scatter_radius_m: 0.5
     success_radius_m: 0.6
+    tight_ring: true
     manip_mode: latch
     seed: 3
 
-  - id: ithor_nav_goal_s2_table_n6
+  - id: ithor_nav_goal_s2_auto_n8
     tier: S2
     sim: configs/sim/molmospaces_ithor_train_0.yaml
     robot: rby1
     mode: nav_goal
-    n_objects: 6
+    n_objects: 8
     goal_landmark: auto
     bin_query: GarbageCan
-    scatter_radius_m: 1.1
+    scatter_radius_m: 0.5
     success_radius_m: 0.6
+    tight_ring: true
     manip_mode: latch
     seed: 4
 

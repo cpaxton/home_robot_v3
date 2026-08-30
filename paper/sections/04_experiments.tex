@@ -277,7 +277,10 @@ object, so we isolate task/motion planning from grasp robustness. Manip modes ar
 stretch / Innate Mars / Nori floor clutter --- Nori IK bottoms out at $z\approx 0.29$\,m),
 and \texttt{attempt} (visual servo). A deterministic multi-object TAMP chain
 (\texttt{plan\_clear\_clutter}) relocates each object to the bin via
-MCTS+\emph{plan-pick-place}, re-reading placements after every move. The single-object
+MCTS+\emph{plan-pick-place}, re-reading placements after every move.
+After clearance the teleport chord is sampled at $\sim$2\,cm and refused if
+any step's footprint hits leftover clutter or furniture (MolmoSpaces navigation
+teleports; a snap through a still-closed ring does not count as success). The single-object
 pick/place tools (\texttt{scene\_tasks}/\texttt{plan\_pick\_place}/\texttt{find\_objects})
 are exposed to the LLM agent; exposing the multi-object clear chain as an agent tool is
 current work (TODO).

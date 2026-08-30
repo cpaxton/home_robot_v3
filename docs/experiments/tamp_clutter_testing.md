@@ -11,7 +11,7 @@ across a (robot × scene) matrix.
 uv run python scripts/eval_tamp_clutter.py --test-battery \
   --battery-robots nori --battery-scenes 0,1
 
-# Full matrix (all latch robots × more scenes)
+# Full matrix (sim-oracle battery × more scenes)
 uv run python scripts/eval_tamp_clutter.py --test-battery \
   --battery-robots nori,innate_mars,rby1 --battery-scenes 0,1,2
 
@@ -33,7 +33,7 @@ Result: per-run JSON + `battery_summary.json` under `EMET_TAMP_CLUTTER_OUTPUT`
 |------|------|---------|----------------|
 | `pickplace` | cleanup | 1 object | relocated to the bin (`n_relocated >= 1`) |
 | `declutter` | cleanup | 3 objects | all relocated (`n_relocated == 3`) |
-| `navblocked` | nav_goal | 8 (tight closed ring @ 0.5 m) | GT probe says **blocked** and, after clearing, the landmark is reached |
+| `navblocked` | nav_goal | 8 (tight closed ring @ 0.5 m) | GT probe says **blocked**; after clearing, interpolated teleport-chord samples are footprint-clear and the landmark is reached |
 | `navclear` | nav_goal | 0 | no clutter; navigate straight to the landmark (`goal_reached`) |
 
 Every step is sim-GT: placements from `sim_object_placements` (staticness/category from the

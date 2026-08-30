@@ -53,6 +53,7 @@ from typing import Any
 import numpy as np
 import yaml
 
+from emet.eval.tamp_clutter import BIN_FALLBACKS
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -70,11 +71,8 @@ _FURNITURE_KEYWORDS = (
     "microwave", "oven", "stove", "sink", "desk", "toilet", "bathtub",
 )
 
-# Trash-like aliases only (must match clutter_chain._BIN_FALLBACKS). Furniture/appliances
-# must not count as the cleanup bin.
-_BIN_FALLBACKS = (
-    "ashcan", "garbagecan", "trashcan", "basket",
-)
+# Farthest navigable landmark: inside the GenericZmqClient ~12 m-from-origin guard.
+_REACHABLE_LANDMARK_M = 10.0
 
 
 def _matches_furniture(cat: str) -> bool:
@@ -252,11 +250,11 @@ def _pickable_bodies(
 
 
 def _resolve_bin(placements: dict[str, dict[str, Any]], bin_query: str | None) -> str | None:
-    """Resolve a drop receptacle GT body, falling back across trash/cabinet categories."""
+    """Resolve a drop receptacle GT body (trash-only aliases, shared with the chain)."""
     from emet.eval.ovmm_find_phase import bodies_matching_category
 
     queries = [bin_query] if bin_query else []
-    for q in _BIN_FALLBACKS:
+    for q in BIN_FALLBACKS:
         if q not in queries:
             queries.append(q)
     for q in queries:
@@ -281,7 +279,8 @@ def _goal_for_landmark(
         if bodies:
             return bodies[0]
         return None
-    # Sample a furniture body, preferring one far from the robot (meaningful nav goal).
+    # Sample a furniture body, preferring the farthest **navigable** one (meaningful
+    # nav goal but inside the client's ~12 m-from-navigation_origin refusal guard).
     furniture = [
         b for b, meta in cat_map.items()
         if meta.get("static") and _matches_furniture(str(meta.get("cat") or ""))
@@ -294,7 +293,11 @@ def _goal_for_landmark(
     def dist(b: str) -> float:
         return float(np.linalg.norm(_clamp2(placements[b]["pos"]) - robot_xy))
 
-    return max(furniture, key=dist)
+    reachable = [b for b in furniture if dist(b) <= _REACHABLE_LANDMARK_M]
+    if reachable:
+        return max(reachable, key=dist)
+    # Degenerate scene: everything beyond reach — use the nearest landmark anyway.
+    return min(furniture, key=dist)
 
 
 def _approach_xy_near(landmark_body: str, placements: dict[str, dict[str, Any]], robot_xy: np.ndarray) -> np.ndarray:
@@ -490,26 +493,22 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             # Pure-nav: no clutter to clear; just reach the landmark (nav_goal).
             goal_reached = False
             nav_success = False
+            nav_path_open = True
+            nav_probe_after = None
             if ep.mode == "nav_goal" and goal_xy is not None:
-                try:
-                    robot.move_base_to(
-                        np.array([float(goal_xy[0]), float(goal_xy[1]), 0.0], dtype=np.float64),
-                        blocking=True,
-                        world_frame=True,
-                    )
-                    nav_success = True
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(f"clutter nav to goal failed: {exc}")
-                achieved = _world_base_xy(robot)
-                goal_reached = bool(
-                    achieved is not None and float(np.linalg.norm(achieved - _clamp2(goal_xy))) <= ep.success_radius_m
+                from emet.controller.task.tamp.clutter_chain import nav_to_landmark_if_clear
+
+                goal_reached, nav_success, nav_path_open, nav_probe_after = nav_to_landmark_if_clear(
+                    robot,
+                    goal_xy=goal_xy,
+                    objects=(),
+                    goal_radius_m=ep.success_radius_m,
+                    clearance_m=float(args.clearance_m),
                 )
-                # nav only "succeeds" if the base actually reached the landmark.
-                nav_success = goal_reached
             elif ep.mode == "cleanup":
                 goal_reached = True
                 nav_success = True
-            return {
+            metrics0 = {
                 "episode_id": ep.id,
                 "tier": ep.tier,
                 "mode": ep.mode,
@@ -521,15 +520,19 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
                 "n_relocated": 0,
                 "goal_reached": bool(goal_reached),
                 "nav_success": bool(nav_success),
-                "task_success": bool(goal_reached),
+                "task_success": bool(goal_reached) and bool(nav_path_open),
                 "manip_success_rate": 0.0,
                 "manip_mode": manip,
                 "episode_valid": False,
                 "skipped_invalid": False,
+                "nav_path_open": bool(nav_path_open),
                 "validity_probe": probe,
                 "landmark_body": landmark_body,
                 "init_wall_s": time.monotonic() - t0,
             }
+            if nav_probe_after is not None:
+                metrics0["nav_probe_after"] = nav_probe_after
+            return metrics0
 
         if args.generate:
             # Problem-set build: record the resolved deterministic episode, no execution.
@@ -565,6 +568,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             manip_mode=manip,
             executor=executor,
             seed=ep.seed,
+            clearance_m=float(args.clearance_m),
         )
         metrics.update(
             {

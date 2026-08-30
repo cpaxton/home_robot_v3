@@ -19,7 +19,11 @@ from emet.eval.tamp_clutter import (
     ClutterEpisode,
     clutter_blocks_path,
     clutter_success_flags,
+    first_footprint_hit,
     load_clutter_episodes,
+    nav_interpolated_route,
+    nav_route_open,
+    placement_obstacle_disks,
     scatter_ring_targets,
 )
 
@@ -50,7 +54,7 @@ def test_invalid_episode_rejected():
 def test_zero_objects_allowed_pure_nav():
     ep = ClutterEpisode(id="x", tier="S1", sim="s", robot="nori", mode="nav_goal", n_objects=0)
     assert ep.n_objects == 0
-    assert ep.resolved_manip_mode() == "latch"
+    assert ep.resolved_manip_mode() == "sim"
 
 
 def test_battery_episodes_matrix():
@@ -69,11 +73,15 @@ def test_battery_episodes_matrix():
 
 
 def test_robot_default_manip_mode():
-    # rby1 and innate_mars default to kinematic latch; stretch to teleport oracle.
+    # rby1 defaults to kinematic latch; innate_mars / nori / stretch to teleport oracle
+    # (Nori's model arm bottoms out at z≈0.29 m — it cannot latch-grasp true-floor
+    # objects; use --manip-mode latch for a latch experiment).
     rby1 = ClutterEpisode(id="a", tier="S1", sim="s", robot="rby1", mode="cleanup", n_objects=3)
     assert rby1.resolved_manip_mode() == "latch"
     mars = ClutterEpisode(id="c", tier="S1", sim="s", robot="innate_mars", mode="nav_goal", n_objects=3)
-    assert mars.resolved_manip_mode() == "latch"
+    assert mars.resolved_manip_mode() == "sim"
+    nori = ClutterEpisode(id="d", tier="S1", sim="s", robot="nori", mode="cleanup", n_objects=3)
+    assert nori.resolved_manip_mode() == "sim"
     stretch = ClutterEpisode(id="b", tier="S1", sim="s", robot="stretch", mode="cleanup", n_objects=3)
     assert stretch.resolved_manip_mode() == "sim"
 
@@ -136,6 +144,8 @@ def test_clutter_blocks_path_ring_blocks_goal():
     blocked, info = clutter_blocks_path(robot, goal, obj, clearance_m=0.22)
     assert blocked is True
     assert info["probe"] == "gt_nav"
+    open_ok, _ = nav_route_open(robot, goal, obj, clearance_m=0.22)
+    assert open_ok is False
 
 
 def test_clutter_blocks_path_open_route():
@@ -145,6 +155,147 @@ def test_clutter_blocks_path_open_route():
     obj = [np.array([1.5, 1.5]), np.array([1.5, -1.5])]
     blocked, info = clutter_blocks_path(robot, goal, obj, clearance_m=0.22)
     assert blocked is False
+
+
+def test_interpolated_chord_hits_object_on_line():
+    robot = np.array([0.0, 0.0])
+    goal = np.array([3.0, 0.0])
+    disks = [(np.array([1.0, 0.0]), 0.08, "apple")]
+    ok, info = nav_interpolated_route(robot, goal, disks, clearance_m=0.22)
+    assert ok is False
+    assert info["hit"]["hit"] == "apple"
+    assert info["n_steps"] >= 150  # 3 m / 0.02 m default
+    # Off the chord: same distance, no hit.
+    ok_off, _ = nav_interpolated_route(
+        robot, goal, [(np.array([1.0, 1.5]), 0.08, "apple")], clearance_m=0.22
+    )
+    assert ok_off is True
+    hit = first_footprint_hit(
+        [robot, np.array([1.0, 0.0]), goal],
+        disks,
+        footprint_r_m=0.22,
+        skip_first=True,
+    )
+    assert hit is not None and hit["hit"] == "apple"
+
+
+def test_unmoved_tight_ring_blocks_teleport_chord():
+    """Battery navblocked geometry: 8 @ 0.5 m, objects never moved → chord is blocked."""
+    rng = np.random.default_rng(0)
+    robot = np.array([0.0, 0.0])
+    goal = np.array([3.0, 0.0])
+    targets = scatter_ring_targets(
+        robot,
+        goal,
+        8,
+        radius_m=0.5,
+        rng=rng,
+        radius_jitter=0.02,
+        angle_jitter_rad=0.02,
+    )
+    disks = [(xy, 0.08, f"obj_{i}") for i, xy in enumerate(targets)]
+    ok, info = nav_interpolated_route(robot, goal, disks, clearance_m=0.22)
+    assert ok is False
+    assert info.get("hit"), info
+    flags = clutter_success_flags(
+        {
+            "mode": "nav_goal",
+            "n_objects": 8,
+            "episode_valid": True,
+            "n_relocated": 0,
+            "goal_reached": True,  # would-be teleport-to-sofa
+            "nav_path_open": False,
+        }
+    )
+    assert flags["task_success"] is False
+
+
+def test_plan_clear_clutter_fails_when_objects_do_not_move(monkeypatch):
+    """Pick/place may report success; if GT XY never changes, nav_goal must fail.
+
+    This is the teleport-to-sofa bug: leftover scatter still on the chord.
+    """
+    import emet.controller.task.tamp.task_search as task_search
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt_mod
+    from emet.controller.task.tamp.task_search import TaskPlan
+
+    rng = np.random.default_rng(0)
+    robot_xy = np.array([0.0, 0.0])
+    goal = np.array([3.0, 0.0])
+    targets = scatter_ring_targets(
+        robot_xy,
+        goal,
+        8,
+        radius_m=0.5,
+        rng=rng,
+        radius_jitter=0.02,
+        angle_jitter_rad=0.02,
+    )
+    bodies = [f"obj_{i}" for i in range(8)]
+    pl: dict = {
+        "ashcan": {"pos": [4.0, 4.0, 0.1], "cat": "ashcan"},
+    }
+    for b, xy in zip(bodies, targets, strict=True):
+        pl[b] = {"pos": [float(xy[0]), float(xy[1]), 0.02], "cat": "apple"}
+
+    class _FakeRobot:
+        def __init__(self) -> None:
+            self.moved: list = []
+
+        def get_emet_session(self):
+            return {}
+
+        def get_base_pose(self, timeout: float = 2.0):
+            return np.array([0.0, 0.0, 0.0])
+
+        def move_base_to(self, xyt, **kwargs):
+            self.moved.append(np.asarray(xyt, dtype=np.float64))
+            return True
+
+    def _ok_plan(*_a, **_k):
+        return TaskPlan(
+            steps=[],
+            object_body="obj_0",
+            receptacle_body="ashcan",
+            success=True,
+            message="claimed_ok",
+        )
+
+    robot = _FakeRobot()
+    robot._state = {"base_xyz": np.array([0.0, 0.0, 0.0])}
+    monkeypatch.setattr(gt_mod, "read_sim_object_placements", lambda _session: dict(pl))
+    monkeypatch.setattr(task_search, "plan_pick_place_mcts", _ok_plan)
+    monkeypatch.setattr(task_search, "execute_task_plan", _ok_plan)
+
+    out = plan_clear_clutter(
+        robot,
+        objects=[{"object_query": "apple", "object_gt_body": b} for b in bodies],
+        mode="nav_goal",
+        bin_query="ashcan",
+        goal_xy=goal,
+        manip_mode="sim",
+        robot_move_goal=goal,  # would count as arrived if the snap were issued
+    )
+    assert out["n_relocated"] == 0
+    assert robot.moved == []
+    assert out["nav_path_open"] is False
+    assert out["goal_reached"] is False
+    assert out["task_success"] is False
+    assert clutter_success_flags({**out, "episode_valid": True})["task_success"] is False
+    hit = (out.get("nav_probe_after") or {}).get("hit") or {}
+    assert hit.get("hit") in set(bodies)
+
+
+def test_placement_obstacle_disks_skips_high_bodies():
+    pl = {
+        "apple": {"pos": [1.0, 0.0, 0.02], "cat": "apple"},
+        "lamp": {"pos": [1.0, 0.0, 2.0], "cat": "lamp"},
+        "table": {"pos": [2.0, 0.0, 0.4], "bounds": [[1.5, -0.4, 0.0], [2.5, 0.4, 0.8]]},
+    }
+    disks = {name: r for _xy, r, name in placement_obstacle_disks(pl, skip_bodies=("apple",))}
+    assert "apple" not in disks
+    assert "lamp" not in disks
+    assert disks["table"] > 0.2
 
 
 def test_clutter_blocks_path_cleanup_near():
@@ -162,12 +313,42 @@ def test_clutter_success_flags():
     assert clutter_success_flags(
         {"mode": "cleanup", "n_objects": 3, "n_relocated": 0, "goal_reached": True}
     )["task_success"] is False
+    # Pure-nav (n=0) still succeeds on goal_reached.
     assert clutter_success_flags({"mode": "nav_goal", "goal_reached": True})["task_success"] is True
     skipped = clutter_success_flags(
         {"mode": "nav_goal", "goal_reached": True, "skipped_invalid": True}
     )
     assert skipped["task_success"] is False
     assert skipped["skipped_invalid"] is True
+    # Blocked nav_goal: teleport-to-sofa without an open route is not success.
+    snap = clutter_success_flags(
+        {
+            "mode": "nav_goal",
+            "n_objects": 8,
+            "episode_valid": True,
+            "n_relocated": 0,
+            "goal_reached": True,
+            "nav_path_open": False,
+        }
+    )
+    assert snap["task_success"] is False
+    assert snap["nav_path_open"] is False
+    cleared = clutter_success_flags(
+        {
+            "mode": "nav_goal",
+            "n_objects": 8,
+            "episode_valid": True,
+            "n_relocated": 8,
+            "goal_reached": True,
+            "nav_path_open": True,
+        }
+    )
+    assert cleared["task_success"] is True
+    # Missing nav_path_open + blocked + nothing relocated → do not count as success.
+    legacy = clutter_success_flags(
+        {"mode": "nav_goal", "n_objects": 8, "episode_valid": True, "n_relocated": 0, "goal_reached": True}
+    )
+    assert legacy["task_success"] is False
 
 
 def test_plan_clear_clutter_missing_bin(monkeypatch):
@@ -188,3 +369,105 @@ def test_plan_clear_clutter_missing_bin(monkeypatch):
     )
     assert out["error"] == "missing_bin_body:GarbageCan"
     assert out["task_success"] is False
+
+
+def test_plan_clear_clutter_refuses_teleport_through_closed_ring(monkeypatch):
+    """Failed relocates must not snap the base through leftover clutter."""
+    import emet.controller.task.tamp.task_search as task_search
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt_mod
+    from emet.controller.task.tamp.task_search import TaskPlan
+
+    robot_xy = np.array([0.0, 0.0])
+    angles = np.linspace(0.0, 2.0 * np.pi, 8, endpoint=False)
+    bodies = [f"obj_{i}" for i in range(8)]
+    pl: dict = {
+        "ashcan": {"pos": [4.0, 4.0, 0.1], "cat": "ashcan"},
+    }
+    for b, a in zip(bodies, angles, strict=True):
+        pl[b] = {
+            "pos": [0.55 * float(np.cos(a)), 0.55 * float(np.sin(a)), 0.02],
+            "cat": "apple",
+        }
+
+    class _FakeRobot:
+        def __init__(self) -> None:
+            self.moved: list = []
+
+        def get_emet_session(self):
+            return {}
+
+        def get_base_pose(self, timeout: float = 2.0):
+            return np.array([float(robot_xy[0]), float(robot_xy[1]), 0.0])
+
+        def move_base_to(self, xyt, **kwargs):
+            self.moved.append(np.asarray(xyt, dtype=np.float64))
+            return True
+
+    robot = _FakeRobot()
+    robot._state = {"base_xyz": np.array([0.0, 0.0, 0.0])}
+    monkeypatch.setattr(gt_mod, "read_sim_object_placements", lambda _session: dict(pl))
+    fail = TaskPlan(steps=[], object_body="", receptacle_body=None, success=False, message="nope")
+    monkeypatch.setattr(task_search, "plan_pick_place_mcts", lambda *a, **k: fail)
+
+    out = plan_clear_clutter(
+        robot,
+        objects=[{"object_query": "apple", "object_gt_body": b} for b in bodies],
+        mode="nav_goal",
+        bin_query="ashcan",
+        goal_xy=np.array([3.0, 0.0]),
+        manip_mode="sim",
+    )
+    assert robot.moved == []
+    assert out["nav_path_open"] is False
+    assert out["goal_reached"] is False
+    assert out["task_success"] is False
+    assert out["n_relocated"] == 0
+
+
+def test_plan_clear_clutter_snaps_when_route_is_open(monkeypatch):
+    """Once clutter is off the route, a single teleport snap is allowed."""
+    import emet.controller.task.tamp.task_search as task_search
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt_mod
+    from emet.controller.task.tamp.task_search import TaskPlan
+
+    bodies = [f"obj_{i}" for i in range(3)]
+    pl: dict = {
+        "ashcan": {"pos": [4.0, 4.0, 0.1], "cat": "ashcan"},
+    }
+    for b in bodies:
+        pl[b] = {"pos": [4.0, 4.0, 0.05], "cat": "apple"}
+
+    class _FakeRobot:
+        def __init__(self) -> None:
+            self.moved: list = []
+
+        def get_emet_session(self):
+            return {}
+
+        def get_base_pose(self, timeout: float = 2.0):
+            return np.array([0.0, 0.0, 0.0])
+
+        def move_base_to(self, xyt, **kwargs):
+            self.moved.append(np.asarray(xyt, dtype=np.float64))
+            self._state = {"base_xyz": np.array([float(xyt[0]), float(xyt[1]), 0.0])}
+            return True
+
+    robot = _FakeRobot()
+    robot._state = {"base_xyz": np.array([0.0, 0.0, 0.0])}
+    monkeypatch.setattr(gt_mod, "read_sim_object_placements", lambda _session: dict(pl))
+    fail = TaskPlan(steps=[], object_body="", receptacle_body=None, success=False, message="nope")
+    monkeypatch.setattr(task_search, "plan_pick_place_mcts", lambda *a, **k: fail)
+
+    out = plan_clear_clutter(
+        robot,
+        objects=[{"object_query": "apple", "object_gt_body": b} for b in bodies],
+        mode="nav_goal",
+        bin_query="ashcan",
+        goal_xy=np.array([3.0, 0.0]),
+        manip_mode="sim",
+        robot_move_goal=np.array([3.0, 0.0]),
+    )
+    assert len(robot.moved) == 1
+    assert out["nav_path_open"] is True
+    assert out["goal_reached"] is True
+    assert out["task_success"] is True
