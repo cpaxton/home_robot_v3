@@ -179,3 +179,10 @@ uv run emet test src/test/eval/test_tamp_clutter_config.py -q
 ```
 
 See `docs/paper_benchmarks.md` and `docs/experiments/README.md` for the experiment index.
+
+## Findings (2026-08-30 signal run, 25-ep subset)
+
+- **Cleanup: 9/10 success** across rby1 (`latch`), Stretch/Innate Mars/Nori (`sim`); the one miss was rby1 iTHOR-0 n3 (2/3 relocated, 1 grasp motion failure).
+- **nav_goal: clears all clutter (8/8) but the terminal nav fails.** Root cause: the eval's final nav is a **straight-line teleport** (`nav_to_landmark_if_clear` → `robot.move_base_to`, `clutter_chain.py:275`), gated by `nav_interpolated_route` over **all** placement disks (`n_disks=84`, furniture included). The landmark is usually behind/next to static furniture, so the post-clear chord still hits e.g. `refrigerator_…` → `path_open=False`. The GT **validity probe** uses grid **8-connected path planning** (routes around furniture), so a row can be `episode_valid=True` yet unwinnable under straight-line nav. This is a benchmark-design gap, not a grasp/planning failure.
+- **Explicit landmarks** (`Table`/`Bed`/`Counter`) did not resolve in these iTHOR scenes (`missing_landmark`); switch to `goal_landmark: auto`.
+- **Fix options (open):** (a) plan the final nav with the voxel/graph A* (route around furniture); (b) make the post-clear check the same 8-connected planner as the validity probe; (c) document that `nav_goal` is only winnable on furniture-clear straight-line rays and choose landmarks accordingly.

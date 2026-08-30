@@ -327,13 +327,19 @@ Fill from \texttt{aggregate\_tamp\_clutter.csv}.
     \toprule
     Mode & Tier & Manip & Task succ. & Obj. cleared & Manip rate & Wall (s) \\
     \midrule
-    cleanup & S1 & latch & -- & -- & -- & -- \\
+    cleanup & S1 & latch & 3/4 & 17/18 & 0.94 & 120 \\
     cleanup & S2 & latch & -- & -- & -- & -- \\
-    cleanup & S2 & sim & -- & -- & -- & -- \\
-    nav\_goal & S1 & latch & -- & -- & -- & -- \\
+    cleanup & S1 & sim & 6/6 & 27/27 & 1.00 & 80 \\
+    nav\_goal & S1 & latch & 0/3$^{\dagger}$ & 22/24 & 0.92 & 120 \\
     nav\_goal & S2 & latch & -- & -- & -- & -- \\
     \bottomrule
   \end{tabular}
+  \vspace{2pt}
+  {\footnotesize Signal run (25-episode subset, iTHOR scenes 0--1); S2 rows pending the full
+  registry. $^{\dagger}$nav\_goal clears all clutter but the terminal nav is a straight-line
+  teleport and the post-clear chord still hits static furniture (e.g.\ a refrigerator), so the
+  landmark is not reached. See \appref{app:model_choice_quantization}-style finding in
+  \texttt{docs/experiments/tamp\_clutter.md}.}
 \end{table}
 
 \subsection{Other planned results}
