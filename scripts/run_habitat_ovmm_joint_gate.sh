@@ -50,6 +50,7 @@ if [[ "$RUN_HABITAT" == "1" ]]; then
     echo "--- phase 1/2: HM-EQA ${HAB_SCRIPT} (Habitat, METHODS=${HAB_METHODS}) ---"
     set +e
     env METHODS="$HAB_METHODS" RUN_ID="${RUN_ID}_hab" RESUME="$HAB_RESUME" \
+        OUT_DIR="$OUT_BASE/habitat" \
         "./scripts/${HAB_SCRIPT}"
     hab_rc=$?
     set -e
@@ -64,7 +65,7 @@ fi
 if [[ "$RUN_OVMM" == "1" ]]; then
     echo "--- phase 2/2: OVMM find slice (PROFILE=${PROFILE}) ---"
     set +e
-    env PROFILE="$PROFILE" RUN_ID="${RUN_ID}_ovmm" \
+    env PROFILE="$PROFILE" RUN_ID="${RUN_ID}_ovmm" OUT_DIR="$OUT_BASE/ovmm" \
         ./scripts/run_ovmm_find_recep_slice.sh
     ovmm_rc=$?
     set -e

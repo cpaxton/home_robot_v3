@@ -113,7 +113,7 @@ flowchart TD
 | **Product (contract)** | Graph pin `{phrase, xyz, obs_id, evidence}` written only when the agent **confirms** or **adds** (`vlm_assess` `in_view`). Scoring / `inspect_graph` read committed pins first. |
 | **Not a pin** | Episode YAML `object_query` / `goal_recep` preloaded by `ovmm_find_phase`. |
 | **Retrieval cache (now)** | First successful `localize_text` for a string on the voxel object. The agentic loop snapshots that XYZ for OVMM scoring (submit drops SigLIP; do not live-query again). Tests may call `pin_phrases_after_mapping`; the OVMM harness must not. |
-| **Unpin on ABSENT** | A close `ABSENT` on a proposal also **removes** the retrieval pin (`unpin_localize_xyz`, `_maybe_retract_claim_after_station`) so a disproven XYZ is never scored by the `pinned_xyz_from_phrases` fallback. |
+| **Unpin on ABSENT** | A close `ABSENT` on a **voxel proposal** (`obs_id < 0`) also **removes** the retrieval pin (`unpin_localize_xyz`, `_maybe_retract_claim_after_station`) so a disproven XYZ is never scored by the `pinned_xyz_from_phrases` fallback. A close ABSENT on a nearby graph view retracts that obs claim but does not unpin. |
 
 ### Map sanity vs OVMM harness
 

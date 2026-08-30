@@ -73,6 +73,21 @@ done
     assert not any(" --" in t for t in tokens), tokens
 
 
+def test_h2h_rotate_is_mapping_budget_zero_unified_explores():
+    text = H2H.read_text(encoding="utf-8")
+    assert 'args+=(--mapping-max-nav-steps "$EXPLORE_STEPS" --no-scene-cache)' in text
+    assert "args+=(--mapping-max-nav-steps 0)" in text
+    assert "--explore-steps" not in text
+    assert 'exit "$gate_rc"' in text
+    assert "status_close fail" in text
+
+
+def test_joint_gate_writes_phase_out_dirs():
+    text = JOINT.read_text(encoding="utf-8")
+    assert 'OUT_DIR="$OUT_BASE/habitat"' in text
+    assert 'OUT_DIR="$OUT_BASE/ovmm"' in text
+
+
 def test_paper_matrix_s0_uses_smoke_and_fails_closed():
     text = PAPER.read_text(encoding="utf-8")
     assert 'env PROFILE=smoke OUT_DIR="$OUT_BASE/ovmm_s0"' in text

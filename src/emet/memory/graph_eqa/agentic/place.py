@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from emet.mapping.voxel_localize import voxel_map_from_agent
+from emet.mapping.voxel_localize import is_proposal_handle, voxel_map_from_agent
 from emet.memory.graph_eqa.agentic.config import (
     DEFAULT_INVESTIGATE_ANNULUS_OUTER_M,
     INVESTIGATE_ANNULUS_OUTER_M,
@@ -693,22 +693,22 @@ def _maybe_retract_claim_after_station(
     phrase = str(verify_out.get("phrase") or self._target_phrase or "").strip()
     if not phrase:
         return None
-    # A close ABSENT disproves the voxel localize point too: drop the pin so
-    # the harness does not score a disproven XYZ (pinned_xyz_from_phrases),
-    # and clear the loop-scored voxel record for this phrase.
-    from emet.mapping.voxel_localize import unpin_localize_xyz
+    # Only the voxel proposal that was looked at disproves the pin. A close
+    # ABSENT on a nearby cabinet graph view must not drop the jar XYZ.
+    if is_proposal_handle(obs_id):
+        from emet.mapping.voxel_localize import unpin_localize_xyz
 
-    voxel_map = voxel_map_from_agent(self.agent)
-    if voxel_map is not None:
-        try:
-            if unpin_localize_xyz(voxel_map, phrase):
-                self._append_trace({"event": "unpin_localize", "phrase": phrase})
-        except Exception as exc:  # noqa: BLE001
-            _logger.warning(f"unpin_localize_xyz failed: {exc}")
-    if str(self._voxel_score_phrase or "").strip().lower() == phrase.lower():
-        self._voxel_score_xyz = None
-        self._voxel_score_phrase = None
-        self._voxel_score_from_pin = None
+        voxel_map = voxel_map_from_agent(self.agent)
+        if voxel_map is not None:
+            try:
+                if unpin_localize_xyz(voxel_map, phrase):
+                    self._append_trace({"event": "unpin_localize", "phrase": phrase})
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(f"unpin_localize_xyz failed: {exc}")
+        if str(self._voxel_score_phrase or "").strip().lower() == phrase.lower():
+            self._voxel_score_xyz = None
+            self._voxel_score_phrase = None
+            self._voxel_score_from_pin = None
     out = gm.retract_phrase_claim_at_obs(
         int(obs_id),
         phrase,

@@ -5,11 +5,9 @@
 # frozen manifest + resume, per-episode crash/cooldown hygiene, per-arm summary.
 # Use it to validate an OVMM change the same way we validate HM-EQA arms.
 #
-# Default axis = unified agentic mapping (this PR):
-#   arm "rotate"  — default mapping (episode explore_steps / scene cache),
-#                   rotate-only for kitchen legs.
-#   arm "unified" — live agentic explore mapping (--explore-steps 8
-#                   --no-scene-cache), the new coverage loop.
+# Default axis = mapping coverage:
+#   arm "rotate"  — --mapping-max-nav-steps 0 (rotate / scene cache only)
+#   arm "unified" — --mapping-max-nav-steps 8 --no-scene-cache (live agentic explore)
 #
 # Usage (prefer emet jobs):
 #   uv run emet jobs run --name ovmm-ab --need-mib 12000 --gpu-exclusive -- \
@@ -19,7 +17,7 @@
 #   ARMS=rotate,unified   arms to run (comma-separated)
 #   EPISODES=...          comma-separated episode ids (default: rby1 S0 + kitchen)
 #   RESUME=1              skip validated COMPLETE markers; rebuild aggregates
-#   EXPLORE_STEPS=8       explore_steps for the unified arm
+#   EXPLORE_STEPS=8       mapping_max_nav_steps for the unified arm
 #   BACKEND=dynagraph     memory backend for both arms
 #   ROUNDS=6              --agentic-max-rounds
 #   CRASH_RETRIES=1       retries of one episode after a native/EGL failure
@@ -73,7 +71,8 @@ manifest = {
     "backend": sys.argv[4],
     "rounds": int(sys.argv[5]),
     "explore_steps": int(sys.argv[6]),
-    "axis": "mapping: rotate/rotate+cache vs live agentic explore (--explore-steps)",
+    "mapping_max_nav_steps": int(sys.argv[6]),
+    "axis": "mapping: rotate (--mapping-max-nav-steps 0) vs live agentic explore",
 }
 json.dump(manifest, open(sys.argv[1], "w"), indent=2)
 PY
@@ -115,7 +114,12 @@ for arm in "${ARM_LIST[@]}"; do
         args=()
         arm_args args "$ep"
         if [[ "$arm" == "unified" ]]; then
-            args+=(--explore-steps "$EXPLORE_STEPS" --no-scene-cache)
+            args+=(--mapping-max-nav-steps "$EXPLORE_STEPS" --no-scene-cache)
+        elif [[ "$arm" == "rotate" ]]; then
+            args+=(--mapping-max-nav-steps 0)
+        else
+            log "ERROR: unknown arm=$arm (want rotate|unified)"
+            exit 2
         fi
         rc=0
         for attempt in $(seq 0 "$CRASH_RETRIES"); do
@@ -191,4 +195,18 @@ for arm in arms:
     (out / f"{arm}_summary.json").write_text(json.dumps(summary, indent=2))
 PY
 
-status_close ok "ovmm AB arms: ${arm_results[*]}" "OUT=$OUT"
+gate_rc=0
+for res in "${arm_results[@]}"; do
+    done_n="${res#*=}"
+    ok="${done_n%%/*}"
+    total="${done_n##*/}"
+    if [[ "$ok" != "$total" ]]; then
+        gate_rc=1
+    fi
+done
+if [[ "$gate_rc" -eq 0 ]]; then
+    status_close ok "ovmm AB arms: ${arm_results[*]}" "OUT=$OUT"
+else
+    status_close fail "ovmm AB incomplete: ${arm_results[*]}" "OUT=$OUT"
+fi
+exit "$gate_rc"

@@ -1151,6 +1151,21 @@ def test_ovmm_help():
     assert "probe-verify" in out
 
 
+def test_ovmm_find_help_mapping_budget():
+    """emet ovmm find --help lists mapping coverage vs find agentic budgets."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "find", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout
+    assert "--mapping-max-nav-steps" in out
+    assert "--explore-steps" in out
+    assert "--agentic-max-rounds" in out
+    assert "--agentic-max-nav-steps" in out
+
+
 def test_ovmm_probe_map_help():
     """emet ovmm probe-map --help lists --voxel and --cpu-only."""
     result = subprocess.run(

@@ -1226,7 +1226,9 @@ def _ovmm_phase_steps_note(prefix: str, row: dict[str, Any]) -> str:
 def _ovmm_steps_note(row: dict[str, Any]) -> str | None:
     parts: list[str] = []
     ctrl = _ovmm_int(row, "n_controller_steps")
-    exp = _ovmm_int(row, "explore_steps")
+    exp = _ovmm_int(row, "mapping_max_nav_steps")
+    if exp is None:
+        exp = _ovmm_int(row, "explore_steps")
     if ctrl is not None:
         parts.append(f"map={ctrl}" + (f"/{exp}exp" if exp is not None else ""))
     obj = _ovmm_phase_steps_note("obj", row)
@@ -1267,9 +1269,11 @@ def _episode_score_from_ovmm_row(row: dict[str, Any], *, path: Path, qid: int) -
 def _iter_ovmm_result_jsons(root: Path) -> list[Path]:
     found: list[Path] = []
     seen: set[str] = set()
-    for path in [*sorted(root.glob("find/*_dynagraph.json")), *sorted(root.glob("*_dynagraph.json"))]:
-        key = str(path.resolve()) if path.exists() else str(path)
-        if key in seen or not path.is_file():
+    for path in sorted(root.rglob("*_dynagraph.json")):
+        if not path.is_file():
+            continue
+        key = str(path.resolve())
+        if key in seen:
             continue
         seen.add(key)
         found.append(path)

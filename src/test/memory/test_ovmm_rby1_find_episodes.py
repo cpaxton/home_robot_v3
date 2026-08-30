@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from emet.eval.ovmm_find_phase import load_find_phase_episodes
 
 
@@ -17,6 +19,9 @@ def test_rby1_fast_gate_episodes_present():
     assert by_id["default_table_rby1_s0_distinct_recep"].sim.endswith("default_table_rby1.yaml")
     assert by_id["robocasa_rby1_pp_s1"].sim.endswith("robocasa_pick_place_rby1.yaml")
     assert by_id["robocasa_rby1_pp_s1"].object_gt_body == "obj_main"
+    # Hop-until-arrival: this is completed journeys, not leftover A* chunks.
+    assert by_id["robocasa_rby1_pp_s1"].mapping_max_nav_steps == 8
+    assert by_id["default_table_rby1_s0_distinct_recep"].mapping_max_nav_steps == 0
 
 
 def test_run_mapping_protocol_rotates_default_table_rby1():
@@ -31,7 +36,7 @@ def test_run_mapping_protocol_rotates_default_table_rby1():
     }
     agent.rotate_in_place = MagicMock()
 
-    n = run_mapping_protocol(agent, explore_steps=0, not_rotate=False, mapping_rotate_steps=4)
+    n = run_mapping_protocol(agent, mapping_max_nav_steps=0, not_rotate=False, mapping_rotate_steps=4)
 
     assert n == 1
     agent.rotate_in_place.assert_called_once_with(n_steps=4)
@@ -63,7 +68,7 @@ def test_prepare_default_table_rby1_mapping_view_moves_and_looks():
 
 
 def test_run_mapping_protocol_agentic_explore_for_non_s0():
-    """Mapping with explore_steps>0 uses AgenticEQAExecutor mode=explore, not execute_action."""
+    """Mapping with mapping_max_nav_steps>0 uses AgenticEQAExecutor mode=explore, not execute_action."""
     from unittest.mock import MagicMock, patch
 
     from emet.eval.ovmm_find_phase import run_mapping_protocol
@@ -82,7 +87,7 @@ def test_run_mapping_protocol_agentic_explore_for_non_s0():
         mock_result.n_nav = 1
         mock_run.return_value = mock_result
 
-        n = run_mapping_protocol(agent, explore_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
+        n = run_mapping_protocol(agent, mapping_max_nav_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
 
         # 1 rotate seed + 2 explore + 1 nav
         assert n == 4
@@ -120,7 +125,7 @@ def test_run_mapping_protocol_falls_back_when_agentic_maps_zero_steps():
         mock_result.n_nav = 0
         mock_run.return_value = mock_result
 
-        n = run_mapping_protocol(agent, explore_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
+        n = run_mapping_protocol(agent, mapping_max_nav_steps=3, not_rotate=False, trace_meta={"ovmm_phase": "mapping"})
 
     assert n == 4  # 1 rotate (agentic seed) + 3 execute_action, no double rotate
     agent.rotate_in_place.assert_called_once()
@@ -308,17 +313,18 @@ def test_close_absent_unpins_voxel_localize():
     assert pinned is not None
     assert unpin_localize_xyz(voxel, "blue cube") is True
     assert pinned_localize_xyz(voxel, "blue cube")[0] is None
+    pin_localize_xyz(voxel, "blue cube", [0.05, 0.05, 0.5])
 
     agent = MagicMock()
     agent.graph_memory = MagicMock()
     agent.voxel_map = voxel
-    agent._voxel_score_phrase = "blue cube"
-    agent._voxel_score_xyz = (0.05, 0.05, 0.5)
-    agent._voxel_score_from_pin = True
 
     ex = AgenticEQAExecutor(agent, question="Where is the blue cube?", max_rounds=4, max_nav_steps=4, router=False)
     ex._target_phrase = "blue cube"
     ex.decision_policy = "legacy"
+    ex._voxel_score_phrase = "blue cube"
+    ex._voxel_score_xyz = (0.05, 0.05, 0.5)
+    ex._voxel_score_from_pin = True
     # Simulate the close-ABSENT retract path (mocked graph retract returns a dict).
     ex.graph_memory.retract_phrase_claim_at_obs = MagicMock(return_value={"phrase": "blue cube", "ok": True})
     ex._observation_room = MagicMock(return_value="")
@@ -335,3 +341,91 @@ def test_close_absent_unpins_voxel_localize():
     assert ex._voxel_score_xyz is None
     assert ex._voxel_score_phrase is None
     assert ex._voxel_score_from_pin is None
+
+
+def test_close_absent_on_graph_view_does_not_unpin_voxel_localize():
+    """A close ABSENT on a nearby graph obs must still retract the claim, but
+    must not drop the voxel pin (that XYZ was not the view that was disproven)."""
+    from unittest.mock import MagicMock
+
+    from emet.mapping.voxel_localize import pin_localize_xyz, pinned_localize_xyz
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    voxel = MagicMock()
+    pin_localize_xyz(voxel, "blue cube", [0.05, 0.05, 0.5])
+    assert pinned_localize_xyz(voxel, "blue cube")[0] is not None
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = voxel
+
+    ex = AgenticEQAExecutor(agent, question="Where is the blue cube?", max_rounds=4, max_nav_steps=4, router=False)
+    ex._target_phrase = "blue cube"
+    ex.decision_policy = "legacy"
+    ex._voxel_score_phrase = "blue cube"
+    ex._voxel_score_xyz = (0.05, 0.05, 0.5)
+    ex._voxel_score_from_pin = True
+    ex.graph_memory.retract_phrase_claim_at_obs = MagicMock(return_value={"phrase": "blue cube", "ok": True})
+    ex._observation_room = MagicMock(return_value="")
+    ex._known_room_for_event = MagicMock(return_value="")
+    ex._append_trace = MagicMock()
+
+    ex._maybe_retract_claim_after_station(
+        7,
+        closest_m=0.5,
+        verify_out={"status": "ABSENT", "phrase": "blue cube", "obs_id": 7},
+    )
+    assert pinned_localize_xyz(voxel, "blue cube")[0] is not None
+    assert ex._voxel_score_xyz == (0.05, 0.05, 0.5)
+    assert ex._voxel_score_phrase == "blue cube"
+    ex.graph_memory.retract_phrase_claim_at_obs.assert_called_once()
+
+
+def test_resolve_mapping_max_nav_steps_alias_and_conflict():
+    from emet.eval.ovmm_find_phase import (
+        _EXPLORE_STEPS_ALIAS_WARNED,
+        FindPhaseEpisode,
+        MappingBudgetConflict,
+        resolve_mapping_max_nav_steps,
+    )
+
+    assert resolve_mapping_max_nav_steps(8, None) == 8
+    assert resolve_mapping_max_nav_steps(0, None) == 0
+    assert resolve_mapping_max_nav_steps(8, 8) == 8
+    assert resolve_mapping_max_nav_steps(None, None, default=0) == 0
+    assert resolve_mapping_max_nav_steps(None, None, default=None) is None
+
+    src = "unit-alias-once-test"
+    _EXPLORE_STEPS_ALIAS_WARNED.discard(src)
+    assert resolve_mapping_max_nav_steps(None, 5, source=src) == 5
+    assert src in _EXPLORE_STEPS_ALIAS_WARNED
+    n_warned = len(_EXPLORE_STEPS_ALIAS_WARNED)
+    assert resolve_mapping_max_nav_steps(None, 5, source=src) == 5
+    assert len(_EXPLORE_STEPS_ALIAS_WARNED) == n_warned
+
+    with pytest.raises(MappingBudgetConflict):
+        resolve_mapping_max_nav_steps(8, 0, source="unit-conflict")
+
+    ep_alias = FindPhaseEpisode(
+        id="alias",
+        tier="S1",
+        sim="configs/sim/x.yaml",
+        object="jar",
+        start_recep="counter",
+        goal_recep="cab",
+        explore_steps=3,
+    )
+    assert ep_alias.mapping_max_nav_steps == 3
+    assert ep_alias.explore_steps == 3
+
+    with pytest.raises(MappingBudgetConflict):
+        FindPhaseEpisode(
+            id="conflict",
+            tier="S1",
+            sim="configs/sim/x.yaml",
+            object="jar",
+            start_recep="counter",
+            goal_recep="cab",
+            mapping_max_nav_steps=0,
+            explore_steps=8,
+        )

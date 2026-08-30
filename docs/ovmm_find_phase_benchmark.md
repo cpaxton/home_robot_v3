@@ -94,7 +94,7 @@ Dynagraph/static_graph without `--sensor-perception` still build graph nodes fro
 ### Scaling / ablation flags
 
 ```bash
-# Exploration budget (episode YAML ``explore_steps`` or dedicated episodes)
+# Mapping coverage budget (episode YAML ``mapping_max_nav_steps``; ``explore_steps`` is a deprecated alias)
 uv run python scripts/eval_ovmm_find_phases.py --episode-id molmo_ithor_s2_idx0_explore15
 
 # Merge / staleness grid on S2
@@ -168,7 +168,9 @@ Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perceptio
 
 Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
 
-**Mapping = same AgenticEQAExecutor as EQA, but coverage-only.** When `explore_steps>0` the harness runs `run_agentic_eqa_result(agent, None, goal="explore and map the environment", max_nav_steps=explore_steps, max_rounds=explore_steps+1)` — `mode=explore` (router only `explore_frontier` / `finish`). Frontier picks are **uncovered-first / VLM among frontier RGBs**, not object-biased `toward=jar`; OVMM objects are placed randomly and biasing toward a SigLIP ghost while mapping wastes steps. Arrival capture is `look_ahead` (tilt 0) facing the frontier then `update()` — not `look_front` −30° and not a 4-pan sweep before leaving. `S0` (`explore_steps=0`) stays rotate-only plus `_prepare_default_table_rby1_mapping_view`.
+**Mapping vs find budgets (do not conflate).** `mapping_max_nav_steps` (CLI `--mapping-max-nav-steps`; deprecated alias `explore_steps` / `--explore-steps`) is the **mapping-phase** agentic `max_nav_steps` — how many coverage journeys `run_mapping_protocol` may run before FindObj. `0` is rotate-only (S0). FindObj/FindRec use `--agentic-max-rounds` / `--agentic-max-nav-steps`. After hop-until-arrival, one mapping step is one completed path, not one leftover A* chunk.
+
+**Mapping = same AgenticEQAExecutor as EQA, but coverage-only.** When `mapping_max_nav_steps>0` the harness runs `run_agentic_eqa_result(agent, None, goal="explore and map the environment", max_nav_steps=mapping_max_nav_steps, max_rounds=mapping_max_nav_steps+1)` — `mode=explore` (router only `explore_frontier` / `finish`). Frontier picks are **uncovered-first / VLM among frontier RGBs**, not object-biased `toward=jar`; OVMM objects are placed randomly and biasing toward a SigLIP ghost while mapping wastes steps. Arrival capture is `look_ahead` (tilt 0) facing the frontier then `update()` — not `look_front` −30° and not a 4-pan sweep before leaving. `S0` (`mapping_max_nav_steps=0`) stays rotate-only plus `_prepare_default_table_rby1_mapping_view`.
 
 **Find = voxel-first, then AgenticEQA.** At find time `localize_text("jar")` / `"cab"` is run on the **finished** voxel map and an `investigate` at that XYZ beats any camera-pose-at-feet graph view (redirect `CAMERA_POSE_PLACE` → unused detection). SigLIP on arrival RGB is the query — YOLOE need not know `jar`. If there is no voxel hit, one `explore_frontier` extends coverage rather than chewing 150 wall nodes. Context that survives between phases is `agent.voxel_map` + `agent.graph_memory` (find starts a new executor; the map is the agent state).
 

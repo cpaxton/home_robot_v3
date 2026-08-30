@@ -1,6 +1,6 @@
 # OVMM agentic find (teleport dynagraph)
 
-Branch: `feat/tamp-ovmm-perf`
+Branch: `feat/ovmm-fast-iterate`
 
 North star: raise **FindObj** and **FindRec** under teleport dynagraph — but
 **routine gates must stay fast**. Stretch Realsense head sweeps made the old
@@ -76,7 +76,7 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 
 | Area | Change |
 |------|--------|
-| **Mapping** | `run_mapping_protocol` with `explore_steps>0` uses `AgenticEQAExecutor` `mode=explore` (coverage, `question=None`, no object `toward`); `S0` `explore_steps=0` stays rotate-only. Frontier picks are uncovered-first / VLM among frontier RGBs — object-biased mapping is wrong for random OVMM placement. |
+| **Mapping** | `run_mapping_protocol` with `mapping_max_nav_steps>0` uses `AgenticEQAExecutor` `mode=explore` (coverage, `question=None`, no object `toward`); `S0` `mapping_max_nav_steps=0` stays rotate-only. (`explore_steps` is a deprecated alias.) Frontier picks are uncovered-first / VLM among frontier RGBs — object-biased mapping is wrong for random OVMM placement. After hop-until-arrival this budget is completed journeys, not leftover A* chunks (kitchen rby1 is 8). |
 | Arrival capture | `_tool_explore_frontier` after nav: face frontier (`target_theta`), `look_ahead` (tilt 0) then `capture_and_update` at arrival; no pre-move `look_around` sweep and not `look_front` −30°. Hop-until-arrival in `navigate_to_target_pose` finishes 27-wp kitchen paths. |
 | Hypothesis recall | `_recall_nav_hypotheses()`; voxel `localize_text` cards from the **question**, not episode YAML / GT placement seeds. Voxel proposal beats camera-pose-at-feet graph view (`CAMERA_POSE_PLACE` redirect). |
 | Find voxel-first | `localize_text` on finished voxel map, then `investigate` that XYZ; do not pin-hunt object while mapping. If no voxel hit, one `explore_frontier` rather than 150 wall nodes. |
@@ -85,7 +85,7 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 | Router observability | `nav_outcome` in Recent actions |
 | **SigLIP per-phase re-attach** | `_do_submit_answer` releases the voxel encoder for Qwen; the OVMM harness re-attaches it (`re_attach_siglip_encoder`) before **each** find phase so FindRec can still `localize_text` the finished map (before: second phase silently returned nothing — `siglip-seed sim=None`). HM-EQA keeps released-SigLIP behavior. |
 | **One-shot proposals** | A voxel proposal (`obs_id < 0`) is blocked after one real nav attempt (`_hypothesis_nav_blocked`): a close ABSENT is decisive, so the router/fallback cannot re-chase the same wall XYZ. The loop re-localizes from the grown map. |
-| **Unpin on ABSENT** | A close ABSENT also removes the retrieval pin (`unpin_localize_xyz`) so a disproven point is never scored by the `pinned_xyz_from_phrases` fallback. |
+| **Unpin on ABSENT** | A close ABSENT on a **voxel proposal handle** (`obs_id < 0`) also removes the retrieval pin (`unpin_localize_xyz`) so a disproven point is never scored by the `pinned_xyz_from_phrases` fallback. A close ABSENT on a nearby graph view still retracts the claim at that obs but does **not** unpin. |
 | **Explore no-progress block** | A nav that moved < 0.10 m blocks that frontier XY (`_habitat_recent_goals`/`_blocked_goals`) so the next pick rotates to a different frontier or falls to multi-goal explore (fixes the kitchen re-pick-the-same-frontier stall). |
 | **Efficiency** | rby1 episodes, or Stretch with `EMET_SKIP_HEAD_SWEEP=1`, + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
 | Close-look map | Occupancy-aligned min camera range + aimed flag; investigate **stays** on a place card until aimed-close or **escapes** when unreachable / attempts exhausted |

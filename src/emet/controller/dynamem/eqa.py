@@ -368,7 +368,7 @@ def navigate_to_target_pose(
         waypoints = [pt.state for pt in res.trajectory]
     elif res is not None:
         waypoints = None
-        logger.warning("navigate_to_target_pose planner failure: %s", res.reason)
+        logger.warning(f"navigate_to_target_pose planner failure: {res.reason}")
     else:
         waypoints = None
 
@@ -551,7 +551,7 @@ def navigate_to_target_pose(
             try:
                 upd()
             except Exception as exc:
-                logger.warning("navigate_to_target_pose hop update failed: %s", exc)
+                logger.warning(f"navigate_to_target_pose hop update failed: {exc}")
         nxt = self._current_planning_xyt()
         logger.info(
             "navigate_to_target_pose: chunk hop %d/%d, replanning from (%.2f, %.2f)",

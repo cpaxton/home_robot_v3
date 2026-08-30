@@ -690,6 +690,36 @@ def test_collect_ovmm_episode_scores_and_report_steps(tmp_path, monkeypatch):
     assert "N/N" in text
 
 
+def test_collect_ovmm_nested_h2h_jsons(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    out = tmp_path / "ovmm_h2h"
+    nested = out / "unified" / "robocasa_rby1_pp_s1"
+    nested.mkdir(parents=True)
+    (nested / "robocasa_rby1_pp_s1_dynagraph.json").write_text(
+        json.dumps(
+            {
+                "episode_id": "robocasa_rby1_pp_s1",
+                "backend": "dynagraph",
+                "object_query": "jar",
+                "goal_recep": "cab",
+                "find_object_success": True,
+                "find_recep_success": False,
+                "n_controller_steps": 5,
+                "mapping_max_nav_steps": 8,
+                "obj_agentic_rounds": 6,
+                "obj_n_nav": 4,
+                "obj_n_explore": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    scores = jr.collect_episode_scores(out)
+    assert len(scores) == 1
+    assert scores[0].episode_id == "robocasa_rby1_pp_s1"
+    assert scores[0].result_label == "1/2"
+    assert scores[0].steps_note == "map=5/8exp o6n4e1"
+
+
 def test_format_job_report_countclock_slice(tmp_path, monkeypatch):
     monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
     wrapper = tmp_path / "jobs_runs" / "instance-graph-repair-15q"

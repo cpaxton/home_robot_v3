@@ -9,7 +9,7 @@ episodes:
     start_recep: table
     goal_recep: table
     success_radius_m: 0.30
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: default_table_s0_blue_cube
     tier: S0
@@ -18,7 +18,7 @@ episodes:
     start_recep: table
     goal_recep: table
     success_radius_m: 0.30
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: default_table_s0_distinct_recep
     tier: S0
@@ -27,7 +27,7 @@ episodes:
     start_recep: table
     goal_recep: blue cube
     success_radius_m: 0.30
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: robocasa_pp_s1
     tier: S1
@@ -37,7 +37,7 @@ episodes:
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: robocasa_pp_s1_explore5
     tier: S1
@@ -47,7 +47,7 @@ episodes:
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
-    explore_steps: 8
+    mapping_max_nav_steps: 8
 
   - id: molmo_ithor_s2_idx0
     tier: S2
@@ -58,7 +58,7 @@ episodes:
     goal_recep: microwave
     object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
     success_radius_m: 0.75
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: molmo_ithor_s2_idx0_explore15
     tier: S2
@@ -68,7 +68,7 @@ episodes:
     goal_recep: microwave
     object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
     success_radius_m: 0.75
-    explore_steps: 15
+    mapping_max_nav_steps: 15
 
   - id: molmo_ithor_s2_idx1
     tier: S2
@@ -77,7 +77,7 @@ episodes:
     start_recep: table
     goal_recep: sofa
     success_radius_m: 0.75
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: molmo_ithor_s2_idx2
     tier: S2
@@ -86,7 +86,7 @@ episodes:
     start_recep: table
     goal_recep: sofa
     success_radius_m: 0.75
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   # ---------------------------------------------------------------------------
   # Fast agentic gate (rby1): no Stretch Realsense head-sweep tax. Prefer these
@@ -101,7 +101,7 @@ episodes:
     start_recep: table
     goal_recep: blue cube
     success_radius_m: 0.30
-    explore_steps: 0
+    mapping_max_nav_steps: 0
 
   - id: robocasa_rby1_pp_s1
     tier: S1
@@ -111,8 +111,6 @@ episodes:
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
-    # No scene cache exists for the rby1 kitchen; rotate-only mapping leaves a
-    # ~1 m² disk and find cannot localize a jar. Live agentic explore (the
-    # unified OVMM mapping path) is the coverage that makes this leg runnable;
-    # 8 hops (~4 m) still stopped short of the counter, so budget 20.
-    explore_steps: 20
+    # No scene cache for the rby1 kitchen. Each explore_frontier now hops until
+    # arrival, so this is completed coverage journeys (not leftover 8-wp chunks).
+    mapping_max_nav_steps: 8

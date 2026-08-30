@@ -63,6 +63,7 @@ def _batch_options_from_click(
     output_dir: Path | None,
     dry_run: bool,
     explore_steps: int | None = None,
+    mapping_max_nav_steps: int | None = None,
     no_scene_cache: bool = False,
     manip_mode: str | None = None,
     oneshot_localize: bool = False,
@@ -89,6 +90,7 @@ def _batch_options_from_click(
         benchmark=benchmark,
         output_dir=output_dir,
         dry_run=dry_run,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         manip_mode=manip_mode,
@@ -200,7 +202,18 @@ def ovmm_group(ctx: click.Context) -> None:
 
 @ovmm_group.command("find", short_help="Batch OVMM find-phase (FindObj / FindRec)")
 @_common_batch_options
-@click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
+@click.option(
+    "--mapping-max-nav-steps",
+    type=int,
+    default=None,
+    help="Override episode mapping coverage budget (agentic explore max_nav_steps; 0 = rotate-only)",
+)
+@click.option(
+    "--explore-steps",
+    type=int,
+    default=None,
+    help="Deprecated alias of --mapping-max-nav-steps (mapping coverage, not FindObj)",
+)
 @click.option("--no-scene-cache", is_flag=True, default=False)
 @click.option(
     "--oneshot-localize",
@@ -244,6 +257,7 @@ def ovmm_find(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
+    mapping_max_nav_steps: int | None,
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,
@@ -274,6 +288,7 @@ def ovmm_find(
         benchmark=benchmark,
         output_dir=output_dir,
         dry_run=dry_run,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         oneshot_localize=oneshot_localize,
@@ -293,7 +308,18 @@ def ovmm_find(
     default=None,
     help="Override full-OVMM episode modes (default: use episode YAML, otherwise oracle)",
 )
-@click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
+@click.option(
+    "--mapping-max-nav-steps",
+    type=int,
+    default=None,
+    help="Override episode mapping coverage budget (agentic explore max_nav_steps; 0 = rotate-only)",
+)
+@click.option(
+    "--explore-steps",
+    type=int,
+    default=None,
+    help="Deprecated alias of --mapping-max-nav-steps (mapping coverage, not FindObj)",
+)
 @click.option("--no-scene-cache", is_flag=True, default=False)
 @click.option(
     "--oneshot-localize",
@@ -332,6 +358,7 @@ def ovmm_full(
     output_dir: Path | None,
     dry_run: bool,
     manip_mode: str | None,
+    mapping_max_nav_steps: int | None,
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,
@@ -359,6 +386,7 @@ def ovmm_full(
         output_dir=output_dir,
         dry_run=dry_run,
         manip_mode=manip_mode,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         oneshot_localize=oneshot_localize,
