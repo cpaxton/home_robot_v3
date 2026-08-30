@@ -1,6 +1,3 @@
-# TAMP clutter-clearance signal subset (25 eps) for paper tab:tamp_clutter.
-# Spans rby1 latch (iTHOR scenes 0-1) + stretch / nori / innate_mars sim (scene 0);
-# cleanup + nav_goal. ~2-4 h on GPU. Derived from clutter_episodes_large.yaml.
 episodes:
 - id: ithor_cleanup_00_rby1_n3
   tier: S1
@@ -40,7 +37,7 @@ episodes:
   seed: 62
   tight_ring: true
   manip_mode: latch
-  goal_landmark: Table
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_rby1_n8_bed_3
   tier: S1
@@ -54,7 +51,7 @@ episodes:
   seed: 93
   tight_ring: true
   manip_mode: latch
-  goal_landmark: Bed
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_rby1_n8_4
   tier: S1
@@ -108,7 +105,7 @@ episodes:
   seed: 159
   tight_ring: true
   manip_mode: latch
-  goal_landmark: Bed
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_01_rby1_n8_counter_3
   tier: S1
@@ -122,7 +119,7 @@ episodes:
   seed: 190
   tight_ring: true
   manip_mode: latch
-  goal_landmark: Counter
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_01_rby1_n8_4
   tier: S1
@@ -176,7 +173,7 @@ episodes:
   seed: 62
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Table
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_stretch_n8_bed_3
   tier: S1
@@ -190,7 +187,7 @@ episodes:
   seed: 93
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Bed
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_stretch_n8_4
   tier: S1
@@ -244,7 +241,7 @@ episodes:
   seed: 62
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Table
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_innate_mars_n8_bed_3
   tier: S1
@@ -258,7 +255,7 @@ episodes:
   seed: 93
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Bed
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_innate_mars_n8_4
   tier: S1
@@ -312,7 +309,7 @@ episodes:
   seed: 62
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Table
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_nori_n8_bed_3
   tier: S1
@@ -326,7 +323,7 @@ episodes:
   seed: 93
   tight_ring: true
   manip_mode: sim
-  goal_landmark: Bed
+  goal_landmark: auto
   bin_query: GarbageCan
 - id: ithor_nav_goal_00_nori_n8_4
   tier: S1
