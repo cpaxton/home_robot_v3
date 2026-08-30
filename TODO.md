@@ -345,19 +345,48 @@ Benchmark: [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) 
 4 robots: rby1 / stretch / innate_mars / nori). Nori backend: [docs/robots/nori.md](docs/robots/nori.md).
 GT+MCTS battery: [docs/experiments/tamp_clutter_testing.md](docs/experiments/tamp_clutter_testing.md).
 
+**PR #152 code is done** (blocked-nav scoring, chord-sampled no-snap, reachable landmarks,
+sim default manip for mars/nori). **#150** (PYTHONPATH ABI) and **#151** (Nori + kinematic
+gate) already landed on `main`. Remaining items are **experiments / product**, not merge
+blockers.
+
 - [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
       pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
-- [ ] **Integrate TAMP into the agent** — the real blocker now that MCTS pick/place works.
-      The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
+      That run predates chord-collision + reachable-landmark; re-run below before citing it.
+- [ ] **GPU GT+MCTS battery re-run** (after chord-sample / 12 m landmark cap). Furniture on
+      the spawn→landmark chord can now fail `navclear`. Queue, do not run inline:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py --test-battery \
+        --battery-robots nori --battery-scenes 0,1
+      ```
+
+      Then optionally `--battery-robots nori,innate_mars,rby1 --battery-scenes 0,1`.
+- [ ] **Fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (scored denominator;
+      exclude `skipped_invalid`). Results section is still placeholders.
+- [ ] **Large registry (200 templates)** via `emet jobs`:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py \
+        --episodes configs/ovmm/clutter_episodes_large.yaml
+      ```
+
+- [ ] **rby1 latch paper row**: default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
+      large-registry rby1 `latch` episodes. Stretch / mars / nori stay `sim` on floor clutter.
+- [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1 default latch
+      `--episode-id ithor_cleanup_s1_bin_n3`. Mars/nori floor objects need `--manip-mode latch`
+      (expected weak: Nori IK bottoms out ~0.29 m vs z≈0.02 floor). Unit/offline path already
+      passes.
+- [ ] **Integrate TAMP into the agent** — the real product blocker now that MCTS pick/place
+      works. The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
       `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
       exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a
       `clear_clutter` CHAT skill (resolve scattered objects from scene graph/memory → run the
       MCTS chain to the bin → optional landmark nav) so the LLM agent can parse "clean up the
       room" / "get to the sofa" and drive TAMP end-to-end; reuse `AgentTaskRef`/`AgentPlanBuild`
       handles and the same no-AI test battery for the agent path.
-- [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1, innate_mars, and nori
-      `--episode-id ithor_*_<robot>_n3` on iTHOR to validate the kinematic chain end-to-end
-      against the real RobosuiteZmqServer (unit/offline verification already passes).
 - [x] **innate_mars actuator naming**: the innate_mars MJCF actuators are *unnamed*, and the
       robosuite server applies `{"joint": vec}` via `mj_name2id(mjOBJ_ACTUATOR, aname)` —
       unnamed actuators never receive ctrl from `set_actuator_positions`. Name them (like

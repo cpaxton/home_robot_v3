@@ -51,7 +51,10 @@ tight ring and drop `skipped_invalid` when the probe is not blocked. See
 [tamp_clutter.md](tamp_clutter.md).
 
 **Validated 2026-08-28:** 24/24 episodes pass across nori, innate_mars, and rby1 × iTHOR
-scenes 0–1 (pickplace / declutter / navblocked / navclear).
+scenes 0–1 (pickplace / declutter / navblocked / navclear). That run **predates**
+chord-sampled no-snap and the 12 m landmark cap — furniture on the spawn→landmark chord
+can now fail `navclear`. Re-run via `emet jobs` before citing (see `TODO.md` TAMP section
+and [tamp_clutter.md](tamp_clutter.md) Remaining experiments).
 
 ## Coverage
 

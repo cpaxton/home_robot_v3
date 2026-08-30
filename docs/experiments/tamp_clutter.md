@@ -112,6 +112,29 @@ uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3 
 Output: per-episode JSON + `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT`
 (default `~/runs/emet/tamp_clutter`). The runner prints `scored=` / `skipped_invalid=`.
 
+## Remaining experiments (not merge blockers)
+
+Queue on GPU via `emet jobs` (never as an agent turn). Full checklist: `TODO.md` (TAMP clutter).
+
+```bash
+# Re-run GT+MCTS battery after chord-collision / reachable-landmark (old 24/24 is 2026-08-28)
+NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py --test-battery \
+  --battery-robots nori --battery-scenes 0,1
+
+# Large 200-episode registry
+NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py \
+  --episodes configs/ovmm/clutter_episodes_large.yaml
+
+# rby1 latch smoke (small YAML)
+NEED_MIB=8000 uv run emet jobs run --name tamp-latch-rby1 --need-mib 8000 -- \
+  uv run python scripts/eval_tamp_clutter.py --episode-id ithor_cleanup_s1_bin_n3
+```
+
+Fill `tab:tamp_clutter` from `aggregate_tamp_clutter.csv` (scored denominator, drop
+`skipped_invalid`).
+
 ## LLM-agent mode
 
 The deterministic chain (`emet.controller.task.tamp.clutter_chain.plan_clear_clutter`)
