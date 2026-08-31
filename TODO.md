@@ -311,7 +311,15 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
       4 robots; nav_goal cleared all clutter but the terminal straight-line teleport chord
       hit furniture (refrigerator) → 0 reached. Fixed in PR #154: post-clear route now uses
       an **8-connected planner probe** (`nav_path_open_around_disks`) matching the GT
-      validity definition; nav_goal rerun in flight.
+      validity definition.
+- [x] **TAMP nav_goal landmarks were unwinnable (2026-08-31):** even with the 8-connected
+      post-clear probe, all 15 nav_goal rows scored 0 because `_goal_for_landmark` picked
+      by *straight-line* distance (< 10 m), not navigability — landmarks sat behind
+      furniture barriers. Fixed (`02be11d0`, PR #154): landmark selection now requires an
+      **8-connected route from the robot start** to the approach point (farthest navigable
+      preferred). 2-episode check: scene-0 nav_goal now **succeeds** (goal_reached,
+      path_open); scene-1 still fails (post-clear route from the bin blocked by dense
+      furniture + one 7/8 relocation). Full 15-row nav_goal rerun pending.
 - [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
       is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
       `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
@@ -394,8 +402,9 @@ Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #
 - [ ] **fp16 full-113 vs budget** — does the fp16 gain grow with more rounds?
 
 ### 4. Make tamp / molmospaces / habitat-ovmm work well
-- [ ] **TAMP E1 battery re-run** (after chord-sample + 8-connected nav fix) + **E3 small** +
-      **fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (exclude `skipped_invalid`).
+- [ ] **TAMP E1 battery re-run** (after chord-sample + 8-connected nav + navigable-landmark
+      fix) + **E3 small** + **nav_goal 15-row rerun** (scene-0 winnable now) + **fill
+      `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (exclude `skipped_invalid`).
 - [ ] **TAMP → agent**: expose `plan_clear_clutter` as a `clear_clutter` CHAT skill so the
       LLM agent can parse "clean up the room" / "get to the sofa" end-to-end (the real
       product blocker; MCTS pick/place already works).
@@ -404,9 +413,9 @@ Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #
 - [ ] **habitat-ovmm**: validate the robocasa cached-map find + rby1 kitchen (explore_steps
       20 live) end-to-end via the mixed gate; report S0/S1/S2.
 
-**Status of running jobs:** TAMP nav_goal 8-connected rerun (15 episodes) in flight;
-TAMP battery 8/8 (pre-chord-fix, re-run needed); OVMM molmo-robocasa live sweep cancelled
-(0/2 robocasa, 3.1 h/ep — use cached-map path for paper).
+**Status of running jobs:** TAMP nav_goal 8-connected + navigable-landmark rerun (15 rows)
+pending — scene-0 confirmed winnable; TAMP battery 8/8 (pre-fix, re-run needed); OVMM
+molmo-robocasa live sweep cancelled (0/2 robocasa, 3.1 h/ep — use cached-map path for paper).
 
 ## Embodied agent planning (world model + tool calling + motion)
 
