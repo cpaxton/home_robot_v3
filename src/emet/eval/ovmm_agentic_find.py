@@ -219,6 +219,14 @@ def run_ovmm_agentic_localize(
     goal_text = goal or f"Find and verify: {q}"
     resolved_trace = Path(trace_path).expanduser() if trace_path else _ovmm_agentic_trace_path(trace_meta)
     try:
+        # Each find phase must be able to localize_text on the finished map.
+        # The previous phase's submit_answer released SigLIP for the VLM; the
+        # shared warm only snapshots ranks. Re-attach here (OVMM harness only)
+        # so this phase's voxel localize is not a silent no-op.
+        from emet.eval.dynagraph_vram import re_attach_siglip_encoder
+
+        if getattr(agent, "encoder", None) is None:
+            re_attach_siglip_encoder(agent)
         result = run_agentic_eqa_result(
             agent,
             q,

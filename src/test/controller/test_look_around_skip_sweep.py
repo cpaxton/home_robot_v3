@@ -14,8 +14,10 @@ from emet.controller.controller_dynamem import (
     DynamemController,
     default_table_mapping_relative_yaws,
 )
+from emet.controller.dynamem.look import look_around_should_sweep
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.zmq_client import StretchZmqClient
+from emet.core.parameters import Parameters
 
 
 def _look_around_on(robot) -> DynamemController:
@@ -61,6 +63,34 @@ def test_look_around_sweeps_for_stretch(monkeypatch):
     agent.look_around()
     assert agent._head_to_sweep.call_count >= 2
     assert agent.update.call_count >= 2
+
+
+def test_look_around_skip_env_overrides_stretch(monkeypatch):
+    monkeypatch.delenv("EMET_FORCE_HEAD_SWEEP", raising=False)
+    monkeypatch.setenv("EMET_SKIP_HEAD_SWEEP", "1")
+    robot = MagicMock(spec=StretchZmqClient)
+    agent = _look_around_on(robot)
+    agent.look_around()
+    agent.update.assert_called_once()
+    agent._head_to_sweep.assert_not_called()
+
+
+def test_look_around_uses_stretch_overlay_false(monkeypatch):
+    monkeypatch.delenv("EMET_FORCE_HEAD_SWEEP", raising=False)
+    monkeypatch.delenv("EMET_SKIP_HEAD_SWEEP", raising=False)
+    robot = MagicMock(spec=StretchZmqClient)
+    agent = _look_around_on(robot)
+    agent.parameters = Parameters(look_around_head_sweep=False)
+    agent.look_around()
+    agent.update.assert_called_once()
+    agent._head_to_sweep.assert_not_called()
+
+
+def test_look_around_should_sweep_force_env_wins(monkeypatch):
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    monkeypatch.setenv("EMET_SKIP_HEAD_SWEEP", "1")
+    robot = MagicMock(spec=StretchZmqClient)
+    assert look_around_should_sweep(robot, Parameters(look_around_head_sweep=False)) is True
 
 
 def test_look_around_force_sweep_overrides_rby1(monkeypatch):

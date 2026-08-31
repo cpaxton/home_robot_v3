@@ -660,6 +660,48 @@ def test_fallback_locate_prefers_nearby_investigate():
     assert args["obs_id"] == 2
 
 
+def test_prefer_explore_once_beats_nearby_locate_cards():
+    """After a close ABSENT look, grow coverage even if unused graph views sit nearby.
+
+    Stretch find8 never called explore_frontier during find because locate hold
+    plus ~150 mapping views within 3.5 m always won.
+    """
+    ex = _executor(question="Where is the jar on the counter?")
+    ex._target_phrase = "jar"
+    ex._prefer_explore = True
+    ex._prefer_explore_reason = "absent"
+    ex._n_consecutive_explore = 0
+    gm = MagicMock()
+    gm.get_nodes.return_value = [MagicMock(is_frontier=True, is_viewpoint=False)]
+    ex.agent.graph_memory = gm
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="cabinet",
+            obs_id=12,
+            xyz=np.array([0.4, 0.1, 0.5]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=99,
+            xyz=np.array([3.0, 0.0, 0.0]),
+            score=0.2,
+            source="frontier",
+        ),
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])  # type: ignore[method-assign]
+    near = ex._nearby_untried_investigate_hyp(max_dist_m=NEAR_INVESTIGATE_M)
+    assert near is not None
+    assert int(near.obs_id) == 12
+    name, _args = ex._fallback_tool()
+    assert name == "explore_frontier"
+    ex._n_consecutive_explore = 1
+    name2, args2 = ex._fallback_tool()
+    assert name2 == "investigate"
+    assert int(args2["obs_id"]) == 12
+
+
 def test_fallback_close_look_prefers_nearby_investigate():
     ex = _executor(question="What time is it on the wall clock?")
     ex._close_look_required = True

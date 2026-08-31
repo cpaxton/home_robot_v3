@@ -65,6 +65,17 @@ def _planning_base_xyt(self, local_xyt: np.ndarray | list | tuple) -> np.ndarray
     return nav_xyt_to_world_xyt(xyt[:3], sess)
 
 
+def _current_planning_xyt(self) -> np.ndarray:
+    """Current base ``(x, y, θ)`` in the voxel-map / world planning frame.
+
+    ``get_base_pose`` is episode-relative (ZMQ gps/compass). A* and
+    ``execute_trajectory(world_frame=True)`` plan in the world frame anchored at
+    ``navigation_origin_xyt`` — on Robocasa that origin is several meters from
+    ``(0, 0)``. Always convert before measuring progress or starting a hop.
+    """
+    return np.asarray(self._planning_base_xyt(self.robot.get_base_pose()), dtype=np.float64)
+
+
 def world_base_xy(self) -> tuple[float, float] | None:
     """Robot base (x, y) in the voxel-map / world frame (not raw ZMQ gps)."""
     if self.robot is None or not hasattr(self.robot, "get_base_pose"):

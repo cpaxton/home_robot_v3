@@ -37,7 +37,11 @@ mapping:
 embodied_agent: {}
 
 robots:
-  stretch: {}
+  stretch:
+    mapping:
+      # Off for Stretch too (not just rby1). Hardware 4-pan is opt-in for now:
+      # --set mapping.look_around_head_sweep=true or EMET_FORCE_HEAD_SWEEP=1.
+      look_around_head_sweep: false
   innate_mars:
     mapping:
       depth_source: auto
@@ -72,6 +76,8 @@ robots:
         instance_min_mask_points: 25
     zmq:
       allow_missing_depth: true
-  rby1: {}
+  rby1:
+    mapping:
+      look_around_head_sweep: false
   galaxea_r1: {}
   xlerobot: {}

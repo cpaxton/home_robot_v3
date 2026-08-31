@@ -77,6 +77,7 @@ class StretchBackend(RobotBackend):
             footprint=Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1),
             sim_uses_stretch_mujoco_zmq=True,
             arm_chain=STRETCH_ARM_CHAIN,
+            # look_around pans: robots.stretch.mapping.look_around_head_sweep in configs/emet/default.yaml
             # Robocasa freejoint spawn: pick-place hint sits near the counter; extra margin +
             # first clearance keep OVMM/dynagraph explore starts on open floor (not jammed aisles).
             planar_spawn_xy_extra_margin_m=0.35,
