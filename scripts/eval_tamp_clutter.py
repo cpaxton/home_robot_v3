@@ -66,9 +66,28 @@ SMOKE_EPISODE_ID = "ithor_cleanup_s1_bin_n3"
 # Static-furniture keywords for nav-goal landmarks (matched as substrings against the
 # live placements cat, which carries instance hashes, e.g. "cabinet 9ec3f05...").
 _FURNITURE_KEYWORDS = (
-    "sofa", "couch", "fridge", "refrigerator", "table", "diningtable", "counter",
-    "cabinet", "drawer", "shelf", "bed", "chair", "tv", "television", "countertop",
-    "microwave", "oven", "stove", "sink", "desk", "toilet", "bathtub",
+    "sofa",
+    "couch",
+    "fridge",
+    "refrigerator",
+    "table",
+    "diningtable",
+    "counter",
+    "cabinet",
+    "drawer",
+    "shelf",
+    "bed",
+    "chair",
+    "tv",
+    "television",
+    "countertop",
+    "microwave",
+    "oven",
+    "stove",
+    "sink",
+    "desk",
+    "toilet",
+    "bathtub",
 )
 
 # Farthest navigable landmark: inside the GenericZmqClient ~12 m-from-origin guard.
@@ -80,6 +99,7 @@ def _matches_furniture(cat: str) -> bool:
     if not c:
         return False
     return any(k in c for k in _FURNITURE_KEYWORDS)
+
 
 # Per-robot MolmoSpaces base sim config for the GT+MCTS battery (scene_index overrides).
 _BATTERY_SIM = {
@@ -200,9 +220,7 @@ def _world_base_xy(robot: Any) -> np.ndarray:
     return _clamp2(world)
 
 
-def _placement_category_map(
-    placements: dict[str, dict[str, Any]], metadata: dict | None
-) -> dict[str, dict[str, Any]]:
+def _placement_category_map(placements: dict[str, dict[str, Any]], metadata: dict | None) -> dict[str, dict[str, Any]]:
     """Map placement bodies to clean category + static flag from scene metadata.
 
     Live placements carry hash-suffixed body labels (``'bottle 8382d4... 1 0 0'``);
@@ -279,11 +297,16 @@ def _goal_for_landmark(
         if bodies:
             return bodies[0]
         return None
-    # Sample a furniture body, preferring the farthest **navigable** one (meaningful
-    # nav goal but inside the client's ~12 m-from-navigation_origin refusal guard).
+    # Sample a furniture body, preferring the farthest **navigable** one: a straight-line
+    # reachable landmark can still sit behind a furniture barrier (no 8-connected route),
+    # which makes the nav_goal unwinnable. Prefer candidates with an actual route.
+    from emet.eval.tamp_clutter import (
+        nav_path_open_around_disks,
+        placement_obstacle_disks,
+    )
+
     furniture = [
-        b for b, meta in cat_map.items()
-        if meta.get("static") and _matches_furniture(str(meta.get("cat") or ""))
+        b for b, meta in cat_map.items() if meta.get("static") and _matches_furniture(str(meta.get("cat") or ""))
     ]
     if not furniture:
         furniture = [b for b, meta in cat_map.items() if meta.get("static")]
@@ -294,10 +317,26 @@ def _goal_for_landmark(
         return float(np.linalg.norm(_clamp2(placements[b]["pos"]) - robot_xy))
 
     reachable = [b for b in furniture if dist(b) <= _REACHABLE_LANDMARK_M]
-    if reachable:
+    if not reachable:
+        # Degenerate scene: everything beyond reach — use the nearest landmark anyway.
+        return min(furniture, key=dist)
+    # Navigable candidates only: 8-connected route from the start pose to the approach
+    # point around all other furniture disks (skip the landmark's own bodies near it).
+    from emet.eval.tamp_clutter import bodies_near_xy
+
+    def navigable(b: str) -> bool:
+        approach = _approach_xy_near(b, placements, robot_xy)
+        skip = bodies_near_xy(placements, approach, keepout_m=0.75)
+        disks = placement_obstacle_disks(placements, skip_bodies=skip)
+        path_open, _probe = nav_path_open_around_disks(robot_xy, approach, disks, clearance_m=0.22)
+        return path_open
+
+    navigable_bodies = [b for b in reachable if navigable(b)]
+    if not navigable_bodies:
+        # No furniture is route-reachable from spawn: fall back to nearest (documented
+        # degenerate case rather than erroring the whole episode).
         return max(reachable, key=dist)
-    # Degenerate scene: everything beyond reach — use the nearest landmark anyway.
-    return min(furniture, key=dist)
+    return max(navigable_bodies, key=dist)
 
 
 def _approach_xy_near(landmark_body: str, placements: dict[str, dict[str, Any]], robot_xy: np.ndarray) -> np.ndarray:
@@ -427,7 +466,10 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             landmark_body = _goal_for_landmark(placements, robot_xy, ep.goal_landmark, cat_map=cat_map)
             if landmark_body is None:
                 return {
-                    "episode_id": ep.id, "tier": ep.tier, "mode": ep.mode, "error": "missing_landmark",
+                    "episode_id": ep.id,
+                    "tier": ep.tier,
+                    "mode": ep.mode,
+                    "error": "missing_landmark",
                     "init_wall_s": time.monotonic() - t0,
                 }
             goal_xy = _approach_xy_near(landmark_body, placements, robot_xy)
@@ -448,8 +490,11 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             )
             if len(bodies) < ep.n_objects:
                 return {
-                    "episode_id": ep.id, "tier": ep.tier, "mode": ep.mode,
-                    "n_objects": ep.n_objects, "error": f"not_enough_pickable_bodies:{len(bodies)}",
+                    "episode_id": ep.id,
+                    "tier": ep.tier,
+                    "mode": ep.mode,
+                    "n_objects": ep.n_objects,
+                    "error": f"not_enough_pickable_bodies:{len(bodies)}",
                     "init_wall_s": time.monotonic() - t0,
                 }
             bodies = bodies[: ep.n_objects]
@@ -537,19 +582,26 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
         if args.generate:
             # Problem-set build: record the resolved deterministic episode, no execution.
             return {
-                "episode_id": ep.id, "tier": ep.tier, "mode": ep.mode, "robot": ep.robot,
-                "sim": ep.sim, "scene_index": ep.scene_index, "n_objects": ep.n_objects,
+                "episode_id": ep.id,
+                "tier": ep.tier,
+                "mode": ep.mode,
+                "robot": ep.robot,
+                "sim": ep.sim,
+                "scene_index": ep.scene_index,
+                "n_objects": ep.n_objects,
                 "manip_mode": manip,
                 "robot_start_xy": [float(x) for x in robot_xy],
                 "goal_xy": [float(x) for x in goal_xy] if goal_xy is not None else None,
-                "goal_landmark": ep.goal_landmark, "landmark_body": landmark_body,
-                "bin_query": ep.bin_query, "scatter_radius_m": ep.scatter_radius_m,
+                "goal_landmark": ep.goal_landmark,
+                "landmark_body": landmark_body,
+                "bin_query": ep.bin_query,
+                "scatter_radius_m": ep.scatter_radius_m,
                 "episode_valid": bool(blocked),
                 "skipped_invalid": skipped_invalid,
                 "validity_probe": probe,
                 "clutter": [
-                    {"body": b, "cat": str(placements[b].get("cat") or b),
-                     "xy": [float(x) for x in xy]} for b, xy in zip(bodies, targets, strict=True)
+                    {"body": b, "cat": str(placements[b].get("cat") or b), "xy": [float(x) for x in xy]}
+                    for b, xy in zip(bodies, targets, strict=True)
                 ],
                 "init_wall_s": time.monotonic() - t0,
             }
@@ -725,9 +777,9 @@ def main() -> int:
             )
         return 0
 
-    output_dir = Path(
-        args.output_dir or os.environ.get("EMET_TAMP_CLUTTER_OUTPUT") or DEFAULT_OUTPUT
-    ).expanduser().resolve()
+    output_dir = (
+        Path(args.output_dir or os.environ.get("EMET_TAMP_CLUTTER_OUTPUT") or DEFAULT_OUTPUT).expanduser().resolve()
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
     resolved: list[dict[str, Any]] = []
@@ -749,9 +801,7 @@ def main() -> int:
 
     if args.generate:
         out_yaml = output_dir / "resolved_clutter_episodes.yaml"
-        out_yaml.write_text(
-            yaml.safe_dump({"episodes": resolved}, sort_keys=False), encoding="utf-8"
-        )
+        out_yaml.write_text(yaml.safe_dump({"episodes": resolved}, sort_keys=False), encoding="utf-8")
         print(f"Wrote resolved registry to {out_yaml}", file=sys.stderr)
         return 0
 
