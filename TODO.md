@@ -317,9 +317,10 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
       by *straight-line* distance (< 10 m), not navigability — landmarks sat behind
       furniture barriers. Fixed (`02be11d0`, PR #154): landmark selection now requires an
       **8-connected route from the robot start** to the approach point (farthest navigable
-      preferred). 2-episode check: scene-0 nav_goal now **succeeds** (goal_reached,
-      path_open); scene-1 still fails (post-clear route from the bin blocked by dense
-      furniture + one 7/8 relocation). Full 15-row nav_goal rerun pending.
+      preferred). **Full 15-row rerun: 5/15 success** (rby1 scene-0 3/3, nori scene-0 2/3);
+      remaining failures: stretch `path_open=True` but teleport doesn't land (nav-execution),
+      innate_mars + rby1 scene-1 `path_open=False` (post-clear route from the bin blocked by
+      dense furniture). Two documented next-step fixes.
 - [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
       is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
       `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
