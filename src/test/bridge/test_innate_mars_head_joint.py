@@ -13,6 +13,10 @@
 import json
 
 import numpy as np
+import pytest
+
+pytest.importorskip("rclpy")
+
 from innate_mars_bridge.remote.ros import InnateMarsRosInterface
 
 from emet.robots.innate_mars.head_kinematics import (

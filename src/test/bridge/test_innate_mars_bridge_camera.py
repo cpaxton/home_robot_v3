@@ -11,6 +11,10 @@
 # All rights reserved.
 
 import numpy as np
+import pytest
+
+pytest.importorskip("rclpy")
+
 from innate_mars_bridge.ros.camera import RosCamera, ros_image_encoding_to_rgb
 
 from emet.controller.generic_zmq_client import _align_camera_k_to_rgb
