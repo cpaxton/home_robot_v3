@@ -289,7 +289,7 @@ def nav_to_landmark_if_clear(
     """
     from emet.eval.tamp_clutter import (
         bodies_near_xy,
-        nav_interpolated_route,
+        nav_path_open_around_disks,
         placement_obstacle_disks,
     )
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
@@ -311,14 +311,14 @@ def nav_to_landmark_if_clear(
         if pos is not None:
             disks.append((_clamp_xy(pos), 0.08, body))
             known.add(body)
-    path_open, probe = nav_interpolated_route(
-        here, target, disks, clearance_m=float(clearance_m)
-    )
+    # Post-clear route: 8-connected path around furniture + leftover clutter (the
+    # GT-planner analogue of the validity probe), not the straight-line teleport
+    # chord — a landmark behind furniture is reachable by planning around it.
+    path_open, probe = nav_path_open_around_disks(here, target, disks, clearance_m=float(clearance_m))
     if not path_open:
-        hit = (probe or {}).get("hit") or {}
         logger.warning(
-            f"clutter nav refused: interpolated chord hits {hit.get('hit', 'obstacle')} "
-            f"at step {hit.get('step', '?')} (no snap-through-clutter)"
+            "clutter nav refused: no 8-connected route to landmark "
+            f"around {len(disks)} obstacle disks (blocked={not path_open})"
         )
         return False, False, False, probe
     try:

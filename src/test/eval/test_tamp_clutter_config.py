@@ -166,9 +166,7 @@ def test_interpolated_chord_hits_object_on_line():
     assert info["hit"]["hit"] == "apple"
     assert info["n_steps"] >= 150  # 3 m / 0.02 m default
     # Off the chord: same distance, no hit.
-    ok_off, _ = nav_interpolated_route(
-        robot, goal, [(np.array([1.0, 1.5]), 0.08, "apple")], clearance_m=0.22
-    )
+    ok_off, _ = nav_interpolated_route(robot, goal, [(np.array([1.0, 1.5]), 0.08, "apple")], clearance_m=0.22)
     assert ok_off is True
     hit = first_footprint_hit(
         [robot, np.array([1.0, 0.0]), goal],
@@ -282,8 +280,12 @@ def test_plan_clear_clutter_fails_when_objects_do_not_move(monkeypatch):
     assert out["goal_reached"] is False
     assert out["task_success"] is False
     assert clutter_success_flags({**out, "episode_valid": True})["task_success"] is False
-    hit = (out.get("nav_probe_after") or {}).get("hit") or {}
-    assert hit.get("hit") in set(bodies)
+    probe = out.get("nav_probe_after") or {}
+    # Post-clear route uses the 8-connected planner probe (not the straight-line
+    # chord): when nothing moved, no path around the clutter/furniture disks exists.
+    assert probe.get("probe") in ("nav_path_8conn", "interpolated_nav")
+    assert probe.get("blocked") is True
+    assert int(probe.get("n_disks", 0)) >= 1
 
 
 def test_placement_obstacle_disks_skips_high_bodies():
@@ -310,14 +312,15 @@ def test_clutter_success_flags():
     assert clutter_success_flags({"mode": "cleanup", "n_objects": 3, "n_relocated": 3})["task_success"] is True
     assert clutter_success_flags({"mode": "cleanup", "n_objects": 3, "n_relocated": 1})["task_success"] is False
     # Cleanup must not succeed via goal_reached alone.
-    assert clutter_success_flags(
-        {"mode": "cleanup", "n_objects": 3, "n_relocated": 0, "goal_reached": True}
-    )["task_success"] is False
+    assert (
+        clutter_success_flags({"mode": "cleanup", "n_objects": 3, "n_relocated": 0, "goal_reached": True})[
+            "task_success"
+        ]
+        is False
+    )
     # Pure-nav (n=0) still succeeds on goal_reached.
     assert clutter_success_flags({"mode": "nav_goal", "goal_reached": True})["task_success"] is True
-    skipped = clutter_success_flags(
-        {"mode": "nav_goal", "goal_reached": True, "skipped_invalid": True}
-    )
+    skipped = clutter_success_flags({"mode": "nav_goal", "goal_reached": True, "skipped_invalid": True})
     assert skipped["task_success"] is False
     assert skipped["skipped_invalid"] is True
     # Blocked nav_goal: teleport-to-sofa without an open route is not success.
@@ -471,3 +474,26 @@ def test_plan_clear_clutter_snaps_when_route_is_open(monkeypatch):
     assert out["nav_path_open"] is True
     assert out["goal_reached"] is True
     assert out["task_success"] is True
+
+
+def test_nav_path_open_around_disks_routes_around_furniture():
+    """Post-clear 8-connected probe: a path exists around a disk even when the
+    straight-line chord would hit it (furniture occludes the landmark ray)."""
+    import numpy as np
+
+    from emet.eval.tamp_clutter import nav_path_open_around_disks
+
+    robot = np.array([0.0, 0.0])
+    goal = np.array([4.0, 0.0])
+    # One wide disk directly between robot and goal: the straight-line chord hits
+    # it, but the 8-connected planner routes above/below.
+    disks = [(np.array([2.0, 0.0]), 0.8, "table")]
+    path_open, probe = nav_path_open_around_disks(robot, goal, disks, clearance_m=0.22)
+    assert path_open is True
+    assert probe["probe"] == "nav_path_8conn"
+    assert probe["blocked"] is False
+    assert int(probe["n_disks"]) == 1
+
+    # No disks -> trivially open; a disk collocated with the goal is relaxed.
+    open2, _ = nav_path_open_around_disks(robot, goal, [], clearance_m=0.22)
+    assert open2 is True
