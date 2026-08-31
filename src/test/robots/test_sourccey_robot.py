@@ -95,7 +95,8 @@ def test_sourccey_left_right_mirror_symmetry():
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
-    for link in ("Arm-Wrist-v1", "Gripper-Base-Back-v1", "Arm-Forearm-v1"):
+    # New official ArmLeft URDF arm chain (canonical left + code-side right mirror).
+    for link in ("Arm-Base-Shoulder", "Arm-Bicep", "Arm-Forearm", "Arm-Wrist", "Gripper-Base"):
         l = data.body(f"left_{link}").xpos
         r = data.body(f"right_{link}").xpos
         assert abs(float(l[0]) + float(r[0])) < 1e-3, f"{link} not mirror-symmetric in x"
@@ -125,18 +126,28 @@ def test_sourccey_arm_links_connected():
         return np.concatenate(out) if out else np.zeros((0, 3))
 
     chain = [
-        "right_Shoulder-With-Gearbox-V3-v1",
-        "right_Arm-Bicep-v1",
-        "right_Arm-Forearm-v1",
-        "right_Arm-Wrist-v1",
-        "right_Gripper-Base-Back-v1",
+        "right_Arm-Base-Shoulder",
+        "right_Feetech_Servo_Motor_v1_2",
+        "right_Arm-Bicep",
+        "right_Bicep_Right_v1_1",
+        "right_Feetech_Servo_Motor_v1_3",
+        "right_Arm-Forearm",
+        "right_Feetech_Servo_Motor_v1_4",
+        "right_Arm-Wrist",
+        "right_Feetech_Servo_Motor_v1_5",
+        "right_Gripper-Base",
+        "right_Feetech_Servo_Motor_v1_6",
+        "right_Gripper-Finger",
     ]
+    # The joint servo-motor meshes bridge the link-to-link gaps (they are the real
+    # connective hardware between bicep/forearm/wrist), so allow a small slack.
+    max_gap_m = 0.02
     for a, b in zip(chain, chain[1:], strict=False):
         va, vb = mesh_verts(a), mesh_verts(b)
         assert len(va) > 0 and len(vb) > 0
         tree = cKDTree(va)
         dist, _ = tree.query(vb)
-        assert float(dist.min()) < 0.01, (
+        assert float(dist.min()) < max_gap_m, (
             f"arm links {a} and {b} separated by {dist.min():.3f} m — check align_urdf_meshes"
         )
 
@@ -168,3 +179,47 @@ def test_sourccey_registry_and_assets():
     assert get_robot_mjcf_path("sourccey") is not None
     spec = get_robot_spec("sourccey")
     assert spec is not None and spec.name == "sourccey"
+
+
+def test_sourccey_vendored_official_urdf():
+    """The updated official ArmLeft URDF is vendored and referenced by the backend."""
+    from pathlib import Path
+
+    spec, _ = _load()
+    assert spec.urdf_path, "urdf_path must point at the vendored official arm URDF"
+    urdf = Path(spec.urdf_path)
+    assert urdf.is_file(), f"vendored URDF missing: {urdf}"
+    text = urdf.read_text()
+    # updated official arm chain
+    for joint in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"):
+        assert f'name="{joint}" type="revolute"' in text
+    # ArmLeft + ArmRight reference copies live next to it
+    assert (urdf.parent.parent / "ArmRight" / "ArmRight.urdf").is_file()
+
+
+def test_sourccey_declares_arm_chains_and_kinematic_manip():
+    """Declarative left/right arm chains + advertised kinematic pick/place."""
+    spec, model = _load()
+    assert spec.advertise_kinematic_manip is True
+    assert spec.arm_chains and "left" in spec.arm_chains and "right" in spec.arm_chains
+    for side in ("left", "right"):
+        chain = spec.arm_chains[side]
+        assert len(chain.joint_names) == 6
+        for jn in chain.joint_names:
+            assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) >= 0
+        assert chain.ee_body == f"{side}_Gripper-Finger"
+        assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, chain.ee_body) >= 0
+    from emet.motion.arm_manip_profile import ArmManipProfile
+
+    for side in ("left", "right"):
+        profile = ArmManipProfile.for_robot("sourccey", arm=side)
+        assert profile.joint_names == tuple(spec.arm_chains[side].joint_names)
+        assert profile.ee_body == f"{side}_Gripper-Finger"
+        assert profile.gripper_contact_bodies()
+
+
+def test_sourccey_create_model():
+    from emet.robots import get_robot_backend
+
+    model = get_robot_backend("sourccey").create_model()
+    assert model is not None and model.get_dof() == 16
