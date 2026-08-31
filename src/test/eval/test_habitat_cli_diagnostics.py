@@ -64,3 +64,16 @@ def test_habitat_run_ovmm_find_batch_help_lists_run_tag():
     )
     assert r.returncode == 0, r.stderr
     assert "--run-tag" in r.stdout
+
+
+@pytest.mark.skipif(not HAB_CLI.is_file(), reason="habitat venv not installed")
+def test_habitat_run_ovmm_find_batch_help_lists_agentic_flags():
+    r = subprocess.run(
+        [str(HAB_CLI), "run-ovmm-find-batch", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    for flag in ("--agentic-find", "--no-agentic-find", "--agentic-max-rounds", "--agentic-max-nav-steps"):
+        assert flag in r.stdout, f"missing {flag}"

@@ -206,6 +206,19 @@ RUN_HABITAT_TESTS=1 uv run emet test src/test/habitat/ -k smoke
 
 Full HM-EQA sweeps are GPU-heavy and not default CI.
 
+## OVMM find-phase (agentic loop) on Habitat
+
+`emet-habitat run-ovmm-find-*` now routes FindObj / FindRec through the shared
+**AgenticEQA loop** for dynagraph/static_graph (default) — same loop as HM-EQA —
+instead of only the one-shot memory localize. This is the path for the large
+whole-home HM3D scenes: the mapping protocol rotates in place, then the loop
+explores navmesh frontiers, investigates place cards, and verifies before the
+object-phrase voxel XYZ is scored. See `docs/ovmm_find_phase_benchmark.md`
+(§ Agentic find on Habitat) and `scripts/smoke_habitat_ovmm_agentic_find.sh`.
+
+CLI flags: `--agentic-find/--no-agentic-find`, `--agentic-max-rounds`,
+`--agentic-max-nav-steps`. Test: `uv run emet test src/test/memory/test_habitat_ovmm_agentic_find.py -q`.
+
 ## Episode flow
 
 1. Load question + init pose from CSVs

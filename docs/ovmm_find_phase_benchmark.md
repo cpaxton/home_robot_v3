@@ -243,6 +243,35 @@ uv run python scripts/eval_habitat_ovmm_find_phases.py \
 Verified GT batch: `find_partial_success=1.0`, `localization_err_*_m=0.0` on
 `hm3d_lamp_bed_00006`, `00025`, `00057` (June 2026).
 
+### Agentic find on Habitat (large scenes)
+
+The default dynagraph/static_graph path routes FindObj / FindRec through the
+**shared AgenticEQA loop** (`emet.eval.ovmm_agentic_find.run_ovmm_agentic_localize`,
+same loop as HM-EQA and sim OVMM find) — not the one-shot memory query. The loop
+phrases the episode as two open questions (`Where is the lamp on the bed?` /
+`Where is the table?`), then navigates to navmesh frontiers, investigates place
+cards, and verifies before the loop's object-phrase voxel XYZ is scored. This is
+what the whole-home HM3D scenes need: the mapping protocol only rotates in place,
+so exploration happens inside the loop.
+
+```bash
+# Bounded GPU smoke on the large scene 00006 (VLM + SigLIP + YoloE required)
+bash scripts/smoke_habitat_ovmm_agentic_find.sh
+
+# Full-budget agentic find (default eqa.agentic_max_tool_rounds / max_nav_steps = 8)
+NEED_MIB=12000 uv run emet jobs run --name habitat-ovmm-agentic-find -- \
+  .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph
+
+# Batch
+uv run python scripts/eval_habitat_ovmm_find_phases.py \
+  --backend dynagraph --output-dir ~/runs/emet/ovmm_habitat/agentic
+```
+
+Flags: `--agentic-find/--no-agentic-find` (default on for dynagraph/static_graph,
+off for dynamem/ground_truth), `--agentic-max-rounds`, `--agentic-max-nav-steps`.
+`--no-agentic-find` restores the one-shot memory-localize ablation.
+
 Full OVMM-HSSD minival (official leaderboard) is not wired yet; HM3D proxy validates the Habitat
 memory → find-phase metric path before HSSD scene download.
 
