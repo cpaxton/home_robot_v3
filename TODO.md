@@ -368,7 +368,17 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
 ## Next experiments + tuning (2026-08-31)
 
 Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #154
-(TAMP nav_goal 8-connected fix). Four axes:
+(TAMP nav_goal 8-connected fix). **EQA is the strong result; OVMM/TAMP are exploratory
+pilots — treat as preliminary until a strong pilot lands (like EQA's).** Four axes:
+
+### 0. OVMM pilot status (preliminary — not paper-commit yet)
+- [ ] **Pattern: FindObj works, FindRec (fixtures) fails.** S0 obj 5/5, recep 3/5; S1
+      (cached robocasa) obj 1/1 jar, recep 0/1 cab; S2 (cached molmo) obj 1/1 bowl, recep
+      0/1 microwave. Small objects localize via voxel; fixture receptacles (cab/cabinet,
+      microwave) are not surfaced by recall (multi-label dilution) — a recall/ranking gap.
+- [ ] Explore OVMM as pilots only: backend matrix, OVMM full (pick/place), Habitat-OVMM
+      are deferred until FindRec-recall improves OR the paper explicitly reports FindObj-only
+      with the fixture gap documented. Do not sink GPU into the full matrix yet.
 
 ### 1. More experiments (fill the paper tables)
 - [ ] **HM-EQA paper-113 fp16 (full)** on caliban — we have the 30-qid subset (16/30 vs
@@ -381,10 +391,10 @@ Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #
       nav_goal rows for `tab:tamp_clutter` (S1 signal already in).
 
 ### 2. Improve failing cases
-- [ ] **FindRec (cab) on robocasa** — the jar localizes but the VLM never sees the cab
-      (navigated to microwave/fridge). Investigate `hypothesize_nav_targets` recall for
-      "cab"/cabinet on the cached map; the cab is a large fixture, so this is a recall/view
-      problem, not SigLIP marginality.
+- [ ] **FindRec (fixture receptacles) on OVMM** — cab/cabinet, microwave are not surfaced by
+      `hypothesize_nav_targets` recall (nodes carry 20+ multi-labels diluting the fixture
+      signal). This is the FindObj-vs-FindRec gap across S0/S1/S2; fix fixture-node ranking
+      for recep questions. Highest-value OVMM lever.
 - [ ] **Clock/count close-look** — q33/q43/q84 fail because the clock is visible but not
       legible (`read N` re-attaches the full frame, no detector bbox for clocks). Implement
       the `read N` re-crop / center-zoom so dials become legible without re-navigating
