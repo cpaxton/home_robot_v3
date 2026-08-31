@@ -296,6 +296,22 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
       `_place_inspect.last_verify == ABSENT`), so HM-EQA count/locate targets stay
       re-approachable from a new bearing while OVMM wall-chases stay one-shot. **Countclock
       back to 7/15 = gateAB** (q21/43 recovered; q93 True solo — variance, not systematic).
+- [x] **Cached-map robocasa find (2026-08-30, stretch-kitchen):** with the re-attach +
+      one-shot + unpin fixes, the cached stretch map localizes the **jar (FindObj 1/1,
+      voxel err 0.176 m)**; **FindRec (cab) 0/1** — the VLM never saw the cab (navigated to
+      microwave/fridge). Live-mapping robocasa scored 0/2 (small-object jar SigLIP miss) and
+      took 3.1 h/ep, so the paper S1 column uses the cached-map path. **Paper OVMM S0:
+      obj 5/5, recep 3/5; S1 (cached): obj 1/1, recep 0/1; S2 (molmo): pending.**
+- [x] **fp16-vs-int4 VLM ablation (2026-08-29→30):** countclock fp16 **10/15 vs 6/15**;
+      30-qid clean same-harness **fp16 16/30 vs int4 9/30 (+7, +78%)** — quantization is a
+      real, task-dependent lever (fine-detail count/clock). Records in
+      `paper/data/vlm_quantization/` + `docs/experiments/vlm_quantization.md`; appendix
+      `06_model_choice.tex` `tab:vlm_precision` + discussion (PR #148).
+- [x] **TAMP signal run (2026-08-30, 25-ep subset):** battery 8/8; cleanup **9/10** across
+      4 robots; nav_goal cleared all clutter but the terminal straight-line teleport chord
+      hit furniture (refrigerator) → 0 reached. Fixed in PR #154: post-clear route now uses
+      an **8-connected planner probe** (`nav_path_open_around_disks`) matching the GT
+      validity definition; nav_goal rerun in flight.
 - [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
       is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
       `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
@@ -339,6 +355,58 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
 - [ ] **NavOutcome in durable nav ledger**: propagate the enum through
       `NavAttemptResult` / `graph_memory.record_nav_attempt` instead of relying
       on status/note reconstruction in offline artifacts.
+
+## Next experiments + tuning (2026-08-31)
+
+Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #154
+(TAMP nav_goal 8-connected fix). Four axes:
+
+### 1. More experiments (fill the paper tables)
+- [ ] **HM-EQA paper-113 fp16 (full)** on caliban — we have the 30-qid subset (16/30 vs
+      9/30 int4); the full 113 with fp16 replaces/extends `tab:hmeqa_vs_prior` (49.6% int4).
+      ~20–28 h serialized; run after the quick wins below.
+- [ ] **OVMM S2 (molmo) column** — `tab:ovmm_find_backend_tier` S2 is pending. Use the
+      cached `molmo_ithor_train_idx0_stretch_gt` map + agentic find (like the robocasa S1
+      cached path that found the jar). rby1 or stretch.
+- [ ] **TAMP full 200-registry** (E4) after the nav_goal fix lands — fills cleanup S2 +
+      nav_goal rows for `tab:tamp_clutter` (S1 signal already in).
+
+### 2. Improve failing cases
+- [ ] **FindRec (cab) on robocasa** — the jar localizes but the VLM never sees the cab
+      (navigated to microwave/fridge). Investigate `hypothesize_nav_targets` recall for
+      "cab"/cabinet on the cached map; the cab is a large fixture, so this is a recall/view
+      problem, not SigLIP marginality.
+- [ ] **Clock/count close-look** — q33/q43/q84 fail because the clock is visible but not
+      legible (`read N` re-attaches the full frame, no detector bbox for clocks). Implement
+      the `read N` re-crop / center-zoom so dials become legible without re-navigating
+      (TODO § count/clock "Close-look / legibility").
+- [ ] **Small-object SigLIP marginality** (blue cube, jar) — levers: lower the localize bar
+      for find (cheap now that ABSENT is one-shot), or a closer start-recep look so
+      YOLO/SigLIP see the object.
+
+### 3. Does more budget help?
+- [ ] **Explore-steps sweep on OVMM kitchen** — 8 → 20/40 explore steps: does mapping
+      coverage / FindObj improve (earlier: 8 steps ≈ 3 m², 0/2)? Isolate coverage-volume vs
+      detection.
+- [ ] **Nav/round budget sweep on countclock + paper-113** — more `max_nav_steps` /
+      `max_rounds` for the agentic loop; measure accuracy-vs-budget curve (mean planning
+      steps already logged).
+- [ ] **fp16 full-113 vs budget** — does the fp16 gain grow with more rounds?
+
+### 4. Make tamp / molmospaces / habitat-ovmm work well
+- [ ] **TAMP E1 battery re-run** (after chord-sample + 8-connected nav fix) + **E3 small** +
+      **fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (exclude `skipped_invalid`).
+- [ ] **TAMP → agent**: expose `plan_clear_clutter` as a `clear_clutter` CHAT skill so the
+      LLM agent can parse "clean up the room" / "get to the sofa" end-to-end (the real
+      product blocker; MCTS pick/place already works).
+- [ ] **MolmoSpaces smokes**: `molmo_ithor_rby1_s2_bowl_pp` (manip=sim) reconfirmed; run
+      `scripted_tamp_pick_place` + rby1 iTHOR kinematic smokes when `.venv-molmospaces` warm.
+- [ ] **habitat-ovmm**: validate the robocasa cached-map find + rby1 kitchen (explore_steps
+      20 live) end-to-end via the mixed gate; report S0/S1/S2.
+
+**Status of running jobs:** TAMP nav_goal 8-connected rerun (15 episodes) in flight;
+TAMP battery 8/8 (pre-chord-fix, re-run needed); OVMM molmo-robocasa live sweep cancelled
+(0/2 robocasa, 3.1 h/ep — use cached-map path for paper).
 
 ## Embodied agent planning (world model + tool calling + motion)
 
