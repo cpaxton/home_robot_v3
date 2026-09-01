@@ -178,7 +178,7 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         det = self._unused_detection_hypothesis()
         if det is not None:
             return "investigate", {"obs_id": int(det.obs_id)}
-    if budget_left and self._prefers_nearby_investigate():
+    if budget_left and self._prefers_nearby_investigate() and not self._defer_nearby_for_prefer_explore():
         near = self._nearby_untried_investigate_hyp()
         if near is not None:
             return "investigate", {"obs_id": int(near.obs_id)}
@@ -214,6 +214,8 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
     # look closer instead of frontier-only loops.
     if self.decision_policy != "grounded_v2" and budget_left and not frontiers_gone and self._prefer_explore:
         streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
+        if streak < 1:
+            return "explore_frontier", self._rendered_frontier_args()
         near = self._nearby_untried_investigate_hyp() if self._prefers_nearby_investigate() else None
         if near is not None:
             return "investigate", {"obs_id": int(near.obs_id)}
@@ -222,7 +224,7 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
             if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
             else self._next_untried_hypothesis()
         )
-        if streak >= 1 and hyp is not None:
+        if hyp is not None:
             return "investigate", {"obs_id": int(hyp.obs_id)}
         return "explore_frontier", self._rendered_frontier_args()
     # Soft cap: too many explores in a row with unused place cards → investigate.

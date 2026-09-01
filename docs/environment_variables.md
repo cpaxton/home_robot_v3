@@ -4,6 +4,8 @@ Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpace
 
 **`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
 
+**Prefer YAML.** Robot and mapping policy belongs in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`robots.<id>`, `mapping.*`) or `--set` / `-O`. New `EMET_*` flags are for process-lifetime / host / GPU accidents (locks, VRAM, EGL), not embodiment defaults. See TODO “config over env flags”.
+
 ## MolmoSpaces
 
 **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** — spawn, autoplace, occupancy map, navigation teleport (`EMET_MOLMOSPACES_NAV_TELEPORT`), asset paths, and related test knobs.
@@ -40,8 +42,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
-| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip Stretch-style head pans (single `update()`). Non-Stretch robots (rby1) skip by default. |
-| `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force head pans even on rby1 / GenericZmqClient. |
+| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). |
+| `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force pans even when YAML/`SKIP` would skip. `PROFILE=stretch-legacy` sets this. |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
 | `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). YAML: `eval.export_map_video`. |
@@ -254,8 +256,11 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
-| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
-| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` (only supported on JP5 Tegra image). `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md) § Quantization. |
+| `EMET_JETSON_VLM_VENV` | `run_jetson_vlm_native.sh` | Native JP7 CUDA venv (default `$REPO/.venv-vlm`). |
+| `EMET_LLM_SERVE_MODEL` | Jetson native / container serve | HF model id override (native VL default `Qwen/Qwen3-VL-8B-Instruct`). |
+| `EMET_LLM_SERVE_DTYPE` | `run_jetson_vlm_native.sh` | Load dtype: `float16` (default), `float32`, or `bfloat16`. |
+| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port (default `8000`; dual-2b VL uses `8001`). |
+| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` only on this server. `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md). |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |

@@ -30,6 +30,37 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
+def _env_flag_on(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def look_around_should_sweep(robot: object, parameters: object | None = None) -> bool:
+    """Whether ``look_around`` should pan the head.
+
+    Env wins: ``EMET_FORCE_HEAD_SWEEP=1`` / ``EMET_SKIP_HEAD_SWEEP=1``. Else the
+    mapping key ``look_around_head_sweep`` from the unified robot overlay
+    (``robots.<id>`` in ``configs/emet/default.yaml``). Default YAML sets this
+    false for Stretch as well as rby1 (hardware 4-pan is opt-in). If the key is
+    missing, Stretch pans (narrow Realsense) and other robots do not.
+    """
+    if _env_flag_on("EMET_FORCE_HEAD_SWEEP"):
+        return True
+    if _env_flag_on("EMET_SKIP_HEAD_SWEEP"):
+        return False
+    raw = None
+    if parameters is not None:
+        getter = getattr(parameters, "get", None)
+        if callable(getter):
+            raw = getter("look_around_head_sweep")
+        elif isinstance(parameters, dict):
+            raw = parameters.get("look_around_head_sweep")
+    if raw is not None:
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(raw)
+    return isinstance(robot, StretchZmqClient)
+
+
 def _head_to_sweep(self, pan: float, tilt: float) -> None:
     """Move head for a look-around pan; return once close enough or briefly settled.
 
@@ -100,29 +131,13 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
 def look_around(self):
     """Look around for mapping / agentic capture.
 
-    Stretch's narrow Realsense FOV needs head pans. Galaxea rby1 and other
-    ``GenericZmqClient`` robots already have a wide enough camera that a
-    single ``update()`` is enough — pan sweeps dominate OVMM find wall time
-    on Stretch (15–45 s each) and must not be the default for routine agentic
-    experiments. Force sweeps with ``EMET_FORCE_HEAD_SWEEP=1``; force skip with
-    ``EMET_SKIP_HEAD_SWEEP=1``.
+    Policy: :func:`look_around_should_sweep` (robot overlay
+    ``mapping.look_around_head_sweep``, then env). YAML default is off for
+    Stretch as well as rby1 (single capture at look_front) — hardware 4-pan
+    is opt-in. Paper coverage: ``EMET_FORCE_HEAD_SWEEP=1`` or
+    ``--set mapping.look_around_head_sweep=true``.
     """
-    force_sweep = os.environ.get("EMET_FORCE_HEAD_SWEEP", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    skip_sweep = (not force_sweep) and (
-        os.environ.get("EMET_SKIP_HEAD_SWEEP", "").strip().lower()
-        in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        or not isinstance(self.robot, StretchZmqClient)
-    )
+    skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         import traceback
 

@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -241,6 +243,18 @@ def _hold_detections_before_explore(self) -> bool:
     return self._prefers_nearby_investigate()
 
 
+def _defer_nearby_for_prefer_explore(self) -> bool:
+    """True when a close ABSENT look should grow coverage before another nearby card.
+
+    Locate questions otherwise pin unused graph views within NEAR_INVESTIGATE_M
+    (~3.5 m). After mapping a kitchen that is always true, so explore never runs
+    and the map stops growing. One explore hop after ``_prefer_explore`` first.
+    """
+    if not bool(getattr(self, "_prefer_explore", False)):
+        return False
+    return int(getattr(self, "_n_consecutive_explore", 0) or 0) < 1
+
+
 def _investigate_matches_target(self, hyp: NavHypothesis | None, obs_id: int) -> bool:
     """Absent-at-close only nudges explore when this card matches the seek phrase."""
     target = str(getattr(self, "_target_phrase", "") or "").strip().lower()
@@ -293,6 +307,9 @@ def _unused_detection_hypothesis(self) -> NavHypothesis | None:
             continue
         if self._place_approaches_exhausted(oid):
             continue
+        # A proposal tested up close and ABSENT is blocked by
+        # _hypothesis_nav_blocked; here rely on that (not a bare nav count) so
+        # HM-EQA count/locate targets stay re-approachable from a new bearing.
         conf = getattr(h, "confidence", None)
         try:
             conf_v = float(conf) if conf is not None else 0.0
@@ -493,10 +510,23 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
     start = self._robot_xyt_world()
     if start is None:
         start = np.array([0.0, 0.0, 0.0])
+    # Arrival should face the frontier so the arrival RGB looks into
+    # uncovered space (tilt 0 via look_ahead), not at the floor.
+    target_theta: float | None = None
+    if frontier_xyz is not None:
+        try:
+            arr = np.asarray(frontier_xyz, dtype=float).reshape(-1)
+            if arr.size >= 2 and start.size >= 2:
+                dx = float(arr[0] - float(start[0]))
+                dy = float(arr[1] - float(start[1]))
+                if math.hypot(dx, dy) > 1e-6:
+                    target_theta = float(math.atan2(dy, dx))
+        except Exception:
+            target_theta = None
     if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
         used_nav_target = True
         try:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, None)
+            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta)
         except TypeError:
             nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
         nav_outcome_str = str(nav_outcome)
@@ -539,8 +569,63 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         nav_status = nav_status_code(nav_result)
     else:
         nav_status = nav_outcome_str or ("ok" if ok else "failed")
+    # A nav that moved little means this frontier clamped to the robot (sample
+    # pulled the goal back to the explored-disk edge) or is a no-op re-navigate.
+    # Block the FRONTIER XY (not the clamped goal) so the next pick chooses a
+    # different frontier — otherwise the loop re-picks the same spot forever
+    # (OVMM kitchen stall) instead of falling through to multi-goal explore.
+    # Keep the bar at ~0 m: legitimate short approaches (0.1–0.2 m) must not
+    # be blocked, or EQA coverage regresses (countclock q47).
+    nav_dist_m = float(getattr(nav_result, "dist_m", 0.0) or 0.0) if nav_result is not None else 0.0
+    if used_nav_target and ok and nav_dist_m < 0.10:
+        try:
+            from emet.controller.habitat_nav import goal_key_xy
+
+            recent = getattr(agent, "_habitat_recent_goals", None)
+            blocked = getattr(agent, "_habitat_blocked_goals", None)
+            if frontier_xyz is not None:
+                key = goal_key_xy(np.asarray(frontier_xyz, dtype=float).reshape(-1)[:2])
+                if recent is not None:
+                    recent.append(key)
+                    del recent[:-8]
+                if blocked is not None:
+                    blocked.add(key)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning(f"explore no-progress goal block failed: {exc}")
     if motion_progress:
         self._refresh_room_after_motion()
+        # Face frontier and capture at arrival with a level head (look_ahead
+        # tilt 0) so arrival RGB carries SigLIP features — not a
+        # pre-move sweep and not look_front (-30°).
+        robot = getattr(agent, "robot", None)
+        if robot is not None:
+            try:
+                la = getattr(robot, "look_ahead", None)
+                if callable(la):
+                    try:
+                        la(blocking=True, timeout=10.0)
+                    except TypeError:
+                        la(blocking=True)
+                else:
+                    head_to = getattr(robot, "head_to", None)
+                    if callable(head_to):
+                        from emet.motion.constants import look_ahead
+
+                        try:
+                            head_to(float(look_ahead[0]), float(look_ahead[1]), blocking=True)
+                        except TypeError:
+                            head_to(float(look_ahead[0]), float(look_ahead[1]))
+                from emet.controller.dynamem.constants import DYNAMEM_HEAD_SETTLE_S
+
+                time.sleep(float(DYNAMEM_HEAD_SETTLE_S))
+                wait_obs = getattr(robot, "wait_for_obs", None)
+                if callable(wait_obs):
+                    try:
+                        wait_obs(timeout=5.0)
+                    except TypeError:
+                        wait_obs()
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(f"explore arrival look_ahead failed: {exc}")
     cap = self._tool_capture_and_update()
     look_retry = False
     # After a successful explore nav, a mid-floor / already-mapped goal often yields

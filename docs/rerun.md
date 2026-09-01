@@ -183,6 +183,8 @@ When the agent plans a path (find / navigate / explore), Rerun logs under `world
 
 With `emet run agent --confirm-nav` (or `EMET_CONFIRM_NAV=1`), each plan also posts a 2D crop to Discord / `world/nav/plan_map` and waits for **y/n** before `execute_trajectory`. Scripted `-c` auto-accepts.
 
+Mapping / empty-text explore used to drop leftover and pick a new frontier; it now **resumes the same goal until arrival** (look-at yaw on the last hop). Agentic `investigate` / `navigate_to_target_pose` hop the same way instead of capturing from the 8-wp midpoint.
+
 ## Load / stability
 
 Defaults in `rerun:` YAML (see above):
