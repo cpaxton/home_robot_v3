@@ -13,6 +13,9 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
+import re
+from pathlib import Path
+
 import mujoco
 import numpy as np
 
@@ -183,8 +186,6 @@ def test_sourccey_registry_and_assets():
 
 def test_sourccey_vendored_official_urdf():
     """The updated official ArmLeft URDF is vendored and referenced by the backend."""
-    from pathlib import Path
-
     spec, _ = _load()
     assert spec.urdf_path, "urdf_path must point at the vendored official arm URDF"
     urdf = Path(spec.urdf_path)
@@ -193,8 +194,17 @@ def test_sourccey_vendored_official_urdf():
     # updated official arm chain
     for joint in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"):
         assert f'name="{joint}" type="revolute"' in text
-    # ArmLeft + ArmRight reference copies live next to it
-    assert (urdf.parent.parent / "ArmRight" / "ArmRight.urdf").is_file()
+    # ArmLeft + ArmRight live next to it (STL meshes only; no Unity sidecars).
+    urdf_root = urdf.parent.parent
+    assert (urdf_root / "ArmRight" / "ArmRight.urdf").is_file()
+    assert not (urdf.parent / "UnityMeshes").exists()
+    assert not (urdf_root / "ArmRight" / "UnityMeshes").exists()
+    assert not list(urdf.parent.glob("*.meta"))
+    assert not list(urdf_root.rglob("*.meta"))
+    # Official visual/collision mesh paths resolve next to the URDF.
+    for ref in re.findall(r'filename="([^"]+)"', text):
+        mesh = urdf.parent / ref
+        assert mesh.is_file(), f"URDF mesh missing: {mesh}"
 
 
 def test_sourccey_declares_arm_chains_and_kinematic_manip():

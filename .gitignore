@@ -129,8 +129,14 @@ ENV/
 *.swn
 *.swo
 
-# URDF files
+# URDF files (local scratch / generated). Vendored robot URDFs are repo content.
 *.urdf
+!src/emet/assets/**/*.urdf
+!src/test/**/*.urdf
+
+# Unity URDF-exporter sidecars (not used by MuJoCo / emet)
+src/emet/assets/**/*.meta
+src/emet/assets/**/UnityMeshes/
 
 # Webcam calibration images
 webcam_calibration_images/

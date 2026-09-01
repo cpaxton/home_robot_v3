@@ -7,8 +7,8 @@ from the open-source Sourccey hardware CAD by Vulcan Robotics:
 - **Arm kinematics / inertials / meshes**: converted from the **updated official**
   `URDF/ArmLeft/ArmLeft.urdf` (the left arm is canonical; the right arm is the
   code-side X-mirror, because the two official `ArmLeft`/`ArmRight` exports are
-  asymmetric). Vendored URDF source lives under `urdf/` (`ArmLeft/`, `ArmRight/`,
-  plus the legacy `Arm.urdf` reference).
+  asymmetric). Vendored URDF source lives under `urdf/` (`ArmLeft/` + `ArmRight/`
+  STLs; Unity `.asset`/`.meta` sidecars are not vendored).
 - **Base / dome / lift / wheels**: assembled from the STEP CAD parts (see
   `scripts/robot_assets/`); meshes are rendered from `step_to_stl.py`.
 - **Hardware license**: CERN Open Hardware Licence Version 2 - Strongly

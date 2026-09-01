@@ -26,10 +26,10 @@ X-mirror of the canonical left arm. Kinematic pick/place (`mcts` manip mode) is 
 | Stack | Status |
 |-------|--------|
 | Vendored MJCF | `src/emet/assets/robot/sourccey/sourccey.xml` (official ArmLeft URDF arm) |
-| Vendored URDF | `src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf` + `ArmRight/` (+ legacy `Arm.urdf`) |
+| Vendored URDF | `src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf` + `ArmRight/` (STL meshes only; no Unity sidecars) |
 | Backend / registry | `emet.robots.sourccey.SourcceyBackend` → `ROBOT_REGISTRY["sourccey"]` |
 | Kinematic model | `create_model` → `SpecRobotModel`; declarative left/right `arm_chains` |
-| Kinematic manip | `advertise_kinematic_manip=True` → `mcts` OVMM pick/place (e.g. `robocasa_sourccey_floor_to_cab_mcts`) |
+| Kinematic manip | `advertise_kinematic_manip=True` → `mcts` OVMM pick/place (e.g. `robocasa_sourccey_counter_to_cab_mcts`) |
 | MolmoSpaces | merge + spawn metadata (`molmospaces_spawn.json`) |
 | RoboCasa | strip-replace (`PandaMobile` placeholder → vendored MJCF) |
 | ZMQ serve | `emet serve mujoco --robot sourccey` (RobosuiteZmqServer) |

@@ -17,7 +17,7 @@ emet molmospaces list-robots
 
 ## Mobile manipulation (learning experiments)
 
-These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the ZMQ stack for navigation / exploration recording. **Agentic sim pick/place** on MolmoSpaces defaults to ZMQ `sim_set_body_pose` (teleport). Live **kinematic latch** (`capabilities.kinematic_manip`) is opt-in via `RobotSpec.advertise_kinematic_manip` (currently **rby1** / **galaxea_r1**, **innate_mars**, **nori**) — a resolvable `ArmManipProfile` alone is not enough. See [molmospaces.md](../molmospaces.md) and [ovmm_full_benchmark.md](../ovmm_full_benchmark.md).
+These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the ZMQ stack for navigation / exploration recording. **Agentic sim pick/place** on MolmoSpaces defaults to ZMQ `sim_set_body_pose` (teleport). Live **kinematic latch** (`capabilities.kinematic_manip`) is opt-in via `RobotSpec.advertise_kinematic_manip` (currently **rby1** / **galaxea_r1**, **innate_mars**, **nori**, **sourccey**) — a resolvable `ArmManipProfile` alone is not enough. See [molmospaces.md](../molmospaces.md) and [ovmm_full_benchmark.md](../ovmm_full_benchmark.md).
 
 **Kinematic pick/place profiles** are auto-discovered from each robot's spec + vendored MJCF via `ArmManipProfile.discover_from_spec()` ([arm_manip_profile.py](../../src/emet/motion/arm_manip_profile.py)) — no per-robot table needed for sourccey, xlerobot, innate_mars, franka_fr3; rby1/galaxea_r1 keep an explicit shared profile. Offline IK tests stay on for robots that do **not** advertise latch. Coverage is enforced by the end-to-end discovery → IK → gripper-contact tests in `src/test/motion/test_arm_manip_profile.py` (see [motion_planning.md](../motion_planning.md#armmanipprofile-discovery-no-hardcoded-table)).
 
@@ -27,7 +27,7 @@ These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the Z
 | **rby1** | `galaxea_r1`, `rb_y1` | freejoint | yes | strip-replace | `GenericZmqClient` | `molmospaces-explore` |
 | **innate_mars** | `maurice` | planar | yes | strip-replace + spawn guards | `GenericZmqClient` | `record_innate_mars_episode.py`, dynagraph |
 | **xlerobot** | `xlerobot_dual` | planar / diff-drive | yes | strip-replace | `GenericZmqClient` | `molmospaces-explore`, DynaMem/Dynagraph nav baselines (`--robot xlerobot`); ZMQ `head_to`, `gripper_left`/`gripper_right` |
-| **sourccey** | — | planar (wheels) + lift | yes | strip-replace + spawn guards | `GenericZmqClient` (stub) | [sourccey.md](sourccey.md) — Vulcan Robotics; vendored MJCF from STEP CAD + `lerobot-vulcan` `Arm.urdf` |
+| **sourccey** | — | planar (wheels) + lift | yes | strip-replace + spawn guards | `GenericZmqClient` (stub) | [sourccey.md](sourccey.md) — Vulcan Robotics; vendored MJCF from STEP CAD + official `ArmLeft.urdf` |
 | **nori** | `nori_a3` | freejoint (diff-drive wheels visual) | yes | no (MolmoSpaces merge only; RoboCasa strip-replace is a follow-up) | `GenericZmqClient` | [nori.md](nori.md) — Nori A3 bimanual, 19-DoF; vendored URDF-derived MJCF (CC BY-NC-SA); curated per-arm `ArmChain`s |
 
 ## Tabletop manipulation (MolmoBot data alignment)
