@@ -131,6 +131,26 @@ def _target_boost_phrases(self) -> list[str]:
         if val and val not in ordered:
             ordered.append(val)
 
+    # Expand terse fixture queries ("cab") with matched graph-node labels
+    # ("cabinet", "kitchen cabinet"): SigLIP / voxel localize grounds the fuller
+    # label far better than the 3-letter recep token, so the find loop gets a
+    # real voxel proposal instead of only camera-pose graph cards.
+    gm = self.graph_memory
+    if gm is not None and hasattr(gm, "get_nodes"):
+        try:
+            for p in list(ordered):
+                for node in gm.get_nodes() or []:
+                    if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                        continue
+                    for lab in getattr(node, "labels", None) or []:
+                        s = str(lab).strip()
+                        if not s or s.lower() == p.lower():
+                            continue
+                        if label_matches_relevant_object(p, s) and s.lower() not in {v.lower() for v in ordered}:
+                            ordered.append(s)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning(f"target boost phrase expansion failed: {exc}")
+
     def _rank(p: str) -> tuple[int, int, str]:
         words = p.lower().split()
         fixture = 1 if any(w in self._FIXTURE_LABEL_TOKENS for w in words) else 0
