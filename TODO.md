@@ -382,10 +382,15 @@ pilots — treat as preliminary until a strong pilot lands (like EQA's).** Four 
       arrival view was "kitchen/toaster" — the **cached graph node XYZs are camera-observation
       poses, not object positions** (`_obs_nav_anchor` returns `node.xyz`), so the robot
       approaches where a camera once stood and sees a toaster/counter, not the cabinet. Same
-      artifact class as the jar-wall proposal. **Fix options:** (a) rebuild the robocasa/molmo
-      caches with the fixed mapping (correct object anchors), (b) make `_obs_nav_anchor` fall
-      back to the observation's semantic object point (voxel) when the node centroid is
-      camera-pose-like, (c) approach framing: pick a standoff that actually shows the anchor.
+      artifact class as the jar-wall proposal.
+- [ ] **FindRec phrase-expansion was negative (2026-09-01):** expanding "cab" → "cabinet"/
+      "kitchen cabinet" (from matched graph-node labels) did not change the result —
+      `recep_localize_source` stayed None. Probe of the cached voxel map: 8002 points across
+      the kitchen but **no cabinet-feature points** (the recep's new captures also showed
+      kitchen/toaster), so there is nothing for localize_text to ground. **FindRec on the
+      cached map needs the cache rebuilt with correct object anchors** (live mapping must
+      first produce good coverage + geometry) — defer while OVMM is exploratory. The
+      phrase-expansion code is kept (principled; helps other terse queries).
 - [ ] Explore OVMM as pilots only: backend matrix, OVMM full (pick/place), Habitat-OVMM
       are deferred until FindRec-recall improves OR the paper explicitly reports FindObj-only
       with the fixture gap documented. Do not sink GPU into the full matrix yet.
