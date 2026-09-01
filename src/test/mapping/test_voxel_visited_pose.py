@@ -14,17 +14,20 @@ import torch
 from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
 
 
-def _make_map() -> SparseVoxelMap:
-    return SparseVoxelMap(
-        resolution=0.05,
-        semantic_memory_resolution=0.05,
-        feature_dim=3,
-        use_instance_memory=False,
-        encoder=None,
-        device="cpu",
-        map_2d_device="cpu",
-        add_local_radius_points=True,
-    )
+def _make_map(**kwargs) -> SparseVoxelMap:
+    defaults = {
+        "resolution": 0.05,
+        "semantic_memory_resolution": 0.05,
+        "feature_dim": 3,
+        "use_instance_memory": False,
+        "encoder": None,
+        "device": "cpu",
+        "map_2d_device": "cpu",
+        "add_local_radius_points": True,
+        "local_radius": 0.25,
+    }
+    defaults.update(kwargs)
+    return SparseVoxelMap(**defaults)
 
 
 def _add_observation(
@@ -112,3 +115,50 @@ def test_every_observation_stamps_obstacles_after_base_moves() -> None:
         _add_observation(voxel_map, base_pose=torch.tensor([0.5, 0.0, 0.0], dtype=torch.float32))
 
     assert mock_add.call_count == 2
+
+
+def test_visited_stamped_only_on_first_observation() -> None:
+    """Rotate-in-place must not grow a visited trail that paints over coverage holes."""
+    voxel_map = _make_map()
+    first = torch.tensor([1.31, -3.47, 0.0], dtype=torch.float32)
+    second = torch.tensor([2.31, -3.47, 0.0], dtype=torch.float32)
+    _add_observation(voxel_map, base_pose=first)
+    _add_observation(voxel_map, base_pose=second)
+
+    visited = voxel_map._visited.detach().cpu().numpy()
+    res = float(voxel_map.grid_resolution)
+    origin = voxel_map.grid_origin[:2].detach().cpu().numpy()
+    first_ij = ((first[:2].numpy() / res) + origin).astype(int)
+    second_ij = ((second[:2].numpy() / res) + origin).astype(int)
+
+    assert visited[first_ij[0], first_ij[1]] > 0
+    assert visited[second_ij[0], second_ij[1]] == 0
+
+
+def test_visited_every_step_when_configured() -> None:
+    voxel_map = _make_map(add_local_radius_every_step=True)
+    first = torch.tensor([1.31, -3.47, 0.0], dtype=torch.float32)
+    second = torch.tensor([2.31, -3.47, 0.0], dtype=torch.float32)
+    _add_observation(voxel_map, base_pose=first)
+    _add_observation(voxel_map, base_pose=second)
+
+    visited = voxel_map._visited.detach().cpu().numpy()
+    res = float(voxel_map.grid_resolution)
+    origin = voxel_map.grid_origin[:2].detach().cpu().numpy()
+    second_ij = ((second[:2].numpy() / res) + origin).astype(int)
+    assert visited[second_ij[0], second_ij[1]] > 0
+
+
+def test_explored_keeps_one_cell_gap_between_islands() -> None:
+    """Morphological close used to merge nearby coverage islands into a solid carpet."""
+    voxel_map = _make_map(add_local_radius_points=False, smooth_kernel_size=3)
+    visited = voxel_map._visited
+    i = int(visited.shape[0] // 2)
+    j = int(visited.shape[1] // 2)
+    visited[i, j] = 1
+    visited[i, j + 2] = 1
+    _, explored = voxel_map.get_2d_map()
+    exp = explored.detach().cpu().numpy()
+    assert exp[i, j]
+    assert exp[i, j + 2]
+    assert not exp[i, j + 1]

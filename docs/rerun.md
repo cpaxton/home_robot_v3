@@ -41,6 +41,8 @@ The `?url=ws://…` query is required. Do not open `https://app.rerun.io`. Remot
 
 `--rerun-native` and `--headless` cannot be combined. Dynagraph/LazyGraph/EQA also have `--save_rerun` / `--SR`: `maybe_save_rerun_recording()` writes `logs/…/data_N.rrd` on rotate / navigate / EQA. If a live `RerunVisualizer` is already streaming, that helper only calls `rr.save` (it does **not** `rr.init`, which would empty the websocket). Offline (`--no-rerun`) still inits then saves. DynaMem `--output-path DIR` writes `DIR/rerun_log.rrd` from the visualizer itself.
 
+`world/explored` (white) is the 2D nav mask: observed voxel columns **plus** a small start-pose `local_radius` disk (default 0.25 m). It is **not** morphologically closed, and Dynamem does **not** stamp that disk on every rotate-in-place frame. Holes between Stretch `look_front` cones (no head sweep, `mapping_max_nav_steps: 0`) are real coverage gaps — they will not match the dense RGB `world/point_cloud` pie slices until those rays exist. Restore pans with `EMET_FORCE_HEAD_SWEEP=1`. Innate Mars keeps `local_radius: 0.85`.
+
 Shared when Rerun is on: `--headless`, `--rerun-native`, `--rerun-show-panels`, `--rerun-debug`, `--rerun-bind`.
 
 ## Config (`rerun:` YAML)
@@ -127,7 +129,7 @@ Logged from `RerunVisualizer.step` (ZMQ thread), `update_voxel_map` / `log_dynag
 | Path | Type | Notes |
 |------|------|--------|
 | `world/point_cloud` | Points3D | Voxel RGB-D cloud; capped by `max_displayed_points_per_camera`; strided by `voxel_map_stride` |
-| `world/obstacles` / `world/explored` | Points3D | 2D occupancy / explored; subsampled to `max_map_2d_points` (default 25000) |
+| `world/obstacles` / `world/explored` | Points3D | 2D occupancy / explored (voxel columns **plus** the small start-pose `local_radius` disk; not morphologically closed). Subsampled to `max_map_2d_points` (default 25000) |
 | `world/semantic_memory/pointcloud` | Points3D | Instance semantic cloud (same cap via `log_custom_pointcloud`) |
 | `world/map_snapshot/topdown` | Image | Cropped 2D map (blueprint `map_topdown`) |
 | `world/head_camera/rgb` | Image | Every ZMQ step |
@@ -179,7 +181,7 @@ Once per session, `log_sim_nav_reference_geometry` draws the walkable clip + spa
 
 ## Motion plans
 
-When the agent plans a path (find / navigate / explore), Rerun logs under `world/nav/` (see catalog). DynaMem still executes at most **8 waypoints per chunk**; if the A* path is longer you will see `(chunk)` in Discord/terminal and another plan after the next look-around. That is planner execution, not lifelong memory restore. NaN finish-marker rows are skipped (`finite_nav_waypoints`).
+When the agent plans a path (find / navigate / explore), Rerun logs under `world/nav/` (see catalog). DynaMem still executes at most **8 waypoints per chunk**; if the A* path is longer you will see `(chunk)` in Discord/terminal and another plan after the next look-around. That is planner execution, not lifelong memory restore. NaN finish-marker rows are skipped (`finite_nav_waypoints`). Plan rows are planar `xyt`; yaw is not used as height, so `wp*` arrows stay on the floor (object height is `world/object`).
 
 With `emet run agent --confirm-nav` (or `EMET_CONFIRM_NAV=1`), each plan also posts a 2D crop to Discord / `world/nav/plan_map` and waits for **y/n** before `execute_trajectory`. Scripted `-c` auto-accepts.
 

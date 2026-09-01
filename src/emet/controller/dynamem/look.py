@@ -287,8 +287,10 @@ def rotate_base_degrees(self, degrees: float) -> float:
 
 
 def _seed_local_radius_explored(self, vm) -> bool:
-    """Stamp ``local_radius`` explored disk at the current base (Stretch-style turn-around hack).
+    """Stamp ``local_radius`` explored disk at the current base (start / fallback seed).
 
+    Used when the map has no explored cells yet, and after OVMM mapping so A* can
+    leave spawn. Does not fill camera-coverage holes — that is observed voxels only.
     Returns True if the map reports any explored cells afterward.
     """
     if vm is None or not hasattr(vm, "_update_visited"):

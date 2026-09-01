@@ -1265,7 +1265,7 @@ def run_mapping_protocol(
         # never reach here. Kitchen / robocasa mapping with mapping_max_nav_steps>0
         # is coverage-only and must not depend on an 8-way spawn spin — but it
         # does need a seeded disk: without any scan the explored area is just the
-        # ~0.5 m ``local_radius`` seed, every frontier is outside the reachable
+        # ``local_radius`` start disk (~0.25 m), every frontier is outside the reachable
         # map, and sample_navigation clamps every explore goal to ~0 m (nav
         # "happens" but never moves). A 4-step rotate seed fixes that.
         if has_stack:

@@ -90,7 +90,7 @@ obs_max_height: 1.5
 obs_min_density: 5
 pad_obstacles: 2          # dilation radius around detected obstacles (grid cells)
 min_pad_obstacles: 1
-local_radius: 0.5         # disk marked explored around the robot
+local_radius: 0.25        # start-pose explored disk (not grown every mapping frame)
 ```
 
 ### Depth / voxel post-filters (DA3 hardware)

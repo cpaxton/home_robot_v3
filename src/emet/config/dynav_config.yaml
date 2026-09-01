@@ -22,7 +22,10 @@ map_boundary:
   obstacle_barrier_cells: 0
   history_penalty_cells: 0
 
-local_radius: 0.5  # Area around the robot to mark as explored (kind of a hack)
+# Start-pose disk marked explored so A* can leave spawn. Keep this small; do not
+# grow it every mapping frame (``add_local_every_step``). Observation gaps stay
+# unexplored until a camera ray actually covers them.
+local_radius: 0.25
 add_local_every_step: False
 remove_visited_from_obstacles: False
 min_depth: 0.25
@@ -135,7 +138,8 @@ detection:
 
 # Point cloud cleanup
 filters:
-  # Use a simple convolutional filter
+  # Obstacle morph in classic SparseVoxelMap only. Dynamem does not close the
+  # 2D explored mask (that hid real camera-coverage holes).
   smooth_kernel_size: 3
   # smooth_kernel_size: 4
   # smooth_kernel_size: 0

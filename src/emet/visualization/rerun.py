@@ -106,7 +106,13 @@ def finite_nav_waypoints(
     *,
     z: float = 0.12,
 ) -> np.ndarray:
-    """Return ``(N, 3)`` finite plan waypoints; skip NaN finish markers used by DynaMem."""
+    """Return ``(N, 3)`` finite plan waypoints; skip NaN finish markers used by DynaMem.
+
+    A* / ``clean_path_for_xy`` rows are planar ``xyt``. The third value is yaw in
+    radians (often unwrapped past ±π), **not** height. Using it as Z sent ``wp*``
+    arrows through the floor. Object height is logged separately as ``world/object``.
+    Rows with 4+ values may pass an explicit Z in index 2 (``x, y, z, yaw``).
+    """
     if traj is None:
         return np.zeros((0, 3), dtype=np.float64)
     rows: list[list[float]] = []
@@ -117,10 +123,8 @@ def finite_nav_waypoints(
         if not np.isfinite(arr[0]) or not np.isfinite(arr[1]):
             continue
         zz = float(z)
-        if arr.size >= 3 and np.isfinite(arr[2]) and abs(float(arr[2])) > 1e-6:
-            # Keep object-look markers above the floor; planar xyt stays at z.
-            if abs(float(arr[2])) > 0.5:
-                zz = float(arr[2])
+        if arr.size >= 4 and np.isfinite(arr[2]):
+            zz = float(arr[2])
         rows.append([float(arr[0]), float(arr[1]), zz])
     if not rows:
         return np.zeros((0, 3), dtype=np.float64)
@@ -2471,6 +2475,7 @@ class RerunVisualizer:
             )
             origins = pts[:-1]
             vectors = pts[1:] - pts[:-1]
+            vectors[:, 2] = 0.0
             log_to_rerun(
                 "world/nav/arrows",
                 rr.Arrows3D(

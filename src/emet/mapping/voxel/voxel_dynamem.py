@@ -30,7 +30,7 @@ from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
 from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 from emet.llms.vllm_registry import VLLMRunConfig, default_hf_model_id, normalize_vl_family, should_share_vllm
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
-from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
+from emet.utils.morphology import binary_dilation, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
 from emet.utils.voxel import VoxelizedPointcloud, scatter3d
 from emet.utils.vram_debug import print_vram_snapshot
@@ -115,7 +115,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         neg_obs_height: float = 0.0,
         add_local_radius_points: bool = True,
         remove_visited_from_obstacles: bool = False,
-        local_radius: float = 0.8,
+        local_radius: float = 0.25,
         min_depth: float = 0.25,
         max_depth: float = 2.5,
         pad_obstacles: int = 0,
@@ -498,24 +498,13 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                 self.dilate_obstacles_kernel,
             )[0, 0].bool()
 
-        # Explored area = only floor mass
-        # floor_voxels = voxels[:, :, :min_height]
+        # Explored = any occupied XY column plus the start-pose ``local_radius`` disk.
+        # Do not morphologically close this mask: open/close with kernel 3 painted over
+        # real observation gaps (Stretch rotate-only / no head pan). Spawn navigability
+        # is the visited disk stamped on the first observation (or ``_seed_local_radius_explored``).
         explored_soft = torch.sum(voxels, dim=-1)
-
-        # Add explored radius around the robot, up to min depth
         explored = explored_soft > 0
         explored = (torch.zeros_like(explored) + self._visited).to(torch.bool) | explored
-
-        if self.smooth_kernel_size > 0:
-            # Opening and closing operations here on explore
-            explored = binary_erosion(
-                binary_dilation(explored.float().unsqueeze(0).unsqueeze(0), self.smooth_kernel),
-                self.smooth_kernel,
-            )
-            explored = binary_dilation(
-                binary_erosion(explored, self.smooth_kernel),
-                self.smooth_kernel,
-            )[0, 0].bool()
         if debug:
             import matplotlib.pyplot as plt
 
@@ -953,7 +942,9 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                 rgb = rgb[selected_indices]
             self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
 
-        if self._add_local_radius_points:
+        # Stamp the start disk once (YAML ``add_local_every_step``). Stamping every
+        # rotate-in-place frame grew a blob that hid coverage holes in Rerun.
+        if self._add_local_radius_points and (len(self.observations) < 2 or self._add_local_radius_every_step):
             if base_pose is not None:
                 self._update_visited(base_pose.to(self.map_2d_device))
             else:
