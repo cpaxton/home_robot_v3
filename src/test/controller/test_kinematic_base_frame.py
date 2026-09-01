@@ -121,6 +121,40 @@ def test_sync_executor_base_to_xyt_uses_spec_planar_names():
         assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - float(val)) < 1e-6
 
 
+def test_sync_executor_home_seed_matches_sourccey_act_suffix():
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.controller.task.tamp.task_search import _sync_executor_base_to_xyt
+    from emet.motion.arm_manip_profile import ArmManipProfile
+    from emet.robots.sourccey import SourcceyBackend
+
+    spec = SourcceyBackend().get_spec()
+    arm_profile = ArmManipProfile.for_robot("sourccey", arm="left")
+    model = mujoco.MjModel.from_xml_path(str(spec.mjcf_path))
+    data = mujoco.MjData(model)
+    home = tuple(0.11 + 0.01 * i for i in range(len(arm_profile.actuator_names)))
+
+    class _Robot:
+        _spec = spec
+
+    exe = SimpleNamespace(
+        _model=model,
+        _data=data,
+        profile=SimpleNamespace(
+            home_cmd=home,
+            actuator_names=arm_profile.actuator_names,
+            base_freejoint_name="base_freejoint",
+        ),
+        robot=_Robot(),
+        joint_names=arm_profile.joint_names,
+    )
+    _sync_executor_base_to_xyt(exe, np.zeros(3))
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_shoulder_pan")
+    assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - home[0]) < 1e-9
+
+
 def test_sync_base_freejoint_writes_sourccey_planar():
     import mujoco
 

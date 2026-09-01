@@ -205,6 +205,7 @@ def test_sourccey_vendored_official_urdf():
     for ref in re.findall(r'filename="([^"]+)"', text):
         mesh = urdf.parent / ref
         assert mesh.is_file(), f"URDF mesh missing: {mesh}"
+    assert (urdf.parent.parent.parent / "mesh_map.json").is_file()
 
 
 def test_sourccey_declares_arm_chains_and_kinematic_manip():
@@ -214,7 +215,9 @@ def test_sourccey_declares_arm_chains_and_kinematic_manip():
     assert spec.arm_chains and "left" in spec.arm_chains and "right" in spec.arm_chains
     for side in ("left", "right"):
         chain = spec.arm_chains[side]
-        assert len(chain.joint_names) == 6
+        assert len(chain.joint_names) == 5
+        assert not any("gripper" in jn for jn in chain.joint_names)
+        assert any(a.endswith("gripper_act") for a in chain.actuator_names)
         for jn in chain.joint_names:
             assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) >= 0
         assert chain.ee_body == f"{side}_Gripper-Finger"
@@ -226,6 +229,56 @@ def test_sourccey_declares_arm_chains_and_kinematic_manip():
         assert profile.joint_names == tuple(spec.arm_chains[side].joint_names)
         assert profile.ee_body == f"{side}_Gripper-Finger"
         assert profile.gripper_contact_bodies()
+        from emet.motion.mujoco_arm_ik import pack_arm_into_actuator_dict
+
+        q = np.linspace(0.1, 0.5, len(profile.joint_names))
+        packed = pack_arm_into_actuator_dict(spec.actuator_names, profile.joint_names, q)
+        assert len(packed) == len(profile.joint_names)
+        assert all(f"{jn}_act" in packed for jn in profile.joint_names)
+
+
+def test_sourccey_executor_actuator_and_gripper_aliases():
+    from unittest.mock import MagicMock
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.motion.arm_manip_profile import ArmManipProfile
+
+    spec, _ = _load()
+    profile = ArmManipProfile.for_robot("sourccey", arm="left")
+    robot = MagicMock()
+    robot._spec = spec
+    robot.get_joint_state.return_value = (np.zeros(len(spec.actuator_names)), None, None)
+    exe = object.__new__(KinematicPickPlaceExecutor)
+    exe.robot = robot
+    exe.arm = "left"
+    exe.profile = profile
+    exe.joint_names = list(profile.joint_names)
+    assert exe._actuator_to_joint_name("left_shoulder_pan_act") == "left_shoulder_pan"
+    assert exe._actuator_to_joint_name("left_arm1") == "left_arm_joint1"
+    exe._set_gripper(open_=True)
+    sent = robot.set_actuator_positions.call_args[0][0]
+    assert sent["left_gripper_act"] == 0.05
+
+
+def test_wrap_recentered_on_joint_puts_parent_at_origin():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[3] / "scripts" / "robot_assets" / "urdf_to_mjcf.py"
+    spec = importlib.util.spec_from_file_location("urdf_to_mjcf", path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    xml = (
+        '<body name="base_link" pos="0 0 0">\n'
+        '  <body name="servo" pos="0.3 0.2 -0.02">\n'
+        '    <joint name="shoulder_pan" type="hinge" axis="0 0 1"/>\n'
+        "  </body>\n"
+        "</body>"
+    )
+    out = mod.wrap_recentered_on_joint(xml, joint_name="shoulder_pan")
+    assert 'name="arm_root"' in out
+    assert "-0.3" in out and "-0.2" in out and "0.02" in out
 
 
 def test_sourccey_create_model():

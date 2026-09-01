@@ -100,22 +100,20 @@ SOURCCEY_GRIPPER_ACTUATORS = {"left": "left_gripper_act", "right": "right_grippe
 # Home keyframe used by robosuite_load_utils / spawns (arms tucked).
 SOURCCEY_HOME_KEYFRAME = "sourccey_home"
 
-# Per-arm 6-DoF chain (shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll,
-# gripper) — mirrors the vendored ArmLeft URDF. The right arm is the code-side X-mirror,
-# so its joints share the same names with a ``right_`` prefix.
-_ARM_JOINT_SUFFIXES = (
+# Per-arm IK chain (shoulder_pan … wrist_roll). The gripper is a separate actuator
+# so position IK cannot chew the fingers; ``_set_gripper`` drives ``{side}_gripper_act``.
+_ARM_IK_SUFFIXES = (
     "shoulder_pan",
     "shoulder_lift",
     "elbow_flex",
     "wrist_flex",
     "wrist_roll",
-    "gripper",
 )
 
 
 def _sourccey_arm_chain(side: str) -> ArmChain:
-    joints = tuple(f"{side}_{s}" for s in _ARM_JOINT_SUFFIXES)
-    acts = tuple(f"{side}_{s}_act" for s in _ARM_JOINT_SUFFIXES)
+    joints = tuple(f"{side}_{s}" for s in _ARM_IK_SUFFIXES)
+    acts = tuple(f"{side}_{s}_act" for s in (*_ARM_IK_SUFFIXES, "gripper"))
     return ArmChain(
         joint_names=joints,
         ee_body=f"{side}_Gripper-Finger",

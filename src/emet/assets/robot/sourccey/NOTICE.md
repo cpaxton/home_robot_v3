@@ -18,24 +18,20 @@ from the open-source Sourccey hardware CAD by Vulcan Robotics:
 
 ## Regeneration
 
-Everything under `meshes/`, `arm_frag.xml`, and `sourccey.xml` is generated, not
-hand-edited. The updated official arm chain converts with the main emet venv (the
-URDF visual origins already place the Unity-exported meshes, so the mesh-map uses
-`offset_mm: [0, 0, 0]`):
+Everything under `meshes/arm_l_*.stl` (sim copies), `arm_frag.xml`, and `sourccey.xml`
+is generated, not hand-edited. `urdf/ArmLeft/meshes/` is the official URDF copy;
+`urdf/ArmRight/` is provenance-only (runtime uses the code-side X-mirror). The
+checked-in `mesh_map.json` maps each ArmLeft STL basename to `meshes/arm_l_<stem>.stl`.
 
 ```bash
-# 1. mesh-map: URDF mesh basename -> vendored STL (arm_l_<name>.stl), no offset.
-#    (ArmLeft URDF meshes are copied to meshes/ as arm_l_<name>.stl)
-
-# 2. URDF arm -> MJCF fragment (mass-scale to land near the 15.88 kg real robot)
+# 1. URDF arm -> MJCF fragment, recentered so shoulder_pan sits at arm_root
 uv run python scripts/robot_assets/urdf_to_mjcf.py \
     src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf \
-    --mesh-map /tmp/mesh_map.json --mass-scale 0.30 --out /tmp/arm_left_frag.xml
+    --mesh-map src/emet/assets/robot/sourccey/mesh_map.json \
+    --mass-scale 0.30 --recenter-joint shoulder_pan --wrap-body arm_root \
+    --out src/emet/assets/robot/sourccey/arm_frag.xml
 
-# 3. recenter the fragment so the shoulder_pan pivot sits at the arm_root origin,
-#    then save as src/emet/assets/robot/sourccey/arm_frag.xml
-
-# 4. full robot MJCF (instances the canonical fragment for both sides)
+# 2. full robot MJCF (instances the canonical fragment for both sides)
 uv run python scripts/robot_assets/assemble_sourccey.py
 ```
 

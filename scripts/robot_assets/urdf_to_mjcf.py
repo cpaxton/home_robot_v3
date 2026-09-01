@@ -30,7 +30,10 @@ Example mesh-map::
 Run with any Python that has numpy (main venv is fine)::
 
     uv run python scripts/robot_assets/urdf_to_mjcf.py \
-        /path/to/Arm.urdf --mesh-map /tmp/mesh_map.json --out /tmp/arm_frag.xml
+        src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf \
+        --mesh-map src/emet/assets/robot/sourccey/mesh_map.json \
+        --mass-scale 0.30 --recenter-joint shoulder_pan \
+        --out src/emet/assets/robot/sourccey/arm_frag.xml
 """
 
 from __future__ import annotations
@@ -249,18 +252,65 @@ class UrdfToMjcf:
         return "\n".join(self.emit_tree(self.root_body))
 
 
+def wrap_recentered_on_joint(xml: str, *, joint_name: str, wrapper: str = "arm_root") -> str:
+    """Wrap a one-root MJCF body tree so ``joint_name``'s parent body sits at the origin.
+
+    Sourccey: ``--recenter-joint shoulder_pan`` makes ``arm_root`` the shoulder pivot
+    so ``assemble_sourccey.py`` can mount the fragment at the shoulder.
+    """
+    text = xml.strip()
+    root = ET.fromstring(text)
+    bodies = list(root.iter("body"))
+    owner = None
+    for body in bodies:
+        for child in list(body):
+            if child.tag == "joint" and child.get("name") == joint_name:
+                owner = body
+                break
+        if owner is not None:
+            break
+    if owner is None:
+        raise ValueError(f"joint {joint_name!r} not found in fragment")
+    parent_by_id: dict[int, ET.Element] = {}
+    for p in bodies:
+        for c in p:
+            if c.tag == "body":
+                parent_by_id[id(c)] = p
+    accum = np.zeros(3)
+    node: ET.Element | None = owner
+    seen: set[int] = set()
+    while node is not None and id(node) not in seen:
+        seen.add(id(node))
+        pos = node.get("pos")
+        if pos:
+            accum = accum + np.array([float(x) for x in pos.split()[:3]], dtype=np.float64)
+        node = parent_by_id.get(id(node))
+    px, py, pz = float(-accum[0]), float(-accum[1]), float(-accum[2])
+    inner = "\n".join(f"  {line}" if line else line for line in text.splitlines())
+    return f'<body name="{wrapper}" pos="{px:.8g} {py:.8g} {pz:.8g}" quat="1 0 0 0">\n{inner}\n</body>'
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("urdf", type=Path, help="Input URDF file.")
     ap.add_argument("--mesh-map", type=Path, help="JSON mesh map (see docstring).")
     ap.add_argument("--root-body", type=str, help="URDF link to start emission from.")
     ap.add_argument("--mass-scale", type=float, default=1.0, help="Scale all link masses/inertias (e.g. 0.25).")
+    ap.add_argument(
+        "--recenter-joint",
+        type=str,
+        help="Wrap the fragment so this joint's parent body sits at the origin (e.g. shoulder_pan).",
+    )
+    ap.add_argument("--wrap-body", type=str, default="arm_root", help="Wrapper body name for --recenter-joint.")
     ap.add_argument("--out", type=Path, required=True, help="Output XML fragment path.")
     args = ap.parse_args()
 
     mesh_map = json.loads(args.mesh_map.read_text()) if args.mesh_map else {}
     conv = UrdfToMjcf(args.urdf, mesh_map=mesh_map, root_body=args.root_body, mass_scale=args.mass_scale)
-    args.out.write_text(conv.build() + "\n")
+    xml = conv.build()
+    if args.recenter_joint:
+        xml = wrap_recentered_on_joint(xml, joint_name=args.recenter_joint, wrapper=args.wrap_body)
+    args.out.write_text(xml + "\n")
     print(f"Wrote {args.out}")
 
 

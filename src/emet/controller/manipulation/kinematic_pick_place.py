@@ -428,7 +428,11 @@ class KinematicPickPlaceExecutor:
             self._sync_qpos_from_robot()
 
         ee_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, self.ee_body)
-        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+        spec = getattr(self.robot, "_spec", None)
+        base_name = str(getattr(spec, "base_link_name", None) or "base_link")
+        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, base_name)
+        if base_id < 0:
+            base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
         if ee_id >= 0 and base_id >= 0:
             mujoco.mj_forward(self._model, self._data)
             ee_z = float(self._data.body(ee_id).xpos[2])
