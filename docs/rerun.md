@@ -222,7 +222,8 @@ uv run emet ovmm find \
   --episodes configs/ovmm/find_phase_episodes.yaml \
   --tier S0 --episode-id default_table_s0 \
   --backend dynagraph --rerun
-EMET_EVAL_RERUN=1 uv run emet-habitat run-episode --question-id 11 --method dynagraph
+# Habitat uses .venv-habitat (no flash-attn wheel). Allow SDPA, or pass --mock-llm to skip Qwen.
+EMET_ALLOW_SDPA_ATTN=1 uv run emet habitat run-episode --question-id 11 --method dynagraph --rerun
 ```
 
 That attaches `open_live_rerun_visualizer()` even when there is no ZMQ `_rerun` thread (Habitat). The same **Context (VLM)** column is used as live `emet run dynagraph`. Head RGB is logged from `update()` when the robot has no ZMQ Rerun thread. `--rerun` does **not** dump `.rrd` files (that is still `--save_rerun` / `--SR`). Overnight H2H / `--via-jobs` should leave this **off** unless you are sitting at the viewer.
