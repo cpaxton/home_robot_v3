@@ -18,6 +18,7 @@ import yaml
 
 from emet.core.parameters import Parameters
 from emet.utils.config import resolve_config_yaml_path
+from emet.visualization.null_visualizer import NullVisualizer, visualizer_is_enabled
 
 
 def _env_truthy(key: str) -> bool | None:
@@ -149,6 +150,11 @@ def build_rerun_visualizer_kwargs(
         default=False,
     )
     mesh = display_robot_mesh if cfg.display_robot_mesh is None else bool(cfg.display_robot_mesh)
+    # Dataclass defaults make log_crops / log_edges bools, so resolve_rerun_bool never
+    # falls through to env. Operators still need EMET_DYNAGRAPH_RERUN_* =1 to force ON
+    # even when YAML is false (cannot force off).
+    crops = bool(cfg.dynagraph.log_crops) or (_env_truthy("EMET_DYNAGRAPH_RERUN_CROPS") is True)
+    edges = bool(cfg.dynagraph.log_edges) or (_env_truthy("EMET_DYNAGRAPH_RERUN_EDGES") is True)
 
     return {
         "output_path": Path(output_path) if output_path is not None else None,
@@ -162,18 +168,8 @@ def build_rerun_visualizer_kwargs(
         "server_memory_limit": cfg.server_memory_limit or "4GB",
         "mjcf_show_visual_mesh": cfg.mjcf_show_visual_mesh,
         "mjcf_show_skeleton": cfg.mjcf_show_skeleton,
-        "dynagraph_rerun_crops": resolve_rerun_bool(
-            cli=False,
-            yaml_value=cfg.dynagraph.log_crops,
-            env_key="EMET_DYNAGRAPH_RERUN_CROPS",
-            default=False,
-        ),
-        "dynagraph_rerun_edges": resolve_rerun_bool(
-            cli=False,
-            yaml_value=cfg.dynagraph.log_edges,
-            env_key="EMET_DYNAGRAPH_RERUN_EDGES",
-            default=False,
-        ),
+        "dynagraph_rerun_crops": crops,
+        "dynagraph_rerun_edges": edges,
         "dynagraph_rerun_summary": cfg.dynagraph.log_summary,
         "dynagraph_rerun_gallery": cfg.dynagraph.log_gallery,
         "max_map_2d_points": max(1000, int(cfg.max_map_2d_points)),
@@ -183,3 +179,77 @@ def build_rerun_visualizer_kwargs(
         "dynagraph_stride": max(1, int(cfg.dynagraph_stride)),
         "mjcf_mesh_stride": max(1, int(cfg.mjcf_mesh_stride)),
     }
+
+
+def open_live_rerun_visualizer(
+    parameters: Parameters | dict[str, Any] | None,
+    *,
+    enabled: bool,
+    output_path: Path | str | None = None,
+    display_robot_mesh: bool = True,
+    mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
+    cli_headless: bool = False,
+    cli_native_viewer: bool = False,
+    cli_show_panels: bool = False,
+) -> Any:
+    """Construct ``RerunVisualizer`` (or ``NullVisualizer``) from YAML / env / CLI.
+
+    Stretch passes ``display_robot_mesh=True`` (URDF). Generic ZMQ passes MJCF
+    when the robot spec has a mesh file.
+    """
+    if not enabled:
+        return NullVisualizer()
+
+    # Deferred: RerunVisualizer imports rerun-sdk native extensions.
+    from emet.visualization.rerun import RerunVisualizer
+
+    out_p = Path(output_path) if output_path is not None else None
+    if out_p is not None:
+        out_p.mkdir(parents=True, exist_ok=True)
+    kwargs = build_rerun_visualizer_kwargs(
+        parameters,
+        output_path=out_p,
+        display_robot_mesh=display_robot_mesh,
+        mjcf_robot=mjcf_robot,
+        cli_headless=cli_headless,
+        cli_native_viewer=cli_native_viewer,
+        cli_show_panels=cli_show_panels,
+    )
+    return RerunVisualizer(**kwargs)
+
+
+def eval_rerun_enabled() -> bool:
+    """Live Rerun during OVMM / Habitat / other evals. Default off (GPU-safe).
+
+    Set ``EMET_EVAL_RERUN=1`` (true/yes/on) or pass ``--rerun`` on ``emet ovmm find|full``
+    / ``emet-habitat run-episode``. One viewer per box (ports 9090 / 9877).
+    """
+    return _env_truthy("EMET_EVAL_RERUN") is True
+
+
+def maybe_attach_eval_rerun_visualizer(
+    parameters: Parameters | dict[str, Any] | None,
+    existing: Any | None = None,
+    *,
+    force: bool = False,
+) -> Any:
+    """Keep an already-live visualizer; otherwise open one when eval Rerun is requested.
+
+    Habitat has no ZMQ ``_rerun``. OVMM / sim eval construct the robot with
+    ``enable_rerun_server=eval_rerun_enabled()``. ``force`` is for Habitat ``--rerun``.
+    """
+    if visualizer_is_enabled(existing):
+        return existing
+    # Keep MagicMock / other test doubles; only attach over None or NullVisualizer.
+    if existing is not None and not isinstance(existing, NullVisualizer):
+        return existing
+    if not (force or eval_rerun_enabled()):
+        return existing if existing is not None else NullVisualizer()
+    native = _env_truthy("RERUN_NATIVE_VIEWER") is True
+    return open_live_rerun_visualizer(
+        parameters,
+        enabled=True,
+        display_robot_mesh=False,
+        cli_headless=not native,
+        cli_native_viewer=native,
+    )

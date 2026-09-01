@@ -2,7 +2,6 @@
 
 Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpaces. Most apps read these at startup; export in the shell before `emet serve` / `emet run`.
 
-<<<<<<< HEAD
 **`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
 
 **Prefer YAML.** Robot and mapping policy belongs in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`robots.<id>`, `mapping.*`) or `--set` / `-O`. New `EMET_*` flags are for process-lifetime / host / GPU accidents (locks, VRAM, EGL), not embodiment defaults. See TODO “config over env flags”.
@@ -21,6 +20,20 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 |----------|---------|---------|
 | `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
+
+## Rerun
+
+Live viewer, entity paths, YAML `rerun:` keys, and CLI defaults: **[rerun.md](rerun.md)**.
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `RERUN_HEADLESS` | `RerunVisualizer` | `1` — web server only (no native spawn / auto-open browser). Same as `--headless`. |
+| `RERUN_NATIVE_VIEWER` | `RerunVisualizer` / `build_rerun_visualizer_kwargs` | `1` — native desktop viewer (needs DISPLAY). Exclusive with web `rr.serve`. |
+| `RERUN_BIND_ALL` | `RerunVisualizer` / `--rerun-bind` | `1` — bind HTTP/WS to `0.0.0.0` for remote viewing. |
+| `EMET_RERUN_HEAD_DEPTH` | `RerunVisualizer.log_head_camera` | `1` — log `world/head_camera/depth` on the live stream (off by default). |
+| `EMET_DYNAGRAPH_RERUN_CROPS` | `build_rerun_visualizer_kwargs` | `1` — per-node crop images + mosaic (forces on even if YAML `log_crops: false`). |
+| `EMET_DYNAGRAPH_RERUN_EDGES` | `build_rerun_visualizer_kwargs` | `1` — graph edge line strips (same on-only override as crops). |
+| `EMET_EVAL_RERUN` | OVMM / Habitat / sim eval | `1` — live VLM-context viewer during eval (default **off**). Same as `emet ovmm find\|full --rerun` or `emet-habitat run-episode --rerun`. |
 
 ## Benchmarks
 

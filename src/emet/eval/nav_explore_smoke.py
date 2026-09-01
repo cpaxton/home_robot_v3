@@ -20,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.config.sim_launch_config import (
     SimLaunchConfig,
     SimLaunchMolmospaces,
@@ -241,12 +242,13 @@ def run_nav_explore_smoke(
         proc, log_path, log_file = _spawn_sim_with_log(launch, bind_timeout_s=sim_bind_timeout_s)
         summary["sim_log"] = str(log_path)
         params = get_parameters(case.parameters_name)
+        live_rerun = eval_rerun_enabled()
         robot = create_robot_client_from_cli(
             case.robot,
             "127.0.0.1",
             port_offset=offset,
             parameters=params,
-            enable_rerun_server=False,
+            enable_rerun_server=live_rerun,
             start_immediately=True,
             allow_missing_depth=False,
             zmq_startup_timeout=zmq_startup_timeout,
@@ -259,6 +261,7 @@ def run_nav_explore_smoke(
             mllm=False,
             realtime_updates=False,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
         )
 
         xyt0 = _base_xyt_world(robot)
