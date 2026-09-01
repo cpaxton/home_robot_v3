@@ -115,7 +115,20 @@ Unit tests (no network): `uv run emet test src/test/llms/test_remote_ops.py src/
 
 ---
 
-## Jetson AGX Orin: Tegra-CUDA container
+## Jetson AGX Orin: Tegra-CUDA (JetPack 7 native)
+
+On **L4T r39 / JetPack 7** (Ubuntu 24.04, CUDA 13.2) do **not** use `dustynv/l4t-pytorch:r35.4.1`. Serve Qwen3-VL with native cu130 torch:
+
+```bash
+# on the Orin
+./scripts/run_jetson_vlm_native.sh --setup
+./scripts/run_jetson_vlm_native.sh --detach   # Qwen/Qwen3-VL-8B-Instruct :8000 fp16
+./scripts/run_jetson_vlm_native.sh --detach --dtype float32   # same weights, ~36 GiB RAM
+```
+
+Largest dense Qwen 3.x VLM that fits AGX Orin **64 GiB unified memory and the 54 G eMMC** is **Qwen3-VL-8B-Instruct** (~17 G on disk). fp16 uses ~20 GiB RAM; fp32 uses ~36 GiB (fits, no extra disk). 32B bf16 (~63 G) does not fit this disk; 32B AWQ (~20 G) plus a vLLM image also overruns eMMC until there is NVMe. Qwen3.5-9B (~19 G) is too tight to sit next to 8B on this eMMC.
+
+## Jetson AGX Orin: Tegra-CUDA container (JetPack 5)
 
 Host emet venv on JetPack 5 is often **CPU-only** PyTorch. Use the dustynv L4T image (NVIDIA Jetson torch + CUDA):
 

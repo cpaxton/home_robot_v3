@@ -83,7 +83,9 @@ Do **not** default to Stretch / `PROFILE=stretch-legacy` for iteration (hours). 
 |-----------|----------|-------------|------|
 | `smoke` (default) | 1× rby1 S0 | ~5–15 min | PR / overnight smoke |
 | `slice` | 2× rby1 S0+S1 | ~15–40+ min | overnight validation |
-| `stretch-legacy` | 3× Stretch | hours | paper only |
+| `stretch` | 1× Stretch table, no head pan | ~rby1 smoke | known-good look_front camera |
+| `stretch-kitchen` | 1× Stretch RoboCasa, no head pan | faster than find8 | kitchen without 4-pan sweeps |
+| `stretch-legacy` | 3× Stretch **with** pans | hours | paper only |
 
 ```bash
 uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- \
@@ -92,7 +94,7 @@ PROFILE=slice uv run emet jobs run --name ovmm-find-rby1-slice --need-mib 8000 -
   ./scripts/run_ovmm_find_recep_slice.sh
 ```
 
-Script sets `EMET_SIM_NAV_TELEPORT=1`, `EMET_SKIP_HEAD_SWEEP=1`, `--not-rotate`, default 4 agentic rounds. Artifacts: `~/runs/emet/ovmm_find_phase/rby1_<profile>_<timestamp>/`. Docs: [`docs/experiments/ovmm_agentic_find_teleport.md`](../../docs/experiments/ovmm_agentic_find_teleport.md).
+Script sets `EMET_SKIP_HEAD_SWEEP=1` (and `EMET_FORCE_HEAD_SWEEP=1` only for `stretch-legacy`). Stretch pans are also `robots.stretch.mapping.look_around_head_sweep` in `configs/emet/default.yaml` (default **false**). Do **not** pass `--not-rotate`; table mapping uses `--mapping-rotate-steps 4`. Teleport is opt-in via `EMET_SIM_NAV_TELEPORT=1`. Artifacts: `~/runs/emet/ovmm_find_phase/<rby1|stretch>_<profile>_<timestamp>/`. Docs: [`docs/experiments/ovmm_agentic_find_teleport.md`](../../docs/experiments/ovmm_agentic_find_teleport.md).
 
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
 - Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).

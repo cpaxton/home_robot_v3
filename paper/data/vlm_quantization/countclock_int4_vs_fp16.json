@@ -1,0 +1,91 @@
+{
+  "schema": "emet.hmeqa.vlm_quantization",
+  "date": "2026-08-29",
+  "git_commit": "7a1d5c30",
+  "vlm": "Qwen/Qwen3-VL-8B-Instruct",
+  "method": "dynagraph",
+  "slices": {
+    "countclock_15": {
+      "ids": [
+        12,
+        21,
+        28,
+        32,
+        33,
+        43,
+        47,
+        48,
+        51,
+        60,
+        78,
+        84,
+        86,
+        88,
+        93
+      ],
+      "int4": {
+        "correct": 6,
+        "n": 15,
+        "accuracy": 0.4
+      },
+      "fp16": {
+        "correct": 10,
+        "n": 15,
+        "accuracy": 0.6667
+      },
+      "fp16_notes": "caliban Orin fp16 serve; the 2026-08-28 float32 serve OOM'd (HTTP 500 -> Unknown fallbacks), invalid."
+    },
+    "subset_30": {
+      "ids": [
+        12,
+        21,
+        28,
+        32,
+        33,
+        43,
+        47,
+        48,
+        51,
+        60,
+        78,
+        84,
+        86,
+        88,
+        93,
+        0,
+        7,
+        14,
+        29,
+        30,
+        37,
+        42,
+        50,
+        56,
+        82,
+        92,
+        100,
+        104,
+        108,
+        110
+      ],
+      "int4_30": {
+        "correct": 9,
+        "n": 30,
+        "accuracy": 0.3,
+        "runner": "countclock slice (same harness as fp16)"
+      },
+      "fp16_30": {
+        "correct": 16,
+        "n": 30,
+        "accuracy": 0.5333,
+        "notes": "10/15 countclock (20260829_170135) + 6/15 new (20260830_010039)"
+      },
+      "delta": {
+        "correct": 7,
+        "relative": "+78%",
+        "pp": "+23.3pp"
+      },
+      "caveat": "int4 itself is noisy (+-2 on countclock-15 across runs: 4/15 here vs 6/15 in the earlier v3 run); the +7 gap is robust."
+    }
+  }
+}

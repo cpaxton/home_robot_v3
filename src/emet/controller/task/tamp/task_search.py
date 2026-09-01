@@ -94,7 +94,11 @@ def rank_grasps_by_ik(
 
 
 def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
-    """Write approach base XYT into the executor's offline MJCF freejoint for IK ranking."""
+    """Write approach base XYT into the executor's offline MJCF for IK ranking.
+
+    Handles both freejoint bases (rby1/nori/galaxea: ``base_freejoint`` 7-DoF quat)
+    and planar slide bases (sourccey/innate_mars/xlerobot: ``base_x/base_y/base_yaw``).
+    """
     import mujoco
 
     model = getattr(executor, "_model", None)
@@ -102,17 +106,27 @@ def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
     profile = getattr(executor, "profile", None)
     if model is None or data is None or profile is None:
         return
-    name = getattr(profile, "base_freejoint_name", None)
-    if not name:
-        return
-    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
-    if jid < 0:
-        return
-    qadr = int(model.jnt_qposadr[jid])
     x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
-    z = float(data.qpos[qadr + 2])
-    half = 0.5 * th
-    data.qpos[qadr : qadr + 7] = [x, y, z, float(np.cos(half)), 0.0, 0.0, float(np.sin(half))]
+
+    def _set_planar_base() -> bool:
+        planar = ("base_x", "base_y", "base_yaw")
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in planar]
+        if any(jid < 0 for jid in ids):
+            return False
+        for jn, val in zip(planar, (x, y, th), strict=True):
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            data.qpos[int(model.jnt_qposadr[jid])] = float(val)
+        return True
+
+    name = getattr(profile, "base_freejoint_name", None)
+    if not name or not _set_planar_base():
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(name)) if name else -1
+        if jid < 0:
+            return
+        qadr = int(model.jnt_qposadr[jid])
+        z = float(data.qpos[qadr + 2])
+        half = 0.5 * th
+        data.qpos[qadr : qadr + 7] = [x, y, z, float(np.cos(half)), 0.0, 0.0, float(np.sin(half))]
     # Seed arm near home so ranking matches post-approach posture.
     home = getattr(profile, "home_cmd", None)
     joint_names = list(getattr(executor, "joint_names", ()) or ())

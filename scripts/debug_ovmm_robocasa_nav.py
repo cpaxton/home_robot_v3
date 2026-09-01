@@ -101,7 +101,7 @@ def main() -> int:
             for _ in range(3):
                 agent.update()
         else:
-            steps = run_mapping_protocol(agent, explore_steps=0, not_rotate=False)
+            steps = run_mapping_protocol(agent, mapping_max_nav_steps=0, not_rotate=False)
             print(f"mapping protocol steps={steps}", file=sys.stderr)
 
         # --- inspect map + base pose ---

@@ -598,6 +598,17 @@ def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
     if self.action_progress_mode == "enforce":
         # Semantic dispatch already chose an eligible concrete approach.
         return False
+    # Voxel localize proposals are blocked after one nav attempt **only when that
+    # attempt was a close ABSENT** — the proposed XYZ was tested up close and is
+    # decisive (re-chasing a wall burns nav budget: OVMM cached kitchen / S0
+    # red-cylinder obj loop). A nav that did not reach a close ABSENT (chunked
+    # progress, stall) must stay eligible: HM-EQA count/locate targets are small
+    # and a first approach from a bad bearing should be retried from another.
+    if is_proposal_handle(oid) and int(self._nav_to_obs_counts.get(oid, 0)) >= 1:
+        rec = self._place_inspect.get(oid)
+        last_verify = str(getattr(rec, "last_verify", "") or "") if rec is not None else ""
+        if last_verify.upper() == "ABSENT":
+            return True
     if self._place_approaches_exhausted(oid):
         return True
     if self._next_approach_index(oid) is None:

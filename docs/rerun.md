@@ -50,7 +50,11 @@ When the agent plans a path (find / navigate / explore), Rerun logs under ``worl
 | ``world/nav/summary`` | Markdown: localize source (graph / voxel / frontier / …), path length, chunked? |
 | ``world/object`` / ``world/xyt_goal`` | Target object + base goal pose |
 
-DynaMem still executes at most **8 waypoints per chunk**; if the A* path is longer you will see ``(chunk)`` in Discord/terminal and another plan after the next look-around. That behavior is planner execution, not lifelong memory restore.
+DynaMem still executes at most **8 waypoints per chunk**. Mapping / empty-text
+explore used to drop leftover and pick a new frontier; it now **resumes the same
+goal until arrival** (look-at yaw on the last hop). Agentic ``investigate`` /
+``navigate_to_target_pose`` hop the same way instead of capturing from the 8-wp
+midpoint. You will still see ``(chunk)`` in Discord/terminal on long A* paths.
 
 With ``emet run agent --confirm-nav`` (or ``EMET_CONFIRM_NAV=1``), each plan also posts a 2D crop to Discord / ``world/nav/plan_map`` and waits for **y/n** before ``execute_trajectory``.
 

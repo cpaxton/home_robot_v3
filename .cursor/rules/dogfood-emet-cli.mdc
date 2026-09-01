@@ -36,5 +36,5 @@ Fast iteration uses rby1 + teleport, not Stretch overnight slices:
 ```bash
 uv run emet jobs run --name ovmm-find-rby1-smoke --need-mib 8000 --gpu-exclusive -- \
   ./scripts/run_ovmm_find_recep_slice.sh
-# PROFILE=slice | stretch-legacy — see script header + docs/experiments/ovmm_agentic_find_teleport.md
+# PROFILE=slice | stretch | stretch-kitchen | stretch-legacy — see script header + docs/experiments/ovmm_agentic_find_teleport.md
 ```
