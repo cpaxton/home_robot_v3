@@ -218,7 +218,10 @@ Headless / bind / empty viewer: [debug.md](debug.md). World-frame “map spins w
 Live Rerun is **off** on paper evals so a batch does not fight the operator viewer or extra GPU/CPU load. Opt in with **`EMET_EVAL_RERUN=1`** or **`--rerun`**:
 
 ```bash
-uv run emet ovmm find --episodes EP.yaml --backend dynagraph --rerun
+uv run emet ovmm find \
+  --episodes configs/ovmm/find_phase_episodes.yaml \
+  --tier S0 --episode-id default_table_s0 \
+  --backend dynagraph --rerun
 EMET_EVAL_RERUN=1 uv run emet-habitat run-episode --question-id 11 --method dynagraph
 ```
 
