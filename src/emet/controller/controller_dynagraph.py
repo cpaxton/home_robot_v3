@@ -188,11 +188,11 @@ class DynagraphController(GraphEQAController):
             )
         return n
 
-    def update(self) -> None:
+    def update(self, *, full_perception: bool | None = None) -> None:
         if self.graph_memory is not None and (self.ground_truth_mode or self.visualize_ground_truth):
             self._sync_ground_truth_from_session()
         # Skip GraphEQAController.update (logs before maintain and consumes dynagraph_stride).
-        super(GraphEQAController, self).update()
+        super(GraphEQAController, self).update(full_perception=full_perception)
         if self.ground_truth_mode:
             self._associate_instances_to_ground_truth()
             self._associate_gt_to_frame_instances()

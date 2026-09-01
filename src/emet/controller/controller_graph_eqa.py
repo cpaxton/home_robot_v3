@@ -220,8 +220,8 @@ class GraphEQAController(DynamemController):
         )
         log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
 
-    def update(self) -> None:
-        super().update()
+    def update(self, *, full_perception: bool | None = None) -> None:
+        super().update(full_perception=full_perception)
         self._log_graph_eqa_rerun()
 
     def look_around(self):

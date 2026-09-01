@@ -227,3 +227,32 @@ def test_rotate_in_place_eight_views_force_full_perception(monkeypatch) -> None:
     assert all(c.kwargs.get("full_perception") is True for c in agent.update.call_args_list)
     # One wait after look_front plus one after each of 7 yaws.
     assert len(waits) == 8
+
+
+def test_graph_controllers_update_accepts_full_perception() -> None:
+    """OVMM find uses DynagraphController; rotate_in_place passes full_perception=True."""
+    import inspect
+
+    from emet.controller.controller_dynagraph import DynagraphController
+    from emet.controller.controller_graph_eqa import GraphEQAController
+    from emet.controller.controller_lazy_graph import LazyGraphController
+
+    for cls in (DynamemController, GraphEQAController, DynagraphController, LazyGraphController):
+        assert "full_perception" in inspect.signature(cls.update).parameters
+
+
+def test_dynagraph_update_forwards_full_perception(monkeypatch) -> None:
+    from emet.controller.controller_dynagraph import DynagraphController
+
+    forwarded: dict[str, bool | None] = {}
+
+    def _base_update(self, *, full_perception: bool | None = None):
+        forwarded["full_perception"] = full_perception
+
+    monkeypatch.setattr(DynamemController, "update", _base_update)
+    agent = DynagraphController.__new__(DynagraphController)
+    agent.graph_memory = None
+    agent.ground_truth_mode = False
+    agent.visualize_ground_truth = False
+    DynagraphController.update(agent, full_perception=True)
+    assert forwarded["full_perception"] is True
