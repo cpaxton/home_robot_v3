@@ -509,7 +509,7 @@ def _run_mcts_manip_phases(
         out["manip_wall_s"] = float(time.monotonic() - t_manip0)
         return out
 
-    exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
+    exe = KinematicPickPlaceExecutor(robot, arm="left", manip_collision="none", traj_dt=0.05)
     candidates = [
         {
             "object_query": episode.object,
@@ -518,14 +518,38 @@ def _run_mcts_manip_phases(
             "receptacle_gt_body": recep_gt,
         }
     ]
-    plan = plan_pick_place_mcts(
-        robot,
-        candidates=candidates,
-        executor=exe,
-        approach_standoff_m=0.55,
-        mcts_iterations=150,
-        seed=seed,
-    )
+    # Try the left arm first, then the right arm: on dual-arm robots the object may sit
+    # on the side the preferred arm cannot reach (e.g. sourccey's new short arms reach
+    # outward, so a counter object in front is only reachable by the side-facing arm).
+    plan = None
+    for arm in ("left", "right"):
+        try:
+            arm_exe = KinematicPickPlaceExecutor(robot, arm=arm, manip_collision="none", traj_dt=0.05)
+        except Exception:
+            # No arm profile for this side (single-arm robots); skip.
+            continue
+        arm_plan = plan_pick_place_mcts(
+            robot,
+            candidates=candidates,
+            executor=arm_exe,
+            approach_standoff_m=0.55,
+            mcts_iterations=150,
+            seed=seed,
+        )
+        plan = arm_plan  # remember the last attempt (may be a failure)
+        if arm_plan.success and arm_plan.receptacle_body == recep_gt:
+            exe = arm_exe
+            break
+    if plan is None:
+        from emet.controller.task.tamp.task_search import TaskPlan
+
+        plan = TaskPlan(
+            steps=[],
+            object_body=gt_body,
+            receptacle_body=recep_gt,
+            success=False,
+            message="no_arm_profile",
+        )
     if plan.success and plan.receptacle_body != recep_gt:
         plan.success = False
         plan.failed_op = "place"
