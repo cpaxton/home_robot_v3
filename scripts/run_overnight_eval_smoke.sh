@@ -23,7 +23,7 @@ if [ "$TAG" != "$RUN_ID" ]; then
 fi
 NEED_MIB="${NEED_MIB:-14000}"
 TIMEOUT_HMEQA="${TIMEOUT_HMEQA:-3600}"
-TIMEOUT_OVMM="${TIMEOUT_OVMM:-2400}"
+TIMEOUT_OVMM="${TIMEOUT_OVMM:-3600}"
 TIMEOUT_SQA3D="${TIMEOUT_SQA3D:-3600}"
 MOCK_LLM="${MOCK_LLM:-0}"
 SKIP_SQA3D="${SKIP_SQA3D:-0}"
@@ -74,8 +74,17 @@ run_ovmm_backend() {
     mkdir -p "$out"
     local log="${LOG_DIR}/ovmm_${backend}.log"
     echo "=== OVMM Habitat backend=${backend} ==="
+    # --device is required for GPU SigLIP/VLM. dynamem stays one-shot; dynagraph /
+    # graph_eqa run the agentic loop (bounded so this overnight stays a smoke).
+    local extra=(--device cuda)
+    if [ "$backend" = "dynamem" ]; then
+        extra+=(--no-agentic-find)
+    else
+        extra+=(--agentic-find --agentic-max-rounds 4 --agentic-max-nav-steps 4)
+    fi
     timeout "$TIMEOUT_OVMM" "$HAB" run-ovmm-find-batch \
         --backend "$backend" \
+        "${extra[@]}" \
         --output-dir "$out" \
         --run-tag "${TAG}_ovmm" \
         --export-map \

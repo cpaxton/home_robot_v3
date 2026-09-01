@@ -208,14 +208,23 @@ def _diagnostics_cli_options(fn):
     return fn
 
 
-def _ovmm_agentic_cli_options(fn):
+def _ovmm_find_cli_options(fn):
     opts = [
+        click.option(
+            "--device",
+            type=click.Choice(["cuda", "cpu"]),
+            default="cuda",
+            help="Encoder + VLM device. cuda (default): GPU SigLIP, and GPU Qwen when agentic "
+            "find is on. cpu: CLIP encoder + CPU VLM (very slow). --cpu-only is an alias for "
+            "--device cpu; neither flag turns off the agentic loop (use --no-agentic-find).",
+        ),
         click.option(
             "--agentic-find/--no-agentic-find",
             "agentic_find",
             default=None,
             help="Route FindObj/FindRec through the shared AgenticEQA loop (default: on for "
-            "dynagraph/static_graph, off for dynamem/ground_truth).",
+            "dynagraph/static_graph, off for dynamem/ground_truth). Independent of --device / "
+            "--cpu-only.",
         ),
         click.option(
             "--agentic-max-rounds",
@@ -623,18 +632,12 @@ def compare_batch(
 )
 @click.option("--merge-xy-m", type=float, default=None)
 @click.option("--staleness-horizon", type=int, default=None)
-@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--cpu-only", is_flag=True, default=False, help="Alias for --device cpu (does not disable agentic find).")
 @click.option("--not-rotate", is_flag=True, default=False)
-@click.option(
-    "--device",
-    type=click.Choice(["cuda", "cpu"]),
-    default="cuda",
-    help="Inference device (cpu forces the CPU CLIP encoder and disables GPU SigLIP).",
-)
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write JSON metrics")
-@_ovmm_agentic_cli_options
+@_ovmm_find_cli_options
 def run_ovmm_find_episode(
     episodes: Path | None,
     episode_id: str,
@@ -742,21 +745,15 @@ def explore_frontiers(
 )
 @click.option("--merge-xy-m", type=float, default=None)
 @click.option("--staleness-horizon", type=int, default=None)
-@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--cpu-only", is_flag=True, default=False, help="Alias for --device cpu (does not disable agentic find).")
 @click.option("--not-rotate", is_flag=True, default=False)
-@click.option(
-    "--device",
-    type=click.Choice(["cuda", "cpu"]),
-    default="cuda",
-    help="Inference device (cpu forces the CPU CLIP encoder and disables GPU SigLIP).",
-)
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output-dir", type=click.Path(path_type=Path), required=True)
 @click.option("--run-tag", default=None, help="Episode bundle tag under ~/.cache/habitat_eqa/episodes/")
 @click.option("--export-map/--no-export-map", default=None)
 @click.option("--export-video/--no-export-video", default=None)
-@_ovmm_agentic_cli_options
+@_ovmm_find_cli_options
 def run_ovmm_find_batch(
     episodes: Path | None,
     episode_id: tuple[str, ...],

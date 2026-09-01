@@ -39,15 +39,26 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--merge-xy-m", type=float, default=None)
     parser.add_argument("--staleness-horizon", type=int, default=None)
-    parser.add_argument("--cpu-only", action="store_true")
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        help="Alias for --device cpu (does not disable agentic find).",
+    )
     parser.add_argument("--not-rotate", action="store_true")
-    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
+    parser.add_argument(
+        "--device",
+        choices=("cuda", "cpu"),
+        default="cuda",
+        help="Encoder + VLM device (default: cuda). cpu = CLIP + CPU VLM; use "
+        "--no-agentic-find to skip the VLM loop.",
+    )
     parser.add_argument(
         "--agentic-find",
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Route FindObj/FindRec through the shared AgenticEQA loop (default: on for "
-        "dynagraph/static_graph, off for dynamem/ground_truth).",
+        "dynagraph/static_graph, off for dynamem/ground_truth). Independent of --device / "
+        "--cpu-only.",
     )
     parser.add_argument("--agentic-max-rounds", type=int, default=None)
     parser.add_argument("--agentic-max-nav-steps", type=int, default=None)

@@ -10,7 +10,7 @@
 #
 # Usage:
 #   bash scripts/smoke_habitat_ovmm_agentic_find.sh [episode_id] [backend]
-#   NEED_MIB=12000 uv run emet jobs run --name habitat-ovmm-agentic-find -- \
+#   uv run emet jobs run --name habitat-ovmm-agentic-find --need-mib 12000 --gpu-exclusive -- \
 #     bash scripts/smoke_habitat_ovmm_agentic_find.sh
 #
 # Defaults:
@@ -44,6 +44,8 @@ echo "[smoke] agentic OVMM find on Habitat scene $EPISODE_ID (backend=$BACKEND)"
 "$HABITAT_BIN" run-ovmm-find-episode \
     --episode-id "$EPISODE_ID" \
     --backend "$BACKEND" \
+    --device cuda \
+    --agentic-find \
     --agentic-max-rounds 4 \
     --agentic-max-nav-steps 4 \
     --output "$OUT_DIR/${EPISODE_ID}_${BACKEND}.json"

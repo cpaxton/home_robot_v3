@@ -504,6 +504,44 @@ def localization_detect_fields(
     }
 
 
+def ovmm_find_query_row(query: Any) -> dict[str, Any]:
+    """Shared FindObj/FindRec JSON keys (Habitat and sim).
+
+    Includes localize success/source, agentic meta, pred XYZ, and oneshot
+    voxel-detect audit fields (empty / false for agentic).
+    """
+    return {
+        **query.localize_fields(),
+        **localization_pred_fields(query.obj_xyz, query.recep_xyz),
+        **localization_detect_fields(query.obj_detect_stats, query.recep_detect_stats),
+    }
+
+
+def score_ovmm_find_query(
+    query: Any,
+    *,
+    placements: dict[str, dict[str, Any]] | None,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    radius_m: float,
+    object_gt_body: str | None = None,
+    frame: PlanarFrame = "mujoco_xy",
+) -> dict[str, Any]:
+    """Score a shared FindObj/FindRec outcome (same GT radius logic on both runners)."""
+    return compute_find_phase_metrics(
+        obj_pred_xyz=query.obj_xyz,
+        recep_pred_xyz=query.recep_xyz,
+        placements=placements,
+        object_query=object_query,
+        start_recep=start_recep,
+        goal_recep=goal_recep,
+        radius_m=radius_m,
+        object_gt_body=object_gt_body,
+        frame=frame,
+    )
+
+
 def set_find_phase_run_seed(seed: int) -> None:
     """Best-effort RNG seeding for repeatable perception/mapping runs."""
     import random
@@ -777,6 +815,146 @@ def query_find_phase_localization(
                 if xyz is not None:
                     return xyz, True, label, "memory_list_objects"
     return None, False, query, None
+
+
+def run_ovmm_oneshot_find_pair(
+    memory: Any,
+    *,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    placements: dict[str, dict[str, Any]] | None,
+    voxel_map: Any | None,
+    prefer_voxel: bool,
+    session: dict[str, Any] | None = None,
+    convert_nav_to_world: bool = False,
+    planar_frame: PlanarFrame = "mujoco_xy",
+    phrase_only: bool = False,
+    capture_voxel_stats: bool = False,
+) -> Any:
+    """One-shot FindObj + FindRec memory localize (shared Habitat / sim ablation)."""
+    from emet.eval.ovmm_agentic_find import OvmmFindQueryOutcome, empty_ovmm_agentic_meta
+
+    obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
+        memory,
+        object_query,
+        placements=placements,
+        session=session,
+        near_recep=start_recep,
+        voxel_map=voxel_map,
+        convert_nav_to_world=convert_nav_to_world,
+        prefer_voxel=prefer_voxel,
+        planar_frame=planar_frame,
+        phrase_only=phrase_only,
+    )
+    obj_stats = take_voxel_localize_stats(voxel_map) if capture_voxel_stats else {}
+    recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
+        memory,
+        goal_recep,
+        placements=placements,
+        session=session,
+        near_recep=goal_recep,
+        voxel_map=voxel_map,
+        convert_nav_to_world=convert_nav_to_world,
+        prefer_voxel=prefer_voxel,
+        planar_frame=planar_frame,
+        phrase_only=phrase_only,
+    )
+    recep_stats = take_voxel_localize_stats(voxel_map) if capture_voxel_stats else {}
+    return OvmmFindQueryOutcome(
+        obj_xyz=obj_xyz,
+        obj_ok=obj_ok,
+        obj_query_used=obj_q_used,
+        obj_source=obj_source,
+        recep_xyz=recep_xyz,
+        recep_ok=recep_ok,
+        recep_query_used=recep_q_used,
+        recep_source=recep_source,
+        meta=empty_ovmm_agentic_meta(use_agentic=False),
+        obj_detect_stats=obj_stats,
+        recep_detect_stats=recep_stats,
+    )
+
+
+def run_ovmm_gt_oracle_find_pair(
+    memory: Any,
+    *,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    object_gt_body: str | None,
+    placements: dict[str, dict[str, Any]] | None,
+    voxel_map: Any | None = None,
+    session: dict[str, Any] | None = None,
+    convert_nav_to_world: bool = False,
+    planar_frame: PlanarFrame = "mujoco_xy",
+) -> Any:
+    """Sim-only FindObj/FindRec from MuJoCo placements (upper bound).
+
+    Habitat ground_truth is **not** this path: it localizes from the GT graph
+    after ``refresh_ground_truth``. Fallback to one-shot memory query when a
+    placement key is missing.
+    """
+    from emet.eval.ovmm_agentic_find import OvmmFindQueryOutcome, empty_ovmm_agentic_meta
+
+    place = placements or {}
+    obj_xyz = None
+    obj_ok = False
+    obj_q_used = object_query
+    obj_source: LocalizeSource | None = None
+    if object_gt_body and object_gt_body in place:
+        obj_xyz = np.asarray(place[object_gt_body]["pos"][:3], dtype=np.float64)
+        obj_ok = True
+        obj_source = "gt_placement"
+        obj_q_used = str(place[object_gt_body].get("cat") or object_gt_body)
+    else:
+        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
+            memory,
+            object_query,
+            placements=place,
+            session=session,
+            near_recep=start_recep,
+            voxel_map=voxel_map,
+            convert_nav_to_world=convert_nav_to_world,
+            prefer_voxel=False,
+            planar_frame=planar_frame,
+        )
+    recep_xyz = None
+    recep_ok = False
+    recep_q_used = goal_recep
+    recep_source: LocalizeSource | None = None
+    needle = goal_recep.lower()
+    for bname, meta in place.items():
+        cat = str(meta.get("cat") or meta.get("label") or bname).lower()
+        if needle in cat or cat in needle:
+            recep_xyz = np.asarray(meta["pos"][:3], dtype=np.float64)
+            recep_ok = True
+            recep_source = "gt_placement"
+            recep_q_used = cat
+            break
+    if not recep_ok:
+        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
+            memory,
+            goal_recep,
+            placements=place,
+            session=session,
+            near_recep=goal_recep,
+            voxel_map=voxel_map,
+            convert_nav_to_world=convert_nav_to_world,
+            prefer_voxel=False,
+            planar_frame=planar_frame,
+        )
+    return OvmmFindQueryOutcome(
+        obj_xyz=obj_xyz,
+        obj_ok=obj_ok,
+        obj_query_used=obj_q_used,
+        obj_source=obj_source,
+        recep_xyz=recep_xyz,
+        recep_ok=recep_ok,
+        recep_query_used=recep_q_used,
+        recep_source=recep_source,
+        meta=empty_ovmm_agentic_meta(use_agentic=False),
+    )
 
 
 def score_find_object(
@@ -1371,7 +1549,11 @@ def run_episode_find_phase(
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.core.parameters import get_parameters
-    from emet.eval.ovmm_agentic_find import should_use_agentic_find
+    from emet.eval.ovmm_agentic_find import (
+        attach_ovmm_episode_debug_dir,
+        run_ovmm_find_queries,
+        should_use_agentic_find,
+    )
     from emet.memory.graph_eqa.sim_ground_truth_graph import (
         gt_graph_completeness,
         instance_gt_association_recall,
@@ -1549,9 +1731,7 @@ def run_episode_find_phase(
                 graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
                 s0_parity=bool(s0_parity and not use_agentic),
             )
-        ep_dir = os.environ.get("EMET_EQA_EPISODE_DIR", "").strip()
-        if ep_dir:
-            agent._episode_debug_dir = ep_dir
+        attach_ovmm_episode_debug_dir(agent)
         if not s0_parity:
             # Controller already started ZMQ + nav posture; apply eval velocity after.
             robot.set_velocity(v=30.0, w=15.0)
@@ -1616,184 +1796,48 @@ def run_episode_find_phase(
 
         object_query = resolve_object_query(episode, placements)
 
-        from emet.eval.ovmm_agentic_find import (
-            ovmm_find_object_question,
-            ovmm_find_recep_question,
-            run_ovmm_agentic_localize,
-        )
-
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
-        agentic_meta: dict[str, Any] = {
-            "agentic_find": bool(use_agentic),
-            "obj_agentic_question": None,
-            "recep_agentic_question": None,
-            "obj_n_retracted_claims": 0,
-            "recep_n_retracted_claims": 0,
-        }
-        obj_xyz = None
-        obj_ok = False
-        obj_q_used = object_query
-        obj_source: LocalizeSource | None = None
-        recep_xyz = None
-        recep_ok = False
-        recep_q_used = episode.goal_recep
-        recep_source: LocalizeSource | None = None
-        obj_detect_stats: dict[str, Any] = {}
-        recep_detect_stats: dict[str, Any] = {}
-
         if run_cfg.backend == "ground_truth":
             # Oracle: localize directly from sim placements (upper bound for FindObj/FindRec).
-            body = episode.object_gt_body
-            if body and body in placements:
-                obj_xyz = np.asarray(placements[body]["pos"][:3], dtype=np.float64)
-                obj_ok = True
-                obj_source = "gt_placement"
-                obj_q_used = str(placements[body].get("cat") or body)
-            else:
-                obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
-                    memory,
-                    object_query,
-                    placements=placements,
-                    session=session,
-                    near_recep=episode.start_recep,
-                    voxel_map=vm,
-                    convert_nav_to_world=nav_world,
-                    prefer_voxel=False,
-                )
-            for bname, meta in placements.items():
-                cat = str(meta.get("cat") or meta.get("label") or bname).lower()
-                if episode.goal_recep.lower() in cat or cat in episode.goal_recep.lower():
-                    recep_xyz = np.asarray(meta["pos"][:3], dtype=np.float64)
-                    recep_ok = True
-                    recep_source = "gt_placement"
-                    recep_q_used = cat
-                    break
-            if not recep_ok:
-                recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
-                    memory,
-                    episode.goal_recep,
-                    placements=placements,
-                    session=session,
-                    near_recep=episode.goal_recep,
-                    voxel_map=vm,
-                    convert_nav_to_world=nav_world,
-                    prefer_voxel=False,
-                )
-        elif use_agentic:
-            # Keep the VLM unloaded while MuJoCo and the mapping stack initialize.
-            # Loading it before robot.start() oversubscribes CPU/CUDA resources and can
-            # starve the Robocasa ZMQ image streams. The controller defers its VLM client,
-            # so the endpoint only needs to exist when the agentic query begins.
-            if vl_worker is not None:
+            query = run_ovmm_gt_oracle_find_pair(
+                memory,
+                object_query=object_query,
+                start_recep=episode.start_recep,
+                goal_recep=episode.goal_recep,
+                object_gt_body=episode.object_gt_body,
+                placements=placements,
+                voxel_map=vm,
+                session=session,
+                convert_nav_to_world=nav_world,
+            )
+        else:
+            if use_agentic and vl_worker is not None:
+                # Keep the VLM unloaded while MuJoCo and the mapping stack initialize.
                 vl_endpoint_used = vl_worker.start()
                 os.environ["EMET_VL_ENDPOINT"] = vl_endpoint_used
                 worker_started = True
                 print(f"Managed OVMM VL worker ready for query: {vl_endpoint_used}", flush=True)
-            # Same AgenticEQAExecutor loop as HM-EQA: phrase OVMM as questions.
-            # trace_meta is logging only — the executor does not branch on ovmm_phase.
-            obj_q = ovmm_find_object_question(object_query, episode.start_recep)
-            recep_q = ovmm_find_recep_question(episode.goal_recep)
-            agentic_meta["obj_agentic_question"] = obj_q
-            agentic_meta["recep_agentic_question"] = recep_q
-            obj_res = run_ovmm_agentic_localize(
-                agent,
-                obj_q,
+            query = run_ovmm_find_queries(
+                agent=agent,
+                memory=memory,
+                use_agentic=use_agentic,
+                object_query=object_query,
+                start_recep=episode.start_recep,
+                goal_recep=episode.goal_recep,
+                episode_id=episode.id,
+                object_gt_body=episode.object_gt_body,
                 max_rounds=run_cfg.agentic_max_rounds,
                 max_nav_steps=run_cfg.agentic_max_nav_steps,
-                require_verified=True,
-                trace_meta={
-                    "ovmm_phase": "find_object",
-                    "episode_id": episode.id,
-                    "object": object_query,
-                    "start_recep": episode.start_recep,
-                    "goal_recep": episode.goal_recep,
-                    "gt_body_key": episode.object_gt_body,
-                },
-            )
-            # Voxel localize is the FindObj/FindRec coordinate: agentic loop uses it as an
-            # investigate card + close-map stay. Do not require VLM verify to score.
-            if obj_res.error:
-                agentic_meta["agentic_find_error"] = obj_res.error
-            obj_xyz = obj_res.xyz
-            obj_ok = obj_xyz is not None
-            obj_q_used = object_query
-            obj_source = (obj_res.extra or {}).get("xyz_source")
-            if not obj_source and obj_ok:
-                obj_source = "agentic_verify" if obj_res.verified else None
-            agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
-            agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
-            agentic_meta["obj_n_nav"] = obj_res.n_nav
-            agentic_meta["obj_n_explore"] = obj_res.n_explore
-            agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
-            if obj_res.extra:
-                agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
-                agentic_meta["obj_from_pin"] = obj_res.extra.get("from_pin")
-                if obj_res.extra.get("voxel_query_used"):
-                    obj_q_used = str(obj_res.extra["voxel_query_used"])
-
-            recep_res = run_ovmm_agentic_localize(
-                agent,
-                recep_q,
-                max_rounds=run_cfg.agentic_max_rounds,
-                max_nav_steps=run_cfg.agentic_max_nav_steps,
-                require_verified=True,
-                trace_meta={
-                    "ovmm_phase": "find_recep",
-                    "episode_id": episode.id,
-                    "object": object_query,
-                    "start_recep": episode.start_recep,
-                    "goal_recep": episode.goal_recep,
-                },
-            )
-            if recep_res.error:
-                agentic_meta["agentic_find_error_recep"] = recep_res.error
-            recep_xyz = recep_res.xyz
-            recep_ok = recep_xyz is not None
-            recep_q_used = episode.goal_recep
-            recep_source = (recep_res.extra or {}).get("xyz_source")
-            if not recep_source and recep_ok:
-                recep_source = "agentic_verify" if recep_res.verified else None
-            agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
-            agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
-            agentic_meta["recep_n_nav"] = recep_res.n_nav
-            agentic_meta["recep_n_explore"] = recep_res.n_explore
-            agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
-            if recep_res.extra:
-                agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
-                agentic_meta["recep_from_pin"] = recep_res.extra.get("from_pin")
-                if recep_res.extra.get("voxel_query_used"):
-                    recep_q_used = str(recep_res.extra["voxel_query_used"])
-        else:
-            # Ablation: one-shot memory localize (voxel-first when prefer_voxel).
-            obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
-                memory,
-                object_query,
                 placements=placements,
-                session=session,
-                near_recep=episode.start_recep,
                 voxel_map=vm,
-                convert_nav_to_world=nav_world,
                 prefer_voxel=prefer_voxel,
+                session=session,
+                convert_nav_to_world=nav_world,
                 phrase_only=s0_phrase_only,
             )
-            obj_detect_stats = take_voxel_localize_stats(vm)
-            recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
-                memory,
-                episode.goal_recep,
-                placements=placements,
-                session=session,
-                near_recep=episode.goal_recep,
-                voxel_map=vm,
-                convert_nav_to_world=nav_world,
-                prefer_voxel=prefer_voxel,
-                phrase_only=s0_phrase_only,
-            )
-            recep_detect_stats = take_voxel_localize_stats(vm)
-
-        find_metrics = compute_find_phase_metrics(
-            obj_pred_xyz=obj_xyz,
-            recep_pred_xyz=recep_xyz,
+        find_metrics = score_ovmm_find_query(
+            query,
             placements=placements,
             object_query=object_query,
             start_recep=episode.start_recep,
@@ -1859,21 +1903,13 @@ def run_episode_find_phase(
             "s0_parity": bool(s0_parity),
             "s0_phrase_only": bool(s0_phrase_only),
             "s0_oneshot_pytest": bool(s0_executor is not None),
-            **agentic_meta,
+            **ovmm_find_query_row(query),
             "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
-            "obj_localize_success": bool(obj_ok),
-            "recep_localize_success": bool(recep_ok),
-            "obj_query_used": obj_q_used,
-            "recep_query_used": recep_q_used,
-            "obj_localize_source": obj_source,
-            "recep_localize_source": recep_source,
             "vl_endpoint": vl_endpoint_used,
             "seed": run_cfg.seed,
-            **localization_pred_fields(obj_xyz, recep_xyz),
-            **localization_detect_fields(obj_detect_stats, recep_detect_stats),
             **find_metrics,
             **scaling,
             **gt_metrics,

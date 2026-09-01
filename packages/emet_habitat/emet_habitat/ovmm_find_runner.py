@@ -25,20 +25,23 @@ from emet.eval.episode_diagnostics import (
     habitat_export_voxel_history_default,
     unbind_diagnostics_recorder,
 )
-from emet.eval.ovmm_agentic_find import should_use_agentic_find
+from emet.eval.ovmm_agentic_find import (
+    attach_ovmm_episode_debug_dir,
+    run_ovmm_find_queries,
+    should_use_agentic_find,
+)
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
     collect_scaling_diagnostics,
-    compute_find_phase_metrics,
     create_find_phase_agent,
     get_memory_backend_for_agent,
-    localization_pred_fields,
     mapping_budget_from_row,
-    query_find_phase_localization,
+    ovmm_find_query_row,
     resolve_mapping_max_nav_steps,
     resolve_object_query,
     run_mapping_protocol,
+    score_ovmm_find_query,
     set_find_phase_run_seed,
 )
 from emet.habitat.config import default_hm3d_scene_dir
@@ -46,7 +49,11 @@ from emet.habitat.datasets import load_scene_init_poses
 from emet.habitat.episode_debug import default_episodes_root
 from emet.habitat.hm3d_semantics import hm3d_placements_from_semantic_scene
 from emet_habitat.robot_client import HabitatRobotClient
-from emet_habitat.runner import _release_gpu_memory
+from emet_habitat.runner import (
+    _configure_habitat_mapping,
+    _configure_habitat_nav,
+    _release_gpu_memory,
+)
 from emet_habitat.simulator import HabitatEQASimulator
 
 MemoryBackendName = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
@@ -178,27 +185,29 @@ def run_habitat_find_phase_episode(
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
         )
-        parameters["encoder"] = None
+        # Voxel features come from DynamemController.create_obstacle_map:
+        # GPU → shared SigLIP, --device cpu / --cpu-only → CLIP. Do not set
+        # parameters["encoder"] = None — that is the InstanceMemory get_encoder()
+        # name, and clearing it disabled semantic memory on the sim find path.
+        # force_eqa_siglip_encoder is only the HM-EQA manipulation_only escape
+        # hatch; habitat_ovmm_find already sets manipulation_only: false.
         use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
+        # HM3D homes need navmesh frontiers + 4.5 m depth / no obstacle pad whether
+        # the query is agentic or one-shot, otherwise the ablation is not the same map.
+        _configure_habitat_mapping(parameters)
+        _configure_habitat_nav(parameters)
         if use_agentic:
-            # The agentic loop explores via habitat navmesh frontiers (like HM-EQA).
-            # Default dynav clamps (max_depth=2.5, pad_obstacles=2, smooth_kernel_size=3)
-            # seal thin corridors and hug a ~2.5 m ring — wrong for whole-home OVMM finds.
-            from emet_habitat.runner import _configure_habitat_mapping, _configure_habitat_nav
-
-            _configure_habitat_mapping(parameters)
-            _configure_habitat_nav(parameters)
-            # Agentic find loads the shared Qwen3-VL for the tool router / keyword
-            # extraction. The habitat torch (2.12/2.13+cu130) has no flash-attn wheel,
-            # so permit PyTorch SDPA like hmeqa_launch / the OVMM VL worker do.
+            # Agentic find loads Qwen3-VL in-process. Habitat torch (cu130) has no
+            # flash-attn wheel, so permit SDPA like hmeqa_launch / the OVMM VL worker.
             os.environ.setdefault("EMET_ALLOW_SDPA_ATTN", "1")
 
         t_init0 = time.monotonic()
+        cpu_only = bool(run_cfg.cpu_only or device == "cpu")
         agent = create_find_phase_agent(
             robot,
             parameters,
             run_cfg.backend,
-            cpu_only=run_cfg.cpu_only or device == "cpu",
+            cpu_only=cpu_only,
             compare_to_gt=run_cfg.compare_to_gt,
             use_sensor_perception=run_cfg.use_sensor_perception,
         )
@@ -217,6 +226,7 @@ def run_habitat_find_phase_episode(
             habitat_floor_y=sim.floor_y,
         )
         init_wall_s = time.monotonic() - t_init0
+        attach_ovmm_episode_debug_dir(agent)
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -251,127 +261,27 @@ def run_habitat_find_phase_episode(
         )
 
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
-        agentic_meta: dict[str, Any] = {
-            "agentic_find": bool(use_agentic),
-            "obj_agentic_question": None,
-            "recep_agentic_question": None,
-            "obj_n_retracted_claims": 0,
-            "recep_n_retracted_claims": 0,
-        }
-        obj_xyz = None
-        obj_ok = False
-        obj_q_used = object_query
-        obj_source: str | None = None
-        recep_xyz = None
-        recep_ok = False
-        recep_q_used = episode.goal_recep
-        recep_source: str | None = None
-
         t_query0 = time.monotonic()
-        if use_agentic:
-            # Same AgenticEQAExecutor loop as HM-EQA / sim OVMM find: phrase FindObj
-            # and FindRec as open questions, navigate/verify/explore inside the shared
-            # loop, then score the loop's object-phrase voxel XYZ (never camera pose).
-            from emet.eval.ovmm_agentic_find import (
-                ovmm_find_object_question,
-                ovmm_find_recep_question,
-                run_ovmm_agentic_localize,
-            )
-
-            obj_q = ovmm_find_object_question(object_query, episode.start_recep)
-            recep_q = ovmm_find_recep_question(episode.goal_recep)
-            agentic_meta["obj_agentic_question"] = obj_q
-            agentic_meta["recep_agentic_question"] = recep_q
-            obj_res = run_ovmm_agentic_localize(
-                agent,
-                obj_q,
-                max_rounds=run_cfg.agentic_max_rounds,
-                max_nav_steps=run_cfg.agentic_max_nav_steps,
-                require_verified=True,
-                trace_meta={
-                    "ovmm_phase": "find_object",
-                    "episode_id": episode.id,
-                    "scene": episode.scene,
-                    "object": object_query,
-                    "start_recep": episode.start_recep,
-                    "goal_recep": episode.goal_recep,
-                    "gt_body_key": episode.object_gt_body,
-                },
-            )
-            if obj_res.error:
-                agentic_meta["agentic_find_error"] = obj_res.error
-            obj_xyz = obj_res.xyz
-            obj_ok = obj_xyz is not None
-            obj_q_used = object_query
-            obj_source = (obj_res.extra or {}).get("xyz_source")
-            if not obj_source and obj_ok:
-                obj_source = "agentic_verify" if obj_res.verified else None
-            agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
-            agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
-            agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
-            if obj_res.extra:
-                agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
-                agentic_meta["obj_from_pin"] = obj_res.extra.get("from_pin")
-                if obj_res.extra.get("voxel_query_used"):
-                    obj_q_used = str(obj_res.extra["voxel_query_used"])
-
-            recep_res = run_ovmm_agentic_localize(
-                agent,
-                recep_q,
-                max_rounds=run_cfg.agentic_max_rounds,
-                max_nav_steps=run_cfg.agentic_max_nav_steps,
-                require_verified=True,
-                trace_meta={
-                    "ovmm_phase": "find_recep",
-                    "episode_id": episode.id,
-                    "scene": episode.scene,
-                    "object": object_query,
-                    "start_recep": episode.start_recep,
-                    "goal_recep": episode.goal_recep,
-                },
-            )
-            if recep_res.error:
-                agentic_meta["agentic_find_error_recep"] = recep_res.error
-            recep_xyz = recep_res.xyz
-            recep_ok = recep_xyz is not None
-            recep_q_used = episode.goal_recep
-            recep_source = (recep_res.extra or {}).get("xyz_source")
-            if not recep_source and recep_ok:
-                recep_source = "agentic_verify" if recep_res.verified else None
-            agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
-            agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
-            agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
-            if recep_res.extra:
-                agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
-                agentic_meta["recep_from_pin"] = recep_res.extra.get("from_pin")
-                if recep_res.extra.get("voxel_query_used"):
-                    recep_q_used = str(recep_res.extra["voxel_query_used"])
-        else:
-            # Ablation: one-shot memory localize (voxel-first when prefer_voxel).
-            obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
-                memory,
-                object_query,
-                placements=placements,
-                near_recep=episode.start_recep,
-                voxel_map=vm,
-                convert_nav_to_world=False,
-                prefer_voxel=prefer_voxel,
-                planar_frame="habitat_xz",
-            )
-            recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
-                memory,
-                episode.goal_recep,
-                placements=placements,
-                near_recep=episode.goal_recep,
-                voxel_map=vm,
-                convert_nav_to_world=False,
-                prefer_voxel=prefer_voxel,
-                planar_frame="habitat_xz",
-            )
-
-        find_metrics = compute_find_phase_metrics(
-            obj_pred_xyz=obj_xyz,
-            recep_pred_xyz=recep_xyz,
+        query = run_ovmm_find_queries(
+            agent=agent,
+            memory=memory,
+            use_agentic=use_agentic,
+            object_query=object_query,
+            start_recep=episode.start_recep,
+            goal_recep=episode.goal_recep,
+            episode_id=episode.id,
+            object_gt_body=episode.object_gt_body,
+            max_rounds=run_cfg.agentic_max_rounds,
+            max_nav_steps=run_cfg.agentic_max_nav_steps,
+            extra_trace_meta={"scene": episode.scene},
+            placements=placements,
+            voxel_map=vm,
+            prefer_voxel=prefer_voxel,
+            convert_nav_to_world=False,
+            planar_frame="habitat_xz",
+        )
+        find_metrics = score_ovmm_find_query(
+            query,
             placements=placements,
             object_query=object_query,
             start_recep=episode.start_recep,
@@ -405,15 +315,8 @@ def run_habitat_find_phase_episode(
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
-            "obj_localize_success": bool(obj_ok),
-            "recep_localize_success": bool(recep_ok),
-            "obj_query_used": obj_q_used,
-            "recep_query_used": recep_q_used,
-            "obj_localize_source": obj_source,
-            "recep_localize_source": recep_source,
             "seed": run_cfg.seed,
-            **agentic_meta,
-            **localization_pred_fields(obj_xyz, recep_xyz),
+            **ovmm_find_query_row(query),
             **find_metrics,
             **scaling,
         }

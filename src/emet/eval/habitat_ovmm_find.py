@@ -24,15 +24,16 @@ Habitat-Sim execution runs in ``.venv-habitat`` via ``emet-habitat`` CLI or
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import yaml
 
 from emet.eval.ovmm_find_phase import (
     FindPhaseRunConfig,
-    compute_find_phase_metrics,
     distance_to_placement_xy,
     horizontal_coords,
+    score_ovmm_find_query,
 )
 from emet.utils.config import resolve_config_yaml_path
 
@@ -72,9 +73,8 @@ def score_habitat_find_phase(
     object_gt_body: str | None = None,
 ) -> dict[str, Any]:
     """Score one Habitat find-phase step (XZ horizontal plane, bounds-aware)."""
-    return compute_find_phase_metrics(
-        obj_pred_xyz=obj_pred_xyz,
-        recep_pred_xyz=recep_pred_xyz,
+    return score_ovmm_find_query(
+        SimpleNamespace(obj_xyz=obj_pred_xyz, recep_xyz=recep_pred_xyz),
         placements=placements,
         object_query=object_query,
         start_recep=start_recep,

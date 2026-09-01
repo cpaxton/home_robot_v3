@@ -5,13 +5,15 @@
 """Agentic-find routing for the Habitat OVMM find runner (no sim).
 
 Verifies ``run_habitat_find_phase_episode`` routes FindObj/FindRec through the
-shared AgenticEQA loop (``run_ovmm_agentic_localize``) for dynagraph/static_graph
-and falls back to one-shot localize for dynamem / ground_truth.
+shared query dispatcher (``run_ovmm_find_queries`` → AgenticEQA loop) for
+dynagraph/static_graph and falls back to one-shot localize for dynamem /
+ground_truth.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -59,7 +61,13 @@ class _FakeSim:
         return None
 
 
-def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None) -> tuple[dict, list[str], list[str]]:
+def _run_episode(
+    monkeypatch,
+    backend: str,
+    *,
+    agentic_find: bool | None = None,
+    device: str = "cuda",
+) -> tuple[dict, list[str], list[str], dict, dict]:
     from pathlib import Path
 
     project_root = Path(__file__).resolve().parents[3]
@@ -74,14 +82,12 @@ def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None)
 
     run_cfg = FindPhaseRunConfig(
         backend=backend,  # type: ignore[arg-type]
-        cpu_only=True,
+        cpu_only=False,
         not_rotate=True,
         agentic_find=agentic_find,
         agentic_max_rounds=3,
         agentic_max_nav_steps=2,
     )
-    if backend == "dynagraph" and agentic_find is None:
-        run_cfg.cpu_only = False
     fake_agent = SimpleNamespace(
         stop=lambda: None,
         update=lambda: None,
@@ -91,6 +97,9 @@ def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None)
     agentic_calls: list[str] = []
     oneshot_calls: list[str] = []
     create_kwargs: dict = {}
+    parameters: dict[str, Any] = {"keep": True}
+    mapping_calls: list[Any] = []
+    nav_calls: list[Any] = []
 
     def _fake_agentic(agent, question, **kwargs):
         agentic_calls.append(question)
@@ -155,15 +164,15 @@ def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None)
         ),
         patch(
             "emet_habitat.ovmm_find_runner.apply_habitat_ovmm_find_parameters",
-            return_value={},
+            return_value=parameters,
         ),
         patch(
-            "emet_habitat.runner._configure_habitat_mapping",
-            return_value=None,
+            "emet_habitat.ovmm_find_runner._configure_habitat_mapping",
+            side_effect=lambda p: mapping_calls.append(p),
         ),
         patch(
-            "emet_habitat.runner._configure_habitat_nav",
-            return_value=None,
+            "emet_habitat.ovmm_find_runner._configure_habitat_nav",
+            side_effect=lambda p: nav_calls.append(p),
         ),
         patch(
             "emet_habitat.ovmm_find_runner.create_find_phase_agent",
@@ -182,11 +191,11 @@ def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None)
             return_value="lamp",
         ),
         patch(
-            "emet_habitat.ovmm_find_runner.query_find_phase_localization",
+            "emet.eval.ovmm_find_phase.query_find_phase_localization",
             side_effect=_fake_oneshot,
         ),
         patch(
-            "emet_habitat.ovmm_find_runner.compute_find_phase_metrics",
+            "emet_habitat.ovmm_find_runner.score_ovmm_find_query",
             return_value={
                 "find_object_success": True,
                 "find_recep_success": True,
@@ -206,31 +215,62 @@ def _run_episode(monkeypatch, backend: str, *, agentic_find: bool | None = None)
     ):
         from emet_habitat.ovmm_find_runner import run_habitat_find_phase_episode
 
-        result = run_habitat_find_phase_episode(_episode(), run_cfg)
-    return result, agentic_calls, oneshot_calls, create_kwargs
+        result = run_habitat_find_phase_episode(_episode(), run_cfg, device=device)
+    extras = {
+        "parameters": parameters,
+        "mapping_calls": mapping_calls,
+        "nav_calls": nav_calls,
+    }
+    return result, agentic_calls, oneshot_calls, create_kwargs, extras
 
 
 def test_habitat_agentic_find_routes_dynagraph_through_agentic_loop(monkeypatch) -> None:
-    result, agentic_calls, oneshot_calls, create_kwargs = _run_episode(monkeypatch, "dynagraph")
+    result, agentic_calls, oneshot_calls, create_kwargs, extras = _run_episode(monkeypatch, "dynagraph")
     assert result["agentic_find"] is True
-    assert len(agentic_calls) == 2
+    assert agentic_calls == ["Where is the lamp on the bed?", "Where is the table?"]
     assert oneshot_calls == []
     assert result["obj_localize_success"] is True
     assert result["recep_localize_success"] is True
     assert result["obj_localize_source"] == "voxel"
     assert result["obj_agentic_rounds"] == 2
+    assert result["obj_n_nav"] == 1
+    assert result["recep_n_nav"] == 1
     assert create_kwargs["cpu_only"] is False
+    assert "encoder" not in extras["parameters"]
+    assert len(extras["mapping_calls"]) == 1
+    assert len(extras["nav_calls"]) == 1
+
+
+def test_habitat_agentic_find_default_on_for_static_graph(monkeypatch) -> None:
+    result, agentic_calls, oneshot_calls, _create, extras = _run_episode(monkeypatch, "static_graph")
+    assert result["agentic_find"] is True
+    assert len(agentic_calls) == 2
+    assert oneshot_calls == []
+    assert extras["mapping_calls"]
 
 
 def test_habitat_agentic_find_default_off_for_dynamem(monkeypatch) -> None:
-    result, agentic_calls, oneshot_calls, _create = _run_episode(monkeypatch, "dynamem")
+    result, agentic_calls, oneshot_calls, _create, extras = _run_episode(monkeypatch, "dynamem")
     assert result["agentic_find"] is False
     assert agentic_calls == []
     assert len(oneshot_calls) == 2
+    # One-shot ablation still uses the HM3D mapping/nav profile.
+    assert extras["mapping_calls"]
+    assert extras["nav_calls"]
 
 
 def test_habitat_agentic_find_no_agentic_override_keeps_oneshot(monkeypatch) -> None:
-    result, agentic_calls, oneshot_calls, _create = _run_episode(monkeypatch, "dynagraph", agentic_find=False)
+    result, agentic_calls, oneshot_calls, _create, extras = _run_episode(
+        monkeypatch, "dynagraph", agentic_find=False
+    )
     assert result["agentic_find"] is False
     assert agentic_calls == []
     assert len(oneshot_calls) == 2
+    assert extras["mapping_calls"]
+
+
+def test_habitat_find_device_cpu_forces_cpu_only(monkeypatch) -> None:
+    _result, _agentic, _oneshot, create_kwargs, _extras = _run_episode(
+        monkeypatch, "dynagraph", device="cpu"
+    )
+    assert create_kwargs["cpu_only"] is True

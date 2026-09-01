@@ -364,13 +364,23 @@ Env table: [environment_variables.md](environment_variables.md) (`EMET_EQA_ANSWE
   --output ~/.cache/habitat_eqa/results/smoke_dynagraph.jsonl
 ```
 
-### OVMM find-phase (Habitat) — includes **dynamem**
+### OVMM find-phase (Habitat)
+
+`--device` selects the encoder/VLM device (`cuda` default). Agentic find is **on**
+for dynagraph/static_graph and **off** for dynamem/ground_truth. `--cpu-only` is
+`--device cpu` and does not disable the agentic loop.
 
 ```bash
+# dynamem one-shot (agentic off by default)
 .venv-habitat/bin/emet-habitat run-ovmm-find-batch \
-  --backend dynamem --run-tag smoke_ovmm \
+  --backend dynamem --device cuda --no-agentic-find --run-tag smoke_ovmm \
   --export-map --export-video \
   --output-dir ~/runs/emet/ovmm_habitat/smoke_dynamem
+
+# dynagraph agentic (VLM; pass --device cuda explicitly)
+.venv-habitat/bin/emet-habitat run-ovmm-find-batch \
+  --backend dynagraph --device cuda --agentic-find --run-tag smoke_ovmm_agentic \
+  --output-dir ~/runs/emet/ovmm_habitat/smoke_dynagraph
 ```
 
 ### SQA3D

@@ -83,12 +83,12 @@ fi
 # --- Habitat OVMM find ---
 if [[ "${SKIP_OVMM:-0}" != "1" ]] && [[ -x "$HAB" ]]; then
     gpu_step
-    log "Track B: Habitat OVMM find (dynagraph + static_graph)"
+    log "Track B: Habitat OVMM find (dynagraph + static_graph; agentic loop, --device cuda)"
     mkdir -p "${HOME}/runs/emet/ovmm_habitat/${RUN_ID}"
     for backend in dynagraph static_graph; do
         timeout 3600 "$HAB" run-ovmm-find-episode \
             --episode-id hm3d_lamp_bed_00006 \
-            --backend "$backend" --device cuda \
+            --backend "$backend" --device cuda --agentic-find \
             --output "${HOME}/runs/emet/ovmm_habitat/${RUN_ID}/hm3d_lamp_bed_00006_${backend}.json" \
             2>&1 | tee "${LOG_ROOT}/habitat_ovmm_${backend}.log" || true
         gpu_step

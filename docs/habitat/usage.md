@@ -208,16 +208,38 @@ Full HM-EQA sweeps are GPU-heavy and not default CI.
 
 ## OVMM find-phase (agentic loop) on Habitat
 
-`emet-habitat run-ovmm-find-*` now routes FindObj / FindRec through the shared
-**AgenticEQA loop** for dynagraph/static_graph (default) — same loop as HM-EQA —
-instead of only the one-shot memory localize. This is the path for the large
-whole-home HM3D scenes: the mapping protocol rotates in place, then the loop
-explores navmesh frontiers, investigates place cards, and verifies before the
-object-phrase voxel XYZ is scored. See `docs/ovmm_find_phase_benchmark.md`
-(§ Agentic find on Habitat) and `scripts/smoke_habitat_ovmm_agentic_find.sh`.
+`emet-habitat run-ovmm-find-episode` / `run-ovmm-find-batch` share sim OVMM find's
+query dispatcher (`run_ovmm_find_queries`): dynagraph/static_graph use the
+**AgenticEQA loop** (same as HM-EQA); dynamem / `--no-agentic-find` use one-shot
+memory localize. Mapping still rotates in place; the loop explores navmesh
+frontiers. JSON keys and GT radius scoring go through `ovmm_find_query_row` /
+`score_ovmm_find_query` (`frame=habitat_xz`). See
+`docs/ovmm_find_phase_benchmark.md` (§ Agentic find on Habitat) and
+`scripts/smoke_habitat_ovmm_agentic_find.sh`.
 
-CLI flags: `--agentic-find/--no-agentic-find`, `--agentic-max-rounds`,
-`--agentic-max-nav-steps`. Test: `uv run emet test src/test/memory/test_habitat_ovmm_agentic_find.py -q`.
+**Defaults (easy to miss):**
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--device` | `cuda` | GPU SigLIP; GPU Qwen when agentic find is on. Pass `--device cpu` for CLIP + CPU VLM. |
+| `--cpu-only` | off | Alias for `--device cpu`. Does **not** disable the agentic loop. |
+| `--agentic-find` | on for dynagraph/static_graph; off for dynamem/ground_truth | `--no-agentic-find` is the one-shot memory-localize ablation. |
+
+```bash
+# GPU agentic find (product path)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda
+
+# One-shot ablation (no VLM)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda --no-agentic-find
+
+# GT / CPU mapping smoke (agentic stays off for ground_truth)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend ground_truth --device cpu --not-rotate
+```
+
+Test: `uv run emet test src/test/memory/test_habitat_ovmm_agentic_find.py -q`.
 
 ## Episode flow
 
