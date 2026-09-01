@@ -36,6 +36,9 @@ wheels/
 
 # Habitat EQA harness (micromamba env; not the main uv venv)
 .venv-habitat/
+
+# JetPack 7 native VLM serve (cu130 torch; scripts/run_jetson_vlm_native.sh)
+.venv-vlm/
 .micromamba/
 
 # PyInstaller
