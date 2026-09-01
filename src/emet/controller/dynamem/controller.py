@@ -126,9 +126,9 @@ class DynamemController(BaseController):
         self._lingbot_use_pose = bool(self.parameters.get("lingbot_use_pose", True))
         # Heavy perception (YoloE detection + SigLIP dense features + instance memory
         # + graph update) runs every N updates; occupancy/clearance update every frame
-        # so navigation is always current. The VLM/graph verification reads the latest
-        # full-perception observation, so a skipped frame only defers object recall by
-        # one cadence — a huge wall-time cut in teleport eval (each update was ~15-20s).
+        # so navigation is always current. Rotate-in-place / look-around mapping
+        # captures pass ``full_perception=True`` so an 8-view scan does not skip
+        # even headings (default N=2 would drop scan 8/8, where the objects often are).
         self._perception_every_n = max(1, int(self.parameters.get("perception_every_n", 2) or 1))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)

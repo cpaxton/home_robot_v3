@@ -91,7 +91,10 @@ obs_min_density: 5
 pad_obstacles: 2          # dilation radius around detected obstacles (grid cells)
 min_pad_obstacles: 1
 local_radius: 0.25        # start-pose explored disk (not grown every mapping frame)
+perception_every_n: 2     # YoloE/graph every N frames; rotate/look-around force every heading
 ```
+
+Rotate-in-place (OVMM mapping scan) always calls ``update(full_perception=True)`` and waits for a newer ZMQ full-obs after each yaw. Default ``perception_every_n: 2`` would otherwise skip even headings — including scan 8/8, where the objects often sit. Occupancy still updates every ``update()``; the force flag also re-runs DA3/LingBot so even headings do not reuse the previous pose's depth.
 
 ### Depth / voxel post-filters (DA3 hardware)
 

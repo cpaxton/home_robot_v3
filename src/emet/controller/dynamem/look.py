@@ -20,6 +20,7 @@ from emet.controller.dynamem.constants import (
     DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL,
     DYNAMEM_HEAD_SWEEP_SPEED_TOL,
     DYNAMEM_HEAD_SWEEP_STOPPED_HOLD_S,
+    DYNAMEM_POST_MOTION_OBS_WAIT_S,
     default_table_mapping_relative_yaws,
 )
 from emet.controller.zmq_client import StretchZmqClient
@@ -28,6 +29,31 @@ from emet.utils.logger import Logger
 from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
+
+
+def wait_post_motion_obs(robot, timeout: float) -> None:
+    """Wait for a camera frame newer than the one cached at end of motion.
+
+    ZMQ ``CONFLATE`` keeps the last full-obs. ``wait_for_obs`` only checks that
+    ``_obs`` is not None, so after a blocking yaw it returns immediately with
+    the previous heading. Stretch has no ``wait_for_obs``; both clients expose
+    ``_seq_id`` from the recv thread — wait until that increments.
+    """
+    if hasattr(robot, "wait_for_obs"):
+        robot.wait_for_obs(timeout=timeout)
+    prev = getattr(robot, "_seq_id", None)
+    if not isinstance(prev, int):
+        time.sleep(DYNAMEM_HEAD_SETTLE_S)
+        return
+    deadline = time.monotonic() + min(DYNAMEM_POST_MOTION_OBS_WAIT_S, max(0.2, float(timeout)))
+    while time.monotonic() < deadline:
+        cur = getattr(robot, "_seq_id", prev)
+        if isinstance(cur, int) and cur > prev:
+            time.sleep(DYNAMEM_HEAD_SETTLE_S)
+            return
+        time.sleep(0.05)
+    logger.warning(f"no fresh observation after motion (seq still {prev})")
+    time.sleep(DYNAMEM_HEAD_SETTLE_S)
 
 
 def _env_flag_on(name: str) -> bool:
@@ -148,7 +174,7 @@ def look_around(self):
         )
     if skip_sweep:
         self.announce_action("Look around: single capture (no head sweep)")
-        self.update()
+        self.update(full_perception=True)
         return
 
     self.announce_action("Look around: sweeping head")
@@ -168,7 +194,7 @@ def look_around(self):
         self.announce_motion_progress(f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})")
         self._head_to_sweep(pan, tilt)
         time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
-        self.update()
+        self.update(full_perception=True)
     self.announce_motion_progress(f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)")
     # Return to look_front without a long blocking wait.
     self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
@@ -218,10 +244,7 @@ def rotate_in_place(self, *, n_steps: int | None = None):
         self.robot.look_front(blocking=True, timeout=nav_timeout)
     else:
         self.announce_motion_progress("Looking around: default-table mapping view + look_front")
-    time.sleep(DYNAMEM_HEAD_SETTLE_S)
-    wait_obs = getattr(self.robot, "wait_for_obs", None)
-    if callable(wait_obs):
-        wait_obs(timeout=nav_timeout)
+    wait_post_motion_obs(self.robot, nav_timeout)
     if n_steps is None:
         env_n = os.environ.get("EMET_ROTATE_SCAN_STEPS", "").strip()
         n_steps = int(env_n) if env_n.isdigit() and int(env_n) > 0 else 8
@@ -230,8 +253,10 @@ def rotate_in_place(self, *, n_steps: int | None = None):
     n_steps = max(1, min(n_steps, 16))
 
     def _capture() -> None:
-        # Mapping must store every scan pose, including when realtime threads exist.
-        self.update()
+        # Mapping must store every scan pose with object-level perception.
+        # ``perception_every_n`` (default 2) would skip even obs_count, including
+        # the last 8/8 heading where the objects often sit.
+        self.update(full_perception=True)
 
     # Map the prepared heading first. The old loop yawed +45° before any
     # update(), so default-table rby1 never stored the table-facing frame.
@@ -254,6 +279,7 @@ def rotate_in_place(self, *, n_steps: int | None = None):
             blocking=True,
             timeout=nav_timeout,
         )
+        wait_post_motion_obs(self.robot, nav_timeout)
         _capture()
         if step_i in (2, 6):
             self.announce_action(f"Looking around: scan step {step_i + 2}/{n_steps}")

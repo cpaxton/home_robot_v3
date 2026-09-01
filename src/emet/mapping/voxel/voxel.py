@@ -1026,14 +1026,22 @@ class SparseVoxelMap:
             )[0, 0].bool()
 
         # Explored = occupied XY columns plus the start-pose ``local_radius`` disk.
-        # Do not close this mask (that filled real observation gaps). Obstacles still
-        # get a morphological open so thin noise can drop.
+        # Open/close fills 1-cell speckle for A*; visit trail is still first-obs only.
         # TODO: make sure lidar is supported here as well; if we do not have lidar assume a certain radius is explored
         explored_soft = torch.sum(voxels, dim=-1)
         explored_soft += self._visited
         explored = explored_soft > 0
 
         if self.smooth_kernel_size > 0:
+            explored = binary_erosion(
+                binary_dilation(explored.float().unsqueeze(0).unsqueeze(0), self.smooth_kernel),
+                self.smooth_kernel,
+            )
+            explored = binary_dilation(
+                binary_erosion(explored, self.smooth_kernel),
+                self.smooth_kernel,
+            )[0, 0].bool()
+
             obstacles = binary_dilation(
                 binary_erosion(obstacles.float().unsqueeze(0).unsqueeze(0), self.smooth_kernel),
                 self.smooth_kernel,

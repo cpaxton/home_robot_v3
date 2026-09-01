@@ -50,6 +50,11 @@ da3_model_id: depth-anything/DA3-SMALL
 da3_process_res: 378
 da3_infer_every_n: 2
 da3_stereo: false
+# Heavy perception (YoloE + SigLIP + instance + graph) every N mapping updates.
+# Occupancy still updates every frame. 1 = always. Rotate-in-place / look-around
+# captures pass ``full_perception=True`` (and re-run DA3) so an 8-view scan does
+# not skip even headings (N=2 would drop scan 8/8).
+perception_every_n: 2
 # da3_use_amp: true   # optional override; omit for auto on CUDA
 # da3_torch_compile: false  # experimental
 # --- Quality-first overrides (slower): ``da3_model_id: depth-anything/DA3METRIC-LARGE``, ``da3_process_res: 504``, ``da3_stereo: true``, ``da3_infer_every_n: 1``.
@@ -133,8 +138,9 @@ detection:
 
 # Point cloud cleanup
 filters:
-  # Obstacle morph in classic SparseVoxelMap only. Dynamem does not close the
-  # 2D explored mask (that hid real camera-coverage holes).
+  # Open/close on 2D explored (and classic SparseVoxelMap obstacles). Fills
+  # 1-cell voxel speckle so map_topdown / A* are not full of holes. Does not
+  # stamp a visit trail — that is ``local_radius`` on the first observation.
   smooth_kernel_size: 3
   # smooth_kernel_size: 4
   # smooth_kernel_size: 0

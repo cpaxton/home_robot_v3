@@ -149,16 +149,29 @@ def test_visited_every_step_when_configured() -> None:
     assert visited[second_ij[0], second_ij[1]] > 0
 
 
-def test_explored_keeps_one_cell_gap_between_islands() -> None:
-    """Morphological close used to merge nearby coverage islands into a solid carpet."""
+def test_explored_closes_one_cell_holes() -> None:
+    """Voxel speckle (1-cell holes inside a blob) must close so map_topdown / A* are navigable."""
     voxel_map = _make_map(add_local_radius_points=False, smooth_kernel_size=3)
     visited = voxel_map._visited
     i = int(visited.shape[0] // 2)
     j = int(visited.shape[1] // 2)
-    visited[i, j] = 1
-    visited[i, j + 2] = 1
+    visited[i - 6 : i + 7, j - 6 : j + 7] = 1
+    visited[i, j] = 0
     _, explored = voxel_map.get_2d_map()
     exp = explored.detach().cpu().numpy()
     assert exp[i, j]
-    assert exp[i, j + 2]
-    assert not exp[i, j + 1]
+
+
+def test_explored_keeps_wide_gap_between_islands() -> None:
+    """Close must not merge coverage islands a meter apart (Stretch cone gaps)."""
+    voxel_map = _make_map(add_local_radius_points=False, smooth_kernel_size=3)
+    visited = voxel_map._visited
+    i = int(visited.shape[0] // 2)
+    j = int(visited.shape[1] // 2)
+    visited[i - 4 : i + 5, j - 4 : j + 5] = 1
+    visited[i - 4 : i + 5, j + 20 : j + 29] = 1
+    _, explored = voxel_map.get_2d_map()
+    exp = explored.detach().cpu().numpy()
+    assert exp[i, j]
+    assert exp[i, j + 24]
+    assert not exp[i, j + 12]
