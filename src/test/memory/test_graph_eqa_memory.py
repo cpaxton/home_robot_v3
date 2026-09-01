@@ -1491,6 +1491,8 @@ def test_query_answer_returns_tuple_with_mock_client():
     assert isinstance(confidence_reasoning, str)
     assert target_point is None  # confident, so no exploration
     assert isinstance(relevant_images, list)
+    assert "Question:" in (mem.last_eqa_prompt_text or "")
+    assert "SCENE_GRAPH" in (mem.last_eqa_prompt_text or "")
 
 
 def test_color_question_answer_contains_red_and_blue():

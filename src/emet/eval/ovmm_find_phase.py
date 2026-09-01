@@ -26,6 +26,7 @@ from typing import Any, Literal
 import numpy as np
 import yaml
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.memory_backends import (
     DYNAGRAPH,
     GROUND_TRUTH,
@@ -55,6 +56,80 @@ LocalizeSource = Literal[
 
 _HEX_TOKEN_RE = re.compile(r"^[0-9a-f]{8,}$", re.IGNORECASE)
 _NUMERIC_TOKEN_RE = re.compile(r"^\d+$")
+
+# ``explore_steps`` is a deprecated alias of ``mapping_max_nav_steps`` (mapping
+# coverage / agentic explore max_nav_steps — not FindObj/FindRec). Warn once
+# per source so sweep files that still use the old key are visible.
+_EXPLORE_STEPS_ALIAS_WARNED: set[str] = set()
+
+
+class MappingBudgetConflict(ValueError):
+    """Both mapping budget keys were set to different integers."""
+
+
+def _warn_explore_steps_alias(source: str) -> None:
+    key = str(source or "explore_steps")
+    if key in _EXPLORE_STEPS_ALIAS_WARNED:
+        return
+    _EXPLORE_STEPS_ALIAS_WARNED.add(key)
+    from emet.utils.logger import Logger
+
+    Logger(__name__).warning(
+        f"{key}: explore_steps is a deprecated alias of mapping_max_nav_steps "
+        "(mapping coverage max_nav_steps, not FindObj/FindRec). "
+        "Prefer mapping_max_nav_steps / --mapping-max-nav-steps."
+    )
+
+
+def resolve_mapping_max_nav_steps(
+    mapping_max_nav_steps: int | None = None,
+    explore_steps: int | None = None,
+    *,
+    source: str = "",
+    default: int | None = 0,
+    warn: bool = True,
+) -> int | None:
+    """Canonical mapping coverage budget (agentic ``max_nav_steps``).
+
+    ``mapping_max_nav_steps`` wins. ``explore_steps`` is a deprecated alias.
+    If both are set and differ, raise :class:`MappingBudgetConflict`. If neither
+    is set, return *default* (``0`` for YAML rows, ``None`` for a CLI override).
+    """
+    has_new = mapping_max_nav_steps is not None
+    has_old = explore_steps is not None
+    if has_new and has_old and int(mapping_max_nav_steps) != int(explore_steps):
+        loc = f"{source}: " if source else ""
+        raise MappingBudgetConflict(
+            f"{loc}mapping_max_nav_steps={mapping_max_nav_steps} conflicts with "
+            f"deprecated explore_steps={explore_steps}"
+        )
+    if has_old and not has_new and warn:
+        _warn_explore_steps_alias(source or "explore_steps")
+    if has_new:
+        return int(mapping_max_nav_steps)
+    if has_old:
+        return int(explore_steps)
+    return default
+
+
+def mapping_budget_from_row(
+    row: dict[str, Any],
+    *,
+    source: str,
+    default: int = 0,
+    warn: bool = True,
+) -> int:
+    """Resolve ``mapping_max_nav_steps`` / ``explore_steps`` from a YAML mapping."""
+    new = row.get("mapping_max_nav_steps")
+    old = row.get("explore_steps")
+    resolved = resolve_mapping_max_nav_steps(
+        None if new is None else int(new),
+        None if old is None else int(old),
+        source=source,
+        default=default,
+        warn=warn,
+    )
+    return int(resolved or 0)
 
 
 def semantic_label_from_instance(name: str) -> str:
@@ -87,7 +162,8 @@ class FindPhaseEpisode:
     start_recep: str
     goal_recep: str
     success_radius_m: float = 0.75
-    explore_steps: int = 0
+    mapping_max_nav_steps: int | None = None
+    explore_steps: int | None = None
     object_gt_body: str | None = None
     # TAMP floor pick/place: drop the object to the floor before the pick phase
     # (RoboCasa "pick something off the floor" / room-exploration tasks).
@@ -95,6 +171,17 @@ class FindPhaseEpisode:
     floor_z_m: float | None = None
     # Optional per-episode full-OVMM override; batch CLI options take precedence.
     manip_mode: ManipMode | None = None
+
+    def __post_init__(self) -> None:
+        n = resolve_mapping_max_nav_steps(
+            self.mapping_max_nav_steps,
+            self.explore_steps,
+            source="FindPhaseEpisode",
+            default=0,
+            warn=False,
+        )
+        object.__setattr__(self, "mapping_max_nav_steps", int(n or 0))
+        object.__setattr__(self, "explore_steps", int(n or 0))
 
 
 @dataclass
@@ -151,9 +238,13 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
     if not isinstance(rows, list):
         raise ValueError(f"expected list under 'episodes' in {full}")
     out: list[FindPhaseEpisode] = []
+    n_alias = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
+        if row.get("explore_steps") is not None and row.get("mapping_max_nav_steps") is None:
+            n_alias += 1
+        budget = mapping_budget_from_row(row, source=str(full), default=0, warn=False)
         out.append(
             FindPhaseEpisode(
                 id=str(row["id"]),
@@ -163,7 +254,8 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
                 start_recep=str(row["start_recep"]),
                 goal_recep=str(row["goal_recep"]),
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
-                explore_steps=int(row.get("explore_steps", 0)),
+                mapping_max_nav_steps=budget,
+                explore_steps=budget,
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
                 floor_object=bool(row.get("floor_object", False)),
                 floor_z_m=(float(row["floor_z_m"]) if row.get("floor_z_m") is not None else None),
@@ -172,6 +264,8 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
         )
         if out[-1].manip_mode is not None and out[-1].manip_mode not in MANIP_MODES:
             raise ValueError(f"invalid manip_mode={out[-1].manip_mode!r} in {full}")
+    if n_alias:
+        _warn_explore_steps_alias(f"{full} ({n_alias} episode(s))")
     return out
 
 
@@ -952,6 +1046,7 @@ def create_find_phase_agent(
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
     input_path = str(graph_memory_input_path) if graph_memory_input_path else None
+    live_rerun = eval_rerun_enabled()
     if s0_parity and backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH):
         from emet.eval.stack import build_memory_agent
 
@@ -987,6 +1082,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             use_instance_memory=True,
             cpu_only=cpu_only,
             eqa=False,
@@ -1004,6 +1100,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             use_instance_graph=use_instance_graph,
             cpu_only=cpu_only,
             use_sensor_perception=use_sensor_perception,
@@ -1017,6 +1114,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             cpu_only=cpu_only,
             use_instance_graph=use_instance_graph,
             use_sensor_perception=use_sensor_perception,
@@ -1031,6 +1129,7 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
+            enable_live_rerun=live_rerun,
             cpu_only=cpu_only,
             use_instance_graph=use_instance_graph,
             use_sensor_perception=False,
@@ -1121,14 +1220,99 @@ def _prepare_default_table_rby1_mapping_view(agent: Any) -> bool:
 
 def run_mapping_protocol(
     agent: Any,
-    *,
-    explore_steps: int,
-    not_rotate: bool,
+    mapping_max_nav_steps: int | None = None,
+    not_rotate: bool = False,
     mapping_rotate_steps: int | None = None,
+    trace_meta: dict[str, Any] | None = None,
+    *,
+    explore_steps: int | None = None,
 ) -> int:
-    """Rotate in place and optionally run frontier explore steps."""
+    """Rotate in place and optionally run frontier explore steps.
+
+    When ``mapping_max_nav_steps>0`` and the agent has a graph/voxel stack
+    (dynagraph), mapping uses the shared :class:`AgenticEQAExecutor` in
+    ``mode=explore`` (coverage, no object ``toward``) — same loop as HM-EQA.
+    ``S0`` ``mapping_max_nav_steps=0`` stays rotate-only.
+
+    ``explore_steps`` is a deprecated alias of ``mapping_max_nav_steps``.
+    """
+    from emet.utils.logger import Logger
+
+    _logger = Logger(__name__)
+
+    n_explore = int(
+        resolve_mapping_max_nav_steps(
+            mapping_max_nav_steps,
+            explore_steps,
+            source="run_mapping_protocol",
+            default=0,
+            warn=bool(explore_steps is not None and mapping_max_nav_steps is None),
+        )
+        or 0
+    )
     steps = 0
-    if not not_rotate:
+    # Agentic coverage mapping when explore steps are requested and not GT.
+    if n_explore > 0 and not backend_uses_ground_truth(agent):
+        gm = getattr(agent, "graph_memory", None)
+        vm = getattr(agent, "voxel_map", None)
+        if vm is None and hasattr(agent, "get_voxel_map"):
+            try:
+                vm = agent.get_voxel_map()
+            except Exception:
+                vm = None
+        has_stack = gm is not None
+        # Keep S0 rotate-only: S0 episodes have mapping_max_nav_steps==0, so they
+        # never reach here. Kitchen / robocasa mapping with mapping_max_nav_steps>0
+        # is coverage-only and must not depend on an 8-way spawn spin — but it
+        # does need a seeded disk: without any scan the explored area is just the
+        # ``local_radius`` start disk (~0.25 m), every frontier is outside the reachable
+        # map, and sample_navigation clamps every explore goal to ~0 m (nav
+        # "happens" but never moves). A 4-step rotate seed fixes that.
+        if has_stack:
+            if not not_rotate:
+                rotate = getattr(agent, "rotate_in_place", None)
+                if callable(rotate):
+                    rotate(n_steps=mapping_rotate_steps)
+                    steps += 1
+            seed_fn = getattr(agent, "_seed_local_radius_explored", None)
+            if callable(seed_fn) and vm is not None:
+                try:
+                    seed_fn(vm)
+                except Exception:
+                    pass
+            try:
+                from emet.memory.graph_eqa.agentic_eqa import run_agentic_eqa_result
+
+                meta = dict(trace_meta or {})
+                meta.setdefault("ovmm_phase", "mapping")
+                result = run_agentic_eqa_result(
+                    agent,
+                    None,
+                    goal="explore and map the environment",
+                    max_nav_steps=n_explore,
+                    max_rounds=n_explore + 1,
+                    # Coverage mapping must not require the VLM router — the VL
+                    # worker only starts at find query time. Deterministic
+                    # explore_frontier / finish fallback is exactly the coverage
+                    # policy (uncovered-first frontier picks).
+                    router=False,
+                    trace_meta=meta,
+                )
+                # Stash for per-episode JSON (jobs report ``map=`` already exists).
+                agent._ovmm_mapping_result = result  # type: ignore[attr-defined]
+                n_agentic = int(getattr(result, "n_explore", 0) + getattr(result, "n_nav", 0))
+                steps += n_agentic
+                if n_agentic > 0:
+                    if backend_uses_ground_truth(agent):
+                        refresh = getattr(agent, "refresh_ground_truth", None)
+                        if callable(refresh):
+                            refresh()
+                    return steps
+                _logger.warning("agentic mapping produced 0 nav/explore steps; falling back to execute_action")
+            except Exception as exc:
+                _logger.warning(f"agentic mapping failed, falling back to execute_action: {exc}")
+
+    if not not_rotate and steps == 0:
         # rotate_in_place backs up + look_front on default_table_rby1 via
         # _prepare_default_table_rby1_mapping_view, then scans with update() each step.
         rotate = getattr(agent, "rotate_in_place", None)
@@ -1141,7 +1325,7 @@ def run_mapping_protocol(
         vm = agent.get_voxel_map()
     if callable(seed_fn) and vm is not None:
         seed_fn(vm)
-    for _ in range(max(0, int(explore_steps))):
+    for _ in range(max(0, n_explore)):
         agent.execute_action("")
         steps += 1
     if backend_uses_ground_truth(agent):
@@ -1152,7 +1336,7 @@ def run_mapping_protocol(
 
 
 def backend_uses_ground_truth(agent: Any) -> bool:
-    return bool(getattr(agent, "ground_truth_mode", False))
+    return getattr(agent, "ground_truth_mode", False) is True
 
 
 @dataclass
@@ -1204,6 +1388,7 @@ def run_episode_find_phase(
 
     repo = repo_root or Path(__file__).resolve().parents[3]
     sim_cfg = load_sim_launch_config_from_path(episode.sim)
+    robot_kind = str(getattr(sim_cfg, "robot", None) or "stretch")
     port_offset = int(run_cfg.port_offset)
     recv_port = 4401 + port_offset
 
@@ -1257,7 +1442,7 @@ def run_episode_find_phase(
     worker_started = False
     try:
         parameters = apply_backend_parameters(
-            get_parameters("dynav_config.yaml"),
+            get_parameters("dynav_config.yaml", robot=robot_kind),
             run_cfg.backend,
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
@@ -1318,13 +1503,12 @@ def run_episode_find_phase(
             settle += 15.0
         time.sleep(settle)
 
-        robot_kind = str(getattr(sim_cfg, "robot", "stretch"))
         # Defer ZMQ start until controller is ready unless S0 parity (pytest-style).
         robot = create_robot_client_from_cli(
             robot_kind,
             "127.0.0.1",
             port_offset=port_offset,
-            enable_rerun_server=False,
+            enable_rerun_server=eval_rerun_enabled(),
             start_immediately=False,
             allow_missing_depth=True,
         )
@@ -1394,15 +1578,15 @@ def run_episode_find_phase(
                     raise RuntimeError("ground-truth mode: no sim_object_placements in session")
 
         t_map0 = time.monotonic()
-        explore_steps = (
+        mapping_budget = (
             int(run_cfg.explore_steps_override)
             if run_cfg.explore_steps_override is not None
-            else int(episode.explore_steps)
+            else int(episode.mapping_max_nav_steps)
         )
         not_rotate = bool(run_cfg.not_rotate)
         if cache_dir is not None:
             # Baseline already mapped; skip rotate/explore.
-            explore_steps = 0
+            mapping_budget = 0
             not_rotate = True
         if s0_executor is not None:
             s0_executor([("rotate_in_place", "")])
@@ -1410,11 +1594,19 @@ def run_episode_find_phase(
         else:
             n_steps = run_mapping_protocol(
                 agent,
-                explore_steps=explore_steps,
+                mapping_max_nav_steps=mapping_budget,
                 not_rotate=not_rotate,
                 mapping_rotate_steps=run_cfg.mapping_rotate_steps,
+                trace_meta={
+                    "ovmm_phase": "mapping",
+                    "episode_id": episode.id,
+                    "object": str(episode.object),
+                    "start_recep": episode.start_recep,
+                    "goal_recep": episode.goal_recep,
+                },
             )
         mapping_wall_s = time.monotonic() - t_map0
+        mapping_result = getattr(agent, "_ovmm_mapping_result", None) if agent is not None else None
 
         session = robot.get_emet_session()
         placements = read_sim_object_placements(session)
@@ -1531,6 +1723,8 @@ def run_episode_find_phase(
                 obj_source = "agentic_verify" if obj_res.verified else None
             agentic_meta["obj_n_retracted_claims"] = obj_res.n_retracted_claims
             agentic_meta["obj_agentic_rounds"] = obj_res.n_rounds
+            agentic_meta["obj_n_nav"] = obj_res.n_nav
+            agentic_meta["obj_n_explore"] = obj_res.n_explore
             agentic_meta["obj_verified_obs_id"] = obj_res.verified_obs_id
             if obj_res.extra:
                 agentic_meta["obj_xyz_source"] = obj_res.extra.get("xyz_source")
@@ -1562,6 +1756,8 @@ def run_episode_find_phase(
                 recep_source = "agentic_verify" if recep_res.verified else None
             agentic_meta["recep_n_retracted_claims"] = recep_res.n_retracted_claims
             agentic_meta["recep_agentic_rounds"] = recep_res.n_rounds
+            agentic_meta["recep_n_nav"] = recep_res.n_nav
+            agentic_meta["recep_n_explore"] = recep_res.n_explore
             agentic_meta["recep_verified_obs_id"] = recep_res.verified_obs_id
             if recep_res.extra:
                 agentic_meta["recep_xyz_source"] = recep_res.extra.get("xyz_source")
@@ -1621,6 +1817,24 @@ def run_episode_find_phase(
                 "instance_gt_association_recall": instance_gt_association_recall(agent.graph_memory, placements),
             }
 
+        # Mapping-phase agentic coverage diagnostics (mapping_max_nav_steps>0 uses
+        # the agentic explore loop; S0 rotate-only has no mapping_result).
+        mapping_diag: dict[str, Any] = {}
+        if mapping_result is not None:
+            mapping_diag = {
+                "mapping_n_explore": int(getattr(mapping_result, "n_explore", 0)),
+                "mapping_n_nav": int(getattr(mapping_result, "n_nav", 0)),
+                "mapping_n_rounds": int(getattr(mapping_result, "n_rounds", 0)),
+                "mapping_verified": bool(getattr(mapping_result, "verified", False)),
+            }
+        else:
+            mapping_diag = {
+                "mapping_n_explore": None,
+                "mapping_n_nav": None,
+                "mapping_n_rounds": None,
+                "mapping_verified": None,
+            }
+
         metrics = {
             "episode_id": episode.id,
             "tier": episode.tier,
@@ -1629,7 +1843,9 @@ def run_episode_find_phase(
             "object_query": object_query,
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,
-            "explore_steps": explore_steps,
+            "mapping_max_nav_steps": mapping_budget,
+            "explore_steps": mapping_budget,
+            **mapping_diag,
             "floor_object": bool(episode.floor_object),
             "floor_z_m": float(episode.floor_z_m) if episode.floor_z_m is not None else None,
             "episode_manip_mode": episode.manip_mode,

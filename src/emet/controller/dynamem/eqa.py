@@ -5,15 +5,13 @@
 
 from __future__ import annotations
 
-import os
 import time
-from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 import torch
 from PIL import Image
 
+from emet.controller.dynamem.constants import DYNAMEM_NAV_CHUNK_WPS, DYNAMEM_NAV_MAX_HOPS
 from emet.controller.habitat_nav import (
     NavAttemptResult,
     NavOutcome,
@@ -23,7 +21,6 @@ from emet.controller.habitat_nav import (
     is_habitat_robot_client,
 )
 from emet.utils.logger import Logger
-from emet.visualization.rerun import has_display
 
 logger = Logger(__name__)
 
@@ -56,12 +53,7 @@ def run_eqa(self, question, max_planning_steps: int = 5):
     """
     API for calling EQA module
     """
-    # See navigate(): avoid rr.init during live Rerun streaming (would reset the recording).
-    if self.save_rerun:
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
 
     self.robot.switch_to_navigation_mode()
 
@@ -301,6 +293,7 @@ def navigate_to_target_pose(
     target_theta: float | None = None,
     *,
     target_obs_id: int | None = None,
+    _hop: int = 0,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -366,7 +359,7 @@ def navigate_to_target_pose(
         waypoints = [pt.state for pt in res.trajectory]
     elif res is not None:
         waypoints = None
-        logger.warning("navigate_to_target_pose planner failure: %s", res.reason)
+        logger.warning(f"navigate_to_target_pose planner failure: {res.reason}")
     else:
         waypoints = None
 
@@ -384,12 +377,12 @@ def navigate_to_target_pose(
     full_traj_for_viz = None
     if waypoints is not None:
         n_planned = len(waypoints)
-        truncated = len(waypoints) > 8
+        truncated = len(waypoints) > DYNAMEM_NAV_CHUNK_WPS
         full_traj_for_viz = self.planner.clean_path_for_xy(
             list(waypoints), start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
         )
         if truncated:
-            waypoints = waypoints[:8]
+            waypoints = waypoints[:DYNAMEM_NAV_CHUNK_WPS]
         traj = self.planner.clean_path_for_xy(waypoints, start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0)
         finished = not truncated
         if finished and target_theta is not None:
@@ -507,7 +500,7 @@ def navigate_to_target_pose(
             self._last_nav_attempt = nav_res
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             return NavOutcome.ABORTED_TIMEOUT
-        after_xy = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:2]
+        after_xy = self._current_planning_xyt().reshape(-1)[:2]
         dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
         note = "ok" if finished else f"moved_{dist_m:.2f}m"
         nav_res = NavAttemptResult(
@@ -542,7 +535,30 @@ def navigate_to_target_pose(
     self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
     if finished:
         return NavOutcome.REACHED
-    if nav_res.success or float(getattr(nav_res, "dist_m", 0.0) or 0.0) >= 0.12:
+    progressed = bool(nav_res.success) or float(getattr(nav_res, "dist_m", 0.0) or 0.0) >= 0.12
+    if progressed and _hop + 1 < DYNAMEM_NAV_MAX_HOPS:
+        upd = getattr(self, "update", None)
+        if callable(upd):
+            try:
+                upd()
+            except Exception as exc:
+                logger.warning(f"navigate_to_target_pose hop update failed: {exc}")
+        nxt = self._current_planning_xyt()
+        logger.info(
+            "navigate_to_target_pose: chunk hop %d/%d, replanning from (%.2f, %.2f)",
+            _hop + 1,
+            DYNAMEM_NAV_MAX_HOPS,
+            float(nxt[0]),
+            float(nxt[1]),
+        )
+        return self.navigate_to_target_pose(
+            original_target_pose,
+            nxt,
+            target_theta,
+            target_obs_id=target_obs_id,
+            _hop=_hop + 1,
+        )
+    if progressed:
         return NavOutcome.PROGRESS
     if nav_res.note == "sample_nav_failed" or str(nav_res.note or "").startswith("no_target"):
         return NavOutcome.NO_TARGET

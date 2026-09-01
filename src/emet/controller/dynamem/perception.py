@@ -19,6 +19,7 @@ from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_de
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -157,7 +158,7 @@ def _rerun_live_status_markdown(self) -> str:
 
 def _rerun_refresh_monologue_panel(self) -> None:
     """Push ``robot_monologue`` = stored plan/EQA text plus live mapping status."""
-    if not getattr(self.rerun_visualizer, "enabled", True):
+    if not visualizer_is_enabled(self.rerun_visualizer):
         return
     base = (self._rerun_monologue_base or "").strip()
     if not base:
@@ -167,7 +168,7 @@ def _rerun_refresh_monologue_panel(self) -> None:
     self.rerun_visualizer.log_text("robot_monologue", doc)
 
 
-def _run_full_perception(self) -> bool:
+def _run_full_perception(self, force: bool | None = None) -> bool:
     """True when this update should run the expensive perception stack.
 
     Occupancy/clearance (what navigation needs) updates every frame; YoloE +
@@ -175,12 +176,32 @@ def _run_full_perception(self) -> bool:
     ``perception_every_n`` frames. ``perception_every_n=1`` = always (old
     behavior). The throttled path still produces a fresh depth/pointcloud, so
     A* has current obstacles; only object-level recall lags by one cadence.
+
+    ``force`` overrides the cadence (rotate-in-place / look-around mapping
+    captures must run detection on every heading, including even ``obs_count``).
     """
+    if force is not None:
+        return bool(force)
     return self._perception_every_n <= 1 or (self.obs_count - 1) % self._perception_every_n == 0
 
 
-def update(self):
-    """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
+def _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=None) -> None:
+    """Habitat / eval robots have no ZMQ Rerun thread — log head RGB from ``update()``."""
+    vis = self.rerun_visualizer
+    if not visualizer_is_enabled(vis):
+        return
+    if getattr(self.robot, "_rerun_thread", None) is not None:
+        return
+    vis.log_head_camera(obs, mapping_depth=mapping_depth)
+
+
+def update(self, *, full_perception: bool | None = None):
+    """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation.
+
+    ``full_perception=True`` runs YoloE / SigLIP / graph ingest even when
+    ``perception_every_n`` would skip this ``obs_count``. Mapping scans also
+    re-run DA3 / LingBot so even headings do not reuse the previous pose's depth.
+    """
 
     _t_update0 = time.time()
     obs = self.robot.get_observation()
@@ -189,10 +210,13 @@ def update(self):
         self.robot.set_mapping_depth_for_rerun(None)
         return
     self.obs_count += 1
+    run_full = self._run_full_perception(full_perception)
     rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
     run_infer_full = self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
     if self._depth_source == "lingbot":
         run_infer_full = self._lingbot_infer_every_n <= 1 or (self.obs_count - 1) % self._lingbot_infer_every_n == 0
+    if run_full:
+        run_infer_full = True
     depth: np.ndarray | None
     if (
         not run_infer_full
@@ -251,6 +275,7 @@ def update(self):
                 max_depth=float(self.parameters.get("max_depth", 2.5)),
             )
     self.robot.set_mapping_depth_for_rerun(depth)
+    _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=depth)
     base_xyt = None
     if obs.gps is not None and obs.compass is not None:
         g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
@@ -283,7 +308,7 @@ def update(self):
             self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
     self.voxel_map.process_rgbd_images(
-        rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=self._run_full_perception()
+        rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full
     )
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
@@ -297,7 +322,7 @@ def update(self):
                 getattr(obs, "emet_session", None),
             )
             robot_xy = (float(wxyt[0]), float(wxyt[1]))
-    if getattr(self.rerun_visualizer, "enabled", True):
+    if visualizer_is_enabled(self.rerun_visualizer):
         self.rerun_visualizer.log_topdown_map_snapshot(self.voxel_map, robot_base_xy=robot_xy)
     if self.voxel_map.voxel_pcd._points is not None:
         self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
@@ -320,7 +345,7 @@ def update(self):
             )
 
     has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
-    if self._run_full_perception() and self.graph_memory is not None and getattr(self, "_lazy_graph_mode", False):
+    if run_full and self.graph_memory is not None and getattr(self, "_lazy_graph_mode", False):
         from emet.memory.graph_eqa.ingest.lazy_graph_commit import record_lazy_graph_viewpoint
 
         record_lazy_graph_viewpoint(
@@ -330,7 +355,7 @@ def update(self):
             frame_step=self.obs_count,
         )
     elif (
-        self._run_full_perception()
+        run_full
         and self.graph_memory is not None
         and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler)
     ):

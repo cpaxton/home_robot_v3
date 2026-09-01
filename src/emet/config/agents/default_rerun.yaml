@@ -18,6 +18,7 @@ rerun:
   voxel_map_stride: 2
   dynagraph_stride: 2
   mjcf_mesh_stride: 3
+  # VLM prompt / Image-N mosaic is always logged to world/dynagraph/context (not these flags).
   dynagraph:
     log_crops: false
     log_edges: false

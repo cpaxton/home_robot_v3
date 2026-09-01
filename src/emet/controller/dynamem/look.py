@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import os
 import time
+from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 
 from emet.controller.dynamem.constants import (
     DYNAMEM_HEAD_SETTLE_S,
@@ -20,13 +20,71 @@ from emet.controller.dynamem.constants import (
     DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL,
     DYNAMEM_HEAD_SWEEP_SPEED_TOL,
     DYNAMEM_HEAD_SWEEP_STOPPED_HOLD_S,
+    DYNAMEM_POST_MOTION_OBS_WAIT_S,
     default_table_mapping_relative_yaws,
 )
 from emet.controller.zmq_client import StretchZmqClient
 from emet.motion import constants as motion_constants
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
+
+
+def wait_post_motion_obs(robot, timeout: float) -> None:
+    """Wait for a camera frame newer than the one cached at end of motion.
+
+    ZMQ ``CONFLATE`` keeps the last full-obs. ``wait_for_obs`` only checks that
+    ``_obs`` is not None, so after a blocking yaw it returns immediately with
+    the previous heading. Stretch has no ``wait_for_obs``; both clients expose
+    ``_seq_id`` from the recv thread — wait until that increments.
+    """
+    if hasattr(robot, "wait_for_obs"):
+        robot.wait_for_obs(timeout=timeout)
+    prev = getattr(robot, "_seq_id", None)
+    if not isinstance(prev, int):
+        time.sleep(DYNAMEM_HEAD_SETTLE_S)
+        return
+    deadline = time.monotonic() + min(DYNAMEM_POST_MOTION_OBS_WAIT_S, max(0.2, float(timeout)))
+    while time.monotonic() < deadline:
+        cur = getattr(robot, "_seq_id", prev)
+        if isinstance(cur, int) and cur > prev:
+            time.sleep(DYNAMEM_HEAD_SETTLE_S)
+            return
+        time.sleep(0.05)
+    logger.warning(f"no fresh observation after motion (seq still {prev})")
+    time.sleep(DYNAMEM_HEAD_SETTLE_S)
+
+
+def _env_flag_on(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def look_around_should_sweep(robot: object, parameters: object | None = None) -> bool:
+    """Whether ``look_around`` should pan the head.
+
+    Env wins: ``EMET_FORCE_HEAD_SWEEP=1`` / ``EMET_SKIP_HEAD_SWEEP=1``. Else the
+    mapping key ``look_around_head_sweep`` from the unified robot overlay
+    (``robots.<id>`` in ``configs/emet/default.yaml``). Default YAML sets this
+    false for Stretch as well as rby1 (hardware 4-pan is opt-in). If the key is
+    missing, Stretch pans (narrow Realsense) and other robots do not.
+    """
+    if _env_flag_on("EMET_FORCE_HEAD_SWEEP"):
+        return True
+    if _env_flag_on("EMET_SKIP_HEAD_SWEEP"):
+        return False
+    raw = None
+    if parameters is not None:
+        getter = getattr(parameters, "get", None)
+        if callable(getter):
+            raw = getter("look_around_head_sweep")
+        elif isinstance(parameters, dict):
+            raw = parameters.get("look_around_head_sweep")
+    if raw is not None:
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(raw)
+    return isinstance(robot, StretchZmqClient)
 
 
 def _head_to_sweep(self, pan: float, tilt: float) -> None:
@@ -99,29 +157,13 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
 def look_around(self):
     """Look around for mapping / agentic capture.
 
-    Stretch's narrow Realsense FOV needs head pans. Galaxea rby1 and other
-    ``GenericZmqClient`` robots already have a wide enough camera that a
-    single ``update()`` is enough — pan sweeps dominate OVMM find wall time
-    on Stretch (15–45 s each) and must not be the default for routine agentic
-    experiments. Force sweeps with ``EMET_FORCE_HEAD_SWEEP=1``; force skip with
-    ``EMET_SKIP_HEAD_SWEEP=1``.
+    Policy: :func:`look_around_should_sweep` (robot overlay
+    ``mapping.look_around_head_sweep``, then env). YAML default is off for
+    Stretch as well as rby1 (single capture at look_front) — hardware 4-pan
+    is opt-in. Paper coverage: ``EMET_FORCE_HEAD_SWEEP=1`` or
+    ``--set mapping.look_around_head_sweep=true``.
     """
-    force_sweep = os.environ.get("EMET_FORCE_HEAD_SWEEP", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    skip_sweep = (not force_sweep) and (
-        os.environ.get("EMET_SKIP_HEAD_SWEEP", "").strip().lower()
-        in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        or not isinstance(self.robot, StretchZmqClient)
-    )
+    skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         import traceback
 
@@ -132,7 +174,7 @@ def look_around(self):
         )
     if skip_sweep:
         self.announce_action("Look around: single capture (no head sweep)")
-        self.update()
+        self.update(full_perception=True)
         return
 
     self.announce_action("Look around: sweeping head")
@@ -152,7 +194,7 @@ def look_around(self):
         self.announce_motion_progress(f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})")
         self._head_to_sweep(pan, tilt)
         time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
-        self.update()
+        self.update(full_perception=True)
     self.announce_motion_progress(f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)")
     # Return to look_front without a long blocking wait.
     self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
@@ -166,13 +208,33 @@ def _find_phase_nav_timeout(self, default: float = 10.0) -> float:
     return float(raw)
 
 
+def maybe_save_rerun_recording(self) -> None:
+    """Write ``logs/…/data_N.rrd`` without resetting a live ``RerunVisualizer`` stream.
+
+    ``rr.init`` during live ``rr.serve`` starts a new recording and empties the
+    websocket view. Only init when there is no live visualizer (offline dump).
+    """
+    if not self.save_rerun:
+        return
+    # Deferred: rerun-sdk native extensions.
+    import rerun as rr
+
+    os.makedirs(self.log, exist_ok=True)
+    dest = os.path.join(self.log, f"data_{self.rerun_iter}.rrd")
+    live = visualizer_is_enabled(self.rerun_visualizer)
+    if live:
+        logger.info(f"save_rerun: writing {dest} (keeping live Rerun recording)")
+        rr.save(dest)
+        return
+    spawn = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.environ.get("WAYLAND_SOCKET"))
+    rr.init("Stretch_robot", recording_id=uuid4(), spawn=spawn)
+    rr.save(dest)
+
+
 def rotate_in_place(self, *, n_steps: int | None = None):
     self.announce_action("Looking around: rotating in place")
     nav_timeout = self._find_phase_nav_timeout()
-    if self.save_rerun:
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
     self.robot.move_to_nav_posture()
     from emet.eval.ovmm_find_phase import _prepare_default_table_rby1_mapping_view
 
@@ -182,10 +244,7 @@ def rotate_in_place(self, *, n_steps: int | None = None):
         self.robot.look_front(blocking=True, timeout=nav_timeout)
     else:
         self.announce_motion_progress("Looking around: default-table mapping view + look_front")
-    time.sleep(DYNAMEM_HEAD_SETTLE_S)
-    wait_obs = getattr(self.robot, "wait_for_obs", None)
-    if callable(wait_obs):
-        wait_obs(timeout=nav_timeout)
+    wait_post_motion_obs(self.robot, nav_timeout)
     if n_steps is None:
         env_n = os.environ.get("EMET_ROTATE_SCAN_STEPS", "").strip()
         n_steps = int(env_n) if env_n.isdigit() and int(env_n) > 0 else 8
@@ -194,8 +253,10 @@ def rotate_in_place(self, *, n_steps: int | None = None):
     n_steps = max(1, min(n_steps, 16))
 
     def _capture() -> None:
-        # Mapping must store every scan pose, including when realtime threads exist.
-        self.update()
+        # Mapping must store every scan pose with object-level perception.
+        # ``perception_every_n`` (default 2) would skip even obs_count, including
+        # the last 8/8 heading where the objects often sit.
+        self.update(full_perception=True)
 
     # Map the prepared heading first. The old loop yawed +45° before any
     # update(), so default-table rby1 never stored the table-facing frame.
@@ -218,6 +279,7 @@ def rotate_in_place(self, *, n_steps: int | None = None):
             blocking=True,
             timeout=nav_timeout,
         )
+        wait_post_motion_obs(self.robot, nav_timeout)
         _capture()
         if step_i in (2, 6):
             self.announce_action(f"Looking around: scan step {step_i + 2}/{n_steps}")
@@ -251,8 +313,10 @@ def rotate_base_degrees(self, degrees: float) -> float:
 
 
 def _seed_local_radius_explored(self, vm) -> bool:
-    """Stamp ``local_radius`` explored disk at the current base (Stretch-style turn-around hack).
+    """Stamp ``local_radius`` explored disk at the current base (start / fallback seed).
 
+    Used when the map has no explored cells yet, and after OVMM mapping so A* can
+    leave spawn. Does not fill camera-coverage holes — that is observed voxels only.
     Returns True if the map reports any explored cells afterward.
     """
     if vm is None or not hasattr(vm, "_update_visited"):

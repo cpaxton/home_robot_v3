@@ -3,6 +3,17 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Config over env flags
+
+We over-use `EMET_*` for robot/controller policy (head sweep, teleport, TTS, rotate
+steps). Embodiment defaults belong in `robots.<id>` / `mapping.*` in
+[`configs/emet/default.yaml`](configs/emet/default.yaml) (see Stretch
+`look_around_head_sweep`). Env should stay as a rare override (`EMET_FORCE_HEAD_SWEEP`
+for paper pans) or for host/GPU process state. Do not add a new `EMET_*` for
+something that can be a YAML key + `--set`. Later: stop exporting
+`EMET_SKIP_HEAD_SWEEP` from `run_ovmm_find_recep_slice.sh` once every caller loads
+the robot overlay; same pass for other script-exported knobs that duplicate config.
+
 ## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
 Canonical record:
@@ -195,18 +206,102 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
 (sample_target_point projection, chunked-nav-as-progress); PR #111 (stacked) adds the
 `NavOutcome` enum + question-type-aware verification + camera diagnostic. What's left:
 
-**Branch `feat/tamp-ovmm-perf` (2026-08-23):** OVMM-scoped routing — unified
+**Branch `feat/tamp-ovmm-perf` (2026-08-23 → 2026-08-28):** OVMM-scoped routing — unified
 `_recall_nav_hypotheses`, GT placement seeds, find_recep nearby-investigate bias,
 `nav_outcome` in router Recent actions, richer `trace_meta` from find-phase harness.
+**2026-08-28 unify mapping (this PR):** `run_mapping_protocol` with `explore_steps>0`
+now calls `run_agentic_eqa_result(agent, None, goal="explore and map…", max_nav_steps=n, max_rounds=n+1)`
+— same `AgenticEQAExecutor` `mode=explore` as HM-EQA (router only `explore_frontier`/`finish`),
+coverage-first frontier picks (no object `toward`), arrival `look_ahead` (tilt 0) facing frontier
+then `update` (not `look_front -30°`/pre-sweep), hop-until-arrival for 27-wp kitchens;
+`S0` `explore_steps==0` stays rotate-only. Voxel `localize_text` on finished map now beats
+camera-pose-at-feet cards (`CAMERA_POSE_PLACE` redirect), SigLIP on arrival RGB is the query.
 **Efficiency pivot:** Stretch 3-ep slice took ~3.5 h with 0/3 success — default gate
 is now **rby1** (`PROFILE=smoke` / `slice` in `run_ovmm_find_recep_slice.sh`);
 `look_around` skips head pans on non-Stretch. Docs:
-`docs/experiments/ovmm_agentic_find_teleport.md`.
+`docs/experiments/ovmm_agentic_find_teleport.md` + `docs/ovmm_find_phase_benchmark.md`.
 **Integration (2026-08-25):** merged `feat/instance-graph-repair` (PR #130) for
 clock/count FIND view pinning + `close_look_label`; extend investigate bias to
 `find_object` and close-look questions on top.
 
+### 2026-08-28 assessment — does unified mapping fix OVMM failures?
 
+**Historical baseline (pre-unify):** teleport 9-ep sweep ~1/9 FindObj, 0/9 FindRec
+(`recep_slice_20260823_172713` 0/3 in 3.5 h). Real-physics 9-ep ~1/3 obj, 1/6 recep.
+Mapping was `run_mapping_protocol: spin + N×execute_action("")` (DynaMem multi-goal A*,
+`look_around` before drive, `look_front -30°`) → voxel saw floor/sky, not kitchen; find
+started a *new* `AgenticEQAExecutor` and scored wall-node cards; `localize_text("jar")`
+often empty or floor. Stretch 27-wp kitchen paths truncated at 8 wps (never reached).
+
+**Expected after unify (1–2 turn prompt sanity):**
+*Turn 0* `inspect_graph` → hypotheses from `localize_text` on finished voxel map (or none) +
+graph nodes/frontiers; prompt = `Rooms: …` + merged `SCENE_GRAPH` (`CONFIRMED_MEMORY` folded,
+no dupe), `Recent actions: … nav_outcome=…`, stable allowlists. No object `toward` during
+mapping, so frontier picks stay uncovered-first.
+*Turn 1* `explore_frontier` → `target_theta` toward frontier, `look_ahead` 0° at arrival,
+`capture_and_update` → new observation → SigLIP points on that frontier surface enter voxel.
+If a jar/cab was in that frustum, `localize_text` next turn produces `proposal` card
+`obs_id<-3M` that **beats** any `CAMERA_POSE_PLACE` view.
+*Turn 2* find: `inspect_graph` on finished map now has SigLIP-backed proposal; router
+should `investigate(proposal)` before `explore`, `verify_siglip` on that view; one
+`explore` only if `ABSENT` (not 150 wall cards). Prompt after 1–2 turns should list
+`detections: 1+` with `source=voxel` and `views` separate, `visible_frontier_ids` shrinking.
+
+**Verdict:** unify addresses the load-bearing mapping bug (coverage vs object-biased
+`toward`, arrival tilt, hop-until-arrival). Voxel-first find + `CAMERA_POSE_PLACE`
+redirect addresses the scoring bug. It **does not** by itself fix the “recep loop
+explores away” targeting problem — that is still a search/ranking issue (see below).
+Needs a GPU `rby1` smoke + `stretch-kitchen` to confirm `localize_text non-null`
+and that `n_explore` now increments `mapping_n_explore` in JSON.
+
+- [x] **Unify OVMM mapping with agentic explore (2026-08-28):** `run_mapping_protocol` for
+      `explore_steps>0` now uses `mode=explore` coverage loop; arrival `look_ahead` facing
+      frontier; tests for mapping entrypoint/arrival look/voxel-first; docs updated.
+- [x] **Object targeting fixes (2026-08-28, live rby1 S0 + kitchen):** three systematic
+      find-loop bugs found and fixed on the **shared** AgenticEQAExecutor:
+  1. **SigLIP released across find phases** (`agentic/answer.py:_do_submit_answer` →
+     `release_siglip_for_vlm` drops `voxel_map.encoder`; nothing re-attached it). FindRec
+     (second phase) could never `localize_text`. Fixed: `re_attach_siglip_encoder` wired into
+     `warm_siglip_confirmed_memory` (`eval/dynagraph_vram.py`), so each phase localizes on
+     the finished map. Rby1 S0 FindRec went from `recep_localize_source: None` → voxel err 0.0.
+  2. **Voxel proposals re-chased after close ABSENT** — the VLM router re-emits
+     `investigate(obs_id<0)` on the same wall point (`-3000000` visits 2..N). Fixed: proposals
+     are one-shot in `_hypothesis_nav_blocked` (`agentic/capture.py`), not just
+     `_unused_detection_hypothesis` — S0 obj loop went from 3× chases to 1×.
+  3. **Disproven voxel pins were still scored** — a close ABSENT leaves the pin; the harness
+     `pinned_xyz_from_phrases` fallback scored the wall point. Fixed: `unpin_localize_xyz`
+     (`mapping/voxel_localize.py`) called from `_maybe_retract_claim_after_station` on ABSENT,
+     plus clearing the loop-scored voxel record.
+  **Measured (rby1 S0 `default_table_rby1_s0_distinct_recep`, 5 runs): FindObj 5/5 (voxel,
+  err 0.0); FindRec 3/5 (voxel err 0.0 when found).** FindObj is stable; FindRec is SigLIP
+  marginality on the small blue cube (YOLO labels in this scene are garbage:
+  box/sign/tv/monitor/divider — graph recall is useless; voxel is the only reliable path).
+  Mixed gate still validates EQA: countclock **7/15 = gateAB** (no regression from the
+  shared-loop changes).
+- [x] **Kitchen explore stall (2026-08-28):** live agentic mapping still creeps (8–20 hops
+      cover only ~3 m²; the nearest-uncovered frontier clamps to ~0 and the loop re-picked
+      the same frontier). Added a no-progress goal block in `_tool_explore_frontier`
+      (`agentic/explore.py`): after a nav that moved < 0.10 m, block the FRONTIER XY in
+      `_habitat_recent_goals`/`_habitat_blocked_goals` so the next pick chooses a different
+      frontier or falls through to multi-goal explore. Frontier selection now rotates
+      (verified live). Kitchen find still 0/2 — coverage volume, not the loop.
+- [x] **SigLIP re-attach scoped to OVMM (2026-08-28):** re-attach was briefly in the shared
+      `warm_siglip_confirmed_memory`; HM-EQA countclock q47 flipped False, so it is now
+      called only from the OVMM harness `run_ovmm_agentic_localize` (before each phase) —
+      HM-EQA keeps its released-SigLIP behavior.
+- [x] **One-shot proposals refined to close-ABSENT (2026-08-28):** the first one-shot gate
+      blocked a proposal after *any* one nav; countclock dropped to 5/15 (q21/q47/q93
+      flips). Refined: a proposal is blocked only after a **close ABSENT** recorded on that
+      card (`_hypothesis_nav_blocked` + `_unused_detection_hypothesis` now both check
+      `_place_inspect.last_verify == ABSENT`), so HM-EQA count/locate targets stay
+      re-approachable from a new bearing while OVMM wall-chases stay one-shot. **Countclock
+      back to 7/15 = gateAB** (q21/43 recovered; q93 True solo — variance, not systematic).
+- [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
+      is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
+      `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
+      Levers: (a) lower the voxel localize bar for find (risky false positives; one-shot
+      proposals now make ABSENT cheap), (b) a closer start-recep look so YOLO/SigLIP see the
+      object, (c) accept variance and report voxel err distribution.
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
       runs all 8 rounds with `nav=0..2 explore=N`; the router keeps picking
       explore_frontier and the assess returns not-present (table not in those views).
@@ -298,6 +393,12 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] **Unified token budget for the EQA prompt**: `eqa_vl.eqa_prompt_max_tokens` default 2500 (`EMET_EQA_PROMPT_MAX_TOKENS`); truncation order HISTORY → CONFIRMED_MEMORY → edges → labels via `build_eqa_prompt_text`.
 - [x] **Router prompt hygiene**: shared `_EQA_RULE_*` atoms in `agentic_tools.py`; byte-stability test pins format-block SHA256 + identity across calls.
 - [x] **HISTORY loop risk**: HISTORY stores one-line outcomes (`Iter: answer=… conf=… action=… salvage=… | reason`) plus `Nav_result`, not raw model replays.
+- [x] **Prompt after 1–2 turns (agentic):** after `inspect_graph` + 1×`explore_frontier(look_ahead→capture)` the state
+      message is `Rooms: …` + merged `SCENE_GRAPH` (no dupe `CONFIRMED_MEMORY`), `Recent actions` with
+      `nav_outcome, target_theta, room_aligned`, stable allowlists
+      `place_ids/place_obs_ids/frontier_ids` via `action_gate`, typed `HISTORY` lines and
+      `visible_event_ids`. Verified 2026-08-28 on `AgenticEQAExecutor` `mode=explore` mock: `target_theta` toward frontier,
+      `look_ahead` before `capture`, `detections` vs `views` split in `inspect_graph`.
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
 

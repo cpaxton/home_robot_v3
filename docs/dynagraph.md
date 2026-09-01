@@ -113,6 +113,7 @@ flowchart TD
 | **Product (contract)** | Graph pin `{phrase, xyz, obs_id, evidence}` written only when the agent **confirms** or **adds** (`vlm_assess` `in_view`). Scoring / `inspect_graph` read committed pins first. |
 | **Not a pin** | Episode YAML `object_query` / `goal_recep` preloaded by `ovmm_find_phase`. |
 | **Retrieval cache (now)** | First successful `localize_text` for a string on the voxel object. The agentic loop snapshots that XYZ for OVMM scoring (submit drops SigLIP; do not live-query again). Tests may call `pin_phrases_after_mapping`; the OVMM harness must not. |
+| **Unpin on ABSENT** | A close `ABSENT` on a **voxel proposal** (`obs_id < 0`) also **removes** the retrieval pin (`unpin_localize_xyz`, `_maybe_retract_claim_after_station`) so a disproven XYZ is never scored by the `pinned_xyz_from_phrases` fallback. A close ABSENT on a nearby graph view retracts that obs claim but does not unpin. |
 
 ### Map sanity vs OVMM harness
 
@@ -129,6 +130,9 @@ flowchart TD
 |-----|--------|
 | Shared EQA tool pack; OVMM phrased as questions | Graph-owned pins from `vlm_assess` confirm/add |
 | `inspect_graph` catalog (proposals vs views, `yoloe_hit` / `siglip_sim` / compact `close_map`); `investigate` closer look; unused proposals beat camera-pose views; `explore_frontier` refused while a proposal remains; close-look required = VLM extract **OR** keywords | `ViewAssessment.in_view` (confirm / add / retract) |
+| **Voxel proposals are one-shot** — one real nav attempt tests that XYZ; a close ABSENT blocks the handle (`_hypothesis_nav_blocked`) so the router/fallback cannot re-chase a wall point; the loop re-localizes from the grown map | Multi-view proposal confirmation |
+| **SigLIP re-attached per OVMM find phase** — `_do_submit_answer` releases the voxel encoder for Qwen; the OVMM harness re-attaches it (`re_attach_siglip_encoder`) before each phase so FindRec can still `localize_text` the finished map. HM-EQA keeps released-SigLIP behavior | Cached text embeddings (no re-load) |
+| **Explore no-progress block** — a nav that moved < 0.10 m blocks that frontier XY (`_habitat_recent_goals`/`_blocked_goals`) so the next pick chooses a different frontier or falls to multi-goal explore instead of re-picking the same clamped spot | Distance-aware frontier pick (farthest reachable) |
 | Close-map stay on a card XY until aimed close or escape; classic prompts do not dump `CLOSE_LOOK_STATUS` | Treat close-map `resolved` as localize success even if Qwen says unknown |
 | `room_clustering.partition` + `proximity` | `occupancy_cc` / `portal` + backend sweep |
 | FindObj/FindRec score the loop's object-phrase voxel XYZ (survives SigLIP release at submit), then pin / live localize; never camera pose or ``red cylinder table`` wraps | Sparse overlays of in-FOV labels on the assess image |
@@ -277,6 +281,8 @@ On **`--export DIR`**, the exporter writes:
 
 The default 3D view uses ``origin=world`` with ``contents=world/**`` (see [rerun.md](rerun.md)) so map layers stay fixed while ``world/robot`` moves. Do **not** default to ``origin=world/robot`` or the map co-rotates on in-place turns. Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
 
+**VLM context (always on):** the Dynagraph Rerun column shows `world/dynagraph/context` (last EQA prompt, Image 1…N → `obs_id`, agentic router state, graph health) and `world/dynagraph/context/mosaic` (numbered attachment thumbnails). Use that panel to debug “what did the model see?” without turning on heavy crop/edge streams. Full entity list: [rerun.md](rerun.md).
+
 Opt back into those heavy channels in agent/dynav YAML:
 
 ```yaml
@@ -286,7 +292,7 @@ rerun:
     log_edges: true
 ```
 
-Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` (env overrides YAML when set). Defaults and other viewer keys: `src/emet/config/agents/default_rerun.yaml`.
+Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` to force those two channels **on** even when YAML is `false`. Defaults and other viewer keys: `src/emet/config/agents/default_rerun.yaml`. Full entity list, CLI defaults, and precedence: [rerun.md](rerun.md).
 
 ### Autonomous frontier exploration (heuristic)
 

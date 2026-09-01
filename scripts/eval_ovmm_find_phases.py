@@ -72,10 +72,16 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--not-rotate", action="store_true", help="Skip rotate-in-place mapping")
     parser.add_argument(
+        "--mapping-max-nav-steps",
+        type=int,
+        default=None,
+        help="Override episode mapping coverage budget (agentic explore max_nav_steps)",
+    )
+    parser.add_argument(
         "--explore-steps",
         type=int,
         default=None,
-        help="Override episode explore_steps (frontier navigations after rotate)",
+        help="Deprecated alias of --mapping-max-nav-steps (mapping coverage, not FindObj)",
     )
     parser.add_argument(
         "--no-scene-cache",
@@ -135,6 +141,7 @@ def main() -> int:
         benchmark=args.benchmark,
         output_dir=args.output_dir,
         dry_run=args.dry_run,
+        mapping_max_nav_steps=args.mapping_max_nav_steps,
         explore_steps=args.explore_steps,
         no_scene_cache=args.no_scene_cache,
         full=False,

@@ -5,17 +5,16 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
-from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 import torch
 
 from emet.controller.dynamem.constants import (
     DYNAMEM_HEAD_SETTLE_S,
+    DYNAMEM_NAV_CHUNK_WPS,
+    DYNAMEM_NAV_MAX_HOPS,
     _finite_xyz_traj_target,
 )
 from emet.controller.habitat_nav import (
@@ -24,7 +23,6 @@ from emet.controller.habitat_nav import (
 )
 from emet.motion.algo.a_star import AStar
 from emet.utils.logger import Logger
-from emet.visualization.rerun import has_display
 
 logger = Logger(__name__)
 
@@ -207,12 +205,20 @@ def execute_action(
 
     self.robot.switch_to_navigation_mode()
 
-    start = self._planning_base_xyt(self.robot.get_base_pose())
-    res = self.process_text(text, start)
-    if len(res) == 0 and text != "" and text is not None:
-        res = self.process_text("", start)
-
-    if len(res) > 0:
+    start = self._current_planning_xyt()
+    # Chunked A* (8 wps) must resume the leftover goal. Mapping used to call
+    # execute_action("") once per "explore step", drop leftover, and pick a new
+    # frontier — so long kitchen paths never finished and look-at never ran.
+    for hop in range(DYNAMEM_NAV_MAX_HOPS):
+        res = self.process_text(text, start)
+        if len(res) == 0 and text != "" and text is not None:
+            res = self.process_text("", start)
+        if len(res) == 0:
+            if hop == 0:
+                logger.warning("No plan from process_text; try again.")
+                return None, None
+            logger.info("execute_action: leftover explore exhausted after %d hop(s)", hop)
+            return False, None
         plan_meta = getattr(self, "_last_nav_plan", None) or {}
         announce = plan_meta.get("announce") or "Navigating…"
         if not str(announce).lower().startswith("navigat"):
@@ -230,12 +236,13 @@ def execute_action(
         self.announce_action(announce)
         n_exec = sum(1 for p in res if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all())
         logger.info(
-            "Navigation plan OK; executing %d waypoints (localize=%s mode=%s path≈%.2fm chunked=%s)",
+            "Navigation plan OK; executing %d waypoints (localize=%s mode=%s path≈%.2fm chunked=%s hop=%d)",
             n_exec,
             plan_meta.get("localize_source", "?"),
             plan_meta.get("mode", "?"),
             float(plan_meta.get("path_m") or 0.0),
             bool(plan_meta.get("chunked")),
+            hop,
         )
         nav_timeout = self._find_phase_nav_timeout()
         wait_obs = getattr(self.robot, "wait_for_obs", None)
@@ -273,29 +280,27 @@ def execute_action(
             self.update()
             self._record_nav_plan_fields(outcome="ok")
             return True, res[-1]
-        # The robot has not reached the object. Next it should look around and continue navigation
-        else:
-            exec_ok = self.robot.execute_trajectory(
-                res,
-                pos_err_threshold=self.pos_err_threshold,
-                rot_err_threshold=self.rot_err_threshold,
-                per_waypoint_timeout=nav_timeout,
-                final_timeout=max(nav_timeout, 30.0),
-                blocking=True,
-                world_frame=True,
-            )
-            if exec_ok is False:
-                self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
-                self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
-                logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
-                return None, None
-            self.robot.look_front()
-            self.update()
-            self._record_nav_plan_fields(outcome="ok_chunk")
-            return False, None
-    else:
-        logger.warning("No plan from process_text; try again.")
-        return None, None
+        # Chunk: execute, grow the voxel/graph at this pose, resume leftover.
+        exec_ok = self.robot.execute_trajectory(
+            res,
+            pos_err_threshold=self.pos_err_threshold,
+            rot_err_threshold=self.rot_err_threshold,
+            per_waypoint_timeout=nav_timeout,
+            final_timeout=max(nav_timeout, 30.0),
+            blocking=True,
+            world_frame=True,
+        )
+        if exec_ok is False:
+            self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+            self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
+            logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+            return None, None
+        self.robot.look_front()
+        self.update()
+        self._record_nav_plan_fields(outcome="ok_chunk")
+        start = self._current_planning_xyt()
+    logger.info("execute_action: still chunked after %d hops", DYNAMEM_NAV_MAX_HOPS)
+    return False, None
 
 
 def run_exploration(self):
@@ -358,6 +363,18 @@ def process_text(self, text, start_pose):
             localize_source = "saved_traj"
             debug_text += "## Reusing prior plan target; semantic re-check was not decisive.\n"
 
+    # Mapping / empty-text explore: resume the leftover frontier instead of
+    # sampling a new one (leftover was only reused for nonempty object queries).
+    continue_saved = False
+    if localized_point is None and (text is None or text == "") and self.space.traj is not None:
+        traj_target_point = self.space.traj[-1]
+        if _finite_xyz_traj_target(traj_target_point):
+            localized_point = traj_target_point
+            localize_source = "saved_traj"
+            mode = "exploration"
+            continue_saved = True
+            debug_text += "## Continuing leftover explore chunk toward prior frontier.\n"
+
     logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
     if text is not None and text != "" and localized_point is None:
@@ -389,7 +406,7 @@ def process_text(self, text, start_pose):
                 logger.debug("voxel localize_text failed for %r: %s", text, exc)
 
     # Do Frontier based exploration (optionally biased by the active EQA question).
-    if text is None or text == "" or localized_point is None:
+    if not continue_saved and (text is None or text == "" or localized_point is None):
         debug_text += "## No object localization; falling back to frontier exploration.\n"
         frontier_text = self._exploration_text(text)
         explore_pt = pick_uncovered_explore_target(
@@ -449,8 +466,8 @@ def process_text(self, text, start_pose):
     point = None
 
     # Exploration: top-K frontiers → one multi-goal A* (skip sealed / unreachable).
-    # Object nav stays single-goal.
-    if mode == "exploration" and isinstance(self.planner, AStar):
+    # Object nav stays single-goal. Leftover chunks keep the same frontier.
+    if mode == "exploration" and not continue_saved and isinstance(self.planner, AStar):
         from emet.motion.frontier_goals import collect_explore_frontier_candidates
 
         frontier_text = self._exploration_text(text)
@@ -531,7 +548,7 @@ def process_text(self, text, start_pose):
     chunked = False
     full_traj_for_viz = None
     if waypoints is not None:
-        finished = len(waypoints) <= 8 and mode == "navigation"
+        finished = len(waypoints) <= DYNAMEM_NAV_CHUNK_WPS
         chunked = not finished
         full_traj_for_viz = self.planner.clean_path_for_xy(
             list(waypoints), start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
@@ -539,9 +556,9 @@ def process_text(self, text, start_pose):
         if finished:
             self.space.traj = None
         else:
-            self.space.traj = waypoints[8:] + [[np.nan, np.nan, np.nan], localized_point]
+            self.space.traj = waypoints[DYNAMEM_NAV_CHUNK_WPS:] + [[np.nan, np.nan, np.nan], localized_point]
         if not finished:
-            waypoints = waypoints[:8]
+            waypoints = waypoints[:DYNAMEM_NAV_CHUNK_WPS]
         traj = self.planner.clean_path_for_xy(waypoints, start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0)
         if finished:
             traj.append([np.nan, np.nan, np.nan])
@@ -661,13 +678,7 @@ def navigate(self, text, max_step=10):
     The robot calls this function to navigate to the object.
     It will call execute_action function until it is ready for manipulation
     """
-    # Do not call rr.init here during normal live viewing: RerunVisualizer already called
-    # rr.init + rr.serve; a second init clears the recording and the ZMQ Rerun thread appears empty.
-    if self.save_rerun:
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
     finished = False
     step = 0
     end_point = None

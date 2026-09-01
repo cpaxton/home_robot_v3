@@ -9,11 +9,10 @@ import math
 from typing import Any
 
 import numpy as np
-import rerun as rr
-import rerun.blueprint as rrb
 
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -63,6 +62,17 @@ def _planning_base_xyt(self, local_xyt: np.ndarray | list | tuple) -> np.ndarray
     if sess is None and self._cached_navigation_origin_xyt is not None:
         sess = {"navigation_origin_xyt": self._cached_navigation_origin_xyt.tolist()}
     return nav_xyt_to_world_xyt(xyt[:3], sess)
+
+
+def _current_planning_xyt(self) -> np.ndarray:
+    """Current base ``(x, y, θ)`` in the voxel-map / world planning frame.
+
+    ``get_base_pose`` is episode-relative (ZMQ gps/compass). A* and
+    ``execute_trajectory(world_frame=True)`` plan in the world frame anchored at
+    ``navigation_origin_xyt`` — on Robocasa that origin is several meters from
+    ``(0, 0)``. Always convert before measuring progress or starting a hop.
+    """
+    return np.asarray(self._planning_base_xyt(self.robot.get_base_pose()), dtype=np.float64)
 
 
 def world_base_xy(self) -> tuple[float, float] | None:
@@ -177,8 +187,12 @@ def setup_custom_blueprint(self):
     """
     This function define rerun blueprint of DynaMem module.
     """
-    if getattr(self.rerun_visualizer, "enabled", True) is False:
+    if not visualizer_is_enabled(self.rerun_visualizer):
         return
+    # Deferred: rerun-sdk native extensions.
+    import rerun as rr
+    import rerun.blueprint as rrb
+
     from emet.visualization.rerun import spatial3d_view_world
 
     main = rrb.Horizontal(

@@ -42,7 +42,7 @@ from emet.core.parameters import get_parameters
     "--save_rerun",
     "--SR",
     is_flag=True,
-    help="Whether we should save rerun rrd",
+    help="Write logs/…/data_N.rrd on rotate/navigate/EQA (does not reset a live viewer)",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(

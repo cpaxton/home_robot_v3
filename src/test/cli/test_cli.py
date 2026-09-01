@@ -108,10 +108,23 @@ def test_habitat_group_help_lists_safe_start():
     assert "info" in result.stdout
 
 
+def test_habitat_run_episode_help_mentions_eval_rerun():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "habitat", "run-episode", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--rerun" in result.stdout
+    assert "EMET_EVAL_RERUN" in result.stdout
+
+
 def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     from types import SimpleNamespace
 
     from click.testing import CliRunner
+
+    monkeypatch.delenv("EMET_EVAL_RERUN", raising=False)
 
     project_root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
@@ -122,10 +135,12 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     result = CliRunner().invoke(habitat_main, ["run-episode", "--help"])
     assert result.exit_code == 0, result.output
     assert "--eqa-vl-quantization" in result.output
+    assert "--rerun" in result.output
     params = {param.name: param.default for param in habitat_main.commands["run-episode"].params}
     assert params["max_planning_steps"] == 20
     assert params["rotate_in_place"] is True
     assert params["eqa_vl_quantization"] is None
+    assert params["enable_rerun"] is False
 
     captured = {}
     monkeypatch.setattr(
@@ -140,6 +155,17 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured["eqa_vl_quantization"] == "int8"
+    assert "no_rerun" not in captured
+
+    captured.clear()
+    result = CliRunner().invoke(
+        habitat_main,
+        ["run-episode", "--mock-llm", "--rerun"],
+    )
+    assert result.exit_code == 0, result.output
+    # --rerun opts into the live viewer via EMET_EVAL_RERUN; it does not dump .rrd.
+    assert "no_rerun" not in captured
+    assert os.environ.get("EMET_EVAL_RERUN") == "1"
 
 
 def test_habitat_safe_start_help():
@@ -1133,7 +1159,7 @@ def test_install_completion_help():
 
 
 def test_ovmm_help():
-    """emet ovmm --help lists find/full/prepare/sweep/rates/status."""
+    """emet ovmm --help lists find/full/prepare/sweep/rates/status/probe-map/probe-verify."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "ovmm", "--help"],
         capture_output=True,
@@ -1147,6 +1173,48 @@ def test_ovmm_help():
     assert "sweep" in out
     assert "rates" in out
     assert "status" in out
+    assert "probe-map" in out
+    assert "probe-verify" in out
+
+
+def test_ovmm_find_help_mapping_budget():
+    """emet ovmm find --help lists mapping coverage vs find agentic budgets."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "find", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout
+    assert "--mapping-max-nav-steps" in out
+    assert "--explore-steps" in out
+    assert "--agentic-max-rounds" in out
+    assert "--agentic-max-nav-steps" in out
+
+
+def test_ovmm_probe_map_help():
+    """emet ovmm probe-map --help lists --voxel and --cpu-only."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "probe-map", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "--voxel" in out
+    assert "--cpu-only" in out
+
+
+def test_ovmm_find_help_mentions_eval_rerun():
+    """emet ovmm find --help documents the opt-in live Rerun flag."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "find", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--rerun" in result.stdout
+    assert "EMET_EVAL_RERUN" in result.stdout
 
 
 def test_sqa3d_help():

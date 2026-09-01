@@ -26,6 +26,7 @@ from termcolor import colored
 import emet.motion.constants as constants
 import emet.motion.conversions as conversions
 import emet.utils.compression as compression
+from emet.config.rerun_config import open_live_rerun_visualizer
 from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
@@ -255,23 +256,16 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         self._send_lock = Lock()
         self._emet_session_lock = Lock()
 
-        if enable_rerun_server:
-            from emet.visualization.rerun import RerunVisualizer
-
-            if output_path is not None and not output_path.exists():
-                output_path.mkdir(parents=True, exist_ok=True)
-
-            self._rerun = RerunVisualizer(
-                output_path=output_path,
-                headless=rerun_headless,
-                rerun_native_viewer=rerun_native_viewer,
-                collapse_panels=not rerun_show_panels,
-            )
-        else:
-            from emet.visualization.rerun import NullVisualizer
-
-            self._rerun = NullVisualizer()
-            self._rerun_thread = None
+        self._rerun = open_live_rerun_visualizer(
+            self._parameters,
+            enabled=enable_rerun_server,
+            output_path=output_path,
+            display_robot_mesh=True,
+            cli_headless=rerun_headless,
+            cli_native_viewer=rerun_native_viewer,
+            cli_show_panels=rerun_show_panels,
+        )
+        self._rerun_thread = None
         self._rerun_debug = rerun_debug if enable_rerun_server else False
 
         if start_immediately:

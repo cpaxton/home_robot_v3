@@ -15,6 +15,7 @@ from pathlib import Path
 
 import click
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.memory_backends import OVMM_MEMORY_BACKENDS
 from emet.eval.ovmm_batch import BACKENDS, MANIP_MODES, OvmmBatchOptions, run_ovmm_batch
 from emet.eval.ovmm_sweep import (
@@ -63,6 +64,7 @@ def _batch_options_from_click(
     output_dir: Path | None,
     dry_run: bool,
     explore_steps: int | None = None,
+    mapping_max_nav_steps: int | None = None,
     no_scene_cache: bool = False,
     manip_mode: str | None = None,
     oneshot_localize: bool = False,
@@ -89,6 +91,7 @@ def _batch_options_from_click(
         benchmark=benchmark,
         output_dir=output_dir,
         dry_run=dry_run,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         manip_mode=manip_mode,
@@ -141,10 +144,22 @@ def _common_batch_options(f):
             help="Per-run JSON + aggregate CSV directory",
         ),
         click.option("--dry-run", is_flag=True, default=False),
+        click.option(
+            "--rerun",
+            "enable_rerun",
+            is_flag=True,
+            default=False,
+            help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+        ),
     ]
     for opt in reversed(opts):
         f = opt(f)
     return f
+
+
+def _apply_eval_rerun_cli(enable_rerun: bool) -> None:
+    if enable_rerun:
+        os.environ["EMET_EVAL_RERUN"] = "1"
 
 
 def _launch_via_jobs(
@@ -174,10 +189,12 @@ def _launch_via_jobs(
         cmd.append("--foreground")
     cmd.append("--")
     # Prefer SDPA for in-process VL (FA2 has hung on MuJoCo+Qwen co-resident runs).
+    env_prefix = ["env", "EMET_ALLOW_SDPA_ATTN=1"]
+    if eval_rerun_enabled() or "--rerun" in argv_tail:
+        env_prefix.append("EMET_EVAL_RERUN=1")
     cmd.extend(
         [
-            "env",
-            "EMET_ALLOW_SDPA_ATTN=1",
+            *env_prefix,
             sys.executable,
             "-m",
             "emet.cli",
@@ -200,7 +217,18 @@ def ovmm_group(ctx: click.Context) -> None:
 
 @ovmm_group.command("find", short_help="Batch OVMM find-phase (FindObj / FindRec)")
 @_common_batch_options
-@click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
+@click.option(
+    "--mapping-max-nav-steps",
+    type=int,
+    default=None,
+    help="Override episode mapping coverage budget (agentic explore max_nav_steps; 0 = rotate-only)",
+)
+@click.option(
+    "--explore-steps",
+    type=int,
+    default=None,
+    help="Deprecated alias of --mapping-max-nav-steps (mapping coverage, not FindObj)",
+)
 @click.option("--no-scene-cache", is_flag=True, default=False)
 @click.option(
     "--oneshot-localize",
@@ -244,6 +272,8 @@ def ovmm_find(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
+    enable_rerun: bool,
+    mapping_max_nav_steps: int | None,
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,
@@ -255,6 +285,7 @@ def ovmm_find(
 
     Dynagraph default: shared AgenticEQA loop (OVMM phrased as questions).
     """
+    _apply_eval_rerun_cli(enable_rerun)
     po = int(port_offset) if port_offset is not None else int(os.getpid() % 400 + 140)
     opts = _batch_options_from_click(
         episodes=episodes,
@@ -274,6 +305,7 @@ def ovmm_find(
         benchmark=benchmark,
         output_dir=output_dir,
         dry_run=dry_run,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         oneshot_localize=oneshot_localize,
@@ -293,7 +325,18 @@ def ovmm_find(
     default=None,
     help="Override full-OVMM episode modes (default: use episode YAML, otherwise oracle)",
 )
-@click.option("--explore-steps", type=int, default=None, help="Override episode explore_steps")
+@click.option(
+    "--mapping-max-nav-steps",
+    type=int,
+    default=None,
+    help="Override episode mapping coverage budget (agentic explore max_nav_steps; 0 = rotate-only)",
+)
+@click.option(
+    "--explore-steps",
+    type=int,
+    default=None,
+    help="Deprecated alias of --mapping-max-nav-steps (mapping coverage, not FindObj)",
+)
 @click.option("--no-scene-cache", is_flag=True, default=False)
 @click.option(
     "--oneshot-localize",
@@ -331,7 +374,9 @@ def ovmm_full(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
+    enable_rerun: bool,
     manip_mode: str | None,
+    mapping_max_nav_steps: int | None,
     explore_steps: int | None,
     no_scene_cache: bool,
     oneshot_localize: bool,
@@ -339,6 +384,7 @@ def ovmm_full(
     agentic_max_nav_steps: int | None,
 ) -> None:
     """Run full OVMM episodes (same path as scripts/eval_ovmm_full.py)."""
+    _apply_eval_rerun_cli(enable_rerun)
     po = int(port_offset) if port_offset is not None else int(os.getpid() % 400 + 140)
     opts = _batch_options_from_click(
         episodes=episodes,
@@ -359,6 +405,7 @@ def ovmm_full(
         output_dir=output_dir,
         dry_run=dry_run,
         manip_mode=manip_mode,
+        mapping_max_nav_steps=mapping_max_nav_steps,
         explore_steps=explore_steps,
         no_scene_cache=no_scene_cache,
         oneshot_localize=oneshot_localize,
@@ -459,6 +506,133 @@ def ovmm_status(out_dir: Path, backend: str, as_json: bool) -> None:
             )
 
 
+@ovmm_group.command("probe-map", short_help="Query a saved scene map (no sim)")
+@click.option(
+    "--map",
+    "map_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Scene map directory (graph.json / voxel_map.pkl)",
+)
+@click.option("--cache-key", default=None, help="Key under ~/.cache/emet/scene_maps/")
+@click.option(
+    "--query",
+    "queries",
+    multiple=True,
+    help="Phrase to match (repeat). Default: kitchen jar/cab aliases.",
+)
+@click.option("--voxel", "do_voxel", is_flag=True, default=False, help="Also run SigLIP localize_text on voxel_map.pkl")
+@click.option("--list", "list_caches", is_flag=True, default=False, help="List cached maps and exit")
+@click.option(
+    "--cpu-only", is_flag=True, default=False, help="Run --voxel SigLIP on CPU (also used when CUDA is absent)"
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write JSON report",
+)
+def ovmm_probe_map(
+    map_dir: Path | None,
+    cache_key: str | None,
+    queries: tuple[str, ...],
+    do_voxel: bool,
+    list_caches: bool,
+    cpu_only: bool,
+    out_path: Path | None,
+) -> None:
+    """Query a dumped scene map with no simulator.
+
+    Graph matching is CPU-only. ``--voxel`` loads SigLIP and runs ``localize_text``
+    on ``voxel_map.pkl`` (still no MuJoCo). Default phrases include ``cab`` / ``jar``
+    so substring false hits on cached kitchen graphs are visible.
+    """
+    from emet.eval.ovmm_map_probe import (
+        DEFAULT_KITCHEN_QUERIES,
+        list_cached_maps,
+        probe_graph,
+        probe_voxel,
+        resolve_map_dir,
+    )
+
+    if list_caches:
+        rows = list_cached_maps()
+        click.echo(json.dumps({"caches": rows}, indent=2))
+        return
+    phrases = list(queries) if queries else list(DEFAULT_KITCHEN_QUERIES)
+    target = resolve_map_dir(map_dir=map_dir, cache_key=cache_key)
+    report: dict = {"graph": probe_graph(target, phrases)}
+    if do_voxel:
+        report["voxel"] = probe_voxel(target, phrases, cpu_only=cpu_only)
+    text = json.dumps(report, indent=2)
+    click.echo(text)
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text + "\n", encoding="utf-8")
+
+
+@ovmm_group.command("probe-verify", short_help="Robocasa floor view + current-view YOLOE/SigLIP")
+@click.option(
+    "--sim",
+    default="configs/sim/robocasa_pick_place_rby1.yaml",
+    show_default=True,
+    help="Sim YAML (default: rby1 PickPlaceCounterToCabinet)",
+)
+@click.option(
+    "--query",
+    "queries",
+    multiple=True,
+    help="Phrase to score (repeat). Default: findable GT cat plus cabinet/counter.",
+)
+@click.option(
+    "--object-body",
+    default="obj_main",
+    show_default=True,
+    help="Preferred GT body if its category is findable (sugar cube is skipped)",
+)
+@click.option("--standoff-m", type=float, default=1.6, show_default=True, help="Min planar range before backing up")
+@click.option("--include-counter", is_flag=True, default=False, help="Also yaw toward the nearest counter")
+@click.option("--port-offset", type=int, default=None)
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Artifact dir (report.json + views/*.png)",
+)
+@click.option("--cpu-only", is_flag=True, default=False)
+def ovmm_probe_verify(
+    sim: str,
+    queries: tuple[str, ...],
+    object_body: str,
+    standoff_m: float,
+    include_counter: bool,
+    port_offset: int | None,
+    out_dir: Path | None,
+    cpu_only: bool,
+) -> None:
+    """Aim from a navigable floor pose and score YOLOE + SigLIP on the head camera.
+
+    Spawns rby1 PickPlace (default), looks forward, faces a findable GT body
+    (not sugar cube), backs up if too close, and writes ``report.json`` plus RGB
+    snapshots. Does not run AgenticEQA.
+    """
+    from emet.eval.ovmm_verify_probe import run_verify_probe
+
+    report = run_verify_probe(
+        sim=sim,
+        queries=list(queries) if queries else None,
+        object_body=object_body,
+        standoff_m=standoff_m,
+        out_dir=out_dir,
+        port_offset=port_offset,
+        include_counter=include_counter,
+        cpu_only=cpu_only,
+    )
+    click.echo(json.dumps(report, indent=2))
+
+
 @ovmm_group.command("sweep", short_help="prepare → find → full → rates (paper multi-env path)")
 @click.option("--preset", default=DEFAULT_PRESET, show_default=True)
 @click.option(
@@ -492,6 +666,13 @@ def ovmm_status(out_dir: Path, backend: str, as_json: bool) -> None:
     default=False,
     help="Rebuild episode lists from bind/task-init failures in OUT",
 )
+@click.option(
+    "--rerun",
+    "enable_rerun",
+    is_flag=True,
+    default=False,
+    help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+)
 @click.option("--via-jobs", is_flag=True, default=False, help="Wrap in emet jobs run")
 @click.option("--need-mib", type=int, default=None, help="VRAM for --via-jobs (default from preset)")
 @click.option("--job-name", default=None, help="Job name when using --via-jobs")
@@ -519,6 +700,7 @@ def ovmm_sweep(
     find_only: bool,
     full_only: bool,
     rerun_failed: bool,
+    enable_rerun: bool,
     via_jobs: bool,
     need_mib: int | None,
     job_name: str | None,
@@ -528,6 +710,7 @@ def ovmm_sweep(
     sync_registry: bool | None,
 ) -> None:
     """Run the multi-env OVMM paper sweep (Robocasa + MolmoSpaces)."""
+    _apply_eval_rerun_cli(enable_rerun)
     if find_only and full_only:
         raise click.UsageError("Use only one of --find-only / --full-only")
 
@@ -576,6 +759,8 @@ def ovmm_sweep(
             argv_tail.append("--full-only")
         if rerun_failed:
             argv_tail.append("--rerun-failed")
+        if enable_rerun:
+            argv_tail.append("--rerun")
         if dry_run:
             argv_tail.append("--dry-run")
         if force_live:

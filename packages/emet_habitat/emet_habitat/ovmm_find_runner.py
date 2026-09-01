@@ -34,7 +34,9 @@ from emet.eval.ovmm_find_phase import (
     create_find_phase_agent,
     get_memory_backend_for_agent,
     localization_pred_fields,
+    mapping_budget_from_row,
     query_find_phase_localization,
+    resolve_mapping_max_nav_steps,
     resolve_object_query,
     run_mapping_protocol,
     set_find_phase_run_seed,
@@ -61,8 +63,20 @@ class HabitatFindPhaseEpisode:
     start_recep: str
     goal_recep: str
     success_radius_m: float = 0.75
-    explore_steps: int = 0
+    mapping_max_nav_steps: int | None = None
+    explore_steps: int | None = None
     object_gt_body: str | None = None
+
+    def __post_init__(self) -> None:
+        n = resolve_mapping_max_nav_steps(
+            self.mapping_max_nav_steps,
+            self.explore_steps,
+            source="HabitatFindPhaseEpisode",
+            default=0,
+            warn=False,
+        )
+        object.__setattr__(self, "mapping_max_nav_steps", int(n or 0))
+        object.__setattr__(self, "explore_steps", int(n or 0))
 
 
 def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseEpisode]:
@@ -74,9 +88,13 @@ def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseE
     if not isinstance(rows, list):
         raise ValueError(f"expected list under 'episodes' in {full}")
     out: list[HabitatFindPhaseEpisode] = []
+    n_alias = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
+        if row.get("explore_steps") is not None and row.get("mapping_max_nav_steps") is None:
+            n_alias += 1
+        budget = mapping_budget_from_row(row, source=str(full), default=0, warn=False)
         out.append(
             HabitatFindPhaseEpisode(
                 id=str(row["id"]),
@@ -86,10 +104,15 @@ def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseE
                 start_recep=str(row["start_recep"]),
                 goal_recep=str(row["goal_recep"]),
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
-                explore_steps=int(row.get("explore_steps", 0)),
+                mapping_max_nav_steps=budget,
+                explore_steps=budget,
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
             )
         )
+    if n_alias:
+        from emet.eval.ovmm_find_phase import _warn_explore_steps_alias
+
+        _warn_explore_steps_alias(f"{full} ({n_alias} episode(s))")
     return out
 
 
@@ -204,7 +227,7 @@ def run_habitat_find_phase_episode(
         t_map0 = time.monotonic()
         n_steps = run_mapping_protocol(
             agent,
-            explore_steps=episode.explore_steps,
+            mapping_max_nav_steps=episode.mapping_max_nav_steps,
             not_rotate=run_cfg.not_rotate,
         )
         for _ in range(3):
@@ -373,6 +396,7 @@ def run_habitat_find_phase_episode(
             "object_query": object_query,
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,
+            "mapping_max_nav_steps": episode.mapping_max_nav_steps,
             "explore_steps": episode.explore_steps,
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),

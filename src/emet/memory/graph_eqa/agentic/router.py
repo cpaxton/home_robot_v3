@@ -27,6 +27,7 @@ from emet.memory.graph_eqa.agentic.tools import (
     build_state_message,
     coerce_room_label,
 )
+from emet.memory.graph_eqa.agentic_state import state_text_digest
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.memory.graph_eqa.spatial.room_clusters import (
     merge_room_estimates,
@@ -177,7 +178,7 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         det = self._unused_detection_hypothesis()
         if det is not None:
             return "investigate", {"obs_id": int(det.obs_id)}
-    if budget_left and self._prefers_nearby_investigate():
+    if budget_left and self._prefers_nearby_investigate() and not self._defer_nearby_for_prefer_explore():
         near = self._nearby_untried_investigate_hyp()
         if near is not None:
             return "investigate", {"obs_id": int(near.obs_id)}
@@ -213,6 +214,8 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
     # look closer instead of frontier-only loops.
     if self.decision_policy != "grounded_v2" and budget_left and not frontiers_gone and self._prefer_explore:
         streak = int(getattr(self, "_n_consecutive_explore", 0) or 0)
+        if streak < 1:
+            return "explore_frontier", self._rendered_frontier_args()
         near = self._nearby_untried_investigate_hyp() if self._prefers_nearby_investigate() else None
         if near is not None:
             return "investigate", {"obs_id": int(near.obs_id)}
@@ -221,7 +224,7 @@ def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
             if self.decision_policy == "grounded_v2" and self._last_agent_state_snapshot is not None
             else self._next_untried_hypothesis()
         )
-        if streak >= 1 and hyp is not None:
+        if hyp is not None:
             return "investigate", {"obs_id": int(hyp.obs_id)}
         return "explore_frontier", self._rendered_frontier_args()
     # Soft cap: too many explores in a row with unused place cards → investigate.
@@ -362,7 +365,9 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     client = getattr(gm, "eqa_client", None) if gm is not None else None
     if not self._router_enabled or client is None:
         if self.decision_policy == "grounded_v2":
-            build_state_message(self)
+            state = build_state_message(self)
+            if gm is not None:
+                gm.last_router_state_text = state
             decisions = [
                 dict(item.__dict__)
                 for item in list(getattr(self._last_agent_state_snapshot, "gate_decisions", ()) or ())
@@ -382,7 +387,6 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     self._refresh_graph_room_estimate()
     img_parts, nearby_meta, img_prefix = self._room_visual_pack()
     state = build_state_message(self)
-    from emet.memory.graph_eqa.agentic_state import state_text_digest
 
     self._router_call_seq += 1
     router_call_id = f"{self._question_id}:router:{self._router_call_seq:04d}"
@@ -423,6 +427,8 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
         }
     )
     user_text = f"{img_prefix}{state}" if img_prefix else state
+    if gm is not None:
+        gm.last_router_state_text = state
     payload: list[Any] = [user_text, *img_parts] if img_parts else [user_text]
     t_router0 = time.monotonic()
     try:
