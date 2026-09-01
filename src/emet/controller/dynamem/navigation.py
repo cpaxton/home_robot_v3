@@ -62,8 +62,14 @@ def _filter_unsafe_nav_traj(
     traj: list,
     *,
     start_xyt: np.ndarray | list[float] | None = None,
+    explore_goal: bool = False,
 ) -> tuple[list, str | None, float | None]:
     """Drop low-clearance / unexplored waypoints before confirm/exec.
+
+    ``explore_goal`` exempts only the terminal waypoint from the unexplored-cell
+    rejection: a frontier-explore goal sits at the unexplored edge by definition,
+    so refusing it makes coverage mapping never navigate. Interior waypoints must
+    still be explored cells, and the goal still passes the clearance / LOS checks.
 
     Returns:
         (filtered_traj, reject_reason, min_clearance_m). reject_reason is set when the
@@ -101,14 +107,18 @@ def _filter_unsafe_nav_traj(
     clearances: list[float] = []
     prev_xy: tuple[float, float] | None = None
     prev_is_start = False
-    for raw in body:
+    n_body = len(body)
+    for i, raw in enumerate(body):
         arr = np.asarray(raw, dtype=np.float64).reshape(-1)
         if arr.size < 2 or not np.isfinite(arr[:2]).all():
             continue
         xy = (float(arr[0]), float(arr[1]))
         # Always keep the first waypoint when it matches start (robot may sit in tight clearance).
         is_start = start_xy is not None and abs(xy[0] - start_xy[0]) < 1e-3 and abs(xy[1] - start_xy[1]) < 1e-3
-        if not is_start and not planner.is_explored_xy(xy):
+        # Frontier-explore goals are at the unexplored edge by definition; only the
+        # final goal is exempt. Interior waypoints must remain explored cells.
+        is_goal = explore_goal and i == n_body - 1
+        if not is_start and not is_goal and not planner.is_explored_xy(xy):
             reject = "rejected_unexplored"
             break
         c = float(planner.clearance_at_xy(xy))
@@ -569,7 +579,11 @@ def process_text(self, text, start_pose):
             if isinstance(localized_point, torch.Tensor):
                 localized_point = localized_point.tolist()
             traj.append(localized_point)
-        traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
+        traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(
+            traj,
+            start_xyt=start_pose,
+            explore_goal=(mode == "exploration"),
+        )
         if reject_reason is not None or not traj:
             logger.warning(
                 "Nav plan rejected after safety filter: %s (min_clearance=%s)",

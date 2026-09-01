@@ -546,9 +546,9 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
     if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
         used_nav_target = True
         try:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta)
+            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta, explore_goal=True)
         except TypeError:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start)
+            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, explore_goal=True)
         nav_outcome_str = str(nav_outcome)
         ok = bool(nav_outcome)
         nav_outcome_str = str(nav_outcome)

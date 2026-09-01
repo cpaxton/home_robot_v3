@@ -303,6 +303,7 @@ def navigate_to_target_pose(
     *,
     target_obs_id: int | None = None,
     _hop: int = 0,
+    explore_goal: bool = False,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -396,7 +397,11 @@ def navigate_to_target_pose(
         finished = not truncated
         if finished and target_theta is not None:
             traj[-1][2] = target_theta
-        traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
+        traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(
+            traj,
+            start_xyt=start_pose,
+            explore_goal=explore_goal,
+        )
         if reject_reason is not None or not traj:
             logger.warning(f"navigate_to_target_pose rejected after safety filter: {reject_reason}")
             self._last_nav_plan = {
@@ -444,7 +449,7 @@ def navigate_to_target_pose(
                 start_xyt=start_pose,
                 goal_xyt=target_pose,
                 object_xyz=original_target_pose,
-                mode="navigation",
+                mode="exploration" if explore_goal else "navigation",
                 localize_source="eqa_target",
                 n_planned=n_planned or None,
                 chunked=truncated,
@@ -566,6 +571,7 @@ def navigate_to_target_pose(
             target_theta,
             target_obs_id=target_obs_id,
             _hop=_hop + 1,
+            explore_goal=explore_goal,
         )
     if progressed:
         return NavOutcome.PROGRESS
