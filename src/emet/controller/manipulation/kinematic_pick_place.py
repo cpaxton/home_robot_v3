@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,53 @@ def _targets_from_grasp_T(
     pregrasp = grasp + approach * float(pregrasp_standoff_m)
     lift = grasp + np.array([0.0, 0.0, float(lift_m)])
     return pregrasp, grasp, lift
+
+
+def write_offline_mjcf_base_xyt(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    xyt: np.ndarray,
+    *,
+    planar_joint_names: Sequence[str] | None = None,
+    freejoint_name: str | None = None,
+    z: float | None = None,
+) -> bool:
+    """Write world XYT into a standalone (unmerged) robot MJCF base.
+
+    Prefers planar slide/hinge joints when all names resolve, otherwise a 7-DoF
+    freejoint. Values are **raw world XYT** — correct for vendored robot MJCFs, not
+    Robocasa-merged models (use :func:`emet.simulation.spawn_planar.write_planar_base_xyt`).
+    """
+    x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
+    names = tuple(str(n) for n in planar_joint_names) if planar_joint_names else ()
+    if len(names) != 3:
+        probe = ("base_x", "base_y", "base_yaw")
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in probe]
+        if all(jid >= 0 for jid in ids):
+            names = probe
+    if len(names) == 3:
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in names]
+        if all(jid >= 0 for jid in ids):
+            for jid, val in zip(ids, (x, y, th), strict=True):
+                data.qpos[int(model.jnt_qposadr[jid])] = float(val)
+            return True
+    if freejoint_name:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
+        if jid >= 0:
+            qadr = int(model.jnt_qposadr[jid])
+            z_use = float(data.qpos[qadr + 2]) if z is None else float(z)
+            half = 0.5 * th
+            data.qpos[qadr : qadr + 7] = [
+                x,
+                y,
+                z_use,
+                float(np.cos(half)),
+                0.0,
+                0.0,
+                float(np.sin(half)),
+            ]
+            return True
+    return False
 
 
 class KinematicPickPlaceExecutor:
@@ -240,33 +288,33 @@ class KinematicPickPlaceExecutor:
                 pass
         return world
 
+    def _planar_joint_names(self) -> tuple[str, ...] | None:
+        spec = getattr(self.robot, "_spec", None)
+        names = getattr(spec, "planar_base_joint_names", None) if spec is not None else None
+        if names and len(names) == 3:
+            return tuple(str(n) for n in names)
+        return None
+
     def _sync_base_freejoint(self) -> None:
         assert self._model is not None and self._data is not None
-        jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, self.profile.base_freejoint_name)
-        if jid < 0:
-            return
-        qadr = int(self._model.jnt_qposadr[jid])
         world = self._world_base_xyt()
         if world is None:
             return
-        x, y, th = float(world[0]), float(world[1]), float(world[2])
-        z = float(self._data.qpos[qadr + 2])
+        z = None
         state = getattr(self.robot, "_state", None)
         if isinstance(state, dict) and state.get("base_xyz") is not None:
             try:
                 z = float(np.asarray(state["base_xyz"], dtype=np.float64).reshape(-1)[2])
             except Exception:
                 pass
-        half = 0.5 * th
-        self._data.qpos[qadr : qadr + 7] = [
-            x,
-            y,
-            z,
-            float(np.cos(half)),
-            0.0,
-            0.0,
-            float(np.sin(half)),
-        ]
+        write_offline_mjcf_base_xyt(
+            self._model,
+            self._data,
+            world,
+            planar_joint_names=self._planar_joint_names(),
+            freejoint_name=getattr(self.profile, "base_freejoint_name", None),
+            z=z,
+        )
 
     def _actuator_to_joint_name(self, aname: str) -> str | None:
         m = re.match(r"(left|right)_arm(\d+)$", aname)
@@ -278,6 +326,12 @@ class KinematicPickPlaceExecutor:
         m = re.match(r"(left|right)_gripper(\d+)$", aname)
         if m:
             return f"{m.group(1)}_gripper_finger_joint{m.group(2)}"
+        if aname in self.joint_names:
+            return aname
+        if aname.endswith("_act"):
+            stem = aname[:-4]
+            if stem in self.joint_names:
+                return stem
         return None
 
     def _sync_qpos_from_robot(self) -> None:
@@ -309,7 +363,9 @@ class KinematicPickPlaceExecutor:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
         val = 0.05 if open_ else 0.0
-        keys = ("right_gripper1", "right_gripper2") if self.arm == "right" else ("left_gripper1", "left_gripper2")
+        keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
+        if not keys:
+            keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
         for k in keys:
             if k in names:
                 hold[k] = val

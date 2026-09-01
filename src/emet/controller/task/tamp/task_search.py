@@ -96,37 +96,28 @@ def rank_grasps_by_ik(
 def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
     """Write approach base XYT into the executor's offline MJCF for IK ranking.
 
-    Handles both freejoint bases (rby1/nori/galaxea: ``base_freejoint`` 7-DoF quat)
-    and planar slide bases (sourccey/innate_mars/xlerobot: ``base_x/base_y/base_yaw``).
+    Uses :func:`~emet.controller.manipulation.kinematic_pick_place.write_offline_mjcf_base_xyt`
+    so planar robots (``RobotSpec.planar_base_joint_names``) and freejoint robots
+    (rby1/nori/galaxea) share one write path with execution IK.
     """
     import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
 
     model = getattr(executor, "_model", None)
     data = getattr(executor, "_data", None)
     profile = getattr(executor, "profile", None)
     if model is None or data is None or profile is None:
         return
-    x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
-
-    def _set_planar_base() -> bool:
-        planar = ("base_x", "base_y", "base_yaw")
-        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in planar]
-        if any(jid < 0 for jid in ids):
-            return False
-        for jn, val in zip(planar, (x, y, th), strict=True):
-            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
-            data.qpos[int(model.jnt_qposadr[jid])] = float(val)
-        return True
-
-    name = getattr(profile, "base_freejoint_name", None)
-    if not name or not _set_planar_base():
-        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(name)) if name else -1
-        if jid < 0:
-            return
-        qadr = int(model.jnt_qposadr[jid])
-        z = float(data.qpos[qadr + 2])
-        half = 0.5 * th
-        data.qpos[qadr : qadr + 7] = [x, y, z, float(np.cos(half)), 0.0, 0.0, float(np.sin(half))]
+    spec = getattr(getattr(executor, "robot", None), "_spec", None)
+    planar = getattr(spec, "planar_base_joint_names", None) if spec is not None else None
+    write_offline_mjcf_base_xyt(
+        model,
+        data,
+        xyt,
+        planar_joint_names=tuple(planar) if planar and len(planar) == 3 else None,
+        freejoint_name=getattr(profile, "base_freejoint_name", None),
+    )
     # Seed arm near home so ranking matches post-approach posture.
     home = getattr(profile, "home_cmd", None)
     joint_names = list(getattr(executor, "joint_names", ()) or ())
@@ -137,12 +128,16 @@ def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
         qadr_list = joint_qpos_addrs(model, joint_names)
         # Map profile home actuators → arm joints when names align via pack helpers.
         for i, jn in enumerate(joint_names):
-            # Prefer matching ``left_arm_jointK`` ↔ ``left_armK`` style.
+            # Prefer matching ``left_arm_jointK`` ↔ ``left_armK`` style, then ``jn_act``.
             short = jn.replace("_joint", "") if "_joint" in jn else jn
-            if short in act_names:
-                ai = act_names.index(short)
-                if ai < len(home) and i < len(qadr_list):
-                    data.qpos[int(qadr_list[i])] = float(home[ai])
+            act_key = short if short in act_names else (f"{jn}_act" if f"{jn}_act" in act_names else None)
+            if act_key is None and jn in act_names:
+                act_key = jn
+            if act_key is None:
+                continue
+            ai = act_names.index(act_key)
+            if ai < len(home) and i < len(qadr_list):
+                data.qpos[int(qadr_list[i])] = float(home[ai])
     mujoco.mj_forward(model, data)
 
 

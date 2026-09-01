@@ -52,9 +52,9 @@ references; Stretch agentic find is slow due to head sweeps),
 **Sourccey kinematic row** (`robocasa_sourccey_counter_to_cab_mcts`, `manip_mode: mcts`):
 the updated official `sourccey-hardware` arm URDF reaches table/counter height but its
 workspace bottoms out around z≈0.36 m, so floor objects are out of reach — use the
-counter-top pick as the sourccey kinematic row, not a floor pick. Requires the
-planar-base sync + dual-arm fallback in `task_search.py` / `ovmm_full.py` (see the
-`fix/tamp-mcts-planar-dual-arm` change).
+counter-top pick as the sourccey kinematic row, not a floor pick. Offline IK ranking
+and execution share `write_offline_mjcf_base_xyt` (planar `RobotSpec.planar_base_joint_names`
+or a freejoint); MCTS tries each distinct arm via `kinematic_arm_sides`.
 
 The TAMP agent-tools gate's default `PROFILE=smoke` is the faster rby1 CHAT
 kinematic contract test; run this floor smoke explicitly when changing
