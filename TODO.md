@@ -376,6 +376,16 @@ pilots — treat as preliminary until a strong pilot lands (like EQA's).** Four 
       (cached robocasa) obj 1/1 jar, recep 0/1 cab; S2 (cached molmo) obj 1/1 bowl, recep
       0/1 microwave. Small objects localize via voxel; fixture receptacles (cab/cabinet,
       microwave) are not surfaced by recall (multi-label dilution) — a recall/ranking gap.
+- [ ] **FindRec recall WORKS — the failure is investigate geometry (2026-09-01 debug).**
+      `EMET_DYNAMEM_MAP_DEBUG` on the cached robocasa recep showed the loop recalled 5
+      cabinet cards (`42:cab,44:cab,69:cab,71:cab,15:cab`) and investigated all 5, but every
+      arrival view was "kitchen/toaster" — the **cached graph node XYZs are camera-observation
+      poses, not object positions** (`_obs_nav_anchor` returns `node.xyz`), so the robot
+      approaches where a camera once stood and sees a toaster/counter, not the cabinet. Same
+      artifact class as the jar-wall proposal. **Fix options:** (a) rebuild the robocasa/molmo
+      caches with the fixed mapping (correct object anchors), (b) make `_obs_nav_anchor` fall
+      back to the observation's semantic object point (voxel) when the node centroid is
+      camera-pose-like, (c) approach framing: pick a standoff that actually shows the anchor.
 - [ ] Explore OVMM as pilots only: backend matrix, OVMM full (pick/place), Habitat-OVMM
       are deferred until FindRec-recall improves OR the paper explicitly reports FindObj-only
       with the fixture gap documented. Do not sink GPU into the full matrix yet.
