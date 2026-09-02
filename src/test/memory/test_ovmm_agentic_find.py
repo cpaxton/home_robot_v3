@@ -53,6 +53,7 @@ def test_ovmm_find_questions():
 def test_should_use_agentic_find_defaults():
     assert should_use_agentic_find("dynagraph", agentic_find=None) is True
     assert should_use_agentic_find("static_graph", agentic_find=None) is True
+    assert should_use_agentic_find("graph_eqa", agentic_find=None) is True
     assert should_use_agentic_find("dynamem", agentic_find=None) is False
     assert should_use_agentic_find("ground_truth", agentic_find=None) is False
     assert should_use_agentic_find("dynagraph", agentic_find=False) is False

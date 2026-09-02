@@ -29,12 +29,7 @@ from typing import Any
 
 import yaml
 
-from emet.eval.ovmm_find_phase import (
-    FindPhaseRunConfig,
-    distance_to_placement_xy,
-    horizontal_coords,
-    score_ovmm_find_query,
-)
+from emet.eval.ovmm_find_phase import score_ovmm_find_query
 from emet.utils.config import resolve_config_yaml_path
 
 DEFAULT_HABITAT_EPISODES = "configs/ovmm/habitat_find_phase_episodes.yaml"
@@ -85,51 +80,8 @@ def score_habitat_find_phase(
     )
 
 
-def run_habitat_minival_batch(
-    output_dir: str | Path,
-    *,
-    backend: str = "dynagraph",
-    episodes_path: str | Path | None = None,
-) -> list[dict[str, Any]]:
-    """
-    Batch runner entry point (delegates to ``emet_habitat`` when available).
-
-    From repo root with Habitat venv::
-
-        .venv-habitat/bin/emet-habitat run-ovmm-find-batch --output-dir runs/ovmm_habitat
-    """
-    episodes = load_habitat_ovmm_episodes(episodes_path)
-    if not episodes:
-        return []
-    try:
-        from emet_habitat.ovmm_find_runner import (
-            load_habitat_find_phase_episodes,
-            run_habitat_find_phase_episode,
-        )
-    except ImportError as exc:
-        raise RuntimeError("Habitat find-phase batch requires .venv-habitat (./scripts/install_habitat.sh)") from exc
-
-    loaded = load_habitat_find_phase_episodes(episodes_path or resolve_config_yaml_path(DEFAULT_HABITAT_EPISODES))
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    run_cfg = FindPhaseRunConfig(backend=backend)  # type: ignore[arg-type]
-    results: list[dict[str, Any]] = []
-    for ep in loaded:
-        metrics = run_habitat_find_phase_episode(ep, run_cfg)
-        (out / f"{ep.id}_{backend}.json").write_text(
-            __import__("json").dumps(metrics, indent=2),
-            encoding="utf-8",
-        )
-        results.append(metrics)
-    return results
-
-
 __all__ = [
     "DEFAULT_HABITAT_EPISODES",
-    "FindPhaseRunConfig",
-    "distance_to_placement_xy",
-    "horizontal_coords",
     "load_habitat_ovmm_episodes",
-    "run_habitat_minival_batch",
     "score_habitat_find_phase",
 ]
