@@ -175,6 +175,6 @@ uv run emet test src/test/config/ \
 
 ## Relationship to cross-track overnight smoke
 
-[`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) adds tier-0 unit tests, full safe pytest, and optional deep Habitat eval. The **seven-track battery** is the paper-facing **simulation validation ladder** documented here and in the paper experiments section — run it before claiming a branch is merge-ready for embodied eval changes.
+[`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) adds tier-0 unit tests and full safe pytest. The **seven-track battery** is the paper-facing **simulation validation ladder** documented here and in the paper experiments section — run it before claiming a branch is merge-ready for embodied eval changes. Habitat VLM smokes (`smoke_habitat_ovmm_agentic_find.sh`, `emet hmeqa overnight`) stay on a **separate night**.
 
 **Do not chain** this battery immediately after a full Robocasa GPU explore + pytest on the same GPU session. Prefer `nohup` and separate nights for track 6–7 if tracks 3–4 used heavy VLM backends.

@@ -14,6 +14,36 @@ something that can be a YAML key + `--set`. Later: stop exporting
 `EMET_SKIP_HEAD_SWEEP` from `run_ovmm_find_recep_slice.sh` once every caller loads
 the robot overlay; same pass for other script-exported knobs that duplicate config.
 
+## Eval orchestrator layers (keep three; do not add a fourth matrix script)
+
+Too many bash wrappers all mean “run a bit of Habitat + OVMM + SQA3D.” Canonical
+layers — docs in [`docs/evaluation.md`](docs/evaluation.md) and
+[`docs/experiments/README.md`](docs/experiments/README.md):
+
+| Layer | Entry | Job |
+|-------|--------|-----|
+| Path smoke | `scripts/run_simulation_smoke_battery.sh` | Seven-track merge-gate (often GT/mock) |
+| Overnight regression | `scripts/run_overnight_cross_track_smoke.sh` | Tier-0 + pytest + those tracks. **Never** chain VLM after this. |
+| Fast OVMM | `scripts/run_ovmm_find_recep_slice.sh` | rby1 / teleport (`PROFILE=smoke`) |
+| Habitat OVMM VLM | `scripts/smoke_habitat_ovmm_agentic_find.sh` | One HM3D scene, agentic 4/4 |
+| Paper numbers | `scripts/run_paper_matrix.sh` + `emet hmeqa overnight` | Real sizes, one GPU lock |
+
+Deleted 2026-09-02: `scripts/run_overnight_eval_smoke.sh` (tiny real-VLM matrix +
+figure pack). Replacements above; figures: `scripts/build_eval_figure_pack.py`.
+
+### Later cleanup (not this PR)
+
+- [ ] Fold `run_representative_benchmark_sample.sh` into
+      `run_dynagraph_tuned_paper_battery.sh` (`SKIP_*` already exists), or the
+      other way around — one “subset paper” orchestrator.
+- [ ] Make `run_overnight_habitat_eval.sh` a thin wrapper around
+      `emet hmeqa overnight`, or drop it (`dogfood-emet-cli` already says the
+      overnight ladder is `emet hmeqa overnight`).
+- [ ] Leave `run_hmeqa_*_h2h.sh` until `emet hmeqa h2h` covers those ID sets;
+      then delete the one-off H2H scripts.
+- [ ] `run_habitat_ovmm_joint_gate.sh` vs `run_paper_matrix.sh` — both HM-EQA +
+      OVMM; keep one gate.
+
 ## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
 Canonical record:

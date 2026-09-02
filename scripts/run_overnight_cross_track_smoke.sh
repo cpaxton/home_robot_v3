@@ -5,8 +5,9 @@
 #   ./scripts/run_overnight_cross_track_smoke.sh
 #   RUN_ID=my_run TIMEOUT_DYNAMIC=28800 ./scripts/run_overnight_cross_track_smoke.sh
 #
-# Deep Habitat eval is OFF by default (stacked GPU jobs caused driver hangs).
-# Opt in explicitly: RUN_DEEP_EVAL=1 ./scripts/run_overnight_cross_track_smoke.sh
+# Do not chain Habitat VLM after this (driver hangs). Separate night:
+#   bash scripts/smoke_habitat_ovmm_agentic_find.sh
+#   uv run emet hmeqa overnight   # or emet-habitat run-batch --question-ids 3,14,17
 #
 # Logs: ~/runs/emet/overnight_cross_track/<RUN_ID>/
 set -euo pipefail
@@ -29,7 +30,6 @@ TIMEOUT_OVMM="${TIMEOUT_OVMM:-3600}"
 TIMEOUT_DYNAMIC="${TIMEOUT_DYNAMIC:-28800}"
 TIMEOUT_WORLD="${TIMEOUT_WORLD:-28800}"
 TIMEOUT_PYTEST="${TIMEOUT_PYTEST:-14400}"
-RUN_DEEP_EVAL="${RUN_DEEP_EVAL:-0}"
 
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 SUMMARY="${LOG_DIR}/summary.txt"
@@ -145,14 +145,11 @@ unset _pytest_ignore_args
 log "=== OVERNIGHT COMPLETE ==="
 log "Review: ${SUMMARY} and per-step logs in ${LOG_DIR}/"
 
-if [ "$RUN_DEEP_EVAL" = "1" ]; then
-    log "RUN_DEEP_EVAL=1 — starting separate deep eval (ensure GPU is idle first)"
-    gpu_between_tracks
-    NEED_MIB=14000 RUN_ID="${RUN_ID}_deep" TAG="${RUN_ID}_deep" \
-        ./scripts/run_overnight_eval_smoke.sh \
-        2>&1 | tee -a "${LOG_DIR}/deep_overnight_eval.log"
-else
-    log "Skipping deep eval (set RUN_DEEP_EVAL=1 to chain run_overnight_eval_smoke.sh)"
+if [ "${RUN_DEEP_EVAL:-0}" = "1" ]; then
+    log "RUN_DEEP_EVAL is removed (run_overnight_eval_smoke.sh deleted). Not chaining VLM."
+    log "Separate night: bash scripts/smoke_habitat_ovmm_agentic_find.sh"
+    log "HM-EQA: uv run emet hmeqa overnight   (or emet-habitat run-batch --question-ids 3,14,17)"
+    log "Figures: uv run python scripts/build_eval_figure_pack.py --run-id …"
 fi
 
 emet_kill_stale_eval_processes
