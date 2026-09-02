@@ -180,7 +180,7 @@ uv run python scripts/eval_dynamic_exploration.py \
 ## Next after all smokes pass
 
 1. SQA3D val subset aggregate
-2. Habitat hold-out-8 or balanced-32 @ Qwen3-VL-8B (`run_overnight_habitat_eval.sh`)
+2. Habitat hold-out-8 or balanced-32 @ Qwen3-VL-8B (`uv run emet hmeqa overnight`)
 3. OVMM S0 ladder CSV refresh
 4. Dynamic explore full matrix (robocasa + molmo lifelong)
 

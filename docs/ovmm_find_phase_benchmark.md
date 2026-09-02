@@ -116,8 +116,7 @@ For fast dynagraph agentic find regression, teleport is opt-in
 (`EMET_SIM_NAV_TELEPORT=1`). **Do not** pass `--not-rotate` on perception
 backends — table mapping uses `--mapping-rotate-steps 4`. The find-phase
 harness already enables `_fast_explore_lookaround`. Head pans are off by
-default (`mapping.look_around_head_sweep: false`); `PROFILE=stretch` /
-`stretch-kitchen` also set `EMET_SKIP_HEAD_SWEEP=1`. Paper pans:
+default (`mapping.look_around_head_sweep: false`). Paper pans:
 `PROFILE=stretch-legacy` (`EMET_FORCE_HEAD_SWEEP=1`).
 
 Stretch episodes in `find_phase_episodes.yaml`: no-pan table/kitchen gates

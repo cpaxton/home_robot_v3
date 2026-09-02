@@ -10,7 +10,7 @@ When launching, recovering, or monitoring Habitat / HM-EQA / OVMM / GPU paper ru
 - Prefer **`uv run emet …`** over ad-hoc `env … taskset … nohup ./scripts/…` lines.
 - **Before Habitat/HM-EQA:** `uv run emet habitat safe-start` (recover + detached jobs-wrapped EGL probe). Exit 0 = queued only — wait for `emet jobs status` `done` + logs OK before `hmeqa`. Never inline `emet-habitat` / `run-episode` in a Cursor agent turn.
 - Recovery: `emet eval recover --need-mib 12000` then `emet hmeqa resume` (or `emet hmeqa status`). After agent death: **`emet status tail`** (not a flat `~/runs/emet/STATUS.log`).
-- Launch H2H: `emet hmeqa h2h --out OUT --resume …` (uses `emet jobs run --need-mib` with `--cpu-safe` / `--gpu-exclusive`). Overnight ladder: **`emet hmeqa overnight`** (no separate overnight-ladder script).
+- Launch H2H: `emet hmeqa h2h --out OUT --resume …` (uses `emet jobs run --need-mib` with `--cpu-safe` / `--gpu-exclusive`). Overnight ladder: **`emet hmeqa overnight`** (`scripts/run_overnight_habitat_eval.sh` is a thin compat wrapper).
 - Post-run: `emet hmeqa summarize` / `emet hmeqa significance` / `emet hmeqa ladder`.
 - Monitor: `emet jobs` / `emet jobs status` / `emet jobs report` / `emet jobs logs` — not long blocking agent shells on Habitat.
 - Affinity: `emet eval affinity` (never hand-roll incomplete `taskset -c 0-7,10-31`).

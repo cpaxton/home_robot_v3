@@ -18,7 +18,7 @@ North star: raise **FindObj** and **FindRec** under teleport dynagraph — but
 | `stretch-kitchen` | Stretch `robocasa_pp_s1`, **no head pan** | 6 | kitchen camera check without 40–80s sweeps |
 | `stretch-legacy` | old Stretch S0/S1/S2 trio **with** pans | 8 | hours — overnight only |
 
-**Iterate here, not on Stretch `molmo-robocasa-find8`.** The table episode backs up and looks at the workspace (`_prepare_default_table_rby1_mapping_view`) so red cylinder / blue cube are in view after a 4-step spin. This morning’s rby1 smoke: FindObj **1/1** in **106 s** (voxel XYZ). Stretch kitchen find8 is ~3 h/episode with head sweeps and `goal_recep: cab` (VLM looks for the word “cab”). The 4-pan `look_around` is optional: `EMET_SKIP_HEAD_SWEEP=1` (kept by `PROFILE=stretch` / `stretch-kitchen`) captures one frame at the current pose instead. PickPlace `obj_main` is often a sugar cube — `emet ovmm probe-verify` skips that and aims from spawn at a jar/bottle/bowl-class body (`emet.eval.ovmm_probe_targets`). Offline dumps: `emet ovmm probe-map`.
+**Iterate here, not on Stretch `molmo-robocasa-find8`.** The table episode backs up and looks at the workspace (`_prepare_default_table_rby1_mapping_view`) so red cylinder / blue cube are in view after a 4-step spin. This morning’s rby1 smoke: FindObj **1/1** in **106 s** (voxel XYZ). Stretch kitchen find8 is ~3 h/episode with head sweeps and `goal_recep: cab` (VLM looks for the word “cab”). The 4-pan `look_around` is off by default (`mapping.look_around_head_sweep: false`); one frame at the current pose. PickPlace `obj_main` is often a sugar cube — `emet ovmm probe-verify` skips that and aims from spawn at a jar/bottle/bowl-class body (`emet.eval.ovmm_probe_targets`). Offline dumps: `emet ovmm probe-map`.
 
 Saved maps (no new sim): `~/.cache/emet/scene_maps/<key>/voxel_map.pkl` + `graph.json`. Probe without MuJoCo:
 
@@ -87,7 +87,7 @@ in ~3.5 h (S0 ~10 min, RoboCasa ~101 min, Molmo ~109 min). Cancelled mid-postfix
 | **One-shot proposals** | A voxel proposal (`obs_id < 0`) is blocked after one real nav attempt (`_hypothesis_nav_blocked`): a close ABSENT is decisive, so the router/fallback cannot re-chase the same wall XYZ. The loop re-localizes from the grown map. |
 | **Unpin on ABSENT** | A close ABSENT on a **voxel proposal handle** (`obs_id < 0`) also removes the retrieval pin (`unpin_localize_xyz`) so a disproven point is never scored by the `pinned_xyz_from_phrases` fallback. A close ABSENT on a nearby graph view still retracts the claim at that obs but does **not** unpin. |
 | **Explore no-progress block** | A nav that moved < 0.10 m blocks that frontier XY (`_habitat_recent_goals`/`_blocked_goals`) so the next pick rotates to a different frontier or falls to multi-goal explore (fixes the kitchen re-pick-the-same-frontier stall). |
-| **Efficiency** | rby1 episodes, or Stretch with `EMET_SKIP_HEAD_SWEEP=1`, + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
+| **Efficiency** | rby1 episodes, or Stretch (YAML pans off), + `--mapping-rotate-steps 4` (do **not** `--not-rotate`; table scan must map the workspace) |
 | Close-look map | Occupancy-aligned min camera range + aimed flag; investigate **stays** on a place card until aimed-close or **escapes** when unreachable / attempts exhausted |
 | Voxel localize | `localize_text` (YoloE / cosine) is an investigate card (`source=voxel`) and the FindObj/FindRec coordinate; camera pose is not scored |
 
