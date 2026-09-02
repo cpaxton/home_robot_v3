@@ -18,7 +18,10 @@ Writes ``src/emet/assets/robot/sourccey/sourccey.xml``.
 
 Kinematics source of truth:
 - Arm chain (shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper):
-  ``vulcan-forge/lerobot-vulcan`` ``Arm.urdf``, converted by ``urdf_to_mjcf.py``.
+  ``vulcan-forge/sourccey-hardware`` ``URDF/ArmLeft/ArmLeft.urdf`` (the updated official
+  arm), converted by ``urdf_to_mjcf.py`` + recentered so the shoulder_pan pivot sits at
+  the fragment root (``arm_root``). The right arm is the code-side X-mirror of the left
+  (the two official URDFs are asymmetric exports, so one canonical arm is mirrored).
 - Base: planar ``base_x/base_y/base_yaw`` on ``base_root`` (matches RoboCasa planar autoplace).
 - Lift: vertical prismatic ``lift``; dome + cameras ride the lift carriage.
 - 4 cameras: ``front_left``/``front_right`` (dome), ``wrist_left``/``wrist_right`` (grippers).
@@ -58,22 +61,21 @@ LIFT_MIN = 0.0
 LIFT_MAX = 0.20
 
 # Arm shoulder mount. On the real Sourccey the arms attach at the upper-body
-# shoulders (below the dome head), hanging down beside the body. The arm mount is
-# expressed as an absolute height (carriage frame) so the shoulder sits at the
-# level-3 / dome-base height, NOT above the dome.
-# Mount quat rotates the URDF arm frame so its ``-Y`` extension points outward
-# (world -X for left, +X for right) while keeping the shoulder-pan axis world-vertical.
-ARM_MOUNT_Z = 0.70  # shoulder height above the carriage floor (upper body)
-ARM_MOUNT_X = DOME_HALF + 0.02
-# R_z(±90deg) in MJCF quat (w x y z): left -> -90 (cos -1/2? no): use exact values below.
+# shoulders (below the dome head), hanging down beside the body. The new official
+# ArmLeft URDF fragment is recentered so ``arm_root`` IS the shoulder_pan pivot;
+# mount it directly at the shoulder height on each side. The mount quat rotates
+# the arm so its ``-Y`` extension points outward (world -X for left, +X for right)
+# while keeping the shoulder-pan axis world-vertical.
+ARM_MOUNT_X = 0.13  # shoulder lateral offset from body centerline (half body width)
+ARM_MOUNT_Z = 0.66  # shoulder height above the carriage floor (upper body)
+# R_z(±90deg) in MJCF quat (w x y z): left -> -90, right -> +90 (arm -Y extends outward).
 ARM_MOUNT_QUAT = {"left": "0.7071068 0 0 -0.7071068", "right": "0.7071068 0 0 0.7071068"}
 
 # Default "home" pose for navigation: arms tucked at their own sides (uncrossed),
 # collision-free. Matches the arm joint order: shoulder_pan, shoulder_lift, elbow_flex,
-# wrist_flex, wrist_roll, gripper. The left fragment is X-mirrored (sagittal), so the
-# left/right joint values must be OPPOSITE sign for the poses to be mirror images.
-# shoulder_pan > ~0.8 makes the arms CROSS in front of the body; 0.6 keeps them at
-# their own sides (verified: left gripper at -x, right at +x, no self-collision).
+# wrist_flex, wrist_roll, gripper. The left arm is the canonical fragment; the right is
+# its X-mirror, so the left/right joint values must be OPPOSITE sign for mirror poses.
+# (Tuned for the new ArmLeft URDF arm; see assemble_sourccey home-keyframe smoke.)
 ARM_HOME = (0.6, -0.6, 1.0, 0.0, 0.0, 0.8)
 LIFT_HOME = 0.05
 
@@ -115,8 +117,9 @@ def _mirror_x_attrs(line: str) -> str:
 def prefix_arm_fragment(fragment: str, side: str) -> str:
     """Prefix every ``<body name=``/``<joint name=`` in the arm fragment with ``<side>_``.
 
-    The URDF arm fragment is emitted once and instanced for both sides; MuJoCo requires
-    globally unique body/joint names, and actuators must reference the prefixed joints.
+    The canonical arm fragment (from ``ArmLeft.urdf``) is instanced for both sides;
+    MuJoCo requires globally unique body/joint names, and actuators must reference the
+    prefixed joints. The fragment is the LEFT arm, so the right arm is its X-mirror.
     """
     import re
 
@@ -125,7 +128,7 @@ def prefix_arm_fragment(fragment: str, side: str) -> str:
         m = re.search(r'(<(?:body|joint) name=")([^"]+)(")', line)
         if m:
             line = f"{line[: m.start(1)]}{m.group(1)}{side}_{m.group(2)}{m.group(3)}{line[m.end(3) :]}"
-        if side == "left":
+        if side == "right":
             line = _mirror_x_attrs(line)
         out.append(line)
     return "\n".join(out)
@@ -135,11 +138,11 @@ def inject_wrist_cameras(fragment: str) -> str:
     """Add a wrist camera on each gripper-base body in the arm fragment.
 
     The real Sourccey wrist camera mounts on the gripper base
-    (``Gripper-Base-Front-Angled-Camera-v1`` mesh), looking along the gripper.
+    (``Gripper-Base`` mesh, new official arm), looking along the gripper.
     The arm fragment is generated from the URDF; we inject a ``<camera>`` element
-    right after each ``<body name="{side}_Gripper-Base-Back-v1">`` open tag so the
-    camera tracks the gripper during manipulation. Left arm X-mirroring already
-    flips the camera position/axes consistently.
+    right after each ``<body name="{side}_Gripper-Base">`` open tag so the camera
+    tracks the gripper during manipulation. Right-arm X-mirroring already flips the
+    camera position/axes consistently.
     """
     import re
 
@@ -156,7 +159,7 @@ def inject_wrist_cameras(fragment: str) -> str:
         return cam
 
     # match body open tags for gripper bases (both sides after prefixing)
-    pat = re.compile(r'(<body name="(left|right)_Gripper-Base-Back-v1"[^>]*>)(\n)(\s*)')
+    pat = re.compile(r'(<body name="(left|right)_Gripper-Base"[^>]*>)(\n)(\s*)')
     return pat.sub(_add_camera, fragment)
 
 
@@ -211,17 +214,8 @@ def build() -> str:
         "wall_l3_right",
     ):
         a(f'    <mesh name="{name}" file="{name}.stl" scale="0.001 0.001 0.001"/>')
-    # arm meshes
-    for name in (
-        "arm_base",
-        "arm_shoulder",
-        "arm_bicep_l",
-        "arm_forearm",
-        "arm_wrist",
-        "gripper_base",
-        "gripper_front",
-        "gripper_finger",
-    ):
+    # arm meshes (new official ArmLeft URDF; STLs vendored as arm_l_*.stl)
+    for name in sorted(p.stem for p in (SRC_ASSETS / "meshes").glob("arm_l_*.stl")):
         a(f'    <mesh name="{name}" file="{name}.stl" scale="0.001 0.001 0.001"/>')
     a("  </asset>")
     a("")
@@ -383,8 +377,7 @@ def build() -> str:
     # ---- arms (left / right) ----
     for side, arm_sx in (("left", -1.0), ("right", 1.0)):
         a(f'      <body name="arm_mount_{side}" pos="{arm_sx * ARM_MOUNT_X} 0 {ARM_MOUNT_Z}">')
-        a(f'        <geom type="mesh" mesh="arm_base" class="robot_visual" pos="{arm_sx * 0.03} 0 -0.05"/>')
-        a(f'        <body name="arm_{side}" pos="{arm_sx * 0.03} 0 -0.05" quat="{ARM_MOUNT_QUAT[side]}">')
+        a(f'        <body name="arm_{side}" pos="0 0 0" quat="{ARM_MOUNT_QUAT[side]}">')
         a(inject_wrist_cameras(prefix_arm_fragment(indent_arm, side)))
         a("        </body>")
         a("      </body>")

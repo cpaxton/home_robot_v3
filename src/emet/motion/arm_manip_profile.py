@@ -48,13 +48,15 @@ class ArmManipProfile:
                 return profile
         # Fall back to the robot's own spec + vendored MJCF so any registry robot with
         # an arm gets motion planning without a hardcoded table. Resolution order:
-        #   1. declarative ``RobotSpec.arm_chain`` (curated per-robot)
+        #   1. declarative ``RobotSpec.arm_chains[arm]``, or ``arm_chain`` for left only
         #   2. backend ``build_arm_manip_profile`` hook (code fallback)
         #   3. MJCF auto-discovery heuristic
         spec = _spec_for_robot_id(key)
         if spec is not None:
             chains = getattr(spec, "arm_chains", None) or {}
-            chain = chains.get(arm_l) or getattr(spec, "arm_chain", None)
+            chain = chains.get(arm_l)
+            if chain is None and not chains and arm_l == "left":
+                chain = getattr(spec, "arm_chain", None)
             if chain is not None:
                 found = _profile_from_arm_chain(spec, chain, arm=arm_l)
                 if found is not None:
@@ -243,8 +245,11 @@ def _discover_arm_joints(model, arm: str) -> list[str]:
         if matched:
             return matched
     # No side token anywhere -> single-arm robot (innate_mars, franka_fr3).
+    # Bind the un-sided chain to ``left`` only so ``arm="right"`` does not alias it.
     has_any_side = any(n.startswith(("left_", "right_")) or n.endswith(("_L", "_R")) for n in hinge)
     if has_any_side:
+        return []
+    if str(arm).lower().strip() not in ("left", ""):
         return []
     return [n for n in hinge if any(h in n.lower() for h in _ARM_HINTS)]
 
@@ -485,6 +490,27 @@ def has_arm_manip_profile(robot_id: str, *, arm: str = "left") -> bool:
         return True
     except KeyError:
         return False
+
+
+def kinematic_arm_sides(robot_id: str) -> tuple[str, ...]:
+    """Distinct arm sides that resolve an :class:`ArmManipProfile` for ``robot_id``.
+
+    Single-arm robots that only declare ``arm_chain`` (innate_mars) yield ``("left",)``.
+    Dual-arm robots yield ``("left", "right")`` when both profiles have different EE/joints.
+    """
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    sides: list[str] = []
+    for arm in ("left", "right"):
+        try:
+            profile = ArmManipProfile.for_robot(robot_id, arm=arm)
+        except KeyError:
+            continue
+        key = (str(profile.ee_body), tuple(profile.joint_names))
+        if key in seen:
+            continue
+        seen.add(key)
+        sides.append(arm)
+    return tuple(sides)
 
 
 def robot_id_from_client(robot: object) -> str:

@@ -18,12 +18,18 @@ dual 5-DOF + gripper arms (6 revolute joints per arm).
 ## Emet support
 
 Emet supports **Sourccey in simulation** (no real-hardware ZMQ bridge yet — `create_client`
-returns a `GenericZmqClient` stub so joint/gripper plumbing has a target).
+returns a `GenericZmqClient` stub so joint/gripper plumbing has a target). The sim model
+uses the **updated official `sourccey-hardware` arm URDF** (`URDF/ArmLeft/ArmLeft.urdf`,
+vendored under `src/emet/assets/robot/sourccey/urdf/`); the right arm is the code-side
+X-mirror of the canonical left arm. Kinematic pick/place (`mcts` manip mode) is advertised.
 
 | Stack | Status |
 |-------|--------|
-| Vendored MJCF | `src/emet/assets/robot/sourccey/sourccey.xml` |
+| Vendored MJCF | `src/emet/assets/robot/sourccey/sourccey.xml` (official ArmLeft URDF arm) |
+| Vendored URDF | `src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf` + `ArmRight/` (STL meshes only; no Unity sidecars) |
 | Backend / registry | `emet.robots.sourccey.SourcceyBackend` → `ROBOT_REGISTRY["sourccey"]` |
+| Kinematic model | `create_model` → `SpecRobotModel`; declarative left/right `arm_chains` |
+| Kinematic manip | `advertise_kinematic_manip=True` → `mcts` OVMM pick/place (e.g. `robocasa_sourccey_counter_to_cab_mcts`) |
 | MolmoSpaces | merge + spawn metadata (`molmospaces_spawn.json`) |
 | RoboCasa | strip-replace (`PandaMobile` placeholder → vendored MJCF) |
 | ZMQ serve | `emet serve mujoco --robot sourccey` (RobosuiteZmqServer) |
@@ -48,10 +54,15 @@ uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
 
 ## Model notes
 
-- **Arm kinematics / inertials** are the exact `Arm.urdf` chain from `lerobot-vulcan`
-  (joint frames, axes, limits, and mass/inertia tensors, scaled to a realistic dual-arm
-  mass so the full robot lands near the real 15.88 kg). The left arm is the X-mirror
-  of the right (sagittal reflection), so left/right joint targets are opposite sign.
+- **Arm kinematics / inertials / meshes** are the exact `URDF/ArmLeft/ArmLeft.urdf`
+  chain from the **updated** `vulcan-forge/sourccey-hardware` repo (joint frames, axes,
+  limits, masses, and Unity-exported meshes). The right arm is the code-side X-mirror
+  of the left (the two official `ArmLeft`/`ArmRight` exports are asymmetric, so one
+  canonical arm is mirrored to keep the robot symmetric).
+- **Arm reach**: the 6-DoF arm reaches outward/sideways (workspace bottoms out around
+  z≈0.36 m below the shoulder), so table/counter-top objects are reachable but **floor
+  objects are not** — use counter-based `mcts` episodes (e.g.
+  `robocasa_sourccey_counter_to_cab_mcts`), not the floor pick/place row.
 - **Base / dome / wheels / lift** are simplified pragmatic geometry assembled from the
   STEP CAD parts (see `scripts/robot_assets/`). The body is a 3-level pyramidal shell
   (250 → 207 → 183 mm plates/walls), 4 mecanum wheels with holder brackets at the
@@ -65,18 +76,18 @@ uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
   velocity actuators (like innate_mars / xlerobot); a nav P-controller converges to a
   world goal in a few seconds.
 - **Cameras**: `front_left`/`front_right` are a stereo pair on the dome (forward, 20°
-  down), `wrist_left`/`wrist_right` look outward along the arms. FOV 70°. Rendered RGB +
+  down), `wrist_left`/`wrist_right` look outward along the grippers. FOV 70°. Rendered RGB +
   depth are verified consistent (`assert_zmq_observation_frames_consistent`).
 - **Home keyframe** `sourccey_home` tucks the arms for navigation and is collision-free.
 
 ## Regeneration
 
-All assets are generated — never hand-edit `sourccey.xml` or `meshes/`. See
+All assets are generated — never hand-edit `sourccey.xml`, `arm_frag.xml`, or `meshes/`. See
 [`scripts/robot_assets/README.md`](../../scripts/robot_assets/README.md) and the
 asset NOTICE at `src/emet/assets/robot/sourccey/NOTICE.md`.
 
 ## License
 
 Sourccey hardware is released under [CERN-OHL-S-2.0](https://github.com/vulcan-forge/sourccey-hardware/blob/main/LICENSE).
-Converted meshes/MJCF preserve upstream notices; the LeRobot fork URDF is Apache-2.0.
+Converted meshes/MJCF preserve upstream notices.
 See `src/emet/assets/robot/sourccey/NOTICE.md`.

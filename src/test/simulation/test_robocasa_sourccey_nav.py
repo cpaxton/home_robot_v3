@@ -145,8 +145,8 @@ def test_robocasa_sourccey_arms_move_and_mirror():
     def local(p):
         return R @ (p[:2] - bx)
 
-    l = local(d.body("left_Gripper-Base-Back-v1").xpos)
-    r = local(d.body("right_Gripper-Base-Back-v1").xpos)
+    l = local(d.body("left_Gripper-Base").xpos)
+    r = local(d.body("right_Gripper-Base").xpos)
     assert abs(l[0] + r[0]) < 0.03 and abs(l[1] - r[1]) < 0.03, f"arms not mirrored: {l} vs {r}"
     assert np.isfinite(d.qacc).all()
     server._running = False
