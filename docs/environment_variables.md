@@ -42,7 +42,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
-| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). |
+| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). The OVMM find slice does **not** export this; YAML is enough. |
 | `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force pans even when YAML/`SKIP` would skip. `PROFILE=stretch-legacy` sets this. |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |

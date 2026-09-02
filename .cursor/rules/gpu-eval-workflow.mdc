@@ -94,7 +94,7 @@ PROFILE=slice uv run emet jobs run --name ovmm-find-rby1-slice --need-mib 8000 -
   ./scripts/run_ovmm_find_recep_slice.sh
 ```
 
-Script sets `EMET_SKIP_HEAD_SWEEP=1` (and `EMET_FORCE_HEAD_SWEEP=1` only for `stretch-legacy`). Stretch pans are also `robots.stretch.mapping.look_around_head_sweep` in `configs/emet/default.yaml` (default **false**). Do **not** pass `--not-rotate`; table mapping uses `--mapping-rotate-steps 4`. Teleport is opt-in via `EMET_SIM_NAV_TELEPORT=1`. Artifacts: `~/runs/emet/ovmm_find_phase/<rby1|stretch>_<profile>_<timestamp>/`. Docs: [`docs/experiments/ovmm_agentic_find_teleport.md`](../../docs/experiments/ovmm_agentic_find_teleport.md).
+YAML `robots.<id>.mapping.look_around_head_sweep` is **false** (single look_front capture). Only `PROFILE=stretch-legacy` sets `EMET_FORCE_HEAD_SWEEP=1`. Do **not** pass `--not-rotate`; table mapping uses `--mapping-rotate-steps 4`. Teleport is opt-in via `EMET_SIM_NAV_TELEPORT=1`. Artifacts: `~/runs/emet/ovmm_find_phase/<rby1|stretch>_<profile>_<timestamp>/`. Docs: [`docs/experiments/ovmm_agentic_find_teleport.md`](../../docs/experiments/ovmm_agentic_find_teleport.md).
 
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
 - Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).
@@ -125,7 +125,7 @@ launched together and froze the box. Override path with `EMET_GPU_LOCK`, bound t
 | `run_simulation_smoke_battery.sh` | sequential | **Paper-facing** seven-track battery — see `docs/simulation_testing_plan.md` |
 | `run_overnight_cross_track_smoke.sh` | no VLM chain | Extended overnight + tier 0 + safe pytest |
 | `smoke_habitat_ovmm_agentic_find.sh` | separate night | Habitat OVMM agentic 4/4 (one HM3D scene) |
-| `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets; prefer `emet hmeqa overnight` |
+| `run_overnight_habitat_eval.sh` | wrapper | Compat → `emet hmeqa overnight` |
 
 ## Record before risky behaviors (especially sim / GPU)
 

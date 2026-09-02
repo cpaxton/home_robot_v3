@@ -127,9 +127,15 @@ Long GPU runs: **`uv run emet jobs run --name … -- CMD`** (not bare `nohup` wh
 |--------|---------|
 | [`run_overnight_cross_track_smoke.sh`](../../scripts/run_overnight_cross_track_smoke.sh) | Five-track smoke + safe no-sim pytest (no VLM chain) |
 | [`smoke_habitat_ovmm_agentic_find.sh`](../../scripts/smoke_habitat_ovmm_agentic_find.sh) | Habitat OVMM agentic 4/4 (one HM3D scene; separate night) |
-| [`run_overnight_habitat_eval.sh`](../../scripts/run_overnight_habitat_eval.sh) | Multi-phase HM-EQA subsets with `--resume` |
+| [`run_overnight_habitat_eval.sh`](../../scripts/run_overnight_habitat_eval.sh) | Compat wrapper → `emet hmeqa overnight` (holdout-8 → bal-32, classic vs agentic) |
+| [`run_habitat_ovmm_joint_gate.sh`](../../scripts/run_habitat_ovmm_joint_gate.sh) | Validation: count/clock 15-qid + rby1 OVMM `PROFILE=slice` |
+| [`run_paper_matrix.sh`](../../scripts/run_paper_matrix.sh) | Paper numbers: HM-EQA paper-113 (no semantics) + OVMM S0/S1/S2 |
+| [`run_representative_benchmark_sample.sh`](../../scripts/run_representative_benchmark_sample.sh) | Subset matrix + static_graph comparison + tables |
+| [`run_dynagraph_tuned_paper_battery.sh`](../../scripts/run_dynagraph_tuned_paper_battery.sh) | Seven-track + holdout/bal-32 + tuned dynagraph numbers |
 | [`run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh) | Full 113 static_graph + dynagraph |
 | [`run_sqa3d_gpu_sweep.sh`](../../scripts/run_sqa3d_gpu_sweep.sh) | SQA3D slice with VRAM preflight |
+
+Representative vs paper battery, and joint gate vs paper matrix, are **not** duplicates — keep both.
 
 For backend localization, prefer `--explore-steps 0` or `--quick` (light mapping protocol) unless you need OVMM-identical rotate+explore mapping (`--full-protocol`, much slower).
 

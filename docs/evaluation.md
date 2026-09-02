@@ -282,7 +282,7 @@ Launch via **`uv run emet jobs run --name … --need-mib 12000 --gpu-exclusive -
 | SQA3D (val q0–2) | `uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 2 --method dynagraph --replay-mode sens --no-download` |
 | Figures | `uv run python scripts/build_eval_figure_pack.py --run-id RUN_ID --output-dir ~/runs/emet/eval_smoke/RUN_ID/figures` |
 
-HM-EQA overnight ladder (holdout / balanced-32): **`uv run emet hmeqa overnight`**. Fast sim OVMM: [`scripts/run_ovmm_find_recep_slice.sh`](../scripts/run_ovmm_find_recep_slice.sh). Paper numbers: [`scripts/run_paper_matrix.sh`](../scripts/run_paper_matrix.sh).
+HM-EQA overnight ladder (holdout / balanced-32, classic vs agentic): **`uv run emet hmeqa overnight`** (compat wrapper [`scripts/run_overnight_habitat_eval.sh`](../scripts/run_overnight_habitat_eval.sh)). Fast sim OVMM: [`scripts/run_ovmm_find_recep_slice.sh`](../scripts/run_ovmm_find_recep_slice.sh). Validation gate (count/clock + rby1 slice): [`scripts/run_habitat_ovmm_joint_gate.sh`](../scripts/run_habitat_ovmm_joint_gate.sh). Paper numbers: [`scripts/run_paper_matrix.sh`](../scripts/run_paper_matrix.sh).
 
 `RUN_ID` vs `--artifact-tag`: figure aggregation uses `--run-id`. If artifact dirs used a different `TAG`, pass `--artifact-tag "$TAG"`.
 

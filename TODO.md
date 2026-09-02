@@ -10,9 +10,10 @@ steps). Embodiment defaults belong in `robots.<id>` / `mapping.*` in
 [`configs/emet/default.yaml`](configs/emet/default.yaml) (see Stretch
 `look_around_head_sweep`). Env should stay as a rare override (`EMET_FORCE_HEAD_SWEEP`
 for paper pans) or for host/GPU process state. Do not add a new `EMET_*` for
-something that can be a YAML key + `--set`. Later: stop exporting
-`EMET_SKIP_HEAD_SWEEP` from `run_ovmm_find_recep_slice.sh` once every caller loads
-the robot overlay; same pass for other script-exported knobs that duplicate config.
+something that can be a YAML key + `--set`. `run_ovmm_find_recep_slice.sh` no
+longer exports `EMET_SKIP_HEAD_SWEEP` — YAML already defaults pans off; only
+`PROFILE=stretch-legacy` sets `EMET_FORCE_HEAD_SWEEP`. Same pass later for other
+script-exported knobs that duplicate config.
 
 ## Eval orchestrator layers (keep three; do not add a fourth matrix script)
 
@@ -31,18 +32,21 @@ layers — docs in [`docs/evaluation.md`](docs/evaluation.md) and
 Deleted 2026-09-02: `scripts/run_overnight_eval_smoke.sh` (tiny real-VLM matrix +
 figure pack). Replacements above; figures: `scripts/build_eval_figure_pack.py`.
 
-### Later cleanup (not this PR)
+### Later cleanup
 
-- [ ] Fold `run_representative_benchmark_sample.sh` into
-      `run_dynagraph_tuned_paper_battery.sh` (`SKIP_*` already exists), or the
-      other way around — one “subset paper” orchestrator.
-- [ ] Make `run_overnight_habitat_eval.sh` a thin wrapper around
-      `emet hmeqa overnight`, or drop it (`dogfood-emet-cli` already says the
-      overnight ladder is `emet hmeqa overnight`).
+- [x] Fold `run_representative_benchmark_sample.sh` into
+      `run_dynagraph_tuned_paper_battery.sh` — **keep both**. Representative =
+      static_graph comparison + S0 matrix + tables; paper battery = seven-track
+      + holdout/bal32 + tuned dynagraph numbers.
+- [x] Make `run_overnight_habitat_eval.sh` a thin wrapper around
+      `emet hmeqa overnight`. Extra slices stay as dedicated scripts
+      (`run_hmeqa_annotated37_h2h.sh`, `run_hmeqa_paper113_h2h.sh`,
+      `run_habitat_iter_subset.sh` for paper-20).
 - [ ] Leave `run_hmeqa_*_h2h.sh` until `emet hmeqa h2h` covers those ID sets;
       then delete the one-off H2H scripts.
-- [ ] `run_habitat_ovmm_joint_gate.sh` vs `run_paper_matrix.sh` — both HM-EQA +
-      OVMM; keep one gate.
+- [x] `run_habitat_ovmm_joint_gate.sh` vs `run_paper_matrix.sh` — **keep both**.
+      Joint gate = count/clock 15-qid + rby1 OVMM `PROFILE=slice`. Paper
+      matrix = HM-EQA paper-113 (no semantics) + OVMM S0/S1/S2 numbers.
 
 ## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
