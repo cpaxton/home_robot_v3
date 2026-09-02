@@ -48,6 +48,22 @@ def test_innate_mars_uses_curated_arm_chain():
     assert len(p.link_bodies) > 1
 
 
+def test_single_arm_robots_do_not_alias_right():
+    with pytest.raises(KeyError, match="innate_mars"):
+        ArmManipProfile.for_robot("innate_mars", arm="right")
+    with pytest.raises(KeyError, match="franka_fr3"):
+        ArmManipProfile.for_robot("franka_fr3", arm="right")
+
+
+def test_kinematic_arm_sides_distinct():
+    from emet.motion.arm_manip_profile import kinematic_arm_sides
+
+    assert kinematic_arm_sides("sourccey") == ("left", "right")
+    assert kinematic_arm_sides("rby1") == ("left", "right")
+    assert kinematic_arm_sides("innate_mars") == ("left",)
+    assert kinematic_arm_sides("stretch") == ()
+
+
 def test_stretch_arm_chain_declared_but_inactive():
     """Stretch declares a curated ArmChain (Phase-3-ready) but has no MJCF yet, so
     for_robot still raises until the combined robosuite-server path lands."""

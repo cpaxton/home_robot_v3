@@ -468,7 +468,7 @@ def _run_mcts_manip_phases(
     """
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
-    from emet.motion.arm_manip_profile import resolve_manip_mode_for_robot
+    from emet.motion.arm_manip_profile import kinematic_arm_sides, resolve_manip_mode_for_robot, robot_id_from_client
 
     t_manip0 = time.monotonic()
     mode = resolve_manip_mode_for_robot(robot, manip_mode="auto")
@@ -509,7 +509,6 @@ def _run_mcts_manip_phases(
         out["manip_wall_s"] = float(time.monotonic() - t_manip0)
         return out
 
-    exe = KinematicPickPlaceExecutor(robot, arm="left", manip_collision="none", traj_dt=0.05)
     candidates = [
         {
             "object_query": episode.object,
@@ -518,16 +517,16 @@ def _run_mcts_manip_phases(
             "receptacle_gt_body": recep_gt,
         }
     ]
-    # Try the left arm first, then the right arm: on dual-arm robots the object may sit
-    # on the side the preferred arm cannot reach (e.g. sourccey's new short arms reach
-    # outward, so a counter object in front is only reachable by the side-facing arm).
+    # Try each distinct arm: on dual-arm robots the object may sit on the side the
+    # preferred arm cannot reach (sourccey's short arms reach outward).
+    try:
+        rid = robot_id_from_client(robot)
+    except ValueError:
+        rid = ""
     plan = None
-    for arm in ("left", "right"):
-        try:
-            arm_exe = KinematicPickPlaceExecutor(robot, arm=arm, manip_collision="none", traj_dt=0.05)
-        except Exception:
-            # No arm profile for this side (single-arm robots); skip.
-            continue
+    exe = None
+    for arm in kinematic_arm_sides(rid):
+        arm_exe = KinematicPickPlaceExecutor(robot, arm=arm, manip_collision="none", traj_dt=0.05)
         arm_plan = plan_pick_place_mcts(
             robot,
             candidates=candidates,
@@ -586,6 +585,7 @@ def _run_mcts_manip_phases(
             }
         )
         return out
+    assert exe is not None
     plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode="kinematic")
 
     after = _read_placements(robot) or before

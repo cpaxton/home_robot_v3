@@ -230,7 +230,7 @@ On a machine with full train + semantics downloads, expect roughly:
 
 | Slice | How | n | Use |
 |-------|-----|---|-----|
-| Overnight triad | `run_overnight_habitat_eval.sh` | 8 / 32 / 20 | Fast dynagraph vs static_graph iteration (alias: `graph_eqa`) |
+| Overnight ladder | `uv run emet hmeqa overnight` (wrapper: `run_overnight_habitat_eval.sh`) | holdout-8 → bal-32 | Classic vs agentic H2H. Method-comparison slices: `run_habitat_iter_subset.sh`, `run_hmeqa_annotated37_h2h.sh`, `run_hmeqa_paper113_h2h.sh` |
 | Annotated semantics | `IDS="$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated_question_ids as f; print(",".join(map(str,f())))')"` or overnight `annotated37_*` phases | ~37 | Fairer perception vs GraphEQA GT path |
 | Historical fixed slice | `emet-habitat run-batch --paper-subset` | **113** | Legacy q0–112 emet slice |
 | GraphEQA repository filter | `grapheqa_baseline_question_ids()` | **114** | Exact semantic-filtered enrich sequence used by upstream code |

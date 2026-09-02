@@ -21,6 +21,7 @@ import zmq
 
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
+from emet.config.rerun_config import maybe_attach_eval_rerun_visualizer
 from emet.controller.base_controller import BaseController
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
@@ -33,7 +34,6 @@ from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator
 from emet.perception.wrapper import OvmmPerception
 from emet.utils.bind_methods import bind_module_methods
 from emet.utils.logger import Logger
-from emet.visualization.rerun import NullVisualizer
 
 from . import describe, eqa, look, manipulation, mapping, navigation, perception, pose
 from .constants import DYNAMEM_HEAD_SETTLE_S, _env_truthy
@@ -53,6 +53,7 @@ class DynamemController(BaseController):
         parameters: Parameters | dict[str, Any],
         semantic_sensor: OvmmPerception | None = None,
         save_rerun: bool = False,
+        enable_live_rerun: bool = False,
         use_instance_memory: bool = False,
         realtime_updates: bool = False,
         re: int = 3,
@@ -74,8 +75,13 @@ class DynamemController(BaseController):
             default_config_path=None,
         )
         self.semantic_sensor = semantic_sensor
-        # StretchZmqClient and GenericZmqClient set ``_rerun`` when Rerun is enabled; otherwise NullVisualizer.
-        self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
+        # Stretch / Generic ZMQ set ``_rerun`` when the client started a viewer.
+        # Habitat and other eval robots have none — ``EMET_EVAL_RERUN=1`` / ``enable_live_rerun`` attaches one.
+        self.rerun_visualizer = maybe_attach_eval_rerun_visualizer(
+            self.parameters,
+            getattr(self.robot, "_rerun", None),
+            force=bool(enable_live_rerun),
+        )
         # Last navigation / EQA markdown for Rerun ``robot_monologue``; ``update()`` appends live status.
         self._rerun_monologue_base = ""
         # Human gate before execute_trajectory (CLI ``--confirm-nav`` / ``EMET_CONFIRM_NAV``).
@@ -120,9 +126,9 @@ class DynamemController(BaseController):
         self._lingbot_use_pose = bool(self.parameters.get("lingbot_use_pose", True))
         # Heavy perception (YoloE detection + SigLIP dense features + instance memory
         # + graph update) runs every N updates; occupancy/clearance update every frame
-        # so navigation is always current. The VLM/graph verification reads the latest
-        # full-perception observation, so a skipped frame only defers object recall by
-        # one cadence — a huge wall-time cut in teleport eval (each update was ~15-20s).
+        # so navigation is always current. Rotate-in-place / look-around mapping
+        # captures pass ``full_perception=True`` so an 8-view scan does not skip
+        # even headings (default N=2 would drop scan 8/8, where the objects often are).
         self._perception_every_n = max(1, int(self.parameters.get("perception_every_n", 2) or 1))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)

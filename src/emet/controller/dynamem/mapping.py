@@ -103,6 +103,7 @@ def create_obstacle_map(self, parameters):
         max_depth=parameters["max_depth"],
         pad_obstacles=parameters["pad_obstacles"],
         add_local_radius_points=parameters.get("add_local_radius_points", True),
+        add_local_radius_every_step=parameters.get("add_local_every_step", False),
         remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", False),
         smooth_kernel_size=parameters.get("filters/smooth_kernel_size", -1),
         use_median_filter=parameters.get("filters/use_median_filter", False),

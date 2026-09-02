@@ -116,8 +116,7 @@ For fast dynagraph agentic find regression, teleport is opt-in
 (`EMET_SIM_NAV_TELEPORT=1`). **Do not** pass `--not-rotate` on perception
 backends — table mapping uses `--mapping-rotate-steps 4`. The find-phase
 harness already enables `_fast_explore_lookaround`. Head pans are off by
-default (`mapping.look_around_head_sweep: false`); `PROFILE=stretch` /
-`stretch-kitchen` also set `EMET_SKIP_HEAD_SWEEP=1`. Paper pans:
+default (`mapping.look_around_head_sweep: false`). Paper pans:
 `PROFILE=stretch-legacy` (`EMET_FORCE_HEAD_SWEEP=1`).
 
 Stretch episodes in `find_phase_episodes.yaml`: no-pan table/kitchen gates
@@ -130,7 +129,7 @@ Stretch episodes in `find_phase_episodes.yaml`: no-pan table/kitchen gates
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
 - `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
-- `obj_max_cosine`, `recep_max_cosine`, `obj_yoloe_hit`, `recep_yoloe_hit` — oneshot voxel localize diagnostics (max SigLIP cosine; YoloE `compute_obj_coord` hit)
+- `obj_max_cosine`, `recep_max_cosine`, `obj_yoloe_hit`, `recep_yoloe_hit` — oneshot voxel localize diagnostics (max SigLIP cosine; YoloE `compute_obj_coord` hit). Habitat and sim oneshot both emit these via `ovmm_find_query_row`.
 - `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
 - `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - `use_sensor_perception`, `prefer_voxel` — mode flags (see above)
@@ -240,18 +239,56 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-csv --fetch-hm3d trai
 # Optional: HM3D semantic meshes (if scenes lack semantics)
 uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
 
-# Batch GT smoke (3 HM3D scenes, ~7 min CPU)
+# Batch GT smoke (3 HM3D scenes, ~7 min CPU; agentic stays off for ground_truth)
 uv run python scripts/eval_habitat_ovmm_find_phases.py \
-  --backend ground_truth --not-rotate --cpu-only \
+  --backend ground_truth --not-rotate --device cpu \
   --output-dir runs/ovmm_habitat/gt_batch
 
-# Single episode
+# Single dynagraph episode (GPU SigLIP + agentic VLM loop; default --device cuda)
 .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
-  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --cpu-only
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda
 ```
 
 Verified GT batch: `find_partial_success=1.0`, `localization_err_*_m=0.0` on
 `hm3d_lamp_bed_00006`, `00025`, `00057` (June 2026).
+
+### Agentic find on Habitat (large scenes)
+
+The default dynagraph/static_graph path routes FindObj / FindRec through the
+**shared query dispatcher** (`emet.eval.ovmm_agentic_find.run_ovmm_find_queries`)
+used by sim OVMM find. Agentic backends call
+`run_ovmm_agentic_localize` (same AgenticEQA loop as HM-EQA); `--no-agentic-find`
+is the one-shot memory-localize ablation. Habitat **does not** use the sim
+MuJoCo placement oracle (`run_ovmm_gt_oracle_find_pair`) — Habitat `ground_truth`
+localizes from the GT graph after `refresh_ground_truth`. Scoring and JSON keys
+(`ovmm_find_query_row`, `score_ovmm_find_query`) are shared; Habitat passes
+`frame="habitat_xz"` / `planar_frame="habitat_xz"`.
+
+The loop phrases the episode as two open questions (`Where is the lamp on the bed?` /
+`Where is the table?`), then navigates to navmesh frontiers, investigates place
+cards, and verifies before the loop's object-phrase voxel XYZ is scored. Mapping
+only rotates in place, so exploration happens inside the loop.
+
+```bash
+# Bounded GPU smoke on the large scene 00006 (VLM + SigLIP + YoloE required)
+bash scripts/smoke_habitat_ovmm_agentic_find.sh
+
+# Full-budget agentic find (default eqa.agentic_max_tool_rounds / max_nav_steps = 8)
+uv run emet jobs run --name habitat-ovmm-agentic-find --need-mib 12000 --gpu-exclusive -- \
+  .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda --agentic-find
+
+# Batch
+uv run python scripts/eval_habitat_ovmm_find_phases.py \
+  --backend dynagraph --device cuda \
+  --output-dir ~/runs/emet/ovmm_habitat/agentic
+```
+
+Flags: `--device cuda|cpu` (default **cuda**), `--agentic-find/--no-agentic-find`
+(default on for dynagraph/static_graph, off for dynamem/ground_truth),
+`--agentic-max-rounds`, `--agentic-max-nav-steps`. `--cpu-only` is an alias for
+`--device cpu` and does **not** turn off the agentic loop. `--no-agentic-find`
+restores the one-shot memory-localize ablation.
 
 Full OVMM-HSSD minival (official leaderboard) is not wired yet; HM3D proxy validates the Habitat
 memory → find-phase metric path before HSSD scene download.

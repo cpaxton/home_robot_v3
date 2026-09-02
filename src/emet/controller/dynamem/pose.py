@@ -9,11 +9,10 @@ import math
 from typing import Any
 
 import numpy as np
-import rerun as rr
-import rerun.blueprint as rrb
 
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -188,8 +187,12 @@ def setup_custom_blueprint(self):
     """
     This function define rerun blueprint of DynaMem module.
     """
-    if getattr(self.rerun_visualizer, "enabled", True) is False:
+    if not visualizer_is_enabled(self.rerun_visualizer):
         return
+    # Deferred: rerun-sdk native extensions.
+    import rerun as rr
+    import rerun.blueprint as rrb
+
     from emet.visualization.rerun import spatial3d_view_world
 
     main = rrb.Horizontal(
