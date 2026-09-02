@@ -504,6 +504,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._molmospaces_planar_autoplace_after_load()
             self._robocasa_planar_autoplace_after_load()
             self._robocasa_freejoint_autoplace_after_load()
+        self._reassign_robot_geoms_to_dedicated_group()
         self._planar_base_actuator_ids_cache = None
         self._configure_mj_substeps_per_tick()
 
@@ -1445,6 +1446,72 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._joint_ctrl_hold_client_pin is not None:
             self._joint_ctrl_hold_client_pin.fill(False)
         self._mujoco_stationary.sync_ctrl_and_spec_hold(self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold)
+
+    def _pin_torso_upright(self) -> None:
+        """Force the Galaxea / RB-Y1 torso upright so the ZED head camera sits at head height.
+
+        The merged robocasa / MolmoSpaces scene can override the robot ``home`` keyframe, so the
+        torso PD hold lands on bent setpoints and the head camera swings below the floor as the
+        base rotates (world-z dips negative). A below-floor camera returns the MuJoCo far-plane
+        for ~96% of depth pixels, so the pointcloud is near-empty and the explored mask never
+        grows. Torso home = all four ``torso_jointN`` = 0 per ``galaxea_r1.xml``.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if str(getattr(self._spec, "name", "")).lower() not in ("rby1", "galaxea_r1"):
+            return
+        self._ensure_joint_ctrl_hold_buffers()
+        for i, aname in enumerate(self._spec.actuator_names):
+            if aname in ("torso1", "torso2", "torso3", "torso4"):
+                if self._joint_ctrl_hold is not None and i < int(self._joint_ctrl_hold.shape[0]):
+                    self._joint_ctrl_hold[i] = 0.0
+                aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+                if aid >= 0:
+                    self._mjdata.ctrl[aid] = 0.0
+        for jn in ("torso_joint1", "torso_joint2", "torso_joint3", "torso_joint4"):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid >= 0:
+                self._mjdata.qpos[self._mjmodel.jnt_qposadr[jid]] = 0.0
+        logger.info("_pin_torso_upright: spec=%s torso qpos->0", self._spec.name)
+
+    def _reassign_robot_geoms_to_dedicated_group(self, group: int = 5) -> None:
+        """Move the robot's own geoms to a dedicated geom group so the head camera can mask them.
+
+        ``head_camera_geomgroup_mask`` hides the geom groups occupied by the robot's body. In
+        merged robocasa / MolmoSpaces scenes the robot and the scene fixtures can **share** groups
+        (rby1/Galaxea robot = groups 2,3; robocasa kitchen fixtures also = 2,3), so masking the
+        robot's groups also hides the kitchen: the head camera renders only the floor/background,
+        and depth returns the far-plane sentinel for ~96% of pixels (near-empty pointcloud, the
+        explored mask never grows). Reassigning the robot geoms to a dedicated free group lets the
+        mask hide only the robot.
+        """
+        if self._mjmodel is None:
+            return
+        base = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+        if base < 0:
+            return
+        used = {int(self._mjmodel.geom_group[g]) for g in range(self._mjmodel.ngeom)}
+        free = next((g for g in range(6) if g not in used), None)
+        if free is None:
+            return
+        n = 0
+        for g in range(self._mjmodel.ngeom):
+            body = int(self._mjmodel.geom_bodyid[g])
+            x = body
+            while x > 0:
+                if x == base:
+                    self._mjmodel.geom_group[g] = free
+                    n += 1
+                    break
+                x = int(self._mjmodel.body_parentid[x])
+        if n:
+            logger.info(
+                "reassigned %d robot-body geoms to group %d (spec=%s) so the head camera can mask "
+                "the robot without hiding merged scene fixtures",
+                n,
+                free,
+                self._spec.name,
+            )
 
     def _preserve_joint_ctrl_hold_from_ctrl(self) -> None:
         """Keep PD targets in :attr:`_joint_ctrl_hold` from current ``data.ctrl`` (not from ``qpos``).
@@ -2591,6 +2658,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._preserve_joint_ctrl_hold_from_ctrl()
                     else:
                         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
+                    # Merged robocasa scenes may override / drop the robot home keyframe, so the
+                    # torso PD hold can land on bent setpoints and swing the head camera below the
+                    # floor. Pin the Galaxea/RB-Y1 torso upright unconditionally.
+                    self._pin_torso_upright()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
                 else:
                     # Robocasa innate_mars / Maurice-style merges often lack MJCF ``home``. Without
@@ -2641,6 +2712,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._preserve_joint_ctrl_hold_from_ctrl()
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
+                # Safety net: merged robocasa loads can drop the robot home keyframe and leave the
+                # torso bent (head camera below floor -> empty depth). Pin upright + refresh qpos0.
+                self._pin_torso_upright()
+                self._preserve_joint_ctrl_hold_from_ctrl()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
                 self._snapshot_stationary_base_freejoint_pose()
                 self._snapshot_stationary_planar_base_qpos()
         if pl_debug and self._mjmodel is not None and self._mjdata is not None:
