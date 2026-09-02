@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Unified overnight eval smoke: HM-EQA + OVMM Habitat + SQA3D with diagnostics artifacts.
 #
+# Habitat OVMM is one HM3D episode (default hm3d_lamp_bed_00006) with agentic 4/4 —
+# same smoke slice as paper / representative, not the full 3-scene proxy batch.
+#
 # Usage:
 #   ./scripts/run_overnight_eval_smoke.sh
 #   MOCK_LLM=1 ./scripts/run_overnight_eval_smoke.sh   # layout check without VLM
@@ -38,6 +41,9 @@ export EMET_EVAL_EXPORT_VIDEO=1
 export EMET_EVAL_EXPORT_FRAMES=1
 
 HMEQA_IDS="${HMEQA_IDS:-3,14,17}"
+# One HM3D scene — same smoke episode as paper / representative / cross-track.
+# Do not batch all three proxy scenes here; agentic 4/4 on 3× backends blows the 1h cap.
+OVMM_EPISODE_ID="${OVMM_EPISODE_ID:-hm3d_lamp_bed_00006}"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
 
@@ -73,10 +79,10 @@ run_ovmm_backend() {
     local out="${HOME}/runs/emet/ovmm_habitat/${TAG}_${backend}"
     mkdir -p "$out"
     local log="${LOG_DIR}/ovmm_${backend}.log"
-    echo "=== OVMM Habitat backend=${backend} ==="
+    echo "=== OVMM Habitat backend=${backend} episode=${OVMM_EPISODE_ID} ==="
     # --device is required for GPU SigLIP/VLM. dynamem stays one-shot; dynagraph /
-    # graph_eqa run the agentic loop (bounded so this overnight stays a smoke).
-    local extra=(--device cuda)
+    # graph_eqa run the agentic loop. One episode + 4/4 so TIMEOUT_OVMM=3600 is a smoke.
+    local extra=(--device cuda --episode-id "$OVMM_EPISODE_ID")
     if [ "$backend" = "dynamem" ]; then
         extra+=(--no-agentic-find)
     else

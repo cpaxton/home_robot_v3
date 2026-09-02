@@ -285,12 +285,12 @@ MOCK_LLM=1 ./scripts/run_overnight_eval_smoke.sh
 SKIP_SQA3D=1 ./scripts/run_overnight_eval_smoke.sh
 ```
 
-**Matrix (~21 GPU episodes with real VLM):**
+**Matrix (~15 GPU episodes with real VLM):**
 
 | Phase | Benchmark | Units | Methods |
 |-------|-----------|-------|---------|
 | 1 | HM-EQA | Q `3,14,17` | `static_graph`, `dynagraph` |
-| 2 | OVMM Habitat | 3 HM3D proxy episodes | **`dynamem`**, `static_graph`, `dynagraph` |
+| 2 | OVMM Habitat | 1 HM3D proxy (`hm3d_lamp_bed_00006`; agentic 4/4) | **`dynamem`**, `graph_eqa`, `dynagraph` |
 | 3 | SQA3D | val Q `0–2` | `dynagraph`, `dynamem` |
 
 Outputs:
