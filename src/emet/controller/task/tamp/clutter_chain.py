@@ -281,11 +281,12 @@ def nav_to_landmark_if_clear(
     clearance_m: float,
     robot_move_goal: Any = None,
 ) -> tuple[bool, bool, bool, dict[str, Any] | None]:
-    """Snap to the landmark only if interpolated chord samples are collision-free.
+    """Snap to the landmark only if an 8-connected route around disks exists.
 
-    MolmoSpaces ``move_base_to`` teleports along the straight line to the goal.
-    Densified chord samples are checked against GT placement disks (leftover
-    clutter and furniture). A hit refuses the snap — no extra ZMQ hops.
+    Scoring matches the GT validity probe: a landmark behind furniture is
+    reachable if a path exists around leftover clutter + furniture disks.
+    ``move_base_to`` is still a teleport snap; the probe is the reachability
+    gate, not a curved follower.
     """
     from emet.eval.tamp_clutter import (
         bodies_near_xy,
