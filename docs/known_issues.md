@@ -203,7 +203,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 ### Mitigation
 
 - **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check` / `diagnose`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
-- Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
+- Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) (no VLM chain). Habitat OVMM VLM on a **separate night**: [`smoke_habitat_ovmm_agentic_find.sh`](../scripts/smoke_habitat_ovmm_agentic_find.sh).
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
 - On Mode A: leave `NATIVE_CRASH_ABORT=1`, inspect `native_crash_*.log` + `journalctl -k` for `libcuda`; retry the failed qid only after `emet eval diagnose` / free GPU — do not treat empty jsonl as a scored miss without a crash capsule.

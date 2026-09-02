@@ -65,6 +65,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_OVMM_OUTPUT_SIM` | `eval_ovmm_find_phases.py` | OVMM sim sweep output. Default `~/runs/emet/ovmm_find_phase` (`configs/ovmm/benchmark.yaml`). |
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |
+| `EMET_AGENTIC_FIND_SKIP_GPU_CHECK` | `scripts/smoke_habitat_ovmm_agentic_find.sh` | `1` — skip the `nvidia-smi` preflight (tests / no-GPU hosts). Agentic find still needs a VLM. |
 | `EMET_OVMM_SKIP_TABLE_MAPPING_POSE` | `ovmm_find_phase.run_mapping_protocol` | Skip rby1 default-table backup + `look_front` before rotate scan (`1`/`true`). |
 | `EMET_OVMM_S0_PARITY` | `ovmm_find_phase.run_episode_find_phase` | Default **on** for S0 ``default_table*`` episodes: pytest-aligned oneshot path (`DynamemTaskExecutor` + live map, no scene cache, interactive dynagraph profile, phrase-only localize). Set `0`/`false` for full OVMM find-phase harness. |
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |

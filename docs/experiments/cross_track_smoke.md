@@ -34,7 +34,7 @@ Multi-hour Habitat evals and overnight orchestrators should run via **`emet jobs
 
 ## Orchestrator (recommended — extended overnight)
 
-Runs tier-0 unit tests, tracks 1–5, safe pytest, and optional deep eval. **Prefer the seven-track battery above** for paper-facing simulation validation; use this orchestrator for full overnight regression.
+Runs tier-0 unit tests, tracks 1–5, and safe pytest. **Prefer the seven-track battery above** for paper-facing simulation validation; use this orchestrator for full overnight regression. Do **not** chain Habitat VLM after it.
 
 ```bash
 # Foreground
@@ -51,7 +51,6 @@ Logs: `~/runs/emet/overnight_cross_track/<RUN_ID>/` (`summary.txt` + per-step `*
 |-----|---------|--------|
 | `RUN_ID` | `cross_track_YYYYMMDD_HHMMSS` | Log subdirectory name |
 | `NEED_MIB` | `12000` | Min free VRAM before GPU tracks |
-| `RUN_DEEP_EVAL` | `0` | Set `1` to run `run_overnight_eval_smoke.sh` after cross-track (separate GPU night recommended) |
 | `TIMEOUT_DYNAMIC` | `28800` | Track 4 Robocasa explore (seconds) |
 
 **Before starting:** ensure sim deps (`emet install sim`) and Habitat wrapper (`.venv-habitat/bin/emet-habitat`). Optional preflight:
@@ -61,11 +60,13 @@ uv run emet eval kill-stale
 NEED_MIB=12000 uv run emet eval wait
 ```
 
-Deep Habitat eval (HM-EQA + OVMM + SQA3D matrix) — **run on a separate night**, not chained after track 4:
+Habitat OVMM / HM-EQA VLM — **run on a separate night**, not chained after track 4:
 
 ```bash
 uv run emet eval kill-stale
-./scripts/run_overnight_eval_smoke.sh
+uv run emet jobs run --name habitat-ovmm-agentic-find --need-mib 12000 --gpu-exclusive -- \
+  bash scripts/smoke_habitat_ovmm_agentic_find.sh
+# HM-EQA: uv run emet hmeqa overnight
 ```
 
 ## Summary (manual / per-track)
@@ -84,7 +85,7 @@ uv run emet eval kill-stale
 
 - **Track 4 (robocasa missing):** earlier ~1.4 s failures were `ModuleNotFoundError: No module named 'robocasa'` — fixed with `emet install sim`.
 - **Full pytest segfault:** `-m "not sim"` still ran MuJoCo-native tests under `src/test/simulation/`; orchestrator now passes explicit `--ignore` list from [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh).
-- **System freeze (~4:32 AM):** stacking `run_overnight_eval_smoke.sh` immediately after Robocasa + pytest on one GPU session wedged the NVIDIA driver (GUI + SSH dead, mouse still moved). Keep **one GPU-heavy job at a time**; use `RUN_DEEP_EVAL=0` default.
+- **System freeze (~4:32 AM):** stacking Habitat VLM immediately after Robocasa + pytest on one GPU session wedged the NVIDIA driver (GUI + SSH dead, mouse still moved). Keep **one GPU-heavy job at a time**; do not chain VLM onto cross-track.
 
 ## Commands (repro — single track)
 

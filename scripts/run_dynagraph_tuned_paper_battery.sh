@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Paper-facing eval battery with tuned Dynagraph harness (sequential GPU jobs).
 #
-# Tracks: seven-track sim smoke gate, Habitat holdout+balanced-32, Habitat OVMM GT,
+# Tracks: seven-track sim smoke gate, Habitat holdout+balanced-32,
+# Habitat OVMM dynagraph agentic find (Phase 0 already ran Habitat OVMM GT),
 # Robocasa/Molmo OVMM find-phase (dynagraph), SQA3D val q0-30.
 #
 # Usage:
@@ -58,10 +59,13 @@ if [[ "${SKIP_HABITAT_DEEP:-0}" != "1" ]]; then
 fi
 
 if [[ "${SKIP_OVMM:-0}" != "1" ]]; then
-    echo "[$(date -Is)] Phase 3: Habitat OVMM find GT smoke" | tee -a "$SUMMARY"
+    echo "[$(date -Is)] Phase 3: Habitat OVMM dynagraph agentic find" | tee -a "$SUMMARY"
+    # Product path on HM3D (not a second GT check — that is Phase 0 track 2).
+    # Cap 4/4 like overnight / habitat smoke so timeout 3600 cannot eat a full 8/8 VLM episode.
     timeout 3600 "$HAB" run-ovmm-find-episode \
         --episode-id hm3d_lamp_bed_00006 \
         --backend dynagraph --device cuda \
+        --agentic-find --agentic-max-rounds 4 --agentic-max-nav-steps 4 \
         --output "${LOG_ROOT}/habitat_ovmm_dynagraph.json" \
         2>&1 | tee "${LOG_ROOT}/habitat_ovmm.log" || true
 

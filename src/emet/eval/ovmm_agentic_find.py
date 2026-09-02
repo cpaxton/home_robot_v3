@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -172,6 +172,40 @@ class OvmmAgenticLocalizeResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def record_ovmm_agentic_result(
+    res: OvmmAgenticLocalizeResult,
+    *,
+    meta: dict[str, Any],
+    prefix: str,
+    default_query: str,
+) -> tuple[np.ndarray | None, bool, str, str | None]:
+    """Copy one FindObj/FindRec localize result into harness metrics.
+
+    ``prefix`` is ``obj`` or ``recep``. Returns ``(xyz, ok, query_used, source)``.
+    """
+    if res.error:
+        err_key = "agentic_find_error" if prefix == "obj" else "agentic_find_error_recep"
+        meta[err_key] = res.error
+    xyz = res.xyz
+    ok = xyz is not None
+    q_used = default_query
+    extra = res.extra or {}
+    source = extra.get("xyz_source")
+    if not source and ok:
+        source = "agentic_verify" if res.verified else None
+    meta[f"{prefix}_n_retracted_claims"] = res.n_retracted_claims
+    meta[f"{prefix}_agentic_rounds"] = res.n_rounds
+    meta[f"{prefix}_n_nav"] = res.n_nav
+    meta[f"{prefix}_n_explore"] = res.n_explore
+    meta[f"{prefix}_verified_obs_id"] = res.verified_obs_id
+    if extra:
+        meta[f"{prefix}_xyz_source"] = extra.get("xyz_source")
+        meta[f"{prefix}_from_pin"] = extra.get("from_pin")
+        if extra.get("voxel_query_used"):
+            q_used = str(extra["voxel_query_used"])
+    return xyz, ok, q_used, source
+
+
 def _count_retracted_claims(gm: Any) -> int:
     """Size of the graph memory's retracted-nav-claim set (0 when absent)."""
     if gm is None:
@@ -306,6 +340,210 @@ def run_ovmm_agentic_localize(
         answer=str(result.answer or ""),
         discord_text=str(result.discord_text or ""),
         extra=extra,
+    )
+
+
+def empty_ovmm_agentic_meta(*, use_agentic: bool) -> dict[str, Any]:
+    """Shared FindObj/FindRec metric keys (agentic or one-shot)."""
+    return {
+        "agentic_find": bool(use_agentic),
+        "obj_agentic_question": None,
+        "recep_agentic_question": None,
+        "obj_n_retracted_claims": 0,
+        "recep_n_retracted_claims": 0,
+    }
+
+
+@dataclass
+class OvmmFindQueryOutcome:
+    """FindObj + FindRec localization for one episode (agentic or one-shot)."""
+
+    obj_xyz: np.ndarray | None
+    obj_ok: bool
+    obj_query_used: str
+    obj_source: str | None
+    recep_xyz: np.ndarray | None
+    recep_ok: bool
+    recep_query_used: str
+    recep_source: str | None
+    meta: dict[str, Any]
+    obj_detect_stats: dict[str, Any] = field(default_factory=dict)
+    recep_detect_stats: dict[str, Any] = field(default_factory=dict)
+
+    def localize_fields(self) -> dict[str, Any]:
+        """Shared harness keys for localize success / query / source + agentic meta."""
+        return {
+            "obj_localize_success": bool(self.obj_ok),
+            "recep_localize_success": bool(self.recep_ok),
+            "obj_query_used": self.obj_query_used,
+            "recep_query_used": self.recep_query_used,
+            "obj_localize_source": self.obj_source,
+            "recep_localize_source": self.recep_source,
+            **self.meta,
+        }
+
+
+def attach_ovmm_episode_debug_dir(agent: Any) -> None:
+    """Point query-PNG dumps at ``EMET_EQA_EPISODE_DIR`` when the harness set it."""
+    ep_dir = os.environ.get("EMET_EQA_EPISODE_DIR", "").strip()
+    if ep_dir:
+        agent._episode_debug_dir = ep_dir
+
+
+def _phase_trace_meta(
+    *,
+    phase: str,
+    episode_id: str,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    object_gt_body: str | None,
+    extra: dict[str, Any] | None,
+) -> dict[str, Any]:
+    meta = dict(extra or {})
+    meta.update(
+        {
+            "ovmm_phase": phase,
+            "episode_id": episode_id,
+            "object": object_query,
+            "start_recep": start_recep,
+            "goal_recep": goal_recep,
+        }
+    )
+    if phase == "find_object" and object_gt_body:
+        meta["gt_body_key"] = object_gt_body
+    return meta
+
+
+def run_ovmm_agentic_find_pair(
+    agent: Any,
+    *,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    episode_id: str,
+    object_gt_body: str | None = None,
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    extra_trace_meta: dict[str, Any] | None = None,
+) -> OvmmFindQueryOutcome:
+    """FindObj then FindRec through the shared AgenticEQA loop (Habitat and sim)."""
+    meta = empty_ovmm_agentic_meta(use_agentic=True)
+    obj_q = ovmm_find_object_question(object_query, start_recep)
+    recep_q = ovmm_find_recep_question(goal_recep)
+    meta["obj_agentic_question"] = obj_q
+    meta["recep_agentic_question"] = recep_q
+    extra = extra_trace_meta
+    obj_res = run_ovmm_agentic_localize(
+        agent,
+        obj_q,
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        require_verified=True,
+        trace_meta=_phase_trace_meta(
+            phase="find_object",
+            episode_id=episode_id,
+            object_query=object_query,
+            start_recep=start_recep,
+            goal_recep=goal_recep,
+            object_gt_body=object_gt_body,
+            extra=extra,
+        ),
+    )
+    obj_xyz, obj_ok, obj_q_used, obj_source = record_ovmm_agentic_result(
+        obj_res, meta=meta, prefix="obj", default_query=object_query
+    )
+    recep_res = run_ovmm_agentic_localize(
+        agent,
+        recep_q,
+        max_rounds=max_rounds,
+        max_nav_steps=max_nav_steps,
+        require_verified=True,
+        trace_meta=_phase_trace_meta(
+            phase="find_recep",
+            episode_id=episode_id,
+            object_query=object_query,
+            start_recep=start_recep,
+            goal_recep=goal_recep,
+            object_gt_body=None,
+            extra=extra,
+        ),
+    )
+    recep_xyz, recep_ok, recep_q_used, recep_source = record_ovmm_agentic_result(
+        recep_res, meta=meta, prefix="recep", default_query=goal_recep
+    )
+    return OvmmFindQueryOutcome(
+        obj_xyz=obj_xyz,
+        obj_ok=obj_ok,
+        obj_query_used=obj_q_used,
+        obj_source=obj_source,
+        recep_xyz=recep_xyz,
+        recep_ok=recep_ok,
+        recep_query_used=recep_q_used,
+        recep_source=recep_source,
+        meta=meta,
+    )
+
+
+def run_ovmm_find_queries(
+    *,
+    agent: Any,
+    memory: Any,
+    use_agentic: bool,
+    object_query: str,
+    start_recep: str,
+    goal_recep: str,
+    episode_id: str,
+    object_gt_body: str | None = None,
+    max_rounds: int | None = None,
+    max_nav_steps: int | None = None,
+    extra_trace_meta: dict[str, Any] | None = None,
+    placements: dict[str, Any] | None = None,
+    voxel_map: Any | None = None,
+    prefer_voxel: bool = True,
+    session: dict[str, Any] | None = None,
+    convert_nav_to_world: bool = False,
+    planar_frame: Literal["mujoco_xy", "habitat_xz"] = "mujoco_xy",
+    phrase_only: bool = False,
+    capture_voxel_stats: bool | None = None,
+) -> OvmmFindQueryOutcome:
+    """Dispatch FindObj/FindRec: agentic loop or one-shot memory localize.
+
+    Habitat and sim both call this so question phrasing, trace keys, and scored
+    XYZ provenance cannot drift. Sim ground-truth oracle stays in the sim
+    runner (``run_ovmm_gt_oracle_find_pair``) — Habitat GT is memory after
+    ``refresh_ground_truth``, not the MuJoCo placement lookup.
+    """
+    if use_agentic:
+        return run_ovmm_agentic_find_pair(
+            agent,
+            object_query=object_query,
+            start_recep=start_recep,
+            goal_recep=goal_recep,
+            episode_id=episode_id,
+            object_gt_body=object_gt_body,
+            max_rounds=max_rounds,
+            max_nav_steps=max_nav_steps,
+            extra_trace_meta=extra_trace_meta,
+        )
+    # Lazy: oneshot lives next to query_find_phase_localization.
+    from emet.eval.ovmm_find_phase import run_ovmm_oneshot_find_pair
+
+    if capture_voxel_stats is None:
+        capture_voxel_stats = True
+    return run_ovmm_oneshot_find_pair(
+        memory,
+        object_query=object_query,
+        start_recep=start_recep,
+        goal_recep=goal_recep,
+        placements=placements,
+        voxel_map=voxel_map,
+        prefer_voxel=prefer_voxel,
+        session=session,
+        convert_nav_to_world=convert_nav_to_world,
+        planar_frame=planar_frame,
+        phrase_only=phrase_only,
+        capture_voxel_stats=capture_voxel_stats,
     )
 
 

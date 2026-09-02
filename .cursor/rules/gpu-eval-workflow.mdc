@@ -109,7 +109,7 @@ Do **not** stack in one uninterrupted session:
 - Robocasa dynagraph explore (track 4)
 - Full `pytest src/test -m "not sim"` without ignore list
 - Habitat HM-EQA with Qwen3-VL-8B
-- `run_overnight_eval_smoke.sh`
+- Habitat OVMM agentic find (`smoke_habitat_ovmm_agentic_find.sh`)
 
 That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH unresponsive; mouse still moved).
 
@@ -123,9 +123,9 @@ launched together and froze the box. Override path with `EMET_GPU_LOCK`, bound t
 | Orchestrator | Default | Notes |
 |--------------|---------|-------|
 | `run_simulation_smoke_battery.sh` | sequential | **Paper-facing** seven-track battery — see `docs/simulation_testing_plan.md` |
-| `run_overnight_cross_track_smoke.sh` | `RUN_DEEP_EVAL=0` | Extended overnight + tier 0 + safe pytest |
-| `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
-| `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
+| `run_overnight_cross_track_smoke.sh` | no VLM chain | Extended overnight + tier 0 + safe pytest |
+| `smoke_habitat_ovmm_agentic_find.sh` | separate night | Habitat OVMM agentic 4/4 (one HM3D scene) |
+| `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets; prefer `emet hmeqa overnight` |
 
 ## Record before risky behaviors (especially sim / GPU)
 

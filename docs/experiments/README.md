@@ -125,8 +125,8 @@ Long GPU runs: **`uv run emet jobs run --name … -- CMD`** (not bare `nohup` wh
 
 | Script | Purpose |
 |--------|---------|
-| [`run_overnight_cross_track_smoke.sh`](../../scripts/run_overnight_cross_track_smoke.sh) | Five-track smoke + safe no-sim pytest (`RUN_DEEP_EVAL=0` default) |
-| [`run_overnight_eval_smoke.sh`](../../scripts/run_overnight_eval_smoke.sh) | HM-EQA + OVMM + SQA3D diagnostics matrix |
+| [`run_overnight_cross_track_smoke.sh`](../../scripts/run_overnight_cross_track_smoke.sh) | Five-track smoke + safe no-sim pytest (no VLM chain) |
+| [`smoke_habitat_ovmm_agentic_find.sh`](../../scripts/smoke_habitat_ovmm_agentic_find.sh) | Habitat OVMM agentic 4/4 (one HM3D scene; separate night) |
 | [`run_overnight_habitat_eval.sh`](../../scripts/run_overnight_habitat_eval.sh) | Multi-phase HM-EQA subsets with `--resume` |
 | [`run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh) | Full 113 static_graph + dynagraph |
 | [`run_sqa3d_gpu_sweep.sh`](../../scripts/run_sqa3d_gpu_sweep.sh) | SQA3D slice with VRAM preflight |

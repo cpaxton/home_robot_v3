@@ -621,6 +621,8 @@ uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusi
 
 Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.
 
+Habitat HM3D proxy (separate binary, not `emet ovmm`): `.venv-habitat/bin/emet-habitat run-ovmm-find-episode --device cuda`. **`--device` defaults to `cuda`.** Agentic find is on for dynagraph/static_graph; `--cpu-only` is `--device cpu` and does **not** disable the loop (`--no-agentic-find` does). Flags: [habitat/usage.md](habitat/usage.md#ovmm-find-phase-agentic-loop-on-habitat).
+
 TAMP clutter-clearance (MolmoSpaces iTHOR; not an `emet` subcommand): `scripts/eval_tamp_clutter.py` — [tamp_clutter.md](experiments/tamp_clutter.md).
 
 ---
