@@ -5,13 +5,10 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
-from uuid import uuid4
 
 import numpy as np
-import rerun as rr
 import torch
 
 from emet.controller.dynamem.constants import (
@@ -26,7 +23,6 @@ from emet.controller.habitat_nav import (
 )
 from emet.motion.algo.a_star import AStar
 from emet.utils.logger import Logger
-from emet.visualization.rerun import has_display
 
 logger = Logger(__name__)
 
@@ -682,13 +678,7 @@ def navigate(self, text, max_step=10):
     The robot calls this function to navigate to the object.
     It will call execute_action function until it is ready for manipulation
     """
-    # Do not call rr.init here during normal live viewing: RerunVisualizer already called
-    # rr.init + rr.serve; a second init clears the recording and the ZMQ Rerun thread appears empty.
-    if self.save_rerun:
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
-        if not os.path.exists(self.log):
-            os.makedirs(self.log)
-        rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+    self.maybe_save_rerun_recording()
     finished = False
     step = 0
     end_point = None

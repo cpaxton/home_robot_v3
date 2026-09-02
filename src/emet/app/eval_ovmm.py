@@ -15,6 +15,7 @@ from pathlib import Path
 
 import click
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.memory_backends import OVMM_MEMORY_BACKENDS
 from emet.eval.ovmm_batch import BACKENDS, MANIP_MODES, OvmmBatchOptions, run_ovmm_batch
 from emet.eval.ovmm_sweep import (
@@ -143,10 +144,22 @@ def _common_batch_options(f):
             help="Per-run JSON + aggregate CSV directory",
         ),
         click.option("--dry-run", is_flag=True, default=False),
+        click.option(
+            "--rerun",
+            "enable_rerun",
+            is_flag=True,
+            default=False,
+            help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+        ),
     ]
     for opt in reversed(opts):
         f = opt(f)
     return f
+
+
+def _apply_eval_rerun_cli(enable_rerun: bool) -> None:
+    if enable_rerun:
+        os.environ["EMET_EVAL_RERUN"] = "1"
 
 
 def _launch_via_jobs(
@@ -176,10 +189,12 @@ def _launch_via_jobs(
         cmd.append("--foreground")
     cmd.append("--")
     # Prefer SDPA for in-process VL (FA2 has hung on MuJoCo+Qwen co-resident runs).
+    env_prefix = ["env", "EMET_ALLOW_SDPA_ATTN=1"]
+    if eval_rerun_enabled() or "--rerun" in argv_tail:
+        env_prefix.append("EMET_EVAL_RERUN=1")
     cmd.extend(
         [
-            "env",
-            "EMET_ALLOW_SDPA_ATTN=1",
+            *env_prefix,
             sys.executable,
             "-m",
             "emet.cli",
@@ -257,6 +272,7 @@ def ovmm_find(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
+    enable_rerun: bool,
     mapping_max_nav_steps: int | None,
     explore_steps: int | None,
     no_scene_cache: bool,
@@ -269,6 +285,7 @@ def ovmm_find(
 
     Dynagraph default: shared AgenticEQA loop (OVMM phrased as questions).
     """
+    _apply_eval_rerun_cli(enable_rerun)
     po = int(port_offset) if port_offset is not None else int(os.getpid() % 400 + 140)
     opts = _batch_options_from_click(
         episodes=episodes,
@@ -357,6 +374,7 @@ def ovmm_full(
     benchmark: str,
     output_dir: Path | None,
     dry_run: bool,
+    enable_rerun: bool,
     manip_mode: str | None,
     mapping_max_nav_steps: int | None,
     explore_steps: int | None,
@@ -366,6 +384,7 @@ def ovmm_full(
     agentic_max_nav_steps: int | None,
 ) -> None:
     """Run full OVMM episodes (same path as scripts/eval_ovmm_full.py)."""
+    _apply_eval_rerun_cli(enable_rerun)
     po = int(port_offset) if port_offset is not None else int(os.getpid() % 400 + 140)
     opts = _batch_options_from_click(
         episodes=episodes,
@@ -647,6 +666,13 @@ def ovmm_probe_verify(
     default=False,
     help="Rebuild episode lists from bind/task-init failures in OUT",
 )
+@click.option(
+    "--rerun",
+    "enable_rerun",
+    is_flag=True,
+    default=False,
+    help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+)
 @click.option("--via-jobs", is_flag=True, default=False, help="Wrap in emet jobs run")
 @click.option("--need-mib", type=int, default=None, help="VRAM for --via-jobs (default from preset)")
 @click.option("--job-name", default=None, help="Job name when using --via-jobs")
@@ -674,6 +700,7 @@ def ovmm_sweep(
     find_only: bool,
     full_only: bool,
     rerun_failed: bool,
+    enable_rerun: bool,
     via_jobs: bool,
     need_mib: int | None,
     job_name: str | None,
@@ -683,6 +710,7 @@ def ovmm_sweep(
     sync_registry: bool | None,
 ) -> None:
     """Run the multi-env OVMM paper sweep (Robocasa + MolmoSpaces)."""
+    _apply_eval_rerun_cli(enable_rerun)
     if find_only and full_only:
         raise click.UsageError("Use only one of --find-only / --full-only")
 
@@ -731,6 +759,8 @@ def ovmm_sweep(
             argv_tail.append("--full-only")
         if rerun_failed:
             argv_tail.append("--rerun-failed")
+        if enable_rerun:
+            argv_tail.append("--rerun")
         if dry_run:
             argv_tail.append("--dry-run")
         if force_live:

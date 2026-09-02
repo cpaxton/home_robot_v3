@@ -13,6 +13,7 @@ from emet.config.embodied_agent_config import (
     coerce_embodied_agent_for_memory_backend,
     normalize_memory_backend,
 )
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.benchmark_dynagraph import apply_dynagraph_harness
 from emet.eval.memory_backends import DYNAGRAPH, LAZY_GRAPH, STATIC_GRAPH
 from emet.utils.logger import Logger
@@ -68,6 +69,7 @@ def build_memory_agent(
     backend_key = normalize_memory_backend(backend)
     harness_key = str(harness or "interactive").strip().lower()
     embodied_agent = coerce_embodied_agent_for_memory_backend(embodied_agent, backend_key)
+    live_rerun = eval_rerun_enabled()
 
     if apply_harness_profile and backend_key in GRAPH_EQA_FAMILY_BACKENDS:
         method = DYNAGRAPH if backend_key in (DYNAGRAPH, LAZY_GRAPH) else STATIC_GRAPH
@@ -114,6 +116,7 @@ def build_memory_agent(
             "use_sensor_perception": sens,
             "eqa": True if eqa else None,
             "defer_eqa_vllm": defer_eqa_vllm if eqa else True,
+            "enable_live_rerun": live_rerun,
         }
         if backend_key == "dynagraph":
             from emet.controller.controller_dynagraph import DynagraphController
@@ -156,4 +159,5 @@ def build_memory_agent(
         eqa=eqa,
         defer_eqa_vllm=defer_eqa_vllm,
         embodied_agent=embodied_agent,
+        enable_live_rerun=live_rerun,
     )

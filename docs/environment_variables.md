@@ -2,7 +2,6 @@
 
 Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpaces. Most apps read these at startup; export in the shell before `emet serve` / `emet run`.
 
-<<<<<<< HEAD
 **`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
 
 **Prefer YAML.** Robot and mapping policy belongs in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`robots.<id>`, `mapping.*`) or `--set` / `-O`. New `EMET_*` flags are for process-lifetime / host / GPU accidents (locks, VRAM, EGL), not embodiment defaults. See TODO “config over env flags”.
@@ -22,6 +21,20 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 | `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
+## Rerun
+
+Live viewer, entity paths, YAML `rerun:` keys, and CLI defaults: **[rerun.md](rerun.md)**.
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `RERUN_HEADLESS` | `RerunVisualizer` | `1` — web server only (no native spawn / auto-open browser). Same as `--headless`. |
+| `RERUN_NATIVE_VIEWER` | `RerunVisualizer` / `build_rerun_visualizer_kwargs` | `1` — native desktop viewer (needs DISPLAY). Exclusive with web `rr.serve`. |
+| `RERUN_BIND_ALL` | `RerunVisualizer` / `--rerun-bind` | `1` — bind HTTP/WS to `0.0.0.0` for remote viewing. |
+| `EMET_RERUN_HEAD_DEPTH` | `RerunVisualizer.log_head_camera` | `1` — log `world/head_camera/depth` on the live stream (off by default). |
+| `EMET_DYNAGRAPH_RERUN_CROPS` | `build_rerun_visualizer_kwargs` | `1` — per-node crop images + mosaic (forces on even if YAML `log_crops: false`). |
+| `EMET_DYNAGRAPH_RERUN_EDGES` | `build_rerun_visualizer_kwargs` | `1` — graph edge line strips (same on-only override as crops). |
+| `EMET_EVAL_RERUN` | OVMM / Habitat / sim eval | `1` — live VLM-context viewer during eval (default **off**). Same as `emet ovmm find\|full --rerun` or `emet-habitat run-episode --rerun`. |
+
 ## Benchmarks
 
 Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight smoke + diagnostics:** [evaluation.md](evaluation.md).
@@ -29,7 +42,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
-| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). |
+| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). The OVMM find slice does **not** export this; YAML is enough. |
 | `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force pans even when YAML/`SKIP` would skip. `PROFILE=stretch-legacy` sets this. |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
@@ -52,6 +65,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_OVMM_OUTPUT_SIM` | `eval_ovmm_find_phases.py` | OVMM sim sweep output. Default `~/runs/emet/ovmm_find_phase` (`configs/ovmm/benchmark.yaml`). |
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |
+| `EMET_AGENTIC_FIND_SKIP_GPU_CHECK` | `scripts/smoke_habitat_ovmm_agentic_find.sh` | `1` — skip the `nvidia-smi` preflight (tests / no-GPU hosts). Agentic find still needs a VLM. |
 | `EMET_OVMM_SKIP_TABLE_MAPPING_POSE` | `ovmm_find_phase.run_mapping_protocol` | Skip rby1 default-table backup + `look_front` before rotate scan (`1`/`true`). |
 | `EMET_OVMM_S0_PARITY` | `ovmm_find_phase.run_episode_find_phase` | Default **on** for S0 ``default_table*`` episodes: pytest-aligned oneshot path (`DynamemTaskExecutor` + live map, no scene cache, interactive dynagraph profile, phrase-only localize). Set `0`/`false` for full OVMM find-phase harness. |
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |

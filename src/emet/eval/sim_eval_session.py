@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.simulation.sim_subprocess import wait_for_sim_tcp_port
 
 
@@ -148,7 +149,7 @@ def connect_benchmark_robot(sim_cfg: Any, port_offset: int) -> Any:
         str(getattr(sim_cfg, "robot", "stretch")),
         "127.0.0.1",
         port_offset=int(port_offset),
-        enable_rerun_server=False,
+        enable_rerun_server=eval_rerun_enabled(),
         start_immediately=True,
         allow_missing_depth=True,
     )

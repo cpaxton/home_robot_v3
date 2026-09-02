@@ -208,7 +208,7 @@ PIDs, while explicit `--wait-pid`, lock, and GPU polling waits are finite. This
 closes simultaneous managed launches across sibling checkouts; do not opt out with `--no-gpu-exclusive` for
 Habitat/VLM/MuJoCo work.
 
-**Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and deep eval on **separate nights** (see below).
+**Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and Habitat VLM smokes on **separate nights** (see below).
 
 ### Cursor / agent sessions
 
@@ -267,52 +267,24 @@ Validates SQA3D, Habitat EQA, OVMM, Robocasa explore/world-change, and a safe un
 
 ```bash
 ./scripts/run_overnight_cross_track_smoke.sh
-# Optional: chain deep Habitat eval (not recommended same night):
-# RUN_DEEP_EVAL=1 ./scripts/run_overnight_cross_track_smoke.sh
 ```
 
-Logs: `~/runs/emet/overnight_cross_track/<RUN_ID>/`.
+Logs: `~/runs/emet/overnight_cross_track/<RUN_ID>/`. Do **not** chain Habitat VLM after this script.
 
-## Overnight smoke (Habitat + OVMM + SQA3D matrix)
+## Real-VLM smokes (separate night)
 
-Run **after** cross-track passes, on a clean GPU (or the next day). One script runs HM-EQA, OVMM Habitat, and SQA3D (if ScanNet verify passes), then builds figures:
+Launch via **`uv run emet jobs run --name … --need-mib 12000 --gpu-exclusive --`**. Do not stack on the same GPU session as cross-track / Robocasa pytest.
 
-```bash
-./scripts/run_overnight_eval_smoke.sh
-# Dry layout check (no VLM):
-MOCK_LLM=1 ./scripts/run_overnight_eval_smoke.sh
-# Skip SQA3D if ScanNet not installed:
-SKIP_SQA3D=1 ./scripts/run_overnight_eval_smoke.sh
-```
+| Track | Command |
+|-------|---------|
+| Habitat OVMM (1 HM3D scene, agentic 4/4) | `bash scripts/smoke_habitat_ovmm_agentic_find.sh` |
+| HM-EQA (Q `3,14,17`) | `.venv-habitat/bin/emet-habitat run-batch --method dynagraph --question-ids 3,14,17 --device cuda --export-map --resume --output ~/.cache/habitat_eqa/results/smoke_dynagraph.jsonl` |
+| SQA3D (val q0–2) | `uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 2 --method dynagraph --replay-mode sens --no-download` |
+| Figures | `uv run python scripts/build_eval_figure_pack.py --run-id RUN_ID --output-dir ~/runs/emet/eval_smoke/RUN_ID/figures` |
 
-**Matrix (~21 GPU episodes with real VLM):**
+HM-EQA overnight ladder (holdout / balanced-32, classic vs agentic): **`uv run emet hmeqa overnight`** (compat wrapper [`scripts/run_overnight_habitat_eval.sh`](../scripts/run_overnight_habitat_eval.sh)). Fast sim OVMM: [`scripts/run_ovmm_find_recep_slice.sh`](../scripts/run_ovmm_find_recep_slice.sh). Validation gate (count/clock + rby1 slice): [`scripts/run_habitat_ovmm_joint_gate.sh`](../scripts/run_habitat_ovmm_joint_gate.sh). Paper numbers: [`scripts/run_paper_matrix.sh`](../scripts/run_paper_matrix.sh).
 
-| Phase | Benchmark | Units | Methods |
-|-------|-----------|-------|---------|
-| 1 | HM-EQA | Q `3,14,17` | `static_graph`, `dynagraph` |
-| 2 | OVMM Habitat | 3 HM3D proxy episodes | **`dynamem`**, `static_graph`, `dynagraph` |
-| 3 | SQA3D | val Q `0–2` | `dynagraph`, `dynamem` |
-
-Outputs:
-
-- JSONL: `~/.cache/habitat_eqa/results/<TAG>_hmeqa_*.jsonl`
-- OVMM JSON: `~/runs/emet/ovmm_habitat/<TAG>_*/`
-- SQA3D: `~/runs/emet/sqa3d/<TAG>_*/`
-- Bundles: `~/.cache/habitat_eqa/episodes/<TAG>_*/`
-- Logs: `~/.cache/habitat_eqa/overnight/<RUN_ID>/`
-- Figures: `~/runs/emet/eval_smoke/<RUN_ID>/figures/`
-
-**`RUN_ID` vs `TAG`:** the overnight script writes artifact paths with `TAG` (defaults to `RUN_ID`). Figure aggregation uses `--run-id` (`RUN_ID`). If you override `TAG` without setting `RUN_ID` to match, the script prints a warning and passes `--artifact-tag "$TAG"` to `build_eval_figure_pack.py`. Prefer keeping them equal, or set `RUN_ID="$TAG"` when customizing tags.
-
-The script kills stale GPU jobs at start/end and waits for `NEED_MIB` (default **14000**) before each VLM phase when `MOCK_LLM=0`.
-
-Post-run only:
-
-```bash
-uv run python scripts/build_eval_figure_pack.py --run-id eval_smoke_YYYYMMDD_HHMMSS
-# When TAG differed from RUN_ID during the smoke:
-uv run python scripts/build_eval_figure_pack.py --run-id "$RUN_ID" --artifact-tag "$TAG"
-```
+`RUN_ID` vs `--artifact-tag`: figure aggregation uses `--run-id`. If artifact dirs used a different `TAG`, pass `--artifact-tag "$TAG"`.
 
 ## Success criteria (smoke)
 
@@ -364,13 +336,23 @@ Env table: [environment_variables.md](environment_variables.md) (`EMET_EQA_ANSWE
   --output ~/.cache/habitat_eqa/results/smoke_dynagraph.jsonl
 ```
 
-### OVMM find-phase (Habitat) — includes **dynamem**
+### OVMM find-phase (Habitat)
+
+`--device` selects the encoder/VLM device (`cuda` default). Agentic find is **on**
+for dynagraph/static_graph and **off** for dynamem/ground_truth. `--cpu-only` is
+`--device cpu` and does not disable the agentic loop.
 
 ```bash
+# dynamem one-shot (agentic off by default)
 .venv-habitat/bin/emet-habitat run-ovmm-find-batch \
-  --backend dynamem --run-tag smoke_ovmm \
+  --backend dynamem --device cuda --no-agentic-find --run-tag smoke_ovmm \
   --export-map --export-video \
   --output-dir ~/runs/emet/ovmm_habitat/smoke_dynamem
+
+# dynagraph agentic (VLM; pass --device cuda explicitly)
+.venv-habitat/bin/emet-habitat run-ovmm-find-batch \
+  --backend dynagraph --device cuda --agentic-find --run-tag smoke_ovmm_agentic \
+  --output-dir ~/runs/emet/ovmm_habitat/smoke_dynagraph
 ```
 
 ### SQA3D

@@ -32,6 +32,8 @@ INIT_HEAD_TILT = -0.65
 # After look_front / move_to_nav_posture, wait briefly so the head reaches goal and depth/RGB
 # stabilize before base motion (Stretch ZMQ + mapping).
 DYNAMEM_HEAD_SETTLE_S = 0.25
+# After a blocking yaw, wait this long for a newer full-obs (ZMQ CONFLATE).
+DYNAMEM_POST_MOTION_OBS_WAIT_S = 2.0
 # Head sweep: command non-blocking; exit on near-goal or settled motion.
 # Soft-wait is for client settle (not because real Stretch is slow — Dynamixel head ~3 rad/s).
 # Sim MJCF used to use head kp=10 (crawl); assets now use higher kp. Keep a short max wait anyway.

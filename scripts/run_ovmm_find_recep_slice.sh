@@ -47,8 +47,8 @@ mkdir -p "$OUT"
 # Do not force nav teleport: default-table mapping needs stable base Z.
 # Set EMET_SIM_NAV_TELEPORT=1 yourself for RoboCasa-only slices if desired.
 export EMET_ALLOW_SDPA_ATTN=1
-# Skip Stretch 4-pan look_around (40–80s). rby1 already skips; Stretch honors this too.
-export EMET_SKIP_HEAD_SWEEP=1
+# Head pans are off in YAML (`mapping.look_around_head_sweep: false`). Only
+# PROFILE=stretch-legacy forces pans via EMET_FORCE_HEAD_SWEEP.
 
 MAP_ROTATE="${MAPPING_ROTATE_STEPS:-4}"
 EXTRA=()
@@ -81,7 +81,6 @@ elif [[ "$PROFILE" == "stretch-legacy" ]]; then
     EPISODES=(default_table_s0_distinct_recep robocasa_pp_s1 molmo_ithor_s2_idx0)
     ROUNDS="${AGENTIC_MAX_ROUNDS:-8}"
     EXTRA=()
-    unset EMET_SKIP_HEAD_SWEEP
     export EMET_FORCE_HEAD_SWEEP=1
 else
     echo "FATAL: unknown PROFILE=$PROFILE (want oneshot|verify|smoke|slice|stretch|stretch-kitchen|stretch-legacy)" >&2
