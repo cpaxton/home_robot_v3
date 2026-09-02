@@ -106,7 +106,7 @@ def test_voxel_planner_uses_get_voxel_map_when_attr_has_no_localize() -> None:
     class _Agent:
         voxel_map = _Occupancy()
         planner = object()
-        parameters = {}
+        parameters: dict = {}
         robot = MagicMock()
 
         def get_voxel_map(self):
@@ -116,3 +116,54 @@ def test_voxel_planner_uses_get_voxel_map_when_attr_has_no_localize() -> None:
     vm, planner = ex._voxel_planner()
     assert vm is semantic
     assert planner is _Agent.planner
+
+
+def test_explore_frontier_nav_passes_explore_goal(monkeypatch) -> None:
+    """Coverage mapping navigate_to_target_pose must run with explore_goal=True so
+    the frontier-edge goal is not rejected by the unexplored-waypoint filter."""
+    import numpy as np
+
+    nav = MagicMock(return_value=True)
+    frontier = np.array([1.0, 1.0, 1.0])
+
+    class _FrontierAgent:
+        robot = MagicMock()
+
+        def navigate_to_target_pose(self, target, start, theta, explore_goal=False):
+            nav(target, start, theta, explore_goal=explore_goal)
+            return True
+
+        def _best_frontier_point_from_graph(self, bias):
+            return frontier
+
+        def _robot_xyt_world(self):
+            return np.array([0.0, 0.0, 0.0])
+
+    agent = _FrontierAgent()
+    ex = AgenticEQAExecutor(agent, "explore", router=False, max_nav_steps=10)
+    ex.decision_policy = "grounded_v2"
+    ex.action_progress_mode = "off"
+    ex.room_policy = "off"
+    ex._last_room_estimate = None
+    ex._in_target_area = False
+    ex._n_nav = 0
+    ex._n_explore = 0
+    ex._unused_detection_hypothesis = lambda: None
+    ex._hold_detections_before_explore = lambda: False
+    ex._begin_policy_approach = lambda *a, **k: None
+    ex._retire_visited_frontier = lambda **k: None
+    ex._explore_nav_progressed = lambda: False
+    ex._refresh_room_after_motion = lambda: None
+    ex._tool_capture_and_update = lambda: {}
+    ex._save_frontier_pick_panel = lambda *a, **k: None
+    ex._attach_gt = lambda *a, **k: None
+    ex._append_trace = lambda *a, **k: None
+    monkeypatch.setattr(
+        "emet.controller.habitat_nav.pick_uncovered_explore_target",
+        lambda agent, question, candidates, blocked, recent_goals, min_travel_m: (candidates or [None])[0],
+    )
+    out = ex._tool_explore_frontier()
+    assert out.get("ok") is True
+    nav.assert_called_once()
+    kwargs = nav.call_args.kwargs
+    assert kwargs.get("explore_goal") is True

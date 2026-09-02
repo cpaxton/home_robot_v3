@@ -429,3 +429,27 @@ def test_resolve_mapping_max_nav_steps_alias_and_conflict():
             mapping_max_nav_steps=0,
             explore_steps=8,
         )
+
+
+def test_target_boost_phrases_expand_fixture_labels():
+    """Terse fixture queries ('cab') expand with matched graph-node labels
+    ('cabinet') so voxel localize_text can ground them."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    node = MagicMock()
+    node.is_frontier = False
+    node.is_viewpoint = False
+    node.labels = ["cabinet", "kitchen counter", "toaster"]
+    agent.graph_memory.get_nodes = MagicMock(return_value=[node])
+
+    ex = AgenticEQAExecutor(agent, question="Where is the cab?", max_rounds=4, max_nav_steps=4, router=False)
+    ex._target_phrase = "cab"
+    phrases = ex._target_boost_phrases()
+    low = {p.lower() for p in phrases}
+    assert "cab" in low
+    assert "cabinet" in low
+    assert "toaster" not in low

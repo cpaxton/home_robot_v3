@@ -58,7 +58,10 @@ ROBOT_DEFAULT_MANIP_MODE = {
 # NOT falling back to furniture/appliances — a stove/cabinet drop would not be "cleanup".
 # Shared by the runner and the TAMP chain so bin resolution + scatter exclusion cannot drift.
 BIN_FALLBACKS = (
-    "ashcan", "garbagecan", "trashcan", "basket",
+    "ashcan",
+    "garbagecan",
+    "trashcan",
+    "basket",
 )
 
 # Static furniture landmarks used to rotate nav-goal goals across the episode set.
@@ -226,9 +229,7 @@ def scatter_ring_targets(
 # ---------------------------------------------------------------------------
 
 
-def _shortest_path(
-    occ: np.ndarray, start: tuple[int, int], goal: tuple[int, int]
-) -> list[tuple[int, int]] | None:
+def _shortest_path(occ: np.ndarray, start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]] | None:
     """8-connected Dijkstra on a boolean occupancy grid (True = free)."""
     h, w = occ.shape
     if not (0 <= start[0] < h and 0 <= start[1] < w and 0 <= goal[0] < h and 0 <= goal[1] < w):
@@ -439,6 +440,79 @@ def clutter_blocks_path(
         "blocked": bool(blocked),
     }
     return blocked, info
+
+
+def nav_path_open_around_disks(
+    robot_xy: np.ndarray | list,
+    goal_xy: np.ndarray | list | None,
+    disks: Sequence[tuple[np.ndarray | list, float, str]],
+    *,
+    grid_res_m: float = 0.05,
+    clearance_m: float = 0.22,
+    pad_cells: int = 4,
+) -> tuple[bool, dict[str, Any]]:
+    """8-connected path exists from robot to goal around obstacle disks.
+
+    This is the **post-clear** analogue of :func:`clutter_blocks_path`: it routes
+    around *all* obstacle disks (static furniture + leftover clutter) instead of the
+    straight-line teleport chord. A teleport nav cannot follow a curved path, so a
+    benchmark that wants ``nav_goal`` to mean ``cleared a path, then reach the
+    landmark`` must score the route the GT planner would take, not the chord.
+    Returns ``(path_open, info)``.
+    """
+    if goal_xy is None:
+        return True, {"probe": "no_goal", "blocked": False}
+    robot = _clamp_xy(robot_xy)
+    goal = _clamp_xy(goal_xy)
+    parsed: list[tuple[np.ndarray, float, str]] = [
+        (_clamp_xy(xy), float(radius), str(name)) for xy, radius, name in disks
+    ]
+    if not parsed:
+        return True, {"probe": "nav_path_8conn", "n_disks": 0, "blocked": False}
+
+    xs = [float(robot[0]), float(goal[0])] + [float(xy[0]) for xy, _r, _n in parsed]
+    ys = [float(robot[1]), float(goal[1])] + [float(xy[1]) for xy, _r, _n in parsed]
+    max_r = max((float(r) for _xy, r, _n in parsed), default=0.0)
+    margin = max(1.0, float(clearance_m) + float(max_r) + 2 * float(grid_res_m) * pad_cells)
+    x0, x1 = float(min(xs)) - margin, float(max(xs)) + margin
+    y0, y1 = float(min(ys)) - margin, float(max(ys)) + margin
+    res = float(grid_res_m)
+    w = max(3, int(math.ceil((x1 - x0) / res)))
+    h = max(3, int(math.ceil((y1 - y0) / res)))
+    occ = np.ones((h, w), dtype=bool)
+
+    def to_cell(p: np.ndarray) -> tuple[int, int]:
+        col = int(round((float(p[0]) - x0) / res))
+        row = int(round((float(p[1]) - y0) / res))
+        return row, col
+
+    for xy, radius, _name in parsed:
+        cr, cc = to_cell(xy)
+        inflate = int(math.ceil((float(clearance_m) + float(radius)) / res))
+        for dr in range(-inflate, inflate + 1):
+            for dc in range(-inflate, inflate + 1):
+                r, c = cr + dr, cc + dc
+                if 0 <= r < h and 0 <= c < w and (dr * dr + dc * dc) <= inflate * inflate:
+                    occ[r, c] = False
+
+    start_cell = to_cell(robot)
+    goal_cell = to_cell(goal)
+    for cell in (start_cell, goal_cell):
+        r, c = cell
+        if 0 <= r < h and 0 <= c < w and not occ[r, c]:
+            occ[r, c] = True
+
+    path_open = _path_exists(occ, start_cell, goal_cell)
+    info = {
+        "probe": "nav_path_8conn",
+        "grid_res_m": res,
+        "clearance_m": float(clearance_m),
+        "n_disks": int(len(parsed)),
+        "start_xy": robot.tolist(),
+        "goal_xy": goal.tolist(),
+        "blocked": not bool(path_open),
+    }
+    return bool(path_open), info
 
 
 def nav_interpolated_route(

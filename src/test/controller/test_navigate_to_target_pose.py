@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from emet.controller.controller_dynamem import DynamemController
+from emet.controller.habitat_nav import NavOutcome
 
 
 class _PlannerFail:
@@ -206,6 +207,81 @@ def test_navigate_to_target_pose_hop_uses_world_frame_start(nav_agent, monkeypat
     # Episode-local GPS after hop 0 is near the chunk end minus origin, not the world cell.
     local_after_hop0 = hop0_end - origin[:2]
     assert np.linalg.norm(planner.plan_starts[1] - local_after_hop0) > 1.0
+
+
+class _FrontierEdgePlanner:
+    """Short non-chunked plan whose terminal waypoint is at the unexplored frontier edge."""
+
+    def __init__(self):
+        self._clearance_m = 0.0
+        self._min_clearance_m = 0.0
+
+    def plan(self, start, goal):
+        goal_a = np.asarray(goal, dtype=np.float64).reshape(-1)
+        start_a = np.asarray(start, dtype=np.float64).reshape(-1)
+        traj = [
+            SimpleNamespace(state=list(start_a[:3])),
+            SimpleNamespace(state=[float(goal_a[0]), float(goal_a[1]), 0.0]),
+        ]
+        return SimpleNamespace(success=True, trajectory=traj, reason="")
+
+    def clean_path_for_xy(self, waypoints, start_yaw=None):
+        return [list(np.asarray(w, dtype=np.float64).reshape(-1)[:3]) for w in waypoints]
+
+    def is_explored_xy(self, xy):
+        return float(xy[0]) < 1.0  # terminal goal x>=1.0 is an unexplored frontier cell
+
+    def clearance_at_xy(self, xy):
+        return 1.0
+
+    def to_pt(self, xy):
+        return np.asarray(xy, dtype=np.float64).reshape(-1)[:2]
+
+    def is_in_line_of_sight(self, a, b):
+        return True
+
+
+def test_filter_unsafe_nav_traj_explore_goal_exempts_terminal_unexplored():
+    """A frontier-explore goal is at the unexplored edge; only the terminal waypoint is exempt."""
+    agent = DynamemController.__new__(DynamemController)
+    agent.planner = _FrontierEdgePlanner()
+    agent._min_clearance_m = 0.0
+    traj = [[0.0, 0.0, 0.0], [1.5, 0.0, 0.0]]
+
+    out, reason, _ = agent._filter_unsafe_nav_traj(traj, start_xyt=[0.0, 0.0, 0.0])
+    assert reason == "rejected_unexplored"
+    assert out == []
+
+    out, reason, _ = agent._filter_unsafe_nav_traj(traj, start_xyt=[0.0, 0.0, 0.0], explore_goal=True)
+    assert reason is None
+    assert len(out) == 2
+
+
+def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(nav_agent, monkeypatch):
+    """Coverage mapping must navigate to a frontier-edge goal; object nav must not."""
+    nav_agent.planner = _FrontierEdgePlanner()
+    nav_agent._min_clearance_m = 0.0
+    nav_agent.space.sample_navigation.return_value = np.array([1.5, 0.0, 0.0])
+    monkeypatch.setattr(
+        "emet.controller.nav_confirm.confirm_navigation_plan",
+        lambda *a, **k: True,
+    )
+
+    out = nav_agent.navigate_to_target_pose(
+        np.array([1.5, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0]),
+        explore_goal=False,
+    )
+    assert out == NavOutcome.SAFETY_REJECTED
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+    out = nav_agent.navigate_to_target_pose(
+        np.array([1.5, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0]),
+        explore_goal=True,
+    )
+    assert out.ok
+    assert nav_agent.robot.execute_trajectory.called
 
 
 def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch):
