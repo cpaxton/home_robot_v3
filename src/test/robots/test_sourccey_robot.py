@@ -45,6 +45,7 @@ def test_sourccey_mjcf_joints_and_actuators():
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname) >= 0
     # planar base + lift
     assert spec.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
+    assert spec.tamp_approach == "side"
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "lift") >= 0
 
 

@@ -82,6 +82,10 @@ class RobotSpec:
     ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
     also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
     switch live DynaMem/OVMM pick/place from teleport to latch."""
+    tamp_approach: str = "front"
+    """TAMP table standoff. ``front`` = Galaxea/rby1 (stand in +Y, yaw=−π/2 so +X faces
+    the object). ``side`` = arms hang on ±X (Sourccey): left yaw=+π/2, right yaw=−π/2 so
+    the selected arm points at the object along −Y."""
     # --- Optional install / app hints (names match pyproject [project.optional-dependencies]) ---
     optional_uv_extras: tuple[str, ...] = ()
     """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""

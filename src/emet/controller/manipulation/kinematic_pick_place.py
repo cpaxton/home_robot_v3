@@ -23,6 +23,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from emet.controller.task.tamp.task_search import approach_yaw_for_mode
 from emet.motion.aabb_arm_collision import AabbArmCollisionChecker
 from emet.motion.arm_manip_profile import (
     ArmManipProfile,
@@ -582,9 +583,14 @@ class KinematicPickPlaceExecutor:
             delta = np.array([0.0, 1.0], dtype=np.float64)
         approach_xy = xy + float(standoff_m) * delta
         if yaw is None:
-            # Face the receptacle from the approach pose.
-            face = xy - approach_xy
-            th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
+            spec = getattr(self.robot, "_spec", None)
+            mode = str(getattr(spec, "tamp_approach", "front") or "front")
+            if mode.lower().strip() == "side":
+                th = approach_yaw_for_mode("side", self.arm)
+            else:
+                # Face the receptacle from the approach pose (Galaxea / rby1).
+                face = xy - approach_xy
+                th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
         else:
             th = float(yaw)
         approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)

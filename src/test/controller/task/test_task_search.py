@@ -50,6 +50,18 @@ def test_approach_pose_faces_minus_y():
     assert abs(p[2] + np.pi / 2) < 1e-9
 
 
+def test_approach_pose_side_left_yaw_plus_half_pi():
+    p = approach_pose_for_object_xy([0.08, -0.55], standoff=0.55, mode="side", arm="left")
+    assert abs(p[0] - 0.08) < 1e-9
+    assert abs(p[1] - 0.0) < 1e-9
+    assert abs(p[2] - np.pi / 2) < 1e-9
+
+
+def test_approach_pose_side_right_yaw_minus_half_pi():
+    p = approach_pose_for_object_xy([0.08, -0.55], standoff=0.55, mode="side", arm="right")
+    assert abs(p[2] + np.pi / 2) < 1e-9
+
+
 def test_plant_mixed_grasps_puts_decoys_first():
     poses = plant_mixed_grasp_poses([0.1, -0.5, 0.8], n_infeasible=2)
     assert len(poses) == 3
@@ -162,6 +174,31 @@ def test_plan_pick_place_without_executor():
     assert any("approach@" in n for n in plan.expanded_nodes)
 
 
+def test_plan_pick_place_uses_spec_side_approach():
+    from types import SimpleNamespace
+
+    pl = {
+        "obj_a": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6]},
+        "cube_b": {"cat": "blue cube", "pos": [-0.02, -0.55, 0.6]},
+    }
+    robot = _FakeRobot(pl)
+    robot._spec = SimpleNamespace(tamp_approach="side")
+    grasps = [_FakeGrasp([0.08, -0.55, 0.62])]
+    plan = plan_pick_place(
+        robot,
+        object_query="red cylinder",
+        receptacle_query="blue cube",
+        grasp_poses=grasps,
+        object_gt_body="obj_a",
+        receptacle_gt_body="cube_b",
+        executor=None,
+    )
+    assert plan.success
+    xyt = plan.steps[0].args["xyt"]
+    assert abs(xyt[2] - np.pi / 2) < 1e-9
+    assert any("mode=side" in n for n in plan.expanded_nodes)
+
+
 def test_plan_missing_object():
     robot = _FakeRobot({})
     plan = plan_pick_place(
@@ -179,3 +216,63 @@ def test_plan_missing_object():
 def test_task_plan_dataclass():
     p = TaskPlan(steps=[TaskPlanStep("approach", {"xyt": [0, 0, 0]})], object_body="a", receptacle_body=None)
     assert p.steps[0].op == "approach"
+
+
+def test_sourccey_side_approach_reaches_default_table_cylinder():
+    """CPU: left-arm IK to the default-table red cylinder from the side standoff.
+
+    The rby1 front pose (yaw=−π/2 at y=+0.55) misses this workspace by >1 m.
+    """
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
+    from emet.motion.arm_manip_profile import ArmManipProfile
+    from emet.motion.mujoco_arm_ik import solve_position_ik_multiseed
+    from emet.robots.sourccey import SourcceyBackend
+    from emet.simulation.sim_object_placements import DEFAULT_TABLE_SCENE_PLACEMENTS
+
+    spec = SourcceyBackend().get_spec()
+    assert spec.tamp_approach == "side"
+    obj = np.asarray(DEFAULT_TABLE_SCENE_PLACEMENTS["object2"]["pos"], dtype=np.float64)
+    approach = approach_pose_for_object_xy(obj[:2], mode="side", arm="left")
+    assert abs(approach[2] - np.pi / 2) < 1e-9
+
+    model = mujoco.MjModel.from_xml_path(str(spec.mjcf_path))
+    data = mujoco.MjData(model)
+    if model.nkey:
+        data.qpos[:] = model.key_qpos[0]
+    write_offline_mjcf_base_xyt(
+        model, data, approach, planar_joint_names=spec.planar_base_joint_names
+    )
+    mujoco.mj_forward(model, data)
+    prof = ArmManipProfile.for_robot("sourccey", arm="left")
+    res = solve_position_ik_multiseed(
+        model,
+        data,
+        ee_body=prof.ee_body,
+        joint_names=prof.joint_names,
+        target_pos=obj,
+        max_iters=80,
+        tol_m=0.05,
+    )
+    assert res.success, f"side approach IK err={res.pos_error_m:.3f} m (approach={approach.tolist()})"
+    assert res.pos_error_m < 0.05
+
+    front = approach_pose_for_object_xy(obj[:2], mode="front", arm="left")
+    write_offline_mjcf_base_xyt(
+        model, data, front, planar_joint_names=spec.planar_base_joint_names
+    )
+    if model.nkey:
+        data.qpos[4:] = model.key_qpos[0][4:]
+    mujoco.mj_forward(model, data)
+    front_res = solve_position_ik_multiseed(
+        model,
+        data,
+        ee_body=prof.ee_body,
+        joint_names=prof.joint_names,
+        target_pos=obj,
+        max_iters=80,
+        tol_m=0.05,
+    )
+    assert not front_res.success
+    assert front_res.pos_error_m > 0.5

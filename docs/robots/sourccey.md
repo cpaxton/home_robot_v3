@@ -62,7 +62,9 @@ uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
 - **Arm reach**: the 6-DoF arm reaches outward/sideways (workspace bottoms out around
   z≈0.36 m below the shoulder), so table/counter-top objects are reachable but **floor
   objects are not** — use counter-based `mcts` episodes (e.g.
-  `robocasa_sourccey_counter_to_cab_mcts`), not the floor pick/place row.
+  `robocasa_sourccey_counter_to_cab_mcts`), not the floor pick/place row. TAMP
+  `plan_pick_place` uses `RobotSpec.tamp_approach="side"` (left yaw=+π/2) rather than
+  the Galaxea front standoff; a front-facing rby1 pose misses by ~0.6–1.2 m.
 - **Base / dome / wheels / lift** are simplified pragmatic geometry assembled from the
   STEP CAD parts (see `scripts/robot_assets/`). The body is a 3-level pyramidal shell
   (250 → 207 → 183 mm plates/walls), 4 mecanum wheels with holder brackets at the

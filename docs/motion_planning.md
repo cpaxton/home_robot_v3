@@ -206,6 +206,17 @@ EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
   --object "red cylinder" --receptacle "blue cube" \
   --plant-infeasible-grasps --cpu-only --skip-oracle --record-mp4
 # → <figures-dir>/third_person.mp4
+
+# Sourccey: table objects at z≈0.6 m (floor picks are out of reach). RoboCasa
+# PickPlace must pin obj_main — the GT category is not "obj". Pass `--rerun`
+# for the web viewer (http://127.0.0.1:9090?url=ws://127.0.0.1:9877); the
+# process holds 30s after the plan so a failed IK still leaves something to look at.
+# Approach is a **side** standoff (`tamp_approach=side`); the rby1 front pose is unreachable.
+uv run python scripts/scripted_tamp_pick_place.py --start-sim \
+  --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --rerun
+uv run python scripts/scripted_tamp_pick_place.py --start-sim \
+  --sim configs/sim/robocasa_pick_place_sourccey.yaml --object obj --receptacle cab \
+  --object-gt-body obj_main --manip-mode kinematic --skip-oracle --rerun
 ```
 
 Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). With `--record-mp4`, the sim streams a **chase camera** off ``base_link`` (FREE cam, lookat raised above the chassis so the view does not cut through the torso); banners show current action + goal. Tune with ``EMET_SIM_THIRD_PERSON_{DISTANCE,AZIMUTH,ELEVATION,LOOKAT_Z}``.

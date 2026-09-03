@@ -47,13 +47,46 @@ class TaskPlan:
     failed_op: str | None = None
 
 
-def approach_pose_for_object_xy(obj_xy: np.ndarray, *, standoff: float = 0.55) -> np.ndarray:
-    """Face −Y (table / iTHOR convention used in default_table smoke).
+def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
+    """Base yaw so the selected arm points at a table object in −Y.
+
+    ``front``: chassis +X toward the object (Galaxea / rby1). ``side``: hanging
+    ±X arm toward the object (Sourccey left +π/2, right −π/2).
+    """
+    mode_l = str(mode or "front").lower().strip()
+    arm_l = str(arm or "left").lower().strip()
+    if mode_l == "side":
+        return float(np.pi / 2 if arm_l != "right" else -np.pi / 2)
+    return float(-np.pi / 2)
+
+
+def approach_pose_for_object_xy(
+    obj_xy: np.ndarray,
+    *,
+    standoff: float = 0.55,
+    mode: str = "front",
+    arm: str = "left",
+) -> np.ndarray:
+    """Stand off in +Y from the object; yaw from :func:`approach_yaw_for_mode`.
 
     Default standoff 0.55 m clears the Galaxea base footprint (0.35 embedded the chassis).
     """
     xy = np.asarray(obj_xy, dtype=np.float64).reshape(-1)[:2]
-    return np.array([float(xy[0]), float(xy[1]) + float(standoff), -np.pi / 2], dtype=np.float64)
+    yaw = approach_yaw_for_mode(mode, arm)
+    return np.array([float(xy[0]), float(xy[1]) + float(standoff), yaw], dtype=np.float64)
+
+
+def _tamp_approach_mode_and_arm(robot: Any, executor: Any | None) -> tuple[str, str]:
+    spec = getattr(robot, "_spec", None)
+    if spec is None and executor is not None:
+        spec = getattr(getattr(executor, "robot", None), "_spec", None)
+    mode = str(getattr(spec, "tamp_approach", "front") or "front").lower().strip()
+    if mode not in ("front", "side"):
+        mode = "front"
+    arm = "left"
+    if executor is not None:
+        arm = str(getattr(executor, "arm", "left") or "left").lower().strip()
+    return mode, arm
 
 
 def rank_grasps_by_ik(
@@ -172,8 +205,11 @@ def plan_pick_place(
             expanded_nodes=expanded,
         )
     obj_xy = np.asarray(pl[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
-    approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m)
-    expanded.append(f"approach@{approach.tolist()}")
+    mode, arm = _tamp_approach_mode_and_arm(robot, executor)
+    approach = approach_pose_for_object_xy(
+        obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm
+    )
+    expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
