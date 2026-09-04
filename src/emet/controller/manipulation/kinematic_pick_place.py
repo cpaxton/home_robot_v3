@@ -647,7 +647,7 @@ class KinematicPickPlaceExecutor:
             self._sleep(0.15)
         place = recep_pos + np.array([0.0, 0.0, self.place_z_offset_m])
         preplace = place + np.array([0.0, 0.0, 0.12])
-        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos, "recep_body": recep_body}
+        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")

@@ -84,7 +84,8 @@ Used during `RobosuiteZmqServer` startup:
 
 | Function | Role |
 |----------|------|
-| `apply_home_keyframe_preserving_base` | Apply MJCF `home` keyframe; keep merged-scene base pose when Molmo autoplace ran. |
+| `apply_home_keyframe_preserving_base` | Apply MJCF `home` keyframe; keep merged-scene base pose and **scene freejoints** (table cubes) when Molmo autoplace ran. |
+| `apply_home_keyframe_preserving_planar_base` | Same for planar `base_x/y/yaw` robots (Sourccey / xlerobot); restores object `<freejoint/>` qpos after `mj_resetDataKeyframe`. |
 | `apply_zero_joint_pose_preserving_base` | Zero articulated joints; preserve base. |
 | `freejoint_qpos_qvel_addrs` | Locate free joint on `base_link` (Molmo merge). |
 | `log_post_load_diagnostics` | Optional velocity / contact logging (`EMET_ROBOSUITE_POST_LOAD_DEBUG=1`; see [environment_variables.md](environment_variables.md)). |

@@ -206,6 +206,7 @@ def main() -> int:
     try:
         if not args.start_sim:
             raise SystemExit("this smoke requires --start-sim")
+        os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
 
         if not args.skip_oracle:
             from emet.perception.grasps.zmq_client import GraspOracleClient

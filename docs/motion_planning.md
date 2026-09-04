@@ -212,6 +212,8 @@ EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
 # for the web viewer (http://127.0.0.1:9090?url=ws://127.0.0.1:9877); the
 # process holds 30s after the plan so a failed IK still leaves something to look at.
 # Approach is a **side** standoff (`tamp_approach=side`); the rby1 front pose is unreachable.
+# `--start-sim` sets EMET_SIM_NAV_TELEPORT so approach snaps instead of a 30s drive.
+# Spawn restores table-object freejoints after sourccey_home (otherwise the cube falls to z≈0).
 uv run python scripts/scripted_tamp_pick_place.py --start-sim \
   --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --rerun
 uv run python scripts/scripted_tamp_pick_place.py --start-sim \
