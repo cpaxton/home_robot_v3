@@ -78,6 +78,20 @@ harness:
       siglip_grounding: false
       use_instance_graph: false
       manipulation_only: true
+    lazy_graph:
+      # Close-look-only graph: no per-frame YoloE/VLM streaming into
+      # GraphEQAMemory; Qwen label-extract + add_observation only on nav-arrival
+      # close looks (LazyGraphController). Same EQA profile/merge as dynagraph.
+      profile: unified_eqa
+      prompt_variant: hmeqa
+      memory_summary: true
+      merged_memory: false
+      mcq_debias: false
+      explore_when_uncovered: conservative
+      siglip_grounding: true
+      use_instance_graph: false
+      use_sensor_perception: true
+      manipulation_only: true
   habitat_ovmm_find:
     dynagraph:
       profile: find_phase

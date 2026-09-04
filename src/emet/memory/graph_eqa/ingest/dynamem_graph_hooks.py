@@ -91,6 +91,57 @@ def _detection_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
     )
 
 
+def _attach_siglip_crop_embeddings(
+    config: Any,
+    frame_rgb: np.ndarray | None,
+    raw_dets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Encode each instance bbox crop with the shared SigLIP encoder.
+
+    Instance detections otherwise carry no embeddings, so the fusion embedding
+    gate is a no-op and repeated detections of the same object cannot be matched
+    by appearance when labels/centroids drift. Gated by
+    ``gates.embedding.use_siglip_crops``; fails soft (returns detections
+    unchanged) so a missing/unloadable encoder never blocks graph ingest.
+    """
+    if not raw_dets or frame_rgb is None:
+        return raw_dets
+    try:
+        if config is None or not bool(
+            getattr(config.gates, "embedding", None) and config.gates.embedding.use_siglip_crops
+        ):
+            return raw_dets
+    except Exception:
+        return raw_dets
+    try:
+        from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+        enc = get_shared_mask_siglip_encoder(device="cuda", feature_matching_threshold=0.14)
+    except Exception:
+        return raw_dets
+    h, w = int(frame_rgb.shape[0]), int(frame_rgb.shape[1])
+    for d in raw_dets:
+        bb = d.get("bbox_xyxy")
+        if not bb or len(bb) != 4 or not all(isinstance(v, (int, np.integer)) for v in bb):
+            continue
+        x0, y0, x1, y1 = (
+            max(0, int(bb[0]) - 2),
+            max(0, int(bb[1]) - 2),
+            min(w, int(bb[2]) + 2),
+            min(h, int(bb[3]) + 2),
+        )
+        if x1 <= x0 or y1 <= y0:
+            continue
+        crop = np.ascontiguousarray(frame_rgb[y0:y1, x0:x1])
+        try:
+            vec = enc.encode_image(crop)
+            if vec is not None:
+                d["embedding"] = np.asarray(vec, dtype=np.float32).reshape(-1)
+        except Exception:
+            continue
+    return raw_dets
+
+
 def _note_instance_ingest(graph_memory: Any, stats: dict[str, int], *, merged: int = 0, created: int = 0) -> None:
     bucket = getattr(graph_memory, "instance_ingest_stats", None)
     if not isinstance(bucket, dict):
@@ -159,6 +210,24 @@ def update_graph_memory_from_dynamem_observation(
     instance_items: list[Any] = []
     raw_dets: list[dict[str, Any]] = []
     visible_labels: list[str] = []
+    fusion_cfg = getattr(graph_object_fusion, "config", None) if graph_object_fusion is not None else None
+    # Master switch: instance (YoloE) detections may be kept entirely out of the
+    # scene graph (count/FIND recall only). Also enforce the per-episode object-node
+    # cap so repeated detections cannot flood the shared graph with singletons.
+    _instance_nodes_allowed = bool(getattr(fusion_cfg, "use_instance_nodes", True)) if fusion_cfg is not None else True
+    _max_object_nodes = (
+        int(getattr(getattr(fusion_cfg, "growth", None), "max_object_nodes", 0)) if fusion_cfg is not None else 0
+    )
+    _object_node_budget_exhausted = False
+    if _instance_nodes_allowed and _max_object_nodes > 0:
+        try:
+            from emet.memory.graph_eqa.graph_stats import graph_node_breakdown
+
+            _budget_hit = graph_node_breakdown(graph_memory).get("object", 0) >= _max_object_nodes
+        except Exception:
+            _budget_hit = False
+        if _budget_hit:
+            _object_node_budget_exhausted = True
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
         raw_dets = frame_instances_to_detections(
@@ -175,7 +244,6 @@ def update_graph_memory_from_dynamem_observation(
                 scene_profile=scene_profile,
             )
         ]
-        fusion_cfg = getattr(graph_object_fusion, "config", None) if graph_object_fusion is not None else None
         if fusion_cfg is not None:
             admitted, ingest_stats = filter_detections_for_graph_admission(
                 raw_dets,
@@ -183,6 +251,8 @@ def update_graph_memory_from_dynamem_observation(
             )
             _note_instance_ingest(graph_memory, ingest_stats)
             raw_dets = admitted
+        if not _instance_nodes_allowed or _object_node_budget_exhausted:
+            raw_dets = []
         instance_items = [
             (
                 d["label_short"],
@@ -219,6 +289,7 @@ def update_graph_memory_from_dynamem_observation(
             use_fusion = cfg is not None and getattr(cfg, "enabled", False)
 
             if use_fusion and raw_dets:
+                raw_dets = _attach_siglip_crop_embeddings(cfg, frame_rgb, raw_dets)
                 for d in raw_dets:
                     cand = _detection_to_candidate(d)
                     graph_object_fusion.apply_detection(

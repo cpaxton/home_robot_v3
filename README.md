@@ -312,6 +312,8 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [graph_eqa.md](docs/graph_eqa.md) | GraphEQA how-to (`emet run graph-eqa`) |
 | [graph_memory.md](docs/graph_memory.md) | Graph memory **code structure** (`emet.memory.graph_eqa`, `GraphStore`, two EQA loops) |
 | [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
+| [graph_object_fusion.md](docs/graph_object_fusion.md) | How detections become/merge graph nodes (gates, labels, growth, SigLIP appearance, lazy-graph ingest) |
+| [lazy_graph.md](docs/lazy_graph.md) | LazyGraph: Qwen-only commits on nav arrival; HM-EQA `--method lazy_graph` |
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
