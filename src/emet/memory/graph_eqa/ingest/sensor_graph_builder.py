@@ -30,17 +30,13 @@ logger = Logger(__name__)
 # JSON-only contract for graph label extraction (Qwen / VLMs must output this shape only).
 # Example: {"objects":[{"name":"red cylinder"},{"name":"wooden table"}]}
 # Alternate: {"labels":["red cylinder","wooden table"]}
-GRAPH_EXTRACT_JSON_SCHEMA = (
-    r'{"objects":[{"name":"<short noun phrase>","bbox_xyxy":[x0,y0,x1,y1]},...]} '
-    r'or {"labels":["..."]}'
-)
+GRAPH_EXTRACT_JSON_SCHEMA = r'{"objects":[{"name":"<short noun phrase>"},...]} or {"labels":["..."]}'
 
 _EXTRACT_SYSTEM_DEFAULT = (
     "You are a strict JSON label extractor for a robot vision system. "
     "Reply with ONLY a single JSON object, no markdown fences, no analysis, no text before or after. "
     f"Schema: {GRAPH_EXTRACT_JSON_SCHEMA}. "
     "Use 1–8 objects maximum; each name is at most 6 words, physical things only. "
-    "When possible include bbox_xyxy in head-image pixel coordinates; omit it when uncertain. "
     "(furniture, props, appliances). Omit walls, ceiling, floor, lighting, darkness, "
     "'the image', 'the user', or scene meta-commentary."
 )
@@ -50,8 +46,7 @@ _EXTRACT_USER_DEFAULT = (
     "(furniture, props, appliances). "
     "Reply with a single JSON object only—no markdown fences, no analysis, no text before or after. "
     f"Shape: {GRAPH_EXTRACT_JSON_SCHEMA}. "
-    "At most 8 entries; each name is a short noun phrase (≤6 words), physical things only. "
-    "For each object include bbox_xyxy=[x0,y0,x1,y1] in image pixel coordinates when visible."
+    "At most 8 entries; each name is a short noun phrase (≤6 words), physical things only."
 )
 
 _LABEL_REJECT = re.compile(
@@ -94,45 +89,6 @@ def world_xyz_median_from_depth(obs: Observations) -> np.ndarray:
     if sel.shape[0] == 0:
         return np.asarray(obs.camera_pose[:3, 3], dtype=np.float64)
     return np.median(sel, axis=0).astype(np.float64)
-
-
-def world_geometry_from_bbox_depth(
-    obs: Observations, bbox_xyxy: list[int] | tuple[int, int, int, int], *, min_points: int = 25
-) -> tuple[np.ndarray, dict[str, list[float]]] | None:
-    """Return a world centroid and bounds from valid RGB-D points inside one image box.
-
-    This deliberately has no whole-frame fallback: an ungrounded VLM noun is view
-    evidence, not an object-localized graph node.
-    """
-    if obs.depth is None or obs.camera_K is None:
-        return None
-    try:
-        b = [int(v) for v in bbox_xyxy]
-        if len(b) != 4:
-            return None
-        obs.compute_xyz(scaling=1.0)
-        world = obs.get_xyz_in_world_frame(scaling=1.0)
-        if world is None:
-            return None
-        h, w = obs.depth.shape[:2]
-        x0, y0, x1, y1 = max(0, b[0]), max(0, b[1]), min(int(w), b[2]), min(int(h), b[3])
-        if x1 <= x0 or y1 <= y0:
-            return None
-        pts = np.asarray(world)[y0:y1, x0:x1].reshape(-1, 3)
-        depth = np.asarray(obs.depth)[y0:y1, x0:x1].reshape(-1)
-        valid = np.isfinite(pts).all(axis=1) & np.isfinite(depth) & (depth > 0.05) & (depth < 10.0)
-        pts = pts[valid]
-        if len(pts) < int(min_points):
-            return None
-        mn, mx = pts.min(axis=0), pts.max(axis=0)
-        return np.median(pts, axis=0).astype(np.float64), {
-            "min": mn.astype(float).tolist(),
-            "max": mx.astype(float).tolist(),
-            "center": (0.5 * (mn + mx)).astype(float).tolist(),
-            "size": (mx - mn).astype(float).tolist(),
-        }
-    except Exception:
-        return None
 
 
 def _extract_json_object_blob(raw: str) -> str | None:
@@ -505,8 +461,6 @@ class SensorGraphBuilder:
         self,
         obs: Observations,
         voxel_labels: list[str] | None = None,
-        *,
-        include_raw: bool = False,
     ) -> tuple[list[str], str | None]:
         """Short labels for graph nodes; optional long raw VLM text as ``description`` (not used as labels)."""
         if _skip_vlm_label_extract(self._parameters):
@@ -538,7 +492,7 @@ class SensorGraphBuilder:
             raw = out.strip()
             structured = labels_from_extract_response(raw)
             if structured:
-                desc = raw if include_raw or len(raw) > 200 else None
+                desc = raw if len(raw) > 200 else None
                 return structured, desc
             raw_hint = f"{raw[:120]!r}..." if len(raw) > 120 else repr(raw)
             logger.debug(
@@ -560,36 +514,6 @@ class SensorGraphBuilder:
     ) -> list[str]:
         labs, _ = self.labels_and_description_from_observation(obs, voxel_labels=voxel_labels)
         return labs
-
-    def grounded_labels_and_description_from_observation(
-        self, obs: Observations, voxel_labels: list[str] | None = None
-    ) -> tuple[list[tuple[str, tuple[int, int, int, int], np.ndarray, dict[str, list[float]]]], list[str], str | None]:
-        """Extract VLM labels plus only the labels whose boxes have usable RGB-D geometry.
-
-        The second return value includes all labels for view-evidence bookkeeping;
-        the first is safe to turn into object nodes.
-        """
-        labels, desc = self.labels_and_description_from_observation(obs, voxel_labels=voxel_labels, include_raw=True)
-        raw = desc
-        if not raw:
-            return [], labels, desc
-        data = parse_graph_object_json(raw)
-        if not isinstance(data, dict) or not isinstance(data.get("objects"), list):
-            return [], labels, desc
-        grounded = []
-        for item in data["objects"]:
-            if not isinstance(item, dict):
-                continue
-            label = _normalize_extract_label(str(item.get("name") or item.get("label") or ""))
-            bbox = item.get("bbox_xyxy")
-            if label is None or not isinstance(bbox, (list, tuple)):
-                continue
-            geom = world_geometry_from_bbox_depth(obs, bbox)
-            if geom is None:
-                continue
-            xyz, bounds = geom
-            grounded.append((label, tuple(int(v) for v in bbox), xyz, bounds))
-        return grounded, labels, desc
 
     def world_xyz_for_observation(self, obs: Observations) -> np.ndarray:
         return world_xyz_median_from_depth(obs)

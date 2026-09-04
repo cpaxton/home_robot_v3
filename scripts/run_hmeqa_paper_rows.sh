@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the currently supported learned HM-EQA paper rows with fixed, auditable
-# settings.  DynaMem and the oracle are intentionally not silently substituted:
-# their HM-EQA adapters must be implemented before they join this launcher.
+# settings. The ground-truth oracle is intentionally not silently substituted:
+# it is a diagnostic row, not a learned-method fallback.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,6 +24,9 @@ common=(run-batch --paper-subset --no-hm3d-semantics --max-planning-steps 20 --m
     --eqa-vl-family qwen3_vl --eqa-hf-model-id Qwen/Qwen3-VL-8B-Instruct --device cuda --frontier-nodes)
 if [[ -n "$QIDS" ]]; then
     common+=(--question-ids "$QIDS")
+fi
+if [[ "${RESUME:-0}" == "1" ]]; then
+    common+=(--resume)
 fi
 
 run_row() {
