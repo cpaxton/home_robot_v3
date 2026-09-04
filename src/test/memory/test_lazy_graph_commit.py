@@ -69,3 +69,26 @@ def test_normalize_memory_backend_accepts_lazy_graph():
     from emet.config.embodied_agent_config import normalize_memory_backend
 
     assert normalize_memory_backend("lazy-graph") == "lazy_graph"
+
+
+def test_controller_arrival_hook_commits_on_nav_finish():
+    """LazyGraphController._commit_lazy_graph_arrival commits a node on EQA nav arrival."""
+    from emet.controller.controller_lazy_graph import LazyGraphController
+
+    agent = object.__new__(LazyGraphController)
+    agent._lazy_graph_mode = True
+    agent.graph_memory = GraphEQAMemory(parameters={"dynagraph_merge_xy_m": 0.0}, defer_llm_clients=True)
+    agent.obs_count = 3
+    agent.parameters = agent.graph_memory.parameters
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = _FakeObs()
+    agent.robot.get_base_pose.return_value = np.array([1.0, 2.0, 0.0], dtype=np.float64)
+    agent.sensor_builder = MagicMock()
+    agent.sensor_builder.labels_and_description_from_observation.return_value = (["cabinet"], "cab")
+    agent.sensor_builder.world_xyz_for_observation.return_value = np.array([1.1, 2.2, 0.6], dtype=np.float64)
+
+    agent._commit_lazy_graph_arrival(action_obs_id=1, target_point=np.array([1.1, 2.2, 0.6]))
+
+    object_nodes = [n for n in agent.graph_memory.get_nodes() if not n.is_viewpoint and not n.is_frontier]
+    assert len(object_nodes) == 1, "lazy-graph arrival hook must commit a graph node"
+    assert object_nodes[0].labels == ["cabinet"]

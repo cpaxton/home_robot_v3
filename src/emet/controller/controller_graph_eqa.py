@@ -990,6 +990,11 @@ class GraphEQAController(DynamemController):
                         note=(nav_res.note if nav_res else "no_nav"),
                     )
                 if finished.finished:
+                    if getattr(self, "_lazy_graph_mode", False):
+                        self._commit_lazy_graph_arrival(
+                            action_obs_id=action_obs_id,
+                            target_point=target_point,
+                        )
                     break
                 if nav_res is not None and (
                     nav_res.note.startswith("already_at_goal")
