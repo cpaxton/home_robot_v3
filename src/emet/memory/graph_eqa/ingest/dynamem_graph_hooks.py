@@ -396,7 +396,11 @@ def update_graph_memory_from_dynamem_observation(
     )
 
     if labels_are_semantic_graph_hypothesis(labels):
-        if fusion_enabled:
+        if fusion_enabled and _object_node_budget_exhausted:
+            # Per-episode object-node cap reached: keep streaming labels for voxel
+            # FIND recall, but do not add more scene-graph nodes (flood guard).
+            pass
+        elif fusion_enabled:
             crop_rgb = np.asarray(rgb)
             xyz_a = np.asarray(xyz, dtype=np.float64)
             for label in labels:
