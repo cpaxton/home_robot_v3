@@ -628,7 +628,7 @@ def compare_batch(
 @click.option("--episode-id", required=True, help="Episode id from registry")
 @click.option(
     "--backend",
-    type=click.Choice(["dynamem", "static_graph", "graph_eqa", "dynagraph", "ground_truth"]),
+    type=click.Choice(["dynamem", "static_graph", "graph_eqa", "dynagraph", "lazy_graph", "ground_truth"]),
     default="dynagraph",
 )
 @click.option("--merge-xy-m", type=float, default=None)

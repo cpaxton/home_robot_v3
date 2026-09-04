@@ -111,6 +111,13 @@ harness:
       eqa: false
       use_instance_graph: true
       manipulation_only: false
+    lazy_graph:
+      profile: find_phase
+      eqa: false
+      use_instance_graph: false
+      use_sensor_perception: true
+      semantic_ingest_mode: arrival_only
+      manipulation_only: false
     static_graph:
       profile: static_graph
       eqa: false
@@ -125,6 +132,13 @@ harness:
     dynagraph:
       profile: find_phase
       use_instance_graph: true
+      manipulation_only: false
+      eqa: false
+    lazy_graph:
+      profile: find_phase
+      use_instance_graph: false
+      use_sensor_perception: true
+      semantic_ingest_mode: arrival_only
       manipulation_only: false
       eqa: false
     static_graph:

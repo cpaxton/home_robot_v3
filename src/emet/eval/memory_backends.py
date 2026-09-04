@@ -31,14 +31,15 @@ _LEGACY_PROFILE_ALIASES: dict[str, str] = {
 _warned_aliases: set[str] = set()
 
 # OVMM find-phase (Emet sim + Habitat proxy): includes oracle + static-graph row.
-OVMM_MEMORY_BACKEND = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
-OVMM_MEMORY_BACKENDS: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH)
+OVMM_MEMORY_BACKEND = Literal["dynamem", "static_graph", "dynagraph", "lazy_graph", "ground_truth"]
+OVMM_MEMORY_BACKENDS: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, DYNAGRAPH, LAZY_GRAPH, GROUND_TRUTH)
 # Click Choice: canonical first, then legacy alias for scripts.
 OVMM_MEMORY_BACKEND_CHOICES: tuple[str, ...] = (
     DYNAMEM,
     STATIC_GRAPH,
     "graph_eqa",
     DYNAGRAPH,
+    LAZY_GRAPH,
     GROUND_TRUTH,
 )
 
