@@ -31,6 +31,9 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$HOME/runs/emet/merge_strategies/${RUN_ID}}"
 mkdir -p "$OUT_DIR"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
+# Local int4 Qwen3-VL loads need the PyTorch SDPA path (flash-attn wheel not
+# installed for this torch/CUDA); the paper runner passes this on the job env.
+export EMET_ALLOW_SDPA_ATTN=1
 
 echo "=== merge-strategies ${RUN_ID}: qids=${QIDS} strategies=${STRATEGIES} ===" >&2
 
