@@ -56,6 +56,12 @@ harness:
   habitat_eqa:
     # Default profile for dynagraph method only; static_graph overrides below.
     profile: unified_eqa
+    dynamem:
+      # Voxel-only learned baseline. Its VLM is owned by SparseVoxelMap rather
+      # than GraphEQAMemory, so no graph/semantic ingest flags apply.
+      eqa: true
+      use_instance_graph: false
+      manipulation_only: true
     dynagraph:
       prompt_variant: hmeqa
       memory_summary: true

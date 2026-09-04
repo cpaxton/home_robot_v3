@@ -11,7 +11,7 @@ emet_export_pytorch_alloc
 
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$HOME/runs/emet/hmeqa_paper/${RUN_ID}}"
-ROWS="${ROWS:-lazy_arrival dynagraph_bounded_instance dynagraph_no_instance static_no_instance}"
+ROWS="${ROWS:-dynamem_voxel lazy_arrival dynagraph_bounded_instance dynagraph_no_instance static_no_instance}"
 QIDS="${QIDS:-}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 mkdir -p "$OUT_DIR"
@@ -29,6 +29,7 @@ fi
 run_row() {
     local row="$1" method="" fusion=""
     case "$row" in
+        dynamem_voxel) method="dynamem" ;;
         lazy_arrival) method="lazy_graph" ;;
         dynagraph_bounded_instance) method="dynagraph"; fusion="$ROOT/configs/benchmarks/fusion_strategy_b.yaml" ;;
         dynagraph_no_instance) method="dynagraph"; fusion="$ROOT/configs/benchmarks/fusion_strategy_c.yaml" ;;

@@ -256,7 +256,7 @@ def _make_controller(
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
 ):
-    from emet.eval.memory_backends import DYNAGRAPH, LAZY_GRAPH
+    from emet.eval.memory_backends import DYNAGRAPH, DYNAMEM, LAZY_GRAPH
 
     method = _normalize_hmeqa_method(method)
     params = _apply_method_parameters(parameters, method)
@@ -286,7 +286,22 @@ def _make_controller(
         "semantic_ingest_mode": str(harness_opts.get("semantic_ingest_mode", "streaming_objects")),
         "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
-    if method == DYNAGRAPH:
+    if method == DYNAMEM:
+        from emet.controller.controller_dynamem import DynamemController
+
+        # DynaMem's VLM EQA lives in SparseVoxelMap; it intentionally has no
+        # GraphEQAMemory and is the honest no-graph paper baseline.
+        agent = DynamemController(
+            robot=robot,
+            parameters=params,
+            save_rerun=not no_rerun,
+            enable_live_rerun=eval_rerun_enabled(),
+            cpu_only=not use_real_vlm,
+            use_instance_memory=False,
+            manipulation_only=bool(harness_opts.get("manipulation_only", True)),
+            eqa=True,
+        )
+    elif method == DYNAGRAPH:
         agent = DynagraphController(**common)
     elif method == LAZY_GRAPH:
         from emet.controller.controller_lazy_graph import LazyGraphController
@@ -525,12 +540,15 @@ def run_hmeqa_episode(
             if agent.graph_memory is not None:
                 agent.graph_memory._eqa_decision_trace_dir = str(ep_dir / "eqa_decisions")
 
-        discord_text, _images = agent.run_eqa(
-            eqa_question,
-            max_planning_steps=max_planning_steps,
-            max_movement_step=max_movement_step,
-            trace_meta=trace_meta,
-        )
+        if method == "dynamem":
+            discord_text, _images = agent.run_eqa(eqa_question, max_planning_steps=max_planning_steps)
+        else:
+            discord_text, _images = agent.run_eqa(
+                eqa_question,
+                max_planning_steps=max_planning_steps,
+                max_movement_step=max_movement_step,
+                trace_meta=trace_meta,
+            )
         raw_eqa = ""
         parsed_letter = ""
         model_confident = False
