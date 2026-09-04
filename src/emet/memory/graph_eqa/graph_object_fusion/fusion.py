@@ -265,7 +265,7 @@ class GraphObjectFusion:
         candidate: GraphDetectionCandidate,
         *,
         viewer_xyz: np.ndarray | None = None,
-    ) -> int:
+    ) -> int | None:
         """Merge into an existing node or add a new observation."""
         match = self.find_best_node(graph_memory, candidate)
         if match is None:
@@ -274,7 +274,7 @@ class GraphObjectFusion:
             match = self.find_fallback_node(graph_memory, candidate)
         if match is not None:
             label_ok = self._label_match(match, candidate.label, candidate)
-            return graph_memory.merge_object_detection(
+            obs_id = graph_memory.merge_object_detection(
                 rgb,
                 candidate,
                 merge_into_node_id=int(match.node_id),
@@ -282,9 +282,29 @@ class GraphObjectFusion:
                 blend=self.config.keep,
                 allow_label_mismatch=not label_ok,
             )
-        return graph_memory.merge_object_detection(
+            stats = getattr(graph_memory, "instance_ingest_stats", None)
+            if isinstance(stats, dict):
+                stats["merged"] = int(stats.get("merged", 0)) + 1
+            return obs_id
+        cap = int(getattr(self.config.growth, "max_object_nodes", 0) or 0)
+        if cap > 0:
+            n_objects = sum(
+                1
+                for node in graph_memory.get_nodes()
+                if not node.is_viewpoint and not getattr(node, "is_frontier", False)
+            )
+            if n_objects >= cap:
+                stats = getattr(graph_memory, "instance_ingest_stats", None)
+                if isinstance(stats, dict):
+                    stats["rejected_object_cap"] = int(stats.get("rejected_object_cap", 0)) + 1
+                return None
+        obs_id = graph_memory.merge_object_detection(
             rgb, candidate, merge_into_node_id=None, viewer_xyz=viewer_xyz, blend=self.config.keep
         )
+        stats = getattr(graph_memory, "instance_ingest_stats", None)
+        if isinstance(stats, dict):
+            stats["created"] = int(stats.get("created", 0)) + 1
+        return obs_id
 
     def consolidate_high_iou_nodes(self, graph_memory: GraphEQAMemory) -> int:
         """Fold object pairs whose 3D bounds mostly overlap (returns nodes absorbed)."""

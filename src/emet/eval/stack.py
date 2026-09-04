@@ -114,6 +114,9 @@ def build_memory_agent(
             "cpu_only": cpu_only,
             "use_instance_graph": inst,
             "use_sensor_perception": sens,
+            "semantic_ingest_mode": str(
+                (parameters.get("dynagraph_harness") or {}).get("semantic_ingest_mode", "streaming_objects")
+            ),
             "eqa": True if eqa else None,
             "defer_eqa_vllm": defer_eqa_vllm if eqa else True,
             "enable_live_rerun": live_rerun,

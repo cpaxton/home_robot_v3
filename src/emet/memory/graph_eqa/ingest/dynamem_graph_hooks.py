@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -163,6 +164,7 @@ def update_graph_memory_from_dynamem_observation(
     sensor_builder: SensorGraphBuilder,
     use_instance_graph: bool,
     use_sensor_perception: bool,
+    semantic_ingest_mode: str = "streaming_objects",
     dedup_skips: Callable[[str, np.ndarray], bool] | None,
     obs: Any,
     frame_step: int | None = None,
@@ -228,6 +230,19 @@ def update_graph_memory_from_dynamem_observation(
             _budget_hit = False
         if _budget_hit:
             _object_node_budget_exhausted = True
+    if os.environ.get("EMET_FUSION_DEBUG"):
+        try:
+            from emet.memory.graph_eqa.graph_stats import graph_node_breakdown
+
+            _dbg_nobj = graph_node_breakdown(graph_memory).get("object", 0)
+        except Exception:
+            _dbg_nobj = -1
+        print(
+            f"[fusion-debug] fusion={'yes' if graph_object_fusion is not None else 'NO'} "
+            f"max_obj={_max_object_nodes} allowed={_instance_nodes_allowed} "
+            f"exhausted={_object_node_budget_exhausted} n_obj={_dbg_nobj}",
+            flush=True,
+        )
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
         raw_dets = frame_instances_to_detections(
@@ -265,6 +280,7 @@ def update_graph_memory_from_dynamem_observation(
         visible_labels.extend(str(item[0]) for item in instance_items)
         if (
             not instance_items
+            and not _object_node_budget_exhausted
             and getattr(frame, "instance", None) is not None
             and getattr(vm, "use_instance_memory", False)
         ):
@@ -378,8 +394,15 @@ def update_graph_memory_from_dynamem_observation(
     if getattr(vm, "image_descriptions", None) and len(vm.image_descriptions) > 0:
         voxel_labels = vm.image_descriptions[-1][0]
 
+    semantic_mode = str(semantic_ingest_mode or "streaming_objects").strip().lower()
+    grounded_items: list[tuple[str, tuple[int, int, int, int], np.ndarray, dict[str, list[float]]]] = []
     if use_sensor_perception:
-        labels, desc = sensor_builder.labels_and_description_from_observation(obs, voxel_labels=voxel_labels)
+        if semantic_mode == "grounded_objects":
+            grounded_items, labels, desc = sensor_builder.grounded_labels_and_description_from_observation(
+                obs, voxel_labels=voxel_labels
+            )
+        else:
+            labels, desc = sensor_builder.labels_and_description_from_observation(obs, voxel_labels=voxel_labels)
         xyz = sensor_builder.world_xyz_for_observation(obs)
     else:
         labels = short_labels_from_voxel_descriptions(voxel_labels) if voxel_labels else ["object"]
@@ -396,7 +419,24 @@ def update_graph_memory_from_dynamem_observation(
     )
 
     if labels_are_semantic_graph_hypothesis(labels):
-        if fusion_enabled:
+        if semantic_mode in {"view_evidence", "arrival_only"}:
+            graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
+        elif semantic_mode == "grounded_objects":
+            for label, bbox, item_xyz, bounds in grounded_items:
+                cand = _detection_to_candidate(
+                    {"label": label, "xyz": item_xyz, "bbox_xyxy": bbox, "bounds_3d": bounds, "semantic_only": True}
+                )
+                if fusion_enabled and not _object_node_budget_exhausted:
+                    graph_object_fusion.apply_detection(graph_memory, np.asarray(rgb), cand, viewer_xyz=viewer_xyz)
+                elif not _object_node_budget_exhausted:
+                    graph_memory.add_observation(
+                        rgb, item_xyz, [label], description=desc, viewer_xyz=viewer_xyz, bbox_xyxy=bbox
+                    )
+        elif fusion_enabled and _object_node_budget_exhausted:
+            # Per-episode object-node cap reached: keep streaming labels for voxel
+            # FIND recall, but do not add more scene-graph nodes (flood guard).
+            pass
+        elif fusion_enabled:
             crop_rgb = np.asarray(rgb)
             xyz_a = np.asarray(xyz, dtype=np.float64)
             for label in labels:

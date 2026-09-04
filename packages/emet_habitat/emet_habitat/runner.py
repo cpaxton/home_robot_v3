@@ -283,6 +283,7 @@ def _make_controller(
         "cpu_only": not use_real_vlm,
         "use_sensor_perception": bool(harness_opts.get("use_sensor_perception", graph_perception)),
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
+        "semantic_ingest_mode": str(harness_opts.get("semantic_ingest_mode", "streaming_objects")),
         "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
     if method == DYNAGRAPH:

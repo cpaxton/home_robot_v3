@@ -131,7 +131,7 @@ class FusionGrowth:
 
     # Hard cap on object nodes per episode; 0 = unlimited. Stops the instance
     # graph from flooding the shared graph with singleton nodes.
-    max_object_nodes: int = 0
+    max_object_nodes: int = 120
     # Only merge into a node whose last_seen is within this many steps; 0 = off.
     temporal_window_steps: int = 0
 

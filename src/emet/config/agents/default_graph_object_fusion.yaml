@@ -53,5 +53,7 @@ graph_object_fusion:
     match_xy_m: 0.55
 
   growth:
-    max_object_nodes: 0
+    # A hard, per-episode safety limit. Fusion may still merge observations after
+    # this limit is reached, but cannot add a new object node.
+    max_object_nodes: 120
     temporal_window_steps: 0

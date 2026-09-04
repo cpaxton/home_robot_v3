@@ -167,10 +167,11 @@ def test_growth_max_object_nodes_caps_flood():
         )
         if i >= 2:
             break
-    # apply_detection bypasses the ingest cap; assert the cap is enforced on the
-    # ingest path below.
+    # The direct fusion path must enforce the same cap as stream ingestion.
     assert fusion.config.growth.max_object_nodes == 2
-    # apply_detection bypasses the ingest cap; verify via the ingest path instead.
+    objs = [n for n in gm.get_nodes() if not n.is_viewpoint and not n.is_frontier]
+    assert len(objs) == 2
+    # Verify the stream path cannot overshoot a cap within one dense frame either.
     vm = MagicMock()
     vm.observations = [_fake_frame_with_instances(n_instances=6)]
     vm.min_depth = 0.1

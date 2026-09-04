@@ -67,6 +67,9 @@ harness:
       siglip_grounding: true
       # YoloE instance masks → bounds_3d + countable_instance for GRAPH_COUNT hints.
       use_instance_graph: true
+      # Frame-level VLM nouns are view evidence only; instance masks are the
+      # only streaming object-localization evidence.
+      semantic_ingest_mode: view_evidence
       manipulation_only: true
     static_graph:
       # GraphEQA-inspired static row: no merge/staleness, no Dynagraph extras.
@@ -77,6 +80,7 @@ harness:
       explore_when_uncovered: "off"
       siglip_grounding: false
       use_instance_graph: false
+      semantic_ingest_mode: view_evidence
       manipulation_only: true
     lazy_graph:
       # Close-look-only graph: no per-frame YoloE/VLM streaming into
@@ -91,6 +95,9 @@ harness:
       siglip_grounding: true
       use_instance_graph: false
       use_sensor_perception: true
+      # This is the validated bounded close-look policy. Box-grounded VLM
+      # objects are experimental and selected only by the paper matrix.
+      semantic_ingest_mode: arrival_only
       manipulation_only: true
   habitat_ovmm_find:
     dynagraph:

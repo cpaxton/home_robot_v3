@@ -76,7 +76,17 @@ def commit_graph_from_arrival_obs(
         parameters=parameters or getattr(graph_memory, "parameters", None),
     )
 
-    labels, desc = sensor_builder.labels_and_description_from_observation(obs, voxel_labels=None)
+    config_source = parameters or getattr(graph_memory, "parameters", None)
+    config_get = getattr(config_source, "get", None)
+    harness = config_get("dynagraph_harness") if callable(config_get) else {}
+    semantic_mode = str((harness or {}).get("semantic_ingest_mode", "arrival_only")).lower()
+    grounded_items = []
+    if semantic_mode == "grounded_objects":
+        grounded_items, labels, desc = sensor_builder.grounded_labels_and_description_from_observation(
+            obs, voxel_labels=None
+        )
+    else:
+        labels, desc = sensor_builder.labels_and_description_from_observation(obs, voxel_labels=None)
     labels = filter_graph_labels(labels, scene_profile=scene_profile)
     if not labels:
         labels = ["object"]
@@ -86,15 +96,27 @@ def commit_graph_from_arrival_obs(
     else:
         xyz = sensor_builder.world_xyz_for_observation(obs)
 
-    obs_id = int(
-        graph_memory.add_observation(
+    if grounded_items:
+        # A close look can contain several objects. Add only per-object RGB-D
+        # anchors; labels without a usable box remain attached to the viewpoint.
+        obs_id = None
+        for label, bbox, item_xyz, _bounds in grounded_items:
+            obs_id = graph_memory.add_observation(
+                obs.rgb, item_xyz, [label], description=desc, viewer_xyz=viewer_xyz, bbox_xyxy=bbox
+            )
+        assert obs_id is not None
+    elif semantic_mode == "grounded_objects":
+        graph_memory.record_navigation_sample(obs.rgb, xyz, base_xyz=viewer_xyz)
+        return None
+    else:
+        obs_id = graph_memory.add_observation(
             obs.rgb,
             xyz,
             labels,
             description=desc,
             viewer_xyz=viewer_xyz,
         )
-    )
+    obs_id = int(obs_id)
     logger.info(
         f"lazy_graph commit obs_id={obs_id} labels={labels} "
         f"localize_source={localize_source!r} query={(query_text or '')[:80]!r}"
