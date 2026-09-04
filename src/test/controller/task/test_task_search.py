@@ -13,6 +13,7 @@ from emet.controller.task.tamp.task_search import (
     TaskPlan,
     TaskPlanStep,
     approach_pose_for_object_xy,
+    execute_task_plan,
     plan_pick_place,
     rank_grasps_by_ik,
 )
@@ -41,6 +42,23 @@ class _FakeGrasp:
         T[:3, 3] = np.asarray(xyz, dtype=np.float64)
         self.T_world = T
         self.position = T[:3, 3].copy()
+
+
+class _FakeVideo:
+    def __init__(self):
+        self.dumps: list[str] = []
+        self.captures = 0
+
+    def set_status(self, action: str = "", *, goal=None, detail=None):
+        return None
+
+    def capture_once(self):
+        self.captures += 1
+        return True
+
+    def dump_paper_stills(self, tag: str):
+        self.dumps.append(str(tag))
+        return {}
 
 
 def test_approach_pose_faces_minus_y():
@@ -218,6 +236,22 @@ def test_task_plan_dataclass():
     assert p.steps[0].op == "approach"
 
 
+def test_execute_task_plan_dumps_stills_per_op():
+    robot = _FakeRobot({})
+    video = _FakeVideo()
+    plan = TaskPlan(
+        steps=[TaskPlanStep("approach", {"xyt": [0.08, 0.0, 1.57], "world_frame": True})],
+        object_body="obj_a",
+        receptacle_body="cube_b",
+    )
+    out = execute_task_plan(robot, plan, executor=None, grasp_poses=[], manip_mode="teleport", video_recorder=video)
+    assert out.success
+    assert out.completed_ops == ["approach"]
+    assert video.captures == 1
+    assert video.dumps == ["approach"]
+    assert len(robot.moved) == 1
+
+
 def test_sourccey_side_approach_reaches_default_table_cylinder():
     """CPU: left-arm IK to the default-table red cylinder from the side standoff.
 
@@ -241,9 +275,7 @@ def test_sourccey_side_approach_reaches_default_table_cylinder():
     data = mujoco.MjData(model)
     if model.nkey:
         data.qpos[:] = model.key_qpos[0]
-    write_offline_mjcf_base_xyt(
-        model, data, approach, planar_joint_names=spec.planar_base_joint_names
-    )
+    write_offline_mjcf_base_xyt(model, data, approach, planar_joint_names=spec.planar_base_joint_names)
     mujoco.mj_forward(model, data)
     prof = ArmManipProfile.for_robot("sourccey", arm="left")
     res = solve_position_ik_multiseed(
@@ -259,9 +291,7 @@ def test_sourccey_side_approach_reaches_default_table_cylinder():
     assert res.pos_error_m < 0.05
 
     front = approach_pose_for_object_xy(obj[:2], mode="front", arm="left")
-    write_offline_mjcf_base_xyt(
-        model, data, front, planar_joint_names=spec.planar_base_joint_names
-    )
+    write_offline_mjcf_base_xyt(model, data, front, planar_joint_names=spec.planar_base_joint_names)
     if model.nkey:
         data.qpos[4:] = model.key_qpos[0][4:]
     mujoco.mj_forward(model, data)

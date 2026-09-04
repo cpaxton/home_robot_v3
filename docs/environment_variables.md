@@ -239,6 +239,10 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_SIM_THIRD_PERSON_AZIMUTH` | chase cam | Azimuth **offset** from behind the base `+X` axis, degrees (default `125` = side/rear iso). |
 | `EMET_SIM_THIRD_PERSON_ELEVATION` | chase cam | Orbit elevation degrees (default `-28`). |
 | `EMET_SIM_THIRD_PERSON_LOOKAT_Z` | chase cam | Lookat height above base origin, meters (default `0.75`). |
+| `EMET_SIM_OVERHEAD` | `robosuite_server` full obs | When `1`, render a nadir FREE cam into `overhead_image` (extra EGL). `--record-mp4` sets this. |
+| `EMET_SIM_OVERHEAD_DISTANCE` | overhead cam | Height of the top-down view, meters (default `2.4`). |
+| `EMET_SIM_OVERHEAD_LOOKAT_Y` | overhead cam | Lookat Y offset from the base, meters (default `-0.4` toward the default table). |
+| `EMET_SIM_OVERHEAD_LOOKAT_Z` | overhead cam | Lookat height, meters (default `0.4`). |
 | `EMET_VL_CACHE_SYSTEM_PREFIX` | `qwen3-vl-eqa` / `Qwen3VLClient` | `1`/`0` — cache system-prompt KV across agent turns (default on via `eqa.vl_cache_system_prefix`). CLI: `--cache-vl-prefix` / `--no-cache-vl-prefix`. |
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |

@@ -155,6 +155,8 @@ class Observations:
 
     # Optional third-person view from simulation
     third_person_image: np.ndarray | None = None
+    # Optional nadir overhead (``EMET_SIM_OVERHEAD`` → ZMQ ``overhead_image``)
+    overhead_image: np.ndarray | None = None
 
     # lidar
     lidar_points: np.ndarray | None = None
@@ -272,6 +274,7 @@ class Observations:
             ee_pose=data.get("ee_pose"),
             instance=data.get("instance"),
             third_person_image=data.get("third_person_image"),
+            overhead_image=data.get("overhead_image"),
             lidar_points=data.get("lidar_points"),
             lidar_timestamp=data.get("lidar_timestamp"),
             joint=data.get("joint"),

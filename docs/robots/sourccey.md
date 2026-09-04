@@ -50,6 +50,10 @@ uv run emet serve mujoco --config configs/sim/molmospaces_ithor_train_sourccey_0
 uv run emet serve mujoco --robot sourccey --scene ithor --headless          # terminal 1
 uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
     --config configs/agent_sourccey.yaml --headless                          # terminal 2
+
+# Scripted TAMP pick-place (side standoff). --record-mp4 writes chase MP4 + stills/
+uv run python scripts/scripted_tamp_pick_place.py --start-sim \
+  --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --record-mp4
 ```
 
 ## Model notes

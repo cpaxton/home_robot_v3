@@ -17,6 +17,9 @@ Example::
   # Sourccey table (z≈0.6 m). ``--rerun`` opens the web viewer (hold 30s after the plan).
   uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
     --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --rerun
+  # Same + kitchen-orbit MP4 and stills (chase / overhead / head / wrist) under --figures-dir/stills/
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
+    --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --record-mp4
   uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
     --sim configs/sim/robocasa_pick_place_sourccey.yaml --object obj --receptacle cab \\
     --object-gt-body obj_main --manip-mode kinematic --skip-oracle --rerun
@@ -88,9 +91,7 @@ def _find_graspable_body(
     grasps_dir = default_grasps_dir()
     if object_gt_body:
         if object_gt_body not in pl:
-            raise RuntimeError(
-                f"object_gt_body={object_gt_body!r} not in placements={list(pl.keys())[:20]}"
-            )
+            raise RuntimeError(f"object_gt_body={object_gt_body!r} not in placements={list(pl.keys())[:20]}")
         candidates = [object_gt_body]
     elif object_query:
         candidates = bodies_matching_category(pl, object_query) or []
@@ -158,7 +159,7 @@ def main() -> int:
     parser.add_argument(
         "--record-mp4",
         action="store_true",
-        help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1 on the sim).",
+        help="Record kitchen-orbit chase MP4 + clean stills (chase, overhead, head/wrist POV) per TAMP step.",
     )
     parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument("--verbose-sim", action="store_true")
@@ -185,6 +186,7 @@ def main() -> int:
 
     if args.record_mp4:
         os.environ["EMET_SIM_THIRD_PERSON"] = "1"
+        os.environ["EMET_SIM_OVERHEAD"] = "1"
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.smoke_grasps import plant_mixed_grasp_poses
@@ -288,9 +290,7 @@ def main() -> int:
         exe = None
         viz = getattr(robot, "_rerun", None) if args.rerun else None
         if mode == "kinematic":
-            exe = KinematicPickPlaceExecutor(
-                robot, manip_collision="none", traj_dt=0.05, visualizer=viz
-            )
+            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05, visualizer=viz)
 
         plan = plan_pick_place(
             robot,
@@ -330,9 +330,7 @@ def main() -> int:
             return 1
 
         if exe is None and mode == "kinematic":
-            exe = KinematicPickPlaceExecutor(
-                robot, manip_collision="none", traj_dt=0.05, visualizer=viz
-            )
+            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05, visualizer=viz)
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         fig_dir = Path(args.figures_dir) if args.figures_dir else Path.home() / "runs/emet/tamp_pick_place" / stamp
@@ -348,12 +346,20 @@ def main() -> int:
                 fps=float(args.video_fps),
                 title="tamp pick-place",
             )
+            video.stills_dir = fig_dir
             video.set_status(
                 "plan",
                 goal=f"{body} → {recep_body}",
                 detail=f"chosen_grasp={plan.chosen_grasp_index}",
             )
             video.start()
+            # One extra-cam full obs after the recorder thread starts.
+            time.sleep(0.5)
+            dumped = video.dump_paper_stills("start")
+            if dumped:
+                print(f"stills start -> {', '.join(sorted(str(p) for p in dumped.values()))}", flush=True)
+            else:
+                print("WARN: no paper stills at start (chase/overhead missing from obs?)", file=sys.stderr, flush=True)
 
         plan = execute_task_plan(
             robot,
@@ -364,6 +370,11 @@ def main() -> int:
             video_recorder=video,
         )
         if video is not None:
+            dumped = video.dump_paper_stills("final")
+            if dumped:
+                print(f"stills final -> {', '.join(sorted(str(p) for p in dumped.values()))}", flush=True)
+            else:
+                print("WARN: no paper stills at final", file=sys.stderr, flush=True)
             mp4 = video.stop()
             if mp4 is not None:
                 print(f"mp4 -> {mp4}", flush=True)

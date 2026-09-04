@@ -35,6 +35,8 @@ def test_scripted_tamp_pick_place_help_lists_object_gt_body():
     assert "--object-gt-body" in result.stdout
     assert "--rerun" in result.stdout
     assert "--rerun-hold-s" in result.stdout
+    assert "--record-mp4" in result.stdout
+    assert "stills" in result.stdout.lower()
     assert "sourccey" in result.stdout.lower()
 
 

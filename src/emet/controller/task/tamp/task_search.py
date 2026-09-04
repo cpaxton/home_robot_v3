@@ -206,9 +206,7 @@ def plan_pick_place(
         )
     obj_xy = np.asarray(pl[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
     mode, arm = _tamp_approach_mode_and_arm(robot, executor)
-    approach = approach_pose_for_object_xy(
-        obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm
-    )
+    approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
     expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
 
     scores: list[tuple[int, float, bool]] = []
@@ -301,7 +299,8 @@ def execute_task_plan(
 ) -> TaskPlan:
     """Execute a :class:`TaskPlan` in order; updates ``plan.success`` / ``message``.
 
-    Optional *video_recorder* (``ManipVideoRecorder``) gets status updates per step.
+    Optional *video_recorder* (``ManipVideoRecorder``) gets status updates per step
+    and dumps clean paper stills after each completed operator.
     """
     if not plan.steps:
         plan.success = False
@@ -397,6 +396,7 @@ def execute_task_plan(
         plan.completed_ops.append(op)
         if video_recorder is not None:
             video_recorder.capture_once()
+            video_recorder.dump_paper_stills(op)
 
     _status("done", detail=plan.message or "ok")
     plan.success = True
