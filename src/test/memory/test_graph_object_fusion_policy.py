@@ -146,6 +146,34 @@ def test_use_instance_nodes_false_skips_instance_graph_nodes():
     assert object_nodes == [], f"instance nodes must stay out of the graph, got {len(object_nodes)}"
 
 
+def test_use_instance_nodes_false_skips_instance_memory_fallback():
+    """The fallback is another instance source and must honor the same master switch."""
+    cfg = GraphObjectFusionConfig(enabled=True, use_instance_nodes=False)
+    fusion = GraphObjectFusion(cfg)
+    gm = GraphEQAMemory(parameters={}, defer_llm_clients=True)
+    vm = MagicMock()
+    vm.observations = [_fake_frame_with_instances(n_instances=1)]
+    vm.min_depth = 0.1
+    vm.max_depth = 5.0
+    vm.image_descriptions = []
+    vm.use_instance_memory = True
+    vm.get_instances.return_value = []
+    update_graph_memory_from_dynamem_observation(
+        graph_memory=gm,
+        robot=MagicMock(get_base_pose=MagicMock(return_value=np.array([0.5, 1.0, 0.0]))),
+        voxel_map=vm,
+        detection_model=MagicMock(class_list=["mug"]),
+        sensor_builder=MagicMock(),
+        use_instance_graph=True,
+        use_sensor_perception=False,
+        dedup_skips=None,
+        obs=_fake_obs(),
+        frame_step=1,
+        graph_object_fusion=fusion,
+    )
+    assert [n for n in gm.get_nodes() if not n.is_viewpoint and not n.is_frontier] == []
+
+
 def test_growth_max_object_nodes_caps_flood():
     """growth.max_object_nodes caps the per-episode object-node count."""
     cfg = GraphObjectFusionConfig(enabled=True, spatial_merge_xy_m=0.1, growth={"max_object_nodes": 2})

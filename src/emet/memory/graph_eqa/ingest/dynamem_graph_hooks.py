@@ -280,6 +280,7 @@ def update_graph_memory_from_dynamem_observation(
         visible_labels.extend(str(item[0]) for item in instance_items)
         if (
             not instance_items
+            and _instance_nodes_allowed
             and not _object_node_budget_exhausted
             and getattr(frame, "instance", None) is not None
             and getattr(vm, "use_instance_memory", False)
