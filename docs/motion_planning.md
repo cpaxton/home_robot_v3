@@ -224,7 +224,7 @@ uv run python scripts/scripted_tamp_pick_place.py --start-sim \
   --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --record-mp4
 ```
 
-Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). With `--record-mp4`, the sim streams a **chase camera** off ``base_link`` (FREE cam, kitchen-orbit defaults) plus a nadir **overhead** still and onboard POV (head / wrist) under ``stills/``. Tune chase with ``EMET_SIM_THIRD_PERSON_{DISTANCE,AZIMUTH,ELEVATION,LOOKAT_Z}``; overhead with ``EMET_SIM_OVERHEAD_{DISTANCE,LOOKAT_Y,LOOKAT_Z}``.
+Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). `--record-mp4` sets `EMET_SIM_THIRD_PERSON` and `EMET_SIM_OVERHEAD`, streams a **chase camera** off ``base_link`` (FREE cam, kitchen-orbit defaults), and writes clean stills (`stills/{start,approach,grasp,place,final}_{third_person,topdown,pov_front,pov_front_right,pov_wrist}.png`) plus `third_person.mp4`. Tune chase with ``EMET_SIM_THIRD_PERSON_{DISTANCE,AZIMUTH,ELEVATION,LOOKAT_Z}``; overhead with ``EMET_SIM_OVERHEAD_{DISTANCE,LOOKAT_Y,LOOKAT_Z}``.
 
 ### Frontier multi-option (explore)
 

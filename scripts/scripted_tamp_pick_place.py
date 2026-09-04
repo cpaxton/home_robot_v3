@@ -288,7 +288,7 @@ def main() -> int:
         base_path = [np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(3)]
 
         exe = None
-        viz = getattr(robot, "_rerun", None) if args.rerun else None
+        viz = robot._rerun if args.rerun else None
         if mode == "kinematic":
             exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05, visualizer=viz)
 
@@ -406,10 +406,10 @@ def main() -> int:
             object_xy=np.asarray(info["pos"], dtype=np.float64).reshape(3)[:2],
             receptacle_xy=recep_xy,
             grasp_xy=grasp_xy,
-            planned_ee_xyz=getattr(exe, "last_ee_path_world", None) if exe else None,
-            joint_waypoints=getattr(exe, "last_plan_waypoints", None) if exe else None,
-            joint_names=list(getattr(exe, "joint_names", ())) if exe else None,
-            targets=getattr(exe, "last_targets", None) if exe else None,
+            planned_ee_xyz=exe.last_ee_path_world if exe else None,
+            joint_waypoints=exe.last_plan_waypoints if exe else None,
+            joint_names=list(exe.joint_names) if exe else None,
+            targets=exe.last_targets if exe else None,
         )
         print(f"figures -> {fig_dir}")
         for k, p in paths.items():

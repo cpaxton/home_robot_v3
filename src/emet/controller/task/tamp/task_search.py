@@ -211,7 +211,7 @@ def plan_pick_place(
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
-    if executor is not None and getattr(executor, "_ensure_model", None) and executor._ensure_model():
+    if executor is not None and executor._ensure_model():
         _sync_executor_base_to_xyt(executor, approach)
         scores = rank_grasps_by_ik(
             executor._model,

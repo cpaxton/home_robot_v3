@@ -233,7 +233,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_MANIP_MODE` | `DynamemTaskExecutor` / `resolve_agent_manip_mode` | `teleport` (default) or `kinematic` (IK + attach). Overrides `agent.manip_mode`. See [molmospaces.md](molmospaces.md) mobile manipulation. |
 | `EMET_MANIP_COLLISION` | kinematic pick/place | `none` (default) or `voxel` (2D obstacle map). Overrides `agent.manip_collision`. |
 | `EMET_MANIP_PLANNER` | kinematic pick/place | `rrt_connect` (default), `rrt`, or `linear`. Joint-space path after IK. Overrides `agent.manip_planner`. |
-| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render a **base chase** view into `third_person_image` (extra EGL cost). Used by `--record-mp4` smokes. |
+| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render a **base chase** view into `third_person_image` (extra EGL cost). `scripted_tamp_pick_place.py --record-mp4` sets this **and** `EMET_SIM_OVERHEAD`. |
 | `EMET_SIM_THIRD_PERSON_CAMERA` | same | Optional body name to follow (default: robot `base_link`). |
 | `EMET_SIM_THIRD_PERSON_DISTANCE` | chase cam | Orbit distance in meters (default `5.5`). |
 | `EMET_SIM_THIRD_PERSON_AZIMUTH` | chase cam | Azimuth **offset** from behind the base `+X` axis, degrees (default `125` = side/rear iso). |
