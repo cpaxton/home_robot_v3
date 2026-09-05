@@ -108,7 +108,10 @@ class GraphEQAMemory(GraphAnswerTraceMixin):
     """
 
     def __init__(self, *args, **kwargs):
+        from emet.memory.query_candidates import QueryCandidates
+
         self.store = GraphStore()
+        self.query_candidates = QueryCandidates()
         graph_init.init_memory(self, *args, **kwargs)
 
     def add_observation(self, *args, **kwargs):

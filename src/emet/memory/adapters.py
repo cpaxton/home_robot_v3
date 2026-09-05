@@ -610,6 +610,7 @@ class GraphEQABackend(MemoryBackend):
             world_store.save(dir_path, include_rgb=include_world_evidence_rgb)
         runtime = {
             "schema_version": 1,
+            "query_candidates": self._graph.query_candidates.to_dict(),
             "next_obs_id": int(getattr(self._graph, "_next_obs_id", 1)),
             "obs_revisions": {
                 str(key): int(value) for key, value in dict(getattr(self._graph, "_obs_revisions", {}) or {}).items()
@@ -801,6 +802,12 @@ class GraphEQABackend(MemoryBackend):
         runtime: dict[str, Any] = {}
         if runtime_path.is_file():
             runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+        from emet.memory.query_candidates import QueryCandidates
+
+        candidate_state = runtime.get("query_candidates")
+        self._graph.query_candidates = (
+            QueryCandidates.from_dict(candidate_state) if candidate_state else QueryCandidates()
+        )
         self._graph._obs_revisions = {
             int(key): int(value) for key, value in dict(runtime.get("obs_revisions") or {}).items()
         }

@@ -364,6 +364,7 @@ class DynamemVoxelLocalizeMixin:
             "query": text,
             "max_cosine": max_cosine,
             "yoloe_hit": res is not None,
+            "source_obs_id": int(obs_id),
         }
         if res is not None:
             target_point = res

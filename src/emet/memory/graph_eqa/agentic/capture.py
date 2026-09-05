@@ -331,10 +331,16 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
         score = 400.0 + (float(conf) if conf is not None else 0.0)
         if stats.get("yoloe_hit"):
             score += 50.0
+        handle = voxel_proposal_id(len(out))
+        if getattr(self.agent, "query_driven_memory", False):
+            candidate = self.agent.propose_query_candidate(phrase, xyz, stats)
+            if candidate is None:
+                continue
+            handle = candidate.handle
         out.append(
             NavHypothesis(
                 phrase=phrase,
-                obs_id=voxel_proposal_id(len(out)),
+                obs_id=handle,
                 xyz=xyz,
                 score=score,
                 source="voxel",

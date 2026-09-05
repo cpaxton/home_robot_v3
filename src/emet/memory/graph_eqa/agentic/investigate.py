@@ -398,7 +398,16 @@ def _tool_investigate(
     # the arrival capture is a wall and verify pins that station instead.
     self._pin_eqa_look_obs(oid)
     self._refresh_room_after_motion()
+    query_candidate = getattr(self.agent, "query_driven_memory", False) and oid in self.agent.query_candidates.records
+    before_capture = len(self.agent.voxel_map.observations) if query_candidate else 0
     cap = self._tool_capture_and_update()
+    grounding = None
+    if query_candidate:
+        grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
+        self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})
+        if grounding["ok"]:
+            cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
+            self._last_capture_status = "OK"
     cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
     station_oid = None
     # Only a successful capture advance counts as a new station view.
@@ -500,6 +509,7 @@ def _tool_investigate(
         "nav_status_code": status,
         "nav_note": note,
         "capture": cap,
+        "grounding": grounding,
         "verify": verify_out,
         "look_around_on_no_new_obs": True,
         "place_inspect": rec.card_bits(),
