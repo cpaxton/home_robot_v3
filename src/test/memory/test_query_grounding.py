@@ -100,18 +100,51 @@ def test_shared_executor_reuses_provenance_handles(question):
     agent.parameters = {}
     agent.query_driven_memory = True
     agent.propose_query_candidate = grounding_agent.propose_query_candidate
+    agent.retrieve_query_candidate = Mock(return_value=(np.array([9, 9, 9]), {"source_obs_id": 1, "max_cosine": 0.4}))
     ex = AgenticEQAExecutor(agent, question, router=False)
     ex._target_boost_phrases = lambda: ["mug"]
     ex._siglip_phrase = lambda: "mug"
     with patch(
         "emet.memory.graph_eqa.agentic.capture.localize_text_xyz",
-        return_value=(np.array([9, 9, 9]), {"source_obs_id": 1, "max_cosine": 0.4}),
+        side_effect=AssertionError("query candidates must not use the confirmed-localization gate"),
     ):
         first = ex._voxel_localize_hypotheses()
         second = ex._voxel_localize_hypotheses()
     assert first[0].obs_id == second[0].obs_id
     assert first[0].obs_id in grounding_agent.query_candidates.records
     assert not grounding_agent.graph_memory.get_nodes()
+
+
+def test_lazy_grounding_initializes_detector_only_on_demand():
+    agent = controller()
+    detector = agent.detection_model
+    agent.detection_model = None
+    agent.device = "cpu"
+    with patch("emet.perception.detection.yoloe.get_shared_yoloe_perception", return_value=detector) as factory:
+        record = agent.propose_query_candidate("mug", [1, 1, 1], {"source_obs_id": 1})
+        factory.assert_not_called()
+        assert agent.ground_query_candidate(record.handle, after_observation=1)["ok"]
+        factory.assert_called_once()
+
+
+def test_weak_voxel_hit_is_search_evidence_not_localization():
+    import torch
+
+    from emet.mapping.voxel.dynamem_localize import DynamemVoxelLocalizeMixin
+
+    vm = DynamemVoxelLocalizeMixin()
+    vm.observations = [object()]
+    vm.semantic_memory = SimpleNamespace(
+        get_pointcloud=lambda: (torch.ones((1, 3)), None, None, None),
+        _obs_counts=torch.tensor([1]),
+    )
+    vm.find_alignment_over_model = lambda text: torch.tensor([0.16])
+    point, stats = vm.retrieve_text_candidate("mug")
+    assert np.allclose(point, [1, 1, 1])
+    assert stats["source_obs_id"] == 1 and not stats["yoloe_hit"]
+    assert not hasattr(vm, "_last_localize_stats")
+    vm.find_alignment_over_model = lambda text: torch.tensor([0.10])
+    assert vm.retrieve_text_candidate("mug")[0] is None
 
 
 def test_retiring_object_does_not_reassign_surviving_candidate_identity():

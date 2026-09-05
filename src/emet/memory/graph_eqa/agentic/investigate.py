@@ -406,6 +406,13 @@ def _tool_investigate(
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
         self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})
         if grounding["ok"]:
+            record = self.agent.query_candidates.records[oid]
+            self._record_voxel_score_hit(
+                record.query,
+                np.asarray(grounding["xyz"]),
+                {"max_cosine": record.retrieval_score, "yoloe_hit": True},
+                self.agent.voxel_map,
+            )
             cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
             self._last_capture_status = "OK"
     cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None

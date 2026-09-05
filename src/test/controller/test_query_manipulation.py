@@ -105,3 +105,35 @@ def test_tracking_rejects_missing_or_ambiguous_geometry():
     assert selected[:4].all() and not selected[4:].any()
     with pytest.raises(ValueError, match="depth"):
         target.select_mask(masks, classes, None)
+
+
+def test_visual_servo_operation_uses_geometry_not_centered_distractor():
+    from emet.controller.operations.grasp_object import GraspObjectOperation
+
+    _, target = executor()
+    operation = object.__new__(GraspObjectOperation)
+    operation.grounded_target = target
+    operation.get_class_mask = Mock(return_value=np.ones((8, 8), dtype=bool))
+    masks = np.zeros((8, 8), dtype=int)
+    masks[4:] = 1
+    world = np.ones((8, 8, 3))
+    world[4:] = 10
+    servo = SimpleNamespace(instance=masks, get_ee_xyz_in_world_frame=lambda: world)
+    chosen = operation.get_target_mask(servo, center=(5, 5))
+    assert chosen[:4].all() and not chosen[4:].any()
+    world[:] = 10
+    with pytest.raises(ValueError, match="absent"):
+        operation.get_target_mask(servo, center=(5, 5))
+
+
+def test_placement_sampling_handles_zero_horizontal_offset():
+    import torch
+
+    from emet.controller.operations.place_object import PlaceObjectOperation
+    from emet.mapping.instance import Instance
+
+    operation = object.__new__(PlaceObjectOperation)
+    instance = Instance(point_cloud=torch.ones((16, 3)))
+    operation.agent = SimpleNamespace(current_receptacle=instance)
+    operation.verbose = False
+    assert np.isfinite(operation.sample_placement_position(np.array([0, 0, 0]))).all()

@@ -56,6 +56,10 @@ class LazyGraphController(DynagraphController):
             logger.warning(f"Query candidate rejected: {exc}")
             return None
 
+    def retrieve_query_candidate(self, phrase: str):
+        """Keep low-confidence voxel matches in the search tier, not object memory."""
+        return self.voxel_map.retrieve_text_candidate(phrase)
+
     def ground_query_candidate(self, handle, *, after_observation: int):
         """Promote only from admitted, object-specific geometry in a new frame."""
         from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
@@ -87,12 +91,19 @@ class LazyGraphController(DynagraphController):
         # Lazy mapping intentionally does not run streaming instance detection.
         # Detect only this arrival view, using the same RGB/depth/world geometry.
         if getattr(frame, "instance", None) is None:
-            if self.detection_model is None:
-                return {"ok": False, "reason": "detector unavailable"}
+            detector = self.detection_model
+            if detector is None:
+                from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+                detector = get_shared_yoloe_perception(
+                    confidence_threshold=self.parameters.get("detection", {}).get("confidence_threshold", 0.05),
+                    device=self.device,
+                    size="l",
+                )
             depth = frame.depth
             if hasattr(depth, "detach"):
                 depth = depth.detach().cpu().numpy()
-            _, masks, metadata = self.detection_model.predict(rgb, depth=depth, draw_instance_predictions=False)
+            _, masks, metadata = detector.predict(rgb, depth=depth, draw_instance_predictions=False)
             frame = SimpleNamespace(
                 rgb=rgb,
                 depth=depth,
@@ -101,8 +112,10 @@ class LazyGraphController(DynagraphController):
                 instance_classes=metadata["instance_classes"],
                 instance_scores=metadata["instance_scores"],
             )
+        else:
+            detector = self.detection_model
         detections = frame_instances_to_detections(
-            frame, min_depth=vm.min_depth, max_depth=vm.max_depth, detection_model=self.detection_model
+            frame, min_depth=vm.min_depth, max_depth=vm.max_depth, detection_model=detector
         )
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         # Fusion's permissive shared-token matching is not a target verifier:
@@ -141,16 +154,14 @@ class LazyGraphController(DynagraphController):
         valid = (mask == det["instance_id"]) & (depth > vm.min_depth) & (depth < vm.max_depth)
         valid &= np.isfinite(world).all(axis=-1) & np.isfinite(depth)
         self._grounded_query_target = GroundedTarget(handle, obs_id, len(vm.observations), world[valid])
-        return {"ok": True, "instance_id": obs_id, "obs_id": obs_id}
+        return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
 
     def prepare_query_target(self, query: str):
         """Reacquire a unique query reference immediately before manipulation."""
-        from emet.mapping.voxel_localize import localize_text_xyz
-
         query = " ".join(query.lower().split())
         records = [r for r in self.query_candidates.records.values() if r.query == query]
         if not records:
-            xyz, stats = localize_text_xyz(self.voxel_map, query)
+            xyz, stats = self.retrieve_query_candidate(query)
             candidate = self.propose_query_candidate(query, xyz, stats) if xyz is not None else None
             records = [candidate] if candidate is not None else []
         if len(records) != 1:

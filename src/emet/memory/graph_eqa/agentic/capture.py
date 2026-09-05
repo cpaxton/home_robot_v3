@@ -304,10 +304,14 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
         phrases.append(extra)
     out: list[NavHypothesis] = []
     for phrase in phrases:
-        xyz, stats = localize_text_xyz(voxel_map, phrase)
+        if getattr(self.agent, "query_driven_memory", False):
+            xyz, stats = self.agent.retrieve_query_candidate(phrase)
+        else:
+            xyz, stats = localize_text_xyz(voxel_map, phrase)
         if xyz is None:
             continue
-        self._record_voxel_score_hit(phrase, xyz, stats, voxel_map)
+        if not getattr(self.agent, "query_driven_memory", False):
+            self._record_voxel_score_hit(phrase, xyz, stats, voxel_map)
         xy = (float(xyz[0]), float(xyz[1]))
         near = [h for h in out if abs(float(h.xyz[0]) - xy[0]) < 0.05 and abs(float(h.xyz[1]) - xy[1]) < 0.05]
         if near:
