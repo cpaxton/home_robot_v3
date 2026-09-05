@@ -574,6 +574,20 @@ def run_hmeqa_episode(
                 parsed_letter = extract_mcq_letter(formatted_answer, q.choices)
             if not parsed_letter and not formatted_answer:
                 parsed_letter = extract_mcq_letter_from_raw_eqa(raw_eqa, q.choices)
+        elif method == "dynamem":
+            formatted_answer = str(getattr(agent, "_last_eqa_answer", "") or "")
+            model_confident = bool(getattr(agent, "_last_eqa_confidence", False))
+            raw_eqa = json.dumps(
+                {
+                    "reasoning": getattr(agent, "_last_eqa_reasoning", ""),
+                    "answer": formatted_answer,
+                    "confidence": model_confident,
+                    "confidence_reasoning": getattr(agent, "_last_eqa_confidence_reasoning", ""),
+                }
+            )
+            parsed_letter = _semantic_choice_letter(formatted_answer, q.choices)
+            if not parsed_letter and formatted_answer:
+                parsed_letter = extract_mcq_letter(formatted_answer, q.choices)
         predicted = parsed_letter
         if not predicted and grounded_decision is None:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text

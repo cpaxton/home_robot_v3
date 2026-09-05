@@ -163,6 +163,14 @@ def run_eqa_one_iter(self, question, max_movement_step: int = 5):
             [],
         )
 
+    # The classic voxel controller has no GraphEQA memory object for the
+    # benchmark runner to inspect. Preserve its latest structured answer on the
+    # controller so DynaMem rows are scored by the same harness.
+    self._last_eqa_answer = str(answer or "")
+    self._last_eqa_reasoning = str(reasoning or "")
+    self._last_eqa_confidence = bool(confidence)
+    self._last_eqa_confidence_reasoning = str(confidence_reasoning or "")
+
     # Log the texts to rerun visualizer
     confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"
 
