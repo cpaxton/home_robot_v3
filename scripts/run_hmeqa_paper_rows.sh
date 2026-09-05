@@ -13,7 +13,15 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$HOME/runs/emet/hmeqa_paper/${RUN_ID}}"
 ROWS="${ROWS:-dynamem_voxel lazy_arrival dynagraph_bounded_instance dynagraph_no_instance static_no_instance}"
 QIDS="${QIDS:-}"
-HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
+# ``HAB`` may point at a shared Habitat environment while ``ROOT`` remains a
+# detached, frozen worktree.  Prepend this checkout so the evaluator imports
+# the exact source revision recorded by the run manifest.
+HAB="${HAB:-${ROOT}/.venv-habitat/bin/emet-habitat}"
+if [[ ! -x "$HAB" ]]; then
+    echo "missing executable HAB=$HAB" >&2
+    exit 2
+fi
+export PYTHONPATH="${ROOT}/src:${ROOT}/packages/emet_habitat${PYTHONPATH:+:${PYTHONPATH}}"
 mkdir -p "$OUT_DIR"
 
 # This local environment has no Flash-Attn wheel; the paper manifest records
