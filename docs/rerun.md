@@ -36,6 +36,7 @@ The `?url=ws://…` query is required. Do not open `https://app.rerun.io`. Remot
 | `emet capture --backend …` | On unless `--no-rerun` | `--rerun-hold-s` keeps the viewer open after the one-shot map step. |
 | `emet show-memory PATH` | Memory playback | `memory_view=True` blueprint (frame timeline). |
 | `emet show FILE.rrd` | Replay a recording | `--web` for browser. |
+| `scripts/scripted_tamp_pick_place.py` | **Off** | `--rerun` (optional `--rerun-headless`, `--rerun-hold-s`). Web UI `:9090`. |
 | `emet ovmm find` / `full` / `sweep` | **Off** | `--rerun` or `EMET_EVAL_RERUN=1`. One viewer per box. |
 | `emet-habitat run-episode` / `emet habitat run-episode` | **Off** | `--rerun` or `EMET_EVAL_RERUN=1`. Paper H2H stays off unless you opt in. |
 

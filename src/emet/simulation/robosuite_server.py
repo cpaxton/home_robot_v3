@@ -1363,6 +1363,25 @@ class RobosuiteZmqServer(BaseZmqServer):
                 rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
         return self._apply_optional_mujoco_render_flip_ud(rgb)
 
+    def _render_overhead_rgb(self) -> np.ndarray | None:
+        """Nadir FREE-camera RGB (table in −Y of spawn)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        from emet.simulation.chase_camera import apply_chase_frustum_near, build_overhead_camera
+
+        body = str(getattr(self._spec, "base_link_name", None) or "base_link")
+        bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
+        if bid < 0:
+            return None
+        with self._mj_lock:
+            with self._render_lock:
+                renderer = self._get_or_create_primary_renderer()
+                cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
+                renderer.update_scene(self._mjdata, camera=cam)
+                apply_chase_frustum_near(renderer.scene, near=0.05)
+                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        return self._apply_optional_mujoco_render_flip_ud(rgb)
+
     def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """RGB + depth + intrinsics ``K`` matching both buffers (primary resolution)."""
         try:
@@ -2414,7 +2433,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
         # Chase cam tracking base_link (MjvCamera TRACKING) — not a fixed world/MJCF cam.
-        from emet.simulation.env_flags import env_sim_third_person
+        from emet.simulation.env_flags import env_sim_overhead, env_sim_third_person
 
         if env_sim_third_person() and allow_extra_cams:
             try:
@@ -2424,6 +2443,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["third_person_camera"] = "chase:base_link"
             except Exception as e:
                 logger.debug(f"third_person chase RGB failed: {e!r}")
+        if env_sim_overhead() and allow_extra_cams:
+            try:
+                rgb_oh = self._render_overhead_rgb()
+                if rgb_oh is not None:
+                    message["overhead_image"] = compression.to_jpg(rgb_oh)
+            except Exception as e:
+                logger.debug(f"overhead RGB failed: {e!r}")
         message = self._attach_emet_session(message)
         with self._render_lock:
             self._last_full_obs_for_servo = message

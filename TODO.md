@@ -592,7 +592,8 @@ Remaining items are **GPU experiments / product**, not code blockers. Operator t
 - [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
       pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
       That run predates chord-collision + reachable-landmark; re-run below before citing it.
-- [ ] **GPU GT+MCTS battery re-run** (after chord-sample / 12 m landmark cap). Furniture on
+- [x] **GPU GT+MCTS battery re-run** (2026-09-05, three robots × scenes 0–1; 21/24 pass).
+      Furniture on
       the spawn→landmark chord can now fail `navclear`. Queue, do not run inline:
 
       ```
@@ -601,7 +602,25 @@ Remaining items are **GPU experiments / product**, not code blockers. Operator t
         --battery-robots nori --battery-scenes 0,1
       ```
 
-      Then optionally `--battery-robots nori,innate_mars,rby1 --battery-scenes 0,1`.
+      The three-robot run is complete at `logs/tamp_validation_20260905/gt_mcts_battery/`;
+      three Innate Mars navigation rows remain tracked below.
+- [ ] **Investigate Innate Mars nav-goal failures (validation 2026-09-05).** The fresh
+      24-case sim-oracle battery scored **21/24**: all cleanup rows passed, and all Nori/rby1
+      rows passed; Innate Mars failed `navblocked_s0` (cleared 8/8, GT probe blocked, final
+      goal not reached), `navclear_s0` (same sampled cabinet goal not reached with no clutter),
+      and `navblocked_s1` (cleared 8/8 but the GT probe classified the ring as unblocked, so
+      the row is invalid). This isolates a Mars navigation/landmark or scene-validity issue,
+      not manipulation: `n_relocated` is correct in every failed blocked row and there are no
+      episode errors. Reproduce from the saved artifacts at
+      `logs/tamp_validation_20260905/gt_mcts_battery/`; compare Mars `move_base_to` / achieved
+      pose with rby1 on the same scene and fix landmark sampling or Mars teleport/nav frame
+      handling before citing the three-robot battery.
+- [ ] **Investigate Sourccey RoboCasa cabinet pre-place IK failure (validation 2026-09-05).**
+      `scripts/scripted_tamp_pick_place.py` reaches and grasps `obj_main` successfully, then
+      fails at `preplace_ik_failed` for `cab_1` at `[0.5, -0.2, 1.85]`; the table scene and
+      infeasible-grasp ranking both pass. Check cabinet opening/target height and the side
+      approach/standoff for the tall cabinet, then rerun the saved command in
+      `logs/tamp_validation_20260905/sourccey_kitchen.log` before claiming RoboCasa support.
 - [ ] **Fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (scored denominator;
       exclude `skipped_invalid`). Results section is still placeholders.
 - [ ] **Large registry (200 templates)** via `emet jobs`:
@@ -612,13 +631,17 @@ Remaining items are **GPU experiments / product**, not code blockers. Operator t
         --episodes configs/ovmm/clutter_episodes_large.yaml
       ```
 
-- [ ] **rby1 latch paper row**: default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
+- [x] **rby1 latch paper row smoke** (2026-09-05): `ithor_cleanup_s1_bin_n3` relocated
+      3/3 objects with 100% manipulation success. The large-registry paper row remains open.
+      Default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
       large-registry rby1 `latch` episodes. Stretch / mars / nori stay `sim` on floor clutter.
 - [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1 default latch
       `--episode-id ithor_cleanup_s1_bin_n3`. Mars/nori floor objects need `--manip-mode latch`
       (expected weak: Nori IK bottoms out ~0.29 m vs z≈0.02 floor). Unit/offline path already
       passes.
-- [ ] **Integrate TAMP into the agent** — the real product blocker now that MCTS pick/place
+- [x] **Integrate TAMP single-object path smoke** (2026-09-05): the kinematic agent-tools
+      gate passed. **Integrate the multi-object clear chain** remains the real product blocker
+      now that MCTS pick/place
       works. The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
       `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
       exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a

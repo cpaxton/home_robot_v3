@@ -155,6 +155,7 @@ class SourcceyBackend(RobotBackend):
             arm_chain=_sourccey_arm_chain("left"),
             arm_chains={"left": _sourccey_arm_chain("left"), "right": _sourccey_arm_chain("right")},
             advertise_kinematic_manip=True,
+            tamp_approach="side",
             # arm meshes are visual-only in the MJCF; inflate clip erosion + require EE XY inside floor.
             planar_spawn_xy_extra_margin_m=0.25,
             planar_spawn_clip_guard_body_names=(

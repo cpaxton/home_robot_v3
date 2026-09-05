@@ -210,6 +210,113 @@ def test_apply_home_keyframe_preserving_planar_base_with_home_keyframe():
         assert abs(float(data.qpos[qadr]) - val) < 1e-6
 
 
+def test_apply_home_keyframe_preserving_planar_base_keeps_scene_freejoint():
+    """Scene freejoints come first in merged table MJCF; padded robot home must not teleport them."""
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_planar_base
+
+    planar = ("base_x", "base_y", "base_yaw")
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="object1" pos="-0.02 -0.55 0.6">
+          <freejoint/>
+          <geom type="box" size="0.02 0.04 0.04" mass="0.5"/>
+        </body>
+        <body name="base_link">
+          <joint name="base_x" type="slide" axis="1 0 0"/>
+          <joint name="base_y" type="slide" axis="0 1 0"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1"/>
+          <joint name="arm" type="hinge" axis="0 0 1"/>
+          <geom type="sphere" size="0.1" mass="1"/>
+        </body>
+      </worldbody>
+      <actuator>
+        <position name="arm_act" joint="arm" kp="50"/>
+      </actuator>
+      <keyframe>
+        <key name="home" qpos="0 0 0 1 0 0 0 0 0 0 1.2" ctrl="1.2"/>
+      </keyframe>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    oid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object1")
+    before = np.array(data.xpos[oid], dtype=np.float64, copy=True)
+    for i, jname in enumerate(planar):
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        data.qpos[int(model.jnt_qposadr[jid])] = 0.25 + 0.1 * i
+    mujoco.mj_forward(model, data)
+    planar_saved = [
+        float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)])]) for j in planar
+    ]
+    arm_before = float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "arm")])])
+    assert apply_home_keyframe_preserving_planar_base(
+        model,
+        data,
+        planar_joint_names=planar,
+        base_body_name="base_link",
+    )
+    np.testing.assert_allclose(data.xpos[oid], before, atol=1e-6)
+    for jname, val in zip(planar, planar_saved, strict=True):
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - val) < 1e-6
+    arm_after = float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "arm")])])
+    assert abs(arm_after - 1.2) < 1e-5
+    assert abs(arm_after - arm_before) > 0.5
+
+
+def test_apply_home_keyframe_preserving_base_keeps_scene_freejoint():
+    """Free-base home reset must not rewrite other scene freejoints."""
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_base
+
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="object1" pos="-0.02 -0.55 0.6">
+          <freejoint/>
+          <geom type="box" size="0.02 0.04 0.04" mass="0.5"/>
+        </body>
+        <body name="base_link" pos="0.1 0.2 0.0">
+          <freejoint/>
+          <geom type="sphere" size="0.1" mass="1"/>
+          <body name="arm_link" pos="0 0 0.1">
+            <joint name="arm" type="hinge" axis="0 0 1"/>
+            <geom type="capsule" size="0.02 0.05" mass="0.2"/>
+          </body>
+        </body>
+      </worldbody>
+      <actuator>
+        <position name="arm_act" joint="arm" kp="50"/>
+      </actuator>
+      <keyframe>
+        <key name="home" qpos="0 0 0 1 0 0 0 0 0 0 1 0 0 0 1.2" ctrl="1.2"/>
+      </keyframe>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    oid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object1")
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    obj_before = np.array(data.xpos[oid], dtype=np.float64, copy=True)
+    baddrs = None
+    for j in range(model.njnt):
+        if int(model.jnt_bodyid[j]) == bid and int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_FREE):
+            baddrs = int(model.jnt_qposadr[j])
+            break
+    assert baddrs is not None
+    data.qpos[baddrs] += 0.3
+    data.qpos[baddrs + 1] -= 0.1
+    mujoco.mj_forward(model, data)
+    base_expected = np.array(data.qpos[baddrs : baddrs + 7], copy=True)
+    assert apply_home_keyframe_preserving_base(model, data, base_body_name="base_link")
+    np.testing.assert_allclose(data.xpos[oid], obj_before, atol=1e-5)
+    np.testing.assert_allclose(data.qpos[baddrs : baddrs + 7], base_expected, atol=1e-6)
+    arm_q = float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "arm")])])
+    assert abs(arm_q - 1.2) < 1e-5
+
+
 def test_resolve_robot_home_keyframe_prefers_robot_specific_name():
     from emet.robots.xlerobot import XLeRobotBackend
     from emet.simulation.robosuite_load_utils import (

@@ -45,6 +45,7 @@ def test_sourccey_mjcf_joints_and_actuators():
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname) >= 0
     # planar base + lift
     assert spec.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
+    assert spec.tamp_approach == "side"
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "lift") >= 0
 
 
@@ -286,3 +287,39 @@ def test_sourccey_create_model():
 
     model = get_robot_backend("sourccey").create_model()
     assert model is not None and model.get_dof() == 16
+
+
+def test_sourccey_merged_table_home_keeps_object_freejoints():
+    """Scene include-first + sourccey_home must not drop the table cube/cylinder to the origin."""
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_planar_base
+
+    spec = SourcceyBackend().get_spec()
+    model = _load_default_scene_with_robot("sourccey")
+    assert model is not None
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    o1 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object1")
+    o2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object2")
+    assert o1 >= 0 and o2 >= 0
+    obj1_before = np.array(data.xpos[o1], dtype=np.float64, copy=True)
+    obj2_before = np.array(data.xpos[o2], dtype=np.float64, copy=True)
+    np.testing.assert_allclose(obj1_before, [-0.02, -0.55, 0.6], atol=1e-4)
+    np.testing.assert_allclose(obj2_before, [0.08, -0.55, 0.6], atol=1e-4)
+    pan_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_shoulder_pan")
+    pan_adr = int(model.jnt_qposadr[pan_jid])
+    pan_before = float(data.qpos[pan_adr])
+    planar = spec.planar_base_joint_names
+    assert planar is not None
+    assert apply_home_keyframe_preserving_planar_base(
+        model,
+        data,
+        planar_joint_names=planar,
+        base_body_name=spec.base_link_name,
+        spec=spec,
+    )
+    np.testing.assert_allclose(data.xpos[o1], obj1_before, atol=1e-4)
+    np.testing.assert_allclose(data.xpos[o2], obj2_before, atol=1e-4)
+    pan_after = float(data.qpos[pan_adr])
+    assert abs(pan_after - pan_before) > 0.2
+    assert abs(pan_after - 0.6) < 0.05

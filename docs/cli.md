@@ -205,6 +205,8 @@ uv run emet grasp-oracle --bind tcp://127.0.0.1:5558
 
 See [motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot).
 
+Scripted TAMP pick-place (no LLM): `scripts/scripted_tamp_pick_place.py --start-sim` — pass **`--rerun`** for the web viewer (`:9090`). Sourccey table: `--sim configs/sim/default_table_sourccey.yaml`. **`--record-mp4`** writes a kitchen-orbit chase MP4 plus clean stills (chase / overhead / head / wrist POV) under `--figures-dir/stills/`. See [motion_planning.md](motion_planning.md).
+
 ---
 
 ### `emet run <app> [options]`
