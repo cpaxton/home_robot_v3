@@ -29,6 +29,12 @@ def _patch_images(self, images: list[Image.Image], patch_size=(480, 640), gap=5)
     """
     Patch a list of PIL Images into a numpy array, used for dicrod bot
     """
+    if not images:
+        # Some valid queries have no retrieved evidence.  Keep the classic
+        # controller's return type image-shaped instead of constructing a
+        # negative-width canvas from ``gap * (n_images - 1)``.
+        return np.zeros((patch_size[1], patch_size[0], 3), dtype=np.uint8)
+
     # Resize all images to the same patch size
     images = [img.resize(patch_size) for img in images]
 
