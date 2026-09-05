@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 
 import numpy as np
 import torch
@@ -153,7 +154,8 @@ def run_eqa_one_iter(self, question, max_movement_step: int = 5):
             confidence,
             answer,
         )
-    except:
+    except Exception:
+        logger.error(f"Voxel EQA query failed:\n{traceback.format_exc()}")
         reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
             "Exception happens in LLM querying!",
             "Unknown",
