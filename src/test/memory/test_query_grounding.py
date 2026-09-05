@@ -40,9 +40,9 @@ def test_retrieval_is_not_an_instance_and_fresh_mask_promotes():
     assert not agent.graph_memory.get_nodes()
     result = agent.ground_query_candidate(candidate.handle, after_observation=1)
     assert result["ok"], result
-    node = next(n for n in agent.graph_memory.get_nodes() if n.node_id == result["instance_id"])
+    node = next(n for n in agent.graph_memory.get_nodes() if n.obs_id == result["instance_id"] and n.countable_instance)
     assert np.allclose(node.xyz, [1, 1, 1])  # mask geometry, never retrieval anchor
-    assert candidate.require_grounding(2) == node.node_id
+    assert candidate.require_grounding(2) == node.obs_id
     agent.detection_model.predict.assert_called_once()
     assert not agent.ground_query_candidate(candidate.handle, after_observation=2)["ok"]
     with pytest.raises(ValueError, match="fresh"):
@@ -112,3 +112,19 @@ def test_shared_executor_reuses_provenance_handles(question):
     assert first[0].obs_id == second[0].obs_id
     assert first[0].obs_id in grounding_agent.query_candidates.records
     assert not grounding_agent.graph_memory.get_nodes()
+
+
+def test_retiring_object_does_not_reassign_surviving_candidate_identity():
+    agent = controller()
+    gm = agent.graph_memory
+    first = gm.add_observation(np.zeros((8, 8, 3), dtype=np.uint8), np.array([1, 1, 1]), ["mug"])
+    second = gm.add_observation(np.zeros((8, 8, 3), dtype=np.uint8), np.array([5, 5, 1]), ["table"])
+    mug = agent.query_candidates.propose("mug", 1, 0, [1, 1, 1])
+    table = agent.query_candidates.propose("table", 2, 0, [5, 5, 1])
+    agent.query_candidates.ground(mug.handle, instance_id=first, observation_revision=2)
+    agent.query_candidates.ground(table.handle, instance_id=second, observation_revision=2)
+    assert gm.retire_object_observations({first}) == 1
+    with pytest.raises(ValueError, match="fresh"):
+        mug.require_grounding(2)
+    assert table.require_grounding(2) == second
+    assert any(n.obs_id == second for n in gm.get_nodes())

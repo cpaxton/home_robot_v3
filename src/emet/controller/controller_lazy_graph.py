@@ -64,9 +64,11 @@ class LazyGraphController(DynagraphController):
             filter_detections_for_graph_admission,
             frame_instances_to_detections,
             frame_rgb_hwc_uint8,
+            frame_world_xyz_hw3,
         )
 
         record = self.query_candidates.records[handle]
+        self._grounded_query_target = None
         vm = self.voxel_map
         # Failed reacquisition must revoke even a previously grounded reference.
         record.grounded_revision = None
@@ -124,8 +126,42 @@ class LazyGraphController(DynagraphController):
         nodes = [n for n in self.graph_memory.get_nodes() if n.obs_id == obs_id and n.countable_instance]
         if len(nodes) != 1:
             return {"ok": False, "reason": "instance identity unresolved"}
-        self.query_candidates.ground(handle, instance_id=nodes[0].node_id, observation_revision=len(vm.observations))
-        return {"ok": True, "instance_id": nodes[0].node_id, "obs_id": obs_id}
+        # Graph node indices are renumbered by maintenance. The object's stable
+        # observation ID is the query identity; never persist a node-list index.
+        self.query_candidates.ground(handle, instance_id=obs_id, observation_revision=len(vm.observations))
+        from emet.memory.grounded_target import GroundedTarget
+
+        world = frame_world_xyz_hw3(frame).detach().cpu().numpy()
+        mask = frame.instance
+        depth = frame.depth
+        if hasattr(mask, "detach"):
+            mask = mask.detach().cpu().numpy()
+        if hasattr(depth, "detach"):
+            depth = depth.detach().cpu().numpy()
+        valid = (mask == det["instance_id"]) & (depth > vm.min_depth) & (depth < vm.max_depth)
+        valid &= np.isfinite(world).all(axis=-1) & np.isfinite(depth)
+        self._grounded_query_target = GroundedTarget(handle, obs_id, len(vm.observations), world[valid])
+        return {"ok": True, "instance_id": obs_id, "obs_id": obs_id}
+
+    def prepare_query_target(self, query: str):
+        """Reacquire a unique query reference immediately before manipulation."""
+        from emet.mapping.voxel_localize import localize_text_xyz
+
+        query = " ".join(query.lower().split())
+        records = [r for r in self.query_candidates.records.values() if r.query == query]
+        if not records:
+            xyz, stats = localize_text_xyz(self.voxel_map, query)
+            candidate = self.propose_query_candidate(query, xyz, stats) if xyz is not None else None
+            records = [candidate] if candidate is not None else []
+        if len(records) != 1:
+            raise ValueError("Manipulation requires a unique query candidate")
+        before = len(self.voxel_map.observations)
+        self.update(full_perception=True)
+        result = self.ground_query_candidate(records[0].handle, after_observation=before)
+        if not result["ok"]:
+            raise ValueError(result["reason"])
+        records[0].require_grounding(len(self.voxel_map.observations))
+        return self._grounded_query_target
 
     def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
         status, object_xyz = super().execute_action(text)

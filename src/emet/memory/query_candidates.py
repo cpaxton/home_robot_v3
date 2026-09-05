@@ -21,6 +21,7 @@ class QueryCandidate:
     source_revision: int
     xyz: list[float]
     retrieval_score: float | None = None
+    # Stable object-observation identity, not GraphNode.node_id (renumbered by maintenance).
     instance_id: int | None = None
     grounded_revision: int | None = None
     invalidation_reason: str = ""
