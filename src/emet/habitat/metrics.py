@@ -53,6 +53,7 @@ class EpisodeMetrics:
     planning_steps: int
     success: bool
     parsed_answer_letter: str = ""
+    query_driven_memory: bool = False
     model_confident: bool = False
     raw_eqa_output: str = ""
     # Debug / reproducibility (full raw EQA also in per-episode bundle ``raw_eqa.txt``).
@@ -220,11 +221,7 @@ def choices_are_count_mcq(choices: list[str] | None) -> bool:
             "5",
         }
     )
-    hits = sum(
-        1
-        for c in real
-        if c in count_exact or (re.fullmatch(r"\d+", c) is not None and 0 <= int(c) <= 20)
-    )
+    hits = sum(1 for c in real if c in count_exact or (re.fullmatch(r"\d+", c) is not None and 0 <= int(c) <= 20))
     return hits >= max(2, (len(real) + 1) // 2)
 
 

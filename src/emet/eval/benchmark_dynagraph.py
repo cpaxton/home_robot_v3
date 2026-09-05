@@ -47,6 +47,19 @@ BenchmarkHarnessName = Literal[
 DEFAULT_DYNAGRAPH_BENCHMARK_YAML = "configs/benchmarks/dynagraph.yaml"
 
 
+def enable_query_driven_memory(parameters: Parameters, backend: str) -> None:
+    """Enable the same experimental lazy policy for EQA and OVMM after profiles."""
+    if normalize_benchmark_backend(backend) != "lazy_graph":
+        raise ValueError("query-driven memory requires the lazy_graph backend")
+    fusion = dict(parameters.get("graph_object_fusion", {}) or {})
+    if not fusion.get("enabled") or not fusion.get("use_instance_nodes", True):
+        raise ValueError("query-driven memory requires enabled instance admission/fusion")
+    parameters.set("query_driven_memory", True)
+    eqa = dict(parameters.get("eqa", {}) or {})
+    eqa["agentic_verify"] = True
+    parameters.set("eqa", eqa)
+
+
 @lru_cache(maxsize=1)
 def load_dynagraph_benchmark_yaml(path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML) -> dict[str, Any]:
     full = Path(resolve_config_yaml_path(path))

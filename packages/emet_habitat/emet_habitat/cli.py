@@ -246,6 +246,7 @@ def _ovmm_find_cli_options(fn):
 
 
 @main.command("run-episode")
+@click.option("--query-driven-memory", is_flag=True, help="Experimental lazy query grounding; enables agentic EQA.")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
 @click.option(
@@ -297,6 +298,7 @@ def _ovmm_find_cli_options(fn):
 @_dynagraph_harness_cli_options
 @_diagnostics_cli_options
 def run_episode(
+    query_driven_memory: bool,
     dataset: str,
     question_id: int,
     method: str,
@@ -343,6 +345,7 @@ def run_episode(
 
     try:
         metrics = run_hmeqa_episode(
+            query_driven_memory=query_driven_memory,
             question_id=question_id,
             method=method,
             mock_llm=mock_llm,
@@ -639,7 +642,9 @@ def compare_batch(
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write JSON metrics")
 @_ovmm_find_cli_options
+@click.option("--query-driven-memory", is_flag=True, help="Experimental lazy query grounding; requires agentic find.")
 def run_ovmm_find_episode(
+    query_driven_memory: bool,
     episodes: Path | None,
     episode_id: str,
     backend: str,
@@ -668,6 +673,7 @@ def run_ovmm_find_episode(
         raise click.ClickException(f"Unknown episode_id {episode_id!r} in {ep_path}")
 
     run_cfg = FindPhaseRunConfig(
+        query_driven_memory=query_driven_memory,
         backend=backend,  # type: ignore[arg-type]
         merge_xy_m=merge_xy_m,
         staleness_horizon=staleness_horizon,
