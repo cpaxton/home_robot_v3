@@ -40,6 +40,15 @@ def test_env_sim_nav_debug_truthy(monkeypatch):
     assert ef.env_sim_nav_debug() is False
 
 
+def test_env_sim_overhead_truthy(monkeypatch):
+    import emet.simulation.env_flags as ef
+
+    monkeypatch.delenv("EMET_SIM_OVERHEAD", raising=False)
+    assert ef.env_sim_overhead() is False
+    monkeypatch.setenv("EMET_SIM_OVERHEAD", "1")
+    assert ef.env_sim_overhead() is True
+
+
 def test_warn_sim_nav_env_flags_once(monkeypatch, capsys):
     import emet.simulation.env_flags as ef
 

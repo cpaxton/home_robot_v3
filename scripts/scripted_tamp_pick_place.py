@@ -13,6 +13,16 @@ Example::
     uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
     --sim configs/sim/default_table_rby1.yaml \\
     --object \"red cylinder\" --receptacle \"blue cube\" --cpu-only
+
+  # Sourccey table (z≈0.6 m). ``--rerun`` opens the web viewer (hold 30s after the plan).
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
+    --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --rerun
+  # Same + kitchen-orbit MP4 and stills (chase / overhead / head / wrist) under --figures-dir/stills/
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
+    --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --record-mp4
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \\
+    --sim configs/sim/robocasa_pick_place_sourccey.yaml --object obj --receptacle cab \\
+    --object-gt-body obj_main --manip-mode kinematic --skip-oracle --rerun
 """
 
 from __future__ import annotations
@@ -30,6 +40,17 @@ from typing import Any
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
+RERUN_URL = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
+
+
+def _hold_rerun(args: argparse.Namespace) -> None:
+    if not args.rerun:
+        return
+    hold = float(args.rerun_hold_s)
+    if hold <= 0:
+        return
+    print(f"Holding Rerun for {hold:.0f}s — {RERUN_URL}", flush=True)
+    time.sleep(hold)
 
 
 def _placement_pos(robot: Any, body: str) -> np.ndarray | None:
@@ -59,6 +80,7 @@ def _find_graspable_body(
     object_query: str | None,
     asset_id: str | None,
     oracle_client: Any,
+    object_gt_body: str | None = None,
 ) -> tuple[str, dict[str, Any], list[Any]]:
     from emet.eval.ovmm_find_phase import bodies_matching_category
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
@@ -67,8 +89,14 @@ def _find_graspable_body(
 
     pl = read_sim_object_placements(robot.get_emet_session()) or {}
     grasps_dir = default_grasps_dir()
-    if object_query:
+    if object_gt_body:
+        if object_gt_body not in pl:
+            raise RuntimeError(f"object_gt_body={object_gt_body!r} not in placements={list(pl.keys())[:20]}")
+        candidates = [object_gt_body]
+    elif object_query:
         candidates = bodies_matching_category(pl, object_query) or []
+        if object_query in pl and object_query not in candidates:
+            candidates.insert(0, object_query)
     else:
         candidates = list(pl.keys())
     for body in candidates:
@@ -76,10 +104,11 @@ def _find_graspable_body(
         cat = str(info.get("cat") or "")
         aid = asset_id or resolve_asset_id_against_grasps_dir(body, grasps_dir, category=cat)
         if not aid:
-            # Table scene objects often lack Molmo assets — synthesize top-down grasp at COM.
-            T = _T_from_placement(info)
+            # Table scene objects often lack Molmo assets — synthesize a top-down grasp at COM.
+            from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
             from emet.perception.grasps.oracle import GraspPose
 
+            T = top_down_grasp_T(info["pos"])
             synth = GraspPose(T_world=T, score=0.5, asset_id="synthetic_com", gripper="droid")
             return body, info, [synth]
         T = _T_from_placement(info)
@@ -100,6 +129,11 @@ def main() -> int:
     parser.add_argument("--robot", type=str, default=None)
     parser.add_argument("--port-offset", type=int, default=None)
     parser.add_argument("--object", type=str, default="red cylinder")
+    parser.add_argument(
+        "--object-gt-body",
+        default=None,
+        help="Pin the GT body id (e.g. obj_main for RoboCasa PickPlace). Category query is skipped.",
+    )
     parser.add_argument("--receptacle", type=str, default="blue cube")
     parser.add_argument("--asset-id", type=str, default=None)
     parser.add_argument(
@@ -125,10 +159,26 @@ def main() -> int:
     parser.add_argument(
         "--record-mp4",
         action="store_true",
-        help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1 on the sim).",
+        help="Record kitchen-orbit chase MP4 + clean stills (chase, overhead, head/wrist POV) per TAMP step.",
     )
     parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument("--verbose-sim", action="store_true")
+    parser.add_argument(
+        "--rerun",
+        action="store_true",
+        help="Live Rerun of the ZMQ client (MJCF robot + cameras). Web UI :9090.",
+    )
+    parser.add_argument(
+        "--rerun-headless",
+        action="store_true",
+        help="With --rerun: do not auto-open a browser (still serves :9090 / :9877).",
+    )
+    parser.add_argument(
+        "--rerun-hold-s",
+        type=float,
+        default=30.0,
+        help="Seconds to keep Rerun up after the plan (default 30; only with --rerun).",
+    )
     args = parser.parse_args()
 
     os.chdir(REPO)
@@ -136,6 +186,7 @@ def main() -> int:
 
     if args.record_mp4:
         os.environ["EMET_SIM_THIRD_PERSON"] = "1"
+        os.environ["EMET_SIM_OVERHEAD"] = "1"
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.smoke_grasps import plant_mixed_grasp_poses
@@ -157,6 +208,7 @@ def main() -> int:
     try:
         if not args.start_sim:
             raise SystemExit("this smoke requires --start-sim")
+        os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
 
         if not args.skip_oracle:
             from emet.perception.grasps.zmq_client import GraspOracleClient
@@ -186,7 +238,12 @@ def main() -> int:
             cwd=REPO,
             server_stderr=sys.stderr if args.verbose_sim else None,
         )
-        robot = connect_benchmark_robot(sim_cfg, sim_handle.port_offset)
+        robot = connect_benchmark_robot(
+            sim_cfg,
+            sim_handle.port_offset,
+            enable_rerun_server=bool(args.rerun),
+            rerun_headless=bool(args.rerun_headless),
+        )
         for _ in range(80):
             sess = robot.get_emet_session()
             if isinstance(sess, dict) and sess.get("is_simulation"):
@@ -195,6 +252,12 @@ def main() -> int:
 
         mode = resolve_manip_mode_for_robot(robot, manip_mode=args.manip_mode)
         print(f"manip_mode={mode!r}", flush=True)
+        if args.rerun:
+            print(
+                "Rerun: http://127.0.0.1:9090?url=ws://127.0.0.1:9877  "
+                "(MJCF robot + cameras; EE path under world/manip/ee_path)",
+                flush=True,
+            )
 
         class _SynthClient:
             def predict(self, **kwargs):
@@ -206,6 +269,7 @@ def main() -> int:
             object_query=object_query,
             asset_id=args.asset_id,
             oracle_client=client or _SynthClient(),
+            object_gt_body=args.object_gt_body,
         )
         if args.plant_infeasible_grasps:
             # Decoys first — ranking must not pick index 0.
@@ -224,8 +288,9 @@ def main() -> int:
         base_path = [np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(3)]
 
         exe = None
+        viz = robot._rerun if args.rerun else None
         if mode == "kinematic":
-            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
+            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05, visualizer=viz)
 
         plan = plan_pick_place(
             robot,
@@ -265,7 +330,7 @@ def main() -> int:
             return 1
 
         if exe is None and mode == "kinematic":
-            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
+            exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05, visualizer=viz)
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         fig_dir = Path(args.figures_dir) if args.figures_dir else Path.home() / "runs/emet/tamp_pick_place" / stamp
@@ -281,12 +346,20 @@ def main() -> int:
                 fps=float(args.video_fps),
                 title="tamp pick-place",
             )
+            video.stills_dir = fig_dir
             video.set_status(
                 "plan",
                 goal=f"{body} → {recep_body}",
                 detail=f"chosen_grasp={plan.chosen_grasp_index}",
             )
             video.start()
+            # One extra-cam full obs after the recorder thread starts.
+            time.sleep(0.5)
+            dumped = video.dump_paper_stills("start")
+            if dumped:
+                print(f"stills start -> {', '.join(sorted(str(p) for p in dumped.values()))}", flush=True)
+            else:
+                print("WARN: no paper stills at start (chase/overhead missing from obs?)", file=sys.stderr, flush=True)
 
         plan = execute_task_plan(
             robot,
@@ -297,6 +370,11 @@ def main() -> int:
             video_recorder=video,
         )
         if video is not None:
+            dumped = video.dump_paper_stills("final")
+            if dumped:
+                print(f"stills final -> {', '.join(sorted(str(p) for p in dumped.values()))}", flush=True)
+            else:
+                print("WARN: no paper stills at final", file=sys.stderr, flush=True)
             mp4 = video.stop()
             if mp4 is not None:
                 print(f"mp4 -> {mp4}", flush=True)
@@ -328,10 +406,10 @@ def main() -> int:
             object_xy=np.asarray(info["pos"], dtype=np.float64).reshape(3)[:2],
             receptacle_xy=recep_xy,
             grasp_xy=grasp_xy,
-            planned_ee_xyz=getattr(exe, "last_ee_path_world", None) if exe else None,
-            joint_waypoints=getattr(exe, "last_plan_waypoints", None) if exe else None,
-            joint_names=list(getattr(exe, "joint_names", ())) if exe else None,
-            targets=getattr(exe, "last_targets", None) if exe else None,
+            planned_ee_xyz=exe.last_ee_path_world if exe else None,
+            joint_waypoints=exe.last_plan_waypoints if exe else None,
+            joint_names=list(exe.joint_names) if exe else None,
+            targets=exe.last_targets if exe else None,
         )
         print(f"figures -> {fig_dir}")
         for k, p in paths.items():
@@ -350,6 +428,10 @@ def main() -> int:
             except Exception:
                 pass
         if robot is not None:
+            try:
+                _hold_rerun(args)
+            except KeyboardInterrupt:
+                print("Rerun hold interrupted", flush=True)
             try:
                 robot.stop()
             except Exception:

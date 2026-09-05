@@ -58,3 +58,29 @@ def test_build_base_chase_camera_lookat_and_behind_azimuth() -> None:
     mujoco.mj_forward(model, data)
     cam2 = build_base_chase_camera(model, data, bid, distance=3.5, azimuth_offset_deg=0.0, lookat_z=0.9)
     assert abs(cam2.azimuth - 90.0) < 1e-3
+
+
+def test_build_overhead_camera_nadir() -> None:
+    import mujoco
+
+    from emet.simulation.chase_camera import build_overhead_camera
+
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="base_link" pos="0.08 0.0 0.0">
+          <freejoint/>
+          <geom type="box" size="0.2 0.2 0.1"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    cam = build_overhead_camera(model, data, bid, distance=2.4, lookat_y_offset=-0.4, lookat_z=0.4)
+    assert cam.type == mujoco.mjtCamera.mjCAMERA_FREE
+    np.testing.assert_allclose(cam.lookat, [0.08, -0.4, 0.4], atol=1e-6)
+    assert abs(cam.elevation - (-90.0)) < 1e-9
+    assert abs(cam.distance - 2.4) < 1e-9

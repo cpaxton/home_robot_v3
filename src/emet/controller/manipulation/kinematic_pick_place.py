@@ -13,6 +13,7 @@ approach standoff but not enforced at the EE.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from collections.abc import Sequence
@@ -23,6 +24,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
 from emet.motion.aabb_arm_collision import AabbArmCollisionChecker
 from emet.motion.arm_manip_profile import (
     ArmManipProfile,
@@ -564,35 +566,37 @@ class KinematicPickPlaceExecutor:
         standoff_m: float = 0.55,
         yaw: float | None = None,
     ) -> None:
-        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach."""
-        import os
+        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
 
+        ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
+        :func:`~emet.controller.task.tamp.task_search.approach_pose_for_object_xy`.
+        ``front`` (Galaxea / rby1) stands off radially from the current base.
+        """
         os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
         xy = np.asarray(target_xy, dtype=np.float64).reshape(2)
-        # Stand off along the vector from target toward current base (fallback +Y).
-        cur = self._world_base_xyt()
-        if cur is not None:
-            delta = np.asarray(cur[:2], dtype=np.float64) - xy
-            n = float(np.linalg.norm(delta))
-            if n > 1e-3:
-                delta = delta / n
+        spec = getattr(self.robot, "_spec", None)
+        mode = str(spec.tamp_approach or "front").lower().strip() if spec is not None else "front"
+        if mode == "side":
+            approach = approach_pose_for_object_xy(xy, standoff=standoff_m, mode="side", arm=self.arm)
+            if yaw is not None:
+                approach = np.array([approach[0], approach[1], float(yaw)], dtype=np.float64)
+        else:
+            cur = self._world_base_xyt()
+            if cur is not None:
+                delta = np.asarray(cur[:2], dtype=np.float64) - xy
+                n = float(np.linalg.norm(delta))
+                delta = delta / n if n > 1e-3 else np.array([0.0, 1.0], dtype=np.float64)
             else:
                 delta = np.array([0.0, 1.0], dtype=np.float64)
-        else:
-            delta = np.array([0.0, 1.0], dtype=np.float64)
-        approach_xy = xy + float(standoff_m) * delta
-        if yaw is None:
-            # Face the receptacle from the approach pose.
-            face = xy - approach_xy
-            th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
-        else:
-            th = float(yaw)
-        approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
-        move = getattr(self.robot, "move_base_to", None)
-        if not callable(move):
-            return
+            approach_xy = xy + float(standoff_m) * delta
+            if yaw is None:
+                face = xy - approach_xy
+                th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
+            else:
+                th = float(yaw)
+            approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
         logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
-        move(approach, blocking=True, world_frame=True)
+        self.robot.move_base_to(approach, blocking=True, world_frame=True)
         self._sleep(0.4)
 
     def place_only(
@@ -641,7 +645,7 @@ class KinematicPickPlaceExecutor:
             self._sleep(0.15)
         place = recep_pos + np.array([0.0, 0.0, self.place_z_offset_m])
         preplace = place + np.array([0.0, 0.0, 0.12])
-        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos, "recep_body": recep_body}
+        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")
