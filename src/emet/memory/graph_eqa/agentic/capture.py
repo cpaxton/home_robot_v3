@@ -304,10 +304,14 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
         phrases.append(extra)
     out: list[NavHypothesis] = []
     for phrase in phrases:
-        xyz, stats = localize_text_xyz(voxel_map, phrase)
+        if getattr(self.agent, "query_driven_memory", False) is True:
+            xyz, stats = self.agent.retrieve_query_candidate(phrase)
+        else:
+            xyz, stats = localize_text_xyz(voxel_map, phrase)
         if xyz is None:
             continue
-        self._record_voxel_score_hit(phrase, xyz, stats, voxel_map)
+        if getattr(self.agent, "query_driven_memory", False) is not True:
+            self._record_voxel_score_hit(phrase, xyz, stats, voxel_map)
         xy = (float(xyz[0]), float(xyz[1]))
         near = [h for h in out if abs(float(h.xyz[0]) - xy[0]) < 0.05 and abs(float(h.xyz[1]) - xy[1]) < 0.05]
         if near:
@@ -331,10 +335,16 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
         score = 400.0 + (float(conf) if conf is not None else 0.0)
         if stats.get("yoloe_hit"):
             score += 50.0
+        handle = voxel_proposal_id(len(out))
+        if getattr(self.agent, "query_driven_memory", False) is True:
+            candidate = self.agent.propose_query_candidate(phrase, xyz, stats)
+            if candidate is None:
+                continue
+            handle = candidate.handle
         out.append(
             NavHypothesis(
                 phrase=phrase,
-                obs_id=voxel_proposal_id(len(out)),
+                obs_id=handle,
                 xyz=xyz,
                 score=score,
                 source="voxel",

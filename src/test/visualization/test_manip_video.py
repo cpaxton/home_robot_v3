@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
-from emet.visualization.manip_video import overlay_manip_frame
+from emet.visualization.manip_video import overlay_manip_frame, save_paper_stills
 
 
 def test_overlay_manip_frame_banners(tmp_path: Path):
@@ -27,6 +28,29 @@ def test_overlay_manip_frame_banners(tmp_path: Path):
     assert out.dtype == np.uint8
     # Top banner darkened / text drawn — not identical to flat fill.
     assert not np.array_equal(out[10, 10], rgb[10, 10]) or out[10, 160, 0] != 40
+
+
+def test_save_paper_stills_writes_named_pngs(tmp_path: Path):
+    rgb = np.zeros((48, 64, 3), dtype=np.uint8)
+    rgb[:, :] = (10, 20, 30)
+    wrist = np.zeros((32, 40, 3), dtype=np.uint8)
+    wrist[:, :] = (200, 10, 10)
+    overhead = np.zeros((40, 40, 3), dtype=np.uint8)
+    overhead[:, :] = (5, 80, 5)
+    robot = SimpleNamespace(
+        get_observation=lambda: SimpleNamespace(
+            rgb=rgb,
+            head_rgb_right=None,
+            ee_rgb=wrist,
+            third_person_image=rgb,
+            overhead_image=overhead,
+        ),
+    )
+    written = save_paper_stills(robot, tmp_path, "grasp")
+    assert set(written) >= {"pov_front", "pov_wrist", "third_person", "topdown"}
+    for p in written.values():
+        assert p.is_file()
+        assert p.stat().st_size > 32
 
 
 def test_write_overlay_mp4(tmp_path: Path):

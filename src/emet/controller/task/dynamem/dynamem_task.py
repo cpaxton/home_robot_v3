@@ -240,6 +240,99 @@ class DynamemTaskExecutor:
         get_vm = getattr(agent, "get_voxel_map", None)
         return get_vm() if callable(get_vm) else getattr(agent, "voxel_map", None)
 
+    def _query_manipulation(self, query: str, *, place: bool) -> bool:
+        """Learned geometry handoff; never dispatch to simulator oracle adapters."""
+        import torch
+
+        from emet.controller.operations.place_object import PlaceObjectOperation
+        from emet.mapping.instance import Instance
+
+        self.last_query_manipulation = {
+            "ok": False,
+            "query": query,
+            "action": "place" if place else "pick",
+            "physical_success_verified": False,
+        }
+        if not self.visual_servo or self.grasp_object is None:
+            self.last_query_manipulation["reason"] = "query manipulation requires visual servo adapter"
+            return False
+        held = getattr(self, "_held_query_instance", None)
+        if (place and held is None) or (not place and held is not None):
+            self.last_query_manipulation["reason"] = "no held object" if place else "already holding an object"
+            return False
+        target = None
+        attempted = False
+        ok = False
+        previous_object = self.agent.current_object
+        previous_receptacle = self.agent.current_receptacle
+        try:
+            target = self.agent.prepare_query_target(query)
+            self.last_query_manipulation.update(candidate_id=target.candidate_id, instance_id=target.instance_id)
+            instance = Instance(
+                global_id=target.instance_id,
+                name=query,
+                point_cloud=torch.as_tensor(np.array(target.points, copy=True), dtype=torch.float32),
+            )
+            self.agent.query_candidates.records[target.candidate_id].require_grounding(
+                len(self.agent.voxel_map.observations)
+            )
+            if place:
+                self.agent.current_object = held
+                self.agent.current_receptacle = instance
+                operation = PlaceObjectOperation("place_grounded_query", self.agent)
+                attempted = True
+                ok = bool(operation())
+            else:
+                self.agent.current_object = instance
+                operation = self.grasp_object
+                attempted = True
+                ok = bool(
+                    operation(
+                        target_object=query,
+                        object_xyz=target.xyz,
+                        grounded_target=target,
+                        match_method="class",
+                        show_object_to_grasp=False,
+                        show_servo_gui=False,
+                        delete_object_after_grasp=False,
+                        try_open_loop=False,
+                    )
+                )
+            if ok:
+                self._held_query_instance = None if place else instance
+            # This reports the existing adapter's execution outcome, not an
+            # independent physical success measurement or simulator GT score.
+            self.last_query_manipulation.update(ok=ok, reason="executed" if ok else "operation failed")
+        except (ValueError, RuntimeError) as exc:
+            self.last_query_manipulation["reason"] = str(exc)
+            logger.warning(f"Query manipulation rejected: {exc}")
+            ok = False
+        finally:
+            self.agent.current_object = previous_object
+            self.agent.current_receptacle = previous_receptacle
+            if attempted:
+                # A failed or interrupted operation may still have moved an object.
+                ids = {target.instance_id}
+                if held is not None:
+                    ids.add(held.global_id)
+                for instance_id in ids:
+                    self.agent.query_candidates.invalidate_instance(instance_id, "manipulation attempted")
+                # Receptacle is not the moved object during placement.
+                moved_ids = {held.global_id} if place else {target.instance_id}
+                self.agent.graph_memory.retire_object_observations(moved_ids)
+                before = len(self.agent.voxel_map.observations)
+                try:
+                    self.agent.update(full_perception=True)
+                    refreshed = len(self.agent.voxel_map.observations) > before
+                except Exception as exc:
+                    logger.warning(f"Post-manipulation observation failed: {exc}")
+                    refreshed = False
+                self.last_query_manipulation["observed_after_action"] = refreshed
+                if not refreshed:
+                    ok = False
+                    self.last_query_manipulation.update(ok=False, reason="post-action observation missing")
+        return ok
+
     def _pickup(
         self,
         target_object: str,
@@ -252,6 +345,8 @@ class DynamemTaskExecutor:
         OK-Robot path propagates ``agent.manipulate`` (False when grasp detection fails
         or the operator declines confirmation).
         """
+        if getattr(self.agent, "query_driven_memory", False):
+            return self._query_manipulation(target_object, place=False)
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
             prefer_sim_teleport_manip,
@@ -351,6 +446,8 @@ class DynamemTaskExecutor:
 
         Stretch path propagates ``agent.place`` (False when receptacle detection fails).
         """
+        if getattr(self.agent, "query_driven_memory", False):
+            return self._query_manipulation(target_receptacle, place=True)
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
             prefer_sim_teleport_manip,

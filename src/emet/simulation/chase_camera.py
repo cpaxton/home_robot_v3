@@ -2,7 +2,7 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Third-person chase camera for MuJoCo sim recording.
+"""Third-person chase and nadir overhead cameras for MuJoCo sim recording.
 
 ``mjCAMERA_TRACKING`` pins lookat to the body origin (often floor-level on
 ``base_link``). With a behind/above orbit that line of sight cuts through the
@@ -12,6 +12,8 @@ torso mesh — the classic “camera inside the robot” look. This helper build
 * looks at a point **above** the base (chest height)
 * orbits behind the base ``+X`` axis (drive forward) by default
 * follows base yaw each frame
+
+``build_overhead_camera`` is a separate nadir FREE cam (``EMET_SIM_OVERHEAD``).
 """
 
 from __future__ import annotations
@@ -39,6 +41,19 @@ def env_chase_elevation() -> float:
 def env_chase_lookat_z() -> float:
     """World-up offset from base origin to lookat (meters)."""
     return float(os.environ.get("EMET_SIM_THIRD_PERSON_LOOKAT_Z", "0.75"))
+
+
+def env_overhead_distance() -> float:
+    return float(os.environ.get("EMET_SIM_OVERHEAD_DISTANCE", "2.4"))
+
+
+def env_overhead_lookat_y() -> float:
+    """World Y offset from base XY so a table in −Y of spawn stays in frame."""
+    return float(os.environ.get("EMET_SIM_OVERHEAD_LOOKAT_Y", "-0.4"))
+
+
+def env_overhead_lookat_z() -> float:
+    return float(os.environ.get("EMET_SIM_OVERHEAD_LOOKAT_Z", "0.4"))
 
 
 def base_yaw_deg(xmat_9: np.ndarray) -> float:
@@ -75,6 +90,32 @@ def build_base_chase_camera(
     # Azimuth 0 places the camera on world -X when yaw=0 → behind body +X.
     cam.azimuth = yaw + az_off
     cam.elevation = elev
+    return cam
+
+
+def build_overhead_camera(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    body_id: int,
+    *,
+    distance: float | None = None,
+    lookat_y_offset: float | None = None,
+    lookat_z: float | None = None,
+) -> mujoco.MjvCamera:
+    """Nadir top-down FREE camera. Lookat is shifted in world −Y so a table in front of spawn stays in frame."""
+    if body_id < 0:
+        raise ValueError("body_id must be a valid MuJoCo body id")
+    xpos = np.asarray(data.xpos[body_id], dtype=np.float64).reshape(3)
+    dist = max(0.8, float(distance if distance is not None else env_overhead_distance()))
+    y_off = float(lookat_y_offset if lookat_y_offset is not None else env_overhead_lookat_y())
+    look_z = float(lookat_z if lookat_z is not None else env_overhead_lookat_z())
+    cam = mujoco.MjvCamera()
+    mujoco.mjv_defaultFreeCamera(model, cam)
+    cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+    cam.lookat[:] = np.array([xpos[0], xpos[1] + y_off, look_z], dtype=np.float64)
+    cam.distance = dist
+    cam.azimuth = 0.0
+    cam.elevation = -90.0
     return cam
 
 

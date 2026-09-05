@@ -65,9 +65,10 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         _emet_session: Optional session dict (GT placements, capabilities) for find-phase harnesses.
     """
 
-    def __init__(self, simulator: HabitatEQASimulator):
+    def __init__(self, simulator: HabitatEQASimulator, *, expose_semantics: bool = True):
         super().__init__()
         self._sim = simulator
+        self._expose_semantics = expose_semantics
         self._emet_session: dict | None = None
         self._xyt = np.zeros(3, dtype=np.float64)
         self._v = 0.3
@@ -115,7 +116,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             depth=frame.depth,
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
-            semantic=frame.semantic,
+            semantic=frame.semantic if self._expose_semantics else None,
             **self._observation_kwargs(),
         )
         self._xyt = np.array([obs.gps[0], obs.gps[1], float(obs.compass[0])], dtype=np.float64)
@@ -123,12 +124,12 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
     @property
     def hm3d_semantic_labeler(self):
         """Optional HM3D semantic labeler when the simulator was built with semantics."""
-        return getattr(self._sim, "semantic_labeler", None)
+        return getattr(self._sim, "semantic_labeler", None) if self._expose_semantics else None
 
     @property
     def uses_hm3d_semantics(self) -> bool:
         """True when the simulator was constructed with HM3D semantic sensors."""
-        return bool(getattr(self._sim, "uses_hm3d_semantics", False))
+        return self._expose_semantics and bool(getattr(self._sim, "uses_hm3d_semantics", False))
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
         """Return the current head RGB-D (and optional semantic) observation.
@@ -145,7 +146,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             depth=frame.depth,
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
-            semantic=frame.semantic,
+            semantic=frame.semantic if self._expose_semantics else None,
             **self._observation_kwargs(),
         )
 

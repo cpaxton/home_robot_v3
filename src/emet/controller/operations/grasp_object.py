@@ -146,6 +146,7 @@ class GraspObjectOperation(ManagedOperation):
         match_method: str = "class",
         delete_object_after_grasp: bool = True,
         try_open_loop: bool = False,
+        grounded_target=None,
     ):
         """Configure the operation with the given keyword arguments.
 
@@ -176,6 +177,9 @@ class GraspObjectOperation(ManagedOperation):
         self.talk = talk
         self.match_method = match_method
         self._try_open_loop = try_open_loop
+        self.grounded_target = grounded_target
+        if grounded_target is not None and (try_open_loop or not servo_to_grasp):
+            raise ValueError("Grounded targets require closed-loop visual tracking")
         if self.match_method not in ["class", "feature"]:
             raise ValueError(f"Unknown match method {self.match_method}. Should be 'class', 'feature'.")
 
@@ -269,7 +273,12 @@ class GraspObjectOperation(ManagedOperation):
             # Now find the mask with that class
             for iid in np.unique(servo.semantic):
                 name = self.agent.semantic_sensor.get_class_name_for_id(iid)
-                if name is not None and target_class in name:
+                matches = name is not None and target_class in name
+                if getattr(self, "grounded_target", None) is not None:
+                    matches = name is not None and " ".join(name.lower().split()) == " ".join(
+                        target_class.lower().split()
+                    )
+                if matches:
                     mask = np.bitwise_or(mask, servo.semantic == iid)
         elif self.match_method == "feature":
             if self.target_object is None:
@@ -374,6 +383,8 @@ class GraspObjectOperation(ManagedOperation):
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
+        if getattr(self, "grounded_target", None) is not None:
+            return self.grounded_target.select_mask(instance_mask, class_mask, servo.get_ee_xyz_in_world_frame())
         if servo.ee_xyz is None:
             servo.compute_ee_xyz()
 
@@ -585,7 +596,8 @@ class GraspObjectOperation(ManagedOperation):
             kernel = np.ones((3, 3), np.uint8)
             mask_np = latest_mask.astype(np.uint8)
             dilated_mask = cv2.dilate(mask_np, kernel, iterations=1)
-            latest_mask = dilated_mask.astype(bool)
+            if getattr(self, "grounded_target", None) is None:
+                latest_mask = dilated_mask.astype(bool)
 
             # push to history
             self.observations.push_mask_to_observation_history(
@@ -596,6 +608,9 @@ class GraspObjectOperation(ManagedOperation):
             )
 
             target_mask = self.observations.get_latest_observation()
+            if getattr(self, "grounded_target", None) is not None:
+                # Never steer from a temporal fallback after camera/arm motion.
+                target_mask = latest_mask
             if target_mask is None:
                 target_mask = np.zeros([servo.ee_rgb.shape[0], servo.ee_rgb.shape[1]], dtype=bool)
 

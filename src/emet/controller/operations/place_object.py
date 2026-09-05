@@ -92,7 +92,9 @@ class PlaceObjectOperation(ManagedOperation):
         distance = np.linalg.norm(point[:2] - center_xyz[:2].cpu().numpy())
         # Take a step towards the center of the object
         dxyz = (center_xyz - point).cpu().numpy()
-        point[:2] = point[:2] + (dxyz[:2] / np.linalg.norm(dxyz[:2]) * min(distance, self.place_step_size))
+        direction_norm = np.linalg.norm(dxyz[:2])
+        if direction_norm > 1e-8:
+            point[:2] = point[:2] + (dxyz[:2] / direction_norm * min(distance, self.place_step_size))
         if self.verbose:
             print(" - After taking a step towards the center of the object, we are at", point)
             print(

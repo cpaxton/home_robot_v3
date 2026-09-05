@@ -202,6 +202,7 @@ class FindPhaseRunConfig:
     prefer_voxel: bool = True
     # None → on for dynagraph/static_graph (shared AgenticEQA loop); off for dynamem/GT.
     agentic_find: bool | None = None
+    query_driven_memory: bool = False
     manip_mode: ManipMode = "skip"
     nav_step_timeout_s: float | None = None
     explore_steps_override: int | None = None

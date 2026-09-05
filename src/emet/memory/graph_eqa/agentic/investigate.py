@@ -143,6 +143,10 @@ def _tool_investigate(
     if gm is None or not hasattr(agent, "navigate_to_target_pose"):
         return {"ok": False, "error": "nav unavailable"}
     oid = int(obs_id)
+    if getattr(agent, "query_driven_memory", False) is True:
+        record = agent.query_candidates.records.get(oid)
+        if record is not None and record.rejected_revision is not None:
+            return {"ok": False, "status": "CANDIDATE_REJECTED", "error": record.invalidation_reason}
     trace_tool = "investigate" if tool_name == "investigate" else "navigate_to_obs"
     if oid in self._station_obs_ids:
         self._append_trace(
@@ -398,7 +402,25 @@ def _tool_investigate(
     # the arrival capture is a wall and verify pins that station instead.
     self._pin_eqa_look_obs(oid)
     self._refresh_room_after_motion()
+    query_candidate = (
+        getattr(self.agent, "query_driven_memory", False) is True and oid in self.agent.query_candidates.records
+    )
+    before_capture = len(self.agent.voxel_map.observations) if query_candidate else 0
     cap = self._tool_capture_and_update()
+    grounding = None
+    if query_candidate:
+        grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
+        self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})
+        if grounding["ok"]:
+            record = self.agent.query_candidates.records[oid]
+            self._record_voxel_score_hit(
+                record.query,
+                np.asarray(grounding["xyz"]),
+                {"max_cosine": record.retrieval_score, "yoloe_hit": True},
+                self.agent.voxel_map,
+            )
+            cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
+            self._last_capture_status = "OK"
     cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
     station_oid = None
     # Only a successful capture advance counts as a new station view.
@@ -500,6 +522,7 @@ def _tool_investigate(
         "nav_status_code": status,
         "nav_note": note,
         "capture": cap,
+        "grounding": grounding,
         "verify": verify_out,
         "look_around_on_no_new_obs": True,
         "place_inspect": rec.card_bits(),

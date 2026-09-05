@@ -181,3 +181,52 @@ def test_sync_base_freejoint_writes_sourccey_planar():
     for jn, val in zip(spec.planar_base_joint_names, (1.25, -0.5, 0.0), strict=True):
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
         assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - float(val)) < 1e-6
+
+
+def test_approach_xy_side_matches_plan_standoff():
+    """Place re-approach must use +Y standoff, not radial-from-current, for Sourccey."""
+    from types import SimpleNamespace
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
+
+    moved: list[np.ndarray] = []
+    robot = SimpleNamespace(
+        _spec=SimpleNamespace(tamp_approach="side"),
+        move_base_to=lambda xyt, blocking=True, world_frame=True: moved.append(
+            np.asarray(xyt, dtype=np.float64).copy()
+        ),
+    )
+    exe = object.__new__(KinematicPickPlaceExecutor)
+    exe.robot = robot
+    exe.arm = "left"
+    exe._sleep = lambda _s: None
+    recep = np.array([-0.02, -0.55], dtype=np.float64)
+    exe._approach_xy(recep, standoff_m=0.55)
+    expected = approach_pose_for_object_xy(recep, standoff=0.55, mode="side", arm="left")
+    assert len(moved) == 1
+    np.testing.assert_allclose(moved[0], expected, atol=1e-9)
+    # Radial-from-[0.08,0] would land near [0.079, -0.009], not the canonical side pose.
+    assert abs(moved[0][1] - 0.0) < 1e-9
+
+
+def test_approach_xy_front_keeps_radial_standoff():
+    from types import SimpleNamespace
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+    moved: list[np.ndarray] = []
+    robot = SimpleNamespace(
+        _spec=SimpleNamespace(tamp_approach="front"),
+        move_base_to=lambda xyt, blocking=True, world_frame=True: moved.append(
+            np.asarray(xyt, dtype=np.float64).copy()
+        ),
+    )
+    exe = object.__new__(KinematicPickPlaceExecutor)
+    exe.robot = robot
+    exe.arm = "left"
+    exe._sleep = lambda _s: None
+    exe._world_base_xyt = lambda: np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    exe._approach_xy(np.array([0.0, 0.0], dtype=np.float64), standoff_m=0.55)
+    assert len(moved) == 1
+    np.testing.assert_allclose(moved[0][:2], [0.55, 0.0], atol=1e-9)

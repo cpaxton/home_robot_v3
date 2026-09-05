@@ -18,7 +18,7 @@ Related user docs: [simulation.md](simulation.md), [molmospaces.md](molmospaces.
 | [`robocasa_objaverse_bbox`](../src/emet/simulation/robocasa_objaverse_bbox.py) | Post-process objaverse MJCFs to add `reg_bbox` geoms (wraps Robocasa `calc_object_bb_reg`). |
 | [`molmospaces_spawn_metadata`](../src/emet/simulation/molmospaces_spawn_metadata.py) | Runtime load of per-robot `molmospaces_spawn.json`. |
 | [`write_molmospaces_spawn_metadata`](../src/emet/app/write_molmospaces_spawn_metadata.py) | Offline measure + write spawn JSON (see [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md)). |
-| [`chase_camera`](../src/emet/simulation/chase_camera.py) | FREE chase cam off `base_link` for `--record-mp4` / `EMET_SIM_THIRD_PERSON` (raised lookat; avoids torso clip). |
+| [`chase_camera`](../src/emet/simulation/chase_camera.py) | FREE chase cam off `base_link` for `--record-mp4` / `EMET_SIM_THIRD_PERSON` (raised lookat; avoids torso clip). Nadir overhead via `EMET_SIM_OVERHEAD`. |
 | [`scene_base_spawn`](../src/emet/simulation/scene_base_spawn.py) | Re-export shim for spawn helpers (original import path). |
 | [`spawn_geom`](../src/emet/simulation/spawn_geom.py) | Floor rays, collision clip, occupancy, exterior-tongue gates. |
 | [`spawn_settle`](../src/emet/simulation/spawn_settle.py) | Free-joint Z settle / restore / foot-clearance probes. |
@@ -84,7 +84,8 @@ Used during `RobosuiteZmqServer` startup:
 
 | Function | Role |
 |----------|------|
-| `apply_home_keyframe_preserving_base` | Apply MJCF `home` keyframe; keep merged-scene base pose when Molmo autoplace ran. |
+| `apply_home_keyframe_preserving_base` | Apply MJCF `home` keyframe; keep merged-scene base pose and **scene freejoints** (table cubes) when Molmo autoplace ran. |
+| `apply_home_keyframe_preserving_planar_base` | Same for planar `base_x/y/yaw` robots (Sourccey / xlerobot); restores object `<freejoint/>` qpos after `mj_resetDataKeyframe`. |
 | `apply_zero_joint_pose_preserving_base` | Zero articulated joints; preserve base. |
 | `freejoint_qpos_qvel_addrs` | Locate free joint on `base_link` (Molmo merge). |
 | `log_post_load_diagnostics` | Optional velocity / contact logging (`EMET_ROBOSUITE_POST_LOAD_DEBUG=1`; see [environment_variables.md](environment_variables.md)). |
