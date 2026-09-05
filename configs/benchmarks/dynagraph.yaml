@@ -101,8 +101,7 @@ harness:
       siglip_grounding: true
       use_instance_graph: false
       use_sensor_perception: true
-      # This is the validated bounded close-look policy. Box-grounded VLM
-      # objects are experimental and selected only by the paper matrix.
+      # Close-look policy under evaluation; labels remain viewpoint evidence.
       semantic_ingest_mode: arrival_only
       manipulation_only: true
   habitat_ovmm_find:

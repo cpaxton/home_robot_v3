@@ -15,8 +15,9 @@ def test_paper_matrix_declares_the_full_honest_row_set():
         "ground_truth_oracle",
     }
     assert expected <= set(matrix["rows"])
-    for dataset in ("hmeqa", "sqa3d", "ovmm_find"):
-        assert expected <= set(matrix["datasets"][dataset]["rows"])
+    assert "ground_truth_oracle" not in matrix["datasets"]["hmeqa"]["rows"]
+    assert "lazy_arrival" not in matrix["datasets"]["sqa3d"]["rows"]
+    assert expected <= set(matrix["datasets"]["ovmm_find"]["rows"])
 
 
 def test_paper_matrix_resolves_explicit_non_oracle_policy():

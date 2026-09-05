@@ -1,6 +1,6 @@
 # Strategy C: Dynagraph WITHOUT instance nodes in the scene graph.
 # YoloE/instance detections never become graph entries (count/FIND recall only),
-# which is the pre-instance-graph behavior of the published 49.6% baseline.
+# This is an ablation, not a reproduction of a historical published baseline.
 graph_object_fusion:
   enabled: true
   use_instance_nodes: false

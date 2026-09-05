@@ -104,6 +104,8 @@ class GraphEQAController(DynamemController):
         # Instance graph: YoloE + SparseVoxelMap Frame masks; voxel ``run_eqa`` off (no per-frame VLM list_objects).
         # Legacy ``--no-instance-graph``: voxel list_objects + VLM / voxel labels for graph nodes.
         # Optional ``eqa=True`` keeps instance graph but still loads caption/EQA clients (agent --eqa).
+        fusion_settings = parameters.get("graph_object_fusion", {}) or {}
+        use_instance_graph = bool(use_instance_graph and fusion_settings.get("use_instance_nodes", True))
         voxel_eqa = (not use_instance_graph) if eqa is None else bool(eqa)
         super().__init__(
             robot=robot,
