@@ -324,6 +324,15 @@ def _make_controller(
             agent.sensor_builder._perception = keyword_client
             agent.sensor_builder._lazy_vl_client = keyword_client
             agent.sensor_builder.cpu_only = False
+    elif method == DYNAMEM and not mock_llm:
+        # The voxel-only baseline has no GraphEQAMemory, so bind the same
+        # shared VLM clients directly to SparseVoxelMap's EQA interface.
+        from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
+
+        keyword_client, eqa_client = build_graph_eqa_vlm_clients(parameters=params, device=device)
+        voxel_map = agent.get_voxel_map()
+        voxel_map.image_description_client = keyword_client
+        voxel_map.eqa_client = eqa_client
     return agent
 
 
