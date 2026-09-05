@@ -58,7 +58,13 @@ class LazyGraphController(DynagraphController):
 
     def retrieve_query_candidate(self, phrase: str):
         """Keep low-confidence voxel matches in the search tier, not object memory."""
-        return self.voxel_map.retrieve_text_candidate(phrase)
+        query = " ".join(phrase.lower().split())
+        rejected = {
+            r.source_obs_id
+            for r in self.query_candidates.records.values()
+            if r.query == query and r.rejected_revision is not None
+        }
+        return self.voxel_map.retrieve_text_candidate(phrase, excluded_obs_ids=rejected)
 
     def ground_query_candidate(self, handle, *, after_observation: int):
         """Promote only from admitted, object-specific geometry in a new frame."""
@@ -109,8 +115,8 @@ class LazyGraphController(DynagraphController):
                 depth=depth,
                 full_world_xyz=frame.full_world_xyz,
                 instance=masks,
-                instance_classes=metadata["instance_classes"],
-                instance_scores=metadata["instance_scores"],
+                instance_classes=metadata.get("instance_classes", []),
+                instance_scores=metadata.get("instance_scores", []),
             )
         else:
             detector = self.detection_model
@@ -122,6 +128,9 @@ class LazyGraphController(DynagraphController):
         # "red chair" and "red mug" must not authorize the same action target.
         matches = [d for d in detections if " ".join(d["label_short"].lower().split()) == record.query]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
+            self.query_candidates.reject(
+                handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
+            )
             return {"ok": False, "reason": "target absent or ambiguous"}
         det = matches[0]
         candidate = GraphDetectionCandidate(

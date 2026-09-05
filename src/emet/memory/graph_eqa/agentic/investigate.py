@@ -143,6 +143,10 @@ def _tool_investigate(
     if gm is None or not hasattr(agent, "navigate_to_target_pose"):
         return {"ok": False, "error": "nav unavailable"}
     oid = int(obs_id)
+    if getattr(agent, "query_driven_memory", False) is True:
+        record = agent.query_candidates.records.get(oid)
+        if record is not None and record.rejected_revision is not None:
+            return {"ok": False, "status": "CANDIDATE_REJECTED", "error": record.invalidation_reason}
     trace_tool = "investigate" if tool_name == "investigate" else "navigate_to_obs"
     if oid in self._station_obs_ids:
         self._append_trace(
@@ -398,7 +402,9 @@ def _tool_investigate(
     # the arrival capture is a wall and verify pins that station instead.
     self._pin_eqa_look_obs(oid)
     self._refresh_room_after_motion()
-    query_candidate = getattr(self.agent, "query_driven_memory", False) and oid in self.agent.query_candidates.records
+    query_candidate = (
+        getattr(self.agent, "query_driven_memory", False) is True and oid in self.agent.query_candidates.records
+    )
     before_capture = len(self.agent.voxel_map.observations) if query_candidate else 0
     cap = self._tool_capture_and_update()
     grounding = None

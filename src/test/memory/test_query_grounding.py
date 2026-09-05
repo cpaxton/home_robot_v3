@@ -143,8 +143,39 @@ def test_weak_voxel_hit_is_search_evidence_not_localization():
     assert np.allclose(point, [1, 1, 1])
     assert stats["source_obs_id"] == 1 and not stats["yoloe_hit"]
     assert not hasattr(vm, "_last_localize_stats")
+    assert vm.retrieve_text_candidate("mug", excluded_obs_ids={1})[0] is None
     vm.find_alignment_over_model = lambda text: torch.tensor([0.10])
     assert vm.retrieve_text_candidate("mug")[0] is None
+
+
+def test_failed_grounding_excludes_only_that_query_source():
+    agent = controller()
+    candidate = agent.propose_query_candidate("mug", [1, 1, 1], {"source_obs_id": 1})
+    agent.detection_model.class_list = ["chair"]
+    assert not agent.ground_query_candidate(candidate.handle, after_observation=1)["ok"]
+    agent.voxel_map.retrieve_text_candidate = Mock(return_value=(None, {}))
+    agent.retrieve_query_candidate("mug")
+    agent.voxel_map.retrieve_text_candidate.assert_called_with("mug", excluded_obs_ids={1})
+    agent.retrieve_query_candidate("chair")
+    agent.voxel_map.retrieve_text_candidate.assert_called_with("chair", excluded_obs_ids=set())
+
+
+def test_rejected_candidate_cannot_be_approached_again():
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = controller()
+    agent.parameters = {}
+    agent.query_driven_memory = True
+    agent.navigate_to_target_pose = Mock()
+    agent.robot = Mock()
+    record = agent.propose_query_candidate("mug", [1, 1, 1], {"source_obs_id": 1})
+    agent.query_candidates.reject(record.handle, observation_revision=2, reason="absent")
+    ex = AgenticEQAExecutor(agent, "Where is the mug?", router=False)
+    ex._hypotheses = [NavHypothesis(phrase="mug", obs_id=record.handle, xyz=np.ones(3), score=1, source="voxel")]
+    assert not ex._investigate_hypotheses()
+    assert ex._tool_investigate(record.handle)["status"] == "CANDIDATE_REJECTED"
+    agent.navigate_to_target_pose.assert_not_called()
 
 
 def test_retiring_object_does_not_reassign_surviving_candidate_identity():

@@ -57,6 +57,7 @@ def enable_query_driven_memory(parameters: Parameters, backend: str) -> None:
     parameters.set("query_driven_memory", True)
     eqa = dict(parameters.get("eqa", {}) or {})
     eqa["agentic_verify"] = True
+    eqa["collect_agentic_trace"] = True
     parameters.set("eqa", eqa)
 
 

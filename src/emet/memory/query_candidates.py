@@ -25,6 +25,7 @@ class QueryCandidate:
     instance_id: int | None = None
     grounded_revision: int | None = None
     invalidation_reason: str = ""
+    rejected_revision: int | None = None
 
     def require_grounding(self, observation_revision: int) -> int:
         """Return the instance identity only for the observation just verified."""
@@ -87,7 +88,15 @@ class QueryCandidates:
         record.instance_id = instance_id
         record.grounded_revision = observation_revision
         record.invalidation_reason = ""
+        record.rejected_revision = None
         return record
+
+    def reject(self, handle: int, *, observation_revision: int, reason: str) -> None:
+        """Record fresh negative evidence so the same source is not approached forever."""
+        record = self.records[handle]
+        record.grounded_revision = None
+        record.rejected_revision = observation_revision
+        record.invalidation_reason = reason
 
     def invalidate_instance(self, instance_id: int, reason: str) -> None:
         if not reason:

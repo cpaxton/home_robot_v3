@@ -297,7 +297,7 @@ def run_ovmm_agentic_localize(
         extra_stats = {}
         if loop_from_pin is not None:
             extra_stats["from_pin"] = bool(loop_from_pin)
-    if xyz is None:
+    if xyz is None and getattr(agent, "query_driven_memory", False) is not True:
         from emet.mapping.voxel_localize import pinned_xyz_from_phrases, voxel_map_from_agent
 
         voxel_xyz, voxel_q, voxel_stats = pinned_xyz_from_phrases(
