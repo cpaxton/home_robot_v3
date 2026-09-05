@@ -169,15 +169,17 @@ def run_habitat_find_phase_episode(
     try:
         sim.set_init_pose(init_pose)
         spawn_record = sim.last_init_pose_record
-        robot = HabitatRobotClient(sim)
+        oracle = run_cfg.backend == "ground_truth"
+        robot = HabitatRobotClient(sim, expose_semantics=oracle)
         from emet.memory.graph_eqa.sim_ground_truth_graph import placements_to_json_dict
 
-        robot.set_emet_session(
-            {
-                "sim_object_placements": placements_to_json_dict(placements),
-                "sim_object_placements_frame": "habitat_yup",
-            }
-        )
+        if oracle:
+            robot.set_emet_session(
+                {
+                    "sim_object_placements": placements_to_json_dict(placements),
+                    "sim_object_placements_frame": "habitat_yup",
+                }
+            )
 
         parameters = apply_habitat_ovmm_find_parameters(
             get_parameters("dynav_config.yaml"),
