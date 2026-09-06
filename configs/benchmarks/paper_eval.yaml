@@ -1,0 +1,61 @@
+# Auditable paper-evaluation matrix.  This is intentionally separate from live
+# agent defaults: a paper run must select a named row and freeze its manifest.
+version: 1
+policy:
+  use_hm3d_semantics: false
+  enrich_labels: false
+  repeat: frozen_full_plus_confirmation
+  report:
+    - accuracy
+    - graph_health
+    - instance_ingest
+    - evidence_provenance
+
+rows:
+  dynamem_voxel:
+    method: dynamem
+    description: "Voxel-only, no GraphEQA object graph."
+  static_no_instance:
+    method: static_graph
+    ingestion:
+      use_instance_graph: false
+      use_sensor_perception: true
+      semantic_ingest_mode: view_evidence
+  lazy_arrival:
+    method: lazy_graph
+    ingestion:
+      use_instance_graph: false
+      use_sensor_perception: true
+      semantic_ingest_mode: arrival_only
+    description: "Close-look-only candidate policy; random-16 is development evidence, not confirmation."
+  dynagraph_bounded_instance:
+    method: dynagraph
+    fusion_config: configs/benchmarks/fusion_strategy_b.yaml
+    ingestion:
+      use_instance_graph: true
+      use_sensor_perception: true
+      semantic_ingest_mode: view_evidence
+  dynagraph_no_instance:
+    method: dynagraph
+    fusion_config: configs/benchmarks/fusion_strategy_c.yaml
+    ingestion:
+      use_instance_graph: false
+      use_sensor_perception: true
+      semantic_ingest_mode: view_evidence
+  ground_truth_oracle:
+    method: ground_truth
+    diagnostic_only: true
+
+datasets:
+  hmeqa:
+    rows: [dynamem_voxel, static_no_instance, lazy_arrival, dynagraph_bounded_instance, dynagraph_no_instance]
+    harness: habitat_eqa
+    paper_subset: true
+    max_planning_steps: 20
+    max_movement_step: 10
+  sqa3d:
+    rows: [dynamem_voxel, dynagraph_bounded_instance, dynagraph_no_instance]
+    harness: sqa3d
+  ovmm_find:
+    rows: [dynamem_voxel, static_no_instance, lazy_arrival, dynagraph_bounded_instance, dynagraph_no_instance, ground_truth_oracle]
+    harness: habitat_ovmm_find

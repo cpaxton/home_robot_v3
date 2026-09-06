@@ -65,6 +65,19 @@ def test_filter_detections_for_graph_admission():
     assert stats["admitted"] == 1
 
 
+def test_filter_detections_applies_candidate_cap_by_score_then_support():
+    cfg = GraphObjectFusionConfig(max_candidates=2)
+    dets = [
+        {"detection_score": 0.2, "mask_point_count": 100, "id": "low"},
+        {"detection_score": 0.9, "mask_point_count": 25, "id": "high-small"},
+        {"detection_score": 0.9, "mask_point_count": 30, "id": "high-large"},
+    ]
+    kept, stats = filter_detections_for_graph_admission(dets, config=cfg)
+    assert [item["id"] for item in kept] == ["high-large", "high-small"]
+    assert stats["rejected_candidate_cap"] == 1
+    assert stats["admitted"] == 2
+
+
 def test_fusion_keeps_incompatible_instance_labels_distinct():
     cfg = GraphObjectFusionConfig(
         enabled=True,

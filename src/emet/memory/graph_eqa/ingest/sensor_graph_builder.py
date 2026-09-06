@@ -36,7 +36,7 @@ _EXTRACT_SYSTEM_DEFAULT = (
     "You are a strict JSON label extractor for a robot vision system. "
     "Reply with ONLY a single JSON object, no markdown fences, no analysis, no text before or after. "
     f"Schema: {GRAPH_EXTRACT_JSON_SCHEMA}. "
-    "Use 1–8 objects maximum; each name is at most 6 words, physical things only "
+    "Use 1–8 objects maximum; each name is at most 6 words, physical things only. "
     "(furniture, props, appliances). Omit walls, ceiling, floor, lighting, darkness, "
     "'the image', 'the user', or scene meta-commentary."
 )

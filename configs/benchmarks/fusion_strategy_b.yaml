@@ -1,0 +1,50 @@
+# Strategy B: Dynagraph + instance nodes with the deep merge policy.
+# SigLIP crop embeddings + appearance override + label synonyms + growth cap,
+# so repeated YoloE detections consolidate instead of flooding the graph.
+graph_object_fusion:
+  enabled: true
+  use_instance_nodes: true
+
+  gates:
+    identity:
+      on: true
+    bounds:
+      on: true
+      iou_floor: 0.08
+      iou_merge_min: 0.3
+    embedding:
+      on: true
+      min_cosine: 0.62
+      blend_alpha: 0.35
+      use_siglip_crops: true
+      appearance_merge_min_cosine: 0.9
+    spatial:
+      on: true
+      xy_m: 0.42
+      centroid_3d_m: 0.55
+      fallback_xy_m: 0.45
+
+  labels:
+    require_match: false
+    require_match_for_instances: true
+    synonyms:
+      - [cab, cabinet, kitchen cabinet]
+      - [microwave, microwave oven]
+    incompatible: []
+
+  keep:
+    prefer_support: true
+    union_labels: true
+    union_bounds: true
+    blend_embedding: true
+    update_xyz: true
+
+  admission:
+    instance_min_confidence: 0.12
+    instance_min_mask_points: 25
+    max_candidates_per_frame: 64
+    match_xy_m: 0.55
+
+  growth:
+    max_object_nodes: 120
+    temporal_window_steps: 0

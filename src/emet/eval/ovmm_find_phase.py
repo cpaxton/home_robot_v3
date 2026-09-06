@@ -30,6 +30,7 @@ from emet.config.rerun_config import eval_rerun_enabled
 from emet.eval.memory_backends import (
     DYNAGRAPH,
     GROUND_TRUTH,
+    LAZY_GRAPH,
     OVMM_MEMORY_BACKEND,
     STATIC_GRAPH,
     normalize_benchmark_backend,
@@ -1219,13 +1220,13 @@ def create_find_phase_agent(
     use_instance_graph = bool(
         harness_kw.get(
             "use_instance_graph",
-            backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH),
+            backend in (STATIC_GRAPH, DYNAGRAPH, LAZY_GRAPH, GROUND_TRUTH),
         )
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
     input_path = str(graph_memory_input_path) if graph_memory_input_path else None
     live_rerun = eval_rerun_enabled()
-    if s0_parity and backend in (STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH):
+    if s0_parity and backend in (STATIC_GRAPH, DYNAGRAPH, LAZY_GRAPH, GROUND_TRUTH):
         from emet.eval.stack import build_memory_agent
 
         agent = build_memory_agent(
@@ -1298,6 +1299,18 @@ def create_find_phase_agent(
             use_sensor_perception=use_sensor_perception,
             manipulation_only=manipulation_only,
             visualize_ground_truth=compare_to_gt,
+            graph_memory_input_path=input_path,
+        )
+    elif backend == LAZY_GRAPH:
+        from emet.controller.controller_lazy_graph import LazyGraphController
+
+        agent = LazyGraphController(
+            robot,
+            parameters,
+            save_rerun=False,
+            enable_live_rerun=live_rerun,
+            cpu_only=cpu_only,
+            manipulation_only=manipulation_only,
             graph_memory_input_path=input_path,
         )
     elif backend == GROUND_TRUTH:

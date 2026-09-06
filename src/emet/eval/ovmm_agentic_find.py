@@ -552,4 +552,4 @@ def should_use_agentic_find(backend: str, *, agentic_find: bool | None) -> bool:
     if agentic_find is not None:
         return bool(agentic_find)
     b = str(backend or "").lower()
-    return b in {"dynagraph", "static_graph", "graph_eqa"}
+    return b in {"dynagraph", "lazy_graph", "static_graph", "graph_eqa"}

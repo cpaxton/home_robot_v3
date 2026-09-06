@@ -102,16 +102,25 @@ def apply_eval_graph_fusion_parameters(
         merge_xy = float(raw) if raw is not None else 0.0
     fc = load_graph_object_fusion_config()
     fusion = asdict(fc)
-    if float(merge_xy) > 0.0:
+    spatial = dict(fusion.get("gates", {}).get("spatial", {}))
+    if not bool(fusion.get("use_instance_nodes", True)):
+        # use_instance_nodes=false is the pre-instance-graph row: keep instance
+        # detections out of the graph AND do not attach fusion, so VLM labels go
+        # through add_observation's spatial merge (old behavior) instead of being
+        # flooded by fusion's spatial_merge_m=0.
+        fusion["enabled"] = False
+        spatial["fallback_xy_m"] = 0.0
+    elif float(merge_xy) > 0.0:
         # Dynagraph production/EQA profiles keep merge + fallback aligned with
         # ``dynagraph_merge_xy_m`` (typically 0.45) for long-horizon instance memory.
         fusion["enabled"] = True
-        fusion["fallback_spatial_merge_xy_m"] = float(merge_xy)
+        spatial["fallback_xy_m"] = float(merge_xy)
     else:
         # Zero-merge profiles (``smoke``, ``static_graph``): disable fusion entirely so
         # IoU/embedding gates cannot silently merge instances (not only XY fallback).
         fusion["enabled"] = False
-        fusion["fallback_spatial_merge_xy_m"] = 0.0
+        spatial["fallback_xy_m"] = 0.0
+    fusion.setdefault("gates", {})["spatial"] = spatial
     params.set("graph_object_fusion", fusion)
     return params
 
@@ -299,6 +308,7 @@ def harness_controller_kwargs(
         "manipulation_only",
         "eqa",
         "use_sensor_perception",
+        "semantic_ingest_mode",
     )
     return {k: block[k] for k in keys if k in block}
 

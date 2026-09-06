@@ -121,7 +121,7 @@ def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
     assert flags["mcq_debias"] is False
     assert flags["explore_when_uncovered"] == "conservative"
     fusion = params.get("graph_object_fusion") or {}
-    assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.45
+    assert float((fusion.get("gates") or {}).get("spatial", {}).get("fallback_xy_m", -1)) == 0.45
 
 
 def test_habitat_eqa_static_graph_uses_baseline_zero_merge():
@@ -143,7 +143,7 @@ def test_habitat_eqa_static_graph_uses_baseline_zero_merge():
         assert flags["explore_when_uncovered"] == "off"
         assert flags["siglip_grounding"] is False
         fusion = params.get("graph_object_fusion") or {}
-        assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0
+        assert float((fusion.get("gates") or {}).get("spatial", {}).get("fallback_xy_m", -1)) == 0.0
 
 
 def test_zero_merge_profiles_disable_fusion_fallback():
@@ -153,7 +153,7 @@ def test_zero_merge_profiles_disable_fusion_fallback():
         params = apply_dynagraph_profile(get_parameters("dynav_config.yaml"), name)
         assert params.get("dynagraph_merge_xy_m") == 0.0
         fusion = params.get("graph_object_fusion") or {}
-        assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0, name
+        assert float((fusion.get("gates") or {}).get("spatial", {}).get("fallback_xy_m", -1)) == 0.0, name
 
 
 def test_unified_eqa_enables_merge_like_interactive():
@@ -164,8 +164,70 @@ def test_unified_eqa_enables_merge_like_interactive():
     assert params.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
     assert params.get("dynagraph_staleness_horizon") == interactive["dynagraph_staleness_horizon"]
     fusion = params.get("graph_object_fusion") or {}
-    assert float(fusion.get("fallback_spatial_merge_xy_m")) == float(interactive["dynagraph_merge_xy_m"])
+    assert float((fusion.get("gates") or {}).get("spatial", {}).get("fallback_xy_m", -1)) == float(
+        interactive["dynagraph_merge_xy_m"]
+    )
     assert (
         params.get("graph_eqa_extract", {}).get("navigation_samples_max")
         == profile_settings("unified_eqa")["graph_eqa_extract"]["navigation_samples_max"]
     )
+
+
+def test_habitat_eqa_dynagraph_paper_row_knobs_pinned():
+    """Freeze the published HM-EQA dynagraph row's harness knobs.
+
+    The 49.6% full-113 baseline (2026-08-14, c83a84a6) ran with
+    ``use_instance_graph: false``. It was silently flipped to ``true`` on 2026-08-23,
+    which turns on YoloE instance admission and floods the shared graph with ~10x more
+    single-instance observations/nodes at the same VLM budget — changing full-113
+    behavior for location/state questions. Drift of a published-row knob must fail here.
+    """
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    block = dict(params.get("dynagraph_harness") or {})
+    assert block.get("profile") == "unified_eqa"
+    assert block.get("prompt_variant") == "hmeqa"
+    assert block.get("memory_summary") is True
+    assert block.get("mcq_debias") is False
+    assert block.get("explore_when_uncovered") == "conservative"
+    assert block.get("siglip_grounding") is True
+    assert block.get("use_instance_graph") is True
+    assert block.get("manipulation_only") is True
+    eqa = dict(params.get("eqa") or {})
+    assert eqa.get("prompt_variant") == "hmeqa"
+    assert eqa.get("merged_memory") is False
+    fusion = params.get("graph_object_fusion") or {}
+    assert fusion.get("enabled") is True
+    assert float(fusion.get("gates", {}).get("bounds", {}).get("iou_merge_min", 0.0)) > 0.0
+
+    static = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "static_graph")
+    static_block = dict(static.get("dynagraph_harness") or {})
+    assert static_block.get("use_instance_graph") is False
+    assert static_block.get("manipulation_only") is True
+
+
+def test_habitat_eqa_lazy_graph_close_look_only_knobs():
+    """lazy_graph = close-look-only: no streaming YoloE nodes, Qwen on arrival."""
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "lazy_graph")
+    block = dict(params.get("dynagraph_harness") or {})
+    assert block.get("profile") == "unified_eqa"
+    assert block.get("prompt_variant") == "hmeqa"
+    assert block.get("memory_summary") is True
+    assert block.get("mcq_debias") is False
+    assert block.get("explore_when_uncovered") == "conservative"
+    assert block.get("siglip_grounding") is True
+    assert block.get("use_instance_graph") is False
+    assert block.get("use_sensor_perception") is True
+    assert block.get("manipulation_only") is True
+    assert block.get("harness") == "habitat_eqa"
+    assert block.get("method") == "lazy_graph"
+    eqa = dict(params.get("eqa") or {})
+    assert eqa.get("prompt_variant") == "hmeqa"
+    assert eqa.get("merged_memory") is False
+    assert params.get("dynagraph_merge_xy_m") == 0.45
+
+
+def test_normalize_hmeqa_method_accepts_lazy_graph():
+    from emet.eval.memory_backends import HMEQA_METHODS, normalize_hmeqa_method
+
+    assert "lazy_graph" in HMEQA_METHODS
+    assert normalize_hmeqa_method("lazy_graph") == "lazy_graph"
