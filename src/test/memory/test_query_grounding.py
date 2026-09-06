@@ -56,7 +56,7 @@ def test_failed_admission_never_creates_instance(failure):
     if failure == "depth":
         agent.voxel_map.observations[-1].depth[:] = np.nan
     elif failure == "absent":
-        agent.detection_model.class_list = ["chair"]
+        agent.detection_model.predict.return_value = (None, -np.ones((8, 8), dtype=int), {})
     elif failure == "ambiguous":
         masks = np.zeros((8, 8), dtype=int)
         masks[4:] = 1
@@ -127,6 +127,54 @@ def test_lazy_grounding_initializes_detector_only_on_demand():
         factory.assert_called_once()
 
 
+def test_fresh_grounding_ignores_background_vocabulary():
+    agent = controller()
+    agent.detection_model.class_list = ["chair"]
+    agent.voxel_map.observations[-1].instance = np.zeros((8, 8), dtype=int)
+    record = agent.propose_query_candidate("mug", [9, 9, 9], {"source_obs_id": 1})
+    assert agent.ground_query_candidate(record.handle, after_observation=1)["ok"]
+    assert agent.detection_model.predict.call_args.kwargs["vocabulary"] == ["mug"]
+    assert agent.detection_model.class_list == ["chair"]
+
+
+def test_weak_recovery_cached_but_never_promotes_and_new_frame_rechecks():
+    agent = controller()
+    agent.voxel_map.retrieve_text_candidate = Mock(
+        side_effect=lambda *args, **kwargs: (
+            np.array([9, 9, 9]) if "minimum_similarity" in kwargs else None,
+            {"source_obs_id": 1, "max_cosine": 0.1},
+        )
+    )
+    for _ in range(2):
+        point, stats = agent.retrieve_query_candidate("mug")
+        assert np.allclose(point, [1, 1, 1])
+        assert stats["recovery_source"] == "query_detector" and not stats["yoloe_hit"]
+    agent.detection_model.predict.assert_called_once()
+    assert not agent.graph_memory.get_nodes()
+    assert not agent.query_candidates.records
+    agent.voxel_map.observations[0] = SimpleNamespace(**vars(agent.voxel_map.observations[0]))
+    agent.retrieve_query_candidate("mug")
+    assert agent.detection_model.predict.call_count == 2
+
+
+def test_detector_query_vocabulary_is_per_call():
+    from emet.perception.detection.yoloe import YoloEPerception
+
+    detector = object.__new__(YoloEPerception)
+    detector.class_list = ["chair"]
+    detector.verbose = False
+    detector.confidence = 0.05
+    detector.model = Mock(return_value=[SimpleNamespace(boxes=None)])
+    with patch("emet.perception.detection.yoloe._text_pe_for_classes", return_value=None):
+        detector.predict(np.zeros((8, 8, 3), dtype=np.uint8), vocabulary=["red cylinder"])
+        assert detector.model.set_classes.call_args.args[0] == ["red cylinder"]
+        assert detector.class_list == ["chair"]
+        detector.predict(np.zeros((8, 8, 3), dtype=np.uint8))
+        assert detector.model.set_classes.call_args.args[0] == ["chair"]
+        with pytest.raises(ValueError, match="empty"):
+            detector.predict(np.zeros((8, 8, 3), dtype=np.uint8), vocabulary=[])
+
+
 def test_weak_voxel_hit_is_search_evidence_not_localization():
     import torch
 
@@ -151,13 +199,13 @@ def test_weak_voxel_hit_is_search_evidence_not_localization():
 def test_failed_grounding_excludes_only_that_query_source():
     agent = controller()
     candidate = agent.propose_query_candidate("mug", [1, 1, 1], {"source_obs_id": 1})
-    agent.detection_model.class_list = ["chair"]
+    agent.detection_model.predict.return_value = (None, -np.ones((8, 8), dtype=int), {})
     assert not agent.ground_query_candidate(candidate.handle, after_observation=1)["ok"]
     agent.voxel_map.retrieve_text_candidate = Mock(return_value=(None, {}))
     agent.retrieve_query_candidate("mug")
-    agent.voxel_map.retrieve_text_candidate.assert_called_with("mug", excluded_obs_ids={1})
+    agent.voxel_map.retrieve_text_candidate.assert_called_with("mug", minimum_similarity=0.0, excluded_obs_ids={1})
     agent.retrieve_query_candidate("chair")
-    agent.voxel_map.retrieve_text_candidate.assert_called_with("chair", excluded_obs_ids=set())
+    agent.voxel_map.retrieve_text_candidate.assert_called_with("chair", minimum_similarity=0.0, excluded_obs_ids=set())
 
 
 def test_rejected_candidate_cannot_be_approached_again():

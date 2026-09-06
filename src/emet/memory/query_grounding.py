@@ -21,7 +21,7 @@ def select_query_detections(query, description, detections, rgb, client=None):
     require a fresh image judgment; unavailable or malformed inference abstains.
     """
     exact = [d["instance_id"] for d in detections if d["label_short"].strip().lower() == query]
-    if not description and exact:
+    if not description and len(query.split()) == 1 and exact:
         return exact, {"source": "exact_label"}
     if client is None or not detections:
         return [], {"source": "unverified", "reason": "semantic verification unavailable"}

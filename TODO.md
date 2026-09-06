@@ -36,11 +36,24 @@ for necessary robot geometry differences. Do not promote based only on graph siz
       lamp selection scored 0.0302 and was correctly blocked by admission 0.12.
       Offline replay admits it at 0.03; live thresholds are unchanged.
 - [ ] Red/blue MuJoCo comparison `20260905_230647_10f8d9` at `3621d63e`:
-      DynaMem agentic 0/2, query-driven pending. Shared query policy is now wired
+      DynaMem agentic 0/2, query-driven 0/2. Shared query policy is now wired
       into the MuJoCo find runner and CLI; no separate robot-specific policy.
-- [ ] One-shot DynaMem red/blue control queued behind that job:
-      `20260905_230946_a9cc38`, same four-view fresh mapping scan. Distinguish
-      this diagnostic from the historical CPU/Stretch basic integration test.
+- [x] One-shot DynaMem red/blue control `20260905_230946_a9cc38`: 1/2 (object
+      found, receptacle error 0.60 m). IMPORTANT: S0 executor ignores the requested
+      four-view override and scans eight views, so this is not a same-map control.
+      Red-cylinder voxel score 0.106 was rescued by detector confirmation; the
+      query-driven 0.14 retrieval floor would exclude that particular candidate.
+- [x] Exact existing CPU/Stretch S0 test `20260905_232835_c3cd73` completed:
+      FAILED object localization; retained its success assertions.
+- [x] Eight-view comparison `20260905_232921_b3f4a7`: both rows 0/2;
+      DynaMem 63 s, query-driven 278 s / 22 graph nodes. More coverage alone
+      does not fix localization (unchanged thresholds, 12/8 action budgets).
+- [x] Unify S0 one-shot/agentic factory, memory profile and mapping protocol;
+      record requested scan steps and actual frames added.
+- [x] Query-conditioned fresh masks, bounded per-source detector recovery for
+      weak voxel hits, independent verification for compound targets. Recovery
+      creates search evidence only; admission thresholds unchanged. 95 focused
+      tests pass. Post-change live comparison still required.
 
 ## Config over env flags
 

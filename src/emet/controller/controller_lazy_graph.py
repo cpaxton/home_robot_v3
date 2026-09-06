@@ -64,7 +64,77 @@ class LazyGraphController(DynagraphController):
             for r in self.query_candidates.records.values()
             if r.query == query and r.rejected_revision is not None
         }
-        return self.voxel_map.retrieve_text_candidate(phrase, excluded_obs_ids=rejected)
+        vm = self.voxel_map
+        xyz, stats = vm.retrieve_text_candidate(phrase, excluded_obs_ids=rejected)
+        if xyz is not None:
+            return xyz, stats
+        # One source-frame detector check can recover a weak visual embedding.
+        # This is still search evidence, never a pin or a grounded object.
+        xyz, stats = vm.retrieve_text_candidate(phrase, minimum_similarity=0.0, excluded_obs_ids=rejected)
+        if xyz is None:
+            return None, stats
+        source_frame = vm.observations[stats["source_obs_id"] - 1]
+        key = (query, id(source_frame))
+        cache = getattr(self, "_query_recovery_cache", None)
+        if cache is None:
+            cache = self._query_recovery_cache = {}
+        if key not in cache:
+            from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
+            from emet.memory.graph_eqa.ingest.instance_observations import filter_detections_for_graph_admission
+
+            _, detections = self._detect_query_frame(source_frame, query)
+            admitted, _ = filter_detections_for_graph_admission(
+                detections,
+                config=fusion_config_from_sources(parameters=self.parameters),
+            )
+            point = np.asarray(admitted[0]["xyz"]) if len(admitted) == 1 else None
+            if len(cache) >= self.query_candidates.max_candidates:
+                cache.pop(next(iter(cache)))
+            cache[key] = (source_frame, point)
+        return cache[key][1], {**stats, "recovery_source": "query_detector", "yoloe_hit": False}
+
+    def _detect_query_frame(self, frame, query):
+        """Query-conditioned masks using the same detector and RGB-D admission path."""
+        from emet.memory.graph_eqa.ingest.instance_observations import (
+            frame_instances_to_detections,
+            frame_rgb_hwc_uint8,
+        )
+        from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+        detector = self.detection_model
+        if detector is None:
+            detector = get_shared_yoloe_perception(
+                confidence_threshold=self.parameters.get("detection", {}).get("confidence_threshold", 0.05),
+                device=self.device,
+                size="l",
+            )
+        rgb = frame_rgb_hwc_uint8(frame)
+        if rgb is None or frame.depth is None:
+            return frame, []
+        depth = frame.depth
+        if hasattr(depth, "detach"):
+            depth = depth.detach().cpu().numpy()
+        _, masks, metadata = detector.predict(
+            rgb,
+            depth=depth,
+            draw_instance_predictions=False,
+            vocabulary=[query],
+        )
+        detected = SimpleNamespace(
+            rgb=rgb,
+            depth=depth,
+            full_world_xyz=frame.full_world_xyz,
+            instance=masks,
+            instance_classes=metadata.get("instance_classes", []),
+            instance_scores=metadata.get("instance_scores", []),
+        )
+        detections = frame_instances_to_detections(
+            detected,
+            min_depth=self.voxel_map.min_depth,
+            max_depth=self.voxel_map.max_depth,
+            detection_model=SimpleNamespace(class_list=[query]),
+        )
+        return detected, detections
 
     def ground_query_candidate(self, handle, *, after_observation: int):
         """Promote only from admitted, object-specific geometry in a new frame."""
@@ -72,7 +142,6 @@ class LazyGraphController(DynagraphController):
         from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
         from emet.memory.graph_eqa.ingest.instance_observations import (
             filter_detections_for_graph_admission,
-            frame_instances_to_detections,
             frame_rgb_hwc_uint8,
             frame_world_xyz_hw3,
         )
@@ -94,35 +163,8 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        # Lazy mapping intentionally does not run streaming instance detection.
-        # Detect only this arrival view, using the same RGB/depth/world geometry.
-        if getattr(frame, "instance", None) is None:
-            detector = self.detection_model
-            if detector is None:
-                from emet.perception.detection.yoloe import get_shared_yoloe_perception
-
-                detector = get_shared_yoloe_perception(
-                    confidence_threshold=self.parameters.get("detection", {}).get("confidence_threshold", 0.05),
-                    device=self.device,
-                    size="l",
-                )
-            depth = frame.depth
-            if hasattr(depth, "detach"):
-                depth = depth.detach().cpu().numpy()
-            _, masks, metadata = detector.predict(rgb, depth=depth, draw_instance_predictions=False)
-            frame = SimpleNamespace(
-                rgb=rgb,
-                depth=depth,
-                full_world_xyz=frame.full_world_xyz,
-                instance=masks,
-                instance_classes=metadata.get("instance_classes", []),
-                instance_scores=metadata.get("instance_scores", []),
-            )
-        else:
-            detector = self.detection_model
-        detections = frame_instances_to_detections(
-            frame, min_depth=vm.min_depth, max_depth=vm.max_depth, detection_model=detector
-        )
+        # Always condition fresh masks on the target, not streaming ScanNet labels.
+        frame, detections = self._detect_query_frame(frame, record.query)
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         from emet.memory.query_grounding import cache_grounding_record, select_query_detections
 
@@ -155,6 +197,7 @@ class LazyGraphController(DynagraphController):
             masks=frame.instance,
             metadata={
                 "target_description": record.target_description,
+                "detector_vocabulary": [record.query],
                 "retrieval_score": record.retrieval_score,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
