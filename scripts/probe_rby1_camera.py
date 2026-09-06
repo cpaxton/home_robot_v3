@@ -8,6 +8,7 @@
 import argparse
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,10 @@ def _wait_port(port: int, timeout: float, proc: subprocess.Popen | None = None) 
 
 
 def main() -> int:
+    def terminate(_signum, _frame):
+        raise SystemExit(124)
+
+    signal.signal(signal.SIGTERM, terminate)
     parser = argparse.ArgumentParser()
     parser.add_argument("--sim", default="configs/sim/robocasa_pick_place_rby1.yaml")
     parser.add_argument("--port-offset", type=int, default=98)
@@ -197,10 +202,12 @@ def main() -> int:
         (args.output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         return 1 if failures else 0
     finally:
-        if robot is not None:
-            robot.stop()
-        terminate_process_tree(server)
-        fh.close()
+        try:
+            if robot is not None:
+                robot.stop()
+        finally:
+            terminate_process_tree(server)
+            fh.close()
 
 
 def mujoco_name_to_id(model, obj: str, name: str) -> int:
