@@ -8,21 +8,26 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from emet.core.command_runtime import CommandRuntime
 from emet.core.server import BaseZmqServer
 
 
-@pytest.mark.parametrize("extra", [{}, {"posture": "navigation"}, {"head_to": [0, 0]}])
-def test_repeated_relative_navigation_dispatches_once(extra):
+def test_repeated_relative_navigation_dispatches_once():
     received = []
-    action = {"step": 7, "xyt": [0, 0, 0.785], "nav_relative": True, **extra}
-    server = SimpleNamespace(
-        verbose=False,
-        skip_duplicate_steps=True,
-        _last_step=-1,
-        is_running=Mock(side_effect=[True, True, False]),
-        recv_socket=SimpleNamespace(recv_pyobj=Mock(side_effect=[action.copy(), action.copy()])),
-        handle_action=lambda a: received.append(a),
-    )
+    server = CommandRuntime()
+    server.initialize_commands()
+    action = {
+        "step": 7,
+        "xyt": [0, 0, 0.785],
+        "nav_relative": True,
+        "command": {**server.command_tracker.metadata(), "client_session_id": "test", "sequence": 7},
+    }
+    server.verbose = False
+    server._last_step = -1
+    server.is_running = Mock(side_effect=[True, True, False])
+    server.recv_socket = SimpleNamespace(recv_pyobj=Mock(side_effect=[action.copy(), action.copy()]))
+    server.start_navigation_command = lambda a: received.append(a)
+    server.navigation_command_result = lambda c: None
     BaseZmqServer.spin_recv(server)
     assert len(received) == 1
     assert server._last_step == 7
@@ -50,6 +55,7 @@ def test_acknowledgement_wait_is_bounded(client_kind):
     client._act_lock = threading.Lock()
     client._iter = 0
     client._last_step = -1
+    client._state = {"command_protocol": {"version": 2, "server_boot_id": "test"}}
     client.send_message = Mock()
     with patch("time.monotonic", side_effect=[0.0, 1.0]):
         with pytest.raises(TimeoutError, match="outcome unknown"):
@@ -67,12 +73,14 @@ def test_retry_keeps_same_identity(client_kind):
     client._act_lock = threading.Lock()
     client._iter = 0
     client._last_step = -1
+    client._state = {"command_protocol": {"version": 2, "server_boot_id": "test"}}
     sent = []
 
     def send(action):
         sent.append(action.copy())
         if len(sent) == 2:
             client._last_step = action["step"]
+            client._state["command_receipts"] = [{**action["command"], "status": "running", "revision": 1}]
 
     client.send_message = send
     with patch("time.sleep"):

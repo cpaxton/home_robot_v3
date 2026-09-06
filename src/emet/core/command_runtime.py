@@ -60,8 +60,6 @@ class CommandRuntime:
                     goal = payload["xyt"]
                     if not isinstance(goal, list) or len(goal) != 3 or not all(math.isfinite(float(v)) for v in goal):
                         raise ValueError("navigation goal must contain three finite coordinates")
-                    if self._navigation_fault:
-                        raise ValueError("navigation locked after unconfirmed stop; restart after inspection")
                 dispatch, receipt = self.command_tracker.accept(identity, payload)
             except (ValueError, TypeError, OverflowError) as exc:
                 self._command_error = {**identity, "reason": str(exc)}

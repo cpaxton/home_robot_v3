@@ -557,6 +557,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Signal threads to stop, join them, and close ZMQ sockets (idempotent)."""
         if self._zmq_closed:
             return
+        from emet.core.command_client import close_command_session
+
+        close_command_session(self)
         self._zmq_closed = True
         self._finish = True
         for attr in ("_rerun_thread", "_recv_thread", "_state_thread", "_servo_thread"):
@@ -912,20 +915,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         timeout: float = 5.0,
         reliable: bool = True,
     ) -> dict[str, Any]:
-        with self._act_lock:
-            block_id = max(self._iter, self._last_step + 1)
-            action["step"] = block_id
-            self._iter = block_id + 1
-            deadline = time.monotonic() + timeout
-            self.send_message(action)
-            while reliable and self._last_step < block_id:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError(f"Command {block_id} was not acknowledged within {timeout}s; outcome unknown")
-                time.sleep(0.05)
-                if self._last_step >= block_id:
-                    break
-                self.send_message(action)
-        return action
+        from emet.core.command_client import send_command
+
+        return send_command(self, action, timeout=timeout, reliable=reliable)
 
     def set_velocity(self, v: float, w: float) -> None:
         """Set base translational (v) and rotational (w) velocity setpoints."""
@@ -1009,16 +1001,11 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         origin[1],
                     )
                     return False
-        self.send_action(action)
+        sent = self.send_action(action)
         if blocking:
-            # PUB/SUB can drop the first packet; give the server a beat to apply xyt.
-            time.sleep(0.02)
-            # Avoid succeeding immediately on a stale ``at_goal`` from the previous navigation
-            # before the server recv thread clears it for the new goal.
-            t_clear = timeit.default_timer()
-            while not self._nav_goal_reset_seen() and timeit.default_timer() - t_clear < 1.0:
-                time.sleep(0.01)
-            return self._wait_at_goal(timeout=wait_s, target_xyt=xyt)
+            from emet.core.command_client import wait_navigation
+
+            return wait_navigation(self, sent, wait_s)
         return True
 
     def _wait_at_goal(self, timeout: float = 30.0, target_xyt: np.ndarray | None = None) -> bool:

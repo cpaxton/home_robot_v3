@@ -818,7 +818,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
         # Absolute episode pose (idempotent under reliable resend). ``nav_world`` only when asked.
         use_world = bool(world_frame) and not relative
-        next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": blocking}
+        next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": False}
         if use_world:
             next_action["nav_world"] = True
         from emet.simulation.env_flags import env_sim_nav_teleport
@@ -844,21 +844,15 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if teleport and blocking:
             # Snap is near-instant; long waits usually mean a frame mismatch, not slow driving.
             wait_timeout = min(wait_timeout, 3.0)
-        action = self.send_action(next_action, timeout=wait_timeout, verbose=verbose, reliable=reliable)
+        next_action["nav_timeout_s"] = wait_timeout
+        action = self.send_action(next_action, verbose=verbose, reliable=reliable)
 
         # Make sure we had time to read
         if blocking:
-            block_id = action["step"]
-            time.sleep(0.1)
-            # goal_xyt is episode-frame when relative (composed) or absolute episode/world.
-            # For world_frame goals, yaw must be compared in world frame (see world_frame=).
-            self._wait_for_base_motion(
-                block_id,
-                goal_angle=float(goal_xyt[2]),
-                verbose=verbose,
-                timeout=wait_timeout,
-                world_frame=use_world,
-            )
+            from emet.core.command_client import wait_navigation
+
+            return wait_navigation(self, action, wait_timeout)
+        return True
 
     def set_velocity(self, v: float, w: float):
         """Move to xyt in global coordinates or relative coordinates.
@@ -1725,35 +1719,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             print(" - yaw: ", cur_joints[3])
             print(" - pitch: ", cur_joints[4])
             print(" - roll: ", cur_joints[5])
-        block_id = None
-        with self._act_lock:
-            # Send it
-            block_id = max(self._iter, self._last_step + 1)
-            next_action["step"] = block_id
-            self._iter = block_id + 1
+        from emet.core.command_client import send_command
 
-            deadline = time.monotonic() + timeout
-            self.send_message(next_action)
-
-            while reliable and self._last_step < block_id:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError(f"Command {block_id} was not acknowledged within {timeout}s; outcome unknown")
-                time.sleep(0.05)
-                if self._last_step >= block_id:
-                    break
-                self.send_message(next_action)
-
-            # For tracking goal
-            if "xyt" in next_action:
-                next_action["xyt"][2]
-            else:
-                pass
-
-            # Empty it out for the next one
-            current_action = next_action
-
-        # Returns the current action in case we want to do something with it like resend
-        return current_action
+        return send_command(self, next_action, timeout=timeout, reliable=reliable)
 
     def blocking_spin(self, verbose: bool = False, visualize: bool = False):
         """Listen for incoming observations and update internal state"""
@@ -2211,6 +2179,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Stop the client and close all sockets. Safe to call even if __init__ failed partway."""
         if self._zmq_closed:
             return
+        from emet.core.command_client import close_command_session
+
+        close_command_session(self)
         self._zmq_closed = True
         self._finish = True
         for attr in ("_thread", "_state_thread", "_servo_thread", "_rerun_thread"):

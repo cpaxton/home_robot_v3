@@ -359,6 +359,11 @@ class MujocoZmqServer(BaseZmqServer):
             time.sleep(1 / self.hz)
 
     def control_loop_callback(self):
+        # Serialize controller writes with command cancellation.
+        with self._command_lock:
+            self._control_loop_callback()
+
+    def _control_loop_callback(self):
         """Actual controller timer callback"""
 
         if self._status is None:
@@ -390,7 +395,7 @@ class MujocoZmqServer(BaseZmqServer):
 
             # Check if actually done (velocity = 0)
             if done and vel_odom is not None:
-                if vel_odom[0] < VEL_THRESHOlD and vel_odom[1] < RVEL_THRESHOLD:
+                if abs(vel_odom[0]) < VEL_THRESHOlD and abs(vel_odom[1]) < RVEL_THRESHOLD:
                     if not self.controller_finished:
                         self.controller_finished = True
                         self.done_since = timeit.default_timer()
@@ -416,6 +421,25 @@ class MujocoZmqServer(BaseZmqServer):
     def base_controller_at_goal(self):
         """Check if the base controller is at goal."""
         return self._base_controller_at_goal
+
+    def start_navigation_command(self, action):
+        self._contract_navigation_context = None
+        self.handle_action(action)
+        if self._contract_navigation_context is None:
+            raise RuntimeError("simulator did not install navigation goal")
+        return self._contract_navigation_context
+
+    def navigation_command_result(self, context):
+        from emet.core.navigation_result import measured_arrival
+
+        if not self.base_controller_at_goal():
+            return None
+        return measured_arrival(context, self.get_base_pose(), xy_tolerance=0.07, yaw_tolerance=0.15)
+
+    def cancel_navigation_command(self):
+        self.active = False
+        self.xyt_goal = None
+        return self.robot_sim.cancel_base_motion()
 
     def _stretch_sim_publish_ok(self) -> bool:
         """True while the Stretch subprocess can answer pull_* / poses (avoid IPC errors during shutdown)."""
@@ -918,10 +942,12 @@ class MujocoZmqServer(BaseZmqServer):
             # xyt_global_to_base(_initial_xyt)). nav_world goals arrive in MuJoCo world frame, so
             # convert back to episode-relative before set_goal_pose, or the goal is offset by the
             # spawn position and the base circles forever. Non-world xyt is already episode-relative.
-            if nav_world and not relative_motion:
-                goal_episode = self._world_to_base_xyt(world)
-            else:
-                goal_episode = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)[:3]
+            goal_episode = self._world_to_base_xyt(world)
+            self._contract_navigation_context = {
+                "resolved_goal": goal_episode.tolist(),
+                "frame": "episode",
+                "motion_mode": "teleport" if nav_teleport else "velocity_drive",
+            }
             if nav_teleport:
                 if self._teleport_base_world(world):
                     self.active = False
@@ -932,7 +958,7 @@ class MujocoZmqServer(BaseZmqServer):
                         f"MolmoSpaces teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
                     )
                 else:
-                    self.set_goal_pose(goal_episode, relative=False)
+                    raise RuntimeError("requested teleport could not be applied")
             else:
                 self.set_goal_pose(goal_episode, relative=False)
 

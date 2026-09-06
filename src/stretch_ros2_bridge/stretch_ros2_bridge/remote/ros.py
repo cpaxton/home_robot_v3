@@ -591,6 +591,9 @@ class StretchRosInterface(Node):
 
     def _odom_callback(self, msg: Odometry):
         """odometry callback"""
+        import time
+
+        self.navigation_velocity_feedback = (time.monotonic(), msg.twist.twist.linear.x, msg.twist.twist.angular.z)
         self._last_odom_update_timestamp = msg.header.stamp
         self.se3_base_odom = sp.SE3(matrix_from_pose_msg(msg.pose.pose))
 

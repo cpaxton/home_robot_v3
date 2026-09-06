@@ -186,6 +186,31 @@ class ZmqServer(BaseZmqServer):
             "step": self._last_step,
         }
 
+    def start_navigation_command(self, action):
+        if action.get("nav_teleport"):
+            raise ValueError("teleport is unavailable on hardware")
+        if self.client._ros.get_base_pose_matrix() is None:
+            raise RuntimeError("navigation requires odometry")
+        nav = self.client._ros.nav
+        if not nav.move_base_to(
+            action["xyt"], relative=bool(action.get("nav_relative")), blocking=False, timeout_s=action["nav_timeout_s"]
+        ):
+            raise RuntimeError("Nav2 did not accept navigation dispatch")
+        return nav.command_context
+
+    def navigation_command_result(self, context):
+        from emet.core.navigation_result import measured_arrival
+
+        status = self.client._ros.nav.terminal_status()
+        if status is None:
+            return None
+        if status != "succeeded":
+            return "failed", {"nav2_status": status}
+        return measured_arrival(context, self.client.base_pose_xyt, xy_tolerance=0.15, yaw_tolerance=0.35)
+
+    def cancel_navigation_command(self):
+        return self.client._ros.nav.cancel_navigation()
+
     @override
     def handle_action(self, action: dict[str, Any]):
         if action is None:

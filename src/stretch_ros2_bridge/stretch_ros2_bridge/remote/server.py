@@ -117,6 +117,31 @@ class ZmqServer(BaseZmqServer):
         }
         return message
 
+    def start_navigation_command(self, action):
+        from emet.utils.geometry import xyt_base_to_global
+
+        if action.get("nav_teleport"):
+            raise ValueError("teleport is unavailable on hardware")
+        if not self.client.in_navigation_mode():
+            raise RuntimeError("switch to navigation posture before submitting a navigation goal")
+        goal = np.asarray(action["xyt"], dtype=float)
+        if action.get("nav_relative"):
+            goal = xyt_base_to_global(goal, self.client.get_base_pose())
+        self.client.nav.move_base_to(goal.tolist(), relative=False, blocking=False)
+        return {"resolved_goal": goal.tolist(), "frame": "filtered_base_pose", "motion_mode": "goto_controller"}
+
+    def navigation_command_result(self, context):
+        from emet.core.navigation_result import measured_arrival
+
+        if self.client.is_runstopped:
+            return "failed", {"reason": "robot runstopped"}
+        if not self.client.at_goal():
+            return None
+        return measured_arrival(context, self.client.get_base_pose(), xy_tolerance=0.07, yaw_tolerance=0.15)
+
+    def cancel_navigation_command(self):
+        return self.client.nav.cancel_navigation()
+
     @override
     def handle_action(self, action: dict[str, Any]):
         """Handle an action from the client."""

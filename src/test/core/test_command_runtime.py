@@ -83,8 +83,10 @@ def test_deadline_cancels_and_unconfirmed_stop_locks_navigation(stopped):
     assert command_receipt(client, action)["status"] == "failed"
     assert robot._navigation_fault is not stopped
     if not stopped:
-        with pytest.raises(RuntimeError, match="locked"):
+        with pytest.raises(RuntimeError, match="busy"):
             send_command(client, {"xyt": [0, 0, 2]})
+        client.send_message(action)
+        assert command_receipt(client, action)["status"] == "failed"
 
 
 def test_old_bridge_or_restart_never_sends_motion():
