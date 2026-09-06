@@ -1924,8 +1924,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             if self._mjdata is None or self._mjmodel is None:
                 return False
             if self._teleport_planar_base_world_xyt(wx, wy, wt):
-                # Align arm/wheel ``ctrl`` with ``qpos`` after snapping planar joints (no extra mj_forward).
-                self._sync_actuator_ctrl_from_joint_positions()
+                # Base motion must preserve commanded torso/arm posture, not
+                # turn gravity-induced tracking error into a new setpoint.
+                self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                 # Held freejoints must move with the EE immediately; do not wait for the next mj_step
                 # (Molmo place approach was leaving the object near the pre-teleport pose).
                 self._snap_kinematic_attachments()
@@ -2002,7 +2003,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if alpha >= 1.0 - 1e-9:
             self._nav_yaw_slew = None
             self._zero_base_free_joint_velocity()
-            self._sync_actuator_ctrl_from_joint_positions()
+            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
             self._snapshot_stationary_planar_base_qpos()
             self._at_goal = True
 
@@ -2300,7 +2301,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         else:
                             self._nav_goal_world = None
                             self._zero_base_free_joint_velocity()
-                            self._sync_actuator_ctrl_from_joint_positions()
+                            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                             # Freejoint robots must refresh the idle snap or hold reverts teleport.
                             self._snapshot_stationary_base_freejoint_pose()
                             self._snapshot_stationary_planar_base_qpos()
@@ -2316,7 +2317,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._at_goal = True
                     else:
                         self._zero_base_free_joint_velocity()
-                        self._sync_actuator_ctrl_from_joint_positions()
+                        self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                         self._nav_goal_world = np.array([wx, wy, wt], dtype=np.float64)
                         self._nav_drive_debug_ticks = 0
                         self._log_nav_action(nav_meta, applied="velocity_drive")
