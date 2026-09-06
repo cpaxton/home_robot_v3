@@ -22,3 +22,20 @@ def test_policy_enables_shared_loop_without_changing_fusion_or_budgets():
 def test_incompatible_policy_fails_explicitly(backend, fusion):
     with pytest.raises(ValueError):
         enable_query_driven_memory(Parameters(graph_object_fusion=fusion), backend)
+
+
+def test_mujoco_find_cli_exposes_query_policy():
+    from click.testing import CliRunner
+
+    from emet.app.eval_ovmm import ovmm_group
+
+    result = CliRunner().invoke(ovmm_group, ["find", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--query-driven-memory" in result.output
+
+
+def test_mujoco_query_policy_rejects_wrong_backend_before_sim_start():
+    from emet.eval.ovmm_find_phase import FindPhaseRunConfig, run_episode_find_phase
+
+    with pytest.raises(ValueError, match="lazy_graph"):
+        run_episode_find_phase(None, FindPhaseRunConfig(backend="dynamem", query_driven_memory=True))

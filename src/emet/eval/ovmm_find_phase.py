@@ -1577,6 +1577,8 @@ def run_episode_find_phase(
     from emet.utils.process_tree import popen_session, terminate_process_tree
 
     use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
+    if run_cfg.query_driven_memory and (run_cfg.backend != "lazy_graph" or not use_agentic):
+        raise ValueError("query-driven memory requires lazy_graph and agentic find")
     s0_parity, s0_phrase_only = resolve_s0_parity_flags(episode, run_cfg, use_agentic=use_agentic)
 
     if run_cfg.seed is not None:
@@ -1645,6 +1647,10 @@ def run_episode_find_phase(
             s0_parity=s0_parity,
             use_agentic=use_agentic,
         )
+        if run_cfg.query_driven_memory:
+            from emet.eval.benchmark_dynagraph import enable_query_driven_memory
+
+            enable_query_driven_memory(parameters, run_cfg.backend)
         # Keep the shared SigLIP encoder (get_shared_mask_siglip_encoder, load-once)
         # so the voxel semantic memory gets per-point features — the agentic find
         # seeds receptacle search from SigLIP text grounding (no label match needed).
@@ -1897,6 +1903,7 @@ def run_episode_find_phase(
             "episode_id": episode.id,
             "tier": episode.tier,
             "backend": run_cfg.backend,
+            "query_driven_memory": run_cfg.query_driven_memory,
             "sim": episode.sim,
             "object_query": object_query,
             "start_recep": episode.start_recep,
