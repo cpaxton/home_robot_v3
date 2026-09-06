@@ -22,6 +22,13 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 
+def image_up_world_z(camera_pose: np.ndarray, intrinsics: np.ndarray) -> float:
+    """World-up component of decreasing image rows, including signed/rotated K."""
+    image_up_camera = np.linalg.solve(intrinsics, np.array([0.0, -1.0, 0.0]))
+    image_up_world = camera_pose[:3, :3] @ image_up_camera
+    return float(image_up_world[2] / np.linalg.norm(image_up_world))
+
+
 def _wait_port(port: int, timeout: float, proc: subprocess.Popen | None = None) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -169,7 +176,10 @@ def main() -> int:
                 try:
                     cp4 = np.asarray(cam_pose, dtype=np.float64).reshape(4, 4)
                     report["cam_origin"] = [round(float(x), 3) for x in cp4[:3, 3]]
-                    report["camera_up_dot_world_z"] = float(-cp4[2, 1])
+                    report["raw_camera_up_dot_world_z"] = float(-cp4[2, 1])
+                    intrinsics = getattr(obs, "camera_K", None)
+                    if intrinsics is not None:
+                        report["camera_up_dot_world_z"] = image_up_world_z(cp4, np.asarray(intrinsics))
                     report["camera_forward_z"] = float(cp4[2, 2])
                 except Exception:
                     report["cam_origin"] = [round(float(x), 3) for x in cam_pose[:3]]
