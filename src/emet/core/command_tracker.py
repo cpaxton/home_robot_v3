@@ -33,6 +33,7 @@ class CommandTracker:
         self._lock = threading.RLock()
         self._receipts: OrderedDict[tuple[str, int], dict] = OrderedDict()
         self._session: str | None = None
+        self._retired_sessions: set[str] = set()
         self._high_water = -1
         self._active: tuple[str, int] | None = None
 
@@ -41,7 +42,11 @@ class CommandTracker:
 
     def accept(self, envelope: dict, payload: dict) -> tuple[bool, dict]:
         """Return (dispatch, receipt). Invalid envelopes never consume identity."""
-        if envelope.get("version") != PROTOCOL_VERSION or envelope.get("server_boot_id") != self.boot_id:
+        if (
+            not isinstance(envelope, dict)
+            or envelope.get("version") != PROTOCOL_VERSION
+            or envelope.get("server_boot_id") != self.boot_id
+        ):
             raise ValueError("incompatible protocol or server boot")
         session, sequence = envelope.get("client_session_id"), envelope.get("sequence")
         if not isinstance(session, str) or not session or len(session) > 128:
@@ -55,6 +60,13 @@ class CommandTracker:
             raise ValueError("navigation timeout must be positive and finite")
         key = (session, sequence)
         with self._lock:
+            if session in self._retired_sessions:
+                previous = self._receipts.get(key)
+                if previous is not None and previous["payload_digest"] == digest:
+                    return False, deepcopy(previous)
+                raise ValueError("retired client session; execution forbidden")
+            if self._session is None and len(self._retired_sessions) >= self.capacity:
+                raise ValueError("session capacity exhausted; restart server before acquiring control")
             if self._session is not None and session != self._session:
                 raise ValueError("another client owns this server session")
             previous = self._receipts.get(key)
@@ -66,7 +78,7 @@ class CommandTracker:
                 raise ValueError("stale or evicted command; execution forbidden")
             self._session = session
             self._high_water = sequence
-            busy = navigation and self._active is not None
+            busy = self._active is not None and not set(payload) <= {"cancel_navigation", "say"}
             receipt = {
                 **self.metadata(),
                 "client_session_id": session,
@@ -85,7 +97,18 @@ class CommandTracker:
                 del self._receipts[victim]
             return not busy, deepcopy(receipt)
 
-    def transition(self, session: str, sequence: int, status: str, *, reason=None) -> dict:
+    def release_control(self, session: str):
+        """Explicit handoff only after confirmed stop; retired identities never execute again."""
+        with self._lock:
+            if session != self._session or self._active is not None:
+                raise ValueError("cannot release control with active navigation or mismatched owner")
+            self._retired_sessions.add(session)
+            self._session = None
+            self._high_water = -1
+
+    def transition(
+        self, session: str, sequence: int, status: str, *, reason=None, result=None, release_navigation=True
+    ) -> dict:
         with self._lock:
             key = (session, sequence)
             receipt = self._receipts[key]
@@ -96,7 +119,9 @@ class CommandTracker:
             if status not in TERMINAL | {"running"}:
                 raise ValueError("invalid command transition")
             receipt.update(status=status, reason=reason, revision=receipt["revision"] + 1)
-            if status in TERMINAL and self._active == key:
+            if result is not None:
+                receipt["result"] = deepcopy(result)
+            if status in TERMINAL and self._active == key and release_navigation:
                 self._active = None
             return deepcopy(receipt)
 
