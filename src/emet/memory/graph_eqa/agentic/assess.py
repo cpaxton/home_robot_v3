@@ -26,7 +26,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def _extract_vlm_target(self) -> None:
     """Text-only VLM: pick the seek/verify phrase + close-look flag once per episode."""
     if not self._close_look:
@@ -34,8 +33,7 @@ def _extract_vlm_target(self) -> None:
         self._close_look_source = "disabled"
     if self.mode != "answer" or not self.question:
         return
-    gm = self.graph_memory
-    client = getattr(gm, "eqa_client", None) if gm is not None else None
+    client = self.eqa_client
     from emet.memory.graph_eqa.graph_memory import heuristic_relevant_phrases
 
     phrases = heuristic_relevant_phrases(self.question)
@@ -82,6 +80,7 @@ def _extract_vlm_target(self) -> None:
         }
     )
 
+
 def _apply_close_look_fallback(self) -> None:
     """Keyword heuristic when no VLM is available (or the classifier is off)."""
     if not self._close_look:
@@ -95,6 +94,7 @@ def _apply_close_look_fallback(self) -> None:
         self._close_look_required = False
         self._close_look_source = "none"
 
+
 def _escape_min_travel_m(self) -> float:
     """Distance the next frontier must clear once the target keeps not showing up."""
     if self.decision_policy == "grounded_v2":
@@ -102,6 +102,7 @@ def _escape_min_travel_m(self) -> float:
     if self._not_present_streak < NOT_PRESENT_ESCAPE_STREAK:
         return 0.0
     return ESCAPE_MIN_TRAVEL_M
+
 
 def _update_escape_streak(self, *, present: bool) -> None:
     """Track consecutive not-visible views and publish the escape floor to the picker."""
@@ -111,9 +112,11 @@ def _update_escape_streak(self, *, present: bool) -> None:
         self._not_present_streak += 1
     self.agent._explore_min_travel_m = 0.0 if self.decision_policy == "grounded_v2" else self._escape_min_travel_m()
 
+
 def _mcq_letter_from_suggested(self, raw: Any) -> str:
     """Map semantic VLM answer text to the benchmark choice encoding."""
     return self._mcq_letter_from_text(str(raw or ""))
+
 
 def _view_identity_for_obs(self, obs_id: int | None) -> tuple[int, str]:
     if obs_id is None:
@@ -134,6 +137,7 @@ def _view_identity_for_obs(self, obs_id: int | None) -> tuple[int, str]:
         except (TypeError, ValueError):
             view_id = ""
     return revision, view_id
+
 
 def _persist_agentic_evidence(
     self,
@@ -174,6 +178,7 @@ def _persist_agentic_evidence(
         _logger.warning(f"persist {stage} evidence failed: {exc}")
         return ""
 
+
 def _record_answer_evidence(
     self,
     *,
@@ -213,13 +218,12 @@ def _record_answer_evidence(
         item
         for item in self._answer_evidence
         if not (
-            item.source == record.source
-            and item.obs_id == record.obs_id
-            and item.obs_revision == record.obs_revision
+            item.source == record.source and item.obs_id == record.obs_id and item.obs_revision == record.obs_revision
         )
     ]
     self._answer_evidence.append(record)
     return record
+
 
 def _best_vlm_answer_evidence(self, *, letter: str = "") -> AnswerEvidenceRecord | None:
     expected = self._mcq_letter_from_text(letter)
@@ -262,6 +266,7 @@ def _best_vlm_answer_evidence(self, *, letter: str = "") -> AnswerEvidenceRecord
         ),
     )
 
+
 def _confirmed_vlm_answer_evidence(self, *, letter: str = "") -> AnswerEvidenceRecord | None:
     """Return the latest VLM answer that opened the ANSWER gate."""
     record = self._confirmed_answer_evidence
@@ -277,6 +282,7 @@ def _confirmed_vlm_answer_evidence(self, *, letter: str = "") -> AnswerEvidenceR
         return None
     return record
 
+
 def _question_is_mcq(self) -> bool:
     """True for HM-EQA-style A–D questions; False for open find/localize questions."""
     from emet.habitat.metrics import parse_mcq_choices_from_question
@@ -284,6 +290,7 @@ def _question_is_mcq(self) -> bool:
     if parse_mcq_choices_from_question(self.question):
         return True
     return bool(getattr(self, "_mcq_choices", None))
+
 
 def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
     """True when target/stem tokens appear in inventory or labels near obs."""
@@ -313,6 +320,7 @@ def _answerable_phrase_hit(self, *, obs_id: int, phrase: str) -> bool:
     if not blob.strip():
         return False
     return any(t in blob for t in tokens)
+
 
 def _maybe_confirm_answerable(
     self,
@@ -394,6 +402,7 @@ def _maybe_confirm_answerable(
     }
     return False, "deferred"
 
+
 def _run_vlm_view_assess(
     self,
     *,
@@ -418,7 +427,7 @@ def _run_vlm_view_assess(
             "error": f"obs_id {oid} already VLM-assessed",
         }
     gm = self.graph_memory
-    client = getattr(gm, "eqa_client", None) if gm is not None else None
+    client = self.eqa_client
     if client is None:
         self._append_trace(
             {
@@ -457,9 +466,7 @@ def _run_vlm_view_assess(
         phrase=str(phrase or self._target_phrase or ""),
         confidence=0.9,
         source="vlm_view_assess",
-        supporting_event_ids=tuple(
-            item for item in (str((proposal or {}).get("evidence_event_id") or ""),) if item
-        ),
+        supporting_event_ids=tuple(item for item in (str((proposal or {}).get("evidence_event_id") or ""),) if item),
         payload={
             "answerable": bool(assessment.answerable),
             "need_more_views": bool(assessment.need_more_views),
@@ -493,9 +500,7 @@ def _run_vlm_view_assess(
         str(assessment.reason or "")[:80],
     )
     # Trust the VLM assess. Cheap detector status is nav/debug only.
-    proposal_status = str(
-        (proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or ""
-    ).upper()
+    proposal_status = str((proposal or {}).get("decision") or getattr(self._last_verify, "status", "") or "").upper()
     vlm_assessment = None
     try:
         vlm_assessment = self._evidence_policy.apply_vlm_assessment(
@@ -659,9 +664,7 @@ def _run_vlm_view_assess(
                 confidence=_PROVENANCE_CONFIDENCE["vlm_suggested"],
                 raw=assessment.raw,
                 evidence_event_ids=(
-                    self._verified_evidence_event_ids
-                    if confirmed
-                    else tuple(item for item in (vlm_event_id,) if item)
+                    self._verified_evidence_event_ids if confirmed else tuple(item for item in (vlm_event_id,) if item)
                 ),
             )
     if confirmed and answer_evidence is not None:

@@ -26,6 +26,7 @@ class QueryCandidate:
     grounded_revision: int | None = None
     invalidation_reason: str = ""
     rejected_revision: int | None = None
+    target_description: str | None = None
 
     def require_grounding(self, observation_revision: int) -> int:
         """Return the instance identity only for the observation just verified."""

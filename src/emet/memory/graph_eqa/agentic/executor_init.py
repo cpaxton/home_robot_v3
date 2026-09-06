@@ -367,6 +367,8 @@ def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str
     args = dict(args or {})
     name = (name or "").strip().lower()
     top_level = self._tool_dispatch_depth == 0
+    if top_level and name != "inspect_graph":
+        self._unchanged_inspections = 0
     if top_level:
         args, gate_error = self._prepare_action_progress_dispatch(name, args)
         if gate_error is not None:

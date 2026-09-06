@@ -124,9 +124,25 @@ class LazyGraphController(DynagraphController):
             frame, min_depth=vm.min_depth, max_depth=vm.max_depth, detection_model=detector
         )
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
-        # Fusion's permissive shared-token matching is not a target verifier:
-        # "red chair" and "red mug" must not authorize the same action target.
-        matches = [d for d in detections if " ".join(d["label_short"].lower().split()) == record.query]
+        from emet.memory.query_grounding import cache_grounding_record, select_query_detections
+
+        matching_ids, verification = select_query_detections(
+            record.query,
+            record.target_description,
+            detections,
+            rgb,
+            client=getattr(self.graph_memory, "eqa_client", None),
+        )
+        cache_grounding_record(
+            (self.parameters.get("query_memory", {}) or {}).get("grounding_cache_dir"),
+            query=record.query,
+            revision=len(vm.observations),
+            source_obs_id=record.source_obs_id,
+            detections=detections,
+            matching_ids=matching_ids,
+            verification=verification,
+        )
+        matches = [d for d in detections if d["instance_id"] in matching_ids]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
             self.query_candidates.reject(
                 handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"

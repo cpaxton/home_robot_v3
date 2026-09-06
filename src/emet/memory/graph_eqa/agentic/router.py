@@ -361,8 +361,12 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     Returns (tool_calls, picked_by, router_meta) where router_meta feeds the offline tuner.
     """
     meta: dict[str, Any] = {"raw_reply_chars": 0, "parse_ok": False, "tool_calls": []}
+    if getattr(self, "_unchanged_inspections", 0) >= 2:
+        tool, args = self._fallback_tool()
+        self._append_trace({"event": "inspection_no_progress", "tool": tool, "args": args})
+        return [(tool, args)], "inspection_no_progress", meta
     gm = self.graph_memory
-    client = getattr(gm, "eqa_client", None) if gm is not None else None
+    client = self.eqa_client
     if not self._router_enabled or client is None:
         if self.decision_policy == "grounded_v2":
             state = build_state_message(self)

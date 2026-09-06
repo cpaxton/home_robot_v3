@@ -340,6 +340,7 @@ def _voxel_localize_hypotheses(self) -> list[NavHypothesis]:
             candidate = self.agent.propose_query_candidate(phrase, xyz, stats)
             if candidate is None:
                 continue
+            candidate.target_description = self.question or self.goal or None
             handle = candidate.handle
         out.append(
             NavHypothesis(
