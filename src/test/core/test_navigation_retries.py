@@ -11,9 +11,10 @@ import pytest
 from emet.core.server import BaseZmqServer
 
 
-def test_repeated_relative_navigation_dispatches_once():
+@pytest.mark.parametrize("extra", [{}, {"posture": "navigation"}, {"head_to": [0, 0]}])
+def test_repeated_relative_navigation_dispatches_once(extra):
     received = []
-    action = {"step": 7, "xyt": [0, 0, 0.785], "nav_relative": True}
+    action = {"step": 7, "xyt": [0, 0, 0.785], "nav_relative": True, **extra}
     server = SimpleNamespace(
         verbose=False,
         skip_duplicate_steps=True,
