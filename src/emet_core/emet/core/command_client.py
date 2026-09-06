@@ -77,6 +77,7 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
                 "sequence": sequence,
             },
         )
+        previous_navigation = getattr(client, "_last_navigation_command", None)
         if "xyt" in action:
             client._last_navigation_command = action
         deadline = time.monotonic() + timeout
@@ -84,6 +85,8 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
         while reliable:
             receipt = command_receipt(client, action)
             if receipt is not None:
+                if "xyt" in action and receipt["status"] == "rejected":
+                    client._last_navigation_command = previous_navigation
                 if receipt["status"] in {"failed", "rejected", "cancelled"}:
                     raise RuntimeError(f"Command {sequence} {receipt['status']}: {receipt.get('reason')}")
                 break
@@ -95,6 +98,19 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
         return action
 
 
+def cancel_navigation(client, action=None):
+    """Cancel the identified goal; accepting a cancel request alone is not success."""
+    action = action if action is not None else getattr(client, "_last_navigation_command", None)
+    if action is None:
+        return True
+    identity = action["command"]
+    send_command(client, {"cancel_navigation": {k: identity[k] for k in ("client_session_id", "sequence")}})
+    receipt = command_receipt(client, action)
+    return bool(
+        receipt and (receipt["status"] in {"succeeded", "cancelled"} or receipt.get("result", {}).get("stop_confirmed"))
+    )
+
+
 def wait_navigation(client, action, timeout):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -102,8 +118,7 @@ def wait_navigation(client, action, timeout):
         if receipt and receipt["status"] in TERMINAL:
             return receipt["status"] == "succeeded"
         time.sleep(0.05)
-    identity = action["command"]
-    send_command(client, {"cancel_navigation": {k: identity[k] for k in ("client_session_id", "sequence")}})
+    cancel_navigation(client, action)
     receipt = command_receipt(client, action)
     if not receipt or receipt["status"] not in TERMINAL:
         raise TimeoutError("Navigation expired; cancellation outcome unknown")
@@ -121,8 +136,8 @@ def close_command_session(client):
         if action is not None:
             receipt = command_receipt(client, action)
             if receipt is None or receipt["status"] not in TERMINAL:
-                identity = action["command"]
-                send_command(client, {"cancel_navigation": {k: identity[k] for k in ("client_session_id", "sequence")}})
+                if not cancel_navigation(client, action):
+                    raise RuntimeError("navigation stop was not confirmed")
         send_command(client, {"release_control": True}, timeout=2.0)
     except (RuntimeError, TimeoutError) as exc:
         logging.getLogger(__name__).warning("Control handoff not confirmed: %s", exc)

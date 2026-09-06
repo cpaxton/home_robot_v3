@@ -339,7 +339,6 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         self._emet_session_cache_step: int = -1
 
         self._base_xyt = np.zeros(3)
-        self._nav_goal_timeout_log_streak = 0
 
         self._rerun_debug = bool(rerun_debug) if enable_rerun_server else False
         self._rerun: Any = None
@@ -808,19 +807,14 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 return np.array(bp)
         return self._base_xyt.copy()
 
-    def _nav_goal_reset_seen(self) -> bool:
-        """True if any cached ZMQ message reports ``at_goal`` false (server cleared stale true)."""
-        with self._obs_lock:
-            chunks = (self._state, self._obs, self._servo)
-        for msg in chunks:
-            if msg is None:
-                continue
-            if not bool(msg.get("at_goal", False)):
-                return True
-        return False
-
     def at_goal(self) -> bool:
-        """True if any of state / full-obs / servo reports at goal (ZMQ CONFLATE can leave one socket stale)."""
+        """Use the latest navigation receipt; telemetry is diagnostic before the first command."""
+        action = getattr(self, "_last_navigation_command", None)
+        if action is not None:
+            from emet.core.command_client import command_receipt
+
+            receipt = command_receipt(self, action)
+            return bool(receipt and receipt["status"] == "succeeded")
         with self._obs_lock:
             chunks = (self._state, self._obs, self._servo)
         for msg in chunks:
@@ -923,6 +917,11 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Set base translational (v) and rotational (w) velocity setpoints."""
         self.send_action({"v": v, "w": w})
 
+    def cancel_navigation(self) -> bool:
+        from emet.core.command_client import cancel_navigation
+
+        return cancel_navigation(self)
+
     def move_base_to(
         self,
         xyt,
@@ -1006,30 +1005,6 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             from emet.core.command_client import wait_navigation
 
             return wait_navigation(self, sent, wait_s)
-        return True
-
-    def _wait_at_goal(self, timeout: float = 30.0, target_xyt: np.ndarray | None = None) -> bool:
-        t0 = timeit.default_timer()
-        while not self.at_goal():
-            time.sleep(0.05)
-            if timeit.default_timer() - t0 > timeout:
-                self._nav_goal_timeout_log_streak += 1
-                g = np.asarray(target_xyt, dtype=float).reshape(-1) if target_xyt is not None else None
-                goal_s = f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]" if g is not None and g.size >= 3 else str(target_xyt)
-                detail = (
-                    f"Navigation goal not reached within {timeout:.0f}s (target_xyt={goal_s}, "
-                    f"at_goal={self.at_goal()}). If this repeats, the sim may never set `at_goal`, "
-                    "the target may be unreachable, or try tighter `--goal-*` bounds / "
-                    "`emet run molmospaces-explore --navigate-every` less often."
-                )
-                if self._nav_goal_timeout_log_streak <= 2:
-                    logger.warning(detail)
-                else:
-                    logger.debug(
-                        f"{detail} (suppressing further identical warnings; streak={self._nav_goal_timeout_log_streak})"
-                    )
-                return False
-        self._nav_goal_timeout_log_streak = 0
         return True
 
     def set_joint_positions(self, positions: dict[str, float]) -> None:

@@ -81,7 +81,6 @@ class BaseZmqServer(CommandRuntime, CommsNode, ABC):
     report_steps = 1000
     fast_report_steps = 10000
     servo_report_steps = 1000
-    skip_duplicate_steps: bool = True
 
     def __init__(
         self,

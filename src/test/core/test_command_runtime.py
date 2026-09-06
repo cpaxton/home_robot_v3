@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from emet.core.command_client import command_receipt, send_command, wait_navigation
+from emet.core.command_client import cancel_navigation, command_receipt, send_command, wait_navigation
 from emet.core.command_runtime import CommandRuntime
 from emet.core.command_tracker import CommandTracker
 
@@ -112,6 +112,34 @@ def test_command_counter_is_independent_of_telemetry_counter():
     assert first["command"]["sequence"] == 0
     assert second["command"]["sequence"] == 1
     assert first["step"] == 0 and second["step"] == 900
+
+
+def test_busy_rejection_keeps_original_cancellation_target():
+    robot = Robot()
+    client = connection(robot)
+    original = send_command(client, {"xyt": [0, 0, 1]})
+    with pytest.raises(RuntimeError, match="busy"):
+        send_command(client, {"xyt": [0, 0, 2]})
+    assert client._last_navigation_command == original
+    assert cancel_navigation(client)
+    assert command_receipt(client, original)["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("client_kind", ["generic", "stretch"])
+def test_async_at_goal_cannot_accept_stale_telemetry(client_kind):
+    if client_kind == "generic":
+        from emet.controller.generic_zmq_client import GenericZmqClient as Client
+    else:
+        from emet.controller.zmq_client import StretchZmqClient as Client
+    robot = Robot()
+    client = connection(robot)
+    send_command(client, {"xyt": [0, 0, 1]})
+    client._state["at_goal"] = True
+    assert not Client.at_goal(client)
+    robot.outcome = ("succeeded", {})
+    robot.poll_navigation_command()
+    client._state = robot.command_message({"at_goal": False})
+    assert Client.at_goal(client)
 
 
 @pytest.mark.parametrize(

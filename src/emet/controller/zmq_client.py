@@ -1193,154 +1193,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         assert self._control_mode == mode
         return True
 
-    def _wait_for_base_motion(
-        self,
-        block_id: int,
-        verbose: bool = False,
-        timeout: float = 10.0,
-        moving_threshold: float | None = None,
-        angle_threshold: float | None = None,
-        min_steps_not_moving: int | None = None,
-        goal_angle: float | None = None,
-        goal_angle_threshold: float | None = 0.15,
-        resend_action: dict | None = None,
-        *,
-        world_frame: bool = False,
-    ) -> None:
-        """Wait for the navigation action to finish.
-
-        Args:
-            block_id(int): The unique, tracked integer id of the action to wait for
-            verbose(bool): Whether to print out debug information
-            timeout(float): How long to wait for the action to finish
-            moving_threshold(float): How far the robot must move to be considered moving
-            angle_threshold(float): How far the robot must rotate to be considered moving
-            min_steps_not_moving(int): How many steps the robot must not move for to be considered stopped
-            goal_angle(float): The goal angle to reach (same frame as ``world_frame``)
-            goal_angle_threshold(float): The threshold for the goal angle
-            resend_action(dict): The action to resend if the robot is not moving. If none, do not resend.
-            world_frame: When True, read pose via :meth:`get_base_pose_world` so yaw checks match
-                ``nav_world`` / Dynagraph planner goals.
-        """
-        timeout = self._scaled_motion_timeout(timeout)
-        logger.info(f"Navigation: waiting for motion step {block_id} to finish (timeout={timeout}s)")
-        last_pos = None
-        last_ang = None
-        last_obs_t = None
-        not_moving_count = 0
-        if moving_threshold is None:
-            moving_threshold = self._moving_threshold
-        if angle_threshold is None:
-            angle_threshold = self._angle_threshold
-        if min_steps_not_moving is None:
-            min_steps_not_moving = self._min_steps_not_moving
-        t0 = timeit.default_timer()
-        deadline = timeit.default_timer() + timeout  # wall-clock: always exit after timeout
-        close_to_goal = False
-        # Prefer published joint speeds when available so slow sims do not look "stuck moving"
-        # under wall-clock pose deltas, and so we can exit as soon as the base is actually idle.
-        base_lin_tol = max(float(moving_threshold), 0.01)
-        base_ang_tol = max(float(angle_threshold), 0.02)
-
-        while not self._finish:
-            # Minor delay at the end - give it time to get new messages
-            time.sleep(0.01)
-
-            if timeit.default_timer() > deadline:
-                logger.warning(f"Timeout ({timeout}s) waiting for navigation step {block_id}")
-                break
-
-            if not self.is_up_to_date():
-                if verbose:
-                    logger.debug("Waiting for client to receive and process action")
-                continue
-
-            with self._state_lock:
-                if self._state is None:
-                    if verbose:
-                        logger.debug("Waiting for state message")
-                    continue
-
-            with self._obs_lock:
-                if self._obs is None:
-                    if verbose:
-                        logger.debug("Waiting for observation")
-                    continue
-
-            xyt = self.get_base_pose_world() if world_frame else self.get_base_pose()
-            if xyt is None:
-                continue
-            pos = xyt[:2]
-            ang = xyt[2]
-            obs_t = timeit.default_timer()
-
-            if not self.at_goal():
-                # Still driving: keep waiting until goal flag or wall-clock deadline.
-                t0 = timeit.default_timer()
-                not_moving_count = 0
-                continue
-
-            moved_dist = np.linalg.norm(pos - last_pos) if last_pos is not None else float("inf")
-            angle_dist = angle_difference(ang, last_ang) if last_ang is not None else float("inf")
-            if goal_angle is not None:
-                angle_dist_to_goal = angle_difference(ang, goal_angle)
-                at_goal = angle_dist_to_goal < goal_angle_threshold
-            else:
-                at_goal = True
-
-            moved_speed = moved_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
-            angle_speed = angle_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
-
-            base_speeds = self._base_joint_speeds()
-            if base_speeds is not None:
-                base_lin, base_ang = base_speeds
-                vel_idle = base_lin < base_lin_tol and base_ang < base_ang_tol
-            else:
-                vel_idle = False
-
-            pose_idle = last_pos is not None and moved_speed < moving_threshold and angle_speed < angle_threshold
-            not_moving = vel_idle or pose_idle
-            if not_moving:
-                not_moving_count += 1
-            else:
-                not_moving_count = 0
-
-            # Check if we are at the goal
-            # If we are at the goal, we can stop if we are not moving
-            last_pos = pos
-            last_ang = ang
-            last_obs_t = obs_t
-            close_to_goal = at_goal
-            if verbose:
-                logger.debug(
-                    f"nav wait step={block_id} last_step={self._last_step} pos={pos} "
-                    f"moved={moved_dist:.4f} angle={angle_dist:.4f} not_moving={not_moving_count} "
-                    f"at_goal_flag={self._state['at_goal']} world_frame={world_frame} "
-                    f"vel_idle={vel_idle}"
-                )
-                logger.debug(
-                    f"nav wait min_steps={min_steps_not_moving} last_step={self._last_step} angle_ok={at_goal}"
-                )
-                if goal_angle is not None:
-                    logger.debug(f"Goal angle {goal_angle} angle dist to goal {angle_dist_to_goal}")
-            # Complete on goal + idle. With published base joint speeds, fewer idle polls are enough.
-            idle_needed = 1 if (vel_idle and at_goal) else min_steps_not_moving
-            if self._last_step >= block_id and at_goal and not_moving_count > idle_needed:
-                if verbose:
-                    logger.debug(f"Navigation at goal for step {block_id}")
-                break
-
-            # Resend the action if we are not moving for some reason and it's been provided
-            if resend_action is not None and not close_to_goal:
-                # Resend the action
-                self.send_action(resend_action)
-
-            t1 = timeit.default_timer()
-            if t1 - t0 > timeout:
-                logger.warning(f"Timeout waiting for navigation step {block_id} (inner loop)")
-                break
-                # raise RuntimeError(f"Timeout waiting for block with step id = {block_id}")
-
     def in_manipulation_mode(self) -> bool:
         """is the robot ready to grasp"""
         return self._control_mode == "manipulation"
@@ -1443,10 +1295,21 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         Returns:
             at_goal (bool): whether the robot is at the goal
         """
+        action = getattr(self, "_last_navigation_command", None)
+        if action is not None:
+            from emet.core.command_client import command_receipt
+
+            receipt = command_receipt(self, action)
+            return bool(receipt and receipt["status"] == "succeeded")
         with self._state_lock:
             if self._state is None:
                 return False
             return self._state["at_goal"]
+
+    def cancel_navigation(self) -> bool:
+        from emet.core.command_client import cancel_navigation
+
+        return cancel_navigation(self)
 
     def _sim_to_real_ratio(self) -> float | None:
         """Latest published sim/wall ratio from state, or ``None`` on hardware / early sim."""
