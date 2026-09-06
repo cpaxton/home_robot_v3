@@ -76,6 +76,27 @@ def test_voxel_router_client_does_not_attach_graph():
     assert agent.graph_memory is None
 
 
+def test_cache_saves_corresponding_pixels_and_depth(tmp_path):
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    cache_grounding_record(
+        tmp_path,
+        query="lamp",
+        revision=2,
+        source_obs_id=1,
+        detections=[detection()],
+        matching_ids=[],
+        verification={"source": "unverified"},
+        rgb=rgb,
+        depth=np.ones((8, 8)),
+        masks=np.zeros((8, 8), dtype=int),
+    )
+    record = json.loads(next(tmp_path.glob("*.json")).read_text())
+    assert (tmp_path / record["rgb_file"]).is_file()
+    with np.load(tmp_path / record["arrays_file"], allow_pickle=False) as arrays:
+        assert arrays["depth"].shape == (8, 8)
+        assert arrays["masks"].shape == (8, 8)
+
+
 def test_stalled_inspection_uses_existing_fallback_without_model_call():
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 

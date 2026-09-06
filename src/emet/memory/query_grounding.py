@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -60,12 +61,26 @@ def select_query_detections(query, description, detections, rgb, client=None):
     return (ids if valid else []), {"source": "fresh_vlm", "raw": raw, "valid": valid}
 
 
-def cache_grounding_record(directory, *, query, revision, source_obs_id, detections, matching_ids, verification):
+def cache_grounding_record(
+    directory,
+    *,
+    query,
+    revision,
+    source_obs_id,
+    detections,
+    matching_ids,
+    verification,
+    rgb=None,
+    depth=None,
+    masks=None,
+    metadata=None,
+):
     """Write immutable, pre-admission scores; never consumed by live grounding."""
     if not directory:
         return
     path = Path(directory)
     path.mkdir(parents=True, exist_ok=True)
+    prefix = f"grounding-{uuid4().hex}"
     record = {
         "schema_version": 1,
         "query": query,
@@ -74,9 +89,23 @@ def cache_grounding_record(directory, *, query, revision, source_obs_id, detecti
         "detections": detections,
         "matching_ids": matching_ids,
         "verification": verification,
+        "metadata": metadata or {},
     }
-    with (path / f"grounding-{uuid4().hex}.json").open("x") as stream:
+    if rgb is not None:
+        Image.fromarray(rgb).save(path / f"{prefix}.png")
+        record["rgb_file"] = f"{prefix}.png"
+    arrays = {}
+    for name, value in (("depth", depth), ("masks", masks)):
+        if value is not None:
+            if hasattr(value, "detach"):
+                value = value.detach().cpu().numpy()
+            arrays[name] = np.asarray(value)
+    if arrays:
+        np.savez_compressed(path / f"{prefix}.npz", **arrays)
+        record["arrays_file"] = f"{prefix}.npz"
+    with (path / f"{prefix}.json").open("x") as stream:
         json.dump(record, stream, allow_nan=False)
+    return str(path / f"{prefix}.json")
 
 
 def replay_grounding_admission(record, config):

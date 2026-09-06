@@ -133,21 +133,47 @@ class LazyGraphController(DynagraphController):
             rgb,
             client=getattr(self.graph_memory, "eqa_client", None),
         )
-        cache_grounding_record(
-            (self.parameters.get("query_memory", {}) or {}).get("grounding_cache_dir"),
+        import os
+        from dataclasses import asdict
+        from pathlib import Path
+
+        cache_dir = (self.parameters.get("query_memory", {}) or {}).get("grounding_cache_dir")
+        # The existing explicit episode artifact directory opts into diagnostic
+        # capture. No new runtime-policy environment flag is needed.
+        if not cache_dir and os.environ.get("EMET_EQA_EPISODE_DIR"):
+            cache_dir = Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "grounding"
+        cache_path = cache_grounding_record(
+            cache_dir,
             query=record.query,
             revision=len(vm.observations),
             source_obs_id=record.source_obs_id,
             detections=detections,
             matching_ids=matching_ids,
             verification=verification,
+            rgb=rgb,
+            depth=frame.depth,
+            masks=frame.instance,
+            metadata={
+                "target_description": record.target_description,
+                "retrieval_score": record.retrieval_score,
+                "admission_config": asdict(fusion.config),
+                "min_depth": vm.min_depth,
+                "max_depth": vm.max_depth,
+            },
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
             self.query_candidates.reject(
                 handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
             )
-            return {"ok": False, "reason": "target absent or ambiguous"}
+            return {
+                "ok": False,
+                "reason": "target absent or ambiguous",
+                "cache_path": cache_path,
+                "n_detections": len(detections),
+                "matching_ids": matching_ids,
+                "verification_source": verification["source"],
+            }
         det = matches[0]
         candidate = GraphDetectionCandidate(
             label=det["label_short"],
