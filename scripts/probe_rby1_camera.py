@@ -122,9 +122,11 @@ def main() -> int:
         for i in range(max(1, int(args.poses)) + 1):
             try:
                 if i and not args.stationary:
-                    robot.move_base_to(
+                    arrived = robot.move_base_to(
                         [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0
                     )
+                    if arrived is not True:
+                        raise RuntimeError("navigation did not report command-specific success")
             except Exception as e:
                 print(f"pose {i}: move failed: {e}", file=sys.stderr)
                 failures.append(f"pose {i}: move failed: {e}")
@@ -135,6 +137,7 @@ def main() -> int:
             cam_pose = np.asarray(getattr(obs, "camera_pose", None), dtype=np.float64).reshape(-1)
 
             report: dict[str, Any] = {"pose": i}
+            report["navigation_receipt"] = getattr(robot, "_command_receipt", None)
             q, _, _ = robot.get_joint_state()
             if q is not None:
                 report["joint_positions_named"] = dict(zip(spec.joint_names, np.asarray(q).tolist(), strict=False))

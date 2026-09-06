@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 import threading
 import time
 import timeit
@@ -17,10 +18,54 @@ import cv2
 import numpy as np
 import zmq
 
+from emet.core.command_runtime import CommandRuntime
 from emet.core.comms import CommsNode
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _zmq_timing_enabled(verbose: bool) -> bool:
+    """Periodic SEND/RECV timing lines: only with ``--verbose`` or ``EMET_ZMQ_TIMING=1``."""
+    return bool(verbose) or os.environ.get("EMET_ZMQ_TIMING", "").lower() in {"1", "true", "yes", "on"}
+
+
+def _send_period_s(env_name: str) -> float:
+    raw = os.environ.get(env_name, "").strip()
+    if not raw:
+        return 0.0
+    hz = float(raw)
+    return 0.0 if hz <= 0 else 1.0 / hz
+
+
+def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:
+    time.sleep(max(minimum_s, period_s - elapsed_s))
+
+
+def _action_recv_log_line(action: dict[str, Any], step: int) -> str:
+    """One-line action summary (navigation flags show values, not only key names)."""
+    parts: list[str] = [f"Action #{step}"]
+    if "xyt" in action:
+        xyt = action.get("xyt")
+        parts.append(
+            f"xyt={xyt!r} nav_relative={action.get('nav_relative', False)!r} "
+            f"nav_world={action.get('nav_world', False)!r} nav_teleport={action.get('nav_teleport', False)!r}"
+        )
+    if "head_to" in action:
+        parts.append(f"head_to={action['head_to']!r}")
+    if "posture" in action:
+        parts.append(f"posture={action['posture']!r}")
+    if "control_mode" in action:
+        parts.append(f"control_mode={action['control_mode']!r}")
+    extra = [
+        k
+        for k in action
+        if k not in ("xyt", "nav_relative", "nav_world", "nav_teleport", "head_to", "posture", "control_mode", "step")
+    ]
+    if extra:
+        parts.append(f"keys={extra}")
+    return " ".join(parts)
+
 
 try:
     from emet.audio.text_to_speech import PiperTextToSpeech
@@ -31,7 +76,7 @@ except ImportError:
     imported_text_to_speech = False
 
 
-class BaseZmqServer(CommsNode, ABC):
+class BaseZmqServer(CommandRuntime, CommsNode, ABC):
     # How often should we print out info about our performance
     report_steps = 1000
     fast_report_steps = 10000
@@ -58,6 +103,9 @@ class BaseZmqServer(CommsNode, ABC):
         self.ee_image_scaling = ee_image_scaling
         self.depth_scaling = depth_scaling
         self.ee_depth_scaling = ee_depth_scaling
+        self._full_send_period_s = _send_period_s("EMET_ZMQ_FULL_HZ")
+        self._state_send_period_s = _send_period_s("EMET_ZMQ_STATE_HZ")
+        self._servo_send_period_s = _send_period_s("EMET_ZMQ_SERVO_HZ")
 
         # Set up the publisher socket using ZMQ
         self.send_socket = self._make_pub_socket(send_port, use_remote_computer)
@@ -71,6 +119,7 @@ class BaseZmqServer(CommsNode, ABC):
         # Subscriber for actions
         self.recv_socket, self.recv_address = self._make_sub_socket(recv_port, use_remote_computer)
         self._last_step = -1
+        self.initialize_commands()
 
         # Extensions to the ROS server
         # Text to speech engine - let's let the robot talk
@@ -184,7 +233,7 @@ class BaseZmqServer(CommsNode, ABC):
     def spin_send(self):
         """Send the full state of the robot to the client."""
 
-        # Create a robot client to get information
+        # Create a stretch client to get information
         sum_time: float = 0
         steps: int = 0
         t0 = timeit.default_timer()
@@ -199,7 +248,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND LARGE IMAGE STATE] message keys: {data.keys()}")
 
-            self.send_socket.send_pyobj(data)
+            self.send_socket.send_pyobj(self.command_message(data))
 
             # Finish with some speed info
             t1 = timeit.default_timer()
@@ -207,10 +256,10 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._full_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_recv(self):
@@ -219,6 +268,7 @@ class BaseZmqServer(CommsNode, ABC):
         steps = 0
         t0 = timeit.default_timer()
         while self.is_running():
+            self.poll_navigation_command()
             try:
                 action = self.recv_socket.recv_pyobj(flags=zmq.NOBLOCK)
             except zmq.Again:
@@ -231,17 +281,13 @@ class BaseZmqServer(CommsNode, ABC):
             if action is not None:
                 if self.verbose:
                     logger.info(f" - Action received: {action}")
-                # Tracking step number -- should never go backwards
-                action_step = action.get("step", -1)
-                if self.skip_duplicate_steps and action_step <= self._last_step:
-                    logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
+                if not self.dispatch_command(action):
                     continue
-                self.handle_action(action)
-                self._last_step = max(action_step, self._last_step)
-                logger.info(
-                    f"Action #{self._last_step} received:",
-                    [str(key) for key in action.keys()],
-                )
+                line = _action_recv_log_line(action, self._last_step)
+                if "xyt" in action and os.environ.get("EMET_SIM_NAV_DEBUG", "").lower() in {"1", "true", "yes", "on"}:
+                    logger.warning(line)
+                else:
+                    logger.info(line)
                 if self.verbose:
                     logger.info(f" - last action step: {self._last_step}")
             # Finish with some speed info
@@ -250,7 +296,7 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.fast_report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(f"[RECV] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
@@ -258,7 +304,7 @@ class BaseZmqServer(CommsNode, ABC):
 
     def spin_send_state(self):
         """Send a faster version of the state for tracking joint states and robot base"""
-        # Create a robot client to get information
+        # Create a stretch client to get information
         sum_time: float = 0
         steps: int = 0
         t0 = timeit.default_timer()
@@ -272,7 +318,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND MINIMAL STATE] message keys: {message.keys()}")
 
-            self.send_state_socket.send_pyobj(message)
+            self.send_state_socket.send_pyobj(self.command_message(message))
 
             # Finish with some speed info
             t1 = timeit.default_timer()
@@ -280,10 +326,10 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.fast_report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time / steps}")
 
-            time.sleep(1e-4)
+            _rate_sleep(self._state_send_period_s, dt, 1e-4)
             t0 = timeit.default_timer()
 
     def spin_send_servo(self):
@@ -292,7 +338,10 @@ class BaseZmqServer(CommsNode, ABC):
         steps: int = 0
         t0 = timeit.default_timer()
 
-        while not self._done:
+        # Match ``spin_send`` / ``spin_send_state``: use ``is_running()`` so backends that latch off a live sim
+        # (e.g. Stretch Mujoco ``robot_sim.is_running()``) stop when the simulator exits, even if ``_done`` was
+        # never set explicitly.
+        while self.is_running():
             message = self.get_servo_message()
 
             # Skip if no message - could not access camera yet
@@ -302,7 +351,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND SERVO STATE] message keys: {message.keys()}")
 
-            self.send_servo_socket.send_pyobj(message)
+            self.send_servo_socket.send_pyobj(self.command_message(message))
 
             # Finish with some speed info
             t1 = timeit.default_timer()
@@ -310,18 +359,48 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.servo_report_steps == 1:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(
                     f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time / steps} rate={1 / (sum_time / steps)}"
                 )
 
-            time.sleep(1e-5)
+            _rate_sleep(self._servo_send_period_s, dt, 1e-5)
             t0 = timeit.default_timer()
+
+    def close_zmq_resources(self) -> None:
+        """Close ZMQ sockets/context without joining spin threads.
+
+        Used by single-threaded servers (e.g. Habitat) and by ``__del__`` when
+        ``start()`` never spawned background threads.
+        """
+        self._done = True
+        try:
+            if hasattr(self, "recv_socket"):
+                self.recv_socket.close(linger=0)
+            if hasattr(self, "send_socket"):
+                self.send_socket.close(linger=0)
+            if hasattr(self, "send_state_socket"):
+                self.send_state_socket.close(linger=0)
+            if hasattr(self, "send_servo_socket"):
+                self.send_servo_socket.close(linger=0)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "context"):
+                self.context.destroy(linger=0)
+        except Exception:
+            pass
 
     def __del__(self):
         self._done = True
-        # Wait for the threads to finish
         time.sleep(0.15)
+
+        # ``start()`` creates *_thread; unit tests often construct the server only to exercise MuJoCo
+        # without starting ZMQ loops. In that case ``join``/``context.term()`` can block indefinitely
+        # (no background threads draining sockets).
+        if getattr(self, "_send_thread", None) is None:
+            self.close_zmq_resources()
+            return
 
         # Close threads
         self._send_thread.join()
@@ -329,8 +408,11 @@ class BaseZmqServer(CommsNode, ABC):
         self._send_state_thread.join()
         self._send_servo_thread.join()
 
-        # Close sockets
-        self.recv_socket.close()
-        self.send_socket.close()
-        self.send_state_socket.close()
-        self.context.term()
+        # Close sockets (present after __init__ completes)
+        if hasattr(self, "recv_socket"):
+            self.recv_socket.close()
+            self.send_socket.close()
+            self.send_state_socket.close()
+            self.send_servo_socket.close()
+        if hasattr(self, "context"):
+            self.context.term()

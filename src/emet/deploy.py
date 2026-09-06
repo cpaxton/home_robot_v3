@@ -267,6 +267,17 @@ def build_remote_bridge_import_verify_cmd(
     py_paths = f"{remote_emet.rstrip('/')}/emet_core:{remote_emet.rstrip('/')}/src"
     ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws.rstrip('/')}/install/setup.bash"
     py_snippet = "; ".join(spec.verify_imports)
+    # Import the deployed adapter as well as core: old bridges must not pass the
+    # upgrade check merely because a new tracker happens to be on PYTHONPATH.
+    py_snippet += (
+        "; from emet.core.command_tracker import PROTOCOL_VERSION"
+        "; from emet.core.command_runtime import CommandRuntime"
+        f"; from {spec.bridge_pkg}.remote.server import ZmqServer"
+        "; assert PROTOCOL_VERSION == 2"
+        "; assert issubclass(ZmqServer, CommandRuntime)"
+        "; assert ZmqServer.start_navigation_command is not CommandRuntime.start_navigation_command"
+        "; assert ZmqServer.cancel_navigation_command is not CommandRuntime.cancel_navigation_command"
+    )
     # Outer bash -lc uses single quotes; pass -c argument in double quotes (no nested '…').
     return f"bash -lc '{ros_setup} && export PYTHONPATH={py_paths}:$PYTHONPATH && python3 -c \"{py_snippet}\"'"
 
