@@ -702,7 +702,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
-                    self._last_step = output["step"]
+                    self._last_step = max(self._last_step, int(output["step"]))
                 if "gps" in output and "compass" in output:
                     self._base_xyt = np.array([output["gps"][0], output["gps"][1], output["compass"][0]])
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
@@ -916,10 +916,15 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             block_id = max(self._iter, self._last_step + 1)
             action["step"] = block_id
             self._iter = block_id + 1
+            deadline = time.monotonic() + timeout
             self.send_message(action)
             while reliable and self._last_step < block_id:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"Command {block_id} was not acknowledged within {timeout}s; outcome unknown")
+                time.sleep(0.05)
+                if self._last_step >= block_id:
+                    break
                 self.send_message(action)
-                time.sleep(0.01)
         return action
 
     def set_velocity(self, v: float, w: float) -> None:

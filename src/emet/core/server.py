@@ -282,15 +282,14 @@ class BaseZmqServer(CommsNode, ABC):
                     logger.info(f" - Action received: {action}")
                 # Tracking step number -- should never go backwards
                 action_step = action.get("step", -1)
-                # Always apply ``xyt`` (navigation): duplicate-step filtering can drop a goal while
-                # the client still advanced its step counter, leaving ``at_goal`` stuck False.
-                # Same for ``posture`` / ``control_mode`` / ``joint`` / ``head_to``: the client may
+                # Navigation retries must not execute again: relative goals are
+                # resolved against the pose on arrival, so replay changes the goal.
+                # ``posture`` / ``control_mode`` / ``joint`` / ``head_to``: the client may
                 # repeat the same step id while mode-switching or re-sending holds; skipping drops
                 # real commands (and can leave sim actuators on stale ``ctrl``).
                 if (
                     self.skip_duplicate_steps
                     and action_step <= self._last_step
-                    and "xyt" not in action
                     and "posture" not in action
                     and "control_mode" not in action
                     and "joint" not in action

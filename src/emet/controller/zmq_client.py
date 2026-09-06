@@ -1732,12 +1732,16 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             next_action["step"] = block_id
             self._iter = block_id + 1
 
+            deadline = time.monotonic() + timeout
             self.send_message(next_action)
 
             while reliable and self._last_step < block_id:
-                # print(next_action)
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"Command {block_id} was not acknowledged within {timeout}s; outcome unknown")
+                time.sleep(0.05)
+                if self._last_step >= block_id:
+                    break
                 self.send_message(next_action)
-                time.sleep(0.01)
 
             # For tracking goal
             if "xyt" in next_action:
