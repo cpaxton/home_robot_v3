@@ -1367,7 +1367,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Update observation internally with lock"""
         with self._obs_lock:
             self._obs = obs
-            self._last_step = obs["step"]
+            self._last_step = max(self._last_step, int(obs["step"]))
             if self._iter <= 0:
                 self._iter = max(self._last_step, self._iter)
         self._note_emet_session_from_zmq_dict(obs)

@@ -27,6 +27,18 @@ def test_repeated_relative_navigation_dispatches_once():
     assert server._last_step == 7
 
 
+def test_stretch_late_image_cannot_regress_acknowledgement():
+    from emet.controller.zmq_client import StretchZmqClient
+
+    client = object.__new__(StretchZmqClient)
+    client._obs_lock = threading.Lock()
+    client._last_step = 8
+    client._iter = 9
+    client._note_emet_session_from_zmq_dict = Mock()
+    client._update_obs({"step": 3})
+    assert client._last_step == 8
+
+
 @pytest.mark.parametrize("client_kind", ["generic", "stretch"])
 def test_acknowledgement_wait_is_bounded(client_kind):
     if client_kind == "generic":
