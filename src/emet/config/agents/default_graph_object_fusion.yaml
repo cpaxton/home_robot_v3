@@ -1,16 +1,57 @@
+# GraphObjectFusion merge policy (instance detections → scene-graph nodes).
+#
+# Blocks:
+#   gates    — evidence signals that gate a merge, identity > bounds > embedding > spatial
+#   labels   — when label compatibility is required, extra synonyms / incompatibles
+#   keep     — which node survives a merge and how state blends
+#   admission— acceptance thresholds before a detection enters the graph
+#   growth   — duplicate/scale control so repeated YoloE detections cannot flood the graph
+#
+# Legacy flat keys (spatial_merge_xy_m, bounds_3d_iou_merge_min, …) still parse.
 graph_object_fusion:
   enabled: true
-  spatial_merge_xy_m: 0.42
-  min_centroid_dist_m: 0.55
-  bounds_3d_iou_min: 0.08
-  bounds_3d_iou_merge_min: 0.45
-  embedding_min_cosine: 0.62
-  embedding_blend_alpha: 0.35
-  # Labels stay on nodes for display/EQA; false = merge by spatial+3D+embedding (recommended).
-  require_label_match: false
-  require_label_match_for_instances: true
-  max_candidates: 64
-  match_xy_m: 0.55
-  fallback_spatial_merge_xy_m: 0.45
-  instance_min_confidence: 0.12
-  instance_min_mask_points: 25
+
+  # Master switch: YoloE/instance detections become first-class scene-graph nodes.
+  # false keeps them out of SCENE_GRAPH entirely (count/FIND recall only) — the
+  # pre-instance-graph behavior of the published 49.6% full-113 baseline.
+  use_instance_nodes: true
+
+  gates:
+    identity:
+      on: true
+    bounds:
+      on: true
+      iou_floor: 0.08
+      iou_merge_min: 0.45
+    embedding:
+      on: true
+      min_cosine: 0.62
+      blend_alpha: 0.35
+    spatial:
+      on: true
+      xy_m: 0.42
+      centroid_3d_m: 0.55
+      fallback_xy_m: 0.45
+
+  labels:
+    require_match: false
+    require_match_for_instances: true
+    synonyms: []
+    incompatible: []
+
+  keep:
+    prefer_support: true
+    union_labels: true
+    union_bounds: true
+    blend_embedding: true
+    update_xyz: true
+
+  admission:
+    instance_min_confidence: 0.12
+    instance_min_mask_points: 25
+    max_candidates_per_frame: 64
+    match_xy_m: 0.55
+
+  growth:
+    max_object_nodes: 0
+    temporal_window_steps: 0

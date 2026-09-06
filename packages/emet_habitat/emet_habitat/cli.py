@@ -14,6 +14,7 @@ from pathlib import Path
 import click
 
 from emet.core.parameters import Parameters
+from emet.eval.memory_backends import HMEQA_METHOD_CHOICES
 from emet.habitat.config import (
     default_habitat_eqa_data_dir,
     default_hm3d_scene_dir,
@@ -249,7 +250,7 @@ def _ovmm_find_cli_options(fn):
 @click.option("--question-id", default=0, type=int)
 @click.option(
     "--method",
-    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    type=click.Choice(list(HMEQA_METHOD_CHOICES)),
     default="dynagraph",
     help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
 )
@@ -388,7 +389,7 @@ def run_episode(
 @main.command("run-batch")
 @click.option(
     "--method",
-    type=click.Choice(["static_graph", "graph_eqa", "dynagraph"]),
+    type=click.Choice(list(HMEQA_METHOD_CHOICES)),
     default="static_graph",
     help="HM-EQA method (graph_eqa is a legacy alias for static_graph).",
 )

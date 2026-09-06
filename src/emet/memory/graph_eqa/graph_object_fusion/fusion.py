@@ -11,6 +11,7 @@ import numpy as np
 
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
+from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
 
 
 @dataclass
@@ -75,6 +76,13 @@ class GraphObjectFusion:
         self.config = config or GraphObjectFusionConfig()
 
     @staticmethod
+    def _step(graph_memory: GraphEQAMemory) -> int:
+        try:
+            return int(graph_memory._effective_timestep())
+        except Exception:
+            return 0
+
+    @staticmethod
     def _identity_compatible(node: GraphNode, candidate: GraphDetectionCandidate) -> bool:
         candidate_key = str(candidate.identity_key).strip() if candidate.identity_key else None
         node_key = str(node.identity_key).strip() if node.identity_key else None
@@ -82,18 +90,36 @@ class GraphObjectFusion:
             return True
         return candidate_key == node_key
 
+    def _label_incompatible(self, a: str, b: str) -> bool:
+        """True when a config ``labels.incompatible`` pair forbids merging a and b."""
+        for pair in self.config.labels.incompatible:
+            if a in pair and b in pair and a != b:
+                return True
+        return False
+
     def _label_match(self, node: GraphNode, label: str, candidate: GraphDetectionCandidate | None = None) -> bool:
         instance_guard = bool(self.config.require_label_match_for_instances) and (
             (candidate is not None and candidate.countable_instance) or bool(node.countable_instance)
         )
         if not self.config.require_label_match and not instance_guard:
             return True
-        from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
-
         for x in node.labels:
+            if self._label_incompatible(label, str(x or "")):
+                return False
             if labels_compatible_for_dedup(label, str(x or "")):
                 return True
+        # Extra synonym groups from config (fixture dilution, terse queries).
+        for group in self.config.labels.synonyms:
+            if label in group and any(str(x or "") in group for x in node.labels):
+                return True
         return False
+
+    def _within_temporal_window(self, node: GraphNode, step: int) -> bool:
+        """False when the growth window is on and the node went stale before it."""
+        window = int(self.config.growth.temporal_window_steps)
+        if window <= 0:
+            return True
+        return (int(step) - int(getattr(node, "last_seen", 0))) <= window
 
     def _spatial_ok(self, node: GraphNode, xyz: np.ndarray, bounds: dict[str, list[float]] | None) -> bool:
         nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
@@ -116,6 +142,22 @@ class GraphObjectFusion:
         if embedding is None or node.embedding is None:
             return True
         return cosine_similarity_np(node.embedding, embedding) >= self.config.embedding_min_cosine
+
+    def _embedding_cosine(self, node: GraphNode, candidate: GraphDetectionCandidate) -> float | None:
+        if candidate.embedding is None or node.embedding is None:
+            return None
+        return cosine_similarity_np(node.embedding, candidate.embedding)
+
+    def _appearance_ok(self, node: GraphNode, candidate: GraphDetectionCandidate) -> bool:
+        """Appearance override: same-looking object near the candidate may merge even
+        when the label gate fails (YoloE labels drift frame-to-frame)."""
+        if not self.config.gates.embedding.on:
+            return False
+        thr = float(self.config.gates.embedding.appearance_merge_min_cosine)
+        if thr <= 0.0:
+            return False
+        cos = self._embedding_cosine(node, candidate)
+        return cos is not None and cos >= thr
 
     def find_best_node(
         self,
@@ -141,9 +183,11 @@ class GraphObjectFusion:
         for node in graph_memory.get_nodes():
             if node.is_viewpoint:
                 continue
+            if not self._within_temporal_window(node, self._step(graph_memory)):
+                continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label, candidate) and not self._appearance_ok(node, candidate):
                 continue
             if not self._spatial_ok(node, xyz, candidate.bounds_3d):
                 continue
@@ -173,9 +217,11 @@ class GraphObjectFusion:
         for node in graph_memory.get_nodes():
             if node.is_viewpoint or node.bounds_3d is None:
                 continue
+            if not self._within_temporal_window(node, self._step(graph_memory)):
+                continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label, candidate) and not self._appearance_ok(node, candidate):
                 continue
             iou = bounds_3d_iou(candidate.bounds_3d, node.bounds_3d)
             if iou >= best_iou:
@@ -198,9 +244,11 @@ class GraphObjectFusion:
         for node in graph_memory.get_nodes():
             if node.is_viewpoint:
                 continue
+            if not self._within_temporal_window(node, self._step(graph_memory)):
+                continue
             if not self._identity_compatible(node, candidate):
                 continue
-            if not self._label_match(node, candidate.label, candidate):
+            if not self._label_match(node, candidate.label, candidate) and not self._appearance_ok(node, candidate):
                 continue
             nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
             dxy = float(np.linalg.norm(nxy[:2] - xyz[:2]))
@@ -225,13 +273,18 @@ class GraphObjectFusion:
         if match is None:
             match = self.find_fallback_node(graph_memory, candidate)
         if match is not None:
+            label_ok = self._label_match(match, candidate.label, candidate)
             return graph_memory.merge_object_detection(
                 rgb,
                 candidate,
                 merge_into_node_id=int(match.node_id),
                 viewer_xyz=viewer_xyz,
+                blend=self.config.keep,
+                allow_label_mismatch=not label_ok,
             )
-        return graph_memory.merge_object_detection(rgb, candidate, merge_into_node_id=None, viewer_xyz=viewer_xyz)
+        return graph_memory.merge_object_detection(
+            rgb, candidate, merge_into_node_id=None, viewer_xyz=viewer_xyz, blend=self.config.keep
+        )
 
     def consolidate_high_iou_nodes(self, graph_memory: GraphEQAMemory) -> int:
         """Fold object pairs whose 3D bounds mostly overlap (returns nodes absorbed)."""
@@ -259,9 +312,7 @@ class GraphObjectFusion:
                     and str(a.identity_key) != str(b.identity_key)
                 ):
                     continue
-                if self.config.require_label_match_for_instances and (
-                    a.countable_instance or b.countable_instance
-                ):
+                if self.config.require_label_match_for_instances and (a.countable_instance or b.countable_instance):
                     from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
 
                     la = str(a.labels[0]) if a.labels else ""
@@ -270,7 +321,10 @@ class GraphObjectFusion:
                         continue
                 if bounds_3d_iou(a.bounds_3d, b.bounds_3d) < thr:
                     continue
-                keep, lose = (a, b) if int(a.support_count) >= int(b.support_count) else (b, a)
+                if bool(self.config.keep.prefer_support):
+                    keep, lose = (a, b) if int(a.support_count) >= int(b.support_count) else (b, a)
+                else:
+                    keep, lose = (a, b) if int(a.last_seen) >= int(b.last_seen) else (b, a)
                 if graph_memory.absorb_object_node(int(lose.node_id), int(keep.node_id)):
                     drop.add(int(lose.node_id))
                     merged += 1

@@ -256,7 +256,7 @@ def _make_controller(
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
 ):
-    from emet.eval.memory_backends import DYNAGRAPH
+    from emet.eval.memory_backends import DYNAGRAPH, LAZY_GRAPH
 
     method = _normalize_hmeqa_method(method)
     params = _apply_method_parameters(parameters, method)
@@ -281,12 +281,16 @@ def _make_controller(
         "save_rerun": not no_rerun,
         "enable_live_rerun": eval_rerun_enabled(),
         "cpu_only": not use_real_vlm,
-        "use_sensor_perception": graph_perception,
+        "use_sensor_perception": bool(harness_opts.get("use_sensor_perception", graph_perception)),
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
         "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
     if method == DYNAGRAPH:
         agent = DynagraphController(**common)
+    elif method == LAZY_GRAPH:
+        from emet.controller.controller_lazy_graph import LazyGraphController
+
+        agent = LazyGraphController(**common)
     else:
         agent = GraphEQAController(**common)
 
