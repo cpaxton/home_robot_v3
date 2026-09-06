@@ -2462,15 +2462,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             return None
         q, dq, eff = self.get_joint_state()
         base_xyz = None
+        base_up = None
+        joint_targets = None
         try:
             with self._mj_lock:
                 xpos = self._mjdata.body(self._spec.base_link_name).xpos
                 base_xyz = [float(xpos[0]), float(xpos[1]), float(xpos[2])]
+                base_up = float(self._mjdata.body(self._spec.base_link_name).xmat.reshape(3, 3)[2, 2])
+                if self._joint_ctrl_hold is not None:
+                    joint_targets = self._joint_ctrl_hold.copy()
         except Exception:
             base_xyz = None
         message = {
             "base_pose": self.get_base_pose(),
             "base_xyz": base_xyz,
+            "base_up_dot_world_z": base_up,
+            "actuator_targets": joint_targets,
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,

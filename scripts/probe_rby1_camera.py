@@ -2,16 +2,18 @@
 # Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-# Probe: why does rby1/robocasa capture ~no depth? Boot the sim, read one full
-# observation, and dump base-z / camera-z / torso joint angles / depth stats.
+# Simulation-only posture/optics probe across registered robots and scene configs.
+# Historical filename retained for existing callers; no perception models needed.
 
 import argparse
+import json
 import os
 import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -37,7 +39,11 @@ def main() -> int:
     parser.add_argument("--sim", default="configs/sim/robocasa_pick_place_rby1.yaml")
     parser.add_argument("--port-offset", type=int, default=98)
     parser.add_argument("--poses", type=int, default=6)
+    parser.add_argument("--robot", help="Override robot in the scene config (simulation only).")
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--stationary", action="store_true", help="Idle-only probe for fixed-base arms.")
     args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
@@ -52,6 +58,8 @@ def main() -> int:
     env.setdefault("EMET_ZMQ_SERVO_HZ", "10")
 
     sim_cfg = load_sim_launch_config_from_path(args.sim)
+    if args.robot:
+        sim_cfg.robot = args.robot
     sim_cfg.port_offset = args.port_offset
     sim_cfg.headless = True
     server_argv = prepare_mujoco_server_argv(sim_cfg)
@@ -59,9 +67,12 @@ def main() -> int:
     recv_port = 4401 + args.port_offset
 
     print("launching sim:", " ".join(server_cmd), file=sys.stderr)
-    server_log = REPO / "probe_rby1_camera_sim.log"
+    server_log = args.output_dir / "sim.log"
     fh = server_log.open("w", encoding="utf-8")
     server = popen_session(server_cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh)
+    robot = None
+    reports = []
+    failures = []
     try:
         if not _wait_port(recv_port, timeout=120.0, proc=server):
             raise RuntimeError("sim server did not bind")
@@ -87,20 +98,42 @@ def main() -> int:
         if model is None or data is None:
             print("no model/data on client; falling back to obs poses", file=sys.stderr)
 
-        for i in range(max(1, int(args.poses))):
+        from PIL import Image
+
+        from emet.robots import get_robot_spec
+
+        spec = get_robot_spec(robot_kind)
+        if not args.stationary:
+            robot.move_to_nav_posture()
+            robot.look_front(blocking=True)
+        time.sleep(2.0)
+        for i in range(max(1, int(args.poses)) + 1):
             try:
-                robot.move_base_to(
-                    [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0
-                )
+                if i and not args.stationary:
+                    robot.move_base_to(
+                        [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0
+                    )
             except Exception as e:
                 print(f"pose {i}: move failed: {e}", file=sys.stderr)
+                failures.append(f"pose {i}: move failed: {e}")
             time.sleep(1.0)
             obs = robot.get_observation()
             rgb = np.asarray(getattr(obs, "rgb", None))
             depth = np.asarray(getattr(obs, "depth", None), dtype=np.float32)
             cam_pose = np.asarray(getattr(obs, "camera_pose", None), dtype=np.float64).reshape(-1)
 
-            report: dict[str, object] = {"pose": i}
+            report: dict[str, Any] = {"pose": i}
+            q, _, _ = robot.get_joint_state()
+            if q is not None:
+                report["joint_positions_named"] = dict(zip(spec.joint_names, np.asarray(q).tolist(), strict=False))
+            state = getattr(robot, "_state", None) or {}
+            report["base_up_dot_world_z"] = state.get("base_up_dot_world_z")
+            report["base_xyz"] = state.get("base_xyz")
+            targets = state.get("actuator_targets")
+            if targets is not None:
+                report["joint_targets_named"] = dict(
+                    zip(spec.actuator_names, np.asarray(targets).tolist(), strict=True)
+                )
             gps = np.asarray(getattr(obs, "gps", None), dtype=np.float64).reshape(-1)
             compass = np.asarray(getattr(obs, "compass", None), dtype=np.float64).reshape(-1)
             if gps.size >= 2:
@@ -131,6 +164,8 @@ def main() -> int:
                 try:
                     cp4 = np.asarray(cam_pose, dtype=np.float64).reshape(4, 4)
                     report["cam_origin"] = [round(float(x), 3) for x in cp4[:3, 3]]
+                    report["camera_up_dot_world_z"] = float(-cp4[2, 1])
+                    report["camera_forward_z"] = float(cp4[2, 2])
                 except Exception:
                     report["cam_origin"] = [round(float(x), 3) for x in cam_pose[:3]]
             if model is not None and data is not None:
@@ -140,11 +175,32 @@ def main() -> int:
                     j = mujoco_name_to_id(model, "joint", jn)
                     if j >= 0:
                         report[jn] = round(float(data.qpos[model.jnt_qposadr[j]]), 3)
-            print(report, flush=True)
+            if rgb.ndim == 3:
+                Image.fromarray(rgb.astype(np.uint8)).save(args.output_dir / f"view_{i:02d}.png")
+            reports.append(report)
+            with (args.output_dir / "observations.jsonl").open("a") as out:
+                out.write(json.dumps(report) + "\n")
+            print(json.dumps(report), flush=True)
+            if not args.stationary and report.get("camera_up_dot_world_z", 1) < 0:
+                failures.append(f"pose {i}: camera inverted")
+            if report.get("base_up_dot_world_z") is not None and report["base_up_dot_world_z"] < 0.57:
+                failures.append(f"pose {i}: base tipped")
+            if i and "cam_origin" in report and "cam_origin" in reports[0]:
+                if report["cam_origin"][2] < reports[0]["cam_origin"][2] - 0.3:
+                    failures.append(f"pose {i}: camera dropped more than 0.3 m")
+            if failures:
+                break
 
-        return 0
+        summary = {"robot": robot_kind, "scene": args.sim, "failures": failures, "frames": len(reports)}
+        missing = any(r.get("base_up_dot_world_z") is None or "joint_targets_named" not in r for r in reports)
+        summary["status"] = "failed" if failures else ("incomplete_telemetry" if missing else "completed_probe")
+        (args.output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        return 1 if failures else 0
     finally:
+        if robot is not None:
+            robot.stop()
         terminate_process_tree(server)
+        fh.close()
 
 
 def mujoco_name_to_id(model, obj: str, name: str) -> int:
