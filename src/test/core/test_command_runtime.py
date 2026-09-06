@@ -125,6 +125,23 @@ def test_busy_rejection_keeps_original_cancellation_target():
     assert command_receipt(client, original)["status"] == "cancelled"
 
 
+def test_failure_preserves_measured_error_and_frozen_goal():
+    robot = Robot()
+    client = connection(robot)
+    action = send_command(client, {"xyt": [0, 0, 1]})
+    robot.outcome = ("failed", {"yaw_error": 0.8, "yaw_tolerance": 0.15})
+    robot.poll_navigation_command()
+    client._state = robot.command_message({})
+    receipt = command_receipt(client, action)
+    assert receipt["status"] == "failed"
+    assert receipt["result"] == {
+        "resolved_goal": [0, 0, 1],
+        "yaw_error": 0.8,
+        "yaw_tolerance": 0.15,
+        "stop_confirmed": True,
+    }
+
+
 @pytest.mark.parametrize("client_kind", ["generic", "stretch"])
 def test_async_at_goal_cannot_accept_stale_telemetry(client_kind):
     if client_kind == "generic":

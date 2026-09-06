@@ -41,8 +41,9 @@ Additional fixes found during integration:
 - Deploy checks protocol version, shared runtime inheritance, and implemented adapter hooks.
 - The standalone robot package carries generated identical runtime sources, with a parity test.
 
-Focused core/client/adapter-result/deploy tests: 60 passed; an additional four
-client-frame/safety tests passed after updating completion assertions to receipts.
+Focused core/client/adapter-result/deploy, query-config and TAMP-tool tests: 84
+passed, including async receipt checks and preserving cancellation targets after
+busy rejection and failed-arrival error provenance.
 These are not real-hardware tests. ROS callback tests exercise the actual module
 with future objects, without starting ROS or contacting robots.
 
@@ -62,11 +63,36 @@ not a demonstration of accurate wheel-driven navigation. No motion tolerances
 were relaxed. Heavy runs are serialized under the jobs GPU lock, CPU-safe with
 one numerical-library thread. The failed launch is retained, not discarded.
 
+### Return to OVMM and the integrated agent
+
+The bounded S0 query-driven OVMM run `20260906_193129_228d8c` completed at
+`77c732bb`: **0/2 find phases**, 155.8 seconds, 8/8 mapping frames, 3 graph nodes.
+It used the existing 12-round/8-navigation budget, unchanged admission thresholds,
+sensor depth, and no scene-cache reuse. Both queries exhausted their budgets;
+there was no verified object or receptacle localization. This does not establish
+learned OVMM success, despite successful protocol smoke tests.
+
+Artifacts: `/tmp/emet-ovmm-nav-contract-20260906`. The two cached blue-cube
+groundings have detection scores 0.0223 and 0.0249; fresh VLM verification rejects
+both. The inspected cached RGB shows floor/sky, not a blue cube. Red-cylinder
+search produced no verified candidate. Investigate view acquisition, camera
+alignment/posture and retained retrieval evidence before tuning object-admission
+thresholds. The previous query-conditioned run was also 0/2 (275.8 seconds,
+19 nodes); these single runs are diagnostics, not a statistically supported
+performance improvement or a frozen paper comparison.
+
+The existing integrated-agent gate `20260906_193708_c286a4` at `1bef10f9` passed
+`scene_tasks -> plan_pick_place -> execute_pick_place_plan` through the live CHAT
+tool registry on rby1/iTHOR. It reported 2.2144 m object displacement. Artifacts:
+`/tmp/emet-integrated-agent-nav-contract-20260906`. This uses GT geometry,
+synthetic grasps, base snapping and simulator attachment assistance. It verifies
+the command/planning integration, **not** learned manipulation or real grasping.
+
 ### Remaining gates
 
-1. Run the bounded S0 OVMM agentic-find regression (same 8 views, 12 rounds,
-   8 navigation steps), then the existing integrated-agent/TAMP command gate.
-2. Record any remaining perception/posture failures independently of transport.
+1. Diagnose S0 view acquisition and retrieval on a follow-up branch; preserve
+   this navigation-contract review boundary rather than mixing in threshold tuning.
+2. Resolve remaining perception/posture failures independently of transport.
    Robocasa torso collapse, camera alignment, scene-loader failures, and the
    Sourccey Hessian failure are **not** established as solved by this change.
 3. Deploy and verify on reachable hardware without motion. Herman was unreachable;

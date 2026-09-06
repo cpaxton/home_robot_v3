@@ -137,10 +137,10 @@ class CommandRuntime:
                     self.command_tracker.transition(session, sequence, status, result=result)
                     self._navigation_command = None
                 else:
-                    self._finish_cancel("failed", str(result))
+                    self._finish_cancel("failed", "navigation controller did not reach the goal", result=result)
 
-    def _finish_cancel(self, status, reason):
-        session, sequence, _ = self._navigation_command
+    def _finish_cancel(self, status, reason, *, result=None):
+        session, sequence, context = self._navigation_command
         try:
             stopped = self.cancel_navigation_command() is True
         except Exception:
@@ -151,7 +151,7 @@ class CommandRuntime:
             sequence,
             status if stopped else "failed",
             reason=reason if stopped else f"{reason}; stop unconfirmed",
-            result={"stop_confirmed": stopped},
+            result={**(context or {}), **(result or {}), "stop_confirmed": stopped},
             release_navigation=stopped,
         )
         if stopped:
