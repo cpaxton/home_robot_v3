@@ -15,6 +15,42 @@ separate from learned retrieval-to-manipulation results.
 
 ## Next paper edits, after the limited pilot
 
+### Bounded cross-benchmark acceptance (no sweep)
+
+Use the existing random-16 EQA IDs as a development pilot, not a new benchmark
+search. Freeze the common budget and resolved configs before rerunning the three
+primary rows: DynaMem, arrival-only lazy memory, and query-driven memory. Reuse
+previous results only when their source/configuration actually matches. Report
+paired outcomes; 16 questions cannot establish broad superiority.
+
+For OVMM, freeze six cases spanning visible, occluded, repeated/ambiguous, unseen,
+absent, and moved/revisited targets before evaluating the same three rows. Check
+positive grounding and appropriate negative behavior, not just exit codes.
+Unsupported attributes must remain explicit failures/abstentions. Do not tune a
+separate query admission policy for EQA versus OVMM to make these cases pass.
+
+For TAMP, retain the table, decoy, and furnished-scene gates below as execution
+controls. Add a learned retrieval -> fresh grounding -> capability adapter ->
+pick/place -> fresh observation sequence, with independent outcome measurement.
+The current query-mode manipulation adapter does not yet provide that live gate
+for rby1/Sourccey; do not substitute the GT task-handle run for it. One bounded
+multi-object relocation case should also exercise replanning after a move.
+
+For Herman, collect a short stationary RGB-D/pose sequence, validate timestamps,
+depth support and projection, then replay it through the same memory/query path.
+Demonstrate at least one supported visible-object query and one absent/ambiguous
+query with saved image/map evidence. Replay success is stationary perception proof
+of life, not navigation or manipulation transfer. Use no base (including yaw),
+arm, or gripper commands. Only head tilt is authorized if needed; a passive
+subscriber is preferred for initial capture. Do not use the documented
+`EMET_BASE_ROTATE_ONLY` mode as a safety boundary because it still allows yaw.
+
+Acceptance requires evidence of the shared lifecycle working in both EQA and
+OVMM, bounded/reasonable memory without losing relevant evidence, correct
+rejection/invalidation, and honestly separated manipulation controls. Report the
+whole selected set, including failures. Run a targeted ablation only for a
+remaining causal question; do not expand into a full parameter sweep.
+
 1. Update `paper/sections/03_method.tex`: describe the shared evidence lifecycle
    and conditional graph admission. The current every-step graph-write description
    does not describe the opt-in lazy/query-driven prototype. Document grounding,
@@ -56,6 +92,41 @@ that unmatched frames come from the same episode. Review dataset/assets licensin
 before redistributing imagery. Missing camera streams must be labeled unavailable.
 
 ## September 5 local gates
+
+### Instrumented grounding diagnosis
+
+The post-fix three-row Habitat diagnostic at `39640791` scored DynaMem 1/2,
+lazy arrival 0/2, query-driven 0/2. This supersedes the earlier miswired DynaMem
+agentic control, which had no router client. It does not establish superiority.
+
+Instrumented query repeat `20260905_230122_e483a6` at `c5ff2347` also scored 0/2
+(97 s). Its immutable pre-admission cache is under
+`/tmp/emet-query-grounding-evidence-20260905/evidence/grounding`:
+
+- The first arrival shows a living room, with 57 detections; the VLM returned no
+  matching regions for the lamp-on-bed referent.
+- The second shows a window/wall close-up, with 30 detections. The VLM selected
+  region 20, labeled lamp, at confidence 0.0302 with 589 valid mask points. The
+  configured 0.12 confidence floor rejected it. Visual review did not establish
+  a lamp or bed in that frame. Lowering admission would risk admitting a false
+  positive rather than repair retrieval/viewpoint selection.
+
+Cache JSON links to matching RGB PNG and depth/mask NPZ files, records the raw
+semantic decision, retrieval score, source/frame IDs, and admission configuration.
+The existing explicit `EMET_EQA_EPISODE_DIR` enables these diagnostic artifacts;
+`query_memory.grounding_cache_dir` can select a separate directory. Replay with
+`replay_grounding_admission(record, config)` only measures admission on a fixed
+observed detection set. It cannot estimate retrieval recall, recreate detections
+below the detector's emission floor, or predict changed navigation trajectories.
+The cache is never read by live action grounding. Add independently checked
+labels before using these records to choose thresholds; VLM acceptance is not GT.
+
+MuJoCo find now exposes `--backend lazy_graph --query-driven-memory`, using the
+same policy helper as Habitat. Red/blue comparison `20260905_230647_10f8d9` at
+`3621d63e` runs DynaMem then query-driven on
+`default_table_rby1_s0_distinct_recep`, four mapping views, agentic find 12 rounds /
+8 nav steps, with scene-cache reuse disabled. Artifacts:
+`/tmp/emet-redblue-query-20260905`. Results are pending; do not mark this gate passed.
 
 Source: `903b0a87`, branch `feat/query-driven-memory`. Runs are sequential with
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`, loopback simulator

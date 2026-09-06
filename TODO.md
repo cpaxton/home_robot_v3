@@ -3,6 +3,45 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Shared query-memory acceptance (2026-09-05, prototype branch)
+
+Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).
+No full sweeps; one shared policy across tasks, capability/configuration adapters
+for necessary robot geometry differences. Do not promote based only on graph size.
+
+- [x] Sequential TAMP controls: rby1/Sourccey table, unreachable-grasp rejection,
+      and rby1 furnished-scene agent-tools execution passed; 77 focused regression
+      tests passed. These are oracle-assisted controls, not learned manipulation.
+- [x] Recorded Sourccey chase video and camera stills; publication rendering review
+      remains necessary. Source/results are recorded in the canonical plan.
+- [x] Started Herman's existing bridge without deployment or motion commands;
+      passive head-camera pose check passed (0.5 mm / 0 deg gaze mismatch).
+- [ ] Wrist camera: tabled at user request. Driver expects Arducam but device is
+      absent from USB enumeration; ROS publisher count is zero. Do not claim wrist
+      capture works or issue arm motion to troubleshoot it.
+- [ ] Stationary head-stereo/depth/query-memory proof of life; no base yaw/translation,
+      arm, or gripper commands. Head tilt is permitted only if needed.
+- [ ] Matched OVMM diagnostic submitted: job `20260905_144422_d900d5`, artifacts
+      `/tmp/emet-ovmm-paired-20260905`, source `74a7f4e5`. DynaMem, lazy arrival,
+      query-driven; episode `hm3d_lamp_bed_00006`; each gets 12 rounds / 8 nav steps.
+      Runs serially with CPU-safe affinity and GPU lock. Inspect task outcomes and
+      grounding traces, not just process exit. This is one diagnostic, not the pilot.
+- [ ] Complete bounded paired EQA/OVMM acceptance and learned manipulation gate.
+      Historic lazy 8/16 vs deep-merge 6/16 is development evidence; the new query
+      policy has not yet demonstrated improvement. Preserve negative results.
+- [x] Post-fix Habitat diagnostic: DynaMem 1/2, lazy arrival 0/2, query-driven 0/2
+      at `39640791`. DynaMem now has the shared VLM; inspection escape executes.
+- [x] Save actual grounding RGB/depth/masks and verifier outputs (`c5ff2347`).
+      Instrumented repeat `20260905_230122_e483a6` scored 0/2. A suspicious VLM
+      lamp selection scored 0.0302 and was correctly blocked by admission 0.12.
+      Offline replay admits it at 0.03; live thresholds are unchanged.
+- [ ] Red/blue MuJoCo comparison `20260905_230647_10f8d9` at `3621d63e`:
+      DynaMem agentic 0/2, query-driven pending. Shared query policy is now wired
+      into the MuJoCo find runner and CLI; no separate robot-specific policy.
+- [ ] One-shot DynaMem red/blue control queued behind that job:
+      `20260905_230946_a9cc38`, same four-view fresh mapping scan. Distinguish
+      this diagnostic from the historical CPU/Stretch basic integration test.
+
 ## Config over env flags
 
 We over-use `EMET_*` for robot/controller policy (head sweep, teleport, TTS, rotate
