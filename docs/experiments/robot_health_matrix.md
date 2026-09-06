@@ -1,5 +1,28 @@
 # Cross-robot scene health checks
 
+## Current run and preliminary findings
+
+The active replacement is `20260906_163000_725ac2`, source `e9a83300`, output
+`/tmp/emet-robot-health-matrix-v2-20260906`. Results are pending.
+
+The first matrix below was cancelled after detecting a probe measurement bug:
+raw camera Y is not image-up when signed intrinsics encode a vertical flip.
+The corrected probe uses `R @ inverse(K) @ [0, -1, 0]`, with regression tests.
+Innate Mars's first-run inversion flags are invalid, not robot failures.
+The worktree also now links the installed MolmoSpaces venv; the early rby1
+and Sourccey Molmo rows failed environment discovery and require reruns.
+
+Valid first-run evidence:
+
+- rby1/Robocasa: base remained upright (>0.9999 up dot), commanded torso
+  targets stayed fixed, but torso joints diverged and camera height fell from
+  1.617 m to 0.333 m by pose 2. This is a remaining dynamics/contact/tracking
+  failure, distinct from the corrected target-retargeting bug.
+- Sourccey/Robocasa: completed all nine captures (baseline plus eight turns),
+  camera height remained 0.853 m. This passes the gross posture screen only.
+- Stretch/Robocasa: partial captures before cancellation had stable 1.299 m
+  camera height; generic base/target telemetry was missing. Not a completed row.
+
 ## Scope
 
 Job `20260906_162502_6917ea` runs source `25492216` sequentially on the
