@@ -1426,8 +1426,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn.
 
         Returns:
-            True if every waypoint was reached (or the final blocking move finished).
-            False if an intermediate ``wait_for_waypoint`` timed out — remaining waypoints are skipped.
+            True only if every waypoint's navigation command succeeded.
+            False on any failed command, including the final waypoint; later points are skipped.
         """
 
         if isinstance(trajectory, PlanResult):
@@ -1436,50 +1436,16 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if relative:
             raise NotImplementedError("Relative trajectories not yet supported")
 
-        for i, pt in enumerate(trajectory):
-            assert len(pt) == 3 or len(pt) == 2, (
-                "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
-            )
-            self.move_base_to(
-                pt,
-                relative=relative,
-                blocking=False,
-                reliable=False,
-                world_frame=world_frame,
-            )
-            logger.debug(f"Moving to waypoint {pt}")
-            last_waypoint = i == len(trajectory) - 1
-            self.move_base_to(
-                pt,
-                relative=relative,
-                blocking=last_waypoint,
-                timeout=final_timeout if last_waypoint else per_waypoint_timeout,
-                verbose=verbose,
-                reliable=True if last_waypoint else False,
-                world_frame=world_frame,
-            )
-            if not last_waypoint:
-                ok = self.wait_for_waypoint(
-                    pt,
-                    pos_err_threshold=pos_err_threshold,
-                    # Intermediate headings point along the next path segment. Requiring
-                    # them here can strand a holonomic sim base at an otherwise reached
-                    # waypoint while it fights contact friction to rotate in place.
-                    # The final blocking move still enforces its requested yaw.
-                    rot_err_threshold=np.inf,
-                    rate=spin_rate,
-                    verbose=verbose,
-                    timeout=per_waypoint_timeout,
-                    world_frame=bool(world_frame) and not relative,
-                )
-                if not ok:
-                    logger.warning(
-                        "execute_trajectory: aborting remaining waypoints after timeout at index %d/%d",
-                        i,
-                        len(trajectory) - 1,
-                    )
-                    return False
-        return True
+        from emet.controller.trajectory import execute_waypoints
+
+        return execute_waypoints(
+            self,
+            trajectory,
+            relative=relative,
+            world_frame=world_frame,
+            per_waypoint_timeout=per_waypoint_timeout,
+            final_timeout=final_timeout,
+        )
 
     def wait_for_waypoint(
         self,
