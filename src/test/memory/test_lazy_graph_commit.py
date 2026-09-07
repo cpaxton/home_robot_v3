@@ -25,7 +25,7 @@ class _FakeObs:
 
 
 def test_record_lazy_graph_viewpoint_adds_navigation_sample():
-    gm = GraphEQAMemory(parameters={"graph_eqa_record_navigation": True})
+    gm = GraphEQAMemory(parameters={"graph_eqa_record_navigation": True}, defer_llm_clients=True)
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([1.0, 2.0, 0.0], dtype=np.float64)
     obs = _FakeObs()
@@ -37,7 +37,7 @@ def test_record_lazy_graph_viewpoint_adds_navigation_sample():
 
 
 def test_commit_graph_from_arrival_obs_uses_qwen_labels_only():
-    gm = GraphEQAMemory(parameters={"dynagraph_merge_xy_m": 0.0})
+    gm = GraphEQAMemory(parameters={"dynagraph_merge_xy_m": 0.0}, defer_llm_clients=True)
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([1.0, 2.0, 0.0], dtype=np.float64)
     obs = _FakeObs()
