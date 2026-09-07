@@ -7,8 +7,8 @@
 """Galaxea R1 MJCF: RGB cameras must be MuJoCo ``<camera>`` with sane world-frame optics.
 
 ``RobosuiteZmqServer`` resolves ``RobotSpec.camera_names`` via ``mjOBJ_CAMERA`` only; sites are
-ignored and the renderer falls back to a world-fixed free camera. Cameras must also look along
-the sensor +X link axis (not -Z) so RGB matches the physical rig / passive viewer.
+ignored and the renderer falls back to a world-fixed free camera. The head camera's
+optical frame follows the torso, not the rotated visual-mesh coordinate frame.
 """
 
 from __future__ import annotations
@@ -86,15 +86,15 @@ def test_zed_camera_pose_tracks_base_translation(galaxea_mj: tuple[mujoco.MjMode
     assert abs(float(delta[2])) < 0.05, "head camera height should not jump from a pure XY base shift"
 
 
-def test_zed_looks_forward_along_head_link_plus_x_not_back_along_minus_z(
+def test_zed_looks_forward_along_torso_plus_x(
     galaxea_mj: tuple[mujoco.MjModel, mujoco.MjData],
 ):
     m, d = galaxea_mj
     cid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_CAMERA, "zed_camera")
-    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "zed_link")
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link4")
     look = _cam_look_world(d, cid)
     bx = _body_axis_x_world(d, bid)
-    assert float(np.dot(look, bx)) > 0.92, "ZED view axis should align with +zed_link X (lens forward)"
+    assert float(np.dot(look, bx)) > 0.99, "head optics must face forward, not along the mesh's lateral axis"
     wup = np.array([0.0, 0.0, 1.0])
     cy = _cam_y_world(d, cid)
     assert float(np.dot(cy, wup)) > 0.5, "camera +Y should tilt toward world +Z for upright RGB rows"

@@ -60,7 +60,9 @@ def head_camera_geomgroup_mask(model: mujoco.MjModel, base_body_name: str = "bas
     Group 0/1 (scene) stay on; robot groups are cleared so the head camera does not render
     the robot's own mast / head / camera housings into the mapping depth / RGB.
     """
-    mask = np.ones(6, dtype=np.uint8)
+    # Preserve MuJoCo's visual defaults: groups 3-5 are hidden. Enabling all
+    # groups exposes collision proxies (e.g. MolmoSpaces' green group-4 hulls).
+    mask = mujoco.MjvOption().geomgroup.copy()
     for grp in robot_body_geom_groups(model, base_body_name=base_body_name):
         if 0 <= grp < 6:
             mask[grp] = 0

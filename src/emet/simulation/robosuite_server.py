@@ -1254,7 +1254,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         ``RobosuiteZmqServer`` (rby1 / Galaxea / innate_mars) reuses one ``mujoco.Renderer``.
         Without masking, head depth includes the torso / arms and the voxel map paints a
         self-obstacle ring at the base → A* ``non navigable point`` / ``sample_nav_failed``.
-        Secondary / tertiary cameras (stereo aux, ee) keep all geom groups visible.
+        Secondary / tertiary cameras retain MuJoCo's default visual groups.
         """
         from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import head_camera_geomgroup_mask
 
@@ -1263,7 +1263,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if primary is not None and camera_name == primary:
             mask = head_camera_geomgroup_mask(self._mjmodel, base_body_name=self._spec.base_link_name)
         else:
-            mask = np.ones(6, dtype=np.uint8)
+            mask = mujoco.MjvOption().geomgroup.copy()
         renderer._scene_option.geomgroup[:] = mask
 
     def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
