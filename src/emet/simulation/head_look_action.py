@@ -44,7 +44,7 @@ def apply_head_to_robosuite(
     Stretch is handled by ``MujocoZmqServerStretch`` (``head_pan`` / ``head_tilt`` in sim).
     This covers ``RobosuiteZmqServer`` (Galaxea R1 / rby1 / innate_mars merged MJCF):
     - Actuators named ``head_pan`` / ``head_tilt`` if present.
-    - ``rby1`` / ``galaxea_r1``: map to ``torso2`` / ``torso3`` with reduced gain.
+    - ``rby1`` / ``galaxea_r1``: upper torso pitch (``torso3``) and yaw (``torso4``).
     - ``innate_mars``: ``joint_head`` position actuator driven by ``tilt`` only (Stretch-style nod).
     """
     n = 0
@@ -60,15 +60,12 @@ def apply_head_to_robosuite(
         return n
 
     if spec.name in ("rby1", "galaxea_r1"):
-        # ZED is on torso_link4; only torso_joint1 (pitch) and torso_joint4 (yaw) move the
-        # mapping camera. Stretch ``look_front`` uses tilt ≈ −30°; map pan/tilt 1:1 onto
-        # torso4 / torso1 so default-table objects enter the ZED FOV during OVMM mapping.
-        pitch = float(np.clip(tilt, -1.2, 0.5))
-        pan_cl = float(np.clip(pan, -1.2, 1.2))
-        n += int(_set_ctrl_clipped(model, data, "torso1", pitch))
-        n += int(_set_ctrl_clipped(model, data, "torso4", 0.5 * pan_cl))
+        # The camera faces torso +X. Joint3's -Y axis makes negative tilt look
+        # down without bending the whole torso at its lowest joint. Joint4 pans.
+        n += int(_set_ctrl_clipped(model, data, "torso3", float(tilt)))
+        n += int(_set_ctrl_clipped(model, data, "torso4", float(pan)))
         if n == 0:
-            logger.debug("head_to: no torso1/torso4 actuators for spec %r; look request ignored", spec.name)
+            logger.debug("head_to: no torso3/torso4 actuators for spec %r; look request ignored", spec.name)
         return n
 
     if spec.name == "innate_mars":

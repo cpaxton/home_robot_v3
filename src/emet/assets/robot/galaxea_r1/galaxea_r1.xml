@@ -139,9 +139,10 @@
               <!-- ZED stereo camera (head, fixed). Named MuJoCo cameras for Renderer / ZMQ (sites are not cameras). -->
               <body name="zed_link" pos="0.065512 0.060005 0.47598" quat="0.405568 -0.579235 0.579237 -0.40557">
                 <geom type="mesh" mesh="zed_link" class="visual" rgba="0.81 0.84 0.91 1"/>
-                <!-- MuJoCo looks along -local Z; euler aligns view with +link X and keeps image upright. -->
-                <camera name="zed_camera" pos="0 0 0" euler="3.14159265 -1.57079633 0" fovy="70"/>
               </body>
+              <!-- Optical frame in torso coordinates, independent of the visual mesh frame
+                   and the scene compiler's Euler convention: forward +X, image up +Z. -->
+              <camera name="zed_camera" pos="0.065512 0.060005 0.47598" xyaxes="0 -1 0 0 0 1" fovy="70"/>
 
               <!-- Arm base visual geoms (fixed) -->
               <geom pos="0.00077694 0.097234 0.30285" type="mesh" mesh="left_arm_base_link" class="visual" rgba="0.79 0.82 0.93 1"/>

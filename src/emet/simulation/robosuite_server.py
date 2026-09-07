@@ -2374,7 +2374,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         elif self._spec.name == "innate_mars":
                             self._pin_spec_actuators_by_name("joint_head")
                         elif self._spec.name in ("rby1", "galaxea_r1"):
-                            self._pin_spec_actuators_by_name("torso1", "torso4")
+                            self._pin_spec_actuators_by_name("torso3", "torso4")
                         else:
                             self._pin_spec_actuators_by_name("head_pan", "head_tilt")
                     else:
