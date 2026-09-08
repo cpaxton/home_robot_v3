@@ -273,6 +273,7 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
         explore_goal=False,
     )
     assert out == NavOutcome.SAFETY_REJECTED
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "navigation"
     nav_agent.robot.execute_trajectory.assert_not_called()
 
     out = nav_agent.navigate_to_target_pose(
@@ -282,6 +283,7 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
     )
     assert out.ok
     assert nav_agent.robot.execute_trajectory.called
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
 
 
 @pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None])
@@ -319,4 +321,5 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
     assert abs(float(goal[0]) - 3.0) < 1e-6
     assert abs(float(goal[1]) - 4.0) < 1e-6
     assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
     np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])

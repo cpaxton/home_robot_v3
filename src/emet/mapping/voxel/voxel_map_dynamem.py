@@ -149,8 +149,9 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
         px = float(point[0].item() if hasattr(point[0], "item") else point[0])
         py = float(point[1].item() if hasattr(point[1], "item") else point[1])
-        # Tight scenes: strict standoff can leave no valid goal; relax standoff for object navigation only.
-        standoffs = [0.35, 0.24, 0.14, 0.08] if not exploration else [0.35]
+        # Frontiers are coverage goals, not objects to stand away from. Pick the
+        # nearest valid reachable cell; retain footprint and visibility checks.
+        standoffs = [0.0] if exploration else [0.35, 0.24, 0.14, 0.08]
         obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
 
         for min_standoff in standoffs:
@@ -163,7 +164,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     continue
 
                 dist_xy = float(np.hypot(selected_x - px, selected_y - py))
-                if dist_xy <= min_standoff:
+                if not exploration and dist_xy <= min_standoff:
                     continue
 
                 ok = True

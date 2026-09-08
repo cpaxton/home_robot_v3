@@ -365,7 +365,9 @@ def navigate_to_target_pose(
             return NavOutcome.PROGRESS
         return NavOutcome.STUCK
 
-    target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
+    target_pose = self.space.sample_navigation(
+        start_pose, self.planner, original_target_pose, mode="exploration" if explore_goal else "navigation"
+    )
 
     # A* planning
     if target_pose is not None:

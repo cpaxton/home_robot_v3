@@ -508,7 +508,7 @@ def process_text(self, text, start_pose):
         object_xys: list[np.ndarray] = []
         nav_goals: list[np.ndarray] = []
         for cand in cands:
-            g = self.space.sample_navigation(start_pose, self.planner, cand)
+            g = self.space.sample_navigation(start_pose, self.planner, cand, mode="exploration")
             if g is None:
                 continue
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
@@ -545,7 +545,7 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
-        point = self.space.sample_navigation(start_pose, self.planner, localized_point)
+        point = self.space.sample_navigation(start_pose, self.planner, localized_point, mode=mode)
 
     logger.info(
         "Nav endpoint sample: localize=%s target_xy=(%.2f, %.2f) base_goal=%s",
