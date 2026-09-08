@@ -10,14 +10,14 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# Rainbow RB-Y1 robot backend — same hardware as Galaxea R1 (two-armed mobile manipulator).
-# MolmoSpaces uses the id "rby1". This module provides a first-class robot backend so that
+# RB-Y1 compatibility backend, currently using a Galaxea R1 simulation proxy.
+# MolmoSpaces uses the id "rby1". This module provides a backend so that
 # emet serve mujoco --robot rby1 and emet run dynamem --robot rby1 use GenericZmqClient
 # with the same MJCF as galaxea_r1.
 
 from __future__ import annotations
 
-# Reuse Galaxea R1 spec (same hardware); only the backend name differs for MolmoSpaces/CLI.
+# Reuse the Galaxea R1 proxy spec; this is not native RB-Y1 geometry/calibration.
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
@@ -29,13 +29,13 @@ from emet.robots.galaxea_r1 import (
 )
 from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 
-# Same MJCF as Galaxea R1 (Rainbow RB-Y1 = Galaxea R1 hardware).
+# Proxy MJCF shared with Galaxea R1; do not interpret proxy tests as native RB-Y1 validation.
 _assets_dir = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
 _MJCF_PATH = str(_assets_dir / "galaxea_r1.xml")
 
 
 class Rby1Backend(RobotBackend):
-    """Rainbow RB-Y1 backend (Galaxea R1 family). Uses same MJCF and GenericZmqClient as galaxea_r1."""
+    """RB-Y1 compatibility backend using the Galaxea R1 MJCF proxy and GenericZmqClient."""
 
     def get_spec(self) -> RobotSpec:
         return RobotSpec(

@@ -46,6 +46,11 @@ Consult the validation ledger rather than assuming every new revision is live-te
 
 ## Interactive model entry point
 
+For a smaller, live-tested perception check with no navigation, use the
+[stationary object probe](stationary_object_probe.md): an actual proxy-robot
+camera facing large red/blue objects. Its rendering and query-detector checks
+pass; it deliberately excludes bridge/control behavior.
+
 The application supports the same harness with an explicit robot and simulator:
 
 ```bash

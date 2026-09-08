@@ -1,0 +1,22 @@
+# Kinematic asset/perception diagnostic, NOT a navigation or dynamics benchmark.
+# rby1 currently resolves to the Galaxea R1 proxy MJCF.
+robot: rby1
+base_xyt: [0.0, 0.8, -1.5707963267948966]
+head_pan: 0.0
+head_tilt: -0.6108652381980153
+camera: zed_camera
+image_size: [480, 640]
+table_position: [0.0, -1.0, 0.4]
+table_size: [0.6, 0.5, 0.4]
+targets:
+  - body: object1
+    query: blue cube
+    position: [-0.22, -0.8, 0.88]
+    size: [0.08, 0.08, 0.08]
+    rgba: [0.1, 0.2, 0.9, 1.0]
+  - body: object2
+    query: red cylinder
+    position: [0.22, -0.8, 0.88]
+    size: [0.08, 0.08, 0.08]
+    rgba: [0.9, 0.1, 0.1, 1.0]
+negative_queries: [green mug]
