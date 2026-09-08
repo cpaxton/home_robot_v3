@@ -216,6 +216,7 @@ def main() -> int:
 
     sim_handle = None
     robot = None
+    video = None
     try:
         if args.start_sim:
             sim_cfg = load_sim_launch_config_from_path(args.sim)
@@ -320,6 +321,7 @@ def main() -> int:
                 video.set_status("done", detail=result.message)
                 video.capture_once()
                 mp4 = video.stop()
+                video = None
                 if mp4 is not None:
                     print(f"mp4 -> {mp4}", flush=True)
             print(
@@ -328,11 +330,6 @@ def main() -> int:
             )
             ok = bool(result.success)
         else:
-            if args.record_mp4 and manip_mode == "kinematic":
-                raise SystemExit(
-                    "--record-mp4 with explicit --tool-calls-json is unsupported; "
-                    "the CHAT plan owns the kinematic executor."
-                )
             video = None
             if args.record_mp4:
                 from datetime import datetime
@@ -351,7 +348,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
-                    title="teleport pick-place",
+                    title=f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
                 video.start()
@@ -369,6 +366,7 @@ def main() -> int:
                 video.set_status("done")
                 video.capture_once()
                 mp4 = video.stop()
+                video = None
                 if mp4 is not None:
                     print(f"mp4 -> {mp4}", flush=True)
         # Re-resolve after manip (session placements patched in place)
@@ -397,6 +395,8 @@ def main() -> int:
             print("WARN: could not resolve GT body for displacement check", file=sys.stderr)
         return 0 if ok else 1
     finally:
+        if video is not None:
+            video.stop()
         if robot is not None:
             try:
                 robot.stop()
