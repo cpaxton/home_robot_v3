@@ -99,4 +99,66 @@ Serial retests at `3766381b`, retaining eight views and 12-round/8-nav budgets:
 - `20260908_085121_79494e`: Stretch/default table, DynaMem;
   `/tmp/emet-stretch-numeric-router-retest-20260908`.
 
-Both are bounded engineering runs, not a full sweep. Outcomes pending.
+Both are bounded engineering runs, not a full sweep. Outcomes: rby1 0/2 in
+129.5 s; Stretch 1/2 in 345.5 s. Router calls now parse, but Stretch investigation
+was rejected because graph memory was absent. Blue localization missed the
+scoring radius by returning a point 0.370 m from the GT bounds (radius 0.3 m).
+
+### Investigation and exploration integration
+
+- `49a62da3`, `f2ac713f`: remove graph requirements from voxel investigation,
+  waypoint resolution and annulus sampling. Tests cover dispatch and actual
+  waypoint resolution separately. Graphless capture/verification still has
+  graph-observation assumptions and needs a shared view-evidence interface;
+  these changes alone do not establish end-to-end DynaMem verification.
+- `1cdedb36`: retain planner target metadata with visualization disabled,
+  measure fallback exploration displacement, and block no-progress goals.
+- `927bc54d`: apply blocked-goal filtering in the GraphEQA ranked override too.
+  The live follow-up exposed that override bypassing the base picker.
+- `f78cbcde`: allow third-person recording around explicit CHAT kinematic tool
+  execution. The first attempt was rejected by the old script guard, not by
+  the manipulation executor.
+- `9d9aa364`: prevent a Stretch server worker joining itself during shutdown.
+
+| Job | Check | Outcome |
+| --- | --- | --- |
+| `20260908_114752_8e542d` | Stretch graphless investigation dispatch | Stopped after retaining NO_WAYPOINT and navigation-timeout traces; waypoint graph requirement was fixed after launch; no completed score |
+| `20260908_115153_923a59` | rby1 exploration progress | 0/2, 135 s, three graph nodes; exposed ranked override still repeating blocked frontier |
+| `20260908_115320_e7c308` | Integrated TAMP + video | Failed at unsupported video/tool combination before execution; script fixed |
+| `20260908_115716_c281de` | Stretch default table, four turns | Five captures, no motion failures; incomplete health telemetry; teardown self-join fixed afterward |
+| `20260908_120238_f6731b` | rby1 with ranked override fix | 0/2, 130.5 s; graph fallback advances to space fallback, but frontier approach still uses object stand-off |
+| `20260908_120415_6467fb` | Integrated TAMP CHAT with video support | Passed; 2.2144 m object displacement; 272-frame, 640x480 MP4 (22.7 s); GT-assisted, not learned manipulation |
+
+Outputs follow their named `/tmp/emet-...-20260908` job directories. The initial
+TAMP launcher `20260908_115237_690772` was cancelled before launch to correct an
+unsupported output-path flag; it is not a test result.
+
+See [simulation tryout](simulation_tryout.md) for exact workstation commands,
+including the difference between scripted GT-assisted tools and learned models.
+
+`29cc1bfa` passes the existing exploration mode through both navigation entry
+points and distinguishes coverage goals from object stand-off targets inside
+the sampler. Exploration picks the closest reachable, footprint-valid cell;
+object stand-off distances, obstacle filtering and visibility checks remain.
+Tests exercise both modes and an occupied target. The final combined gate is
+121 passed (commands, exploration, waypoint planning, agent loop, renderer mask,
+shutdown, decoder and batch selection), with two dependency deprecation warnings.
+
+Final bounded learned retest: `20260908_121001_7d5280`, artifacts
+`/tmp/emet-rby1-frontier-mode-retest-20260908`: **0/2**, 112.1 s, four graph
+nodes, 899 explored cells. The robot reaches different navigation targets,
+but verification reports `NOT_A_VIEW` with no station/view identity. Neither
+phase produces a verified observation or localization. This is not evidence
+that frontier changes solve learned grounding, nor a controlled speed comparison.
+
+The next shared-harness blocker is capture/verification provenance: view evidence
+needs an identity and verification interface independent of object-graph
+insertion. Graphless capture currently has no graph observation to return, and
+lazy captures can also lack the view required by verification. Fix this shared
+interface before threshold tuning; do not manufacture object nodes merely to
+give verification an ID. Then repeat the bounded Stretch and native rby1 checks.
+
+The integrated recording is
+`/tmp/emet-integrated-tamp-chat-video-20260908/third_person.mp4`.
+Recording works, but an inspected frame is heavily occluded by scene geometry;
+the chase-camera framing is not paper-ready.
