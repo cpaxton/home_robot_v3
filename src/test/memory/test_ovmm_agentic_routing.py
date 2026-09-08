@@ -406,6 +406,26 @@ def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_g
     assert int(verified[0]["obs_id"]) == 6
 
 
+def test_voxel_only_investigate_resolves_anchor_without_graph():
+    ex = _executor(question="Where is the red cylinder?")
+    ex.graph_memory = None
+    ex.agent.graph_memory = None
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="red cylinder",
+            obs_id=-3_000_000,
+            xyz=np.array([1.0, 2.0, 0.6]),
+            score=1.0,
+            source="voxel",
+            confidence=1.0,
+        )
+    ]
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    ex._voxel_planner = lambda: (None, None)
+    target = ex._investigate_target_xyz(-3_000_000, 0)
+    np.testing.assert_allclose(target[:2], [1.0, 2.0])
+
+
 def test_fallback_need_more_investigates_voxel_detection_not_frontier():
     """A miss on this RGB must not dump a remaining voxel detection for explore."""
     ex = _executor(question="Where is the red cylinder on the table?")
