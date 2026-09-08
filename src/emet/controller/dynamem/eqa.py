@@ -311,6 +311,7 @@ def navigate_to_target_pose(
     target_obs_id: int | None = None,
     _hop: int = 0,
     explore_goal: bool = False,
+    look_at_xy: tuple[float, float] | None = None,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -368,6 +369,10 @@ def navigate_to_target_pose(
     target_pose = self.space.sample_navigation(
         start_pose, self.planner, original_target_pose, mode="exploration" if explore_goal else "navigation"
     )
+    # A projected base goal can differ substantially from the requested approach.
+    # Recompute bearing there, not at the original waypoint.
+    if target_pose is not None and look_at_xy is not None:
+        target_theta = float(np.arctan2(look_at_xy[1] - target_pose[1], look_at_xy[0] - target_pose[0]))
 
     # A* planning
     if target_pose is not None:
@@ -581,6 +586,7 @@ def navigate_to_target_pose(
             target_obs_id=target_obs_id,
             _hop=_hop + 1,
             explore_goal=explore_goal,
+            look_at_xy=look_at_xy,
         )
     if progressed:
         return NavOutcome.PROGRESS

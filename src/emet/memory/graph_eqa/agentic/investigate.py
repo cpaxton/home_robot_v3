@@ -298,9 +298,11 @@ def _tool_investigate(
     # arrival capture sees a brick wall and the VLM assess reports present=False.
     # theta toward the object anchor from the standing waypoint makes the head look
     # at the target itself.
+    look_at_xy = None
     try:
         t_arr = np.asarray(target, dtype=float).reshape(-1)
         look_x, look_y = self._investigate_arrival_look_at_xy(oid, t_arr)
+        look_at_xy = (look_x, look_y)
         target_theta = float(np.arctan2(look_y - t_arr[1], look_x - t_arr[0]))
         if math.hypot(look_x - t_arr[0], look_y - t_arr[1]) < 1e-6:
             # Waypoint coincides with the anchor (robot already inside the min
@@ -311,7 +313,9 @@ def _tool_investigate(
     except (TypeError, ValueError):
         target_theta = None
     try:
-        nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid)
+        nav_outcome = agent.navigate_to_target_pose(
+            target, start, target_theta, target_obs_id=oid, look_at_xy=look_at_xy
+        )
     except TypeError:
         nav_outcome = agent.navigate_to_target_pose(target, start, target_theta)
     finished = bool(nav_outcome.finished)
@@ -368,6 +372,8 @@ def _tool_investigate(
         "obs_id": oid,
         "approach_index": int(next_ap),
         "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
+        "look_at_xy": list(look_at_xy) if look_at_xy is not None else None,
+        "arrival_base_xyt": list(self._robot_xyt_world()) if self._robot_xyt_world() is not None else None,
         "nav_outcome": nav_outcome_str,
         "nav_success": bool(finished),
         "nav_progress": bool(nav_progress),
@@ -409,6 +415,19 @@ def _tool_investigate(
     )
     before_capture = len(self.agent.voxel_map.observations) if query_candidate else 0
     cap = self._tool_capture_and_update()
+    from emet.memory.graph_eqa.agentic.views import captured_view, target_in_view
+
+    arrival_view = captured_view(self, cap.get("obs_id"))
+    if arrival_view is not None:
+        self._append_trace(
+            {
+                "event": "arrival_targeting",
+                "candidate_id": oid,
+                "obs_id": arrival_view.obs_id,
+                "view_id": arrival_view.view_id,
+                **target_in_view(arrival_view, self._hypothesis_nav_anchor_xyz(oid)),
+            }
+        )
     grounding = None
     if query_candidate:
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)

@@ -154,12 +154,16 @@ def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch
         np.array([2.0, 2.0, 0.0]),
         np.array([0.0, 0.0, 0.0]),
         target_theta=0.3,
+        look_at_xy=(2.0, 1.0),
     )
     assert out.ok
     assert planner.n_plan >= 2
     assert nav_agent.robot.execute_trajectory.call_count >= 2
     assert nav_agent._last_nav_attempt.finished is True
     nav_agent.update.assert_called()
+    # The actual sampled endpoint is (1, 1), not the requested (2, 2).
+    # Face the candidate (2, 1) from that endpoint, not using the stale 0.3 yaw.
+    assert abs(pose[2]) < 1e-6
 
 
 def test_navigate_to_target_pose_hop_uses_world_frame_start(nav_agent, monkeypatch):

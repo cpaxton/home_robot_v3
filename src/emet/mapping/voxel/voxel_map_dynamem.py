@@ -109,7 +109,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         return True
 
     def sample_target_point(
-        self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False
+        self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False, blocked=None
     ) -> np.ndarray | None:
         """Sample a position near the mask and return.
 
@@ -158,6 +158,8 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             for selected_target in selected_targets:
                 sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
                 selected_x, selected_y = planner.to_xy([sx_i, sy_i])
+                if blocked and (round(float(selected_x), 2), round(float(selected_y), 2)) in blocked:
+                    continue
                 theta = self.compute_theta(selected_x, selected_y, px, py)
 
                 if not self.is_valid(np.array([selected_x, selected_y, theta])):
@@ -183,29 +185,11 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 if ok:
                     return np.array([selected_x, selected_y, theta])
 
-        # Projection fallback: no standoff pose passed the validity/LOS gates, but the
-        # anchor itself may sit in unexplored / walled-off space (a hypothesized object
-        # glimpsed through a doorway). Snap to the nearest reachable navigable cell that
-        # can see it, theta facing the predicted position, so navigation never fails to
-        # sample when any reachable cell exists. Best-effort last resort: nearest reachable
-        # cell regardless of visibility.
-        best = None
-        last_resort = None
-        for selected_target in selected_targets:
-            sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
-            selected_x, selected_y = planner.to_xy([sx_i, sy_i])
-            dist_xy = float(np.hypot(selected_x - px, selected_y - py))
-            if dist_xy <= 0.08:
-                continue
-            theta = self.compute_theta(selected_x, selected_y, px, py)
-            if last_resort is None:
-                last_resort = np.array([selected_x, selected_y, theta])
-            if self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y):
-                best = np.array([selected_x, selected_y, theta])
-                break
-        return best if best is not None else last_resort
+        # No useful approach exists in the currently reachable map. Let the caller
+        # explore; do not silently bypass footprint/visibility checks to claim arrival.
+        return None
 
-    def sample_exploration(self, xyt, planner, text=None, debug=False):
+    def sample_exploration(self, xyt, planner, text=None, debug=False, blocked=None):
         """
         Sample an exploration target
         """
@@ -256,6 +240,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 total_heuristics = total_heuristics + siglip_weight * sig_norm
 
         rounded_heuristics = np.ceil(total_heuristics * 200) / 200
+        # Apply exclusions in the final fallback too, before selecting its maximum.
+        for xy in blocked or ():
+            i, j = planner.to_pt(xy)
+            if 0 <= i < rounded_heuristics.shape[0] and 0 <= j < rounded_heuristics.shape[1]:
+                rounded_heuristics[i, j] = -np.inf
+        if not np.isfinite(rounded_heuristics).any():
+            return None, time_heuristics, alignments_heuristics, total_heuristics
         max_heuristic = rounded_heuristics.max()
         indices = np.column_stack(np.where(rounded_heuristics == max_heuristic))
         closest_index = np.argmin(np.linalg.norm(indices - np.asarray(planner.to_pt(xyt)), axis=-1))
@@ -421,12 +412,12 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         xy = self.voxel_map.grid_coords_to_xy(pt)  # type: ignore
         return float(xy[0]), float(xy[1])
 
-    def sample_navigation(self, start, planner, point, mode="navigation"):
+    def sample_navigation(self, start, planner, point, mode="navigation", *, blocked=None):
         plt.clf()
         if point is None:
             start_pt = self.to_pt(start)
             return None
-        goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation")
+        goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation", blocked=blocked)
         logger.debug("sample_navigation point=%s goal=%s", point, goal)
         obstacles, explored = self.voxel_map.get_2d_map()
         plt.imshow(obstacles)
@@ -440,7 +431,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         # plt.show()
         return goal
 
-    def sample_frontier(self, planner, start_pose=None, text=None):
+    def sample_frontier(self, planner, start_pose=None, text=None, *, blocked=None):
         if start_pose is None:
             start_pose = [0, 0, 0]
         (
@@ -453,7 +444,10 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             planner,
             text=text,
             debug=False,
+            blocked=blocked,
         )
 
+        if index is None:
+            return None
         obstacles, explored = self.voxel_map.get_2d_map()
         return self.voxel_map.grid_coords_to_xyt(torch.tensor([index[0], index[1]]))

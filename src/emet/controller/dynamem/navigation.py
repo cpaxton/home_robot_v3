@@ -454,7 +454,9 @@ def process_text(self, text, start_pose):
                 debug_text += "## Selected frontier target from graph memory.\n"
                 mode = "exploration"
             else:
-                localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                localized_point = self.space.sample_frontier(
+                    self.planner, start_pose, frontier_text, blocked=getattr(self, "_habitat_blocked_goals", None)
+                )
                 localize_source = "frontier_space" if localized_point is not None else ""
                 mode = "exploration"
 
@@ -508,7 +510,13 @@ def process_text(self, text, start_pose):
         object_xys: list[np.ndarray] = []
         nav_goals: list[np.ndarray] = []
         for cand in cands:
-            g = self.space.sample_navigation(start_pose, self.planner, cand, mode="exploration")
+            g = self.space.sample_navigation(
+                start_pose,
+                self.planner,
+                cand,
+                mode="exploration",
+                blocked=getattr(self, "_habitat_blocked_goals", None),
+            )
             if g is None:
                 continue
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
@@ -545,7 +553,13 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
-        point = self.space.sample_navigation(start_pose, self.planner, localized_point, mode=mode)
+        point = self.space.sample_navigation(
+            start_pose,
+            self.planner,
+            localized_point,
+            mode=mode,
+            blocked=getattr(self, "_habitat_blocked_goals", None) if mode == "exploration" else None,
+        )
 
     logger.info(
         "Nav endpoint sample: localize=%s target_xy=(%.2f, %.2f) base_goal=%s",

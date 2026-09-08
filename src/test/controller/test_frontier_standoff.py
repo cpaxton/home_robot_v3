@@ -33,3 +33,10 @@ def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     obstacles[5, 0] = True
     blocked = sample(space, start, target, planner, exploration=True)
     assert not np.allclose(blocked[:2], target[:2])
+    excluded = sample(space, start, target, planner, exploration=True, blocked={(0.4, 0.0), (0.5, 0.0)})
+    assert excluded[0] < 0.4
+    space._line_of_sight_clear = lambda *args: False
+    assert sample(space, start, target, planner) is None
+    space._line_of_sight_clear = lambda *args: True
+    space.is_valid = lambda pose: False
+    assert sample(space, start, target, planner) is None
