@@ -20,3 +20,15 @@ targets:
     size: [0.08, 0.08, 0.08]
     rgba: [0.9, 0.1, 0.1, 1.0]
 negative_queries: [green mug]
+# Incremental live-bridge diagnostic: known free space in front of the table.
+live_probe:
+  hold_seconds: 10
+  hold_xy_tolerance_m: 0.03
+  # Precision diagnostic, explicitly stricter than normal bridge arrival defaults.
+  waypoint_xy_tolerance_m: 0.02
+  yaw_tolerance_rad: 0.03
+  route:
+    - [0.0, 0.8, -1.3962634015954636]  # +10 degree turn
+    - [0.0, 0.8, -1.5707963267948966]  # restore view
+    - [0.0, 0.6, -1.5707963267948966]  # 20 cm toward table
+    - [0.0, 0.8, -1.5707963267948966]  # return

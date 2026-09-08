@@ -145,12 +145,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         scene_xml: str | None = None,
         scene_model: mujoco.MjModel | None = None,
         simulation_rate: int = 80,
+        navigation_xy_tolerance: float = 0.07,
+        navigation_yaw_tolerance: float = 0.15,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
         objects_info: dict[str, Any] | None = None,
         **kwargs,
     ):
+        if not all(np.isfinite(v) and v > 0 for v in (navigation_xy_tolerance, navigation_yaw_tolerance)):
+            raise ValueError("Navigation tolerances must be finite and positive")
         max_sim_steps = kwargs.pop("max_sim_steps", None)
         debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
         scene_disk_path = kwargs.pop("scene_disk_path", None)
@@ -175,8 +179,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._emet_session: dict[str, Any] | None = None
         # World-frame (x, y, yaw) holonomic drive goal (velocity before mj_step): free joint or planar joints.
         self._nav_goal_world: np.ndarray | None = None
-        self._nav_tol_xy = 0.07
-        self._nav_tol_theta = 0.15
+        self._nav_tol_xy = float(navigation_xy_tolerance)
+        self._nav_tol_theta = float(navigation_yaw_tolerance)
         self._nav_kp_xy = 0.95
         self._nav_kp_theta = 2.2
         self._nav_v_max = 0.42
