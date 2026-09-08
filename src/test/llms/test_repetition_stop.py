@@ -57,3 +57,12 @@ def test_helper_returns_stopping_criteria_list():
     assert len(crit) == 2
     assert isinstance(crit[0], DecodeProgressStop)
     assert isinstance(crit[1], RepetitionStop)
+
+
+def test_numeric_ids_do_not_trigger_phrase_repetition_guard():
+    from types import SimpleNamespace
+
+    tokenizer = SimpleNamespace(decode=lambda ids: "".join({0: "0", 1: "go "}[i] for i in ids))
+    stop = RepetitionStop(prompt_len=1, tokenizer=tokenizer)
+    assert stop(_ids([99], [0] * 8), None) is False
+    assert stop(_ids([99], [1] * 5), None) is True
