@@ -284,7 +284,8 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
     assert nav_agent.robot.execute_trajectory.called
 
 
-def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch):
+@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None])
+def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch, log_plan):
     def _boom(*_a, **_k):
         raise AssertionError("empty-text explore must not pick a new frontier while leftover exists")
 
@@ -307,7 +308,7 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch)
         enabled=False,
         clear_nav_plan=MagicMock(),
         clear_identity=MagicMock(),
-        log_nav_plan=None,
+        log_nav_plan=log_plan,
         log_arrow3D=MagicMock(),
     )
     nav_agent._rerun_refresh_monologue_panel = lambda: None  # type: ignore[method-assign]
@@ -317,3 +318,5 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch)
     goal = np.asarray(traj[-1], dtype=np.float64).reshape(-1)
     assert abs(float(goal[0]) - 3.0) < 1e-6
     assert abs(float(goal[1]) - 4.0) < 1e-6
+    assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]
+    np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])
