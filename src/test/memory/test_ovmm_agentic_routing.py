@@ -23,6 +23,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from emet.controller.habitat_nav import NavOutcome
 from emet.mapping.close_map import CloseDistanceMap
@@ -344,7 +345,8 @@ def test_siglip_seed_is_not_a_voxel_detection():
     assert out.get("status") != "DETECTIONS_REMAIN"
 
 
-def test_stalled_voxel_investigate_scores_current_view_without_look_around():
+@pytest.mark.parametrize("has_graph", [True, False])
+def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_graph):
     """Arrival yaw faces the object — do not pan before assess."""
     ex = _executor(question="Where is the red cylinder on the table?")
     oid = -3_000_000
@@ -357,7 +359,8 @@ def test_stalled_voxel_investigate_scores_current_view_without_look_around():
         confidence=1.0,
     )
     ex._hypotheses = [hyp]
-    ex.agent.graph_memory = MagicMock()
+    ex.agent.graph_memory = MagicMock() if has_graph else None
+    ex.graph_memory = ex.agent.graph_memory
     ex.agent.navigate_to_target_pose = MagicMock(return_value=NavOutcome.REACHED)
     ex.agent._last_nav_attempt = None
     events: list[str] = []

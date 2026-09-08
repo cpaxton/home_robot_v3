@@ -140,7 +140,9 @@ def _tool_investigate(
         return {"ok": False, "error": "nav budget exhausted"}
     gm = self.graph_memory
     agent = self.agent
-    if gm is None or not hasattr(agent, "navigate_to_target_pose"):
+    # Voxel proposals are investigable without a graph (e.g. DynaMem).
+    # Graph bookkeeping below is optional; navigation is the required capability.
+    if not callable(getattr(agent, "navigate_to_target_pose", None)):
         return {"ok": False, "error": "nav unavailable"}
     oid = int(obs_id)
     if getattr(agent, "query_driven_memory", False) is True:
