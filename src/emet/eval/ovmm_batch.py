@@ -145,11 +145,11 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
     if opts.query_driven_memory and (backends != ["lazy_graph"] or opts.oneshot_localize or opts.agentic_find is False):
         raise ValueError("query-driven memory requires only lazy_graph with agentic find")
     episodes_path = str(opts.episodes)
-    default_find = str(root / "configs" / "ovmm" / "find_phase_episodes.yaml")
-    default_full = str(root / "configs" / "ovmm" / "full_episodes.yaml")
-    if episodes_path in (default_find, "configs/ovmm/find_phase_episodes.yaml") and not opts.full:
+    # Only the CLI's relative defaults delegate to the benchmark. An explicit
+    # absolute file must not be replaced by a path resolved from another cwd.
+    if episodes_path == "configs/ovmm/find_phase_episodes.yaml" and not opts.full:
         episodes_path = str(bench.sim_episodes_yaml)
-    if episodes_path in (default_full, "configs/ovmm/full_episodes.yaml") and opts.full:
+    if episodes_path == "configs/ovmm/full_episodes.yaml" and opts.full:
         episodes_path = str(bench.full_episodes_yaml)
 
     episodes = load_find_phase_episodes(episodes_path)
@@ -159,6 +159,9 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
         episode_ids=opts.episode_ids,
         floor_only=opts.floor_only,
     )
+    if not episodes:
+        print(f"FATAL: no episodes selected from {episodes_path}; check episode IDs and filters", file=sys.stderr)
+        return 2
 
     if opts.dry_run:
         for ep in episodes:
