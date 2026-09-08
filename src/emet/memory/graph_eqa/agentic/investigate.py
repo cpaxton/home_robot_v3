@@ -312,12 +312,7 @@ def _tool_investigate(
                 target_theta = float(np.arctan2(look_y - float(rxy[1]), look_x - float(rxy[0])))
     except (TypeError, ValueError):
         target_theta = None
-    try:
-        nav_outcome = agent.navigate_to_target_pose(
-            target, start, target_theta, target_obs_id=oid, look_at_xy=look_at_xy
-        )
-    except TypeError:
-        nav_outcome = agent.navigate_to_target_pose(target, start, target_theta)
+    nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid, look_at_xy=look_at_xy)
     finished = bool(nav_outcome.finished)
     nav_outcome_str = str(nav_outcome)
     self._n_nav += 1

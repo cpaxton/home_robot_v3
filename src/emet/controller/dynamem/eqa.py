@@ -468,7 +468,6 @@ def navigate_to_target_pose(
                 n_planned=n_planned or None,
                 chunked=truncated,
             )
-            self._record_nav_plan_fields(traj=list(traj))
         else:
             origins = []
             vectors = []
@@ -483,6 +482,15 @@ def navigate_to_target_pose(
                 0.1,
             )
 
+        # Target provenance belongs to navigation, even with a null visualizer.
+        self._record_nav_plan_fields(
+            traj=list(traj),
+            goal_xyt=np.asarray(target_pose).tolist(),
+            object_xyz=np.asarray(original_target_pose).tolist(),
+            look_at_xy=list(look_at_xy) if look_at_xy is not None else None,
+            mode="exploration" if explore_goal else "navigation",
+            localize_source="eqa_target",
+        )
         from emet.controller.nav_confirm import confirm_navigation_plan
 
         if not confirm_navigation_plan(

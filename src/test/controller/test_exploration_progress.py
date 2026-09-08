@@ -54,3 +54,17 @@ def test_ranked_graph_frontier_also_honors_blocked_goals():
     agent._planning_base_xyt = lambda pose: pose
     agent._habitat_blocked_goals = {goal_key_xy(near.xyz[:2])}
     np.testing.assert_allclose(agent._best_frontier_point_from_graph("bowl"), far.xyz)
+
+
+def test_blocked_goal_invalidates_saved_trajectory_continuation():
+    from emet.controller.dynamem.navigation import _mark_nav_goal_blocked
+
+    agent = SimpleNamespace(
+        space=SimpleNamespace(traj=[[1, 0, 0], [np.nan] * 3, [2, 0, 0]]),
+        _last_nav_plan={"goal_xyt": [1, 0, 0], "object_xyz": [2, 0, 0]},
+        _record_nav_plan_fields=Mock(),
+    )
+    _mark_nav_goal_blocked(agent, reason="aborted_waypoint_timeout")
+    assert agent.space.traj is None
+    assert goal_key_xy((1, 0)) in agent._habitat_blocked_goals
+    assert goal_key_xy((2, 0)) in agent._habitat_blocked_goals

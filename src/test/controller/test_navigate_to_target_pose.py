@@ -128,6 +128,9 @@ class _LongChunkPlanner:
 
 
 def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch):
+    from emet.visualization.null_visualizer import NullVisualizer
+
+    nav_agent.rerun_visualizer = NullVisualizer()
     planner = _LongChunkPlanner()
     nav_agent.planner = planner
     nav_agent._min_clearance_m = 0.0
@@ -164,6 +167,9 @@ def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch
     # The actual sampled endpoint is (1, 1), not the requested (2, 2).
     # Face the candidate (2, 1) from that endpoint, not using the stale 0.3 yaw.
     assert abs(pose[2]) < 1e-6
+    np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [1, 1])
+    np.testing.assert_allclose(nav_agent._last_nav_plan["object_xyz"][:2], [2, 2])
+    assert nav_agent._last_nav_plan["look_at_xy"] == [2, 1]
 
 
 def test_navigate_to_target_pose_hop_uses_world_frame_start(nav_agent, monkeypatch):

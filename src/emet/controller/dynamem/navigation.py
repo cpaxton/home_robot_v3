@@ -151,6 +151,11 @@ def _filter_unsafe_nav_traj(
 
 def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") -> None:
     """Remember the last nav goal so explore multi-goal A* skips it next time."""
+    # A failed chunk invalidates its continuation; otherwise process_text resumes
+    # the saved target before consulting any of the blocked-aware samplers.
+    space = getattr(self, "space", None)
+    if space is not None:
+        space.traj = None
     blocked = getattr(self, "_habitat_blocked_goals", None)
     if blocked is None:
         self._habitat_blocked_goals = set()
