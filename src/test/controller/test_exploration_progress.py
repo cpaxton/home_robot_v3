@@ -41,3 +41,16 @@ def test_graph_frontier_fallback_honors_blocked_goals(query):
         robot=None,
     )
     np.testing.assert_allclose(_best_frontier_point_from_graph(agent, query), far.xyz)
+
+
+def test_ranked_graph_frontier_also_honors_blocked_goals():
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    near = SimpleNamespace(source="frontier", xyz=np.array([1, 0, 1]))
+    far = SimpleNamespace(source="frontier", xyz=np.array([2, 0, 1]))
+    agent = GraphEQAController.__new__(GraphEQAController)
+    agent.graph_memory = SimpleNamespace(hypothesize_nav_targets=lambda *a, **k: [near, far])
+    agent.robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3))
+    agent._planning_base_xyt = lambda pose: pose
+    agent._habitat_blocked_goals = {goal_key_xy(near.xyz[:2])}
+    np.testing.assert_allclose(agent._best_frontier_point_from_graph("bowl"), far.xyz)

@@ -248,8 +248,13 @@ class GraphEQAController(DynamemController):
                 )
             except TypeError:
                 hypotheses = gm.hypothesize_nav_targets(text or "", max_k=12)
+            blocked = getattr(self, "_habitat_blocked_goals", None) or set()
             frontier = next(
-                (hypothesis for hypothesis in hypotheses if hypothesis.source == "frontier"),
+                (
+                    hypothesis
+                    for hypothesis in hypotheses
+                    if hypothesis.source == "frontier" and goal_key_xy(hypothesis.xyz[:2]) not in blocked
+                ),
                 None,
             )
             if frontier is not None:
