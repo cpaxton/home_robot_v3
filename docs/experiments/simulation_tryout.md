@@ -63,8 +63,9 @@ Qwen3-VL worker. Do not compare those as identical model settings.
 Learned find/localization remains under diagnosis. A returned XYZ is not itself
 a successful scored localization or a verified object. In particular, the last
 completed Stretch control was 1/2. The final native rby1/Molmo retest at
-`29cc1bfa` was 0/2 in 112.1 s, with four graph nodes. Navigation reaches new
-targets, but capture/verification still lacks usable view identity in this
-lazy-memory path. Graphless verification also needs this shared interface.
+`9e2d9c4c` was 0/2 in 122.5 s, with two graph nodes; Stretch remained 1/2 in
+956.3 s, without a verified close-look view. Captured-view identity now works
+independently of graph insertion, but rby1 approach sampling and Stretch waypoint
+timeouts still prevent reliable targeted search. These are not passing model demos.
 Use [the validation ledger](robot_grounding_validation.md) for jobs, budgets,
 artifacts and new outcomes. No full EQA/OVMM/TAMP paper comparison is claimed.

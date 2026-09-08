@@ -162,3 +162,46 @@ The integrated recording is
 `/tmp/emet-integrated-tamp-chat-video-20260908/third_person.mp4`.
 Recording works, but an inspected frame is heavily occluded by scene geometry;
 the chase-camera framing is not paper-ready.
+
+### Captured evidence and targeting (2026-09-08, `9e2d9c4c`)
+
+- Retain a bounded, query-local camera evidence buffer independently of object
+  nodes. Integer tool IDs map to actual voxel frames; verification uses their
+  retained RGB and explicit voxel-source binding, not a later live image or a
+  global voxel maximum. Missing captures now fail explicitly.
+- Pass the candidate's world-space look-at point into navigation and recompute
+  the final bearing after the planner projects the base endpoint. A requested
+  waypoint and the actual endpoint need not coincide.
+- Remove the sampler's last-resort fallback that bypassed footprint/visibility
+  checks. Apply blocked-goal exclusions to the space-frontier fallback and its
+  sampled endpoints as well as graph frontiers.
+- Save capture RGB/pose and project candidate anchors into arrival images when
+  camera geometry is available. `target_in_frame` is geometric targeting, **not**
+  proof of unobstructed visibility, correct object identity, or localization.
+- Focused cross-component gate: **124 passed**, two dependency warnings.
+
+Serial, eight-view, 12-round/8-nav retests retain model and threshold settings:
+
+| Job | Check | Outcome |
+| --- | --- | --- |
+| `20260908_150330_012bad` | Native rby1 query-driven lazy graph | **0/2**, 122.5 s, two graph nodes. Retained-view VLM verification runs; images show nearby walls, not the queried objects. Target approaches fail sampling; useful exploration remains unresolved. |
+| `20260908_150530_89d47e` | Stretch default table, graphless DynaMem | **1/2**, 956.3 s. Red voxel localization scores successfully; neither phase has a verified view. Object approach and exploration hit waypoint timeouts; retained RGB is evaluated but shows floor/dark background. |
+
+Artifacts are `/tmp/emet-rby1-targeted-view-retest-20260908` and
+`/tmp/emet-stretch-targeted-view-retest-20260908`. These are engineering checks,
+not proof that learned search is solved or a controlled attribution study.
+
+The Stretch trace exposed a saved-trajectory continuation bypassing blocked-goal
+selection after a timeout (including across the two queries). A regression test
+reproduced this before the fix: blocking now invalidates that continuation.
+Navigation also retains target/endpoint/look-at metadata with visualization
+disabled. Follow-up commit `b6b5b8f7` passes the combined 125-test gate (plus
+the final null-visualizer targeting check). These changes are not included in the two live
+runs above. No further learned run or sweep was launched in this batch.
+
+Targeting remains an end-to-end acceptance gate, not a claimed success: the live
+rby1 target approaches failed sampling, and Stretch's object approach timed out.
+The heading correction and optical projection are covered by deterministic tests;
+neither robot demonstrated a verified close-look target in this batch. Next isolate
+reachable approach selection and measured waypoint execution with model-free
+probes, then repeat learned search without changing admission thresholds.
