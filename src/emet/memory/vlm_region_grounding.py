@@ -69,6 +69,8 @@ def region_annotation(rgb, region):
 
 
 def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False):
+    if client is None:
+        raise RuntimeError("Query grounding VLM client is not initialized")
     prompt = (
         f"Locate the visible object referred to by {description or query!r}. Target category hint: {query!r}. "
         "Use pixels, not the hint, as evidence. Return a tight bounding box around the target and an interior "
@@ -96,7 +98,7 @@ def select_vlm_region(rgb, query, description, *, client, correction=None, box_o
             "point using the original image, or abstain. This feedback does not establish object presence."
         )
         images.append(region_annotation(rgb, correction["region"]))
-    raw = _call_eqa_client(client, [prompt, *images], system_prompt=system) if client else ""
+    raw = _call_eqa_client(client, [prompt, *images], system_prompt=system)
     parsed = _parse_json_object(raw)
     verification = {
         "source": "vlm_region",

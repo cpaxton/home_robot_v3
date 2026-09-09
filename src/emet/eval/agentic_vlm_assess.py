@@ -112,7 +112,19 @@ def _call_eqa_client(
     system_prompt: str,
     max_new_tokens: int = 192,
 ) -> str:
+    from emet.llms.base import AbstractVLLMClient
+    from emet.llms.vllm_factory import dynamem_vllm_call
+
     try:
+        if isinstance(client, AbstractVLLMClient):
+            return str(
+                dynamem_vllm_call(
+                    client,
+                    payload if isinstance(payload, list) else [payload],
+                    system_prompt=system_prompt,
+                    max_new_tokens=max_new_tokens,
+                )
+            )
         return str(
             client(
                 payload if isinstance(payload, list) else [payload],

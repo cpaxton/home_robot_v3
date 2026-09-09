@@ -65,3 +65,27 @@ def test_geometry_feedback_is_bounded_and_does_not_override_abstention():
     client = Mock(return_value='{"verified":false}')
     assert not select_supported_region(rgb, depth, "mug", "mug", client=client, min_depth=0.2, max_depth=4)[2]["valid"]
     client.assert_called_once()
+
+
+def test_missing_client_is_not_semantic_absence():
+    from emet.memory.vlm_region_grounding import select_vlm_region
+
+    with pytest.raises(RuntimeError, match="not initialized"):
+        select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "mug", "mug", client=None)
+
+
+def test_shared_vlm_uses_explicit_grounding_prompt_and_budget():
+    from unittest.mock import Mock
+
+    from PIL import Image
+
+    from emet.eval.agentic_vlm_assess import _call_eqa_client
+    from emet.llms.qwen3_vl_client import Qwen3VLClient
+
+    client = object.__new__(Qwen3VLClient)
+    client.generate_multimodal = Mock(return_value='{"verified":false}')
+    payload = ["locate", Image.new("RGB", (8, 8))]
+    assert _call_eqa_client(client, payload, system_prompt="grounding", max_new_tokens=192)
+    client.generate_multimodal.assert_called_once_with(
+        payload, system_prompt="grounding", max_new_tokens=192, reset_context=True, assistant_prefill=None
+    )

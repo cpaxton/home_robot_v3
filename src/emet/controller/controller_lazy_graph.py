@@ -190,6 +190,14 @@ class LazyGraphController(DynagraphController):
         if backend == "vlm":
             from emet.memory.vlm_region_grounding import ground_vlm_region
 
+            if client is None:
+                # The shared agent binds its deferred VLM to voxel memory.
+                # Query grounding must reuse it, not interpret an uninitialized
+                # graph client as a semantic rejection (or load a second model).
+                client = getattr(vm, "eqa_client", None)
+            if client is None:
+                self.graph_memory._ensure_llm_clients()
+                client = self.graph_memory.eqa_client
             frame, detections, matching_ids, verification = ground_vlm_region(
                 frame,
                 query,
