@@ -1,0 +1,15 @@
+# Episode-frame SE(2) route, not relative deltas. No robot-specific policy.
+# Use --route-repeats 1 for initial diagnostics; five repeats are the acceptance run.
+navigation_policy: precision
+repeats: 5
+route:
+  - [0.0, 0.0, 0.1745329252]
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.0, -0.1745329252]
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.0, 0.5235987756]
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.0, -0.5235987756]
+  - [0.0, 0.0, 0.0]
+  - [0.2, 0.0, 0.0]
+  - [0.0, 0.0, 0.0]
