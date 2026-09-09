@@ -44,6 +44,10 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
 - [ ] Recover target proposals beyond inaccurate VLM boxes and audit the legacy
       unconditional 90-degree find-to-manipulation turn; preserve acquisition
       views and revalidate before action. Keep the table-rejection gate intact.
+- [x] Replay higher-precision Qwen on Caliban: FP16 passes 10/10 stress targets
+      versus int4 9/10; both 5/5 absent cases. FP16 still misses both live-frame
+      boxes. [Precision comparison](docs/experiments/caliban_fp16_grounding.md)
+      records runtime confounds; this is not proof of quantization causality.
 - [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
       then freeze a paired no-regression comparison, not a full sweep.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
