@@ -54,6 +54,7 @@ from emet.utils.image import align_camera_matrix_to_image_size, pinhole_camera_f
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -1842,7 +1843,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Use the rerun server so that we can visualize what is going on as the robot takes actions in the world."""
         step_count = 0
         last_debug_t = 0
-        while not self._finish:
+        while not self._finish and visualizer_is_enabled(self._rerun):
             if not self._wait_if_streams_paused():
                 return
             if self._rerun:
@@ -1927,13 +1928,13 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         self._thread = threading.Thread(target=self.blocking_spin, daemon=True)
         self._state_thread = threading.Thread(target=self.blocking_spin_state, daemon=True)
         self._servo_thread = threading.Thread(target=self.blocking_spin_servo, daemon=True)
-        if self._rerun:
+        if visualizer_is_enabled(self._rerun):
             self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)  # type: ignore
         self._finish = False
         self._thread.start()
         self._state_thread.start()
         self._servo_thread.start()
-        if self._rerun:
+        if visualizer_is_enabled(self._rerun):
             self._rerun_thread.start()
 
         t0 = timeit.default_timer()
