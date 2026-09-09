@@ -1,5 +1,16 @@
 # OVMM grounding closeout
 
+Implementation: `cfab4f97`, review PR #167. The 142-test focused suite and all
+commit hooks passed. A subsequent CLI dispatch regression also checks that
+`--seed` and query mode actually reach the runner (not merely appear in help).
+
+Pilot submitted September 9 as managed job `20260909_120346_2b3550`, frozen
+checkout `/tmp/emet-ovmm-grounding-cfab4f97`. Results/evidence are under
+`/tmp/emet-ovmm-grounding-v2-cfab4f97`; supervisor log and recorded command are
+under `/home/cpaxton/runs/emet/jobs_runs/ovmm-grounding-v2-pilot`.
+Status at this documentation update: running, simulator/agent initialized;
+task outcomes pending. No merge acceptance or performance improvement claimed.
+
 Scope: land the shared grounding correction, then a bounded pilot. No new robot
 models, threshold sweep, or paper performance claim is part of this change.
 
