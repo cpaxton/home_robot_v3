@@ -90,9 +90,12 @@ entered fresh capture, then the 32-token image-caption call timed out at 180 s
 reached. The timed-out shared client refused reuse; the process emitted an
 abort message but remained alive, so the managed job was cancelled for cleanup
 after recording the tool failure. Cancellation is not a successful episode.
-No grounding RGB-D bundle was produced before this early caption failure; the
-managed log retains the command, model, tool arguments, timings and traceback.
-Save pre-caption evidence and diagnose this latency before repeating task runs.
+No query-grounding bundle was produced before this early caption failure. A
+later audit found the raw pre-caption RGB-D under the voxel-memory debug log
+and copied it into the managed job's `memory_debug` directory. The camera view
+contains mostly dark background, not the table targets. The managed log retains
+the command, model, tool arguments, timings and traceback. Diagnose latency and
+the viewing policy separately; an empty view should still be captioned promptly.
 
 Relevant fixture/proposal tests: 15 passed. Production defaults remain unchanged
 and PR #167 remains draft. This batch supports a narrower design hypothesis,

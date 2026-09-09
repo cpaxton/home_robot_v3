@@ -22,17 +22,21 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
 - [x] Run paired touching/occlusion/same-color/farther-view diagnostics: surface
       9/10 versus point 4/10 target gates; both 5/5 absent-query abstentions.
       [Frozen results](docs/experiments/surface_stress_paired.md).
-- [ ] Fix and retest the farther-view wrong-surface acceptance: VLM search box
-      misses the cylinder, then accepts the sole table proposal (0% purity).
-      Add no-correct-candidate rejection evidence before promotion; do not mask
-      this failure with a larger candidate cap or a favorable aggregate score.
+- [x] Reject the known farther-view wrong-only proposal set with candidate-only
+      panels: frozen boxes/masks preserve nine target recoveries, reject the table
+      patch, and abstain on five absent queries. This is one rejection case.
+- [ ] Recover missing target proposals and expand wrong-only candidate tests
+      before promotion; a safe rejection is not successful localization.
 - [ ] Diagnose unsafe posture during known-route translation (upright dot
       0.97898). Hold and turns pass; keep posture safety threshold unchanged.
 - [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
       and independent post-action scoring; oracle TAMP control is not this test.
-- [ ] Diagnose live shared-VLM caption latency: router reaches pick_place, but
-      the fresh-observation caption times out after 180 seconds before grounding.
-      Cached region calls are fast; do not silently increase the timeout.
+- [x] Fix live shared-VLM caption latency: disabled Stretch visualizer spawned a
+      no-op busy loop. With the enabled check, identical integrated captions take
+      0.19–0.66 s instead of timing out at 180 s; tool reaches target rejection.
+      [Evidence and remaining limits](docs/experiments/live_caption_and_candidate_rejection.md).
+- [ ] Improve observation coverage: current integrated view contains only table
+      edge, not targets. Compare the existing head sweep before adding policy.
 - [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
       then freeze a paired no-regression comparison, not a full sweep.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
