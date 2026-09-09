@@ -140,7 +140,10 @@ class DynamemTaskExecutor:
 
         # Create semantic sensor if visual servoing is enabled
         logger.debug("- Create semantic sensor if visual servoing is enabled")
-        if self.visual_servo:
+        detector_free = bool(self.parameters.get("query_driven_memory", False)) and (
+            (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm") == "vlm"
+        )
+        if self.visual_servo and not detector_free:
             self.parameters["detection"]["module"] = "yoloe" if self.cpu_only else "owlsam"
             self.semantic_sensor = create_semantic_sensor(
                 parameters=self.parameters,
@@ -148,7 +151,8 @@ class DynamemTaskExecutor:
                 verbose=False,
             )
         else:
-            self.parameters["encoder"] = None
+            if not self.visual_servo:
+                self.parameters["encoder"] = None
             self.semantic_sensor = None
 
         logger.debug("- Start robot agent with data collection")

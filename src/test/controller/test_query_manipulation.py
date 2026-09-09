@@ -13,6 +13,32 @@ from emet.memory.grounded_target import GroundedTarget
 from emet.memory.query_candidates import QueryCandidates
 
 
+@pytest.mark.parametrize("backend,expects_detector", [("vlm", False), ("yoloe", True)])
+def test_visual_servo_constructor_respects_grounding_backend(backend, expects_detector):
+    from emet.core import AbstractRobotClient
+
+    parameters = {
+        "query_driven_memory": True,
+        "query_memory": {"grounding_backend": backend},
+        "detection": {},
+        "encoder": "siglip",
+    }
+    module = "emet.controller.task.dynamem.dynamem_task"
+    with (
+        patch(f"{module}.create_semantic_sensor") as detector,
+        patch.object(DynamemTaskExecutor, "_build_agent", return_value=Mock()),
+        patch(f"{module}.GraspObjectOperation") as grasp,
+        patch(f"{module}.EmoteTask"),
+    ):
+        task = DynamemTaskExecutor(Mock(spec=AbstractRobotClient), parameters, visual_servo=True, cpu_only=True)
+    assert detector.called is expects_detector
+    assert task.grasp_object is grasp.return_value
+    assert parameters["encoder"] == "siglip"
+    if not expects_detector:
+        assert task.semantic_sensor is None
+        assert parameters["detection"] == {}
+
+
 def executor():
     task = object.__new__(DynamemTaskExecutor)
     store = QueryCandidates()
