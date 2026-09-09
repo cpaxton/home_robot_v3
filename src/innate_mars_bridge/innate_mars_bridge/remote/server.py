@@ -174,6 +174,12 @@ class ZmqServer(BaseZmqServer):
 
     def start(self):
         if self._h264_enabled:
+            try:
+                import av  # noqa: F401
+            except ImportError:
+                click.echo("H.264 disabled: install the optional PyAV dependency (emet[video]).", err=True)
+                self._h264_enabled = False
+        if self._h264_enabled:
             self._h264_socket = self._make_pub_socket(self._h264_port, self._use_remote_computer)
         super().start()
         if self._h264_enabled and self._h264_socket is not None:
@@ -183,7 +189,6 @@ class ZmqServer(BaseZmqServer):
             self._send_h264_thread.start()
 
     def _spin_send_h264(self):
-        import time
         import timeit
 
         from emet.core.server import _rate_sleep
@@ -201,8 +206,8 @@ class ZmqServer(BaseZmqServer):
             except Exception as exc:
                 if steps == 0:
                     click.echo(f"Warning: H.264 encode failed ({exc}); disable EMET_ZMQ_H264.", err=True)
-                time.sleep(0.1)
-                continue
+                self._h264_enabled = False
+                return
             msg = {
                 EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
                 "h264_nal": nal,

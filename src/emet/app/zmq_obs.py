@@ -403,31 +403,42 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
                 f"{map_stats.get('n_voxel_explored_cells', 0)} explored cells"
             )
     elif run.profile == "stream":
+        preview = None
         if run.rtsp_preview:
-            import threading
+            import multiprocessing
 
             from emet.app.comm_video import run_comm_video
 
-            threading.Thread(
-                target=lambda: run_comm_video(
-                    robot_ip=host,
-                    connection_name=run.connection_name,
-                    port_offset=run.port_offset,
-                    seconds=0.0,
-                    ffplay=False,
-                ),
+            # OpenCV owns the child process's main thread; never fork active
+            # ZMQ/OpenCV threads from the parent.
+            preview = multiprocessing.get_context("spawn").Process(
+                target=run_comm_video,
+                kwargs={
+                    "robot_ip": host,
+                    "connection_name": run.connection_name,
+                    "port_offset": run.port_offset,
+                    "seconds": 0.0,
+                    "ffplay": False,
+                },
                 daemon=True,
-            ).start()
-        _stream_zmq_only(
-            robot_key=robot_key,
-            host=host,
-            port_offset=run.port_offset,
-            headless=run.headless,
-            rerun_native=run.rerun_native,
-            rerun_show_panels=run.rerun_show_panels,
-            rerun_debug=run.rerun_debug,
-            allow_missing_depth=allow_missing_depth,
-        )
+            )
+            preview.start()
+        try:
+            _stream_zmq_only(
+                robot_key=robot_key,
+                host=host,
+                port_offset=run.port_offset,
+                headless=run.headless,
+                rerun_native=run.rerun_native,
+                rerun_show_panels=run.rerun_show_panels,
+                rerun_debug=run.rerun_debug,
+                allow_missing_depth=allow_missing_depth,
+            )
+        finally:
+            if preview is not None:
+                if preview.is_alive():
+                    preview.terminate()
+                preview.join(timeout=5)
 
 
 _BACKEND_HELP = (

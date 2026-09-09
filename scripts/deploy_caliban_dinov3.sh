@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${EMET_DINOV3_HOST:-${EMET_LLM_HOST:-${EMET_CALIBAN_HOST:-}}}"
-REMOTE_REPO="${EMET_CALIBAN_REPO:-~/src/home_robot_v4}"
+REMOTE_REPO="${EMET_CALIBAN_REPO:-~/src/home_robot_v3}"
 REMOTE_HF='~/hf-cache'
 HF_HUB="${HF_HOME:-$HOME/.cache/huggingface}/hub"
 IMAGE="${EMET_JETSON_LLM_IMAGE:-emet-jetson-llm:r35.4.1}"
