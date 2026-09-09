@@ -35,8 +35,15 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
       no-op busy loop. With the enabled check, identical integrated captions take
       0.19–0.66 s instead of timing out at 180 s; tool reaches target rejection.
       [Evidence and remaining limits](docs/experiments/live_caption_and_candidate_rejection.md).
-- [ ] Improve observation coverage: current integrated view contains only table
-      edge, not targets. Compare the existing head sweep before adding policy.
+- [x] Compare observation coverage using the existing head sweep. Sweeps see the
+      objects and a later integrated grounding frame contains both targets;
+      this does not establish robust reacquisition or manipulation readiness.
+- [x] Test existing head sweep and fix the shared query VLM binding. Grounding
+      previously read an uninitialized graph client instead of the loaded voxel
+      client. Wired run now sees the target but rejects a misplaced table box.
+- [ ] Recover target proposals beyond inaccurate VLM boxes and audit the legacy
+      unconditional 90-degree find-to-manipulation turn; preserve acquisition
+      views and revalidate before action. Keep the table-rejection gate intact.
 - [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
       then freeze a paired no-regression comparison, not a full sweep.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and

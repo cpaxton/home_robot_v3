@@ -74,3 +74,44 @@ proposal remains unrecovered; more rejection cases are needed before promotion.
 
 The focused shared-agent regression pack passes 247 tests, with one existing
 model-loading CLI test deselected. Production defaults remain unchanged.
+
+## Shared grounding client wiring
+
+The four-pan ablation completes its sweep in 5.1 s, sees the cylinder/block in
+captions, and finishes its tool turn in 30.3 s, still reporting failure. Its
+grounding record has `raw: ""`: **this is not a measured Qwen semantic miss**.
+The shared-agent bootstrap binds the deferred VLM to voxel memory, but the
+query-grounding path reads only the still-deferred graph client. No grounding
+model call was made in that path. Raw sweep RGB-D is archived in the job's
+`memory_debug` directory and the grounding audit is under
+`/home/cpaxton/runs/emet/shared-query-head-sweep-20260909/grounding`.
+
+`cffac0ab` reuses the initialized voxel VLM when graph memory has no client,
+otherwise initializes graph clients through their existing lazy initializer.
+A missing client now raises an infrastructure error in region grounding.
+The common EQA call adapter dispatches `AbstractVLLMClient` through its explicit
+multimodal contract, preserving the grounding system prompt, image payload,
+token budget and reset context instead of inheriting chat defaults.
+Tests cover shared reuse without another load, deferred initialization, missing
+client failure, and the explicit shared-client call settings.
+
+Frozen rerun `20260909_183039_bb8ec4` repeats the same head-sweep task with this
+wiring fix and explicit grounding evidence. It must not be pooled with the
+earlier uninitialized-client failures as a detector-accuracy comparison.
+
+The wired rerun completes its turn in **41.5 s**. Grounding now makes two real
+Qwen calls (1.9 s localization and 2.1 s candidate selection). The raw RGB shows
+the red cylinder and blue block near the lower image edge. Qwen identifies the
+cylinder semantically but its normalized box misses the object; the sole
+candidate is table. The selector explicitly identifies that surface as table,
+sets `target_unambiguous=false`, and blocks manipulation. This is a real
+proposal-coverage failure with safe rejection, not an uninitialized client or
+an end-to-end success. Exact image, depth, masks, prompts and raw responses are
+under `/home/cpaxton/runs/emet/shared-query-wired-vlm-20260909/grounding`.
+
+Final focused regression pack: **251 passed, one deselected**. Next gate:
+recover a valid target proposal without relying on a tight VLM box, then repeat
+the frozen stress/room cases and this integrated command. Do not weaken the
+candidate rejection just to force the task forward. Also audit the legacy
+find-to-manipulation transition: `_find` unconditionally rotates the base by
+90 degrees after navigation, so it can discard the useful acquisition view.
