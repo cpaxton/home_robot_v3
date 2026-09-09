@@ -101,7 +101,7 @@ def select_vlm_region(rgb, query, description, *, client, correction=None):
 
 
 def select_supported_region(rgb, depth, query, description, *, client, min_depth, max_depth):
-    """One geometry-feedback correction at most; semantic abstentions stand."""
+    """One correction at most, then visually check the marked surface point."""
     correction = None
     attempts = []
     mask = np.full(depth.shape, -1, dtype=np.int32)
@@ -126,6 +126,33 @@ def select_supported_region(rgb, depth, query, description, *, client, min_depth
                 correction = {"region": parsed, "error": str(exc)}
     audit["attempts"] = attempts
     audit["correction"] = correction
+    audit["region"] = parsed
+    if audit["valid"]:
+        prompt = (
+            f"The requested target is {description or query!r}. The first image is the original; "
+            "the second marks a proposed region with a yellow box and a red circle. "
+            "Inspect the CENTER of the red circle, not just the box. Does that precise point lie "
+            "on the visible physical surface of the requested object? A point on the table, wall, "
+            "background, or another object must be rejected even if the target is nearby or inside "
+            "the yellow box. Do not trust the proposed coordinates as evidence. "
+            'Return JSON only: {"verified":true or false,"reason":"..."}. Abstain if unclear.'
+        )
+        system = "Verify a proposed robot grounding against pixels; reject points off the requested object."
+        raw = _call_eqa_client(
+            client, [prompt, Image.fromarray(rgb), region_annotation(rgb, parsed)], system_prompt=system
+        )
+        check = _parse_json_object(raw)
+        audit["surface_verification"] = {
+            "prompt": prompt,
+            "system_prompt": system,
+            "raw": raw,
+            "image_order": ["rgb_file", "region_rgb_file"],
+            "valid": check.get("verified") is True,
+        }
+        if check.get("verified") is not True:
+            audit["valid"] = False
+            audit["reason"] = "marked point not visually confirmed on target"
+            mask.fill(-1)
     return parsed, mask, audit
 
 

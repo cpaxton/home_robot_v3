@@ -115,6 +115,11 @@ def cache_grounding_record(
 
             region_annotation(rgb, verification["correction"]["region"]).save(path / f"{prefix}-correction.png")
             record["correction_rgb_file"] = f"{prefix}-correction.png"
+        if verification.get("surface_verification"):
+            from emet.memory.vlm_region_grounding import region_annotation
+
+            region_annotation(rgb, verification["region"]).save(path / f"{prefix}-region.png")
+            record["region_rgb_file"] = f"{prefix}-region.png"
     arrays = {}
     for name, value in (("depth", depth), ("masks", masks)):
         if value is not None:
