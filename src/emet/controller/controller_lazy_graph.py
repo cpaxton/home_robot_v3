@@ -73,6 +73,8 @@ class LazyGraphController(DynagraphController):
         xyz, stats = vm.retrieve_text_candidate(phrase, minimum_similarity=0.0, excluded_obs_ids=rejected)
         if xyz is None:
             return None, stats
+        if (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm") == "vlm":
+            return xyz, {**stats, "recovery_source": "weak_voxel", "yoloe_hit": False}
         source_frame = vm.observations[stats["source_obs_id"] - 1]
         key = (query, id(source_frame))
         cache = getattr(self, "_query_recovery_cache", None)
@@ -181,18 +183,24 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        # Always condition fresh masks on the target, not streaming ScanNet labels.
-        frame, detections = self._detect_query_frame(frame, query)
-        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         from emet.memory.query_grounding import cache_grounding_record, select_query_detections
 
-        matching_ids, verification = select_query_detections(
-            query,
-            target_description,
-            detections,
-            rgb,
-            client=getattr(self.graph_memory, "eqa_client", None),
-        )
+        backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm")
+        client = getattr(self.graph_memory, "eqa_client", None)
+        if backend == "vlm":
+            from emet.memory.vlm_region_grounding import ground_vlm_region
+
+            frame, detections, matching_ids, verification = ground_vlm_region(
+                frame, query, target_description, client=client, min_depth=vm.min_depth, max_depth=vm.max_depth
+            )
+        elif backend == "yoloe":
+            frame, detections = self._detect_query_frame(frame, query)
+            matching_ids, verification = select_query_detections(
+                query, target_description, detections, rgb, client=client
+            )
+        else:
+            raise ValueError(f"Unknown query grounding backend: {backend}")
+        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         import os
         from dataclasses import asdict
         from pathlib import Path
@@ -215,7 +223,8 @@ class LazyGraphController(DynagraphController):
             masks=frame.instance,
             metadata={
                 "target_description": target_description,
-                "detector_vocabulary": [query],
+                "grounding_backend": backend,
+                "detector_vocabulary": [query] if backend == "yoloe" else [],
                 "retrieval_score": record.retrieval_score if record is not None else None,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
@@ -285,7 +294,13 @@ class LazyGraphController(DynagraphController):
             depth = depth.detach().cpu().numpy()
         valid = (mask == det["instance_id"]) & (depth > vm.min_depth) & (depth < vm.max_depth)
         valid &= np.isfinite(world).all(axis=-1) & np.isfinite(depth)
-        self._grounded_query_target = GroundedTarget(handle, obs_id, len(vm.observations), world[valid])
+        self._grounded_query_target = GroundedTarget(
+            handle,
+            obs_id,
+            len(vm.observations),
+            world[valid],
+            geometry_source=verification.get("geometry_source", "detector_mask"),
+        )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
 
     def prepare_query_target(self, query: str):

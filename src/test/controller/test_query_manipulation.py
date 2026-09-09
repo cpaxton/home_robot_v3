@@ -126,6 +126,21 @@ def test_visual_servo_operation_uses_geometry_not_centered_distractor():
         operation.get_target_mask(servo, center=(5, 5))
 
 
+def test_vlm_surface_tracking_does_not_require_semantic_masks():
+    from emet.controller.operations.grasp_object import GraspObjectOperation
+
+    operation = object.__new__(GraspObjectOperation)
+    operation.grounded_target = GroundedTarget(1, 7, 2, np.ones((30, 3)), "vlm_selected_depth_surface")
+    operation.get_class_mask = Mock(side_effect=AssertionError("detector must not gate VLM surface"))
+    world = np.ones((10, 10, 3))
+    world[5:] = 10
+    servo = SimpleNamespace(get_ee_xyz_in_world_frame=lambda: world)
+    assert operation.get_target_mask(servo, center=(8, 8))[:5].all()
+    world[:] = 10
+    with pytest.raises(ValueError, match="absent"):
+        operation.get_target_mask(servo, center=(8, 8))
+
+
 def test_placement_sampling_handles_zero_horizontal_offset():
     import torch
 

@@ -380,6 +380,9 @@ class GraspObjectOperation(ManagedOperation):
         Returns:
             Optional[np.ndarray]: Target mask to move to
         """
+        target = getattr(self, "grounded_target", None)
+        if target is not None and target.geometry_source == "vlm_selected_depth_surface":
+            return target.select_surface(servo.get_ee_xyz_in_world_frame())
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
@@ -585,11 +588,16 @@ class GraspObjectOperation(ManagedOperation):
             center_x += self.detected_center_offset_x  # move closer to top
 
             # Run semantic segmentation on it
-            if self.match_method == "class":
+            detector_free = (
+                getattr(self, "grounded_target", None) is not None
+                and self.grounded_target.geometry_source == "vlm_selected_depth_surface"
+            )
+            if not detector_free and self.match_method == "class":
                 # This means that we are just using an open-vocabulary object detector to find the object so we need to update the vocabulary.
                 self.agent.semantic_sensor.update_vocabulary_list([self.target_object], 1)
                 self.agent.semantic_sensor.set_vocabulary(1)
-            servo = self.agent.semantic_sensor.predict(servo, ee=True)
+            if not detector_free:
+                servo = self.agent.semantic_sensor.predict(servo, ee=True)
             latest_mask = self.get_target_mask(servo, center=(center_x, center_y))
 
             # dilate mask

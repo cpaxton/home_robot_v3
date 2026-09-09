@@ -17,6 +17,7 @@ from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 def controller():
     agent = object.__new__(LazyGraphController)
     agent.parameters = {"graph_object_fusion": {"enabled": True, "instance_min_mask_points": 10}}
+    agent.parameters["query_memory"] = {"grounding_backend": "yoloe"}
     agent.graph_memory = GraphEQAMemory(parameters={}, defer_llm_clients=True)
     frame = SimpleNamespace(
         rgb=np.zeros((8, 8, 3), dtype=np.uint8),
@@ -58,6 +59,16 @@ def test_current_view_grounds_without_retrieval_or_camera_anchor():
     record = next(iter(agent.query_candidates.records.values()))
     assert record.source_obs_id == 2
     assert record.require_grounding(2) == result["obs_id"]
+
+
+def test_default_query_grounding_never_calls_detector():
+    agent = controller()
+    agent.parameters.pop("query_memory")
+    agent.graph_memory.eqa_client = Mock(return_value='{"verified":true,"box":[0,0,1000,1000],"point":[500,500]}')
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["ok"], result
+    agent.detection_model.predict.assert_not_called()
+    assert agent._grounded_query_target.geometry_source == "vlm_selected_depth_surface"
 
 
 @pytest.mark.parametrize("failure", ["stale", "relation", "ambiguous", "absent"])
