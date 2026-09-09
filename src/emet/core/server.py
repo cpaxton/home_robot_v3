@@ -20,6 +20,7 @@ import zmq
 
 from emet.core.command_runtime import CommandRuntime
 from emet.core.comms import CommsNode
+from emet.core.zmq_server_env import zmq_send_period_s
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -31,11 +32,7 @@ def _zmq_timing_enabled(verbose: bool) -> bool:
 
 
 def _send_period_s(env_name: str) -> float:
-    raw = os.environ.get(env_name, "").strip()
-    if not raw:
-        return 0.0
-    hz = float(raw)
-    return 0.0 if hz <= 0 else 1.0 / hz
+    return zmq_send_period_s(env_name)
 
 
 def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:

@@ -41,6 +41,9 @@ HEAD_RIGHT_CAMERA_INFO_TOPIC = "/mars/main_camera/right/camera_info"
 # End-effector / arm camera
 EE_IMAGE_TOPIC = "/mars/arm/image_raw"
 
+# 2D lidar (Nav2 / slam; optional on bringup)
+LIDAR_TOPIC = "/scan"
+
 # Optional: head position (if published)
 HEAD_POSITION_TOPIC = "/mars/head/current_position"
 
