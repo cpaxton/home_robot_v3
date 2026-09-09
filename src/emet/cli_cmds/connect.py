@@ -352,7 +352,7 @@ def mars_cmd() -> None:
 @click.option(
     "--video-rtsp",
     is_flag=True,
-    help="Enable GStreamer RTSP side channel (EMET_MARS_VIDEO_RTSP=1; advertises video_streams)",
+    help="Experimental: RTSP side channel (EMET_MARS_VIDEO_RTSP=1; requires site launcher on robot)",
 )
 @click.option(
     "--metadata-only-obs",

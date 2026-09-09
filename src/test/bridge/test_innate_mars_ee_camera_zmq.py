@@ -36,9 +36,11 @@ def test_decode_innate_mars_servo_message():
         "ee_cam/pose": np.eye(4, dtype=np.float64),
         "joint_positions": np.zeros(10, dtype=np.float64),
         "step": 3,
+        "head_cam_left/image_timing": {"timestamp_ns": 123, "clock_domain": "ros"},
     }
     obs = _decode_servo_message_to_observations(msg, None, None)
     assert obs is not None
+    assert obs.image_timing["head_cam_left"]["timestamp_ns"] == 123
     assert obs.rgb.shape == (48, 64, 3)
     assert obs.ee_rgb is not None and obs.ee_rgb.shape == (48, 64, 3)
     assert float(obs.ee_camera_K[0, 0]) == 2.0
