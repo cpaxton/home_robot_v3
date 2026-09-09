@@ -25,6 +25,15 @@ def test_lazy_backend_cannot_be_overridden_to_streaming_instances():
     assert controller.call_args.kwargs["use_instance_graph"] is False
 
 
+def test_shared_query_preset_has_required_grounding_contract():
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("configs/emet/query_surface_pilot.yaml")
+    assert params.get("query_driven_memory") is True
+    assert params.get("query_memory")["grounding_backend"] == "vlm"
+    assert params.get("eqa")["agentic_verify"] is True
+
+
 def test_compose_eqa_question_empty_extra():
     assert compose_eqa_question("Where is the lamp?", None) == "Where is the lamp?"
     assert compose_eqa_question("Where is the lamp?", "  ") == "Where is the lamp?"
