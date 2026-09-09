@@ -27,7 +27,7 @@ def test_depth_layers_separate_object_and_support_with_noise_and_holes():
     assert masks[0].sum() == 891
     assert np.all(depth[masks[0]] < 1.1)
     assert not any(mask[26, 31] for mask in masks)
-    assert surface_candidate_image(rgb, regions).size == (512, 560)
+    assert surface_candidate_image(rgb, regions).size == (512, 280)
 
 
 def test_disconnected_equal_depth_objects_are_not_merged():
@@ -118,7 +118,7 @@ def test_selected_mask_not_vlm_point_supplies_geometry():
     assert audit["valid"]
     assert (mask == 0).sum() == 900
     assert np.all(depth[mask == 0] == 1)
-    assert len(client.call_args.args[0]) == 3
+    assert len(client.call_args.args[0]) == 4  # prompt, original, two separate candidate images
 
 
 def test_absent_target_does_not_trigger_proposal_selection():

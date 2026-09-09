@@ -127,6 +127,10 @@ def test_surface_candidate_cache_preserves_exact_masks_and_selection_image(tmp_p
     assert np.array_equal(candidate_mask(retained[0], depth.shape), np.ones(depth.shape, bool))
     saved = np.asarray(Image.open(tmp_path / record["surface_candidates_rgb_file"]))
     assert np.array_equal(saved, np.asarray(surface_candidate_image(rgb, regions)))
+    from emet.memory.surface_candidates import surface_candidate_panels
+
+    saved_panel = np.asarray(Image.open(tmp_path / record["surface_candidate_0_rgb_file"]))
+    assert np.array_equal(saved_panel, np.asarray(surface_candidate_panels(rgb, regions)[0]))
 
 
 def test_cache_saves_corresponding_pixels_and_depth(tmp_path):

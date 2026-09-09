@@ -145,7 +145,7 @@ def select_supported_region(rgb, depth, query, description, *, client, min_depth
 
 
 def select_candidate_surface(rgb, depth, query, description, *, client, min_depth, max_depth):
-    from emet.memory.surface_candidates import candidate_mask, surface_candidate_image, surface_candidates
+    from emet.memory.surface_candidates import candidate_mask, surface_candidate_panels, surface_candidates
 
     parsed, audit = select_vlm_region(rgb, query, description, client=client, box_only=True)
     mask = np.full(depth.shape, -1, dtype=np.int32)
@@ -163,8 +163,9 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         audit["reason"] = "no supported surfaces; another view is needed"
         return parsed, mask, audit
     prompt = (
-        f"Select a measured surface of {description or query!r}. Image 1 is the original; image 2 "
-        "shows enlarged panels of the same crop: an original crop, then one panel per candidate. "
+        f"Select a measured surface of {description or query!r}. Image 1 is the original reference, NOT a candidate. "
+        "Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, "
+        "image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. "
         "In each candidate panel, ONLY the original-brightness pixels define the candidate surface; "
         "dimmed pixels are outside that candidate. These unlabelled geometry proposals may include "
         "table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong "
@@ -175,7 +176,7 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
     )
     system = "Choose a visually supported surface, not an object location guess. Reply with JSON only."
     raw = _call_eqa_client(
-        client, [prompt, Image.fromarray(rgb), surface_candidate_image(rgb, regions)], system_prompt=system
+        client, [prompt, Image.fromarray(rgb), *surface_candidate_panels(rgb, regions)], system_prompt=system
     )
     selection = _parse_json_object(raw)
     chosen = selection.get("selected_id")
@@ -183,7 +184,7 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         "prompt": prompt,
         "system_prompt": system,
         "raw": raw,
-        "image_order": ["rgb_file", "surface_candidates_rgb_file"],
+        "image_order": ["rgb_file"] + [f"surface_candidate_{r['id']}_rgb_file" for r in regions],
     }
     if selection.get("target_unambiguous") is not True or type(chosen) is not int or not 0 <= chosen < len(regions):
         audit["reason"] = "no unambiguous surface selected; another view is needed"

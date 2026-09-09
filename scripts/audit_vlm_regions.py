@@ -93,11 +93,15 @@ def main():
             if audit.get("correction"):
                 region_annotation(rgb, audit["correction"]["region"]).save(args.output_dir / f"{index}-correction.png")
             if audit.get("surface_candidates"):
-                from emet.memory.surface_candidates import surface_candidate_image
+                from emet.memory.surface_candidates import surface_candidate_image, surface_candidate_panels
 
                 surface_candidate_image(rgb, audit["surface_candidates"]).save(
                     args.output_dir / f"{index}-surfaces.png"
                 )
+                for region, panel in zip(
+                    audit["surface_candidates"], surface_candidate_panels(rgb, audit["surface_candidates"]), strict=True
+                ):
+                    panel.save(args.output_dir / f"{index}-surface-{region['id']}.png")
             overlay.save(args.output_dir / f"{index}-region.png")
             results.append(result)
             (args.output_dir / "results.json").write_text(json.dumps(results, indent=2))

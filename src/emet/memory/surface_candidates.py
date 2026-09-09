@@ -101,14 +101,14 @@ def candidate_mask(region, shape):
     return mask
 
 
-def surface_candidate_image(rgb, regions):
+def surface_candidate_panels(rgb, regions):
     """Enlarged candidate panels; retain RGB on support and dim its surroundings.
 
     All panels use the same context crop. Labels live outside the image, never
     over small objects. The separate original image remains unmodified.
     """
     if not regions:
-        return Image.fromarray(rgb)
+        return []
     bounds = np.asarray([r["bbox_xyxy"] for r in regions])
     left, top = bounds[:, :2].min(axis=0)
     right, bottom = bounds[:, 2:].max(axis=0)
@@ -116,23 +116,35 @@ def surface_candidate_image(rgb, regions):
     left, top = max(0, left - padding), max(0, top - padding)
     right, bottom = min(rgb.shape[1], right + padding), min(rgb.shape[0], bottom + padding)
     crop = rgb[top:bottom, left:right]
-    panels = [("Original crop", crop)]
+    panels = []
     for region in regions:
         mask = candidate_mask(region, rgb.shape[:2])[top:bottom, left:right]
         pixels = (crop * 0.15).astype(np.uint8)
         pixels[mask] = crop[mask]
         panels.append((f"Candidate {region['id']}", pixels))
     width, height = 256, 280
-    image = Image.new("RGB", (width * 2, height * ((len(panels) + 1) // 2)))
-    draw = ImageDraw.Draw(image)
     font = ImageFont.load_default(size=18)
-    for index, (title, pixels) in enumerate(panels):
-        x, y = (index % 2) * width, (index // 2) * height
+    images = []
+    for title, pixels in panels:
+        image = Image.new("RGB", (width, height))
+        draw = ImageDraw.Draw(image)
         tile = Image.fromarray(pixels)
         scale = min(width / tile.width, (height - 24) / tile.height)
         tile = tile.resize(
             (max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.NEAREST
         )
-        image.paste(tile, (x + (width - tile.width) // 2, y + 24 + (height - 24 - tile.height) // 2))
-        draw.text((x + 6, y + 3), title, fill="white", font=font)
+        image.paste(tile, ((width - tile.width) // 2, 24 + (height - 24 - tile.height) // 2))
+        draw.text((6, 3), title, fill="white", font=font)
+        images.append(image)
+    return images
+
+
+def surface_candidate_image(rgb, regions):
+    """Human-review contact sheet; model inputs are the individual panels."""
+    panels = surface_candidate_panels(rgb, regions)
+    if not panels:
+        return Image.fromarray(rgb)
+    image = Image.new("RGB", (512, 280 * ((len(panels) + 1) // 2)))
+    for index, panel in enumerate(panels):
+        image.paste(panel, (256 * (index % 2), 280 * (index // 2)))
     return image
