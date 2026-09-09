@@ -378,3 +378,129 @@ def test_attach_siglip_crop_embeddings(monkeypatch):
     assert "embedding" in out[0]
     assert out[0]["embedding"].shape == (3,)
     assert "embedding" not in out[1], "detections without a usable bbox get no embedding"
+
+
+def test_shipped_yaml_preserves_gate_settings():
+    from pathlib import Path
+
+    import yaml
+
+    from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
+
+    root = Path(__file__).resolve().parents[3]
+    for relative in (
+        "src/emet/config/agents/default_graph_object_fusion.yaml",
+        "configs/benchmarks/fusion_strategy_b.yaml",
+        "configs/benchmarks/fusion_strategy_c.yaml",
+    ):
+        path = root / relative
+        raw = yaml.safe_load(path.read_text())["graph_object_fusion"]["gates"]
+        cfg = load_graph_object_fusion_config(str(path))
+        assert cfg.gates.bounds.iou_merge_min == raw["bounds"]["iou_merge_min"]
+        assert cfg.gates.spatial.fallback_xy_m == raw["spatial"]["fallback_xy_m"]
+        for name, settings in raw.items():
+            for key, expected in settings.items():
+                assert getattr(getattr(cfg.gates, name), key) == expected
+
+
+def test_invalid_gate_settings_raise_instead_of_resetting_defaults():
+    import pytest
+    import yaml
+
+    for raw in (
+        {"gates": {"bounds": {"iou_merge_typo": 0.8}}},
+        yaml.safe_load("gates:\n  bounds:\n    on: false\n    iou_merge_min: 0.8\n"),
+    ):
+        with pytest.raises(Exception, match="not valid"):
+            decode_graph_object_fusion_config(raw)
+
+
+def test_siglip_tensor_embeddings_are_detached_and_copied_to_cpu(monkeypatch):
+    from emet.memory.graph_eqa.ingest.dynamem_graph_hooks import _attach_siglip_crop_embeddings
+
+    calls = []
+
+    class DeviceTensor(torch.Tensor):
+        # Emulate CUDA's refusal of direct NumPy conversion without a GPU/model.
+        def numpy(self):
+            raise TypeError("must move tensor to CPU first")
+
+        def cpu(self):
+            calls.append("cpu")
+            return self.as_subclass(torch.Tensor).cpu()
+
+    vector = torch.tensor([[1.0, 2.0, 3.0]], requires_grad=True).as_subclass(DeviceTensor)
+    encoder = MagicMock()
+    encoder.encode_image.return_value = vector
+    monkeypatch.setattr(
+        "emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder",
+        lambda **kw: encoder,
+    )
+    dets = [{"bbox_xyxy": (0, 0, 4, 4)}]
+    _attach_siglip_crop_embeddings(GraphObjectFusionConfig(enabled=True), np.zeros((8, 8, 3), np.uint8), dets)
+    assert calls == ["cpu"]
+    np.testing.assert_array_equal(dets[0]["embedding"], [1.0, 2.0, 3.0])
+    assert dets[0]["embedding"].dtype == np.float32
+
+
+def test_stream_at_capacity_refreshes_existing_objects_and_rejects_new_ones(monkeypatch):
+    from emet.memory.graph_eqa.ingest import dynamem_graph_hooks as hooks
+
+    cfg = GraphObjectFusionConfig(enabled=True, growth={"max_object_nodes": 1})
+    cfg.gates.embedding.use_siglip_crops = False
+    fusion = GraphObjectFusion(cfg)
+    gm = GraphEQAMemory(parameters={}, defer_llm_clients=True)
+    vm = MagicMock()
+    vm.observations = [_fake_frame_with_instances(1)]
+    vm.min_depth, vm.max_depth = 0.1, 5.0
+    vm.image_descriptions = []
+    vm.use_instance_memory = True
+    detections = [
+        {
+            "label_short": "mug",
+            "xyz": np.array([0.0, 0.0, 0.9]),
+            "bbox_xyxy": (0, 0, 4, 4),
+            "detection_score": 0.8,
+            "mask_point_count": 100,
+        }
+    ]
+    monkeypatch.setattr(hooks, "frame_instances_to_detections", lambda *a, **kw: list(detections))
+    monkeypatch.setattr(
+        hooks,
+        "instance_items_from_instance_memory",
+        lambda *a: [
+            ("mug", np.array([0.0, 0.0, 0.9]), (0, 0, 4, 4), None),
+            ("chair", np.array([5.0, 0.0, 0.9]), (0, 0, 4, 4), None),
+        ],
+    )
+    for step in (1, 2, 3):
+        hooks.update_graph_memory_from_dynamem_observation(
+            graph_memory=gm,
+            robot=MagicMock(get_base_pose=MagicMock(return_value=np.zeros(3))),
+            voxel_map=vm,
+            detection_model=MagicMock(class_list=["mug"]),
+            sensor_builder=MagicMock(),
+            use_instance_graph=True,
+            use_sensor_perception=False,
+            dedup_skips=None,
+            obs=_fake_obs(),
+            frame_step=step,
+            graph_object_fusion=fusion,
+        )
+        objects = [n for n in gm.get_nodes() if not n.is_viewpoint and not n.is_frontier]
+        assert len(objects) == 1
+        assert objects[0].support_count == step
+        assert objects[0].last_seen == step
+        if step == 1:
+            detections.append(
+                {
+                    "label_short": "chair",
+                    "xyz": np.array([5.0, 0.0, 0.9]),
+                    "bbox_xyxy": (0, 0, 4, 4),
+                    "detection_score": 0.8,
+                    "mask_point_count": 100,
+                }
+            )
+        else:
+            detections.clear()  # Third frame uses the instance-memory fallback.
+    assert gm.instance_ingest_stats["rejected_object_cap"] == 2

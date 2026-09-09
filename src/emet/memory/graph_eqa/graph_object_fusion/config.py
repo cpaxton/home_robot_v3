@@ -326,11 +326,8 @@ def _decode_block(block_type: type[Any], raw: Any) -> Any:
     if isinstance(raw, block_type):
         return raw
     if not isinstance(raw, dict):
-        return block_type()
-    try:
-        return draccus.decode(block_type, raw)
-    except Exception:
-        return block_type()
+        raise ValueError(f"{block_type.__name__} must be a mapping")
+    return draccus.decode(block_type, raw)
 
 
 def decode_graph_object_fusion_config(raw: dict[str, Any] | None) -> GraphObjectFusionConfig:
