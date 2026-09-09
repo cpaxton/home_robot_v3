@@ -56,6 +56,22 @@ def test_sourccey_mjcf_cameras():
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, cname) >= 0
 
 
+def test_sourccey_front_camera_image_up_is_upright():
+    """Production pixel transforms must preserve the asset's upright horizon."""
+    from emet.utils.pinhole_intrinsics import chain_pinhole_K_pixel_ops
+
+    spec, model = _load()
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    for name in ("front_left", "front_right"):
+        cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name)
+        optical_rotation = data.cam_xmat[cid].reshape(3, 3) @ np.diag([1, -1, -1])
+        k = np.array([[300.0, 0.0, 320.0], [0.0, 300.0, 240.0], [0.0, 0.0, 1.0]])
+        k, _, _ = chain_pinhole_K_pixel_ops(k, 480, 640, spec.robosuite_rgb_depth_ops)
+        up = optical_rotation @ np.linalg.solve(k, [0.0, -1.0, 0.0])
+        assert up[2] / np.linalg.norm(up) > 0.9
+
+
 def test_sourccey_mjcf_geometry_sane():
     spec, model = _load()
     data = mujoco.MjData(model)

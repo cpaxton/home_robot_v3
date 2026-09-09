@@ -86,6 +86,24 @@ until hardware commissioning. No hardware connection is needed for these gates.
 
 ## Remaining gates (not complete)
 
+### September 8 continuation
+
+- ZMQ PR #135 merged separately as `b2db951e` after 113 focused tests.
+  The navigation branch/pilot below does not yet include that transport merge.
+- Habitat EQA can run independently of the failing MuJoCo embodiment gates.
+  First development unit: job `20260908_224906_e81fd9`, DynaMem question 1,
+  frozen source `30cf14f8` at `/tmp/emet-pilot-30cf14f8`, artifacts and paired
+  plan under `/tmp/emet-eqa-pilot-20260909`. Shared agentic/router enabled,
+  no GT semantics/enriched labels, 20 planning / 10 movement budget, Qwen3-VL
+  8B, map/video requested. Onboard DINOv3/H.264 explicitly disabled. Remaining
+  rows/IDs are planned, not launched. This is not a locomotion acceptance run.
+- Sourccey job `20260908_214330_b65b89` failed its initial image-orientation
+  gate before motion. Its extra `flipud` inverted the asset's upright front
+  cameras. Removed it and added an optical-frame/pixel-transform regression
+  test; rendered health/precision-route acceptance remains pending.
+- Only one heavy experiment runs at a time. Sourccey debugging during EQA is
+  source inspection and lightweight geometry checks, not a second simulation.
+
 - Validate the posture-fault live stop, repeated routes and disturbances.
 - Repair/validate Galaxea proxy wheel-supported translation without declaring
   idealized direct base motion to be a physical locomotion result.
