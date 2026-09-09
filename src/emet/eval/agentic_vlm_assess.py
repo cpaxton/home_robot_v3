@@ -49,6 +49,9 @@ class ViewAssessment:
     suggested_answer: str | None = None
     reason: str = ""
     raw: str = ""
+    prompt: str = ""
+    system_prompt: str = ""
+    image_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -359,9 +362,11 @@ def assess_view_with_vlm(
                 max_new_tokens=192,
             )
         except Exception:
+            user += "\n(Image unavailable — answerable must be false.)"
+            images = []
             raw = _call_eqa_client(
                 client,
-                user + "\n(Image unavailable — answerable must be false.)",
+                user,
                 system_prompt=_ASSESS_SYSTEM,
                 max_new_tokens=128,
             )
@@ -376,5 +381,8 @@ def assess_view_with_vlm(
         need_more_views=_json_bool(data.get("need_more_views", not answerable), default=not answerable),
         suggested_answer=suggested,
         reason=str(data.get("reason") or "").strip(),
-        raw=raw[:1000],
+        raw=raw,
+        prompt=user,
+        system_prompt=_ASSESS_SYSTEM,
+        image_count=len(images),
     )

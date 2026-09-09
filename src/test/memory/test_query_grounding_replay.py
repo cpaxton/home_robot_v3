@@ -3,6 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -65,6 +66,30 @@ def test_cache_replays_admission_without_models(tmp_path):
     assert replay_grounding_admission(record, cfg)
     cfg.instance_min_confidence = 0.7
     assert not replay_grounding_admission(record, cfg)
+
+
+def test_debug_record_retains_exact_verifier_images_and_prompt(tmp_path):
+    from PIL import Image
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    client = Mock(return_value='{"matching_ids": [], "constraints_verified": false}')
+    ids, verification = select_query_detections("lamp", "lamp near a bed", [detection()], rgb, client)
+    path = cache_grounding_record(
+        tmp_path,
+        query="lamp",
+        revision=2,
+        source_obs_id=1,
+        detections=[detection()],
+        matching_ids=ids,
+        verification=verification,
+        rgb=rgb,
+    )
+    record = json.loads(Path(path).read_text())
+    payload = client.call_args.args[0]
+    assert record["verification"]["prompt"] == payload[0]
+    assert record["verification"]["raw"] == client.return_value
+    assert np.array_equal(np.asarray(Image.open(tmp_path / record["rgb_file"])), np.asarray(payload[1]))
+    assert np.array_equal(np.asarray(Image.open(tmp_path / record["numbered_rgb_file"])), np.asarray(payload[2]))
 
 
 def test_voxel_router_client_does_not_attach_graph():

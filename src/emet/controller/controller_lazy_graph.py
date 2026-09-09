@@ -220,6 +220,18 @@ class LazyGraphController(DynagraphController):
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
                 "max_depth": vm.max_depth,
+                "vlm_config": {
+                    key: (self.parameters.get("eqa", {}) or {}).get(key)
+                    for key in (
+                        "backend",
+                        "vl_family",
+                        "vl_hf_model_id",
+                        "vl_quantization",
+                        "vl_image_max_side",
+                        "vl_image_max_pixels",
+                        "vl_max_tokens",
+                    )
+                },
             },
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]

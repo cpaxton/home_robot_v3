@@ -8,8 +8,45 @@ Pilot submitted September 9 as managed job `20260909_120346_2b3550`, frozen
 checkout `/tmp/emet-ovmm-grounding-cfab4f97`. Results/evidence are under
 `/tmp/emet-ovmm-grounding-v2-cfab4f97`; supervisor log and recorded command are
 under `/home/cpaxton/runs/emet/jobs_runs/ovmm-grounding-v2-pilot`.
-Status at this documentation update: running, simulator/agent initialized;
-task outcomes pending. No merge acceptance or performance improvement claimed.
+Completed: query-driven 0/4, lazy-arrival 0/4, shared-agent DynaMem 1/4
+(table in scene 00025). No merge acceptance or performance improvement claimed.
+
+## Manual visual review and VLM audit
+
+All six logs identify local `Qwen/Qwen3-VL-8B-Instruct`, int4, CUDA/SDPA.
+This establishes model identity, not perception quality. Do not describe the
+remaining TAMP gate as training a motion planner: it is the shared task agent
+using learned perception with conventional planning/execution, without oracle
+object poses or teleport manipulation.
+
+Manual review of query_00025 grounding RGB files ending `44ddf23cddaf497692404c2006611738`
+and `616603915f564b3ca2f4c575fa020571` shows a sofa in a kitchen/living area, not
+a clearly identifiable bed. The view assessor's bed claims are not supported
+by this review. The region verifier rejected the lamp/bed relation. A high lamp
+detection score alone does not establish the relation or prove the verifier bad.
+
+The scene 00006 router selected the same rejected query handle on rounds 3–10.
+Dispatch now redirects such selections to the existing exploration tool, under
+its normal budget and safety gates. The trace retains selected and executed
+actions and the rewrite reason. Rejection is not cleared; new-source candidates
+remain eligible. This is not permission to revisit a rejected handle indefinitely.
+
+For subsequent diagnostic runs, grounding JSON retains the exact verifier user
+and system prompts, full raw response, ordered input-image references, detector
+boxes/scores, and configured VLM identity/quantization/image-size settings. The
+original RGB and numbered copy are saved alongside depth/masks. The numbered
+copy is produced by the same helper as the actual verifier input. These are
+client input images, not a dump of Qwen's internally resized image tokens.
+View-assessment traces retain their full response, prompt, system prompt and
+image count alongside the existing saved RGB reference. An image-unavailable
+fallback is recorded as zero images, not silently represented as visual evidence.
+Existing pilot caches are preserved; missing historical prompts are not invented.
+
+Review order: image visibility → detector regions/depth → raw Qwen judgment →
+parsed decision → admission → selected/executed action. Keep manual annotations
+separate from agent evidence; they must not leak into benchmark runs. Model
+quality/quantization remains a hypothesis to test on identical cached inputs,
+not a reason to weaken admission thresholds or change the live pilot model.
 
 Scope: land the shared grounding correction, then a bounded pilot. No new robot
 models, threshold sweep, or paper performance claim is part of this change.
