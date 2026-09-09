@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+import warnings
 
 
 def _env_truthy(name: str, default: bool = False) -> bool:
@@ -20,15 +22,19 @@ def _env_float(name: str, default: float | None = None) -> float | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
-    return float(raw)
+    try:
+        value = float(raw)
+        if math.isfinite(value):
+            return value
+    except ValueError:
+        pass
+    warnings.warn(f"Invalid {name}={raw!r}; using {default!r}", RuntimeWarning, stacklevel=2)
+    return default
 
 
 def zmq_send_period_s(env_name: str) -> float:
     """Return minimum seconds between publishes when ``env_name`` sets a positive Hz cap."""
-    raw = os.environ.get(env_name, "").strip()
-    if not raw:
-        return 0.0
-    hz = float(raw)
+    hz = _env_float(env_name, 0.0)
     return 0.0 if hz <= 0 else 1.0 / hz
 
 
@@ -49,10 +55,7 @@ def resolve_zmq_ee_image_scaling(default: float = 0.5) -> float:
 
 
 def resolve_zmq_jpeg_quality(default: int = 90) -> int:
-    raw = os.environ.get("EMET_ZMQ_JPEG_QUALITY", "").strip()
-    if not raw:
-        return default
-    return max(1, min(100, int(raw)))
+    return max(1, min(100, int(_env_float("EMET_ZMQ_JPEG_QUALITY", default))))
 
 
 def zmq_obs_include_images(default: bool = True) -> bool:
@@ -74,10 +77,7 @@ def zmq_video_rtsp_enabled() -> bool:
 
 
 def zmq_video_rtsp_port(default: int = 8554) -> int:
-    raw = os.environ.get("EMET_MARS_VIDEO_RTSP_PORT", "").strip()
-    if not raw:
-        return default
-    return int(raw)
+    return _env_port("EMET_MARS_VIDEO_RTSP_PORT", default)
 
 
 def zmq_video_rtsp_host() -> str | None:
@@ -87,10 +87,15 @@ def zmq_video_rtsp_host() -> str | None:
 
 
 def zmq_h264_port(default: int = 4405) -> int:
-    raw = os.environ.get("EMET_ZMQ_H264_PORT", "").strip()
-    if not raw:
-        return default
-    return int(raw)
+    return _env_port("EMET_ZMQ_H264_PORT", default)
+
+
+def _env_port(name: str, default: int) -> int:
+    value = _env_float(name, default)
+    if value == int(value) and 1 <= value <= 65535:
+        return int(value)
+    warnings.warn(f"Invalid port {name}={value!r}; using {default}", RuntimeWarning, stacklevel=2)
+    return default
 
 
 def zmq_h264_enabled() -> bool:

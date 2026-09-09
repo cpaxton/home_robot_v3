@@ -103,6 +103,9 @@ def merge_servo_images_into_full_obs(full_obs: dict[str, Any], servo: dict[str, 
         if blob is None:
             continue
         full_obs[full_key] = blob
+        timing_key = full_key.replace("/image", "/image_timing")
+        # Metadata must travel with the selected pixels, including unknown timing.
+        full_obs[timing_key] = servo.get(timing_key)
         merged = True
         shape_key = servo_key.replace("/color_image", "/color_image/shape")
         if shape_key in servo:
@@ -116,6 +119,15 @@ def merge_servo_images_into_full_obs(full_obs: dict[str, Any], servo: dict[str, 
     if merged:
         expand_zmq_obs_image_aliases(full_obs)
     return merged
+
+
+def read_image_timing(message: dict[str, Any]) -> dict[str, Any]:
+    """Keep per-camera timing without inventing timestamps for legacy peers."""
+    return {
+        camera: message[camera + "/image_timing"]
+        for camera in ("head_cam_left", "head_cam_right", "ee_cam")
+        if message.get(camera + "/image_timing") is not None
+    }
 
 
 def _decode_jpg_if_needed(val: Any) -> np.ndarray | None:
