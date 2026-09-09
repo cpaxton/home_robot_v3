@@ -27,7 +27,7 @@ def test_depth_layers_separate_object_and_support_with_noise_and_holes():
     assert masks[0].sum() == 891
     assert np.all(depth[masks[0]] < 1.1)
     assert not any(mask[26, 31] for mask in masks)
-    assert surface_candidate_image(rgb, regions).size == (80, 60)
+    assert surface_candidate_image(rgb, regions).size == (512, 560)
 
 
 def test_disconnected_equal_depth_objects_are_not_merged():

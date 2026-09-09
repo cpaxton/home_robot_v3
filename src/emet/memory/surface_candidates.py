@@ -6,8 +6,8 @@
 import base64
 
 import numpy as np
-from PIL import Image, ImageDraw
-from scipy.ndimage import distance_transform_edt, label
+from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import label
 
 
 def surface_candidates(depth, box, *, min_depth, max_depth, proposal_masks=None):
@@ -79,21 +79,37 @@ def candidate_mask(region, shape):
 
 
 def surface_candidate_image(rgb, regions):
-    """Exact mask overlay sent to the VLM; the unmodified image is sent too."""
-    colors = [(255, 190, 0), (0, 220, 255), (220, 80, 255), (80, 255, 130)]
-    overlay = np.asarray(rgb).copy()
-    positions = []
+    """Enlarged candidate panels; retain RGB on support and dim its surroundings.
+
+    All panels use the same context crop. Labels live outside the image, never
+    over small objects. The separate original image remains unmodified.
+    """
+    if not regions:
+        return Image.fromarray(rgb)
+    bounds = np.asarray([r["bbox_xyxy"] for r in regions])
+    left, top = bounds[:, :2].min(axis=0)
+    right, bottom = bounds[:, 2:].max(axis=0)
+    padding = max(right - left, bottom - top) // 2
+    left, top = max(0, left - padding), max(0, top - padding)
+    right, bottom = min(rgb.shape[1], right + padding), min(rgb.shape[0], bottom + padding)
+    crop = rgb[top:bottom, left:right]
+    panels = [("Original crop", crop)]
     for region in regions:
-        mask = candidate_mask(region, rgb.shape[:2])
-        overlay[mask] = (0.6 * overlay[mask] + 0.4 * np.array(colors[region["id"] % len(colors)])).astype(np.uint8)
-        # Put the ID inside actual support rather than a possibly empty box center.
-        y, x = np.unravel_index(
-            np.argmax(distance_transform_edt(np.pad(mask, 1))), (mask.shape[0] + 2, mask.shape[1] + 2)
-        )
-        positions.append((x - 1, y - 1, region["id"]))
-    image = Image.fromarray(overlay)
+        mask = candidate_mask(region, rgb.shape[:2])[top:bottom, left:right]
+        pixels = (crop * 0.15).astype(np.uint8)
+        pixels[mask] = crop[mask]
+        panels.append((f"Candidate {region['id']}", pixels))
+    width, height = 256, 280
+    image = Image.new("RGB", (width * 2, height * ((len(panels) + 1) // 2)))
     draw = ImageDraw.Draw(image)
-    for x, y, index in positions:
-        draw.rectangle((x - 7, y - 8, x + 8, y + 8), fill="black")
-        draw.text((x - 3, y - 5), str(index), fill="white")
+    font = ImageFont.load_default(size=18)
+    for index, (title, pixels) in enumerate(panels):
+        x, y = (index % 2) * width, (index // 2) * height
+        tile = Image.fromarray(pixels)
+        scale = min(width / tile.width, (height - 24) / tile.height)
+        tile = tile.resize(
+            (max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.NEAREST
+        )
+        image.paste(tile, (x + (width - tile.width) // 2, y + 24 + (height - 24 - tile.height) // 2))
+        draw.text((x + 6, y + 3), title, fill="white", font=font)
     return image

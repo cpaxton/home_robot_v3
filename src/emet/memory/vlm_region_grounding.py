@@ -164,9 +164,10 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         return parsed, mask, audit
     prompt = (
         f"Select a measured surface of {description or query!r}. Image 1 is the original; image 2 "
-        "overlays numbered depth-connected regions. The colored pixels, not the number's location "
-        "or its box, define each region. These are unlabelled geometry proposals and may include "
-        "table, wall, occluders, or mixed objects. Select only a region whose colored pixels belong "
+        "shows enlarged panels of the same crop: an original crop, then one panel per candidate. "
+        "In each candidate panel, ONLY the original-brightness pixels define the candidate surface; "
+        "dimmed pixels are outside that candidate. These unlabelled geometry proposals may include "
+        "table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong "
         "to the requested object, not its support furniture. A partial visible object surface is "
         "sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. "
         f"Available IDs: {[r['id'] for r in regions]}. "
