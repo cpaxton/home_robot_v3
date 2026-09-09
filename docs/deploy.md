@@ -179,3 +179,25 @@ Profiles without `robot:` must pass `--robot` explicitly — bare `emet deploy` 
 - Stretch install / ament symlink (legacy): [install_details.md](install_details.md)
 - ZMQ / capture: [zmq_obs.md](zmq_obs.md)
 - LLM: [llm_serve.md](llm_serve.md)
+# Navigation protocol v2 upgrade
+
+Navigation clients and bridges must be upgraded together. Old bridges are
+rejected before motion; there is no legacy fallback. From the review checkout,
+run `python scripts/sync_core_runtime.py --check` before deployment. `emet deploy`
+syncs the lightweight runtime and matching bridge, builds it, then verifies the
+version and adapter hooks without constructing a robot or sending commands.
+This import check does not prove that an already-running bridge has restarted.
+
+For a reachable robot, use `emet deploy --robot innate_mars --host HOST` or
+`emet deploy --robot stretch --host HOST` with its saved SSH user/workspace.
+Do not add `--start-bridge` while hardware startup or motion is prohibited.
+Back up robot-local changes before deploy: managed directories are rsynced with
+`--delete`. If SSH is unavailable, update the same core/bridge pair manually
+using the installation procedure below, build, and run the deploy import check
+on the machine. Never update only the workstation client.
+
+After an operator-approved bridge restart, receipt metadata must advertise v2
+and a new boot ID. Reconnect a fresh client; do not replay any command whose
+physical outcome is unknown. Keep hardware acceptance stationary until base
+motion is explicitly safe and authorized. See
+[the bridge contract](../src/emet_core/BRIDGE_CONTRACT.md) for ownership and stop semantics.

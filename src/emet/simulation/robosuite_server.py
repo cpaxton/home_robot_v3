@@ -1924,8 +1924,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             if self._mjdata is None or self._mjmodel is None:
                 return False
             if self._teleport_planar_base_world_xyt(wx, wy, wt):
-                # Align arm/wheel ``ctrl`` with ``qpos`` after snapping planar joints (no extra mj_forward).
-                self._sync_actuator_ctrl_from_joint_positions()
+                # Base motion must preserve commanded torso/arm posture, not
+                # turn gravity-induced tracking error into a new setpoint.
+                self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                 # Held freejoints must move with the EE immediately; do not wait for the next mj_step
                 # (Molmo place approach was leaving the object near the pre-teleport pose).
                 self._snap_kinematic_attachments()
@@ -2002,7 +2003,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if alpha >= 1.0 - 1e-9:
             self._nav_yaw_slew = None
             self._zero_base_free_joint_velocity()
-            self._sync_actuator_ctrl_from_joint_positions()
+            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
             self._snapshot_stationary_planar_base_qpos()
             self._at_goal = True
 
@@ -2126,6 +2127,35 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mj_step_once()
 
     @override
+    def start_navigation_command(self, action):
+        self._contract_navigation_context = None
+        self.handle_action(action)
+        if self._contract_navigation_context is None:
+            raise RuntimeError("simulator did not install a navigation goal")
+        return self._contract_navigation_context
+
+    def navigation_command_result(self, context):
+        from emet.core.navigation_result import measured_arrival
+
+        with self._mj_lock:
+            if not self._at_goal:
+                return None
+            return measured_arrival(
+                context, self.get_base_xyt(), xy_tolerance=self._nav_tol_xy, yaw_tolerance=self._nav_tol_theta
+            )
+
+    def cancel_navigation_command(self):
+        with self._mj_lock:
+            if self._mjdata is None:
+                return False
+            self._nav_goal_world = None
+            self._nav_yaw_slew = None
+            self._zero_base_free_joint_velocity()
+            self._snapshot_stationary_base_freejoint_pose()
+            self._snapshot_stationary_planar_base_qpos()
+            self._at_goal = False
+            return True
+
     def handle_action(self, action: dict[str, Any]):
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
@@ -2285,6 +2315,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                     pure_yaw_planar = (
                         self._is_pure_yaw_relative(action, raw) and self._planar_base_joint_names() is not None
                     )
+                    self._contract_navigation_context = {
+                        "resolved_goal": [float(wx), float(wy), float(wt)],
+                        "frame": "world",
+                        "motion_mode": "teleport"
+                        if nav_teleport
+                        else ("yaw_slew" if pure_yaw_planar else "velocity_drive"),
+                    }
                     if pure_yaw_planar and not nav_teleport:
                         self._nav_goal_world = None
                         self._zero_base_free_joint_velocity()
@@ -2297,10 +2334,11 @@ class RobosuiteZmqServer(BaseZmqServer):
                                 f"{self._spec.base_link_name!r}; cannot teleport."
                             )
                             self._log_nav_action(nav_meta, applied="teleport_failed")
+                            raise RuntimeError("requested teleport could not be applied")
                         else:
                             self._nav_goal_world = None
                             self._zero_base_free_joint_velocity()
-                            self._sync_actuator_ctrl_from_joint_positions()
+                            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                             # Freejoint robots must refresh the idle snap or hold reverts teleport.
                             self._snapshot_stationary_base_freejoint_pose()
                             self._snapshot_stationary_planar_base_qpos()
@@ -2316,13 +2354,14 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._at_goal = True
                     else:
                         self._zero_base_free_joint_velocity()
-                        self._sync_actuator_ctrl_from_joint_positions()
+                        self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                         self._nav_goal_world = np.array([wx, wy, wt], dtype=np.float64)
                         self._nav_drive_debug_ticks = 0
                         self._log_nav_action(nav_meta, applied="velocity_drive")
         except Exception as e:
             if has_xyt:
                 logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
+                raise
 
         if "head_to" in action and self._mjmodel is not None and self._mjdata is not None:
             ht = action["head_to"]
@@ -2466,15 +2505,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             return None
         q, dq, eff = self.get_joint_state()
         base_xyz = None
+        base_up = None
+        joint_targets = None
         try:
             with self._mj_lock:
                 xpos = self._mjdata.body(self._spec.base_link_name).xpos
                 base_xyz = [float(xpos[0]), float(xpos[1]), float(xpos[2])]
+                base_up = float(self._mjdata.body(self._spec.base_link_name).xmat.reshape(3, 3)[2, 2])
+                if self._joint_ctrl_hold is not None:
+                    joint_targets = self._joint_ctrl_hold.copy()
         except Exception:
             base_xyz = None
         message = {
             "base_pose": self.get_base_pose(),
             "base_xyz": base_xyz,
+            "base_up_dot_world_z": base_up,
+            "actuator_targets": joint_targets,
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,

@@ -12,6 +12,34 @@
 import pytest
 
 
+def test_generic_state_exposes_posture_diagnostics():
+    import mujoco
+    import numpy as np
+
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    spec = Rby1Backend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    server = RobosuiteZmqServer(
+        robot_spec=spec,
+        scene_model=model,
+        send_port=0,
+        recv_port=0,
+        send_state_port=0,
+        send_servo_port=0,
+    )
+    server._mjmodel = model
+    server._mjdata = mujoco.MjData(model)
+    server._joint_ctrl_hold = np.zeros(len(spec.actuator_names))
+    mujoco.mj_forward(model, server._mjdata)
+    state = server.get_state_message()
+    assert state["base_up_dot_world_z"] == pytest.approx(1.0)
+    np.testing.assert_allclose(state["actuator_targets"], server._joint_ctrl_hold)
+    state["actuator_targets"][0] = 10
+    assert server._joint_ctrl_hold[0] == 0  # transport gets a snapshot, not a live buffer
+
+
 def test_galaxea_r1_spec():
     """GalaxeaR1Backend.get_spec() returns a valid RobotSpec."""
     from emet.robots.galaxea_r1 import GalaxeaR1Backend

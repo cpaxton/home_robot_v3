@@ -18,9 +18,9 @@ import cv2
 import numpy as np
 import zmq
 
+from emet.core.command_runtime import CommandRuntime
 from emet.core.comms import CommsNode
-from emet.core.zmq_protocol import zmq_meta_action_should_bypass_duplicate_step
-from emet.simulation.env_flags import env_sim_nav_debug, env_zmq_timing
+from emet.core.zmq_server_env import zmq_send_period_s
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -28,15 +28,11 @@ logger = Logger(__name__)
 
 def _zmq_timing_enabled(verbose: bool) -> bool:
     """Periodic SEND/RECV timing lines: only with ``--verbose`` or ``EMET_ZMQ_TIMING=1``."""
-    return bool(verbose) or env_zmq_timing()
+    return bool(verbose) or os.environ.get("EMET_ZMQ_TIMING", "").lower() in {"1", "true", "yes", "on"}
 
 
 def _send_period_s(env_name: str) -> float:
-    raw = os.environ.get(env_name, "").strip()
-    if not raw:
-        return 0.0
-    hz = float(raw)
-    return 0.0 if hz <= 0 else 1.0 / hz
+    return zmq_send_period_s(env_name)
 
 
 def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:
@@ -77,12 +73,11 @@ except ImportError:
     imported_text_to_speech = False
 
 
-class BaseZmqServer(CommsNode, ABC):
+class BaseZmqServer(CommandRuntime, CommsNode, ABC):
     # How often should we print out info about our performance
     report_steps = 1000
     fast_report_steps = 10000
     servo_report_steps = 1000
-    skip_duplicate_steps: bool = True
 
     def __init__(
         self,
@@ -120,6 +115,7 @@ class BaseZmqServer(CommsNode, ABC):
         # Subscriber for actions
         self.recv_socket, self.recv_address = self._make_sub_socket(recv_port, use_remote_computer)
         self._last_step = -1
+        self.initialize_commands()
 
         # Extensions to the ROS server
         # Text to speech engine - let's let the robot talk
@@ -248,7 +244,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND LARGE IMAGE STATE] message keys: {data.keys()}")
 
-            self.send_socket.send_pyobj(data)
+            self.send_socket.send_pyobj(self.command_message(data))
 
             # Finish with some speed info
             t1 = timeit.default_timer()
@@ -268,6 +264,7 @@ class BaseZmqServer(CommsNode, ABC):
         steps = 0
         t0 = timeit.default_timer()
         while self.is_running():
+            self.poll_navigation_command()
             try:
                 action = self.recv_socket.recv_pyobj(flags=zmq.NOBLOCK)
             except zmq.Again:
@@ -280,29 +277,10 @@ class BaseZmqServer(CommsNode, ABC):
             if action is not None:
                 if self.verbose:
                     logger.info(f" - Action received: {action}")
-                # Tracking step number -- should never go backwards
-                action_step = action.get("step", -1)
-                # Always apply ``xyt`` (navigation): duplicate-step filtering can drop a goal while
-                # the client still advanced its step counter, leaving ``at_goal`` stuck False.
-                # Same for ``posture`` / ``control_mode`` / ``joint`` / ``head_to``: the client may
-                # repeat the same step id while mode-switching or re-sending holds; skipping drops
-                # real commands (and can leave sim actuators on stale ``ctrl``).
-                if (
-                    self.skip_duplicate_steps
-                    and action_step <= self._last_step
-                    and "xyt" not in action
-                    and "posture" not in action
-                    and "control_mode" not in action
-                    and "joint" not in action
-                    and "head_to" not in action
-                    and not zmq_meta_action_should_bypass_duplicate_step(action)
-                ):
-                    logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
+                if not self.dispatch_command(action):
                     continue
-                self.handle_action(action)
-                self._last_step = max(action_step, self._last_step)
                 line = _action_recv_log_line(action, self._last_step)
-                if "xyt" in action and env_sim_nav_debug():
+                if "xyt" in action and os.environ.get("EMET_SIM_NAV_DEBUG", "").lower() in {"1", "true", "yes", "on"}:
                     logger.warning(line)
                 else:
                     logger.info(line)
@@ -336,7 +314,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND MINIMAL STATE] message keys: {message.keys()}")
 
-            self.send_state_socket.send_pyobj(message)
+            self.send_state_socket.send_pyobj(self.command_message(message))
 
             # Finish with some speed info
             t1 = timeit.default_timer()
@@ -369,7 +347,7 @@ class BaseZmqServer(CommsNode, ABC):
             if steps == 0:
                 logger.info(f"[SEND SERVO STATE] message keys: {message.keys()}")
 
-            self.send_servo_socket.send_pyobj(message)
+            self.send_servo_socket.send_pyobj(self.command_message(message))
 
             # Finish with some speed info
             t1 = timeit.default_timer()

@@ -620,6 +620,27 @@ class StretchMujocoSimulator:
             self.data_proxies.set_command(command)
 
     @require_connection
+    def cancel_base_motion(self, timeout: float = 2.0) -> bool:
+        """Clear pending base motion and require consumed stop plus fresh measured rest."""
+        with self._command_lock:
+            command = self.data_proxies.get_command()
+            command.teleport_base.trigger = False
+            command.set_base_velocity(CommandBaseVelocity(v_linear=0.0, omega=0.0, trigger=True))
+            self.data_proxies.set_command(command)
+            deadline = time.monotonic() + timeout
+            acknowledged_at = None
+            while time.monotonic() < deadline:
+                status = self.data_proxies.get_status()
+                if not self.data_proxies.get_command().base_velocity.trigger:
+                    if acknowledged_at is None:
+                        acknowledged_at = status.time
+                    elif status.time > acknowledged_at:
+                        if abs(status.base.x_vel) < 0.02 and abs(status.base.theta_vel) < 0.05:
+                            return True
+                time.sleep(0.02)
+            return False
+
+    @require_connection
     def add_world_frame(
         self,
         position: tuple[float, float, float],

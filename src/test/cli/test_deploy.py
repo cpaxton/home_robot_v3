@@ -32,6 +32,9 @@ def test_remote_bridge_import_verify_cmd_mars():
     assert "innate_mars_bridge.ros.camera" in cmd
     assert "emet.utils.image" in cmd
     assert "emet.core.server" in cmd
+    assert "PROTOCOL_VERSION == 2" in cmd
+    assert "ZmqServer.start_navigation_command" in cmd
+    assert "ZmqServer.cancel_navigation_command" in cmd
     assert "colcon" not in cmd
     assert '-c "import innate_mars_bridge' in cmd
     assert "-c 'import" not in cmd

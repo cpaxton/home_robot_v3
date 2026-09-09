@@ -9,9 +9,43 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from emet.simulation.robosuite_server import RobosuiteZmqServer
 from emet.utils.geometry import xyt_base_to_global, xyt_global_to_base
+
+
+@pytest.mark.parametrize("teleport", [False, True])
+def test_base_action_preserves_commanded_posture(teleport):
+    """A base command must not adopt torso sag as the next hold target."""
+    import mujoco
+
+    from emet.robots.rby1 import Rby1Backend
+
+    spec = Rby1Backend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    server = RobosuiteZmqServer(
+        robot_spec=spec,
+        scene_model=model,
+        send_port=0,
+        recv_port=0,
+        send_state_port=0,
+        send_servo_port=0,
+    )
+    server._mjmodel = model
+    server._mjdata = mujoco.MjData(model)
+    server._initial_xyt = np.zeros(3)
+    server._joint_ctrl_hold = np.zeros(len(spec.actuator_names))
+    server._joint_ctrl_hold_client_pin = np.ones(len(spec.actuator_names), dtype=bool)
+    index = spec.actuator_names.index("torso1")
+    server._joint_ctrl_hold[index] = -0.3
+    server._mjdata.joint("torso_joint1").qpos[0] = -0.5
+    mujoco.mj_forward(model, server._mjdata)
+    expected = server._joint_ctrl_hold.copy()
+    server.handle_action({"xyt": [0.2, 0.1, 0.3], "nav_world": True, "nav_teleport": teleport})
+    np.testing.assert_allclose(server._joint_ctrl_hold, expected)
+    assert server._joint_ctrl_hold_client_pin.all()
+    assert server._mjdata.actuator("torso1").ctrl[0] == pytest.approx(-0.3)
 
 
 def test_spawn_rel_compose_matches_geometry_helpers():
