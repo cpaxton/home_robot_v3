@@ -21,6 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+import torch
 
 from emet.memory.graph_eqa.eval.calibration_export import CalibrationFrameWriter, detections_to_json_rows
 from emet.memory.graph_eqa.graph_label_filter import (
@@ -137,6 +138,8 @@ def _attach_siglip_crop_embeddings(
         try:
             vec = enc.encode_image(crop)
             if vec is not None:
+                if isinstance(vec, torch.Tensor):
+                    vec = vec.detach().cpu().numpy()
                 d["embedding"] = np.asarray(vec, dtype=np.float32).reshape(-1)
         except Exception:
             continue
@@ -221,6 +224,7 @@ def update_graph_memory_from_dynamem_observation(
         int(getattr(getattr(fusion_cfg, "growth", None), "max_object_nodes", 0)) if fusion_cfg is not None else 0
     )
     _object_node_budget_exhausted = False
+    fusion_active = fusion_cfg is not None and bool(fusion_cfg.enabled)
     if _instance_nodes_allowed and _max_object_nodes > 0:
         try:
             from emet.memory.graph_eqa.graph_stats import graph_node_breakdown
@@ -266,7 +270,7 @@ def update_graph_memory_from_dynamem_observation(
             )
             _note_instance_ingest(graph_memory, ingest_stats)
             raw_dets = admitted
-        if not _instance_nodes_allowed or _object_node_budget_exhausted:
+        if not _instance_nodes_allowed or (_object_node_budget_exhausted and not fusion_active):
             raw_dets = []
         instance_items = [
             (
@@ -281,7 +285,7 @@ def update_graph_memory_from_dynamem_observation(
         if (
             not instance_items
             and _instance_nodes_allowed
-            and not _object_node_budget_exhausted
+            and (not _object_node_budget_exhausted or fusion_active)
             and getattr(frame, "instance", None) is not None
             and getattr(vm, "use_instance_memory", False)
         ):
@@ -305,7 +309,21 @@ def update_graph_memory_from_dynamem_observation(
             cfg = getattr(graph_object_fusion, "config", None) if graph_object_fusion is not None else None
             use_fusion = cfg is not None and getattr(cfg, "enabled", False)
 
-            if use_fusion and raw_dets:
+            if use_fusion:
+                # At capacity, fusion still refreshes matching nodes and rejects
+                # only new objects. Route instance-memory fallback here as well.
+                if not raw_dets:
+                    for item in instance_items:
+                        label, xyz_item, bbox, identity_key = unpack_instance_item(item)
+                        raw_dets.append(
+                            {
+                                "label_short": label,
+                                "xyz": xyz_item,
+                                "bbox_xyxy": bbox,
+                                "identity_key": identity_key,
+                                "countable_instance": True,
+                            }
+                        )
                 raw_dets = _attach_siglip_crop_embeddings(cfg, frame_rgb, raw_dets)
                 for d in raw_dets:
                     cand = _detection_to_candidate(d)
@@ -418,10 +436,6 @@ def update_graph_memory_from_dynamem_observation(
     if labels_are_semantic_graph_hypothesis(labels):
         if semantic_mode in {"view_evidence", "arrival_only"}:
             graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
-        elif fusion_enabled and _object_node_budget_exhausted:
-            # Per-episode object-node cap reached: keep streaming labels for voxel
-            # FIND recall, but do not add more scene-graph nodes (flood guard).
-            pass
         elif fusion_enabled:
             crop_rgb = np.asarray(rgb)
             xyz_a = np.asarray(xyz, dtype=np.float64)
