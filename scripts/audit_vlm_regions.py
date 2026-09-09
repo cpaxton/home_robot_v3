@@ -29,18 +29,40 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
+    parser.add_argument(
+        "--replay-boxes",
+        type=Path,
+        help="Reuse search-box responses from prior results.json; surface-selection ablation only",
+    )
     parser.add_argument("--depth-noise-std-m", type=float, default=0.0)
     parser.add_argument("--depth-dropout", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if args.replay_boxes and args.strategy != "depth_candidates":
+        parser.error("--replay-boxes requires depth_candidates")
     if not np.isfinite(args.depth_noise_std_m) or args.depth_noise_std_m < 0 or not 0 <= args.depth_dropout <= 1:
         parser.error("depth noise must be finite/nonnegative and dropout in [0,1]")
     args.output_dir.mkdir(parents=True, exist_ok=False)
+    rows = yaml.safe_load(args.manifest.read_text())
+    replay = json.loads(args.replay_boxes.read_text()) if args.replay_boxes else None
+    if replay is not None and (
+        len(replay) != len(rows) or any(r["input"] != row for r, row in zip(replay, rows, strict=True))
+    ):
+        raise ValueError("replayed boxes must match the exact manifest and order")
     params = get_parameters("dynav_config.yaml")
     _, client = build_graph_eqa_vlm_clients(parameters=params)
-    rows = yaml.safe_load(args.manifest.read_text())
     results = []
     for index, row in enumerate(rows):
+        first_call = True
+
+        def selection_client(*call_args, **kwargs):
+            nonlocal first_call
+            if first_call and replay is not None:
+                first_call = False
+                return json.dumps(replay[index]["selection"])
+            first_call = False
+            return client(*call_args, **kwargs)
+
         with np.load(row["arrays"], allow_pickle=False) as arrays:
             rgb = np.asarray(Image.open(row["rgb"]).convert("RGB")) if row.get("rgb") else arrays["rgb"]
             depth = arrays["depth"]
@@ -60,13 +82,14 @@ def main():
                 depth,
                 row["query"],
                 row.get("description", row["query"]),
-                client=client,
+                client=selection_client,
                 min_depth=0.25,
                 max_depth=4.5,
                 strategy=args.strategy,
             )
             result = {
                 "input": row,
+                "replayed_box_source": str(args.replay_boxes) if args.replay_boxes else None,
                 "depth_perturbation": perturbation,
                 "selection": parsed,
                 "audit": audit,
