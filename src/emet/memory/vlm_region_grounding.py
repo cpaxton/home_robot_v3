@@ -13,7 +13,7 @@ import math
 from types import SimpleNamespace
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy.ndimage import label
 
 from emet.eval.agentic_vlm_assess import _call_eqa_client, _parse_json_object
@@ -53,7 +53,22 @@ def region_depth_mask(depth, box, point, *, min_depth, max_depth):
     return mask
 
 
-def select_vlm_region(rgb, query, description, *, client):
+def region_annotation(rgb, region):
+    image = Image.fromarray(rgb).copy()
+    draw = ImageDraw.Draw(image)
+    h, w = rgb.shape[:2]
+    box, point = region.get("box"), region.get("point")
+    if isinstance(box, list) and len(box) == 4 and all(type(v) is int for v in box):
+        coordinates = np.asarray(box) * [w, h, w, h] / 1000
+        if coordinates[2] >= coordinates[0] and coordinates[3] >= coordinates[1]:
+            draw.rectangle(tuple(coordinates), outline="yellow", width=3)
+    if isinstance(point, list) and len(point) == 2 and all(type(v) is int for v in point):
+        x, y = point[0] * w / 1000, point[1] * h / 1000
+        draw.ellipse((x - 5, y - 5, x + 5, y + 5), outline="red", width=3)
+    return image
+
+
+def select_vlm_region(rgb, query, description, *, client, correction=None):
     prompt = (
         f"Locate the visible object referred to by {description or query!r}. Target category hint: {query!r}. "
         "Use pixels, not the hint, as evidence. Return a tight bounding box around the target and an interior "
@@ -64,17 +79,54 @@ def select_vlm_region(rgb, query, description, *, client):
         'For abstention return {"verified":false,"reason":"..."}.'
     )
     system = "Ground a robot target in the provided image. Do not invent missing visual evidence."
-    raw = _call_eqa_client(client, [prompt, Image.fromarray(rgb)], system_prompt=system) if client else ""
+    images = [Image.fromarray(rgb)]
+    if correction is not None:
+        prompt += (
+            f" Your previous selection was {correction['region']!r}. Geometry check: {correction['error']}. "
+            "The second image marks that selection in yellow with a red point. Correct the box and interior "
+            "point using the original image, or abstain. This feedback does not establish object presence."
+        )
+        images.append(region_annotation(rgb, correction["region"]))
+    raw = _call_eqa_client(client, [prompt, *images], system_prompt=system) if client else ""
     parsed = _parse_json_object(raw)
     verification = {
         "source": "vlm_region",
         "prompt": prompt,
         "system_prompt": system,
         "raw": raw,
-        "image_order": ["rgb_file"],
+        "image_order": ["rgb_file"] + (["correction_rgb_file"] if correction else []),
         "valid": False,
     }
     return parsed, verification
+
+
+def select_supported_region(rgb, depth, query, description, *, client, min_depth, max_depth):
+    """One geometry-feedback correction at most; semantic abstentions stand."""
+    correction = None
+    attempts = []
+    mask = np.full(depth.shape, -1, dtype=np.int32)
+    for _ in range(2):
+        parsed, audit = select_vlm_region(rgb, query, description, client=client, correction=correction)
+        attempts.append({**audit, "selection": parsed})
+        if parsed.get("verified") is not True:
+            audit["reason"] = "VLM abstained or returned invalid output"
+            attempts[-1]["reason"] = audit["reason"]
+            break
+        try:
+            mask = region_depth_mask(
+                depth, parsed.get("box", []), parsed.get("point", []), min_depth=min_depth, max_depth=max_depth
+            )
+            audit["valid"] = True
+            attempts[-1]["valid"] = True
+            break
+        except (ValueError, TypeError) as exc:
+            audit["reason"] = str(exc)
+            attempts[-1]["reason"] = str(exc)
+            if correction is None:
+                correction = {"region": parsed, "error": str(exc)}
+    audit["attempts"] = attempts
+    audit["correction"] = correction
+    return parsed, mask, audit
 
 
 def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth):
@@ -88,16 +140,10 @@ def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth
         instance_classes=[0],
         instance_scores=[1.0],
     )
-    parsed, verification = select_vlm_region(rgb, query, description, client=client)
-    if parsed.get("verified") is not True:
-        verification["reason"] = "VLM abstained or returned invalid output"
-        return detected, [], [], verification
-    try:
-        detected.instance = region_depth_mask(
-            depth, parsed.get("box", []), parsed.get("point", []), min_depth=min_depth, max_depth=max_depth
-        )
-    except (ValueError, TypeError) as exc:
-        verification["reason"] = str(exc)
+    parsed, detected.instance, verification = select_supported_region(
+        rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth
+    )
+    if not verification["valid"]:
         return detected, [], [], verification
     detections = frame_instances_to_detections(
         detected,

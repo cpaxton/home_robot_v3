@@ -17,11 +17,11 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from emet.core.parameters import get_parameters
 from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
-from emet.memory.vlm_region_grounding import region_depth_mask, select_vlm_region
+from emet.memory.vlm_region_grounding import region_annotation, select_supported_region
 
 
 def main():
@@ -38,17 +38,20 @@ def main():
         with np.load(row["arrays"], allow_pickle=False) as arrays:
             rgb = np.asarray(Image.open(row["rgb"]).convert("RGB")) if row.get("rgb") else arrays["rgb"]
             depth = arrays["depth"]
-            parsed, audit = select_vlm_region(rgb, row["query"], row.get("description", row["query"]), client=client)
+            parsed, support, audit = select_supported_region(
+                rgb,
+                depth,
+                row["query"],
+                row.get("description", row["query"]),
+                client=client,
+                min_depth=0.25,
+                max_depth=4.5,
+            )
             result = {"input": row, "selection": parsed, "audit": audit, "surface_points": 0, "xyz": None}
-            overlay = Image.fromarray(rgb)
-            if parsed.get("verified") is True:
+            overlay = region_annotation(rgb, parsed)
+            if audit["valid"]:
                 try:
-                    mask = (
-                        region_depth_mask(
-                            depth, parsed.get("box", []), parsed.get("point", []), min_depth=0.25, max_depth=4.5
-                        )
-                        == 0
-                    )
+                    mask = support == 0
                     result["surface_points"] = int(mask.sum())
                     np.savez_compressed(args.output_dir / f"{index}-support.npz", mask=mask)
                     if "camera_K" in arrays and "camera_pose" in arrays:
@@ -58,11 +61,12 @@ def main():
                         pose = arrays["camera_pose"]
                         world = camera @ pose[:3, :3].T + pose[:3, 3]
                         result["xyz"] = np.median(world[mask], axis=0).tolist()
-                    h, w = depth.shape
-                    box = np.asarray(parsed["box"]) * [w, h, w, h] / 1000
-                    ImageDraw.Draw(overlay).rectangle(tuple(box), outline="yellow", width=3)
                 except (ValueError, TypeError) as exc:
                     result["geometry_error"] = str(exc)
+            elif parsed.get("verified") is True:
+                result["geometry_error"] = audit.get("reason")
+            if audit.get("correction"):
+                region_annotation(rgb, audit["correction"]["region"]).save(args.output_dir / f"{index}-correction.png")
             overlay.save(args.output_dir / f"{index}-region.png")
             results.append(result)
             (args.output_dir / "results.json").write_text(json.dumps(results, indent=2))

@@ -110,6 +110,11 @@ def cache_grounding_record(
         record["rgb_file"] = f"{prefix}.png"
         numbered_detection_image(rgb, detections).save(path / f"{prefix}-numbered.png")
         record["numbered_rgb_file"] = f"{prefix}-numbered.png"
+        if verification.get("correction"):
+            from emet.memory.vlm_region_grounding import region_annotation
+
+            region_annotation(rgb, verification["correction"]["region"]).save(path / f"{prefix}-correction.png")
+            record["correction_rgb_file"] = f"{prefix}-correction.png"
     arrays = {}
     for name, value in (("depth", depth), ("masks", masks)):
         if value is not None:

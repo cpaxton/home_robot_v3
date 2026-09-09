@@ -43,3 +43,25 @@ def test_vlm_grounding_has_no_detector_dependency():
 def test_invalid_depth_cannot_become_geometry():
     with pytest.raises(ValueError, match="invalid depth"):
         region_depth_mask(np.full((40, 40), np.nan), [0, 0, 1000, 1000], [500, 500], min_depth=0.2, max_depth=4)
+
+
+def test_geometry_feedback_is_bounded_and_does_not_override_abstention():
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    depth = np.ones((40, 40))
+    depth[0, 0] = np.nan
+    client = Mock(
+        side_effect=[
+            '{"verified":true,"box":[0,0,1000,1000],"point":[0,0]}',
+            '{"verified":true,"box":[0,0,1000,1000],"point":[500,500]}',
+        ]
+    )
+    _, mask, audit = select_supported_region(rgb, depth, "mug", "mug", client=client, min_depth=0.2, max_depth=4)
+    assert audit["valid"] and (mask == 0).sum() > 25
+    assert client.call_count == 2
+    assert len(client.call_args.args[0]) == 3
+    assert "invalid depth" in client.call_args.args[0][0]
+    client = Mock(return_value='{"verified":false}')
+    assert not select_supported_region(rgb, depth, "mug", "mug", client=client, min_depth=0.2, max_depth=4)[2]["valid"]
+    client.assert_called_once()
