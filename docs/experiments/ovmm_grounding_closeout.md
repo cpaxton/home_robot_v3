@@ -13,6 +13,27 @@ Completed: query-driven 0/4, lazy-arrival 0/4, shared-agent DynaMem 1/4
 
 ## Manual visual review and VLM audit
 
+Follow-up job `20260909_132943_604841` (frozen `9420d190`) completed **0/2**
+in 179 seconds; artifacts `/tmp/emet-ovmm-retry-qwen-9420d190`. The object phase
+now performs seven exploration calls rather than eight rejected-handle no-ops.
+However, router states on rounds 3 and 6 still advertise the rejected handle
+`-3000000` under Investigate. The legacy renderer read raw `_hypotheses` instead
+of the existing rejection-filtered `_investigate_hypotheses`. The renderer now
+uses that shared eligible set; a regression asserts the rejected ID is absent
+from the actual generated state message. The execution guard remains defense
+against stale references, not a replacement for truthful router state.
+
+Manual review of follow-up grounding `ff64a60d55f4473483df37cb39e7c9e4.png`
+shows a close, oblique view of a lamp beside a red sofa. Its NPZ masks contain
+only -1 (307,200 background pixels); this is a detector mask miss before depth
+admission. Qwen correctly reports a visible lamp but cannot verify the bed
+relationship. Frame `rgb_1099511627789.png` faces a wall/artwork/wooden surface;
+`rgb_1099511627803.png` is mostly occluded by nearby dark geometry. Their negative
+Qwen assessments agree with manual review. The latter follows a frontier move
+reported reached at approximately (-8.48, 1.21); subsequent moves fail. This
+establishes poor observation quality, not the exact collision/camera root cause.
+Do not attribute these frames to VLM hallucination or claim the robot fell over.
+
 All six logs identify local `Qwen/Qwen3-VL-8B-Instruct`, int4, CUDA/SDPA.
 This establishes model identity, not perception quality. Do not describe the
 remaining TAMP gate as training a motion planner: it is the shared task agent

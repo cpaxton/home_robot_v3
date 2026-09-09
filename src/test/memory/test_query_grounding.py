@@ -289,6 +289,9 @@ def test_rejected_candidate_cannot_be_approached_again():
     ex = AgenticEQAExecutor(agent, "Where is the mug?", router=False)
     ex._hypotheses = [NavHypothesis(phrase="mug", obs_id=record.handle, xyz=np.ones(3), score=1, source="voxel")]
     assert not ex._investigate_hypotheses()
+    from emet.memory.graph_eqa.agentic.tools import build_state_message
+
+    assert f"obs_id={record.handle}" not in build_state_message(ex)
     assert ex._tool_investigate(record.handle)["status"] == "CANDIDATE_REJECTED"
     agent.navigate_to_target_pose.assert_not_called()
 

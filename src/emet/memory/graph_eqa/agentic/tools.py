@@ -586,7 +586,10 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
         "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
     )
-    inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+    from emet.memory.graph_eqa.agentic.place import _investigate_hypotheses
+
+    # Render the same eligible set used by action selection, not stale recall.
+    inv = _investigate_hypotheses(executor)
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
     ledger = getattr(executor, "_place_inspect", {}) or {}
     refresh = getattr(executor, "_refresh_place_coverage", None)
@@ -632,9 +635,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 if cm is not None:
                     d = cm.get("min_cam_m")
                     d_s = "none" if d is None else f"{float(d):.2f}"
-                    cm_bit = (
-                        f" close_map=resolved={cm['resolved']} aimed={cm['aimed']} min_cam={d_s}"
-                    )
+                    cm_bit = f" close_map=resolved={cm['resolved']} aimed={cm['aimed']} min_cam={d_s}"
             rec = ledger.get(oid)
             bits = (
                 rec.card_bits()
