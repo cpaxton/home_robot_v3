@@ -1,5 +1,157 @@
 # OVMM grounding closeout
 
+## September 9 detector-free follow-up (not merge acceptance)
+
+Final focused regression pack: **225 passed**, with one existing CLI test that
+can load a real offline model excluded from the unit run. Commit hooks and
+`git diff --check` also pass. Unit success is not task acceptance.
+
+The new query-grounding backend uses Qwen to select a normalized image box and
+an interior surface point. Connected, finite depth support supplies partial
+visible-surface geometry; it is not a semantic segmentation, whole-object
+extent, calibrated confidence, or a grasp plan. YOLOE remains an explicit
+`query_memory.grounding_backend: yoloe` option, not a mandatory gate. Query mode
+remains disabled by default. A geometry rejection permits at most one annotated
+correction; semantic abstentions are not retried on the same image.
+An additional same-model marked-point check was evaluated and withdrawn after
+failing the cached audit below. It is not part of the final production path.
+VLM surface grounding remains experimental: valid depth does not establish that
+the point belongs to the requested object. Do not use this prototype to authorize
+real-robot manipulation.
+
+Arrival capture checks central depth for severe obstruction and permits at most
+two head-only recaptures. It never substitutes a historical view or moves the
+base as a recovery shortcut. This detects close/invalid depth, not semantic
+coverage: an unobstructed wall is still an unhelpful view.
+
+The shared command now exposes opt-in `--visual-servo`. Its current wrist-camera
+grasp adapter is Stretch-specific. Query-driven chat cannot enumerate oracle
+scene tasks, construct/execute oracle TAMP plans, or bypass fresh grounding via
+`pick_place`. Controller completion is explicitly not independently verified
+physical success. Other modes retain the existing oracle controls for isolated
+mechanics testing, labeled accordingly.
+
+Integrated startup also exposed a profile-precedence bug: the generic embodied
+graph preset could overwrite `lazy_graph` with `use_instance_graph=true`.
+`f899c120` applies the lazy backend invariant after those preset values, and
+`3e973f36` adds `configs/emet/query_surface_pilot.yaml` with explicit verification
+prerequisites. The first integrated attempt (`20260909_142931_1489b9`) failed
+startup because verification was not enabled; it is not a task result.
+
+The shared sim command is:
+
+```bash
+EMET_ALLOW_SDPA_ATTN=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  MUJOCO_GL=egl PYTHONPATH=src python -m emet.app.run_agent \
+  --config configs/emet/query_surface_pilot.yaml --memory-backend lazy_graph \
+  --robot stretch --start-sim --sim-config configs/sim/default_table_stretch.yaml \
+  --headless --no-discord --llm qwen3-vl-eqa --eqa --visual-servo \
+  --debug-tools --debug-llm \
+  -c 'Use pick_place to put the red cylinder on the blue cube; report failures.'
+```
+
+This is an experimental diagnostic command, not a validated real-robot recipe.
+Launch through the managed CPU-safe/GPU-exclusive job wrapper and set a bounded
+timeout. Keep robot/simulator choices separate from the shared memory preset.
+
+### Completed bounded runs
+
+| Check | Frozen source | Outcome | Interpretation |
+| --- | --- | --- | --- |
+| Static table visibility | `385e6657` | red cylinder 2,099 pixels; blue cube 2,623 | Render/visibility control, not learned grounding |
+| Live hold and two turns | `385e6657` | hold drift 0; turn errors about 0.030 rad | Partial route acceptance |
+| Route translation | `385e6657` | unsafe posture; upright dot 0.97898; XY error 0.0928 m | Failed; safety threshold unchanged |
+| OVMM nearest-v2 00006 | `81dcb92f` | FindObj 0/1, FindRec 0/1; 17 graph nodes; 122.9 s | Task acceptance failed |
+| OVMM nearest-v2 00025 | `81dcb92f` | FindObj 0/1, FindRec 0/1; 21 graph nodes; 134.2 s | Task acceptance failed |
+| EQA q15, q16, q25 | `81dcb92f` | 3/3 correct | Small smoke slice, not a paired no-regression claim |
+| TAMP plan/execute control | `81dcb92f` | placement error 0.020 m | Oracle scene poses, kinematic attachment and nav teleport; not learned TAMP |
+| Eight cached RGB-D queries | `1e632bee` | sofa/blue cube accepted; lamp false negative; red cylinder failed; four negative/relation cases abstained | Region correction did not recover the red cylinder |
+
+All learned runs above use local `Qwen/Qwen3-VL-8B-Instruct`, int4, CUDA/SDPA.
+OVMM uses seed 0, 12 rounds and 8 navigation steps. EQA uses 20 planning steps
+and 10 movement steps, without HM3D semantic/enriched labels; its CLI does not
+freeze a seed, so these runs are not a matched-seed causal comparison. EQA final
+submission and initial raw EQA output can differ: inspect the agentic trace,
+not just the correctness field, before claiming evidence quality.
+
+The stationary `rby1` registry entry in this checkout resolves to the Galaxea R1
+MJCF. This is not evidence of a genuine Rainbow RBY1 hardware model. The route
+failure establishes unsafe measured posture, not its dynamics/collision cause.
+
+Manual review of the cached correction overlay shows the red-cylinder point
+above/left of the cylinder on background. Invalid depth correctly blocks it;
+Qwen subsequently abstains rather than correcting it. The blue-cube point lies
+on the cube and yields a surface centroid within 0.15 m of its evaluator center.
+The close-up lamp remains a semantic false negative. A graph-size reduction
+therefore does not demonstrate improved perception or task success.
+
+Manual before/after review of receptacle-round-5 views `1099511627804` and
+`1099511627806` shows a nearby textured window/exterior surface in both images.
+The obstruction fraction falls from 1.00 to 0.71, but the head turns do not
+reveal the requested table. Passing the depth check is not semantic progress.
+
+Artifacts and managed jobs (one CPU-safe/GPU-exclusive experiment at a time):
+
+- `20260909_141034_d5dea5`: `/tmp/emet-vlm-stationary`, `/tmp/emet-vlm-known-route`.
+- `20260909_141308_fea283`: `/tmp/emet-vlm-habitat-acceptance`; per-phase traces,
+  RGB-D caches, model settings and results. EQA figure/video bundles are under
+  `~/.cache/habitat_eqa/episodes/vlm-led-eqa-{15,16,25}`.
+- `20260909_141830_316009`: `~/runs/emet/jobs_runs/vlm-tamp-kinematic-control/job.log`.
+- `20260909_142619_bacd38`: `/tmp/emet-vlm-feedback-sdpa-audit`; exact prompts,
+  both attempts, original/correction overlays, support masks and calibrated XYZ.
+- `20260909_143833_bb0d31`: `/tmp/emet-vlm-route-reacquisition-audit`, source
+  `1e632bee`. Four queries after the two passed turns all had finite depth, but
+  manual overlays show three points on the table behind the objects. Only the
+  final blue-cube point is supported on the requested object. Do not report
+  this as 4/4 successful reacquisition. This motivated marked-point verification
+  in `273df5ba`, with a separate frozen audit rather than rescoring this run.
+- `20260909_144248_f03625`: frozen `273df5ba`, outputs
+  `/tmp/emet-vlm-point-verified-static` and `/tmp/emet-vlm-point-verified-route`.
+  The added marked-point check still approved two cylinder proposals on the
+  tabletop and rejected valid cube proposals with contradictory explanations
+  (`verified:false` but prose asserting validity). It was withdrawn: no extra
+  production inference gate or tuning knob is retained for this failed idea.
+- Excluded launches: `20260909_141013_278915` was cancelled after detecting the
+  wrong legacy model factory; `20260909_142412_a836bd` failed before inference
+  because SDPA opt-in was missing. Neither contributes results.
+
+Replay a manifest of `{arrays: NPZ, rgb: optional PNG, query, description: optional}`:
+
+```bash
+EMET_ALLOW_SDPA_ATTN=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  PYTHONPATH=src python scripts/audit_vlm_regions.py \
+  --manifest /absolute/frozen-inputs.yaml --output-dir /absolute/new-output
+```
+
+NPZ must contain depth and either RGB or an explicit PNG reference. World XYZ
+is emitted only with `camera_K` and `camera_pose`; missing calibration is not
+invented. Retain the manifest, frozen commit and managed-job command together.
+These paths are local diagnostic artifacts, not an archival public dataset.
+
+Remaining acceptance gates: reliable red-cylinder localization on cached and
+live views, safe complete route, non-oracle shared-agent manipulation, and OVMM
+localization on both scenes. Keep PR #167 draft while these remain red. Do not
+promote this pilot to a performance table or silently change benchmark budgets.
+
+### Integrated shared-agent smoke
+
+`20260909_143340_91bef3`, frozen `3e973f36`, confirmed lazy initialization with
+`instance_graph=False` and no YOLOE load. The production Qwen router selected
+`pick_place(red cylinder, blue cube)`. Fresh observation then stalled in the
+32-token image-caption call: first decode after 76 seconds, generation timeout
+at 180 seconds, followed by an automatic retry. We cancelled the run and cleaned
+up its exact agent/simulator process groups. No grasp or placement was validated.
+Logs are under `~/runs/emet/jobs_runs/vlm-shared-preset-manip`.
+
+The timeout worker can continue running CUDA work after the caller raises. The
+client now rejects subsequent generations after a timeout, and voxel captioning
+propagates timeouts rather than retrying or silently completing perception.
+This is a safety/lifecycle fix, not a demonstrated fix for the original stall.
+Investigate live caption/model-sharing latency before another manipulation run;
+do not extend timeouts or add retries to turn this red gate into apparent success.
+
+## Earlier detector-gated pilot
+
 Implementation: `cfab4f97`, review PR #167. The 142-test focused suite and all
 commit hooks passed. A subsequent CLI dispatch regression also checks that
 `--seed` and query mode actually reach the runner (not merely appear in help).

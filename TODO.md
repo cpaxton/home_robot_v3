@@ -3,6 +3,30 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## PR #167 VLM-led acceptance (2026-09-09)
+
+Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).
+Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
+
+- [x] Bounded head-only view recovery, detector-free depth-surface grounding,
+      cached image/prompt audit, and explicit shared wrist-adapter CLI.
+- [x] Prevent generic embodied presets from re-enabling streaming instances in
+      lazy mode; block oracle TAMP/tool metadata bypasses in query mode.
+- [ ] Recover the visible red cylinder and lamp without evaluator labels or
+      weakening depth support; frozen cached audit currently fails both.
+- [ ] Diagnose unsafe posture during known-route translation (upright dot
+      0.97898). Hold and turns pass; keep posture safety threshold unchanged.
+- [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
+      and independent post-action scoring; oracle TAMP control is not this test.
+- [ ] Diagnose live shared-VLM caption latency: router reaches pick_place, but
+      the fresh-observation caption times out after 180 seconds before grounding.
+      Cached region calls are fast; do not silently increase the timeout.
+- [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
+      then freeze a paired no-regression comparison, not a full sweep.
+- [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
+      update paper evidence/limitations only after acceptance; Sourccey and Mars
+      remain deferred, not required for this closeout.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).
