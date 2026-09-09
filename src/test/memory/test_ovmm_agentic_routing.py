@@ -41,6 +41,7 @@ from emet.memory.graph_eqa.agentic_eqa import (
 
 def _executor(*, question: str = "Where is the microwave?") -> AgenticEQAExecutor:
     agent = MagicMock()
+    agent.query_driven_memory = False
     agent.parameters = {}
     agent.robot = MagicMock()
     return AgenticEQAExecutor(

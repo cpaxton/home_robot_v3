@@ -255,11 +255,16 @@ def _make_controller(
     memory_summary: bool | None = None,
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
+    query_driven_memory: bool = False,
 ):
     from emet.eval.memory_backends import DYNAGRAPH, DYNAMEM, LAZY_GRAPH
 
     method = _normalize_hmeqa_method(method)
     params = _apply_method_parameters(parameters, method)
+    if query_driven_memory:
+        from emet.eval.benchmark_dynagraph import enable_query_driven_memory
+
+        enable_query_driven_memory(params, method)
     apply_dynagraph_harness_overrides(
         params,
         memory_summary=memory_summary,
@@ -415,7 +420,12 @@ def run_hmeqa_episode(
     export_video: bool | None = None,
     map_stride: int | None = None,
     extra_instruction: str | None = None,
+    query_driven_memory: bool = False,
 ) -> EpisodeMetrics:
+    if query_driven_memory:
+        if use_hm3d_semantics:
+            raise ValueError("query-driven memory evaluation must not expose simulator semantics")
+        use_hm3d_semantics = False
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
     poses = load_scene_init_poses(init_poses_path)
@@ -476,6 +486,7 @@ def run_hmeqa_episode(
             mock_llm=mock_llm,
             mock_llm_explore=mock_llm_explore,
             gold_letter=q.answer_letter,
+            query_driven_memory=query_driven_memory,
             no_rerun=no_rerun,
             use_real_vlm=use_real_vlm,
             device=device,
@@ -675,6 +686,7 @@ def run_hmeqa_episode(
         eqa_cfg = dict(parameters.get("eqa", {}) or {})
         metrics = EpisodeMetrics(
             dataset="hmeqa",
+            query_driven_memory=query_driven_memory,
             method=method,
             question_id=question_id,
             scene=q.scene,

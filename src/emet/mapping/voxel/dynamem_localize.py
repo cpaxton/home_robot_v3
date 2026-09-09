@@ -83,6 +83,29 @@ class DynamemVoxelLocalizeMixin:
             print("Points close to the point are not similar to the text!")
         return torch.max(alignments[near]) >= similarity_threshold
 
+    def retrieve_text_candidate(self, text, minimum_similarity: float = 0.14, *, excluded_obs_ids=()):
+        """Return weak search evidence, never a detector-confirmed localization."""
+        points, _, _, _ = self.semantic_memory.get_pointcloud()
+        alignments = self.find_alignment_over_model(text)
+        stats = {"query": text, "max_cosine": None, "yoloe_hit": False}
+        if points is None or alignments is None or alignments.numel() == 0:
+            return None, stats
+        if excluded_obs_ids:
+            alignments = alignments.flatten().clone()
+            counts = self.semantic_memory._obs_counts.flatten().to(alignments.device)
+            excluded = torch.tensor(list(excluded_obs_ids), device=alignments.device, dtype=counts.dtype)
+            alignments[torch.isin(counts, excluded)] = -torch.inf
+        index = int(alignments.argmax().item())
+        score = float(alignments.flatten()[index].item())
+        source = int(self.semantic_memory._obs_counts[index].item())
+        stats.update(max_cosine=score, source_obs_id=source)
+        if not np.isfinite(score) or score < minimum_similarity or not 1 <= source <= len(self.observations):
+            return None, stats
+        point = points[index].detach().cpu().numpy().reshape(3)
+        if not np.isfinite(point).all():
+            return None, stats
+        return point, stats
+
     def localize_text(self, text, debug=True, return_debug=False):
         if self.mllm:
             return self.localize_with_mllm(text, debug=debug, return_debug=return_debug)
@@ -364,6 +387,7 @@ class DynamemVoxelLocalizeMixin:
             "query": text,
             "max_cosine": max_cosine,
             "yoloe_hit": res is not None,
+            "source_obs_id": int(obs_id),
         }
         if res is not None:
             target_point = res

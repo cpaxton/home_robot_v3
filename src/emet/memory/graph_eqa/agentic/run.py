@@ -110,6 +110,12 @@ def run(self) -> AgenticEQAResult:
     # Deferred clients: build the shared VLM now — keyword extraction in inspect_graph
     # and the tool router both need it (text-only turns coexist with warm SigLIP).
     gm = self.graph_memory
+    if gm is None and self._router_enabled:
+        from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
+
+        # Do not attach GraphEQAMemory to a voxel-only controller: doing so would
+        # activate graph ingestion and change the baseline we are measuring.
+        _, self._voxel_eqa_client = build_graph_eqa_vlm_clients(parameters=self.agent.parameters)
     if gm is not None and hasattr(gm, "_ensure_llm_clients"):
         try:
             gm._ensure_llm_clients()

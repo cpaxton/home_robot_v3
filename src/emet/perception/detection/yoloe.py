@@ -166,6 +166,7 @@ class YoloEPerception(PerceptionModule):
         depth_threshold: float | None = None,
         draw_instance_predictions: bool = True,
         confidence_threshold: float | None = None,
+        vocabulary: list[str] | None = None,
     ) -> Observations:
         """
         Arguments:
@@ -180,7 +181,12 @@ class YoloEPerception(PerceptionModule):
              image of shape (H, W, 3)
         """
 
-        self.model.set_classes(self.class_list, _text_pe_for_classes(self.model, self.class_list))
+        # Per-call target vocabulary; never change the shared detector's default
+        # class list or label IDs used by subsequent background mapping calls.
+        classes = self.class_list if vocabulary is None else vocabulary
+        if not classes:
+            raise ValueError("Detection vocabulary must not be empty")
+        self.model.set_classes(classes, _text_pe_for_classes(self.model, classes))
 
         if isinstance(rgb, np.ndarray):
             # This is expected

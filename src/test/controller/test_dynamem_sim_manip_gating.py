@@ -21,6 +21,7 @@ def _make_executor(*, manip_mode: str = "teleport", session_caps: dict | None = 
     robot.move_to_nav_posture = MagicMock()
 
     agent = MagicMock()
+    agent.query_driven_memory = False
     agent.robot_say = MagicMock(return_value=None)
     agent.get_voxel_map = MagicMock(return_value=None)
 

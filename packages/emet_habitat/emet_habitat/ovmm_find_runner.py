@@ -169,15 +169,17 @@ def run_habitat_find_phase_episode(
     try:
         sim.set_init_pose(init_pose)
         spawn_record = sim.last_init_pose_record
-        robot = HabitatRobotClient(sim)
+        oracle = run_cfg.backend == "ground_truth"
+        robot = HabitatRobotClient(sim, expose_semantics=oracle)
         from emet.memory.graph_eqa.sim_ground_truth_graph import placements_to_json_dict
 
-        robot.set_emet_session(
-            {
-                "sim_object_placements": placements_to_json_dict(placements),
-                "sim_object_placements_frame": "habitat_yup",
-            }
-        )
+        if oracle:
+            robot.set_emet_session(
+                {
+                    "sim_object_placements": placements_to_json_dict(placements),
+                    "sim_object_placements_frame": "habitat_yup",
+                }
+            )
 
         parameters = apply_habitat_ovmm_find_parameters(
             get_parameters("dynav_config.yaml"),
@@ -186,6 +188,12 @@ def run_habitat_find_phase_episode(
             staleness_horizon=run_cfg.staleness_horizon,
         )
         # Voxel features come from DynamemController.create_obstacle_map:
+        if run_cfg.query_driven_memory:
+            from emet.eval.benchmark_dynagraph import enable_query_driven_memory
+
+            if run_cfg.agentic_find is False:
+                raise ValueError("query-driven memory requires agentic find")
+            enable_query_driven_memory(parameters, run_cfg.backend)
         # GPU → shared SigLIP, --device cpu / --cpu-only → CLIP. Do not set
         # parameters["encoder"] = None — that is the InstanceMemory get_encoder()
         # name, and clearing it disabled semantic memory on the sim find path.
@@ -302,6 +310,7 @@ def run_habitat_find_phase_episode(
             "scene": episode.scene,
             "floor": episode.floor,
             "backend": run_cfg.backend,
+            "query_driven_memory": run_cfg.query_driven_memory,
             "dataset": "habitat_hm3d",
             "object_query": object_query,
             "start_recep": episode.start_recep,

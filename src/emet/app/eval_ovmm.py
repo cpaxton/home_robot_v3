@@ -68,6 +68,7 @@ def _batch_options_from_click(
     no_scene_cache: bool = False,
     manip_mode: str | None = None,
     oneshot_localize: bool = False,
+    query_driven_memory: bool = False,
     agentic_max_rounds: int | None = None,
     agentic_max_nav_steps: int | None = None,
     mapping_rotate_steps: int | None = None,
@@ -96,6 +97,7 @@ def _batch_options_from_click(
         no_scene_cache=no_scene_cache,
         manip_mode=manip_mode,
         oneshot_localize=oneshot_localize,
+        query_driven_memory=query_driven_memory,
         agentic_max_rounds=agentic_max_rounds,
         agentic_max_nav_steps=agentic_max_nav_steps,
         mapping_rotate_steps=mapping_rotate_steps,
@@ -216,6 +218,7 @@ def ovmm_group(ctx: click.Context) -> None:
 
 
 @ovmm_group.command("find", short_help="Batch OVMM find-phase (FindObj / FindRec)")
+@click.option("--query-driven-memory", is_flag=True, help="Use shared lazy query grounding (lazy_graph only).")
 @_common_batch_options
 @click.option(
     "--mapping-max-nav-steps",
@@ -255,6 +258,7 @@ def ovmm_group(ctx: click.Context) -> None:
     help="Mapping rotate_in_place scan steps (default 8; use 4 for fast rby1 gate)",
 )
 def ovmm_find(
+    query_driven_memory: bool,
     episodes: str,
     backends: tuple[str, ...],
     tier: tuple[str, ...],
@@ -313,6 +317,7 @@ def ovmm_find(
         agentic_max_nav_steps=agentic_max_nav_steps,
         mapping_rotate_steps=mapping_rotate_steps,
         full=False,
+        query_driven_memory=query_driven_memory,
     )
     raise SystemExit(run_ovmm_batch(opts, repo_root=_project_root()))
 

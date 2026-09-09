@@ -37,6 +37,9 @@ class LocalizeResult:
     point_xyz: np.ndarray | None  # (3,) or (2,) world position
     success: bool
     extra_info: dict[str, Any]
+    candidate_id: int | None = None
+    instance_id: int | None = None
+    grounding_status: str = "unverified"
 
 
 class MemoryBackend(ABC):

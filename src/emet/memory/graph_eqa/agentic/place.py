@@ -38,7 +38,11 @@ _logger = Logger(__name__)
 
 
 def _investigate_hypotheses(self) -> list[NavHypothesis]:
-    return [h for h in self._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+    hypotheses = [h for h in self._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+    if getattr(self.agent, "query_driven_memory", False) is True:
+        rejected = {r.handle for r in self.agent.query_candidates.records.values() if r.rejected_revision is not None}
+        hypotheses = [h for h in hypotheses if int(h.obs_id) not in rejected]
+    return hypotheses
 
 
 def _place_anchor_xy(self, obs_id: int, hyp: NavHypothesis | None) -> tuple[float, float] | None:

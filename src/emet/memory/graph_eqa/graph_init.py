@@ -114,6 +114,7 @@ def init_memory(
     if not defer_llm_clients and (self.eqa_client is None or self.image_description_client is None):
         self._init_clients()
 
+
 def _parameters_dict(self) -> dict[str, Any]:
     p = self.parameters
     if isinstance(p, dict):
@@ -121,6 +122,7 @@ def _parameters_dict(self) -> dict[str, Any]:
     if hasattr(p, "data") and isinstance(p.data, dict):
         return p.data
     return {}
+
 
 def _load_navigation_settings(self) -> None:
     d = self._parameters_dict()
@@ -136,6 +138,7 @@ def _load_navigation_settings(self) -> None:
     if isinstance(eqa, dict) and eqa.get("image_nav_min_approach_m") is not None:
         self.image_nav_min_approach_m = max(0.05, float(eqa["image_nav_min_approach_m"]))
 
+
 def _load_dynagraph_settings(self) -> None:
     d = self._parameters_dict()
     if not d:
@@ -146,6 +149,7 @@ def _load_dynagraph_settings(self) -> None:
         self.staleness_horizon = max(0, int(d["dynagraph_staleness_horizon"]))
     if d.get("dynagraph_viewpoint_merge_m") is not None:
         self.viewpoint_merge_m = max(0.0, float(d["dynagraph_viewpoint_merge_m"]))
+
 
 def _load_frontier_settings(self) -> None:
     d = self._parameters_dict()
@@ -164,6 +168,7 @@ def _load_frontier_settings(self) -> None:
         self._frontier_min_cluster_cells = max(1, int(blk["min_cluster_cells"]))
     if blk.get("keyword_score_weight") is not None:
         self._frontier_keyword_score_weight = max(0.0, float(blk["keyword_score_weight"]))
+
 
 def _load_attempt_ledger_settings(self) -> None:
     """Load ``eqa.attempt_ledger`` dict knobs (max_records, persist_absent_claims)."""
@@ -191,9 +196,11 @@ def _load_attempt_ledger_settings(self) -> None:
         except ValueError:
             pass
 
+
 def attempt_summary_for_obs(self, obs_id: int, *, max_bits: int = 4) -> str:
     """Newest-first compact attempt tags for place cards / diagnostics."""
     return summary_bits_for_obs(self._attempt_records, int(obs_id), max_bits=max_bits)
+
 
 def record_close_look_label(self, obs_id: int, label: str) -> None:
     """Store a Qwen close-look / vlm_assess name on graph nodes for this view.
@@ -219,9 +226,11 @@ def record_close_look_label(self, obs_id: int, label: str) -> None:
             continue
         self._nodes[idx] = replace(node, close_look_label=clipped)
 
+
 def set_graph_timestep(self, step: int) -> None:
     """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
     self._graph_timestep = int(step)
+
 
 def _position_update(
     self,
@@ -273,6 +282,7 @@ def _position_update(
     samples = np.asarray([entry["xyz"] for entry in history[-20:]], dtype=float)
     covariance = np.cov(samples.T) if samples.shape[0] >= 2 else np.zeros((3, 3), dtype=float)
     return updated, covariance, history[-64:], changes[-32:], confidence
+
 
 def observe_visible_labels(
     self,
@@ -378,22 +388,27 @@ def observe_visible_labels(
         )
     return events
 
+
 def get_change_events(self) -> list[dict[str, Any]]:
     return [dict(event) for event in self._change_events]
+
 
 def set_navigation_samples_max(self, n: int) -> None:
     """Raise or lower the cap on stored navigation viewpoint samples (default from config)."""
     self._nav_max = max(1, int(n))
 
+
 @property
 def navigation_samples_max(self) -> int:
     return int(self._nav_max)
+
 
 def _effective_timestep(self) -> int:
     if self._graph_timestep > 0:
         return self._graph_timestep
     self._fallback_timestep += 1
     return self._fallback_timestep
+
 
 def clear_eqa_working_memory(self) -> None:
     """Drop cached EQA / CONFIRMED_MEMORY state after a known world change.
@@ -422,6 +437,7 @@ def clear_eqa_working_memory(self) -> None:
     self.last_eqa_salvage_used = False
     self._obs_nav_dists.clear()
     self.clear_room_events()
+
 
 def invalidate_nodes_near(
     self,
@@ -469,6 +485,7 @@ def invalidate_nodes_near(
             n_pruned = int(self._drop_nodes_near(target, radius_m=radius))
     return n_aged, n_pruned
 
+
 def _drop_nodes_near(self, xyz: np.ndarray, *, radius_m: float) -> int:
     """Remove non-GT object nodes within ``radius_m`` of ``xyz`` (xy)."""
     target = np.asarray(xyz, dtype=np.float64).reshape(-1)
@@ -478,12 +495,26 @@ def _drop_nodes_near(self, xyz: np.ndarray, *, radius_m: float) -> int:
         if not is_ground_truth_node(n)
         and not n.is_frontier
         and not n.is_viewpoint
-        and float(np.linalg.norm(np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2] - target[:2]))
-        <= float(radius_m)
+        and float(np.linalg.norm(np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2] - target[:2])) <= float(radius_m)
     ]
     if not to_drop:
         return 0
     drop_obs = {n.obs_id for n in to_drop}
+    return self.retire_object_observations(drop_obs)
+
+
+def retire_object_observations(self, obs_ids) -> int:
+    """Retire explicitly moved learned objects without relying on mutable node IDs."""
+    to_drop = [
+        n
+        for n in self._nodes
+        if n.obs_id in obs_ids and not is_ground_truth_node(n) and not n.is_frontier and not n.is_viewpoint
+    ]
+    if not to_drop:
+        return 0
+    drop_obs = {n.obs_id for n in to_drop}
+    for obs_id in drop_obs:
+        self.query_candidates.invalidate_instance(obs_id, "object observation retired")
     drop_node_ids = {n.node_id for n in to_drop}
     drop_node_ids |= {n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs}
     self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
@@ -494,6 +525,7 @@ def _drop_nodes_near(self, xyz: np.ndarray, *, radius_m: float) -> int:
     self._rebuild_viewpoint_index()
     self._update_edges()
     return len(to_drop)
+
 
 def maintain(self, current_step: int) -> int:
     """
@@ -514,6 +546,8 @@ def maintain(self, current_step: int) -> int:
     if not to_drop:
         return 0
     drop_obs = {n.obs_id for n in to_drop if not n.is_viewpoint}
+    for obs_id in drop_obs:
+        self.query_candidates.invalidate_instance(obs_id, "object observation expired")
     drop_node_ids = {n.node_id for n in to_drop}
     drop_node_ids |= {n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs}
     self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
@@ -525,11 +559,13 @@ def maintain(self, current_step: int) -> int:
     self._update_edges()
     return len(to_drop)
 
+
 def _ensure_llm_clients(self) -> None:
     """Load shared Qwen3.5 multimodal on first use when defer_llm_clients=True."""
     if self.eqa_client is not None and self.image_description_client is not None:
         return
     self._init_clients()
+
 
 def _init_clients(self) -> None:
     """Initialize EQA + keyword helper (one shared VLM: gemma4 / Qwen-VL / Qwen3.5)."""
@@ -547,9 +583,11 @@ def _init_clients(self) -> None:
             "GraphEQA memory requires emet.llms for EQA. Install GPU extras (torch, transformers)."
         ) from e
 
+
 def obs_revision(self, obs_id: int) -> int:
     """Content generation for *obs_id* (advances when candidate RGB is refreshed)."""
     return int(self._obs_revisions.get(int(obs_id), 0))
+
 
 def set_capture_context(
     self,
@@ -561,9 +599,7 @@ def set_capture_context(
     """Attach immutable sensor-pose provenance to subsequent object views."""
     self._capture_context = {
         "camera_pose_world": (
-            np.asarray(camera_pose_world, dtype=float).reshape(4, 4).copy()
-            if camera_pose_world is not None
-            else None
+            np.asarray(camera_pose_world, dtype=float).reshape(4, 4).copy() if camera_pose_world is not None else None
         ),
         "base_pose_world": (
             np.asarray(base_pose_world, dtype=float).reshape(-1)[:3].copy() if base_pose_world is not None else None
@@ -572,19 +608,17 @@ def set_capture_context(
     if session_id:
         self.world_evidence.session_id = str(session_id)
 
+
 def clear_capture_context(self) -> None:
     self._capture_context = {}
+
 
 def _record_world_view_for_obs(self, obs_id: int) -> str:
     if not self.world_evidence.enabled:
         return ""
     oid = int(obs_id)
     node = next(
-        (
-            item
-            for item in self._nodes
-            if int(item.obs_id) == oid and not item.is_frontier and not item.is_viewpoint
-        ),
+        (item for item in self._nodes if int(item.obs_id) == oid and not item.is_frontier and not item.is_viewpoint),
         None,
     )
     obs = self._observation_by_id(oid)
@@ -632,8 +666,10 @@ def _record_world_view_for_obs(self, obs_id: int) -> str:
         )
     return view.view_id if view is not None else ""
 
+
 def view_id_for_obs(self, obs_id: int) -> str:
     return self.world_evidence.view_id_for_obs(int(obs_id))
+
 
 def bind_episode_context(
     self,
@@ -645,6 +681,7 @@ def bind_episode_context(
     self._attempt_ledger_question_id = str(question_id) if question_id is not None else None
     self.world_evidence.set_context(question_id=question_id, session_id=session_id)
 
+
 def observation_room(self, obs_id: int) -> tuple[str | None, str]:
     """Return the room persisted on an observation's stable view/place."""
     view = self.world_evidence.view_for_obs(int(obs_id))
@@ -655,6 +692,7 @@ def observation_room(self, obs_id: int) -> tuple[str | None, str]:
         return None, "unknown"
     room = self.world_evidence.rooms.get(place.room_id)
     return place.room_id, room.room_name if room is not None else "unknown"
+
 
 def record_agentic_evidence(
     self,
@@ -693,11 +731,13 @@ def record_agentic_evidence(
     )
     return event.event_id if event is not None else ""
 
+
 def durable_confirmation_event_ids(self, *, obs_id: int, phrase: str = "") -> tuple[str, ...]:
     return self.world_evidence.durable_confirmation_event_ids(
         obs_id=int(obs_id),
         phrase=phrase,
     )
+
 
 def latest_world_view_id(self) -> str:
     if not self.world_evidence.views:
@@ -707,11 +747,13 @@ def latest_world_view_id(self) -> str:
         key=lambda view: (view.captured_step, view.obs_id, view.revision),
     ).view_id
 
+
 def _reindex_world_entities(self) -> None:
     self.world_evidence.reindex_entities(
         self._nodes,
         step=self._effective_timestep(),
     )
+
 
 def _bump_obs_revision(self, obs_id: int) -> int:
     oid = int(obs_id)
@@ -721,6 +763,7 @@ def _bump_obs_revision(self, obs_id: int) -> int:
     # Stale SigLIP features would disagree with the refreshed RGB candidate.
     self._obs_siglip_features.pop(oid, None)
     return nxt
+
 
 def refresh_observation_candidate(
     self,

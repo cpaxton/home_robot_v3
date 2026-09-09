@@ -35,15 +35,23 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 @property
 def graph_memory(self) -> Any:
     return getattr(self.agent, "graph_memory", None)
+
+
+@property
+def eqa_client(self) -> Any:
+    """Inference is shared even when the selected memory backend has no graph."""
+    gm = self.graph_memory
+    return getattr(gm, "eqa_client", None) if gm is not None else getattr(self, "_voxel_eqa_client", None)
+
 
 @property
 def query_text(self) -> str:
     """Phrase used to bias graph inspection / frontier picks (question or explore goal)."""
     return self.question or self.goal
+
 
 def _robot_xyt(self) -> np.ndarray | None:
     robot = getattr(self.agent, "robot", None)
@@ -56,6 +64,7 @@ def _robot_xyt(self) -> np.ndarray | None:
     if pose.size < 2 or not np.isfinite(pose[:2]).all():
         return None
     return pose
+
 
 def _robot_xyt_world(self) -> np.ndarray | None:
     """Robot base ``(x, y, θ)`` in the voxel-map / world frame for A* planning.
@@ -90,6 +99,7 @@ def _robot_xyt_world(self) -> np.ndarray | None:
             pass
     return local
 
+
 def _graph_world_step(self) -> int:
     gm = self.graph_memory
     getter = getattr(gm, "_effective_timestep", None) if gm is not None else None
@@ -99,6 +109,7 @@ def _graph_world_step(self) -> int:
         except (TypeError, ValueError):
             pass
     return int(getattr(gm, "_graph_timestep", 0) or 0) if gm is not None else 0
+
 
 def _refresh_graph_room_estimate(self, *, after_motion: bool = False) -> str:
     """Recompute current-pose canonical room and room-target status."""
@@ -146,9 +157,11 @@ def _refresh_graph_room_estimate(self, *, after_motion: bool = False) -> str:
         self._in_target_area = None
     return graph_room
 
+
 def _refresh_room_after_motion(self) -> str:
     """Invalidate prior-pose router room and establish a current-pose room."""
     return self._refresh_graph_room_estimate(after_motion=True)
+
 
 def _observation_room(self, obs_id: int | None) -> str:
     """Resolve evidence room from the immutable observation view/place."""
@@ -166,6 +179,7 @@ def _observation_room(self, obs_id: int | None) -> str:
             pass
     return ""
 
+
 def _append_trace(self, row: dict[str, Any]) -> None:
     if not self._collect_trace:
         return
@@ -182,6 +196,7 @@ def _append_trace(self, row: dict[str, Any]) -> None:
         self._trace_path.parent.mkdir(parents=True, exist_ok=True)
         with self._trace_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload, default=str) + "\n")
+
 
 def _attach_gt(self, row: dict[str, Any], xyz: np.ndarray | None) -> None:
     placements = self._gt_placements
@@ -208,6 +223,7 @@ def _attach_gt(self, row: dict[str, Any], xyz: np.ndarray | None) -> None:
         row["gt_dist_m"] = d
         row["gt_present"] = bool(d <= 1.5)
 
+
 def _graph_node_for_obs(self, obs_id: int) -> Any | None:
     gm = self.graph_memory
     for node in list(getattr(gm, "_nodes", None) or ()):
@@ -217,6 +233,7 @@ def _graph_node_for_obs(self, obs_id: int) -> Any | None:
             continue
         return node
     return None
+
 
 def _action_target_for_obs(self, obs_id: int) -> ActionTarget:
     """Resolve a mutable adapter ID to stable place/view semantics."""
@@ -265,6 +282,7 @@ def _action_target_for_obs(self, obs_id: int) -> ActionTarget:
         xyz=xyz,
     )
 
+
 def _action_target_for_frontier(self, frontier_id: str) -> ActionTarget:
     fid = str(frontier_id or "").strip()
     gm = self.graph_memory
@@ -291,6 +309,7 @@ def _action_target_for_frontier(self, frontier_id: str) -> ActionTarget:
         xyz=xyz,
     )
 
+
 def _frontier_geometry_id(self, frontier_id: str) -> str:
     gm = self.graph_memory
     world = getattr(gm, "world_evidence", None) if gm is not None else None
@@ -307,6 +326,7 @@ def _frontier_geometry_id(self, frontier_id: str) -> str:
             "parents": tuple(sorted(record.parent_ids)),
         },
     )
+
 
 def _relevant_evidence_digest(self, target: ActionTarget) -> str:
     """Hash target-local non-attempt evidence only."""
@@ -334,6 +354,7 @@ def _relevant_evidence_digest(self, target: ActionTarget) -> str:
             )
         )
     return stable_digest("target-evidence", rows)
+
 
 def _action_signature(
     self,
@@ -439,6 +460,7 @@ def _action_signature(
         variant={},
     )
 
+
 def _action_progress_token(self, signature: ActionSignature) -> ProgressToken:
     target = signature.target
     components: dict[str, Any] = {
@@ -469,6 +491,7 @@ def _action_progress_token(self, signature: ActionSignature) -> ProgressToken:
         )
     return ProgressToken.build(components)
 
+
 @staticmethod
 def _action_progress_reasons(
     signature: ActionSignature,
@@ -496,6 +519,7 @@ def _action_progress_reasons(
     if capture_status in {"NEW_OBS", "CONTENT_REFRESHED"} and "new_view" not in reasons:
         reasons.append("new_view")
     return tuple(dict.fromkeys(reasons))
+
 
 def _record_action_history(
     self,
@@ -565,6 +589,7 @@ def _record_action_history(
     self._recent_actions = self._recent_actions[-RECENT_ACTIONS_K:]
     self._append_trace({"event": "action_history", "entry": entry.to_dict()})
 
+
 def _inspect_action_gate_decision(
     self,
     name: str,
@@ -621,9 +646,7 @@ def _inspect_action_gate_decision(
 
     if preferred is not None and decisions:
         return decisions[0]
-    prior_rounds = tuple(
-        dict.fromkeys(round_index for decision in decisions for round_index in decision.prior_rounds)
-    )
+    prior_rounds = tuple(dict.fromkeys(round_index for decision in decisions for round_index in decision.prior_rounds))
     base = (
         decisions[0]
         if decisions
@@ -642,6 +665,7 @@ def _inspect_action_gate_decision(
         prior_rounds=prior_rounds[-4:],
     )
 
+
 def _action_gate_decision(self, name: str, args: dict[str, Any]) -> GateDecision:
     tool = str(name or "").strip().lower()
     if tool in {"investigate", "navigate_to_obs"}:
@@ -649,6 +673,7 @@ def _action_gate_decision(self, name: str, args: dict[str, Any]) -> GateDecision
     signature = self._action_signature(tool, args)
     progress = self._action_progress_token(signature)
     return decide_candidate(self._action_history, signature, progress)
+
 
 def _prepare_action_progress_dispatch(
     self,
@@ -711,6 +736,7 @@ def _prepare_action_progress_dispatch(
         if approach is not None:
             prepared["approach_index"] = int(approach)
     return prepared, None
+
 
 def _record_recent_action(
     self,

@@ -26,12 +26,15 @@ def test_ovmm_s0_distinct_recep_oneshot_parity():
         cpu_only=True,
         perfect_depth=True,
         agentic_find=False,
+        mapping_rotate_steps=8,
         port_offset=int(os.getpid() % 400 + 220),
     )
     metrics = run_episode_find_phase(ep, run_cfg)
     assert metrics.get("s0_parity") is True, metrics
     assert metrics.get("s0_phrase_only") is True, metrics
-    assert metrics.get("s0_oneshot_pytest") is True, metrics
+    assert metrics.get("s0_oneshot_pytest") is False, metrics
+    assert metrics.get("mapping_rotate_steps_requested") == 8, metrics
+    assert metrics.get("mapping_frames_added", 0) > 0, metrics
     assert metrics.get("obj_query_used") == "red cylinder", metrics
     assert metrics.get("find_object_success") is True, metrics
     assert metrics.get("find_recep_success") is True, metrics

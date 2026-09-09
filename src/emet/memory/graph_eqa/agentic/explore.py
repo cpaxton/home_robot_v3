@@ -878,8 +878,6 @@ def _explore_done(self) -> bool:
 
 def _tool_inspect_graph(self) -> dict[str, Any]:
     gm = self.graph_memory
-    if gm is None:
-        return {"ok": False, "error": "no graph_memory"}
     if hasattr(gm, "extract_relevant_objects") and getattr(gm, "image_description_client", None) is not None:
         gm.extract_relevant_objects(self.query_text)
     if getattr(gm, "memory_summary_enabled", False) and hasattr(gm, "refresh_siglip_confirmed_memory"):
@@ -894,11 +892,20 @@ def _tool_inspect_graph(self) -> dict[str, Any]:
         except Exception:
             voxel_map = None
     catalog = [_hyp_catalog_row(h, voxel_map=voxel_map) for h in self._hypotheses]
+    # Inspection does not acquire evidence. Detect identical results so the
+    # shared router cannot spend its whole budget querying an unchanged map.
+    import json
+
+    snapshot = (len(getattr(voxel_map, "observations", ()) or ()), json.dumps(catalog, sort_keys=True))
+    unchanged = snapshot == getattr(self, "_last_inspection_snapshot", None)
+    self._unchanged_inspections = getattr(self, "_unchanged_inspections", 0) + 1 if unchanged else 0
+    self._last_inspection_snapshot = snapshot
     detections = [row for row in catalog if row["kind"] == "proposal"]
     views = [row for row in catalog if row["kind"] == "view"]
     out = {
         "ok": True,
         "moved": False,
+        "status": "NO_NEW_EVIDENCE" if unchanged else "UPDATED",
         "n_hypotheses": len(self._hypotheses),
         "n_detections": len(detections),
         "n_views": len(views),

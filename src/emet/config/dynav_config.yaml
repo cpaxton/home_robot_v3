@@ -46,6 +46,10 @@ da3_stereo: false
 # still updates every frame so navigation stays current. 1 = always (old behavior).
 # Rotate-in-place / look-around mapping captures always run full perception (and DA3).
 perception_every_n: 2
+# Experimental lazy_graph policy, shared by agentic EQA and OVMM find.
+# Requires eqa.agentic_verify and graph_object_fusion.{enabled,use_instance_nodes}: true.
+# Candidates remain navigation-only until a fresh arrival mask supplies geometry.
+query_driven_memory: false
 # da3_use_amp: true   # optional override; omit for auto on CUDA
 # da3_torch_compile: false  # experimental
 # --- Quality-first overrides (slower): ``da3_model_id: depth-anything/DA3METRIC-LARGE``, ``da3_process_res: 504``, ``da3_stereo: true``, ``da3_infer_every_n: 1``.

@@ -64,6 +64,7 @@ class OvmmBatchOptions:
     no_scene_cache: bool = False
     # None → dynagraph/static_graph use shared AgenticEQA find; True/False override.
     agentic_find: bool | None = None
+    query_driven_memory: bool = False
     # Ablation: force one-shot localize (sets agentic_find=False).
     oneshot_localize: bool = False
     agentic_max_rounds: int | None = None
@@ -141,6 +142,8 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
     root = repo_root or Path(__file__).resolve().parents[3]
     bench = load_ovmm_benchmark_config(opts.benchmark)
     backends = list(opts.backends) if opts.backends else ["dynagraph"]
+    if opts.query_driven_memory and (backends != ["lazy_graph"] or opts.oneshot_localize or opts.agentic_find is False):
+        raise ValueError("query-driven memory requires only lazy_graph with agentic find")
     episodes_path = str(opts.episodes)
     default_find = str(root / "configs" / "ovmm" / "find_phase_episodes.yaml")
     default_full = str(root / "configs" / "ovmm" / "full_episodes.yaml")
@@ -187,7 +190,8 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
         return 2
     stride = max(1, int(opts.port_stride))
     agentic_requested = not opts.oneshot_localize and any(
-        opts.agentic_find is not False and backend in {"dynagraph", "lazy_graph", "static_graph", "graph_eqa"}
+        opts.agentic_find is True
+        or (opts.agentic_find is not False and backend in {"dynagraph", "lazy_graph", "static_graph", "graph_eqa"})
         for backend in backends
     )
     worker = None
@@ -216,6 +220,7 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 use_sensor_perception=opts.sensor_perception,
                 prefer_voxel=not opts.graph_query,
                 agentic_find=agentic,
+                query_driven_memory=opts.query_driven_memory,
                 agentic_max_rounds=opts.agentic_max_rounds,
                 agentic_max_nav_steps=opts.agentic_max_nav_steps,
                 mapping_rotate_steps=opts.mapping_rotate_steps,

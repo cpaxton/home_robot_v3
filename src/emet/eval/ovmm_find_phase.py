@@ -202,6 +202,7 @@ class FindPhaseRunConfig:
     prefer_voxel: bool = True
     # None → on for dynagraph/static_graph (shared AgenticEQA loop); off for dynamem/GT.
     agentic_find: bool | None = None
+    query_driven_memory: bool = False
     manip_mode: ManipMode = "skip"
     nav_step_timeout_s: float | None = None
     explore_steps_override: int | None = None
@@ -1171,20 +1172,9 @@ def apply_backend_parameters(
 ) -> Any:
     """Configure dynagraph merge/staleness for backend comparison runs.
 
-    ``s0_parity`` + oneshot uses the interactive profile so pytest / DynamemTaskExecutor
-    match. Agentic find keeps the tighter ``ovmm_find_phase`` merge (0.15 m) so tabletop
-    instances are not glued into a 0.45 m blob.
+    One-shot and agentic runs share the evaluation profile. Legacy S0 flags
+    remain accepted but no longer select a different memory configuration.
     """
-    if s0_parity and backend != "dynamem" and not use_agentic:
-        from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
-
-        apply_dynagraph_profile(parameters, "interactive")
-        if merge_xy_m is not None:
-            parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
-        if staleness_horizon is not None:
-            parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
-        return parameters
-
     from emet.eval.benchmark_dynagraph import apply_ovmm_backend_dynagraph
 
     return apply_ovmm_backend_dynagraph(
@@ -1576,6 +1566,8 @@ def run_episode_find_phase(
     from emet.utils.process_tree import popen_session, terminate_process_tree
 
     use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
+    if run_cfg.query_driven_memory and (run_cfg.backend != "lazy_graph" or not use_agentic):
+        raise ValueError("query-driven memory requires lazy_graph and agentic find")
     s0_parity, s0_phrase_only = resolve_s0_parity_flags(episode, run_cfg, use_agentic=use_agentic)
 
     if run_cfg.seed is not None:
@@ -1644,6 +1636,10 @@ def run_episode_find_phase(
             s0_parity=s0_parity,
             use_agentic=use_agentic,
         )
+        if run_cfg.query_driven_memory:
+            from emet.eval.benchmark_dynagraph import enable_query_driven_memory
+
+            enable_query_driven_memory(parameters, run_cfg.backend)
         # Keep the shared SigLIP encoder (get_shared_mask_siglip_encoder, load-once)
         # so the voxel semantic memory gets per-point features — the agentic find
         # seeds receptacle search from SigLIP text grounding (no label match needed).
@@ -1719,31 +1715,16 @@ def run_episode_find_phase(
             if cache_dir is not None:
                 map_source = "cache"
 
-        s0_oneshot_pytest = s0_parity and not use_agentic and run_cfg.backend != "ground_truth" and cache_dir is None
-        s0_executor = None
         t_init0 = time.monotonic()
-        if s0_oneshot_pytest:
-            from emet.controller.task.dynamem import DynamemTaskExecutor
-
-            s0_executor = DynamemTaskExecutor(
-                robot,
-                parameters,
-                skip_confirmations=True,
-                cpu_only=run_cfg.cpu_only,
-                memory_backend=str(run_cfg.backend),
-            )
-            agent = s0_executor.agent
-        else:
-            agent = create_find_phase_agent(
-                robot,
-                parameters,
-                run_cfg.backend,
-                cpu_only=run_cfg.cpu_only,
-                compare_to_gt=run_cfg.compare_to_gt,
-                use_sensor_perception=run_cfg.use_sensor_perception,
-                graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
-                s0_parity=bool(s0_parity and not use_agentic),
-            )
+        agent = create_find_phase_agent(
+            robot,
+            parameters,
+            run_cfg.backend,
+            cpu_only=run_cfg.cpu_only,
+            compare_to_gt=run_cfg.compare_to_gt,
+            use_sensor_perception=run_cfg.use_sensor_perception,
+            graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
+        )
         attach_ovmm_episode_debug_dir(agent)
         if not s0_parity:
             # Controller already started ZMQ + nav posture; apply eval velocity after.
@@ -1781,23 +1762,23 @@ def run_episode_find_phase(
             # Baseline already mapped; skip rotate/explore.
             mapping_budget = 0
             not_rotate = True
-        if s0_executor is not None:
-            s0_executor([("rotate_in_place", "")])
-            n_steps = 1
-        else:
-            n_steps = run_mapping_protocol(
-                agent,
-                mapping_max_nav_steps=mapping_budget,
-                not_rotate=not_rotate,
-                mapping_rotate_steps=run_cfg.mapping_rotate_steps,
-                trace_meta={
-                    "ovmm_phase": "mapping",
-                    "episode_id": episode.id,
-                    "object": str(episode.object),
-                    "start_recep": episode.start_recep,
-                    "goal_recep": episode.goal_recep,
-                },
-            )
+        mapping_frames_before = len(getattr(getattr(agent, "voxel_map", None), "observations", ()) or ())
+        n_steps = run_mapping_protocol(
+            agent,
+            mapping_max_nav_steps=mapping_budget,
+            not_rotate=not_rotate,
+            mapping_rotate_steps=run_cfg.mapping_rotate_steps,
+            trace_meta={
+                "ovmm_phase": "mapping",
+                "episode_id": episode.id,
+                "object": str(episode.object),
+                "start_recep": episode.start_recep,
+                "goal_recep": episode.goal_recep,
+            },
+        )
+        mapping_frames_added = (
+            len(getattr(getattr(agent, "voxel_map", None), "observations", ()) or ()) - mapping_frames_before
+        )
         mapping_wall_s = time.monotonic() - t_map0
         mapping_result = getattr(agent, "_ovmm_mapping_result", None) if agent is not None else None
 
@@ -1896,6 +1877,7 @@ def run_episode_find_phase(
             "episode_id": episode.id,
             "tier": episode.tier,
             "backend": run_cfg.backend,
+            "query_driven_memory": run_cfg.query_driven_memory,
             "sim": episode.sim,
             "object_query": object_query,
             "start_recep": episode.start_recep,
@@ -1915,7 +1897,9 @@ def run_episode_find_phase(
             "prefer_voxel": bool(prefer_voxel),
             "s0_parity": bool(s0_parity),
             "s0_phrase_only": bool(s0_phrase_only),
-            "s0_oneshot_pytest": bool(s0_executor is not None),
+            "s0_oneshot_pytest": False,  # historical result-schema field; special executor removed
+            "mapping_rotate_steps_requested": run_cfg.mapping_rotate_steps,
+            "mapping_frames_added": mapping_frames_added,
             **ovmm_find_query_row(query),
             "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),

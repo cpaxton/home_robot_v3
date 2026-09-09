@@ -146,7 +146,10 @@ def extract_target_from_question(
         "state, reading fine detail); false for location questions where seeing the "
         "object at a distance suffices\n"
         "  notes: optional short note\n"
-        "Do not include MCQ option text in target_phrase."
+        "Do not include MCQ option text in target_phrase. Keep identifying attributes, "
+        "but exclude support furniture and spatial relations: for 'red cylinder on the table', "
+        "return 'red cylinder'; for 'lamp on the bed', return 'lamp', not 'lamp bed'. "
+        "The full question is retained separately to verify those relations."
     )
     raw = _call_eqa_client(client, prompt, system_prompt=_TARGET_SYSTEM, max_new_tokens=128)
     data = _parse_json_object(raw)
