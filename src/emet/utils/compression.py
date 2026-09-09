@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import io
+import os
 
 import cv2
 import liblzfse
@@ -94,6 +95,13 @@ def to_jp2(image: np.ndarray, quality: int = 800):
 
 def to_jpg(image: np.ndarray, quality: int = 90):
     """Encode as JPEG. Input must be **RGB** uint8 (H,W,3); OpenCV expects BGR for ``imencode``."""
+    if os.environ.get("EMET_ZMQ_TURBOJPEG", "").strip().lower() in ("1", "true", "yes", "on"):
+        try:
+            from turbojpeg import TJPF_RGB, TurboJPEG
+
+            return TurboJPEG().encode(image, quality=quality, pixel_format=TJPF_RGB)
+        except ImportError:
+            pass
     if image.ndim == 3 and image.shape[2] == 3:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     _, compressed_image = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
@@ -117,3 +125,42 @@ def from_jp2(compressed_image: bytes | np.ndarray) -> np.ndarray:
     if isinstance(compressed_image, bytes):
         compressed_image = np.frombuffer(compressed_image, dtype=np.uint8)
     return cv2.imdecode(compressed_image, cv2.IMREAD_UNCHANGED)
+
+
+def from_h264(nal_bytes: bytes | np.ndarray) -> np.ndarray:
+    """Decode one H.264 access-unit (NAL bundle) to RGB uint8 via PyAV when installed."""
+    try:
+        import av
+    except ImportError as exc:
+        raise ImportError("PyAV is required for H.264 ZMQ decode (pip install av)") from exc
+
+    if isinstance(nal_bytes, np.ndarray):
+        nal_bytes = bytes(np.asarray(nal_bytes).tobytes())
+    container = av.open(io.BytesIO(nal_bytes), format="h264")
+    for frame in container.decode(video=0):
+        rgb = frame.to_ndarray(format="rgb24")
+        return np.ascontiguousarray(rgb)
+    raise ValueError("no video frame in H.264 NAL bytes")
+
+
+def to_h264(image: np.ndarray) -> bytes:
+    """Encode one RGB frame to a single H.264 access unit (PyAV)."""
+    try:
+        import av
+    except ImportError as exc:
+        raise ImportError("PyAV is required for H.264 ZMQ encode (pip install av)") from exc
+
+    h, w = image.shape[:2]
+    output = io.BytesIO()
+    container = av.open(output, mode="w", format="h264")
+    stream = container.add_stream("h264", rate=30)
+    stream.width = w
+    stream.height = h
+    stream.pix_fmt = "yuv420p"
+    frame = av.VideoFrame.from_ndarray(np.ascontiguousarray(image), format="rgb24")
+    for packet in stream.encode(frame):
+        output.write(bytes(packet))
+    for packet in stream.encode():
+        output.write(bytes(packet))
+    container.close()
+    return output.getvalue()

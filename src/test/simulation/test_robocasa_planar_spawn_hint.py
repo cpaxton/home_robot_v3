@@ -95,6 +95,7 @@ def test_wait_for_obs_waits_for_navigation_origin_on_robosuite():
     client = GenericZmqClient.__new__(GenericZmqClient)
     client._obs_lock = Lock()
     client._obs = {"joint": [0.0] * 4}
+    client._servo = None
     client._emet_session_cache = {"runtime_kind": "robosuite_sim"}
     assert client.wait_for_obs(timeout=0.15) is False
 
@@ -114,6 +115,7 @@ def test_wait_for_obs_does_not_require_navigation_origin_for_non_robosuite():
     client = GenericZmqClient.__new__(GenericZmqClient)
     client._obs_lock = Lock()
     client._obs = {"joint": [0.0] * 4}
+    client._servo = None
     client._emet_session_cache = {EMET_ZMQ_SESSION_KEY: {"runtime_kind": "molmospaces"}}
     assert client.wait_for_obs(timeout=0.15, require_navigation_origin=False) is True
 

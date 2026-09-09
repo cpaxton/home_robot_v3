@@ -17,6 +17,7 @@
 """Slim ZMQ viewer: connect to a bridge (Innate Mars or Stretch) and display images + state. No Stretch-specific logic."""
 
 import time
+from typing import Any
 
 import click
 import cv2
@@ -25,6 +26,14 @@ import zmq
 
 from emet.utils.connection import get_host_from_connection
 from emet.utils.memory import lookup_address
+
+# (servo JPEG key, full-obs slim key, legacy alias, window title)
+_VIEW_IMAGE_KEYS: tuple[tuple[str, ...], str] = (
+    (("head_cam_left/color_image", "head_cam_left/image", "rgb"), "head_cam_left"),
+    (("head_cam_right/color_image", "head_cam_right/image", "rgb_right"), "head_cam_right"),
+    (("ee_cam/color_image", "ee_cam/image", "rgb_tertiary"), "ee_cam"),
+    (("head_cam/color_image", "head_cam/image",), "head_cam"),
+)
 
 
 def _decode_jpg(buf: bytes) -> np.ndarray | None:
@@ -35,6 +44,32 @@ def _decode_jpg(buf: bytes) -> np.ndarray | None:
     if img is not None:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
+
+
+def _decode_image(val: Any) -> np.ndarray | None:
+    if val is None:
+        return None
+    if isinstance(val, np.ndarray):
+        arr = np.asarray(val)
+        if arr.ndim == 3 and arr.shape[-1] >= 3:
+            return np.ascontiguousarray(arr[..., :3])
+        if arr.ndim == 1 or (arr.ndim == 2 and arr.size > 0):
+            return _decode_jpg(arr.tobytes() if arr.ndim == 1 else bytes(arr))
+        return None
+    if isinstance(val, (bytes, bytearray)):
+        return _decode_jpg(bytes(val))
+    return None
+
+
+def _find_image_blob(*messages: dict[str, Any] | None, keys: tuple[str, ...]) -> Any:
+    for msg in messages:
+        if not msg:
+            continue
+        for key in keys:
+            blob = msg.get(key)
+            if blob is not None:
+                return blob
+    return None
 
 
 def _robot_host(robot_ip: str) -> str:
@@ -56,13 +91,14 @@ def _robot_host(robot_ip: str) -> str:
     default="",
     help="Robot IP or host (default: active connection or ~/.stretch/robot_ip.txt)",
 )
-@click.option("--recv-port", default=4404, help="Servo port (default 4404)")
-@click.option("--state-port", default=4403, help="State port (default 4403)")
-def main(robot_ip: str, recv_port: int, state_port: int) -> None:
+@click.option("--obs-port", default=4401, show_default=True, help="Full observation port (Mars JPEGs when servo is pose-only)")
+@click.option("--recv-port", default=4404, show_default=True, help="Servo port")
+@click.option("--state-port", default=4403, show_default=True, help="State port")
+def main(robot_ip: str, obs_port: int, recv_port: int, state_port: int) -> None:
     """View images and state from a robot bridge (Innate Mars or Stretch).
 
-    Connects to the ZMQ servo port (4404 by default) and displays head_cam_left,
-    head_cam_right, ee_cam (and head_cam if present). Prints step and joint state.
+    Subscribes to full obs (4401) and servo (4404). Default Mars launch puts JPEGs on
+    4401 with pose-only 4404; ``--metadata-only-obs`` inverts that (images on 4404).
     Press 'q' in a window to quit.
 
     Examples:
@@ -70,10 +106,16 @@ def main(robot_ip: str, recv_port: int, state_port: int) -> None:
       emet view-bridge --robot-ip 192.168.1.43
     """
     host = _robot_host(robot_ip)
+    obs_addr = f"tcp://{host}:{obs_port}"
     recv_addr = f"tcp://{host}:{recv_port}"
     state_addr = f"tcp://{host}:{state_port}"
 
     ctx = zmq.Context()
+    obs_socket = ctx.socket(zmq.SUB)
+    obs_socket.setsockopt(zmq.SUBSCRIBE, b"")
+    obs_socket.setsockopt(zmq.CONFLATE, 1)
+    obs_socket.connect(obs_addr)
+
     recv_socket = ctx.socket(zmq.SUB)
     recv_socket.setsockopt(zmq.SUBSCRIBE, b"")
     recv_socket.setsockopt(zmq.CONFLATE, 1)
@@ -84,17 +126,27 @@ def main(robot_ip: str, recv_port: int, state_port: int) -> None:
     state_socket.setsockopt(zmq.CONFLATE, 1)
     state_socket.connect(state_addr)
 
-    print(f"Connected to {recv_addr} (servo) and {state_addr} (state). Press 'q' in a window to quit.")
+    print(
+        f"Connected to {obs_addr} (obs), {recv_addr} (servo), {state_addr} (state). "
+        "Press 'q' in a window to quit."
+    )
     poller = zmq.Poller()
+    poller.register(obs_socket, zmq.POLLIN)
     poller.register(recv_socket, zmq.POLLIN)
     poller.register(state_socket, zmq.POLLIN)
 
+    last_obs = None
     last_state = None
     last_servo = None
     step_printed = -1
 
     while True:
         socks = dict(poller.poll(timeout=100))
+        if obs_socket in socks:
+            try:
+                last_obs = obs_socket.recv_pyobj()
+            except Exception:
+                pass
         if recv_socket in socks:
             try:
                 last_servo = recv_socket.recv_pyobj()
@@ -106,26 +158,19 @@ def main(robot_ip: str, recv_port: int, state_port: int) -> None:
             except Exception:
                 pass
 
-        if last_servo is None:
+        if last_obs is None and last_servo is None:
             time.sleep(0.02)
             continue
 
-        # Decode and show images (Innate Mars: head_cam_left, head_cam_right, ee_cam; Stretch: head_cam, ee_cam)
-        def show(key: str, title: str) -> None:
-            if key not in last_servo:
-                return
-            buf = last_servo[key]
-            img = _decode_jpg(buf)
+        for keys, title in _VIEW_IMAGE_KEYS:
+            blob = _find_image_blob(last_obs, last_servo, keys=keys)
+            img = _decode_image(blob)
             if img is not None:
                 bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 cv2.imshow(title, bgr)
 
-        show("head_cam_left/color_image", "head_cam_left")
-        show("head_cam_right/color_image", "head_cam_right")
-        show("ee_cam/color_image", "ee_cam")
-        show("head_cam/color_image", "head_cam")
-
-        step = last_servo.get("step", -1)
+        step_src = last_obs if last_obs is not None else last_servo
+        step = step_src.get("step", -1) if step_src else -1
         if step != step_printed and (step >= 0 or last_state):
             step_printed = step
             if last_state:
@@ -133,15 +178,18 @@ def main(robot_ip: str, recv_port: int, state_port: int) -> None:
                 joints = last_state.get("joint_positions", [])
                 jpre = str(joints)[:60] + "..." if len(str(joints)) > 60 else str(joints)
                 print(f"step={step} base_pose={base} joint_positions={jpre}")
-            else:
+            elif last_servo:
                 cfg = last_servo.get("robot/config", [])
                 print(f"step={step} robot/config len={len(cfg)}")
+            else:
+                print(f"step={step}")
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
 
     cv2.destroyAllWindows()
+    obs_socket.close()
     recv_socket.close()
     state_socket.close()
     ctx.term()
