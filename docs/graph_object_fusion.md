@@ -34,19 +34,19 @@ graph_object_fusion:
 
   gates:
     identity:                      # exact persistent track/instance id
-      on: true
+      "on": true
     bounds:                        # 3D-bounds overlap (duplicate views of one object)
-      on: true
+      "on": true
       iou_floor: 0.08              # hard floor when both sides carry bounds_3d
       iou_merge_min: 0.3           # merge on overlap even if spatial/centroid drift (0=off)
     embedding:                     # appearance similarity (SigLIP crop embeddings)
-      on: true
+      "on": true
       min_cosine: 0.62
       blend_alpha: 0.35
       use_siglip_crops: true       # encode each instance bbox crop with shared SigLIP
       appearance_merge_min_cosine: 0.9  # merge across label drift when this similar
     spatial:                       # centroid proximity
-      on: true
+      "on": true
       xy_m: 0.42
       centroid_3d_m: 0.55
       fallback_xy_m: 0.45          # nearest-node radius when strict gates fail (0=off)

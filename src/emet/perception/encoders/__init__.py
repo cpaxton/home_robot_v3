@@ -36,8 +36,8 @@ def get_encoder(encoder_name, args: Any):
 
         return Siglip2Encoder(**args)
     elif encoder_name == "dinov3":
-        from .dinov3_encoder import Dinov3Encoder
+        from .remote_dinov3_encoder import build_dinov3_encoder
 
-        return Dinov3Encoder(**args)
+        return build_dinov3_encoder(**args)
     else:
         raise ValueError(f"Encoder {encoder_name} not implemented or not supported.")

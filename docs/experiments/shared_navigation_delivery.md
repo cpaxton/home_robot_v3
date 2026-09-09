@@ -1,5 +1,21 @@
 # Shared navigation delivery and review ledger
 
+## September 9 PR closeout
+
+#162, #163, #164 and #165 merged as `40afd551`, `4dbb6eb3`, `9b6df34f`
+and `d7765de6`. #166 is scoped to opt-in policy implementation and diagnostic
+tooling, not completed cross-robot physical acceptance. Named policies require
+explicit selection; passive base support defaults off. Historical tables below
+record development boundaries rather than current open-PR status.
+
+Sourccey/Galaxea acceptance is deferred at user request and tracked in TODO.md;
+it does not gate the EQA/Habitat OVMM pilot. Integrated Sourccey one-repeat
+route `20260908_230012_acc084` completed all ten moves at `e0de0645`, but its
+camera view is largely obstructed, and five-repeat/scene robustness is untested.
+The native DynaMem question-1 diagnostic scored 0/1, not an agentic-harness result.
+The corrected random-16 job `20260908_234831_7ff9e5` runs DynaMem then lazy
+arrival at frozen `0c2dc7f0`; do not change that tree while it is running.
+
 ## Frozen starting point
 
 Implementation starts from `fix/grounding-robot-validation` at `4cb7abde`.
