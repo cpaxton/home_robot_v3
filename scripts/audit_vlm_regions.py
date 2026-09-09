@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
+    parser.add_argument("--remote-image-format", choices=["jpeg", "png"], default="jpeg")
     parser.add_argument(
         "--replay-boxes",
         type=Path,
@@ -50,6 +51,7 @@ def main():
     ):
         raise ValueError("replayed boxes must match the exact manifest and order")
     params = get_parameters("dynav_config.yaml")
+    params.set("eqa/vl_image_format", args.remote_image_format)
     _, client = build_graph_eqa_vlm_clients(parameters=params)
     results = []
     for index, row in enumerate(rows):
@@ -89,6 +91,7 @@ def main():
             )
             result = {
                 "input": row,
+                "remote_image_format": args.remote_image_format,
                 "replayed_box_source": str(args.replay_boxes) if args.replay_boxes else None,
                 "depth_perturbation": perturbation,
                 "selection": parsed,
