@@ -74,3 +74,17 @@ def test_generate_with_heartbeat_completes_under_timeout():
         timeout_s=2.0,
     )
     assert out == "ok"
+
+
+def test_debug_heartbeat_records_worker_stack(monkeypatch, capsys):
+    monkeypatch.setattr("emet.llms.qwen3_vl_client.env_agent_model_debug", lambda: True)
+
+    def slow_forward():
+        time.sleep(0.1)
+        return "ok"
+
+    assert (
+        _generate_with_heartbeat(slow_forward, input_len=1, max_new=1, has_vision=True, heartbeat_s=0.02, timeout_s=2)
+        == "ok"
+    )
+    assert "slow_forward" in capsys.readouterr().err

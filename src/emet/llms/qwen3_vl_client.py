@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 import time
 import timeit
+import traceback
 from collections.abc import Callable
 from typing import Any
 
@@ -161,6 +163,11 @@ def _generate_with_heartbeat(
         work.join(timeout=wait)
         if next_beat is not None and time.monotonic() >= next_beat:
             _heartbeat_line()
+            if env_agent_model_debug():
+                frame = sys._current_frames().get(work.ident)
+                if frame is not None:
+                    print("[vl] stalled generation worker stack:", file=sys.stderr, flush=True)
+                    traceback.print_stack(frame, file=sys.stderr)
             next_beat = time.monotonic() + interval
 
     if "error" in box:
