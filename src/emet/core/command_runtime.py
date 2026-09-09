@@ -29,6 +29,17 @@ class CommandRuntime:
     def navigation_policy_measurement(self):
         raise NotImplementedError
 
+    def navigation_correction_action(self, context, *, remaining, policy):
+        frame = context.get("frame")
+        if frame not in ("world", "episode"):
+            raise ValueError("adapter must define correction for its resolved goal frame")
+        return {
+            "xyt": list(context["resolved_goal"]),
+            "nav_world": frame == "world",
+            "nav_timeout_s": remaining,
+            "nav_policy": policy,
+        }
+
     def command_message(self, message):
         if message is None:
             return None
@@ -179,12 +190,11 @@ class CommandRuntime:
                         return
                     try:
                         self.start_navigation_command(
-                            {
-                                "xyt": list(context["resolved_goal"]),
-                                "nav_world": True,
-                                "nav_timeout_s": remaining,
-                                "nav_policy": self._navigation_policy,
-                            }
+                            self.navigation_correction_action(
+                                context,
+                                remaining=remaining,
+                                policy=self._navigation_policy,
+                            )
                         )
                     except Exception as exc:
                         self._finish_cancel("failed", f"navigation correction failed: {exc}", result=result)

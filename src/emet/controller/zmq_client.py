@@ -780,6 +780,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         reliable: bool = True,
         *,
         world_frame: bool | None = None,
+        navigation_policy: str | None = None,
         **kwargs: Any,
     ):
         """Move to xyt in global coordinates or relative coordinates.
@@ -819,6 +820,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         # Absolute episode pose (idempotent under reliable resend). ``nav_world`` only when asked.
         use_world = bool(world_frame) and not relative
         next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": False}
+        if navigation_policy is not None:
+            next_action["nav_policy"] = navigation_policy
         if use_world:
             next_action["nav_world"] = True
         from emet.simulation.env_flags import env_sim_nav_teleport

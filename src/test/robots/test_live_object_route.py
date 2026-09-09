@@ -53,6 +53,7 @@ def test_galaxea_camera_holds_tilt_under_gravity(monkeypatch, initial_height):
     server = RobosuiteZmqServer.__new__(RobosuiteZmqServer)
     server._mjmodel, server._mjdata, server._spec = model, data, spec
     server._nav_goal_world = None
+    server._passive_base_support = True
     server._stationary_base_freejoint_qpos = data.qpos[qadr : qadr + 7].copy()
     # Exercise the actual production hold. Height/roll/pitch and upper-body
     # joints must settle physically, not be pinned at a penetrating pose.

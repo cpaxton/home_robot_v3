@@ -147,6 +147,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         simulation_rate: int = 80,
         navigation_xy_tolerance: float = 0.07,
         navigation_yaw_tolerance: float = 0.15,
+        passive_base_support: bool = False,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
@@ -164,6 +165,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._scene_xml = scene_xml
         self._scene_model = scene_model
         self.simulation_rate = simulation_rate
+        self._passive_base_support = passive_base_support
         self._environment_descriptor = dict(environment) if environment else None
         self._scene_source_basename = scene_source_basename
         self._session_extra = dict(session_extra) if session_extra else None
@@ -835,6 +837,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is None:
             return
         qadr, vadr = addrs
+        if not self._passive_base_support:
+            self._mjdata.qpos[qadr : qadr + 7] = snap
+            if vadr >= 0:
+                self._mjdata.qvel[vadr : vadr + 6] = 0.0
+            return
         self._mjdata.qpos[qadr : qadr + 2] = snap[:2]
         quat = self._mjdata.qpos[qadr + 3 : qadr + 7]
 
@@ -2107,9 +2114,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             _, vadr = free_addrs
             v0 = int(vadr)
             self._mjdata.qvel[v0 : v0 + 2] = (vx, vy)
+            if not self._passive_base_support:
+                self._mjdata.qvel[v0 + 2] = 0.0
             bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
             rotation_world_from_body = np.asarray(self._mjdata.xmat[bid], dtype=np.float64).reshape(3, 3)
             angular_velocity_world = rotation_world_from_body @ self._mjdata.qvel[v0 + 3 : v0 + 6]
+            if not self._passive_base_support:
+                angular_velocity_world[:2] = 0.0
             angular_velocity_world[2] = wz
             angular_velocity_body = rotation_world_from_body.T @ angular_velocity_world
             self._mjdata.qvel[v0 + 3 : v0 + 6] = angular_velocity_body
@@ -2173,10 +2184,13 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def navigation_policy_measurement(self):
         with self._mj_lock:
+            base = self._mjdata.body(self._spec.base_link_name)
+            upright = float(base.xmat[8])
             return {
                 "pose": self.get_base_xyt(),
                 "timestamp": float(self._mjdata.time),
                 "stopped": self._at_goal and self._nav_goal_world is None,
+                "failure": "base posture unsafe" if not np.isfinite(upright) or upright < 0.98 else None,
             }
 
     def navigation_command_result(self, context):

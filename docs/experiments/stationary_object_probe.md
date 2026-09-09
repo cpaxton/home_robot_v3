@@ -75,7 +75,9 @@ command receipts, and calibrated RGB-D at every hold sample and waypoint.
 `result.json` reports stage gates; `observations.jsonl` retains measurements.
 
 This is **not wheel-driven locomotion or balance validation**: production idle
-control pins the free base and navigation drives holonomic base velocity.
+control normally pins the free base and navigation drives holonomic base velocity.
+The new diagnostic explicitly enables experimental planar-only holding, leaving
+height/roll/pitch dynamic, and requests the opt-in `precision` completion policy.
 Upper-body joints remain dynamic. The fixture explicitly requests 0.02 m /
 0.03 rad arrival tolerances through the server constructor; ordinary bridge
 defaults remain 0.07 m / 0.15 rad. Inspect actual measured angles, not just
@@ -110,3 +112,10 @@ Do not treat the earlier loose-gate result as a known-good navigation baseline.
 
 43 focused fixture, load-reference, navigation-clamp, and optical-axis tests
 pass (one skip). No full sweep or learned OVMM success is claimed.
+
+For subsequent opt-in-policy runs and the remaining translation/tipping failure,
+see [the shared navigation delivery ledger](shared_navigation_delivery.md).
+The live probe now waits for three good camera/posture samples before each
+measurement stage, with a 30-second settling limit, and applies a one-degree
+camera gate. These stricter measurements are not directly interchangeable with
+the earlier fixed-delay/loose-camera-gate results.

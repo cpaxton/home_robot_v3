@@ -13,8 +13,8 @@ Do not include local virtualenv or third-party symlinks in a PR.
 | --- | --- | --- | --- |
 | Evaluation foundation (#162) | main | `44c7710e` | Existing PR; ingestion switches, fusion controls, baseline/evaluation tooling |
 | Query memory (#163) | foundation | `4c869e03` | Extend published `903b0a87` by seven cohesive memory/evaluation commits; exclude later transport work |
-| Command contract | query memory | `18f11d11` | Includes prerequisite posture/health probes, idempotent dispatch, receipts, cancellation and deployable runtime |
-| Grounding corrections | command contract | `4cb7abde` | Camera/targeting/evidence corrections, honest evaluation selection, stationary and live probes |
+| Command contract (#164, draft) | query memory | `18f11d11` | Includes prerequisite posture/health probes, idempotent dispatch, receipts, cancellation and deployable runtime |
+| Grounding corrections (#165, draft) | command contract | `4cb7abde` | Camera/targeting/evidence corrections, honest evaluation selection, stationary and live probes |
 | Navigation acceptance | grounding corrections | `fix/shared-navigation-acceptance` | In progress; opt-in completion policy and repeated cross-robot simulation acceptance |
 | Integrated pilot | accepted navigation | pending | Frozen OVMM/TAMP/EQA rows and recorded outcomes |
 | Paper alignment | pilot artifacts | pending | Methods, limitations, results and reproducible figures |
@@ -53,4 +53,33 @@ until hardware commissioning. No hardware connection is needed for these gates.
   the settled optical tilt from approximately -35.8 to -28.6 degrees.
 - Holding only planar pose while leaving height/roll/pitch dynamic passes the
   isolated production-hold test at three starting heights. This is not yet
-  cross-robot or integrated acceptance; live rerun is pending.
+  cross-robot or integrated acceptance.
+- Job `20260908_200752_bedca4` at `73ce4552`, artifacts
+  `/tmp/emet-live-settled-precision-route-20260908`: settled ten-second hold
+  passes (max pitch error 0.002866 rad), +10-degree turn and return pass
+  (goal errors 0.02986/0.02979 rad). Translation fails: the chassis tips, even
+  though planar XY enters its 2 cm tolerance. No remaining route or integrated
+  pilot was run. Camera/body posture must be checked alongside SE(2) arrival.
+- The asset has **no wheel collision geoms**: only its chassis contacts the
+  floor, and visual wheels extend about 4 cm below the configured floor plane.
+  Adding wheel collisions alone in a local physics experiment did not establish
+  reliable translation; that experimental asset edit was not retained. A matched
+  wheel-support/actuation model needs validation, not a tolerance adjustment.
+- Passive height/roll/pitch support is now an explicit constructor opt-in
+  (`passive_base_support=True`, enabled by the diagnostic). Legacy base hold
+  and velocity behavior remain the default until translation acceptance.
+- New navigation policies reject unsafe base posture through the shared failure
+  path. Stretch simulation uses timestamped episode-frame measurements; correction
+  preserves the resolved frame rather than unconditionally treating it as world.
+  ROS hardware policy support is not advertised until its adapters are validated.
+
+## Remaining gates (not complete)
+
+- Validate the posture-fault live stop, repeated routes and disturbances.
+- Repair/validate Galaxea proxy wheel-supported translation without declaring
+  idealized direct base motion to be a physical locomotion result.
+- Run Sourccey, Stretch and Mars simulator acceptance and scene-health checks.
+- Complete timestamp/controller-policy integration for hardware bridges using
+  offline transport tests, before stationary hardware commissioning.
+- Run the frozen integrated pilot, then update paper results/figures. No new
+  learned OVMM, TAMP or EQA result is claimed by these navigation changes.

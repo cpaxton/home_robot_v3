@@ -71,6 +71,7 @@ def serve(config, offset, output):
         environment={"kind": "default_mujoco"},
         navigation_xy_tolerance=config["live_probe"]["waypoint_xy_tolerance_m"],
         navigation_yaw_tolerance=config["live_probe"]["yaw_tolerance_rad"],
+        passive_base_support=True,
     )
     try:
         server.start(headless=True)

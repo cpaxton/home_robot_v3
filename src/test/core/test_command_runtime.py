@@ -55,6 +55,18 @@ def test_policy_rejected_before_client_sends_motion():
     assert robot.starts == 0
 
 
+def test_corrections_preserve_episode_frame():
+    action = Robot().navigation_correction_action(
+        {"resolved_goal": [1, 2, 3], "frame": "episode"}, remaining=4, policy="precision"
+    )
+    assert action["nav_world"] is False
+    assert action["xyt"] == [1, 2, 3]
+    with pytest.raises(ValueError, match="resolved goal frame"):
+        Robot().navigation_correction_action(
+            {"resolved_goal": [1, 2, 3], "frame": "unknown"}, remaining=4, policy="precision"
+        )
+
+
 def test_policy_correction_keeps_identity_absolute_goal_and_deadline(monkeypatch):
     from emet.core import command_runtime
 
@@ -68,7 +80,7 @@ def test_policy_correction_keeps_identity_absolute_goal_and_deadline(monkeypatch
         def start_navigation_command(self, action):
             self.starts += 1
             self.last_action = action
-            return {"resolved_goal": [2, 0, 0]}
+            return {"resolved_goal": [2, 0, 0], "frame": "world"}
 
         def navigation_policy_measurement(self):
             return {"pose": self.pose, "timestamp": clock[0], "stopped": True}

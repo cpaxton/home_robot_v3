@@ -96,7 +96,8 @@ def test_episode_rotate_compose_keeps_same_world_xy():
         assert abs(world[2] - theta) < 1e-6
 
 
-def test_freejoint_navigation_writes_linear_velocity_before_angular_velocity():
+@pytest.mark.parametrize("passive", [False, True])
+def test_freejoint_navigation_writes_linear_velocity_before_angular_velocity(passive):
     import mujoco
 
     model = mujoco.MjModel.from_xml_string(
@@ -116,6 +117,7 @@ def test_freejoint_navigation_writes_linear_velocity_before_angular_velocity():
     data.qpos[3:7] = [np.sqrt(0.5), np.sqrt(0.5), 0.0, 0.0]
     mujoco.mj_forward(model, data)
     server = object.__new__(RobosuiteZmqServer)
+    server._passive_base_support = passive
     server._mjmodel = model
     server._mjdata = data
     server._nav_goal_world = np.array([1.0, 0.0, 0.5], dtype=np.float64)
@@ -132,10 +134,14 @@ def test_freejoint_navigation_writes_linear_velocity_before_angular_velocity():
     server._sim_nav_debug_enabled = lambda: False
     server.get_base_xyt = lambda: np.zeros(3, dtype=np.float64)
 
-    server._step_base_navigation_drive()
-    np.testing.assert_allclose(data.qvel[:3], [0.4, 0.0, 0.0], atol=1e-9)
+    data.qvel[2] = 0.1
     rotation_world_from_body = np.asarray(data.body("base_link").xmat).reshape(3, 3)
-    expected_angular_body = rotation_world_from_body.T @ np.array([0.0, 0.0, 0.5])
+    data.qvel[3:6] = rotation_world_from_body.T @ np.array([0.2, 0.3, 0.0])
+
+    server._step_base_navigation_drive()
+    np.testing.assert_allclose(data.qvel[:3], [0.4, 0.0, 0.1 if passive else 0.0], atol=1e-9)
+    rotation_world_from_body = np.asarray(data.body("base_link").xmat).reshape(3, 3)
+    expected_angular_body = rotation_world_from_body.T @ np.array([0.2 if passive else 0, 0.3 if passive else 0, 0.5])
     np.testing.assert_allclose(data.qvel[3:6], expected_angular_body, atol=1e-9)
     mujoco.mj_step(model, data)
     assert data.qpos[0] > 0.0
@@ -164,6 +170,7 @@ def test_freejoint_navigation_keeps_translating_inside_former_deadband():
     server._mjmodel = model
     server._mjdata = data
     server._nav_goal_world = np.array([0.12, 0.0, 0.0], dtype=np.float64)
+    server._passive_base_support = False
     server._spec = type("_Spec", (), {"base_link_name": "base_link"})()
     server._nav_kp_xy = 1.0
     server._nav_v_max = 0.4
