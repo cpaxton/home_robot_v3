@@ -44,7 +44,7 @@ def test_parse_bridge_status_ignores_pgrep_self_match_with_echo_separators():
         "7461 /usr/bin/python3 /home/jetson1/innate-os/ros2_ws/install/innate_mars_bridge/"
         "lib/innate_mars_bridge/server --ros-args -r __node:=innate_mars_zmq_server\n"
         "11541 zsh -c pgrep -af 'innate_mars_zmq_server' 2>/dev/null || true; "
-        "echo '---'; ss -tlnH 2>/dev/null | grep -E ':440[1-4] ' || true; "
+        "echo '---'; ss -tlnH 2>/dev/null | grep -E ':440[1-5] ' || true; "
         "echo '---'; tmux has-session -t ros_nodes 2>/dev/null && "
         "tmux capture-pane -t ros_nodes:emet-bridge -p 2>/dev/null | tail -12 "
         "|| echo '---tmux-unavailable---'\n"
@@ -105,3 +105,36 @@ def test_print_bridge_status_includes_camera_line(capsys):
     assert "cameras:" in out
     assert "wrist down" in out
     assert "Arducam" in out
+
+
+def test_print_bridge_status_core_ports_ok_without_optional_h264(capsys):
+    raw = """10105 python3 innate_mars_zmq_server
+---
+LISTEN 0      100          0.0.0.0:4401       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4402       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4403       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4404       0.0.0.0:*
+---
+[server-1] Running all...
+"""
+    status = parse_bridge_status_output("herman", "jetson1", raw)
+    assert status.listening_ports == {4401, 4402, 4403, 4404}
+    print_bridge_status(status, profile="herman", show_next_steps=False)
+    out = capsys.readouterr().out
+    assert "4401–4404" in out
+    assert "missing 4405" not in out
+    assert "3/4" not in out
+    assert "4/5" not in out
+
+
+def test_parse_bridge_status_optional_h264_port():
+    raw = """10105 python3 innate_mars_zmq_server
+---
+LISTEN 0      100          0.0.0.0:4401       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4403       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4405       0.0.0.0:*
+---
+"""
+    status = parse_bridge_status_output("herman", "jetson1", raw)
+    assert 4405 in status.listening_ports
+    assert status.ready_for_stream

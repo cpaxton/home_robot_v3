@@ -136,6 +136,23 @@ class RosCamera(Camera):
     def get_time(self):
         return self._t
 
+    def get_snapshot(self):
+        """Copy a frame and its ROS header stamp under the same lock.
+
+        ROS stamps are not necessarily Unix time or verified exposure times.
+        Zero/unavailable stamps remain unknown, never replaced by send time.
+        """
+        with self._lock:
+            image = None if self._img is None else self._img.copy()
+            stamp = self._t
+            ns = int(getattr(stamp, "sec", 0)) * 1_000_000_000 + int(getattr(stamp, "nanosec", 0))
+            return image, {
+                "timestamp_ns": ns if image is not None and ns > 0 else None,
+                "clock_domain": "ros",
+                "source": "image_header",
+                "available": image is not None,
+            }
+
     def wait_for_image(self, timeout_s: float = 120.0):
         import rclpy
 

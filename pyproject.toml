@@ -104,6 +104,7 @@ dependencies = [
 emet = "emet.cli:main"
 
 [project.optional-dependencies]
+video = ["av"]
 dev = [
     "pre-commit",
     "pytest",
