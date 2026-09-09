@@ -43,6 +43,7 @@ from emet.core.zmq_obs_codec import (
     decode_zmq_obs_images_inplace,
     full_obs_has_wire_images,
     merge_servo_images_into_full_obs,
+    read_image_timing,
 )
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
@@ -229,6 +230,7 @@ def _decode_servo_message_to_observations(
         seq_id=seq_id,
         is_simulation=bool(msg.get("is_simulation", True)),
         emet_session=sess,
+        image_timing=read_image_timing(msg),
     )
 
 
@@ -260,6 +262,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
         seq_id=int(obs.get("step", -1)) if obs.get("step") is not None else -1,
         is_simulation=bool(obs.get("is_simulation", False)),
         emet_session=read_emet_session(obs),
+        image_timing=read_image_timing(obs),
     )
 
 
@@ -946,6 +949,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             compass=compass,
             third_person_image=obs.get("third_person_image"),
             emet_session=read_emet_session(obs),
+            image_timing=read_image_timing(obs),
         )
 
     def peek_emet_robot_id(self) -> str | None:

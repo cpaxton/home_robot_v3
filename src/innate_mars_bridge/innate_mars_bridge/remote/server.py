@@ -183,6 +183,7 @@ class ZmqServer(BaseZmqServer):
             self._send_h264_thread.start()
 
     def _spin_send_h264(self):
+        import time
         import timeit
 
         from emet.core.server import _rate_sleep
@@ -191,7 +192,7 @@ class ZmqServer(BaseZmqServer):
         steps = 0
         t0 = timeit.default_timer()
         while self.is_running():
-            head_left = self.client.head_left_cam.get()
+            head_left, timing = self.client.head_left_cam.get_snapshot()
             if head_left is None:
                 head_left = np.zeros((480, 640, 3), dtype=np.uint8)
             scaled = self._rescale_color(head_left, self.image_scaling)
@@ -207,6 +208,7 @@ class ZmqServer(BaseZmqServer):
                 "h264_nal": nal,
                 "is_keyframe": True,
                 "camera": "head_left",
+                "head_cam_left/image_timing": timing,
                 "step": self._last_step,
             }
             self._h264_socket.send_pyobj(msg)
@@ -226,9 +228,9 @@ class ZmqServer(BaseZmqServer):
     def get_full_observation_message(self) -> dict[str, Any]:
         q, dq = self.client.get_joint_state()
         base_pose = self.client.base_pose_xyt
-        head_left = self.client.head_left_cam.get()
-        head_right = self.client.head_right_cam.get()
-        ee_img = self.client.ee_cam.get()
+        head_left, timing_left = self.client.head_left_cam.get_snapshot()
+        head_right, timing_right = self.client.head_right_cam.get_snapshot()
+        ee_img, timing_ee = self.client.ee_cam.get_snapshot()
         head_left = head_left if head_left is not None else np.zeros((480, 640, 3), dtype=np.uint8)
         head_right = head_right if head_right is not None else np.zeros((480, 640, 3), dtype=np.uint8)
         ee_img = ee_img if ee_img is not None else np.zeros((480, 640, 3), dtype=np.uint8)
@@ -289,6 +291,9 @@ class ZmqServer(BaseZmqServer):
             "recv_address": self.recv_address,
         }
         if self._obs_include_images:
+            message["head_cam_left/image_timing"] = timing_left
+            message["head_cam_right/image_timing"] = timing_right
+            message["ee_cam/image_timing"] = timing_ee
             head_left_wire = self._rescale_color(head_left, self.image_scaling)
             head_right_wire = self._rescale_color(head_right, self.image_scaling)
             ee_wire = self._rescale_color(ee_img, self.ee_image_scaling)
@@ -362,21 +367,21 @@ class ZmqServer(BaseZmqServer):
             return message
 
         # Head left
-        head_left_img = self.client.head_left_cam.get()
+        head_left_img, timing_left = self.client.head_left_cam.get_snapshot()
         if head_left_img is None:
             head_left_img = np.zeros((480, 640, 3), dtype=np.uint8)
         head_left_img = self._rescale_color(head_left_img, self.image_scaling)
         head_left_compressed = self._encode_wire_image(head_left_img, 1.0)
 
         # Head right
-        head_right_img = self.client.head_right_cam.get()
+        head_right_img, timing_right = self.client.head_right_cam.get_snapshot()
         if head_right_img is None:
             head_right_img = np.zeros((480, 640, 3), dtype=np.uint8)
         head_right_img = self._rescale_color(head_right_img, self.image_scaling)
         head_right_compressed = self._encode_wire_image(head_right_img, 1.0)
 
         # EE camera
-        ee_img = self.client.ee_cam.get()
+        ee_img, timing_ee = self.client.ee_cam.get_snapshot()
         if ee_img is None:
             ee_img = np.zeros((480, 640, 3), dtype=np.uint8)
         ee_img = self._rescale_color(ee_img, self.ee_image_scaling)
@@ -384,6 +389,9 @@ class ZmqServer(BaseZmqServer):
 
         message.update(
             {
+                "head_cam_left/image_timing": timing_left,
+                "head_cam_right/image_timing": timing_right,
+                "ee_cam/image_timing": timing_ee,
                 "head_cam_left/color_camera_K": scale_camera_matrix(
                     self.client.head_left_cam.get_K(), self.image_scaling
                 ),

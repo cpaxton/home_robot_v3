@@ -173,6 +173,7 @@ class Observations:
     # --------------------------------------------------------
 
     task_observations: dict[str, Any] | None = None
+    image_timing: dict[str, Any] | None = None
 
     # Sequence number - which message was this?
     seq_id: int = -1
@@ -279,6 +280,7 @@ class Observations:
             relative_resting_position=data.get("relative_resting_position"),
             is_holding=data.get("is_holding"),
             task_observations=data.get("task_observations"),
+            image_timing=data.get("image_timing"),
             seq_id=data.get("seq_id"),
             is_simulation=data.get("is_simulation"),
             is_pose_graph_node=data.get("is_pose_graph_node"),
