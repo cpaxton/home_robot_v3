@@ -83,3 +83,17 @@ One bounded integrated Stretch simulation is recorded separately as managed
 job `20260909_170512_6f6e56`; it is a shared `pick_place` handoff diagnostic,
 not an independently scored OVMM benchmark episode. It runs only after the
 paired perception job releases the GPU lock, with a 360-second process limit.
+
+Integrated outcome: router selected `pick_place(red cylinder, blue cube)` and
+entered fresh capture, then the 32-token image-caption call timed out at 180 s
+(first decode token only after 74.4 s). Grounding and manipulation were never
+reached. The timed-out shared client refused reuse; the process emitted an
+abort message but remained alive, so the managed job was cancelled for cleanup
+after recording the tool failure. Cancellation is not a successful episode.
+No grounding RGB-D bundle was produced before this early caption failure; the
+managed log retains the command, model, tool arguments, timings and traceback.
+Save pre-caption evidence and diagnose this latency before repeating task runs.
+
+Relevant fixture/proposal tests: 15 passed. Production defaults remain unchanged
+and PR #167 remains draft. This batch supports a narrower design hypothesis,
+not a cross-benchmark success or no-regression claim.
