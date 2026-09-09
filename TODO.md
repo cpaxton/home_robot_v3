@@ -19,6 +19,13 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
 - [ ] Recover the visible lamp and handle textured-scene proposal fragmentation;
       frozen candidate audit still misses lamp and abstains on sofa. Test clutter
       and occlusion before promoting the strategy or claiming OVMM recovery.
+- [x] Run paired touching/occlusion/same-color/farther-view diagnostics: surface
+      9/10 versus point 4/10 target gates; both 5/5 absent-query abstentions.
+      [Frozen results](docs/experiments/surface_stress_paired.md).
+- [ ] Fix and retest the farther-view wrong-surface acceptance: VLM search box
+      misses the cylinder, then accepts the sole table proposal (0% purity).
+      Add no-correct-candidate rejection evidence before promotion; do not mask
+      this failure with a larger candidate cap or a favorable aggregate score.
 - [ ] Diagnose unsafe posture during known-route translation (upright dot
       0.97898). Hold and turns pass; keep posture safety threshold unchanged.
 - [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
