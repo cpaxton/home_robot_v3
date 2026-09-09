@@ -154,7 +154,7 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         audit["reason"] = "VLM abstained or returned invalid output"
         return parsed, mask, audit
     try:
-        regions = surface_candidates(depth, parsed.get("box"), min_depth=min_depth, max_depth=max_depth)
+        regions = surface_candidates(depth, parsed.get("box"), min_depth=min_depth, max_depth=max_depth, rgb=rgb)
     except (TypeError, ValueError) as exc:
         audit["reason"] = str(exc)
         return parsed, mask, audit
@@ -189,7 +189,7 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         audit["reason"] = "no unambiguous surface selected; another view is needed"
         return parsed, mask, audit
     mask[candidate_mask(regions[chosen], depth.shape)] = 0
-    audit.update(valid=True, selected_id=chosen, proposal_source="depth_layers")
+    audit.update(valid=True, selected_id=chosen, proposal_source="rgbd_components")
     return parsed, mask, audit
 
 

@@ -48,6 +48,23 @@ def test_touching_coplanar_objects_are_not_falsely_claimed_separable():
     assert len(regions) == 2
 
 
+def test_appearance_boundaries_separate_depth_connected_target_and_support():
+    rgb, depth = scene()
+    depth[:] = 1  # no geometric separation at all
+    rgb[:] = [120, 90, 55]
+    rgb[15:45, 20:50] = [190, 20, 20]
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.25, max_depth=4, rgb=rgb)
+    assert sorted(r["points"] for r in regions) == [900, 3900]
+    target = next(r for r in regions if r["points"] == 900)
+    assert np.all(rgb[candidate_mask(target, depth.shape)] == [190, 20, 20])
+
+
+def test_indistinguishable_touching_surfaces_remain_one_proposal():
+    rgb = np.full((40, 40, 3), 120, dtype=np.uint8)
+    regions = surface_candidates(np.ones((40, 40)), [0, 0, 1000, 1000], min_depth=0.25, max_depth=4, rgb=rgb)
+    assert len(regions) == 1  # semantics/multi-view still needed; no invented split
+
+
 def test_missing_depth_has_no_geometry_even_with_external_masks():
     depth = np.full((40, 40), np.nan)
     assert (
@@ -92,7 +109,7 @@ def test_selected_mask_not_vlm_point_supplies_geometry():
     client = Mock(
         side_effect=[
             '{"verified":true,"box":[0,0,1000,1000],"point":[999,999]}',
-            '{"selected_id":0,"target_unambiguous":true}',
+            '{"selected_id":1,"target_unambiguous":true}',
         ]
     )
     _, mask, audit = select_supported_region(

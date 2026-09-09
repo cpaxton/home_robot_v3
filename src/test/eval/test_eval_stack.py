@@ -31,6 +31,7 @@ def test_shared_query_preset_has_required_grounding_contract():
     params = get_parameters("configs/emet/query_surface_pilot.yaml")
     assert params.get("query_driven_memory") is True
     assert params.get("query_memory")["grounding_backend"] == "vlm"
+    assert params.get("query_memory")["region_strategy"] == "depth_candidates"
     assert params.get("eqa")["agentic_verify"] is True
 
 

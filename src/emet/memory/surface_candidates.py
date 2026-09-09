@@ -8,9 +8,11 @@ import base64
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import label
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 
-def surface_candidates(depth, box, *, min_depth, max_depth, proposal_masks=None):
+def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None):
     """Split a VLM search box into measured depth layers and connected components.
 
     Optional class-agnostic masks replace depth-layer proposals, not depth
@@ -31,12 +33,33 @@ def surface_candidates(depth, box, *, min_depth, max_depth, proposal_masks=None)
     valid = np.isfinite(roi) & (roi > min_depth) & (roi < max_depth)
     if not valid.any():
         return []
-    if proposal_masks is None:
+    if proposal_masks is None and rgb is not None:
+        rgb = np.asarray(rgb)
+        if rgb.shape != (*depth.shape, 3) or rgb.dtype != np.uint8:
+            raise ValueError("RGB must be uint8 and aligned with depth")
+        colors = rgb[y0:y1, x0:x1].astype(float)
+        indices = np.arange(roi.size).reshape(roi.shape)
+        rows, cols = [], []
+        for a, b in ((np.s_[:-1, :], np.s_[1:, :]), (np.s_[:, :-1], np.s_[:, 1:])):
+            compatible = valid[a] & valid[b]
+            compatible &= np.abs(roi[a] - roi[b]) <= 0.08
+            # Class-agnostic appearance boundary: no category/color vocabulary.
+            # This avoids joining target and support through a few depth outliers.
+            compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
+            rows.append(indices[a][compatible])
+            cols.append(indices[b][compatible])
+        rows, cols = np.concatenate(rows), np.concatenate(cols)
+        graph = coo_matrix((np.ones(len(rows), dtype=bool), (rows, cols)), shape=(roi.size, roi.size)).tocsr()
+        _, pixel_components = connected_components(graph, directed=False)
+        sizes = np.bincount(pixel_components[valid.ravel()])
+        pixel_components = pixel_components.reshape(roi.shape)
+        masks = (valid & (pixel_components == index) for index in np.flatnonzero(sizes >= 25))
+    elif proposal_masks is None:
         # Split only at measured gaps, not an assumed foreground or object depth.
         values = np.unique(roi[valid])
         cuts = (values[:-1] + values[1:])[np.diff(values) > 0.08] / 2
         layers = np.searchsorted(cuts, roi)
-        masks = [valid & (layers == index) for index in range(len(cuts) + 1)]
+        masks = (valid & (layers == index) for index in range(len(cuts) + 1))
     else:
         masks = []
         for mask in proposal_masks:
