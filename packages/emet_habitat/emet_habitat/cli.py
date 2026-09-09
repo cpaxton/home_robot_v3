@@ -643,7 +643,9 @@ def compare_batch(
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write JSON metrics")
 @_ovmm_find_cli_options
 @click.option("--query-driven-memory", is_flag=True, help="Experimental lazy query grounding; requires agentic find.")
+@click.option("--seed", type=int, default=None, help="Seed Python, NumPy and Torch for a paired find-phase run.")
 def run_ovmm_find_episode(
+    seed: int | None,
     query_driven_memory: bool,
     episodes: Path | None,
     episode_id: str,
@@ -674,6 +676,7 @@ def run_ovmm_find_episode(
 
     run_cfg = FindPhaseRunConfig(
         query_driven_memory=query_driven_memory,
+        seed=seed,
         backend=backend,  # type: ignore[arg-type]
         merge_xy_m=merge_xy_m,
         staleness_horizon=staleness_horizon,

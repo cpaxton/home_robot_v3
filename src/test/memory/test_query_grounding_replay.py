@@ -34,6 +34,8 @@ def test_relation_requires_visual_verification_not_shared_words():
     "reply",
     [
         "{}",
+        # Recorded lamp/bed failure: detected object is not proof of relation.
+        '{"matching_ids": [0], "constraints_verified": false}',
         '{"matching_ids": [99], "constraints_verified": true}',
         '{"matching_ids": [0], "constraints_verified": "true"}',
         '{"matching_ids": [0, 0], "constraints_verified": true}',

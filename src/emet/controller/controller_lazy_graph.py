@@ -138,6 +138,30 @@ class LazyGraphController(DynagraphController):
 
     def ground_query_candidate(self, handle, *, after_observation: int):
         """Promote only from admitted, object-specific geometry in a new frame."""
+        record = self.query_candidates.records[handle]
+        self._grounded_query_target = None
+        record.grounded_revision = None
+        record.invalidation_reason = "reacquisition pending"
+        if len(self.voxel_map.observations) <= max(after_observation, record.source_obs_id):
+            return {"ok": False, "reason": "fresh observation required"}
+        return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
+
+    def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str):
+        """Localize a target in the current captured view without a retrieval prerequisite.
+
+        Historical views remain evidence, but cannot authorize current geometry.
+        No search anchor or instance is created until mask admission succeeds.
+        """
+        self._grounded_query_target = None
+        if source_obs_id < 1 or source_obs_id != len(self.voxel_map.observations):
+            return {"ok": False, "reason": "current captured observation required"}
+        query = " ".join(query.lower().split())
+        if not query or not target_description.strip():
+            return {"ok": False, "reason": "target description required"}
+        return self._ground_query_frame(query, target_description, source_obs_id)
+
+    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None):
+        """Shared mask, semantic verification and instance-admission boundary."""
         from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
         from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
         from emet.memory.graph_eqa.ingest.instance_observations import (
@@ -146,14 +170,8 @@ class LazyGraphController(DynagraphController):
             frame_world_xyz_hw3,
         )
 
-        record = self.query_candidates.records[handle]
-        self._grounded_query_target = None
+        record = self.query_candidates.records.get(handle)
         vm = self.voxel_map
-        # Failed reacquisition must revoke even a previously grounded reference.
-        record.grounded_revision = None
-        record.invalidation_reason = "reacquisition pending"
-        if len(vm.observations) <= max(after_observation, record.source_obs_id):
-            return {"ok": False, "reason": "fresh observation required"}
         frame = vm.observations[-1]
         rgb = frame_rgb_hwc_uint8(frame)
         if rgb is None or frame.depth is None:
@@ -164,13 +182,13 @@ class LazyGraphController(DynagraphController):
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
         # Always condition fresh masks on the target, not streaming ScanNet labels.
-        frame, detections = self._detect_query_frame(frame, record.query)
+        frame, detections = self._detect_query_frame(frame, query)
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         from emet.memory.query_grounding import cache_grounding_record, select_query_detections
 
         matching_ids, verification = select_query_detections(
-            record.query,
-            record.target_description,
+            query,
+            target_description,
             detections,
             rgb,
             client=getattr(self.graph_memory, "eqa_client", None),
@@ -186,9 +204,9 @@ class LazyGraphController(DynagraphController):
             cache_dir = Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "grounding"
         cache_path = cache_grounding_record(
             cache_dir,
-            query=record.query,
+            query=query,
             revision=len(vm.observations),
-            source_obs_id=record.source_obs_id,
+            source_obs_id=source_obs_id,
             detections=detections,
             matching_ids=matching_ids,
             verification=verification,
@@ -196,9 +214,9 @@ class LazyGraphController(DynagraphController):
             depth=frame.depth,
             masks=frame.instance,
             metadata={
-                "target_description": record.target_description,
-                "detector_vocabulary": [record.query],
-                "retrieval_score": record.retrieval_score,
+                "target_description": target_description,
+                "detector_vocabulary": [query],
+                "retrieval_score": record.retrieval_score if record is not None else None,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
                 "max_depth": vm.max_depth,
@@ -206,9 +224,10 @@ class LazyGraphController(DynagraphController):
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
-            self.query_candidates.reject(
-                handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
-            )
+            if handle is not None:
+                self.query_candidates.reject(
+                    handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
+                )
             return {
                 "ok": False,
                 "reason": "target absent or ambiguous",
@@ -218,6 +237,13 @@ class LazyGraphController(DynagraphController):
                 "verification_source": verification["source"],
             }
         det = matches[0]
+        if record is None:
+            try:
+                record = self.query_candidates.propose(query, source_obs_id, len(vm.observations), det["xyz"])
+            except ValueError as exc:
+                return {"ok": False, "reason": str(exc)}
+            record.target_description = target_description
+            handle = record.handle
         candidate = GraphDetectionCandidate(
             label=det["label_short"],
             xyz=np.asarray(det["xyz"]),
@@ -255,9 +281,16 @@ class LazyGraphController(DynagraphController):
         query = " ".join(query.lower().split())
         records = [r for r in self.query_candidates.records.values() if r.query == query]
         if not records:
-            xyz, stats = self.retrieve_query_candidate(query)
-            candidate = self.propose_query_candidate(query, xyz, stats) if xyz is not None else None
-            records = [candidate] if candidate is not None else []
+            before = len(self.voxel_map.observations)
+            self.update(full_perception=True)
+            if len(self.voxel_map.observations) <= before:
+                raise ValueError("fresh observation required")
+            result = self.ground_query_view(
+                query, source_obs_id=len(self.voxel_map.observations), target_description=query
+            )
+            if not result["ok"]:
+                raise ValueError(result["reason"])
+            return self._grounded_query_target
         if len(records) != 1:
             raise ValueError("Manipulation requires a unique query candidate")
         before = len(self.voxel_map.observations)

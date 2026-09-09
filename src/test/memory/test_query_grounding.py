@@ -49,6 +49,73 @@ def test_retrieval_is_not_an_instance_and_fresh_mask_promotes():
         candidate.require_grounding(2)
 
 
+def test_current_view_grounds_without_retrieval_or_camera_anchor():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="Where is the mug?")
+    assert result["ok"], result
+    assert np.allclose(result["xyz"], [1, 1, 1])
+    record = next(iter(agent.query_candidates.records.values()))
+    assert record.source_obs_id == 2
+    assert record.require_grounding(2) == result["obs_id"]
+
+
+@pytest.mark.parametrize("failure", ["stale", "relation", "ambiguous", "absent"])
+def test_view_grounding_abstains_without_creating_candidates(failure):
+    agent = controller()
+    response = '{"matching_ids": [0], "constraints_verified": false}'
+    if failure == "ambiguous":
+        masks = np.zeros((8, 8), dtype=int)
+        masks[4:] = 1
+        agent.detection_model.predict.return_value = (
+            None,
+            masks,
+            {"instance_classes": np.array([0, 0]), "instance_scores": np.array([0.9, 0.9])},
+        )
+        response = '{"matching_ids": [0, 1], "constraints_verified": true}'
+    elif failure == "absent":
+        agent.detection_model.predict.return_value = (None, -np.ones((8, 8), dtype=int), {})
+    agent.graph_memory.eqa_client = Mock(return_value=response)
+    result = agent.ground_query_view(
+        "mug", source_obs_id=1 if failure == "stale" else 2, target_description="mug on the bed"
+    )
+    assert not result["ok"]
+    assert not agent.query_candidates.records
+    assert not agent.graph_memory.get_nodes()
+    if failure == "stale":
+        agent.detection_model.predict.assert_not_called()
+
+
+def test_manipulation_can_reacquire_visible_target_without_retrieval():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(agent.voxel_map.observations[-1]))
+    target = agent.prepare_query_target("mug")
+    assert target.observation_revision == 3
+    assert np.allclose(target.xyz, [1, 1, 1])
+    agent.update = Mock()  # No new RGB-D must never authorize a second action.
+    with pytest.raises(ValueError, match="fresh"):
+        agent.prepare_query_target("mug")
+
+
+def test_confirmed_view_transition_keeps_geometry_separate_and_runs_once():
+    from emet.memory.graph_eqa.agentic.views import CapturedView, ground_confirmed_view
+
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    ex = SimpleNamespace(
+        agent=agent,
+        question="Where is the mug?",
+        _append_trace=Mock(),
+        _captured_views={123: CapturedView(123, 2, np.zeros((8, 8, 3), dtype=np.uint8), None)},
+    )
+    result = ground_confirmed_view(ex, 123, "mug")
+    assert result["ok"]
+    assert ex._grounded_obs_id == result["obs_id"]
+    assert ground_confirmed_view(ex, 123, "mug") is None
+    agent.detection_model.predict.assert_called_once()
+
+
 @pytest.mark.parametrize("failure", ["depth", "absent", "ambiguous", "disabled", "attribute"])
 def test_failed_admission_never_creates_instance(failure):
     agent = controller()
