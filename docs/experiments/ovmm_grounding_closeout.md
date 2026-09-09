@@ -260,6 +260,11 @@ confusion by lowering thresholds.
 
 ## Bounded acceptance
 
+Detector-free surface selection now has a separate
+[frozen perception pilot](surface_candidate_pilot.md). Clean/noisy red-blue
+localization passes; lamp and textured-sofa failures remain. These diagnostics
+do not replace the task-level acceptance below or change the prior OVMM 0/4.
+
 Run scenes 00006 and 00025, seed 0, 12 tool rounds / 8 navigation steps per
 question, Qwen3-VL-8B-Instruct int4, CUDA/SDPA, unchanged detector/admission
 settings. Compare lazy-arrival, query-driven lazy, and DynaMem under the **same

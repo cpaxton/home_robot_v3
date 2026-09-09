@@ -12,8 +12,13 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
       cached image/prompt audit, and explicit shared wrist-adapter CLI.
 - [x] Prevent generic embodied presets from re-enabling streaming instances in
       lazy mode; block oracle TAMP/tool metadata bypasses in query mode.
-- [ ] Recover the visible red cylinder and lamp without evaluator labels or
-      weakening depth support; frozen cached audit currently fails both.
+- [x] Recover stationary red/blue surfaces without a detector or evaluator-label
+      input; shared opt-in candidate strategy passes clean and noisy cached views.
+      See [surface pilot](docs/experiments/surface_candidate_pilot.md): partial
+      surfaces, not grasp acceptance or real-world robustness.
+- [ ] Recover the visible lamp and handle textured-scene proposal fragmentation;
+      frozen candidate audit still misses lamp and abstains on sofa. Test clutter
+      and occlusion before promoting the strategy or claiming OVMM recovery.
 - [ ] Diagnose unsafe posture during known-route translation (upright dot
       0.97898). Hold and turns pass; keep posture safety threshold unchanged.
 - [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
