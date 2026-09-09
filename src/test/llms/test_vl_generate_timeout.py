@@ -11,11 +11,19 @@ import time
 import pytest
 
 from emet.llms.qwen3_vl_client import (
+    Qwen3VLClient,
     VlGenerateTimeoutError,
     _generate_with_heartbeat,
     resolve_vl_generate_timeout_s,
 )
 from emet.llms.repetition_stop import HardTimeStop
+
+
+def test_timed_out_client_rejects_retry_before_touching_model():
+    client = object.__new__(Qwen3VLClient)
+    client._generation_timed_out = True
+    with pytest.raises(VlGenerateTimeoutError, match="restart"):
+        client.generate_multimodal("retry")
 
 
 def test_resolve_vl_generate_timeout_default(monkeypatch):

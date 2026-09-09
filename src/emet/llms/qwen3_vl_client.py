@@ -617,6 +617,9 @@ class Qwen3VLClient(AbstractVLLMClient):
         progress_callback: Callable[[str], None] | None = None,
         assistant_prefill: str | None = None,
     ) -> str:
+        if getattr(self, "_generation_timed_out", False):
+            raise VlGenerateTimeoutError("This VL client timed out; restart its process before another generation.")
+
         def _progress(msg: str) -> None:
             if progress_callback is not None:
                 try:
@@ -741,13 +744,19 @@ class Qwen3VLClient(AbstractVLLMClient):
                 logger.info("VL prefix cache: skipped (vision inputs present)")
             return self._generate_ids(inputs, max_new_tokens=ntok)
 
-        generated_ids = _generate_with_heartbeat(
-            _do_generate,
-            input_len=input_len,
-            max_new=ntok,
-            has_vision=has_vision,
-            timeout_s=resolve_vl_generate_timeout_s(),
-        )
+        try:
+            generated_ids = _generate_with_heartbeat(
+                _do_generate,
+                input_len=input_len,
+                max_new=ntok,
+                has_vision=has_vision,
+                timeout_s=resolve_vl_generate_timeout_s(),
+            )
+        except VlGenerateTimeoutError:
+            # Python cannot cancel the CUDA worker. Retrying this client can
+            # overlap model forwards and corrupt shared state or exhaust VRAM.
+            self._generation_timed_out = True
+            raise
         gen_s = timeit.default_timer() - t_gen0
         print(f"[vl] generate finished in {gen_s:.1f}s", flush=True)
 
