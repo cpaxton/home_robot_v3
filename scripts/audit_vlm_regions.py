@@ -29,7 +29,12 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
+    parser.add_argument("--depth-noise-std-m", type=float, default=0.0)
+    parser.add_argument("--depth-dropout", type=float, default=0.0)
+    parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if not np.isfinite(args.depth_noise_std_m) or args.depth_noise_std_m < 0 or not 0 <= args.depth_dropout <= 1:
+        parser.error("depth noise must be finite/nonnegative and dropout in [0,1]")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     params = get_parameters("dynav_config.yaml")
     _, client = build_graph_eqa_vlm_clients(parameters=params)
@@ -39,6 +44,17 @@ def main():
         with np.load(row["arrays"], allow_pickle=False) as arrays:
             rgb = np.asarray(Image.open(row["rgb"]).convert("RGB")) if row.get("rgb") else arrays["rgb"]
             depth = arrays["depth"]
+            perturbation = {"noise_std_m": args.depth_noise_std_m, "dropout": args.depth_dropout, "seed": args.seed}
+            if args.depth_noise_std_m or args.depth_dropout:
+                # Reset per image so repeated queries see identical corrupted
+                # evidence. This is a synthetic stress test, not sensor realism.
+                rng = np.random.default_rng(args.seed)
+                depth = depth.astype(float).copy()
+                valid = np.isfinite(depth) & (depth > 0)
+                noise = rng.normal(0, args.depth_noise_std_m, depth.shape)
+                depth[valid] += noise[valid]
+                depth[rng.random(depth.shape) < args.depth_dropout] = np.nan
+                np.savez_compressed(args.output_dir / f"{index}-input-depth.npz", depth=depth)
             parsed, support, audit = select_supported_region(
                 rgb,
                 depth,
@@ -49,7 +65,14 @@ def main():
                 max_depth=4.5,
                 strategy=args.strategy,
             )
-            result = {"input": row, "selection": parsed, "audit": audit, "surface_points": 0, "xyz": None}
+            result = {
+                "input": row,
+                "depth_perturbation": perturbation,
+                "selection": parsed,
+                "audit": audit,
+                "surface_points": 0,
+                "xyz": None,
+            }
             overlay = region_annotation(rgb, parsed)
             if audit["valid"]:
                 try:

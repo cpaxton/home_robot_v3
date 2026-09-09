@@ -103,6 +103,32 @@ def test_voxel_router_client_does_not_attach_graph():
     assert agent.graph_memory is None
 
 
+def test_surface_candidate_cache_preserves_exact_masks_and_selection_image(tmp_path):
+    from PIL import Image
+
+    from emet.memory.surface_candidates import candidate_mask, surface_candidate_image, surface_candidates
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    depth = np.ones((40, 40))
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.25, max_depth=4)
+    path = cache_grounding_record(
+        tmp_path,
+        query="mug",
+        revision=2,
+        source_obs_id=1,
+        detections=[],
+        matching_ids=[],
+        verification={"surface_candidates": regions, "valid": False},
+        rgb=rgb,
+        depth=depth,
+    )
+    record = json.loads(Path(path).read_text())
+    retained = record["verification"]["surface_candidates"]
+    assert np.array_equal(candidate_mask(retained[0], depth.shape), np.ones(depth.shape, bool))
+    saved = np.asarray(Image.open(tmp_path / record["surface_candidates_rgb_file"]))
+    assert np.array_equal(saved, np.asarray(surface_candidate_image(rgb, regions)))
+
+
 def test_cache_saves_corresponding_pixels_and_depth(tmp_path):
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     cache_grounding_record(
