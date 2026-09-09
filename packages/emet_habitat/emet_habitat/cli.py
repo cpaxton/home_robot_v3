@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -207,6 +208,42 @@ def _diagnostics_cli_options(fn):
     return fn
 
 
+def _ovmm_find_cli_options(fn):
+    opts = [
+        click.option(
+            "--device",
+            type=click.Choice(["cuda", "cpu"]),
+            default="cuda",
+            help="Encoder + VLM device. cuda (default): GPU SigLIP, and GPU Qwen when agentic "
+            "find is on. cpu: CLIP encoder + CPU VLM (very slow). --cpu-only is an alias for "
+            "--device cpu; neither flag turns off the agentic loop (use --no-agentic-find).",
+        ),
+        click.option(
+            "--agentic-find/--no-agentic-find",
+            "agentic_find",
+            default=None,
+            help="Route FindObj/FindRec through the shared AgenticEQA loop (default: on for "
+            "dynagraph/static_graph, off for dynamem/ground_truth). Independent of --device / "
+            "--cpu-only.",
+        ),
+        click.option(
+            "--agentic-max-rounds",
+            default=None,
+            type=int,
+            help="Agentic tool rounds per find question (default: eqa.agentic_max_tool_rounds).",
+        ),
+        click.option(
+            "--agentic-max-nav-steps",
+            default=None,
+            type=int,
+            help="Agentic nav+explore steps per find question (default: eqa.agentic_max_nav_steps).",
+        ),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 @main.command("run-episode")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
@@ -229,6 +266,13 @@ def _diagnostics_cli_options(fn):
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write episode JSONL")
 @click.option("--rotate-in-place/--no-rotate-in-place", default=True, help="Sweep heading before EQA")
+@click.option(
+    "--rerun",
+    "enable_rerun",
+    is_flag=True,
+    default=False,
+    help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+)
 @click.option(
     "--extra-instruction",
     default=None,
@@ -263,6 +307,7 @@ def run_episode(
     data_dir: Path | None,
     output: Path | None,
     rotate_in_place: bool,
+    enable_rerun: bool,
     extra_instruction: str | None,
     use_hm3d_semantics: bool | None,
     use_enrich_labels: bool,
@@ -282,6 +327,8 @@ def run_episode(
     explore_when_uncovered: str | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
+    if enable_rerun:
+        os.environ["EMET_EVAL_RERUN"] = "1"
     if dataset != "hmeqa":
         raise click.ClickException(f"Unsupported dataset {dataset!r}")
     if mock_llm_explore and not mock_llm:
@@ -585,11 +632,12 @@ def compare_batch(
 )
 @click.option("--merge-xy-m", type=float, default=None)
 @click.option("--staleness-horizon", type=int, default=None)
-@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--cpu-only", is_flag=True, default=False, help="Alias for --device cpu (does not disable agentic find).")
 @click.option("--not-rotate", is_flag=True, default=False)
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write JSON metrics")
+@_ovmm_find_cli_options
 def run_ovmm_find_episode(
     episodes: Path | None,
     episode_id: str,
@@ -598,9 +646,13 @@ def run_ovmm_find_episode(
     staleness_horizon: int | None,
     cpu_only: bool,
     not_rotate: bool,
+    device: str,
     hm3d_root: Path | None,
     data_dir: Path | None,
     output: Path | None,
+    agentic_find: bool | None,
+    agentic_max_rounds: int | None,
+    agentic_max_nav_steps: int | None,
 ) -> None:
     """Run one Habitat find-phase episode (FindObj / FindRec)."""
     from emet.eval.ovmm_find_phase import FindPhaseRunConfig
@@ -620,12 +672,16 @@ def run_ovmm_find_episode(
         staleness_horizon=staleness_horizon,
         cpu_only=cpu_only,
         not_rotate=not_rotate,
+        agentic_find=agentic_find,
+        agentic_max_rounds=agentic_max_rounds,
+        agentic_max_nav_steps=agentic_max_nav_steps,
     )
     metrics = run_habitat_find_phase_episode(
         ep,
         run_cfg,
         hm3d_root=hm3d_root,
         init_poses_path=init_poses_path,
+        device=device,
     )
     text = json.dumps(metrics, indent=2)
     click.echo(text)
@@ -689,7 +745,7 @@ def explore_frontiers(
 )
 @click.option("--merge-xy-m", type=float, default=None)
 @click.option("--staleness-horizon", type=int, default=None)
-@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--cpu-only", is_flag=True, default=False, help="Alias for --device cpu (does not disable agentic find).")
 @click.option("--not-rotate", is_flag=True, default=False)
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
@@ -697,6 +753,7 @@ def explore_frontiers(
 @click.option("--run-tag", default=None, help="Episode bundle tag under ~/.cache/habitat_eqa/episodes/")
 @click.option("--export-map/--no-export-map", default=None)
 @click.option("--export-video/--no-export-video", default=None)
+@_ovmm_find_cli_options
 def run_ovmm_find_batch(
     episodes: Path | None,
     episode_id: tuple[str, ...],
@@ -705,12 +762,16 @@ def run_ovmm_find_batch(
     staleness_horizon: int | None,
     cpu_only: bool,
     not_rotate: bool,
+    device: str,
     hm3d_root: Path | None,
     data_dir: Path | None,
     output_dir: Path,
     run_tag: str | None,
     export_map: bool | None,
     export_video: bool | None,
+    agentic_find: bool | None,
+    agentic_max_rounds: int | None,
+    agentic_max_nav_steps: int | None,
 ) -> None:
     """Batch Habitat find-phase evaluation."""
     from emet.eval.ovmm_find_phase import FindPhaseRunConfig
@@ -729,6 +790,9 @@ def run_ovmm_find_batch(
         staleness_horizon=staleness_horizon,
         cpu_only=cpu_only,
         not_rotate=not_rotate,
+        agentic_find=agentic_find,
+        agentic_max_rounds=agentic_max_rounds,
+        agentic_max_nav_steps=agentic_max_nav_steps,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     bundle_tag = run_tag or output_dir.name
@@ -742,6 +806,7 @@ def run_ovmm_find_batch(
             debug_run_tag=bundle_tag,
             export_map=export_map,
             export_video=export_video,
+            device=device,
         )
         out = output_dir / f"{ep.id}_{backend}.json"
         out.write_text(json.dumps(metrics, indent=2), encoding="utf-8")

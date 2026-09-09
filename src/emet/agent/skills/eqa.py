@@ -12,7 +12,7 @@ from emet.agent.skills.specs import SkillSpec, eqa_specs_for_submode
 from emet.agent.tools import Tool
 
 if TYPE_CHECKING:
-    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa import AgenticEQAExecutor
 
 
 def _dispatch(executor: AgenticEQAExecutor, name: str):

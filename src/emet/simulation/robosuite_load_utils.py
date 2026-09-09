@@ -49,6 +49,23 @@ def freejoint_qpos_qvel_addrs(model: mujoco.MjModel, base_body_name: str) -> tup
     return None
 
 
+def _snapshot_freejoint_qpos(model: mujoco.MjModel, data: mujoco.MjData) -> list[tuple[int, np.ndarray]]:
+    """Copy 7-DoF ``qpos`` for every free joint (scene objects and optional free base)."""
+    jnt_free = int(mujoco.mjtJoint.mjJNT_FREE)
+    out: list[tuple[int, np.ndarray]] = []
+    for j in range(int(model.njnt)):
+        if int(model.jnt_type[j]) != jnt_free:
+            continue
+        qadr = int(model.jnt_qposadr[j])
+        out.append((qadr, np.array(data.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)))
+    return out
+
+
+def _restore_freejoint_qpos(data: mujoco.MjData, saved: list[tuple[int, np.ndarray]]) -> None:
+    for qadr, q in saved:
+        data.qpos[qadr : qadr + 7] = q
+
+
 def _actuator_is_joint_velocity(model: mujoco.MjModel, aid: int) -> bool:
     """True for MuJoCo ``<velocity`` joint actuators (``gear[0] == 3``) or legacy ``wheel*`` names."""
     if abs(float(model.actuator_gear[int(aid), 0]) - 3.0) < 1e-6:
@@ -107,14 +124,13 @@ def apply_home_keyframe_preserving_base(
     spec: RobotSpec | None = None,
     key_name: str | None = None,
 ) -> bool:
-    """If MJCF defines a robot home keyframe, reset to it while keeping the base free-joint pose.
+    """If MJCF defines a robot home keyframe, reset to it while keeping free-joint poses.
 
     MolmoSpaces autoplace updates only the base; default compiled ``qpos`` can be a poor arm posture.
-    ``mj_resetDataKeyframe`` applies the keyframe; we then restore the 7 base ``qpos`` values that
-    were present before the reset (typically the autoplace result). On merged scenes, compiled
-    ``key_qpos`` may disagree with ``key ctrl`` for the robot; we snap hinge/slide ``qpos`` to
-    ``ctrl`` for matching actuators, ``mj_forward``, then copy the full ``qpos`` vector into
-    ``model.qpos0`` for consistent resets.
+    ``mj_resetDataKeyframe`` applies the keyframe; we then restore every freejoint ``qpos`` from
+    before the reset (robot base plus scene objects — merged table cubes sit in qpos 0–13 when
+    the scene include comes first). On merged scenes, compiled ``key_qpos`` may disagree with
+    ``key ctrl`` for the robot; we snap hinge/slide ``qpos`` to ``ctrl`` for matching actuators.
 
     Returns:
         True if the keyframe was applied, False if no home key or no base free joint.
@@ -130,14 +146,15 @@ def apply_home_keyframe_preserving_base(
         kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     if kid < 0:
         return False
-    qadr, vadr = int(addrs[0]), int(addrs[1])
-    base_q = np.array(data.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
+    vadr = int(addrs[1])
+    saved_free = _snapshot_freejoint_qpos(model, data)
     mujoco.mj_resetDataKeyframe(model, data, kid)
-    data.qpos[qadr : qadr + 7] = base_q
+    _restore_freejoint_qpos(data, saved_free)
     if vadr >= 0:
         data.qvel[vadr : vadr + 6] = 0.0
     data.qvel.fill(0.0)
     snap_joint_qpos_to_ctrl_for_position_actuators(model, data)
+    _restore_freejoint_qpos(data, saved_free)
     mujoco.mj_forward(model, data)
     return True
 
@@ -174,7 +191,11 @@ def apply_home_keyframe_preserving_planar_base(
     spec: RobotSpec | None = None,
     key_name: str | None = None,
 ) -> bool:
-    """Apply robot home keyframe while preserving planar base slide/yaw ``qpos`` (Robocasa merge robots)."""
+    """Apply robot home keyframe while preserving planar base and scene freejoint ``qpos``.
+
+    Merged table scenes put object ``<freejoint/>`` bodies before the robot, so a padded
+    robot-only ``key_qpos`` would otherwise teleport cubes/cylinders to the origin.
+    """
     if key_name is not None:
         kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, key_name)
     elif spec is not None:
@@ -190,7 +211,9 @@ def apply_home_keyframe_preserving_planar_base(
             return False
         qadr = int(model.jnt_qposadr[jid])
         saved.append((qadr, float(data.qpos[qadr])))
+    saved_free = _snapshot_freejoint_qpos(model, data)
     mujoco.mj_resetDataKeyframe(model, data, kid)
+    _restore_freejoint_qpos(data, saved_free)
     for qadr, val in saved:
         data.qpos[qadr] = val
     data.qvel.fill(0.0)
@@ -198,6 +221,7 @@ def apply_home_keyframe_preserving_planar_base(
     # Velocity base actuators (gear≠3, e.g. xlerobot slide/yaw) still match mjTRN_JOINT; keep planar qpos.
     for qadr, val in saved:
         data.qpos[qadr] = val
+    _restore_freejoint_qpos(data, saved_free)
     mujoco.mj_forward(model, data)
     return True
 

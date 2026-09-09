@@ -34,6 +34,8 @@ MOLMOSPACES_ROBOT_IDS = [
     "floating_robotiq",
     "franka_fr3",
     "sourccey",
+    "nori",
+    "nori_a3",
 ]
 
 DEFAULT_MOLMOSPACES_ROBOT = "stretch"

@@ -560,6 +560,21 @@ def save_episode_debug_bundle(
         if manifest.get("diagnostics_manifest"):
             metrics.diagnostics_manifest_path = str(manifest["diagnostics_manifest"])
 
+    gm = getattr(agent, "graph_memory", None)
+    trace_root = getattr(gm, "_eqa_decision_trace_dir", None) if gm is not None else None
+    if trace_root:
+        from emet.eval.eqa_decision_trace import finalize_eqa_decision_trace
+
+        n_iter = int(getattr(metrics, "eqa_iterations", 0) or 0)
+        if n_iter <= 0 and gm is not None:
+            n_iter = len(getattr(gm, "_history_outputs", []) or [])
+        finalize_eqa_decision_trace(trace_root, n_iterations=n_iter)
+        manifest_path = episode_dir / "diagnostics_manifest.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["eqa_decisions"] = str(trace_root)
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
     metrics.debug_bundle_dir = str(episode_dir)
     (episode_dir / "metrics.json").write_text(
         json.dumps(metrics.to_dict(), indent=2) + "\n",

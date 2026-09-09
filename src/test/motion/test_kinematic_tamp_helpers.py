@@ -31,6 +31,24 @@ def test_pack_arm_into_actuator_dict_rby1():
     assert vec[R1_ACTUATOR_NAMES.index("left_arm1")] == 0.1
 
 
+def test_pack_arm_into_actuator_dict_sourccey_act_suffix():
+    from emet.robots.sourccey import SOURCCEY_ACTUATOR_NAMES
+
+    joints = (
+        "left_shoulder_pan",
+        "left_shoulder_lift",
+        "left_elbow_flex",
+        "left_wrist_flex",
+        "left_wrist_roll",
+        "left_gripper",
+    )
+    q = np.linspace(0.1, 0.6, 6)
+    d = pack_arm_into_actuator_dict(SOURCCEY_ACTUATOR_NAMES, joints, q)
+    assert d["left_shoulder_pan_act"] == 0.1
+    assert d["left_gripper_act"] == 0.6
+    assert "left_shoulder_pan" not in d
+
+
 def test_interpolate_arm_waypoints():
     path = interpolate_arm_waypoints(np.zeros(6), np.ones(6), n_steps=4)
     assert len(path) == 5

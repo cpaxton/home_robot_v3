@@ -1,6 +1,6 @@
 # Running emet on the NVIDIA Jetson
 
-Instructions for **Jetson AGX Orin** (and similar Tegra boards). Tested on JetPack 5.1.2 (L4T 35.4.1, Ubuntu 20.04, aarch64).
+Instructions for **Jetson AGX Orin** (and similar Tegra boards). Native VLM serve is tested on **JetPack 7.2.1** (L4T r39.2.1, Ubuntu 24.04, CUDA 13.2). The lean `install_jetson.sh` profile and JP5 Docker LLM image were originally written for JetPack 5.1.2 (L4T 35.4.1).
 
 There are two options:
 
@@ -54,7 +54,23 @@ Optional onboard DA3 (Mars bridge): `depth-anything-3` is **not** installed on L
 uv sync --group da3
 ```
 
-### Tegra CUDA PyTorch (optional)
+### Tegra CUDA PyTorch (JetPack 7 / L4T r39)
+
+PyPI `torch` in the emet `.venv` is **CPU-only** on aarch64. Host a VLM with a separate CUDA venv (cu130 wheels; `sm_87` warning is cosmetic on JP7.2):
+
+```bash
+# on the Orin — largest dense Qwen3-VL that fits 64 GiB unified + 54 G eMMC
+./scripts/run_jetson_vlm_native.sh --setup
+# rsync weights from a workstation HF cache if eMMC is tight, then:
+./scripts/run_jetson_vlm_native.sh --detach
+# same checkpoint, full precision (~36 GiB unified, no extra disk):
+./scripts/run_jetson_vlm_native.sh --detach --dtype float32
+curl -s http://127.0.0.1:8000/health   # expect "cuda": true
+```
+
+Default model: **Qwen/Qwen3-VL-8B-Instruct** (~17 G on disk). fp16 ~20 GiB RAM; fp32 ~36 GiB. Qwen3-VL-32B bf16 (~63 G) does not fit this eMMC. The JP5 `dustynv/l4t-pytorch:r35.4.1` container does **not** run on r39.
+
+### Tegra CUDA PyTorch (optional, JetPack 5)
 
 Official JP5 wheels target **Python 3.8**. For emet’s Python 3.10 venv you typically need to **build PyTorch from source** for this JetPack, or run inference in a container that already has a Tegra build. See:
 

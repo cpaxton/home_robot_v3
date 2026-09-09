@@ -10,8 +10,8 @@ without requiring emet's Python >=3.10 package.
   # Text (CausalLM) on :8000
   python3 jetson_llm_server.py --model Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000
 
-  # Vision-language on :8001 (transformers Qwen2-VL; JP5 image has no Qwen2.5-VL class)
-  python3 jetson_llm_server.py --vl --model Qwen/Qwen2-VL-2B-Instruct --host 0.0.0.0 --port 8001
+  # Vision-language (Qwen3-VL on JP7 native torch, or Qwen2-VL on JP5 dustynv)
+  python3 jetson_llm_server.py --vl --model Qwen/Qwen3-VL-8B-Instruct --host 0.0.0.0 --port 8000
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from urllib.parse import urlparse
 _DATA_URL_RE = re.compile(r"^data:(image/[^;]+);base64,(.+)$", re.DOTALL | re.IGNORECASE)
 
 DEFAULT_TEXT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
-DEFAULT_VL_MODEL = "Qwen/Qwen2-VL-2B-Instruct"
+DEFAULT_VL_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
 
 
 def _log(msg: str) -> None:
@@ -219,7 +219,7 @@ class ModelBundle:
             self.model = self.model.to("cpu")
 
     def _load_vl(self, torch, torch_dtype) -> None:
-        from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+        from transformers import AutoProcessor
 
         self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
         kwargs = {
@@ -228,7 +228,16 @@ class ModelBundle:
         }
         if self.device == "cuda":
             kwargs["device_map"] = {"": 0}
-        self.model = Qwen2VLForConditionalGeneration.from_pretrained(self.model_id, **kwargs)
+        # JP7 native: AutoModelForImageTextToText (Qwen3-VL / Qwen3.5). JP5 dustynv
+        # pins transformers<4.46 and only ships Qwen2VLForConditionalGeneration.
+        try:
+            from transformers import AutoModelForImageTextToText
+        except ImportError:
+            try:
+                from transformers import Qwen3VLForConditionalGeneration as AutoModelForImageTextToText
+            except ImportError:
+                from transformers import Qwen2VLForConditionalGeneration as AutoModelForImageTextToText
+        self.model = AutoModelForImageTextToText.from_pretrained(self.model_id, **kwargs)
         if self.device == "cpu":
             self.model = self.model.to("cpu")
 
@@ -435,19 +444,22 @@ def main(argv=None):
     p.add_argument(
         "--vl",
         action="store_true",
-        help="Load Qwen2-VL multimodal weights (image_url data URLs). Prefer --port 8001.",
+        help="Load Qwen3-VL / Qwen2-VL multimodal weights (image_url data URLs).",
     )
     p.add_argument(
         "--quant",
         default=os.environ.get("EMET_LLM_SERVE_QUANT", "fp16"),
         choices=("fp16", "none", "awq", "int4", "int8", "bnb"),
         help=(
-            "Weight format. JP5 Tegra container only supports fp16/none today: "
-            "bitsandbytes/AutoAWQ/Quanto need newer torch+kernels and pip-install "
-            "replaces NVIDIA torch with CPU wheels. Use a JP6/vLLM image for AWQ."
+            "Weight format. This server stays on fp16: bitsandbytes/AutoAWQ on Jetson "
+            "often replace working CUDA torch with CPU wheels. Use vLLM for AWQ."
         ),
     )
-    p.add_argument("--model", default=None, help="HF model id (text default 7B; --vl default Qwen2-VL-2B).")
+    p.add_argument(
+        "--model",
+        default=None,
+        help="HF model id (text default 7B; --vl default Qwen3-VL-8B-Instruct).",
+    )
     p.add_argument("--host", default=os.environ.get("EMET_LLM_SERVE_HOST", "0.0.0.0"))
     p.add_argument("--port", type=int, default=None)
     p.add_argument(
@@ -469,11 +481,9 @@ def main(argv=None):
         quant = "fp16"
     if quant not in ("fp16",):
         _log(
-            f"FATAL: --quant {quant} is not supported on this Jetson JP5 Tegra-CUDA image "
-            "(torch nv/tegra). bitsandbytes / AutoAWQ / Quanto need newer PyTorch + CUDA "
-            "kernels; pip installing them replaces NVIDIA torch with CPU wheels. "
-            "Stay on fp16 (Orin ~64 GiB unified memory fits Qwen2-VL-7B), or move to "
-            "a JP6 / dustynv vLLM container for AWQ. See docs/llm_serve.md."
+            f"FATAL: --quant {quant} is not supported by jetson_llm_server.py. "
+            "Stay on fp16 (AGX Orin ~64 GiB unified memory fits Qwen3-VL-8B), or use "
+            "vLLM for AWQ. See docs/llm_serve.md."
         )
         return 1
 

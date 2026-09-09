@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,17 +25,23 @@ from emet.eval.episode_diagnostics import (
     habitat_export_voxel_history_default,
     unbind_diagnostics_recorder,
 )
+from emet.eval.ovmm_agentic_find import (
+    attach_ovmm_episode_debug_dir,
+    run_ovmm_find_queries,
+    should_use_agentic_find,
+)
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
     collect_scaling_diagnostics,
-    compute_find_phase_metrics,
     create_find_phase_agent,
     get_memory_backend_for_agent,
-    localization_pred_fields,
-    query_find_phase_localization,
+    mapping_budget_from_row,
+    ovmm_find_query_row,
+    resolve_mapping_max_nav_steps,
     resolve_object_query,
     run_mapping_protocol,
+    score_ovmm_find_query,
     set_find_phase_run_seed,
 )
 from emet.habitat.config import default_hm3d_scene_dir
@@ -42,7 +49,11 @@ from emet.habitat.datasets import load_scene_init_poses
 from emet.habitat.episode_debug import default_episodes_root
 from emet.habitat.hm3d_semantics import hm3d_placements_from_semantic_scene
 from emet_habitat.robot_client import HabitatRobotClient
-from emet_habitat.runner import _release_gpu_memory
+from emet_habitat.runner import (
+    _configure_habitat_mapping,
+    _configure_habitat_nav,
+    _release_gpu_memory,
+)
 from emet_habitat.simulator import HabitatEQASimulator
 
 MemoryBackendName = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
@@ -59,8 +70,20 @@ class HabitatFindPhaseEpisode:
     start_recep: str
     goal_recep: str
     success_radius_m: float = 0.75
-    explore_steps: int = 0
+    mapping_max_nav_steps: int | None = None
+    explore_steps: int | None = None
     object_gt_body: str | None = None
+
+    def __post_init__(self) -> None:
+        n = resolve_mapping_max_nav_steps(
+            self.mapping_max_nav_steps,
+            self.explore_steps,
+            source="HabitatFindPhaseEpisode",
+            default=0,
+            warn=False,
+        )
+        object.__setattr__(self, "mapping_max_nav_steps", int(n or 0))
+        object.__setattr__(self, "explore_steps", int(n or 0))
 
 
 def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseEpisode]:
@@ -72,9 +95,13 @@ def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseE
     if not isinstance(rows, list):
         raise ValueError(f"expected list under 'episodes' in {full}")
     out: list[HabitatFindPhaseEpisode] = []
+    n_alias = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
+        if row.get("explore_steps") is not None and row.get("mapping_max_nav_steps") is None:
+            n_alias += 1
+        budget = mapping_budget_from_row(row, source=str(full), default=0, warn=False)
         out.append(
             HabitatFindPhaseEpisode(
                 id=str(row["id"]),
@@ -84,10 +111,15 @@ def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseE
                 start_recep=str(row["start_recep"]),
                 goal_recep=str(row["goal_recep"]),
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
-                explore_steps=int(row.get("explore_steps", 0)),
+                mapping_max_nav_steps=budget,
+                explore_steps=budget,
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
             )
         )
+    if n_alias:
+        from emet.eval.ovmm_find_phase import _warn_explore_steps_alias
+
+        _warn_explore_steps_alias(f"{full} ({n_alias} episode(s))")
     return out
 
 
@@ -98,7 +130,7 @@ def run_habitat_find_phase_episode(
     hm3d_root: Path | None = None,
     init_poses_path: Path | None = None,
     use_hm3d_semantics: bool | None = True,
-    device: str | None = "cpu",
+    device: str | None = "cuda",
     debug_run_tag: str | None = None,
     export_map: bool | None = None,
     export_video: bool | None = None,
@@ -153,14 +185,29 @@ def run_habitat_find_phase_episode(
             merge_xy_m=run_cfg.merge_xy_m,
             staleness_horizon=run_cfg.staleness_horizon,
         )
-        parameters["encoder"] = None
+        # Voxel features come from DynamemController.create_obstacle_map:
+        # GPU → shared SigLIP, --device cpu / --cpu-only → CLIP. Do not set
+        # parameters["encoder"] = None — that is the InstanceMemory get_encoder()
+        # name, and clearing it disabled semantic memory on the sim find path.
+        # force_eqa_siglip_encoder is only the HM-EQA manipulation_only escape
+        # hatch; habitat_ovmm_find already sets manipulation_only: false.
+        use_agentic = should_use_agentic_find(run_cfg.backend, agentic_find=run_cfg.agentic_find)
+        # HM3D homes need navmesh frontiers + 4.5 m depth / no obstacle pad whether
+        # the query is agentic or one-shot, otherwise the ablation is not the same map.
+        _configure_habitat_mapping(parameters)
+        _configure_habitat_nav(parameters)
+        if use_agentic:
+            # Agentic find loads Qwen3-VL in-process. Habitat torch (cu130) has no
+            # flash-attn wheel, so permit SDPA like hmeqa_launch / the OVMM VL worker.
+            os.environ.setdefault("EMET_ALLOW_SDPA_ATTN", "1")
 
         t_init0 = time.monotonic()
+        cpu_only = bool(run_cfg.cpu_only or device == "cpu")
         agent = create_find_phase_agent(
             robot,
             parameters,
             run_cfg.backend,
-            cpu_only=run_cfg.cpu_only or device == "cpu",
+            cpu_only=cpu_only,
             compare_to_gt=run_cfg.compare_to_gt,
             use_sensor_perception=run_cfg.use_sensor_perception,
         )
@@ -179,6 +226,7 @@ def run_habitat_find_phase_episode(
             habitat_floor_y=sim.floor_y,
         )
         init_wall_s = time.monotonic() - t_init0
+        attach_ovmm_episode_debug_dir(agent)
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -189,7 +237,7 @@ def run_habitat_find_phase_episode(
         t_map0 = time.monotonic()
         n_steps = run_mapping_protocol(
             agent,
-            explore_steps=episode.explore_steps,
+            mapping_max_nav_steps=episode.mapping_max_nav_steps,
             not_rotate=run_cfg.not_rotate,
         )
         for _ in range(3):
@@ -214,30 +262,26 @@ def run_habitat_find_phase_episode(
 
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
-        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
-            memory,
-            object_query,
+        query = run_ovmm_find_queries(
+            agent=agent,
+            memory=memory,
+            use_agentic=use_agentic,
+            object_query=object_query,
+            start_recep=episode.start_recep,
+            goal_recep=episode.goal_recep,
+            episode_id=episode.id,
+            object_gt_body=episode.object_gt_body,
+            max_rounds=run_cfg.agentic_max_rounds,
+            max_nav_steps=run_cfg.agentic_max_nav_steps,
+            extra_trace_meta={"scene": episode.scene},
             placements=placements,
-            near_recep=episode.start_recep,
             voxel_map=vm,
-            convert_nav_to_world=False,
             prefer_voxel=prefer_voxel,
+            convert_nav_to_world=False,
             planar_frame="habitat_xz",
         )
-        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
-            memory,
-            episode.goal_recep,
-            placements=placements,
-            near_recep=episode.goal_recep,
-            voxel_map=vm,
-            convert_nav_to_world=False,
-            prefer_voxel=prefer_voxel,
-            planar_frame="habitat_xz",
-        )
-
-        find_metrics = compute_find_phase_metrics(
-            obj_pred_xyz=obj_xyz,
-            recep_pred_xyz=recep_xyz,
+        find_metrics = score_ovmm_find_query(
+            query,
             placements=placements,
             object_query=object_query,
             start_recep=episode.start_recep,
@@ -262,6 +306,7 @@ def run_habitat_find_phase_episode(
             "object_query": object_query,
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,
+            "mapping_max_nav_steps": episode.mapping_max_nav_steps,
             "explore_steps": episode.explore_steps,
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),
@@ -270,14 +315,8 @@ def run_habitat_find_phase_episode(
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
-            "obj_localize_success": bool(obj_ok),
-            "recep_localize_success": bool(recep_ok),
-            "obj_query_used": obj_q_used,
-            "recep_query_used": recep_q_used,
-            "obj_localize_source": obj_source,
-            "recep_localize_source": recep_source,
             "seed": run_cfg.seed,
-            **localization_pred_fields(obj_xyz, recep_xyz),
+            **ovmm_find_query_row(query),
             **find_metrics,
             **scaling,
         }

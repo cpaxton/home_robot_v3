@@ -256,7 +256,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 | Slice | n | Meaning |
 |-------|---|---------|
-| canonical-8 / balanced-32 / paper-20 | 8 / 32 / 20 | Overnight convenience (not GraphEQA paper coverage) |
+| canonical-8 / balanced-32 / paper-20 | 8 / 32 / 20 | Classic method-comparison slices via `run_habitat_iter_subset.sh` (not GraphEQA paper coverage; not `emet hmeqa overnight`) |
 | annotated-semantics | ~37 | Paper indices with HM3DSem `.semantic.glb` — fairer perception vs GraphEQA GT path (`hmeqa_annotated_question_ids()`) |
 | legacy q0–112 (`--paper-subset`) | **113** | Historical emet fixed slice; not the released GraphEQA filtered set |
 | GraphEQA repository filter | **114** | Semantic-scene sequence used by the released HM-EQA runner |
@@ -328,7 +328,7 @@ IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,4
   ./scripts/run_habitat_iter_subset.sh
 ```
 
-Overnight orchestrators: **`uv run emet eval`** (preflight; [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates), [`scripts/run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh), `scripts/run_overnight_eval_smoke.sh`, `scripts/run_overnight_habitat_eval.sh`, `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
+Overnight orchestrators: **`uv run emet eval`** (preflight; [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates), [`scripts/run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh), [`scripts/smoke_habitat_ovmm_agentic_find.sh`](../scripts/smoke_habitat_ovmm_agentic_find.sh), **`uv run emet hmeqa overnight`** (compat wrapper [`run_overnight_habitat_eval.sh`](../scripts/run_overnight_habitat_eval.sh)), `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
 
 ## Related docs
 

@@ -112,8 +112,7 @@ def test_graph_memory_to_string_spatial_rag_regions(monkeypatch):
 
     from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 
-    # Bypass heavy __init__ side effects (VL client / config resolution).
-    mem = object.__new__(GraphEQAMemory)
+    mem = GraphEQAMemory(defer_llm_clients=True)
     mem.parameters = {"eqa": {"spatial_rag": True, "spatial_rag_radius_m": 2.5}}
     mem._nodes = [
         GraphNode(

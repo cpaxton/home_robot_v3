@@ -124,6 +124,11 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
     \multicolumn{5}{@{}l@{}}{\textit{Ablations (not method defaults)}} \\
     Canonical-8 + debias & dynagraph & Qwen2.5-VL-3B & 8 & 62.5\% \\
     Held-out random-8 & dynagraph (explore off) & Qwen3-VL-8B & 8 & 100.0\% \\
+    \midrule
+    \multicolumn{5}{@{}l@{}}{\textit{Location-confidence gates (count/clock-15 slice)}} \\
+    Count/clock-15 & dynagraph, gate A (location missing-FIND) & Qwen3-VL-8B & 15 & 40.0\% \\
+    Count/clock-15 & dynagraph, gates A+B (close-map resolved) & Qwen3-VL-8B & 15 & 46.7\% \\
+    Count/clock-15 & dynagraph, gate C (image landmark strict) & Qwen3-VL-8B & 15 & 33.3\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -301,6 +306,40 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
     Molmo idx0 & 2 & -- & -- & -- & -- & -- \\
     \bottomrule
   \end{tabular}
+\end{table}
+
+\subsection{TAMP clutter clearance}
+\label{sec:tamp_clutter_results}
+
+\textit{Results pending.} The robot starts surrounded by small floor objects and must
+move them (relocate to a bin) as part of a plan --- \texttt{cleanup} ("clean up the
+room") or \texttt{nav\_goal} ("get to the sofa", clear a path then reach a scene
+landmark). See Section~\ref{sec:tamp_clutter} and Appendix~\ref{app:tamp_clutter}.
+Fill from \texttt{aggregate\_tamp\_clutter.csv}.
+
+\begin{table}[t]
+  \centering
+  \caption{TAMP clutter clearance on MolmoSpaces iTHOR (rby1): task success, objects cleared, and
+  manipulation success rate by mode $\times$ manip mode $\times$ tier.}
+  \label{tab:tamp_clutter}
+  \small
+  \begin{tabular}{@{}lllcccc@{}}
+    \toprule
+    Mode & Tier & Manip & Task succ. & Obj. cleared & Manip rate & Wall (s) \\
+    \midrule
+    cleanup & S1 & latch & 3/4 & 17/18 & 0.94 & 120 \\
+    cleanup & S2 & latch & -- & -- & -- & -- \\
+    cleanup & S1 & sim & 6/6 & 27/27 & 1.00 & 80 \\
+    nav\_goal & S1 & latch & 0/3$^{\dagger}$ & 22/24 & 0.92 & 120 \\
+    nav\_goal & S2 & latch & -- & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}
+  \vspace{2pt}
+  {\footnotesize Signal run (25-episode subset, iTHOR scenes 0--1); S2 rows pending the full
+  registry. $^{\dagger}$nav\_goal clears all clutter but the terminal nav is a straight-line
+  teleport and the post-clear chord still hits static furniture (e.g.\ a refrigerator), so the
+  landmark is not reached. See \appref{app:model_choice_quantization}-style finding in
+  \texttt{docs/experiments/tamp\_clutter.md}.}
 \end{table}
 
 \subsection{Other planned results}

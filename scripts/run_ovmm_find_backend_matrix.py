@@ -140,7 +140,7 @@ def main() -> int:
             if args.cpu_only:
                 cmd.append("--cpu-only")
             if explore_override is not None:
-                cmd.extend(["--explore-steps", str(explore_override)])
+                cmd.extend(["--mapping-max-nav-steps", str(explore_override)])
             # GT oracle uses placements; skip rotate unless forced.
             # Perception backends use explore-budget episodes + rotate.
             skip_rotate = args.not_rotate or (backend == "ground_truth" and not args.rotate)

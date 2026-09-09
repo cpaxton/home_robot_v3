@@ -52,3 +52,48 @@ def test_warm_keeps_encoder_release_drops():
     release_siglip_for_vlm(agent)
     assert agent.encoder is None
     assert agent.graph_memory._confirmed_memory_siglip_encoder is None
+
+
+def _patch_shared_siglip(monkeypatch, sent: dict):
+    def fake_get(*, version, device, feature_matching_threshold):
+        sent["device"] = device
+        sent["version"] = version
+        sent["threshold"] = feature_matching_threshold
+        return _FakeEncoder()
+
+    monkeypatch.setattr(
+        "emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder",
+        fake_get,
+    )
+
+
+def test_re_attach_siglip_uses_cpu_when_cuda_unavailable(monkeypatch):
+    """FindRec after submit_answer must re-attach even on cpu_only / no-CUDA hosts."""
+    from emet.eval.dynagraph_vram import re_attach_siglip_encoder
+
+    sent: dict = {}
+    _patch_shared_siglip(monkeypatch, sent)
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    agent = _FakeAgent()
+    agent.encoder = None
+    agent.voxel_map.encoder = None
+    enc = re_attach_siglip_encoder(agent)
+    assert enc is not None
+    assert sent["device"] == "cpu"
+    assert agent.encoder is enc
+    assert agent.voxel_map.encoder is enc
+
+
+def test_re_attach_siglip_cpu_only_even_when_cuda_exists(monkeypatch):
+    from emet.eval.dynagraph_vram import re_attach_siglip_encoder
+
+    sent: dict = {}
+    _patch_shared_siglip(monkeypatch, sent)
+    monkeypatch.setattr("torch.cuda.is_available", lambda: True)
+    agent = _FakeAgent()
+    agent.cpu_only = True
+    agent.encoder = None
+    enc = re_attach_siglip_encoder(agent)
+    assert enc is not None
+    assert sent["device"] == "cpu"
+    assert agent.encoder is enc

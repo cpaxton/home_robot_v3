@@ -46,8 +46,10 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="inspect_graph",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Refresh question keywords and ranked navigation hypotheses from the scene graph "
-            "and SigLIP memory. Use when hypotheses look stale or empty."
+            "QUERY (no motion): where do the voxel map and graph see the question objects? "
+            "Returns detections (kind=proposal, source=voxel, localize_text XYZ) and views "
+            "(graph observations). Voxel obs_ids are handles, not camera frames — "
+            "investigate(obs_id) to go look. A view at the current camera pose is not the object."
         ),
         parameters=_NO_PARAMS,
         returns_info=True,
@@ -56,9 +58,11 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="explore_frontier",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "EXPLORE: grow map coverage when no Investigate place card is worth a closer look "
-            "(or all close looks were ABSENT). Optional 'toward' is weak coverage bias only — "
-            "not a substitute for investigate(obs_id). Prefer investigate on graph/siglip cards first."
+            "EXPLORE: grow map coverage / change rooms. Locate and close-look questions "
+            "must investigate unused voxel detections (source=voxel) first. Location "
+            "multiple-choice may explore even if a keyword detection is listed. "
+            "Optional 'toward' is weak coverage bias only — not a substitute for "
+            "investigate(obs_id) on a listed detection."
         ),
         parameters={
             "type": "object",
@@ -78,13 +82,11 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="investigate",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "INVESTIGATE: closer look at a listed place card (graph/confirmed/siglip "
-            "obs_id). Navigates to a random navigable floor sample in an annulus around "
-            "the object (prefers frontier-adjacent), looks around, verifies/assesses. "
-            "Cards show coverage=open|closed from object-footprint ∩ unexplored frontier. "
-            "Re-call while coverage=open / more_views; when coverage=closed or "
-            "views_exhausted, pick another card or explore_frontier. Optional "
-            "approach_index selects a sample slot (0..N-1)."
+            "INVESTIGATE: closer look at a listed detection or place card. Navigates to a "
+            "floor sample around that XYZ, captures a NEW camera frame, then verifies/assesses "
+            "that frame (not the card id). Voxel/inspect_graph source=voxel handles are "
+            "localize_text XYZ, not a stored image. A graph view at the current camera pose "
+            "is not the object. Do not investigate frontiers."
         ),
         parameters={
             "type": "object",
@@ -141,7 +143,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 "phrase": {"type": "string", "description": "Object phrase to verify (e.g. 'sink')."},
                 "obs_id": {
                     "type": "integer",
-                    "description": "Observation id to verify against (-1 = current best hypothesis).",
+                    "description": (
+                        "Observation id to verify. Omit or -1 = live camera now. Voxel detection handles are not views."
+                    ),
                 },
             },
             "required": ["phrase"],

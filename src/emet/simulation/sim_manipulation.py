@@ -253,10 +253,9 @@ def prefer_kinematic_manip(
 ) -> bool:
     """True when agent should run IK + attach pick/place (not teleport / visual-servo).
 
-    Requires both the server ``kinematic_manip`` capability **and** a registered
-    :class:`~emet.motion.arm_manip_profile.ArmManipProfile` for the robot id.
-    Robosuite may advertise the cap broadly; profile gating prevents KeyError on
-    innate_mars / xlerobot / stretch.
+    Requires the server ``kinematic_manip`` capability (opt-in via
+    :attr:`~emet.robots.base.RobotSpec.advertise_kinematic_manip`) **and** a
+    resolvable :class:`~emet.motion.arm_manip_profile.ArmManipProfile` for the robot id.
     """
     if visual_servo or str(manip_mode).lower() != "kinematic":
         return False

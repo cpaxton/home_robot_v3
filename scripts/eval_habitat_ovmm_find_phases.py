@@ -39,8 +39,29 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--merge-xy-m", type=float, default=None)
     parser.add_argument("--staleness-horizon", type=int, default=None)
-    parser.add_argument("--cpu-only", action="store_true")
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        help="Alias for --device cpu (does not disable agentic find).",
+    )
     parser.add_argument("--not-rotate", action="store_true")
+    parser.add_argument(
+        "--device",
+        choices=("cuda", "cpu"),
+        default="cuda",
+        help="Encoder + VLM device (default: cuda). cpu = CLIP + CPU VLM; use "
+        "--no-agentic-find to skip the VLM loop.",
+    )
+    parser.add_argument(
+        "--agentic-find",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Route FindObj/FindRec through the shared AgenticEQA loop (default: on for "
+        "dynagraph/static_graph, off for dynamem/ground_truth). Independent of --device / "
+        "--cpu-only.",
+    )
+    parser.add_argument("--agentic-max-rounds", type=int, default=None)
+    parser.add_argument("--agentic-max-nav-steps", type=int, default=None)
     parser.add_argument("--benchmark", default="configs/ovmm/benchmark.yaml")
     parser.add_argument("--output-dir", default=None)
     return parser.parse_args()
@@ -81,6 +102,14 @@ def main() -> int:
         cmd.append("--cpu-only")
     if args.not_rotate:
         cmd.append("--not-rotate")
+    if args.device != "cuda":
+        cmd.extend(["--device", args.device])
+    if args.agentic_find is not None:
+        cmd.append("--agentic-find" if args.agentic_find else "--no-agentic-find")
+    if args.agentic_max_rounds is not None:
+        cmd.extend(["--agentic-max-rounds", str(args.agentic_max_rounds)])
+    if args.agentic_max_nav_steps is not None:
+        cmd.extend(["--agentic-max-nav-steps", str(args.agentic_max_nav_steps)])
     for eid in args.episode_ids or []:
         cmd.extend(["--episode-id", eid])
 

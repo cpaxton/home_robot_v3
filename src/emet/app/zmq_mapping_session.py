@@ -113,9 +113,9 @@ def run_mapping_session(
     agent = bundle.agent
     resolved_backend = bundle.backend
     if resolved_backend == "ground_truth":
-        from emet.app.run_dynagraph import _ensure_ground_truth_ready
+        from emet.app.graph_nav_gt import ensure_ground_truth_ready
 
-        _ensure_ground_truth_ready(agent, context="stream")
+        ensure_ground_truth_ready(agent, context="stream")
 
     if on_ready is not None:
         on_ready(bundle)

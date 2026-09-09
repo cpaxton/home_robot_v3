@@ -34,6 +34,7 @@ import zmq
 
 import emet.utils.compression as compression
 from emet.agent.env_flags import env_base_rotate_only
+from emet.config.rerun_config import open_live_rerun_visualizer
 from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
@@ -60,6 +61,7 @@ from emet.simulation.env_flags import env_sim_nav_teleport, warn_sim_nav_env_fla
 from emet.utils.image import align_camera_matrix_to_image_size
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -259,6 +261,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
         gps=obs.get("gps", np.zeros(2)),
         compass=obs.get("compass", np.zeros(1)),
         third_person_image=obs.get("third_person_image"),
+        overhead_image=obs.get("overhead_image"),
         seq_id=int(obs.get("step", -1)) if obs.get("step") is not None else -1,
         is_simulation=bool(obs.get("is_simulation", False)),
         emet_session=read_emet_session(obs),
@@ -350,16 +353,12 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         self._rerun_debug = bool(rerun_debug) if enable_rerun_server else False
         self._rerun: Any = None
         self._rerun_thread: threading.Thread | None = None
-        if enable_rerun_server:
-            from emet.config.rerun_config import build_rerun_visualizer_kwargs
-            from emet.visualization.rerun import RerunVisualizer
 
-            out_p = Path(output_path) if output_path is not None else None
-            if out_p is not None and not out_p.exists():
-                out_p.mkdir(parents=True, exist_ok=True)
+        mjcf_robot = None
+        use_mjcf = False
+        if enable_rerun_server:
             mjcf_p = getattr(self._spec, "mjcf_path", None)
             use_mjcf = bool(mjcf_p and Path(str(mjcf_p)).is_file())
-            mjcf_robot = None
             if use_mjcf:
                 mjcf_robot = (
                     str(Path(str(mjcf_p)).resolve()),
@@ -367,20 +366,16 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     int(self._spec.dof),
                     str(self._spec.base_link_name),
                 )
-            rerun_kwargs = build_rerun_visualizer_kwargs(
-                self._parameters,
-                output_path=out_p,
-                display_robot_mesh=use_mjcf,
-                mjcf_robot=mjcf_robot,
-                cli_headless=rerun_headless,
-                cli_native_viewer=rerun_native_viewer,
-                cli_show_panels=rerun_show_panels,
-            )
-            self._rerun = RerunVisualizer(**rerun_kwargs)
-        else:
-            from emet.visualization.rerun import NullVisualizer
-
-            self._rerun = NullVisualizer()
+        self._rerun = open_live_rerun_visualizer(
+            self._parameters,
+            enabled=enable_rerun_server,
+            output_path=output_path,
+            display_robot_mesh=use_mjcf,
+            mjcf_robot=mjcf_robot,
+            cli_headless=rerun_headless,
+            cli_native_viewer=rerun_native_viewer,
+            cli_show_panels=rerun_show_panels,
+        )
 
         # ZMQ sockets
         self.context = zmq.Context()
@@ -547,7 +542,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             self._state_thread.start()
             self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
             self._servo_thread.start()
-            if getattr(self._rerun, "enabled", False) and self._rerun_thread is None:
+            if visualizer_is_enabled(self._rerun) and self._rerun_thread is None:
                 self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)
                 self._rerun_thread.start()
         if not self._wait_for_zmq_ready():
@@ -620,7 +615,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         while not self._finish:
             if not self._wait_if_streams_paused():
                 return
-            if getattr(self._rerun, "enabled", False):
+            if visualizer_is_enabled(self._rerun):
                 with self._obs_lock:
                     obs = self._obs
                     servo_obs = self._servo_obs_rerun
@@ -728,6 +723,11 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     output["third_person_image"] = compression.from_jpg(output["third_person_image"])
                 except Exception:
                     output["third_person_image"] = None
+            if "overhead_image" in output and output["overhead_image"] is not None:
+                try:
+                    output["overhead_image"] = compression.from_jpg(output["overhead_image"])
+                except Exception:
+                    output["overhead_image"] = None
             enrich_zmq_observation_ee_fields(output)
             raw_depth = output.get("depth")
             if raw_depth is None:
@@ -948,6 +948,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             gps=gps,
             compass=compass,
             third_person_image=obs.get("third_person_image"),
+            overhead_image=obs.get("overhead_image"),
             emet_session=read_emet_session(obs),
             image_timing=read_image_timing(obs),
         )

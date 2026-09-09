@@ -41,6 +41,9 @@ def get_robot_mjcf_path(robot_key: str) -> Path | None:
     if robot_key in ("innate_mars", "maurice"):
         path = get_mujoco_models_path() / "innate_mars" / "innate_mars.xml"
         return path if path.exists() else None
+    if robot_key in ("nori", "nori_a3"):
+        path = get_mujoco_models_path() / "nori_a3" / "nori_a3.xml"
+        return path if path.exists() else None
     if robot_key in ("xlerobot", "xlerobot_dual"):
         path = get_mujoco_models_path() / "xlerobot" / "xlerobot.xml"
         return path if path.exists() else None

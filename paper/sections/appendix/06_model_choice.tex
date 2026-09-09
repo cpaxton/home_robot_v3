@@ -34,6 +34,7 @@ A \textbf{32B int4} checkpoint (e.g.\ \texttt{Qwen3-VL-32B-Instruct}) is a \emph
     \midrule
     Qwen2.5-VL-3B~\citep{qwen25vl} & 3B & bf16 & $\sim$13\,GB & control; int4 unstable for this arch \\
     Qwen3-VL-8B~\citep{qwen3vl} & 8B & int4 & $\sim$13\,GB & native bbox grounding \\
+    Qwen3-VL-8B~\citep{qwen3vl} & 8B & fp16 (Orin) & $\sim$18\,GB & same model, unquantized; served remotely \\
     Qwen3.5-9B~\citep{qwen35} & 9B & int4 & $\sim$13\,GB & natively multimodal; hybrid DeltaNet \\
     Gemma-4-E4B~\citep{gemma4} & 4B eff. & int4 & $\sim$12\,GB & MatFormer; no native grounding \\
     \bottomrule
@@ -104,6 +105,50 @@ model-limited rather than exploration-limited on this slice. The balanced-31 run
 8B winner was in progress at submission time; we report its JSONL path in the reproduction
 doc above.
 
+\subsection{Quantization is not free: int4 vs.\ fp16 on the same 8B}
+\label{app:model_choice_quantization}
+
+The bake-off above is run on a single 24\,GB GPU, which forces 4-bit NF4
+quantization~\citep{dettmers2023qlora} for the 8B winner. To isolate the cost of that
+precision, we served the \emph{same} \texttt{Qwen3-VL-8B} unquantized in fp16 on a
+separate NVIDIA AGX Orin (61\,GiB unified memory) over an OpenAI-compatible HTTP
+endpoint (\texttt{EMET\_VL\_ENDPOINT}), and re-ran a representative 30-question subset of
+HM-EQA with the identical Dynagraph harness, exploration budget, and debiasing pipeline.
+Only the weight precision differs.
+
+\begin{table}[h]
+  \centering
+  \caption{30-qid HM-EQA subset, same harness, same qids: fp16 vs.\ int4 (Qwen3-VL-8B).}
+  \label{tab:vlm_precision}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Precision & Correct & Accuracy \\
+    \midrule
+    int4 (local 4090) & 9/30 & 30\% \\
+    \textbf{fp16 (remote Orin)} & \textbf{16/30} & \textbf{53\%} \\
+    \midrule
+    $\Delta$ & \textbf{+7} & \textbf{+23\,pp} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+fp16 recovers seven additional correct answers (+78\% relative). The gain is not uniform:
+it is concentrated in the count/clock slice (10/15 vs.\ 6/15), where the task demands
+reading fine visual detail (clock hands, shelf counts, mat placement) that 4-bit
+quantization distorts; on a separate 15-qid diverse slice fp16 was roughly flat (6/15
+vs.\ 5/15). This is the first clean same-model measurement that quantization cost is
+\emph{task-dependent} and material: an unquantized (or larger) VLM is a first-class lever,
+not a footnote. Prior work reporting higher embodied-EQA accuracy with stronger VLMs may
+partly reflect this precision effect rather than model-family superiority alone.
+
+Operationally, the fp16 arm ran $\sim$3--4$\times$ slower (Orin nvgpu + HTTP JPEG
+transport, $\sim$10--13\,min/qid vs.\ $\sim$3\,min int4 in-process), so precision is
+traded against wall-clock on a fixed GPU; the remote-Orin split amortizes that by
+offloading the VLM off the single 24\,GB card. Pitfalls for reproducing the remote arm
+(fp16-only serve, \texttt{HF\_HOME}, ssh detachment, float32 OOM) are documented in
+\texttt{docs/experiments/vlm\_quantization.md}.
+
 \subsection{Why a newer, larger generalist loses}
 \label{app:model_choice_failures}
 
@@ -162,9 +207,11 @@ memory can dominate VLM choice independently of model quality.
   \item \textbf{Prefer grounding-trained VLMs} (Qwen3-VL) over higher-benchmark
   generalists (Qwen3.5) at equal VRAM when the task requires literal presence/counting
   and tight instruction following.
-  \item \textbf{$\sim$8B int4 is the practical ceiling} on a 24\,GB GPU shared with
+  \item \textbf{$\sim$8B int4 is the practical ceiling} on a single 24\,GB GPU shared with
   Habitat and SigLIP; upsizing from 3B bf16 to 8B int4 yielded the largest accuracy gain
-  we measured (+3/6 on canonical-6).
+  we measured (+3/6 on canonical-6). But precision is the next lever: the same 8B in fp16
+  (served on a remote Orin) adds another +7/30 (+23\,pp) on a 30-qid subset, concentrated
+  on fine-detail count/clock questions.
   \item \textbf{Measure position bias and format compliance directly} on your MCQ pipeline
   --- they moved end-task accuracy more than headline benchmark deltas between Qwen
   generations.

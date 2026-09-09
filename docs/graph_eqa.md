@@ -19,6 +19,23 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 
 **Room timeline:** the same memory keeps a capped room-scoped event history (`stamp` / `verify_absent` / `coverage_closed`, …) for the agentic state card — agent-visible facts, not a nav escape latch. See [attempt_ledger.md](attempt_ledger.md#room-timeline-graph-history).
 
+**Close-look map:** occupancy is not a resolved look at a small object. A 2D grid aligned with the voxel map stores min camera range + aimed hits; agentic find stays on a place card until close or escape. See [close_map.md](close_map.md).
+
+## Public API
+
+Import from the package, not from mixin or subpackage modules:
+
+```python
+from emet.memory.graph_eqa import (
+    GraphEQAMemory,
+    AgenticEQAExecutor,
+    NavHypothesis,
+    run_agentic_eqa,
+)
+```
+
+`graph_memory.py`, `agentic_eqa.py`, and the `agentic/` / `ingest/` / `spatial/` / `eqa/` / `eval/` subpackages are implementation. Old mixin paths stay importable for `mock.patch`. New callers outside `emet.memory.graph_eqa` should use the package. See [graph_memory.md](graph_memory.md).
+
 ## When to use GraphEQA vs DynaMem EQA
 
 | | **EQA (DynaMem)** | **Graph EQA** |
@@ -52,7 +69,7 @@ Other options (mirroring `run_eqa`):
 
 - `--not_rotate_in_place` / `-N`: skip initial rotation-in-place scan.
 - `--discord` / `-D`: use the Discord bot (task `graph_eqa`).
-- `--save_rerun` / `--SR`: save Rerun logs under `graph_eqa_log/`.
+- `--save_rerun` / `--SR`: write `graph_eqa_log/…/data_N.rrd` on rotate / navigate / EQA (live viewer stays up).
 
 Example:
 
@@ -139,7 +156,7 @@ emet run graph-eqa --robot-ip 127.0.0.1
    - Use the current scene graph (and task-relevant images) to try to answer.
    - If not confident, it will **navigate to a suggested frontier** and **look around** again; each observation updates the graph with new object labels from the encoder.
    - Repeat until it can answer with confidence or hits the step limit.
-4. The graph is updated on every controller step via `update_graph_memory_from_dynamem_observation` in `dynamem_graph_hooks.py`. With **`use_instance_graph: true`** (default for Dynagraph / `agent_*.yaml`), YoloE instance masks on each voxel **Frame** become labeled 3D nodes with **bbox crops** in the Rerun mosaic (`frame_instances_to_labels_xyz` reshapes depth unprojection to H×W×3). **YoloE runs at a low confidence threshold on purpose** (high-recall **candidate proposals** for instance/graph construction — not calibrated chat captions). With **`use_sensor_perception: true`** as well, the VLM may add extra nodes for objects the detector missed (deduped by label + XY; VLM nodes have no bbox and are omitted from the mosaic). **`--no-instance-graph`** or **`--no-sensor-perception`** disable the corresponding path. User-facing “what do you see” (`describe_scene`) should answer from the **VLM** and/or **graph memory**, not by dumping raw low-conf detector class names.
+4. The graph is updated on every controller step via `update_graph_memory_from_dynamem_observation` in `ingest/dynamem_graph_hooks.py`. With **`use_instance_graph: true`** (default for Dynagraph / `agent_*.yaml`), YoloE instance masks on each voxel **Frame** become labeled 3D nodes with **bbox crops** in the Rerun mosaic (`frame_instances_to_labels_xyz` reshapes depth unprojection to H×W×3). **YoloE runs at a low confidence threshold on purpose** (high-recall **candidate proposals** for instance/graph construction — not calibrated chat captions). With **`use_sensor_perception: true`** as well, the VLM may add extra nodes for objects the detector missed (deduped by label + XY; VLM nodes have no bbox and are omitted from the mosaic). **`--no-instance-graph`** or **`--no-sensor-perception`** disable the corresponding path. User-facing “what do you see” (`describe_scene`) should answer from the **VLM** and/or **graph memory**, not by dumping raw low-conf detector class names.
 
 So “find some known object” means: **ask about an object that is actually in the scene** (e.g. an apple or a pot in the default Robocasa task). The robot will explore until the graph contains enough information for the mLLM to answer.
 
@@ -148,7 +165,7 @@ So “find some known object” means: **ask about an object that is actually in
 EQA answers are formatted for **people and agents**, not internal image indices:
 
 - The mLLM may reason about “Image 1 / Image 8” in **reasoning**, but the **answer** shown to users is a short sentence with **object names and scene coordinates** (e.g. *The sink is on the counter at (2.1, -0.8, 0.9) m*).
-- **Attached RGB:** `query_answer` shows **full camera frames** for FIND / Action-pinned observations (the graph is an index into stored views, not the count). **Visual FIND** is DynaMem retrieve: question Qwen names phrases → voxel SigLIP `find_all_images` (top‑k, not argmax) mapped onto graph RGB, spread in XY. Habitat snapshots those ranks in `prepare_dynagraph_vram_for_eqa` *before* GPU SigLIP is dropped for Qwen — `query_answer` cannot `encode_text` after that release. An optional live-frame Qwen highlight (“what in this image could answer?”) adds extra SigLIP queries when phrases retrieve poorly (e.g. “what time is it” vs a wall clock). Time / sign / oven-display questions are not special-cased. The EQA ``action`` field may be ``""``, an Image id, or **``read N``** when the answer is written or shown in Image N but not legible. The controller may **stay** / approach that attached view when the VLM is still gathering evidence (especially ``read N``), but **releases** to frontier explore when VIEW_STATUS marks a view spent/risky, the graph does not yet cover relevant objects, or the VLM returns Unknown without a read action. **VIEW_STATUS** (in the HM-EQA prompt) exposes per-Image visit/look/read/Unknown counters so Qwen can switch views or leave ``action`` empty instead of looping on one frame. YoloE class strings are leftover recall, not Image 1. GRAPH_COUNT lists retrieved views; list length is never the answer. Detector close-ups remain labeled extras of an already-attached scene. SigLIP only proposes RGB — it is not an “object confirmed” oracle.
+- **Attached RGB:** `query_answer` shows **full camera frames** for FIND / Action-pinned observations (the graph is an index into stored views, not the count). **Visual FIND** is DynaMem retrieve: question Qwen names phrases → voxel SigLIP `find_all_images` (top‑k, not argmax) mapped onto graph RGB, spread in XY. Habitat snapshots those ranks in `prepare_dynagraph_vram_for_eqa` *before* GPU SigLIP is dropped for Qwen — `query_answer` cannot `encode_text` after that release. An optional live-frame Qwen highlight (“what in this image could answer?”) adds extra SigLIP queries when phrases retrieve poorly (e.g. “what time is it” vs a wall clock). Time / sign / oven-display questions are not special-cased. The EQA ``action`` field may be ``""``, an Image id, or **``read N``** when the answer is written or shown in Image N but not legible. The controller may **stay** / approach that attached view when the VLM is still gathering evidence (especially ``read N``), but **releases** to frontier explore when VIEW_STATUS marks a view spent/risky, the graph does not yet cover relevant objects, or the VLM returns Unknown without a read action. **VIEW_STATUS** (in the HM-EQA prompt) exposes per-Image visit/look/read/Unknown counters so Qwen can switch views or leave ``action`` empty instead of looping on one frame. YoloE class strings are leftover recall, not Image 1. GRAPH_COUNT / FIND lists instance-node and CONFIRMED_MEMORY LOOK obs ids first (unattached, in-room); visual-find is extras and must not replace spawn RGB already attached as Image 1. List length is never the answer. Detector close-ups remain labeled extras of an already-attached scene. SigLIP only proposes RGB — it is not an “object confirmed” oracle.
 - **`emet run agent`**: use **`query_scene_graph`** for where-is / what-is questions; tool results look like `Answer: …`, `Location: …`, `Confidence: …`.
 - When **`Nodes (0)`** in export, answers may rely on navigation viewpoints only until graph merge populates nodes; see [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
 
@@ -170,13 +187,15 @@ Calibrate thresholds on one Robocasa seed: **`emet export-sim-gt`**, **`emet run
 
 ## Code layout
 
+Package architecture, glossary, and the two EQA loops: **[graph_memory.md](graph_memory.md)**. The code name is `graph_eqa`; the thing is **graph memory**.
+
 All three memory models:
 
 | Memory model | Package | Notes |
 |--------------|---------|--------|
 | **Sparse voxel map** | `emet.mapping.voxel` | `SparseVoxelMap`; base voxel map used by default agent. |
 | **DynaMem** | `emet.memory.dynamem` / `emet.mapping.voxel` | Re-exports `SparseVoxelMapDynamem`; VL + EQA voxel memory. |
-| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` in `graph_memory.py`. |
+| **Graph memory** | `emet.memory.graph_eqa` | `GraphEQAMemory` facade + `GraphStore`. Classic `query_answer` and agentic tools share the same store. Close-look occupancy grid: [close_map.md](close_map.md). |
 
 Other components:
 
@@ -184,10 +203,10 @@ Other components:
 |-----------|----------|
 | GraphEQA agent | `src/emet/controller/controller_graph_eqa.py` (`GraphEQAController`) |
 | Dynagraph agent | `src/emet/controller/controller_dynagraph.py` — merge/staleness on `GraphEQAMemory`; see [dynagraph.md](dynagraph.md) |
-| Attempt ledger | `attempt_ledger.py` / `attempt_metrics.py` on `GraphEQAMemory` — [attempt_ledger.md](attempt_ledger.md) |
+| Attempt ledger | `attempt_ledger.py` / `store.py` on `GraphEQAMemory` — [attempt_ledger.md](attempt_ledger.md) |
 | App entry point | `src/emet/app/run_graph_eqa.py` |
-| Dynagraph app | `src/emet/app/run_dynagraph.py` |
-| Plan (design) | [docs/plans/GRAPH_EQA_PLAN.md](plans/GRAPH_EQA_PLAN.md) |
+| Dynagraph / LazyGraph app | `src/emet/app/run_dynagraph.py` / `run_lazy_graph.py` (shared CLI: `graph_nav_cli.py`, `configure_graph_nav`) |
+| Plan (design) | [docs/plans/GRAPH_EQA_PLAN.md](plans/GRAPH_EQA_PLAN.md) (historical; see graph_memory.md for current layout) |
 
 ## Tests and contributing
 

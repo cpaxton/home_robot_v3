@@ -57,7 +57,7 @@ from emet.memory.headless_export import export_graph_eqa_dir
     "--save_rerun",
     "--SR",
     is_flag=True,
-    help="Whether to save Rerun rrd",
+    help="Write logs/…/data_N.rrd on rotate/navigate/EQA (does not reset a live viewer)",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(

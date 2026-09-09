@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from emet.config.rerun_config import eval_rerun_enabled
 from emet.simulation.sim_subprocess import wait_for_sim_tcp_port
 
 
@@ -140,15 +141,26 @@ def benchmark_sim_server(
         terminate_benchmark_sim_server(sim)
 
 
-def connect_benchmark_robot(sim_cfg: Any, port_offset: int) -> Any:
-    """ZMQ client for an already-running benchmark sim server."""
+def connect_benchmark_robot(
+    sim_cfg: Any,
+    port_offset: int,
+    *,
+    enable_rerun_server: bool | None = None,
+    rerun_headless: bool = False,
+) -> Any:
+    """ZMQ client for an already-running benchmark sim server.
+
+    Pass ``enable_rerun_server=True`` from a ``--rerun`` CLI flag. When omitted,
+    OVMM/eval callers still honor ``eval_rerun_enabled()``.
+    """
     from emet.app.robot_cli import create_robot_client_from_cli
 
     robot = create_robot_client_from_cli(
         str(getattr(sim_cfg, "robot", "stretch")),
         "127.0.0.1",
         port_offset=int(port_offset),
-        enable_rerun_server=False,
+        enable_rerun_server=bool(eval_rerun_enabled() if enable_rerun_server is None else enable_rerun_server),
+        rerun_headless=bool(rerun_headless),
         start_immediately=True,
         allow_missing_depth=True,
     )

@@ -13,6 +13,7 @@ from emet.controller.task.tamp.task_search import (
     TaskPlan,
     TaskPlanStep,
     approach_pose_for_object_xy,
+    execute_task_plan,
     plan_pick_place,
     rank_grasps_by_ik,
 )
@@ -43,10 +44,39 @@ class _FakeGrasp:
         self.position = T[:3, 3].copy()
 
 
+class _FakeVideo:
+    def __init__(self):
+        self.dumps: list[str] = []
+        self.captures = 0
+
+    def set_status(self, action: str = "", *, goal=None, detail=None):
+        return None
+
+    def capture_once(self):
+        self.captures += 1
+        return True
+
+    def dump_paper_stills(self, tag: str):
+        self.dumps.append(str(tag))
+        return {}
+
+
 def test_approach_pose_faces_minus_y():
     p = approach_pose_for_object_xy([1.0, 2.0], standoff=0.4)
     assert abs(p[0] - 1.0) < 1e-9
     assert abs(p[1] - 2.4) < 1e-9
+    assert abs(p[2] + np.pi / 2) < 1e-9
+
+
+def test_approach_pose_side_left_yaw_plus_half_pi():
+    p = approach_pose_for_object_xy([0.08, -0.55], standoff=0.55, mode="side", arm="left")
+    assert abs(p[0] - 0.08) < 1e-9
+    assert abs(p[1] - 0.0) < 1e-9
+    assert abs(p[2] - np.pi / 2) < 1e-9
+
+
+def test_approach_pose_side_right_yaw_minus_half_pi():
+    p = approach_pose_for_object_xy([0.08, -0.55], standoff=0.55, mode="side", arm="right")
     assert abs(p[2] + np.pi / 2) < 1e-9
 
 
@@ -162,6 +192,31 @@ def test_plan_pick_place_without_executor():
     assert any("approach@" in n for n in plan.expanded_nodes)
 
 
+def test_plan_pick_place_uses_spec_side_approach():
+    from types import SimpleNamespace
+
+    pl = {
+        "obj_a": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6]},
+        "cube_b": {"cat": "blue cube", "pos": [-0.02, -0.55, 0.6]},
+    }
+    robot = _FakeRobot(pl)
+    robot._spec = SimpleNamespace(tamp_approach="side")
+    grasps = [_FakeGrasp([0.08, -0.55, 0.62])]
+    plan = plan_pick_place(
+        robot,
+        object_query="red cylinder",
+        receptacle_query="blue cube",
+        grasp_poses=grasps,
+        object_gt_body="obj_a",
+        receptacle_gt_body="cube_b",
+        executor=None,
+    )
+    assert plan.success
+    xyt = plan.steps[0].args["xyt"]
+    assert abs(xyt[2] - np.pi / 2) < 1e-9
+    assert any("mode=side" in n for n in plan.expanded_nodes)
+
+
 def test_plan_missing_object():
     robot = _FakeRobot({})
     plan = plan_pick_place(
@@ -179,3 +234,75 @@ def test_plan_missing_object():
 def test_task_plan_dataclass():
     p = TaskPlan(steps=[TaskPlanStep("approach", {"xyt": [0, 0, 0]})], object_body="a", receptacle_body=None)
     assert p.steps[0].op == "approach"
+
+
+def test_execute_task_plan_dumps_stills_per_op():
+    robot = _FakeRobot({})
+    video = _FakeVideo()
+    plan = TaskPlan(
+        steps=[TaskPlanStep("approach", {"xyt": [0.08, 0.0, 1.57], "world_frame": True})],
+        object_body="obj_a",
+        receptacle_body="cube_b",
+    )
+    out = execute_task_plan(robot, plan, executor=None, grasp_poses=[], manip_mode="teleport", video_recorder=video)
+    assert out.success
+    assert out.completed_ops == ["approach"]
+    assert video.captures == 1
+    assert video.dumps == ["approach"]
+    assert len(robot.moved) == 1
+
+
+def test_sourccey_side_approach_reaches_default_table_cylinder():
+    """CPU: left-arm IK to the default-table red cylinder from the side standoff.
+
+    The rby1 front pose (yaw=−π/2 at y=+0.55) misses this workspace by >1 m.
+    """
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
+    from emet.motion.arm_manip_profile import ArmManipProfile
+    from emet.motion.mujoco_arm_ik import solve_position_ik_multiseed
+    from emet.robots.sourccey import SourcceyBackend
+    from emet.simulation.sim_object_placements import DEFAULT_TABLE_SCENE_PLACEMENTS
+
+    spec = SourcceyBackend().get_spec()
+    assert spec.tamp_approach == "side"
+    obj = np.asarray(DEFAULT_TABLE_SCENE_PLACEMENTS["object2"]["pos"], dtype=np.float64)
+    approach = approach_pose_for_object_xy(obj[:2], mode="side", arm="left")
+    assert abs(approach[2] - np.pi / 2) < 1e-9
+
+    model = mujoco.MjModel.from_xml_path(str(spec.mjcf_path))
+    data = mujoco.MjData(model)
+    if model.nkey:
+        data.qpos[:] = model.key_qpos[0]
+    write_offline_mjcf_base_xyt(model, data, approach, planar_joint_names=spec.planar_base_joint_names)
+    mujoco.mj_forward(model, data)
+    prof = ArmManipProfile.for_robot("sourccey", arm="left")
+    res = solve_position_ik_multiseed(
+        model,
+        data,
+        ee_body=prof.ee_body,
+        joint_names=prof.joint_names,
+        target_pos=obj,
+        max_iters=80,
+        tol_m=0.05,
+    )
+    assert res.success, f"side approach IK err={res.pos_error_m:.3f} m (approach={approach.tolist()})"
+    assert res.pos_error_m < 0.05
+
+    front = approach_pose_for_object_xy(obj[:2], mode="front", arm="left")
+    write_offline_mjcf_base_xyt(model, data, front, planar_joint_names=spec.planar_base_joint_names)
+    if model.nkey:
+        data.qpos[4:] = model.key_qpos[0][4:]
+    mujoco.mj_forward(model, data)
+    front_res = solve_position_ik_multiseed(
+        model,
+        data,
+        ee_body=prof.ee_body,
+        joint_names=prof.joint_names,
+        target_pos=obj,
+        max_iters=80,
+        tol_m=0.05,
+    )
+    assert not front_res.success
+    assert front_res.pos_error_m > 0.5

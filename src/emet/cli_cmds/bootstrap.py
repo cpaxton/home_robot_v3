@@ -152,6 +152,8 @@ def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     """Run a Python module. Returns exit code."""
     from emet.utils.pythonpath import sanitize_emet_subprocess_env
 
+    # Child env: drop ROS PYTHONPATH, prepend tagged venv site-packages. Must run
+    # before spawn — mujoco_server imports numpy at module load (see pythonpath.py).
     env = sanitize_emet_subprocess_env(env)
     # Prefer project .venv so the subprocess has the same deps (e.g. robocasa for mujoco server).
     venv_py = _project_venv_python()

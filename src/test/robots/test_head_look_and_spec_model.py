@@ -35,9 +35,9 @@ def test_apply_head_to_r1_sets_torso_when_no_head():
             return -1
         if name == "head_tilt":
             return -1
-        if name == "torso2":
+        if name == "torso1":
             return 6
-        if name == "torso3":
+        if name == "torso4":
             return 7
         return -1
 
@@ -50,8 +50,8 @@ def test_apply_head_to_r1_sets_torso_when_no_head():
                 [-1.0, 1.0],
                 [-1.0, 1.0],
                 [-1.0, 1.0],
-                [-0.5, 0.5],
-                [-0.4, 0.4],
+                [-1.5, 1.5],
+                [-3.2, 3.2],
                 [-1, 1],
                 [-1, 1],
                 [-1, 1],
@@ -82,8 +82,8 @@ def test_apply_head_to_r1_sets_torso_when_no_head():
 
         n = apply_head_to_robosuite(spec, model, data, 0.5, -0.3)
     assert n == 2
-    assert data.ctrl[6] != 0.0
-    assert data.ctrl[7] != 0.0
+    assert abs(float(data.ctrl[6]) - (-0.3)) < 1e-6
+    assert abs(float(data.ctrl[7]) - 0.25) < 1e-6
 
 
 def test_spec_robot_model_footprint_from_spec():

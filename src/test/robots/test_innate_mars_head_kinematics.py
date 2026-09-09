@@ -16,7 +16,9 @@ import pytest
 from emet.robots.innate_mars.head_kinematics import (
     camera_pose_in_base_link,
     compare_mjcf_camera_to_zmq,
+    head_hinge_rad_from_base_head_tf,
     infer_joint_head_from_camera_pose,
+    ros_head_deg_to_mjcf_rad,
 )
 
 
@@ -56,6 +58,14 @@ def test_sim_zmq_camera_pose_matches_mjcf_fk():
     finally:
         proc.terminate()
         proc.wait(timeout=15)
+
+
+def test_ros_head_deg_to_mjcf_rad_sign():
+    assert ros_head_deg_to_mjcf_rad(10.0) == -np.deg2rad(10.0)
+
+
+def test_head_hinge_from_identity_tf():
+    assert head_hinge_rad_from_base_head_tf(np.eye(4)) == 0.0
 
 
 def test_camera_pose_in_base_link_identity():

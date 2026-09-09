@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 
+from emet.eval.ovmm_find_phase import mapping_budget_from_row
 from emet.utils.config import resolve_config_yaml_path
 
 SWEEPS_DIR = "configs/ovmm/sweeps"
@@ -137,7 +138,7 @@ def _episode_dict(
     start_recep: str,
     goal_recep: str,
     success_radius_m: float,
-    explore_steps: int,
+    mapping_max_nav_steps: int,
     object_gt_body: str | None = None,
 ) -> dict[str, Any]:
     ep: dict[str, Any] = {
@@ -148,7 +149,7 @@ def _episode_dict(
         "start_recep": start_recep,
         "goal_recep": goal_recep,
         "success_radius_m": float(success_radius_m),
-        "explore_steps": int(explore_steps),
+        "mapping_max_nav_steps": int(mapping_max_nav_steps),
     }
     if object_gt_body:
         ep["object_gt_body"] = object_gt_body
@@ -175,7 +176,7 @@ def _expand_robocasa_episodes(
     start_recep = str(block.get("start_recep", "counter"))
     goal_recep = str(block.get("goal_recep", "cab"))
     radius = float(block.get("success_radius_m", 0.5))
-    explore = int(block.get("explore_steps", 8))
+    explore = mapping_budget_from_row(block, source=f"sweep robocasa {suffix}", default=8)
     tier = str(block.get("tier", "S1"))
     eps: list[dict[str, Any]] = []
     for layout in layouts:
@@ -195,7 +196,7 @@ def _expand_robocasa_episodes(
                 start_recep=start_recep,
                 goal_recep=goal_recep,
                 success_radius_m=radius,
-                explore_steps=explore,
+                mapping_max_nav_steps=explore,
                 object_gt_body=str(object_gt_body) if object_gt_body else None,
             )
         )
@@ -238,7 +239,7 @@ def _expand_molmo_episodes(
                 start_recep=str(row.get("start_recep", "cabinet")),
                 goal_recep=str(row.get("goal_recep", "microwave")),
                 success_radius_m=float(row.get("success_radius_m", 0.75)),
-                explore_steps=int(row.get("explore_steps", 15)),
+                mapping_max_nav_steps=mapping_budget_from_row(row, source=f"sweep molmo {ep_id}", default=15),
                 object_gt_body=str(row["object_gt_body"]) if row.get("object_gt_body") else None,
             )
         )
@@ -362,8 +363,8 @@ def aggregate_ovmm_rates(
     # Prefer scored-phase denominators when present (unscored ≠ localization miss).
     obj_scored = [r for r in find_rows if r.get("find_object_scored", True)]
     recep_scored = [r for r in find_rows if r.get("find_recep_scored", True)]
-    fo = sum(1 for r in obj_scored if r.get("find_object_success"))
-    fr = sum(1 for r in recep_scored if r.get("find_recep_success"))
+    n_find_obj = sum(1 for r in obj_scored if r.get("find_object_success"))
+    n_find_recep = sum(1 for r in recep_scored if r.get("find_recep_success"))
     n_obj = len(obj_scored)
     n_recep = len(recep_scored)
     mp = sum(float(r.get("find_partial_success") or 0) for r in find_rows) / max(n, 1)
@@ -378,8 +379,8 @@ def aggregate_ovmm_rates(
             "n": n,
             "n_object_scored": n_obj,
             "n_recep_scored": n_recep,
-            "find_object": fo,
-            "find_recep": fr,
+            "find_object": n_find_obj,
+            "find_recep": n_find_recep,
             "mean_partial": mp,
             "skipped_bind_or_init": bind_fail,
             "rows": [{k: r.get(k) for k in FIND_RATE_KEYS} for r in find_rows],
@@ -396,8 +397,8 @@ def aggregate_ovmm_rates(
     rates_path.write_text(json.dumps(rates, indent=2) + "\n", encoding="utf-8")
     print(
         f"FIND (excl bind/init fails): n={n} "
-        f"FindObj={fo}/{n_obj} ({100 * fo / max(n_obj, 1):.0f}%) "
-        f"FindRec={fr}/{n_recep} ({100 * fr / max(n_recep, 1):.0f}%) "
+        f"FindObj={n_find_obj}/{n_obj} ({100 * n_find_obj / max(n_obj, 1):.0f}%) "
+        f"FindRec={n_find_recep}/{n_recep} ({100 * n_find_recep / max(n_recep, 1):.0f}%) "
         f"mean_partial={mp:.3f} skipped={bind_fail}"
     )
     print(

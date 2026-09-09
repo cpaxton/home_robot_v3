@@ -40,12 +40,58 @@ def _vram_free_mib() -> float | None:
         return None
 
 
+def re_attach_siglip_encoder(agent: Any) -> Any | None:
+    """Re-attach the shared SigLIP encoder after :func:`release_siglip_for_vlm`.
+
+    ``release_siglip_for_vlm`` drops ``agent.encoder`` / ``voxel_map.encoder`` so
+    Qwen can load; the agentic find loop runs *per phase* (FindObj then FindRec),
+    and each phase needs ``localize_text`` on the finished map. Without re-attaching,
+    the second phase's localize silently returns nothing (SigLIP cosine over an
+    ``encoder=None`` voxel) and the loop can only explore. ``warm_*`` snapshots
+    cached ranks but does not restore the live encoder, so call this from the warm
+    path.
+
+    Device follows the agent (``cpu_only`` / ``device``) and falls back to CUDA
+    when it is available, otherwise CPU. Find-phase ``cpu_only`` episodes still
+    need ``localize_text`` on FindRec after FindObj's ``submit_answer``.
+    """
+    import torch
+
+    cpu_only = bool(getattr(agent, "cpu_only", False))
+    want = getattr(agent, "device", None)
+    if cpu_only or (isinstance(want, str) and want.strip().lower() == "cpu"):
+        device = "cpu"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
+    from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+    enc = get_shared_mask_siglip_encoder(version="so400m", device=device, feature_matching_threshold=0.14)
+    if enc is None:
+        return None
+    agent.encoder = enc
+    vm = getattr(agent, "voxel_map", None)
+    if vm is not None:
+        vm.encoder = enc
+    gm = getattr(agent, "graph_memory", None)
+    if gm is not None and hasattr(gm, "set_confirmed_memory_siglip_encoder"):
+        try:
+            gm.set_confirmed_memory_siglip_encoder(enc)
+        except Exception:
+            pass
+    return enc
+
+
 def warm_siglip_confirmed_memory(agent: Any) -> None:
     """Snapshot SigLIP CONFIRMED_MEMORY features and visual FIND ranks.
 
     Keep the encoder attached for agentic verify; answer-only / Habitat then
     calls :func:`release_siglip_for_vlm` so Qwen can load. FIND after that
-    release uses the ranks cached here.
+    release uses the ranks cached here. Do **not** re-attach the encoder here —
+    HM-EQA relies on the released state (SigLIP dropped before Qwen); the OVMM
+    find harness calls :func:`re_attach_siglip_encoder` explicitly so its
+    second find phase can still ``localize_text`` on the finished map.
     """
     from emet.memory.graph_eqa.graph_eqa_siglip import warm_graph_eqa_siglip_confirmed_memory
 

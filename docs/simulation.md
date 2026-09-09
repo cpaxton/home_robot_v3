@@ -33,6 +33,8 @@ emet serve mujoco
 # or: python -m emet.simulation.mujoco_server
 ```
 
+If this fails on scipy/numpy ABI (`undefined symbol`) while `uv run python -c "import scipy"` works, see [pythonpath.md](pythonpath.md).
+
 **Terminal 2** – Run an app (use `127.0.0.1` for local simulation):
 
 ```bash

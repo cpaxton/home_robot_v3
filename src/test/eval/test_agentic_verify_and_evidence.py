@@ -16,7 +16,6 @@ verification gate and ground unverified final answers:
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -259,9 +258,7 @@ def test_count_submit_force_puts_find_views_ahead_of_verified():
     gm.last_eqa_look_obs_id = 163
     gm.last_eqa_action_obs_id = None
     gm._obs_usable_for_eqa_image = MagicMock(return_value=True)
-    gm._count_candidate_nodes = MagicMock(
-        return_value=([SimpleNamespace(obs_id=163), SimpleNamespace(obs_id=195)], None)
-    )
+    gm._eqa_find_obs_ids = MagicMock(return_value=[163, 195])
     gm.select_obs_ids_for_verified_answer = MagicMock(return_value=[49])
     ex._verified = True
     ex._verified_obs_id = 49

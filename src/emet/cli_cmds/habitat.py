@@ -318,11 +318,19 @@ def habitat_serve(
 )
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=5, type=int)
+@click.option(
+    "--rerun",
+    "enable_rerun",
+    is_flag=True,
+    default=False,
+    help="Live Rerun VLM-context viewer (ports 9090/9877). Also EMET_EVAL_RERUN=1. Off by default.",
+)
 def habitat_run_episode(
     question_id: int,
     method: str,
     mock_llm: bool,
     max_planning_steps: int,
+    enable_rerun: bool,
 ) -> None:
     args = [
         "run-episode",
@@ -335,6 +343,9 @@ def habitat_run_episode(
     ]
     if mock_llm:
         args.append("--mock-llm")
+    if enable_rerun:
+        args.append("--rerun")
+        os.environ["EMET_EVAL_RERUN"] = "1"
     sys.exit(_run_habitat_wrapper(args))
 
 

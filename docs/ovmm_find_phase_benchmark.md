@@ -94,7 +94,7 @@ Dynagraph/static_graph without `--sensor-perception` still build graph nodes fro
 ### Scaling / ablation flags
 
 ```bash
-# Exploration budget (episode YAML ``explore_steps`` or dedicated episodes)
+# Mapping coverage budget (episode YAML ``mapping_max_nav_steps``; ``explore_steps`` is a deprecated alias)
 uv run python scripts/eval_ovmm_find_phases.py --episode-id molmo_ithor_s2_idx0_explore15
 
 # Merge / staleness grid on S2
@@ -107,12 +107,29 @@ uv run python scripts/eval_ovmm_find_phases.py --tier S2 --backend dynagraph \
 
 Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggregate_<backends>.csv`.
 
+### Teleport sim (routine agentic regression)
+
+**Default robot for agentic find iteration is rby1** (wide FOV; no Stretch head-sweep
+tax). Use `scripts/run_ovmm_find_recep_slice.sh` (`PROFILE=smoke` or `slice`).
+
+For fast dynagraph agentic find regression, teleport is opt-in
+(`EMET_SIM_NAV_TELEPORT=1`). **Do not** pass `--not-rotate` on perception
+backends — table mapping uses `--mapping-rotate-steps 4`. The find-phase
+harness already enables `_fast_explore_lookaround`. Head pans are off by
+default (`mapping.look_around_head_sweep: false`). Paper pans:
+`PROFILE=stretch-legacy` (`EMET_FORCE_HEAD_SWEEP=1`).
+
+Stretch episodes in `find_phase_episodes.yaml`: no-pan table/kitchen gates
+(`PROFILE=stretch`, `stretch-kitchen`) or paper pans (`stretch-legacy`). See
+[experiments/ovmm_agentic_find_teleport.md](experiments/ovmm_agentic_find_teleport.md).
+
 ### Metrics
 
 - `find_object_success`, `find_recep_success` @ `success_radius_m`
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
 - `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `obj_max_cosine`, `recep_max_cosine`, `obj_yoloe_hit`, `recep_yoloe_hit` — oneshot voxel localize diagnostics (max SigLIP cosine; YoloE `compute_obj_coord` hit). Habitat and sim oneshot both emit these via `ovmm_find_query_row`.
 - `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
 - `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - `use_sensor_perception`, `prefer_voxel` — mode flags (see above)
@@ -150,8 +167,14 @@ Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perceptio
 
 Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
 
-**Default find path (dynagraph): same agentic loop as HM-EQA.**
-Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py) — navigate → close look → VLM verify → retract claim on ABSENT → explore. Verified obs XYZ is scored against GT. One-shot voxel localize (`prefer_voxel` / `oneshot_localize`) is an **ablation**, not the product path. Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`.
+**Mapping vs find budgets (do not conflate).** `mapping_max_nav_steps` (CLI `--mapping-max-nav-steps`; deprecated alias `explore_steps` / `--explore-steps`) is the **mapping-phase** agentic `max_nav_steps` — how many coverage journeys `run_mapping_protocol` may run before FindObj. `0` is rotate-only (S0). FindObj/FindRec use `--agentic-max-rounds` / `--agentic-max-nav-steps`. After hop-until-arrival, one mapping step is one completed path, not one leftover A* chunk.
+
+**Mapping = same AgenticEQAExecutor as EQA, but coverage-only.** When `mapping_max_nav_steps>0` the harness runs `run_agentic_eqa_result(agent, None, goal="explore and map the environment", max_nav_steps=mapping_max_nav_steps, max_rounds=mapping_max_nav_steps+1)` — `mode=explore` (router only `explore_frontier` / `finish`). Frontier picks are **uncovered-first / VLM among frontier RGBs**, not object-biased `toward=jar`; OVMM objects are placed randomly and biasing toward a SigLIP ghost while mapping wastes steps. Arrival capture is `look_ahead` (tilt 0) facing the frontier then `update()` — not `look_front` −30° and not a 4-pan sweep before leaving. `S0` (`mapping_max_nav_steps=0`) stays rotate-only plus `_prepare_default_table_rby1_mapping_view`.
+
+**Find = voxel-first, then AgenticEQA.** At find time `localize_text("jar")` / `"cab"` is run on the **finished** voxel map and an `investigate` at that XYZ beats any camera-pose-at-feet graph view (redirect `CAMERA_POSE_PLACE` → unused detection). SigLIP on arrival RGB is the query — YOLOE need not know `jar`. If there is no voxel hit, one `explore_frontier` extends coverage rather than chewing 150 wall nodes. Context that survives between phases is `agent.voxel_map` + `agent.graph_memory` (find starts a new executor; the map is the agent state).
+
+**Default find path (dynagraph): same AgenticEQA loop as HM-EQA.**
+Episode fields are phrased as questions (`Where is the jar on the counter?` / `Where is the cab?`) and run through [`AgenticEQAExecutor`](../src/emet/memory/graph_eqa/agentic_eqa.py). The agent may call `inspect_graph` → live `localize_text` as an investigate card; close-map stays on that XY; VLM verify is a check. **FindObj/FindRec score the loop's object-phrase voxel XYZ**, never camera pose, and never a harness pin of episode YAML. Voxel proposals are **one-shot** (a close ABSENT blocks the handle and unpins that XYZ, so the loop re-localizes from the grown map instead of re-chasing a wall point), and the harness **re-attaches SigLIP before each find phase** (`re_attach_siglip_encoder`) so FindRec can still `localize_text` the finished map after FindObj released the encoder for Qwen. `--oneshot-localize` / `agentic_find: false` is a leftover **mapping ablation**, not the product path and not the map-sanity check (that is pytest `test_red_cylinder_detected_in_sim`). Method: [dynagraph.md](dynagraph.md#method). Preset: `agentic_find: true` in `configs/ovmm/sweeps/molmo_robocasa.yaml`. See [plans/2026-08-26_ovmm_voxel_close_map.md](plans/2026-08-26_ovmm_voxel_close_map.md).
 
 **Query / scoring notes (agent language, no GT query leakage):**
 - The agent localizes with **episode task language** (`object` / `goal_recep`), not sim GT fixture paths.
@@ -216,18 +239,56 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-csv --fetch-hm3d trai
 # Optional: HM3D semantic meshes (if scenes lack semantics)
 uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
 
-# Batch GT smoke (3 HM3D scenes, ~7 min CPU)
+# Batch GT smoke (3 HM3D scenes, ~7 min CPU; agentic stays off for ground_truth)
 uv run python scripts/eval_habitat_ovmm_find_phases.py \
-  --backend ground_truth --not-rotate --cpu-only \
+  --backend ground_truth --not-rotate --device cpu \
   --output-dir runs/ovmm_habitat/gt_batch
 
-# Single episode
+# Single dynagraph episode (GPU SigLIP + agentic VLM loop; default --device cuda)
 .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
-  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --cpu-only
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda
 ```
 
 Verified GT batch: `find_partial_success=1.0`, `localization_err_*_m=0.0` on
 `hm3d_lamp_bed_00006`, `00025`, `00057` (June 2026).
+
+### Agentic find on Habitat (large scenes)
+
+The default dynagraph/static_graph path routes FindObj / FindRec through the
+**shared query dispatcher** (`emet.eval.ovmm_agentic_find.run_ovmm_find_queries`)
+used by sim OVMM find. Agentic backends call
+`run_ovmm_agentic_localize` (same AgenticEQA loop as HM-EQA); `--no-agentic-find`
+is the one-shot memory-localize ablation. Habitat **does not** use the sim
+MuJoCo placement oracle (`run_ovmm_gt_oracle_find_pair`) — Habitat `ground_truth`
+localizes from the GT graph after `refresh_ground_truth`. Scoring and JSON keys
+(`ovmm_find_query_row`, `score_ovmm_find_query`) are shared; Habitat passes
+`frame="habitat_xz"` / `planar_frame="habitat_xz"`.
+
+The loop phrases the episode as two open questions (`Where is the lamp on the bed?` /
+`Where is the table?`), then navigates to navmesh frontiers, investigates place
+cards, and verifies before the loop's object-phrase voxel XYZ is scored. Mapping
+only rotates in place, so exploration happens inside the loop.
+
+```bash
+# Bounded GPU smoke on the large scene 00006 (VLM + SigLIP + YoloE required)
+bash scripts/smoke_habitat_ovmm_agentic_find.sh
+
+# Full-budget agentic find (default eqa.agentic_max_tool_rounds / max_nav_steps = 8)
+uv run emet jobs run --name habitat-ovmm-agentic-find --need-mib 12000 --gpu-exclusive -- \
+  .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda --agentic-find
+
+# Batch
+uv run python scripts/eval_habitat_ovmm_find_phases.py \
+  --backend dynagraph --device cuda \
+  --output-dir ~/runs/emet/ovmm_habitat/agentic
+```
+
+Flags: `--device cuda|cpu` (default **cuda**), `--agentic-find/--no-agentic-find`
+(default on for dynagraph/static_graph, off for dynamem/ground_truth),
+`--agentic-max-rounds`, `--agentic-max-nav-steps`. `--cpu-only` is an alias for
+`--device cpu` and does **not** turn off the agentic loop. `--no-agentic-find`
+restores the one-shot memory-localize ablation.
 
 Full OVMM-HSSD minival (official leaderboard) is not wired yet; HM3D proxy validates the Habitat
 memory → find-phase metric path before HSSD scene download.

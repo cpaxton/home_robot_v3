@@ -87,7 +87,7 @@ There is **no other single “master” file** today; this page is the hub. Feat
 |-----------|----------------|-------|
 | **OpenVocab scene graph** in Robocasa (dedup, kitchen labels) | [test_scene_graph_robocasa.py](../src/test/scene_graph/test_scene_graph_robocasa.py) | Uses `SceneGraphProcessor` + `cpu_scene_graph`; **not** GraphEQAMemory / Dynagraph path |
 | Open-vocab unit behaviour | [test_open_vocab_scene_graph.py](../src/test/scene_graph/test_scene_graph_in_sim.py) | Default scene spin |
-| GraphEQA memory unit (merge, staleness, query) | [test_graph_eqa_memory.py](../src/test/memory/test_graph_eqa_memory.py) | Mock EQA clients |
+| GraphEQA memory unit (merge, staleness, query) | [test_graph_eqa_memory.py](../src/test/memory/test_graph_eqa_memory.py) | Mock EQA clients; package map: [graph_memory.md](graph_memory.md) |
 | GraphEQA + default scene (red/blue) | [test_graph_eqa_default_scene_sim.py](../src/test/memory/test_graph_eqa_default_scene_sim.py) | Sim RGB + **injected** graph labels; mocked `query_answer` |
 | Per-frame detections on export | Dynagraph `--export` → `graph/frames/detections_*.json` | Manual review; see [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#assessing-semantic--eqa-quality) |
 

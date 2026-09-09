@@ -90,8 +90,11 @@ obs_max_height: 1.5
 obs_min_density: 5
 pad_obstacles: 2          # dilation radius around detected obstacles (grid cells)
 min_pad_obstacles: 1
-local_radius: 0.5         # disk marked explored around the robot
+local_radius: 0.25        # start-pose explored disk (not grown every mapping frame)
+perception_every_n: 2     # YoloE/graph every N frames; rotate/look-around force every heading
 ```
+
+Rotate-in-place (OVMM mapping scan) always calls ``update(full_perception=True)`` and waits for a newer ZMQ full-obs after each yaw. Default ``perception_every_n: 2`` would otherwise skip even headings — including scan 8/8, where the objects often sit. Occupancy still updates every ``update()``; the force flag also re-runs DA3/LingBot so even headings do not reuse the previous pose's depth.
 
 ### Depth / voxel post-filters (DA3 hardware)
 
@@ -107,7 +110,7 @@ Cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_so
 
 **Where:** under ``robots.innate_mars.mapping`` / ``…filters`` (deep-merged into ``mapping`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config.
 
-**Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.add_observation()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
+**Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/dynamem/perception.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.process_rgbd_images()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
 
 **Disable / tighten** (tune per site — try one knob at a time):
 

@@ -533,7 +533,7 @@ def _run_eqa_single(
     robot.move_to_nav_posture()
     robot.switch_to_navigation_mode()
     agent._fast_explore_lookaround = True
-    from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+    from emet.memory.graph_eqa import agentic_verify_enabled, run_agentic_eqa
 
     try:
         if agentic_verify_enabled(agent):
@@ -635,7 +635,7 @@ def run_world_change_episode(
             agent = None
             try:
                 from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa, warm_siglip_confirmed_memory
-                from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+                from emet.memory.graph_eqa import agentic_verify_enabled
 
                 def _prep_vram_for_eqa() -> None:
                     if agentic_verify_enabled(agent):

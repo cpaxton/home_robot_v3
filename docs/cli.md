@@ -1,6 +1,6 @@
 # Emet CLI Tool
 
-The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below). Click groups live under `emet.cli_cmds`; [`src/emet/cli.py`](../src/emet/cli.py) is the registrar (`emet.cli:main`).
+The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below). Click groups live under `emet.cli_cmds`; [`src/emet/cli.py`](../src/emet/cli.py) is the registrar (`emet.cli:main`). Sim-heavy top-level commands (`export-sim-gt`, `eval-dynagraph`, `ovmm`, `debug-da3-depth`, …) are **lazy**: `emet jobs`, `emet eval`, and `emet --help` do not import MuJoCo.
 
 ## Installation
 
@@ -41,6 +41,8 @@ uv run emet run debug-da3-depth --robot innate_mars
 ```
 
 If port 4401 is already in use: `uv run emet kill-mujoco-server` then retry, or `uv run emet serve mujoco --port-offset 100`.
+
+If `emet serve mujoco` fails on `import scipy` / numpy ABI errors while `uv run python -c "import scipy"` works: leftover `python3.12` site-packages in a 3.10 `.venv` — see [pythonpath.md](pythonpath.md) and [known_issues.md](known_issues.md).
 
 ## Commands
 
@@ -203,6 +205,8 @@ uv run emet grasp-oracle --bind tcp://127.0.0.1:5558
 
 See [motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot).
 
+Scripted TAMP pick-place (no LLM): `scripts/scripted_tamp_pick_place.py --start-sim` — pass **`--rerun`** for the web viewer (`:9090`). Sourccey table: `--sim configs/sim/default_table_sourccey.yaml`. **`--record-mp4`** writes a kitchen-orbit chase MP4 plus clean stills (chase / overhead / head / wrist POV) under `--figures-dir/stills/`. See [motion_planning.md](motion_planning.md).
+
 ---
 
 ### `emet run <app> [options]`
@@ -213,8 +217,9 @@ Run a robot agent or app.
 |-----|--------------|
 | `agent` | Embodied LLM agent + tools (optional Discord, opt-in Rerun). See [AGENT_RUN.md](AGENT_RUN.md). |
 | `dynamem` | DynaMem navigation + manipulation |
-| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
+| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md), [graph_memory.md](graph_memory.md)) |
 | `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)); **`--explore-loop`**, **`--export`**, **`--question`** |
+| `lazy-graph` | Same CLI as dynagraph with LazyGraph memory ([lazy_graph.md](lazy_graph.md)); shared [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) (`configure_graph_nav`) |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |
 | `chat` | LLM chat with robot |
@@ -289,6 +294,16 @@ uv run emet mars start --connection mars --deploy
 
 **LAN LLM/VLM (AGX Orin, ~64 GiB unified memory):**
 
+JetPack 7 / L4T r39: native cu130 serve on the Orin (`./scripts/run_jetson_vlm_native.sh --detach`), then:
+
+```bash
+uv run emet llm health --host ORIN_IP
+uv run emet llm smoke --host ORIN_IP
+uv run emet run chat --host ORIN_IP --vl --once "Describe briefly"
+```
+
+JetPack 5 Docker deploy (Qwen2-VL) is still:
+
 ```bash
 uv run emet deploy llm --host ORIN_HOST                         # unified-7b (Qwen2-VL-7B on :8000)
 uv run emet deploy llm --host ORIN_HOST --profile dual-2b       # text :8000 + VL-2B :8001
@@ -296,7 +311,7 @@ uv run emet llm health --host ORIN_HOST
 uv run emet llm smoke --host ORIN_HOST --vl-only
 ```
 
-Details: [llm_serve.md](llm_serve.md). Shell helper: `./scripts/deploy_caliban_vl.sh --host ORIN_HOST --profile unified-7b` (script name is historical).
+Details: [llm_serve.md](llm_serve.md) / [jetson.md](jetson.md). Shell helper: `./scripts/deploy_caliban_vl.sh --host ORIN_HOST --profile unified-7b` (script name is historical).
 
 ### `emet mars [start|status|stop]`
 
@@ -601,8 +616,10 @@ OVMM find/full paper benchmarks and multi-env sweeps (Robocasa + MolmoSpaces). D
 | `sweep` | `prepare` → find → full → `rates` (paper multi-env path) |
 | `rates` | Aggregate `OUT/find` + `OUT/full` → `rates.json` (excludes bind/task-init fails) |
 | `status` | Per-episode outcomes + bind-fail counts |
+| `probe-map` | Query a saved scene map (`graph.json` / optional `voxel_map.pkl`) with no sim. `--voxel` runs SigLIP (CUDA if available; `--cpu-only` forces CPU) |
+| `probe-verify` | Spawn Robocasa, aim from a navigable floor pose, score YOLOE + SigLIP on head RGB |
 
-**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find uses the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions); preset `agentic_find: true`. Ablation only: `emet ovmm find --oneshot-localize` / `emet ovmm full --oneshot-localize` (no silent oneshot rescue on agentic miss). Agentic budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident).
+**Presets:** `configs/ovmm/sweeps/` (e.g. `molmo-robocasa`). Explicitly **no** `default_table`. Dynagraph find is the **same AgenticEQA loop** as HM-EQA (OVMM phrased as questions) — method in [dynagraph.md](dynagraph.md#method). `localize_text` is an investigate card and the scored XYZ (never camera pose). The harness does **not** pin episode YAML phrases. Preset `agentic_find: true`. `--oneshot-localize` / `emet ovmm full --oneshot-localize` is a leftover **mapping ablation**, not the product path. Mapping coverage: `--mapping-max-nav-steps` (`0` = rotate-only; deprecated alias `--explore-steps`). FindObj/FindRec budget: `--agentic-max-rounds` / `--agentic-max-nav-steps` on `find`/`full` (or preset `defaults.agentic_max_rounds` / `agentic_max_nav_steps`). `--via-jobs` sets `EMET_ALLOW_SDPA_ATTN=1` so in-process VL uses SDPA (FA2 has hung with MuJoCo co-resident). Live Rerun is **off** by default on find/full/sweep; pass **`--rerun`** or `EMET_EVAL_RERUN=1` for the VLM-context viewer (ports 9090/9877). Do not enable this on overnight `--via-jobs` batches unless you are watching the viewer. Details: [rerun.md](rerun.md#eval-ovmm--habitat--grapheqa). `emet ovmm probe-map` matches find phrases against a dumped map. `emet ovmm probe-verify` is the live drive-up check (rby1 + teleport, no AgenticEQA). Fast gates: `scripts/run_ovmm_find_recep_slice.sh` (`PROFILE=smoke` rby1; `PROFILE=stretch` / `stretch-kitchen` skip Stretch head pans via `EMET_SKIP_HEAD_SWEEP=1`). A/B mapping: `scripts/run_ovmm_agentic_h2h.sh` (`rotate` = `--mapping-max-nav-steps 0`; `unified` = `8 --no-scene-cache`; non-zero exit if an arm is incomplete). Joint Habitat+OVMM: `scripts/run_habitat_ovmm_joint_gate.sh` (Habitat `OUT_DIR=$OUT_BASE/habitat`, OVMM `…/ovmm`; non-zero exit if a requested phase fails). Paper numbers: `scripts/run_paper_matrix.sh` (S0 table = `PROFILE=smoke`; also non-zero on phase fail).
 
 **Examples:**
 ```bash
@@ -617,9 +634,21 @@ uv run emet ovmm full --episodes OUT/full_episodes.yaml --backend dynagraph --ma
   --port-stride 4 --output-dir OUT/full
 uv run emet ovmm rates --out OUT
 uv run emet ovmm status --out OUT
+uv run emet ovmm probe-map --list
+uv run emet ovmm probe-map --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+# SigLIP on the pickle (CUDA if available; --cpu-only to force CPU; still no sim):
+uv run emet jobs run --name ovmm-probe-map-voxel --need-mib 8000 --gpu-exclusive -- \
+  uv run emet ovmm probe-map --voxel --cache-key robocasa_pickplacecountertocabinet_s1_l1_seed0_stretch_gt
+# Live Robocasa: drive up to GT jar/cabinet and verify on the current view
+uv run emet jobs run --name ovmm-probe-verify-rby1 --need-mib 8000 --gpu-exclusive -- \
+  uv run emet ovmm probe-verify
 ```
 
 Compatibility wrappers (same library path): `scripts/eval_ovmm_find_phases.py`, `scripts/eval_ovmm_full.py`.
+
+Habitat HM3D proxy (separate binary, not `emet ovmm`): `.venv-habitat/bin/emet-habitat run-ovmm-find-episode --device cuda`. **`--device` defaults to `cuda`.** Agentic find is on for dynagraph/static_graph; `--cpu-only` is `--device cpu` and does **not** disable the loop (`--no-agentic-find` does). Flags: [habitat/usage.md](habitat/usage.md#ovmm-find-phase-agentic-loop-on-habitat).
+
+TAMP clutter-clearance (MolmoSpaces iTHOR; not an `emet` subcommand): `scripts/eval_tamp_clutter.py` — [tamp_clutter.md](experiments/tamp_clutter.md).
 
 ---
 
@@ -790,13 +819,13 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
 | `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
-| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters). `--fail-only` lists incorrect rows; `--out-dir PATH` reports without a registry id |
+| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters). OVMM find JSON shows **steps** (`map=` rotate+explore controller steps; `o`/`r` = FindObj/FindRec agentic rounds, plus `n`/`e` nav/explore when recorded). `--fail-only` lists incorrect rows; `--out-dir PATH` reports without a registry id |
 | `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive with sections: **view investigation** (eqa_history action/Unknown loops), **rooms** (merged/vlm/graph timeline, `Rooms:` line, MCQ targets, mismatch/redirects), router picks, investigate/station/explore, assess, verify, red flags. Flags: `--rooms` (rooms focus), `-s/--section`, `--brief`, `-v/--verbose`, `--json` |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled; prints resume hint + warns if unmanaged eval PIDs remain |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id); optional `--description` / `-d` |
 | `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` / `--description` |
-| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. |
+| `emet jobs run --name NAME [-d TEXT] [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] [--wait-timeout-sec S] [--lock-timeout-sec S] [--gpu-wait-max-rounds N] -- CMD…` | Start a detached supervisor that self-registers, sets `EMET_JOB_ID`, and runs the command. GPU-like commands and jobs with `--need-mib` default to **cpu-safe** + **gpu-exclusive**; exclusive jobs hold a host-wide `flock` for their full lifetime. **cpu-safe** pins via `python -m emet.utils.cpu_affinity` (not `emet eval affinity`) so the wrapper does not import MuJoCo after the previous sim job releases the lock. |
 
 `emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Jobs with a `--description` / `-d` also show a **`why:`** line under the row (and in `emet jobs status`). The detached supervisor owns registration: if the invoking terminal or agent dies before spawn, no phantom queued record is created; if it dies after spawn, the supervisor registers and continues independently. The host-wide `flock` is the serialization authority for exclusive jobs; the launcher does not infer and wait on unrelated active GPU PIDs. Only explicit `--wait-pid` prerequisites are waited, and all PID, lock, and optional pre-command GPU waits are bounded (defaults: six hours for PID/lock, 120 GPU polling rounds). The canonical shared lock is `~/runs/emet/gpu.lock` (`EMET_GPU_LOCK`); `EMET_GPU_LOCK_FILE` is a compatibility alias. This applies equally to `emet hmeqa …`, `emet ovmm … --via-jobs`, and direct `emet jobs run`. Prefer it over bare `nohup` for multi-hour GPU evals.
 
@@ -854,7 +883,7 @@ Canonical GPU preflight for paper evals and overnight smokes (Python implementat
 | `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
 | `emet eval wait [--need-mib N] [--max-rounds N]` | Wait until free VRAM is stably above N, bounded by 120 rounds by default |
 | `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
-| `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask |
+| `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask (stdlib affinity helpers only; does not import OVMM/MuJoCo) |
 | `emet eval recover [--need-mib N] [--max-rounds N]` | `status` + `diagnose` + bounded `wait` one-shot (post-crash / post-reboot) |
 
 Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [known_issues.md](known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals), and [environment_variables.md](environment_variables.md).
@@ -878,7 +907,7 @@ Requires `./scripts/install_habitat.sh` (``.venv-habitat``). **Never** run `run-
 | `emet habitat info` | Data paths + asset status |
 | `emet habitat safe-start [--need-mib N] [--question-id Q] [--smoke-episode]` | `eval recover` + **detached** jobs-wrapped `emet-habitat egl-probe` (no VLM). Exit 0 = queued, not EGL OK. Optional mock-llm episode also queued (waits behind probe). |
 | `emet habitat egl-probe --force-inline` | Inline EGL only (dedicated terminal); agents are redirected to `safe-start` |
-| `emet habitat list-questions` / `serve` / `run-episode` | Wrapper passthrough (prefer jobs for anything that loads Habitat) |
+| `emet habitat list-questions` / `serve` / `run-episode` | Wrapper passthrough (prefer jobs for anything that loads Habitat). `run-episode --rerun` / `EMET_EVAL_RERUN=1` opens the VLM-context viewer; default off. |
 
 ```bash
 uv run emet habitat safe-start --need-mib 4000
@@ -916,7 +945,7 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 |---------|---------|
 | `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [-d TEXT] [--variant-config FILE] [--host HOST] [--vl-endpoint …] [--vl-port N] [--preset paper-router] [--eqa-hf-model-id …] [--eqa-vl-family …] [--eqa-vl-quantization int4\|int8\|float16\|bfloat16\|float32\|none] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--use-hm3d-semantics\|--no-hm3d-semantics] [--enrich-labels\|--no-enrich-labels] [--action-progress-mode off\|shadow\|enforce] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive); `--variant-config` loads all nine variant axes from strict YAML; `-d` tags the job why; `--host` / `--vl-endpoint` inject remote answer VL into the job env |
 | `emet hmeqa resume [OUT] [variant flags…]` | Resolve latest OUT if omitted; reuse its frozen variant/model/budgets/IDs, validate commit + dirty state + digest, then set `RESUME=1` |
-| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips only phases with a validated JSON `DONE`; sets `RESUME=1` when validated or pending state exists) |
+| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults). Re-pass `--base` after cancel to resume (skips only phases with a validated JSON `DONE`; sets `RESUME=1` when validated or pending state exists). Compat wrapper: `scripts/run_overnight_habitat_eval.sh` (old `SKIP_PHASES` env is ignored; method-comparison slices stay on `run_habitat_iter_subset.sh` / `run_hmeqa_*_h2h.sh`) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
 | `emet hmeqa significance [OUT] [--from-summary …] [--json …]` | Paired McNemar / Wilcoxon / bootstrap on classic vs agentic |

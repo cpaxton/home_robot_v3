@@ -182,7 +182,7 @@ Stdout includes the **GraphEQA answer** and an updated **`scene_graph_report.txt
 | **stretch** (this branch) | `MujocoZmqServer` / stretch_mujoco | `StretchZmqClient` | Default `dynav_config.yaml` |
 | **stretch** (experimental) | `RobosuiteZmqServer` on `feature/stretch-robocasa-robosuite` | `GenericZmqClient` | See that branch |
 
-Navigation uses **world-frame** planning (`navigation_origin_xyt` from ZMQ session); see [`controller_dynamem.py`](../src/emet/controller/controller_dynamem.py) (`_planning_base_xyt`, `_robot_nav_xyt`).
+Navigation uses **world-frame** planning (`navigation_origin_xyt` from ZMQ session); see [`pose.py`](../src/emet/controller/dynamem/pose.py) (`_planning_base_xyt`).
 
 ## Troubleshooting
 

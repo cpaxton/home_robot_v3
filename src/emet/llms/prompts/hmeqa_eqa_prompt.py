@@ -25,24 +25,37 @@ _HMEQA_HEADER = """
         Answer with the meaning of the selected option, not its A/B/C/D label.
         Reply with ONLY a single JSON object (no markdown fences, no caption field) with keys:
         reasoning (string), answer (short semantic answer text), confidence (boolean),
-        action ("" if done, an attached Image id to look at, or "read N" when the answer
-        is written or shown in Image N but not legible),
+        action ("" if done, an attached Image slot 1..K, a graph obs id to navigate, or
+        "read N" to re-inspect attached Image N),
         confidence_reasoning (string).
         Copy the selected option text into "answer" without its letter label. Never leave
         "answer" blank. If uncertain, still give your best semantic answer and set
         "confidence" to false.
 
+        ATTACHED_INDEX maps Image 1..K (the RGB frames in this prompt) to graph obs ids.
         SCENE_GRAPH, CONFIRMED_MEMORY, and GRAPH_COUNT are an index of views to inspect,
-        not the answer. Use them to choose which Image N to look at (or navigate to).
+        not the answer. They list other views as [graph obs N] / obsN — those numbers are
+        navigation targets, not attached slots.
         Identify and count from attached RGB. Never answer a count by counting SCENE_GRAPH
-        nodes, CONFIRMED_MEMORY rows, or GRAPH_COUNT list length. Never answer WHERE from a
-        SCENE_GRAPH node index or xyz — look at the candidate Image N. Detector class names
-        are proposals for WHERE to look.
+        nodes, CONFIRMED_MEMORY rows, or GRAPH_COUNT list length.
+        Never answer WHERE from a SCENE_GRAPH node index or xyz. Detector class names are
+        proposals for WHERE to look.
+
+        Action contract:
+        - "" — done, or explore a new room when attached views are spent/risky.
+        - N or "Image N" — if N is 1..K, inspect that attached slot; if N is a graph obs id
+          from GRAPH_COUNT, navigate to that view (example: action: 37).
+        - "read N" — N is an attached slot 1..K only. Re-inspect that frame. Do not
+          "read" a graph obs id.
 
         VIEW_STATUS lists per-Image investigation counters (visits, look/read picks, Unknown
         answers, spent/risky flags). More than three visits on one Image without progress is
-        risky — pick a different Image or leave action empty so the robot can explore.
-        Do not keep answering Unknown from a view marked spent=yes or risky=yes.
+        risky — pick a different Image, set action to an unattached GRAPH_COUNT obs id, or leave
+        action empty so the robot can explore. Do not keep answering Unknown from a view
+        marked spent=yes or risky=yes.
+
+        QUESTION_ROOM / ROOM_MISMATCH / DOORWAY_GLIMPSE lines scope which room the answer
+        must come from — do not count or read clocks from a different room or through a door.
 """
 
 _HMEQA_MCQ_EXAMPLE = """
@@ -53,7 +66,8 @@ _HMEQA_MCQ_EXAMPLE = """
                 B. The lamp is off.
                 C. There is no lamp.
                 D. The lamp is broken.
-                SCENE_GRAPH: Node 3: floor lamp at (1.2, -0.4) [Image 1]
+                ATTACHED_INDEX: Image 1=obs12
+                SCENE_GRAPH: Node 3: floor lamp at (1.2, -0.4) [graph obs 12]
                 IMAGE: <2 RGB frames>
             Output:
                 {"reasoning": "Image 1 shows the floor lamp with a glowing shade, so the lamp is on.", "answer": "The lamp is on.", "confidence": true, "action": "", "confidence_reasoning": "The lit lamp is clearly visible in Image 1."}
@@ -65,28 +79,41 @@ _HMEQA_MCQ_EXAMPLE = """
                 B) Between TV and living room sofas
                 C) Next to the dining table
                 D) Next to the living room armchairs
-                CONFIRMED_MEMORY: woven basket: LOOK — candidate views: woven basket [Image 2] at (-6.5, 3.6); list length is not a count; verify in attached images
-                SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [Image 2]
+                ATTACHED_INDEX: Image 1=obs8, Image 2=obs22
+                CONFIRMED_MEMORY: woven basket: LOOK — candidate views: woven basket [graph obs 22] at (-6.5, 3.6); list length is not a count; verify in attached images
+                SCENE_GRAPH: Node 7: woven basket at (-6.5, 3.6) [graph obs 22]
                 IMAGE: <2 RGB frames>
             Output:
                 {"reasoning": "Image 2 shows the basket next to the armchairs.", "answer": "Next to the living room armchairs", "confidence": true, "action": "", "confidence_reasoning": "Visible next to the armchairs in Image 2, not from Node 7's coordinates."}
 
-        Example (count — look at the listed views; do not copy a graph count):
+        Example (count — navigate to a FIND view, then count from attached RGB):
+            Input:
+                Question: How many bedside tables are there in the bedroom?
+                A) Three B) One C) None D) Two
+                ATTACHED_INDEX: Image 1=obs4
+                GRAPH_COUNT: views to look at: [graph obs 37] (navigate via action=<obs id>; not an exact count)
+                IMAGE: <1 RGB frame of a living room>
+            Output:
+                {"reasoning": "Attached Image 1 is a living room, not the bedroom. GRAPH_COUNT lists unattached obs 37.", "answer": "Unknown", "confidence": false, "action": "37", "confidence_reasoning": "Navigate to graph obs 37 before answering None or a count."}
+
+        Example (count — look at the listed attached views; do not copy a graph count):
             Input:
                 Question: How many table lamps are there in the bedroom?
                 A) Three B) Four C) One D) Two
-                CONFIRMED_MEMORY: table lamps: LOOK — candidate views: [Image 3] at (4.8, 5.1); [Image 4] at (3.1, 5.0); list length is not a count; verify in attached images
+                ATTACHED_INDEX: Image 1=obs3, Image 2=obs4
+                CONFIRMED_MEMORY: table lamps: LOOK — candidate views: [graph obs 3] at (4.8, 5.1); [graph obs 4] at (3.1, 5.0); list length is not a count; verify in attached images
                 IMAGE: <2 RGB frames of bedside lamps>
             Output:
-                {"reasoning": "Images 3 and 4 each show one bedside lamp.", "answer": "Two", "confidence": true, "action": "", "confidence_reasoning": "Two close views of table lamps, not furniture."}
+                {"reasoning": "Image 1 and Image 2 each show one bedside lamp.", "answer": "Two", "confidence": true, "action": "", "confidence_reasoning": "Two close views of table lamps, not furniture."}
 
-        Example (read — target is in the frame but not legible):
+        Example (read — target is in the attached frame but not legible):
             Input:
                 Question: What does the sign on the door say?
                 A) Exit B) Open C) Closed D) Unknown
+                ATTACHED_INDEX: Image 1=obs10, Image 2=obs11
                 IMAGE: <2 RGB frames; Image 2 shows a distant sign>
             Output:
-                {"reasoning": "Image 2 shows a sign but the letters are too small to read.", "answer": "Unknown", "confidence": false, "action": "read 2", "confidence_reasoning": "Need a closer view of Image 2; do not explore a new room."}
+                {"reasoning": "Image 2 shows a sign but the letters are too small to read.", "answer": "Unknown", "confidence": false, "action": "read 2", "confidence_reasoning": "Need a closer view of attached Image 2; do not explore a new room."}
 """
 
 _HMEQA_FORMAT_OVERRIDE = """
@@ -98,9 +125,14 @@ _HMEQA_FORMAT_OVERRIDE = """
            shows the evidence. SCENE_GRAPH labels and node indices do not decide the answer.
         3. "answer" is the exact semantic option text without an A/B/C/D label.
            Emit it before elaborating further and never leave it blank.
-        4. "confidence" is true or false. "action" is "", an Image id, or "read N".
-           Use "read N" when Image N shows the thing to read but the text or digits are
-           not large and unambiguous. Do not guess. "confidence_reasoning" is one short sentence.
+        4. "confidence" is true or false. "action" is "", an attached slot 1..K, a graph
+           obs id from GRAPH_COUNT, or "read N" (attached slot only). Use "read N" when
+           attached Image N shows the thing to read but the text or digits are not large
+           and unambiguous. Do not guess. "confidence_reasoning" is one short sentence.
+        5. For "What time is it now?" and other clock/time MCQs: do not guess a time bucket
+           from a tiny clock in a wide frame. Use "read N" on the attached slot that shows
+           the clock, or set action to a GRAPH_COUNT obs id for a closer view. Leave "action"
+           empty only when the hands or digits are clearly legible.
 
         You have a limited output budget. Spending it describing images instead of answering
         counts as a wrong answer.

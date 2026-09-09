@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 
+from emet.mapping.voxel_localize import localize_text_xyz, voxel_map_from_agent
+
 
 def signed_yaw_delta_rad(current_yaw: float, target_yaw: float) -> float:
     """Smallest signed yaw change (rad): positive = left / CCW."""
@@ -44,16 +46,10 @@ def resolve_object_xy(agent: Any, label: str) -> tuple[np.ndarray | None, str]:
                     return arr[:2].copy(), "graph"
         except Exception:
             pass
-    if agent is not None and hasattr(agent, "get_voxel_map"):
-        try:
-            vm = agent.get_voxel_map()
-            if vm is not None and hasattr(vm, "localize_text"):
-                result = vm.localize_text(query, return_debug=True)
-                point = result[0] if isinstance(result, (list, tuple)) else result
-                if point is not None:
-                    coords = np.asarray(point, dtype=np.float64).reshape(-1)
-                    if coords.size >= 2 and np.isfinite(coords[:2]).all():
-                        return coords[:2].copy(), "voxel"
-        except Exception:
-            pass
+    try:
+        xyz, _stats = localize_text_xyz(voxel_map_from_agent(agent), query)
+        if xyz is not None and np.isfinite(xyz[:2]).all():
+            return xyz[:2].copy(), "voxel"
+    except Exception:
+        pass
     return None, "not found"

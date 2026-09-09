@@ -150,7 +150,7 @@ The Habitat runner enables navmesh pathing and frontier exploration by default (
 | `habitat_explore_frontiers` | `true` | When uncertain, prefer frontier targets over spin-in-place |
 | `image_nav_min_approach_m` | `0.35` | Standoff distance when navigating to an **Image N** target and the robot is already at the capture viewpoint |
 
-**Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/graph_memory.py` (`_navigation_waypoint_for_obs`).
+**Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/eqa/graph_nav.py` (`_navigation_waypoint_for_obs`). Package map: [graph_memory.md](../graph_memory.md).
 
 **Mapping overrides (HM-EQA only):** `_configure_habitat_mapping` sets `max_depth=4.5` and, temporarily, **no obstacle dilation** (`pad_obstacles=0`, `filters.smooth_kernel_size=0`) so open-plan doorways are less likely to seal under morphological padding. Real-robot / Robocasa dynav defaults are unchanged. Restore prior Habitat padding with `EMET_HABITAT_PAD_OBSTACLES=1` (and non-zero smooth follows when pad &gt; 0). Frontier graph nodes also snap to a **reachable cell adjacent to the cluster** (not the arc centroid), so explore goals sit on the free-space rim instead of mid-floor.
 
@@ -205,6 +205,41 @@ RUN_HABITAT_TESTS=1 uv run emet test src/test/habitat/ -k smoke
 ```
 
 Full HM-EQA sweeps are GPU-heavy and not default CI.
+
+## OVMM find-phase (agentic loop) on Habitat
+
+`emet-habitat run-ovmm-find-episode` / `run-ovmm-find-batch` share sim OVMM find's
+query dispatcher (`run_ovmm_find_queries`): dynagraph/static_graph use the
+**AgenticEQA loop** (same as HM-EQA); dynamem / `--no-agentic-find` use one-shot
+memory localize. Mapping still rotates in place; the loop explores navmesh
+frontiers. JSON keys and GT radius scoring go through `ovmm_find_query_row` /
+`score_ovmm_find_query` (`frame=habitat_xz`). See
+`docs/ovmm_find_phase_benchmark.md` (§ Agentic find on Habitat) and
+`scripts/smoke_habitat_ovmm_agentic_find.sh`.
+
+**Defaults (easy to miss):**
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--device` | `cuda` | GPU SigLIP; GPU Qwen when agentic find is on. Pass `--device cpu` for CLIP + CPU VLM. |
+| `--cpu-only` | off | Alias for `--device cpu`. Does **not** disable the agentic loop. |
+| `--agentic-find` | on for dynagraph/static_graph; off for dynamem/ground_truth | `--no-agentic-find` is the one-shot memory-localize ablation. |
+
+```bash
+# GPU agentic find (product path)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda
+
+# One-shot ablation (no VLM)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --device cuda --no-agentic-find
+
+# GT / CPU mapping smoke (agentic stays off for ground_truth)
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00006 --backend ground_truth --device cpu --not-rotate
+```
+
+Test: `uv run emet test src/test/memory/test_habitat_ovmm_agentic_find.py -q`.
 
 ## Episode flow
 

@@ -45,6 +45,8 @@ However, pull requests with failing pre-commit hooks will not be merged.
 
 ### Pull Requests
 
+Fill in **Testing instructions** in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md): copy-pasteable `uv run emet …` commands, what success looks like, and GPU/robot steps only when needed. Checkboxes are not a substitute. Prefer `emet jobs` for Habitat / VLM / overnight eval — do not run those as blocking Cursor agent commands.
+
 We follow a squash-and-merge strategy for pull requests, which means that all commits in a PR are squashed into a single commit before merging. This keeps the git history clean and easy to read.
 
 Please make sure your PR is up-to-date with the latest changes in the main branch before submitting. You can do this by rebasing your branch on the main branch:

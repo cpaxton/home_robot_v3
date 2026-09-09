@@ -11,6 +11,13 @@ import pytest
 from emet.core.zmq_server_env import resolve_zmq_image_scaling, zmq_h264_port, zmq_send_period_s
 
 
+def test_experimental_video_disabled_by_default(monkeypatch):
+    from emet.core.zmq_server_env import zmq_h264_enabled
+
+    monkeypatch.delenv("EMET_ZMQ_H264", raising=False)
+    assert not zmq_h264_enabled()
+
+
 @pytest.mark.parametrize("name", ["core/zmq_obs_codec.py", "core/zmq_server_env.py", "utils/compression.py"])
 def test_deployed_runtime_parity(name):
     root = Path(__file__).resolve().parents[2]

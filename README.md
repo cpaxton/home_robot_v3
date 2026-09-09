@@ -302,13 +302,15 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [emet_config.md](docs/emet_config.md) | Nested YAML (`configs/emet/default.yaml`), `--set` / `-O`, robot overlays |
 | [TESTING.md](docs/TESTING.md) | `uv run emet test`, memory-backend smokes, Dynagraph harnesses |
 | [known_issues.md](docs/known_issues.md) | Open bugs, Habitat EGL / agent segfault notes |
+| [pythonpath.md](docs/pythonpath.md) | `PYTHONPATH` sanitizer: ROS `cv2` + mixed `python3.12` site-packages in a 3.10 venv |
 
 ### Memory, EQA, and agents
 
 | Doc | When to use |
 |-----|-------------|
 | [dynamem.md](docs/dynamem.md) | Voxel map / open-vocab manipulation (`emet run dynamem`) |
-| [graph_eqa.md](docs/graph_eqa.md) | GraphEQA memory + classic planning loop |
+| [graph_eqa.md](docs/graph_eqa.md) | GraphEQA how-to (`emet run graph-eqa`) |
+| [graph_memory.md](docs/graph_memory.md) | Graph memory **code structure** (`emet.memory.graph_eqa`, `GraphStore`, two EQA loops) |
 | [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
@@ -359,6 +361,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | Doc | When to use |
 |-----|-------------|
 | [robots/supported_robots.md](docs/robots/supported_robots.md) | Registry of embodiments |
+| [robots/nori.md](docs/robots/nori.md) | Nori A3 bimanual backend (vendored MJCF, ArmChains, nori-sdk follow-up) |
 | [robots/innate_mars.md](docs/robots/innate_mars.md) | Innate Mars bridge / sim / DA3 |
 | [robots/sourccey.md](docs/robots/sourccey.md) | Sourccey sim support (Vulcan Robotics) |
 | [start_with_docker_plus_virtenv.md](docs/start_with_docker_plus_virtenv.md) | Stretch GPU client + robot install |

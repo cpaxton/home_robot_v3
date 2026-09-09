@@ -47,13 +47,46 @@ class TaskPlan:
     failed_op: str | None = None
 
 
-def approach_pose_for_object_xy(obj_xy: np.ndarray, *, standoff: float = 0.55) -> np.ndarray:
-    """Face −Y (table / iTHOR convention used in default_table smoke).
+def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
+    """Base yaw so the selected arm points at a table object in −Y.
+
+    ``front``: chassis +X toward the object (Galaxea / rby1). ``side``: hanging
+    ±X arm toward the object (Sourccey left +π/2, right −π/2).
+    """
+    mode_l = str(mode or "front").lower().strip()
+    arm_l = str(arm or "left").lower().strip()
+    if mode_l == "side":
+        return float(np.pi / 2 if arm_l != "right" else -np.pi / 2)
+    return float(-np.pi / 2)
+
+
+def approach_pose_for_object_xy(
+    obj_xy: np.ndarray,
+    *,
+    standoff: float = 0.55,
+    mode: str = "front",
+    arm: str = "left",
+) -> np.ndarray:
+    """Stand off in +Y from the object; yaw from :func:`approach_yaw_for_mode`.
 
     Default standoff 0.55 m clears the Galaxea base footprint (0.35 embedded the chassis).
     """
     xy = np.asarray(obj_xy, dtype=np.float64).reshape(-1)[:2]
-    return np.array([float(xy[0]), float(xy[1]) + float(standoff), -np.pi / 2], dtype=np.float64)
+    yaw = approach_yaw_for_mode(mode, arm)
+    return np.array([float(xy[0]), float(xy[1]) + float(standoff), yaw], dtype=np.float64)
+
+
+def _tamp_approach_mode_and_arm(robot: Any, executor: Any | None) -> tuple[str, str]:
+    spec = getattr(robot, "_spec", None)
+    if spec is None and executor is not None:
+        spec = getattr(getattr(executor, "robot", None), "_spec", None)
+    mode = str(getattr(spec, "tamp_approach", "front") or "front").lower().strip()
+    if mode not in ("front", "side"):
+        mode = "front"
+    arm = "left"
+    if executor is not None:
+        arm = str(getattr(executor, "arm", "left") or "left").lower().strip()
+    return mode, arm
 
 
 def rank_grasps_by_ik(
@@ -94,25 +127,30 @@ def rank_grasps_by_ik(
 
 
 def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
-    """Write approach base XYT into the executor's offline MJCF freejoint for IK ranking."""
+    """Write approach base XYT into the executor's offline MJCF for IK ranking.
+
+    Uses :func:`~emet.controller.manipulation.kinematic_pick_place.write_offline_mjcf_base_xyt`
+    so planar robots (``RobotSpec.planar_base_joint_names``) and freejoint robots
+    (rby1/nori/galaxea) share one write path with execution IK.
+    """
     import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
 
     model = getattr(executor, "_model", None)
     data = getattr(executor, "_data", None)
     profile = getattr(executor, "profile", None)
     if model is None or data is None or profile is None:
         return
-    name = getattr(profile, "base_freejoint_name", None)
-    if not name:
-        return
-    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
-    if jid < 0:
-        return
-    qadr = int(model.jnt_qposadr[jid])
-    x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
-    z = float(data.qpos[qadr + 2])
-    half = 0.5 * th
-    data.qpos[qadr : qadr + 7] = [x, y, z, float(np.cos(half)), 0.0, 0.0, float(np.sin(half))]
+    spec = getattr(getattr(executor, "robot", None), "_spec", None)
+    planar = getattr(spec, "planar_base_joint_names", None) if spec is not None else None
+    write_offline_mjcf_base_xyt(
+        model,
+        data,
+        xyt,
+        planar_joint_names=tuple(planar) if planar and len(planar) == 3 else None,
+        freejoint_name=getattr(profile, "base_freejoint_name", None),
+    )
     # Seed arm near home so ranking matches post-approach posture.
     home = getattr(profile, "home_cmd", None)
     joint_names = list(getattr(executor, "joint_names", ()) or ())
@@ -123,12 +161,16 @@ def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
         qadr_list = joint_qpos_addrs(model, joint_names)
         # Map profile home actuators → arm joints when names align via pack helpers.
         for i, jn in enumerate(joint_names):
-            # Prefer matching ``left_arm_jointK`` ↔ ``left_armK`` style.
+            # Prefer matching ``left_arm_jointK`` ↔ ``left_armK`` style, then ``jn_act``.
             short = jn.replace("_joint", "") if "_joint" in jn else jn
-            if short in act_names:
-                ai = act_names.index(short)
-                if ai < len(home) and i < len(qadr_list):
-                    data.qpos[int(qadr_list[i])] = float(home[ai])
+            act_key = short if short in act_names else (f"{jn}_act" if f"{jn}_act" in act_names else None)
+            if act_key is None and jn in act_names:
+                act_key = jn
+            if act_key is None:
+                continue
+            ai = act_names.index(act_key)
+            if ai < len(home) and i < len(qadr_list):
+                data.qpos[int(qadr_list[i])] = float(home[ai])
     mujoco.mj_forward(model, data)
 
 
@@ -163,12 +205,13 @@ def plan_pick_place(
             expanded_nodes=expanded,
         )
     obj_xy = np.asarray(pl[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
-    approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m)
-    expanded.append(f"approach@{approach.tolist()}")
+    mode, arm = _tamp_approach_mode_and_arm(robot, executor)
+    approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+    expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
-    if executor is not None and getattr(executor, "_ensure_model", None) and executor._ensure_model():
+    if executor is not None and executor._ensure_model():
         _sync_executor_base_to_xyt(executor, approach)
         scores = rank_grasps_by_ik(
             executor._model,
@@ -256,7 +299,8 @@ def execute_task_plan(
 ) -> TaskPlan:
     """Execute a :class:`TaskPlan` in order; updates ``plan.success`` / ``message``.
 
-    Optional *video_recorder* (``ManipVideoRecorder``) gets status updates per step.
+    Optional *video_recorder* (``ManipVideoRecorder``) gets status updates per step
+    and dumps clean paper stills after each completed operator.
     """
     if not plan.steps:
         plan.success = False
@@ -352,6 +396,7 @@ def execute_task_plan(
         plan.completed_ops.append(op)
         if video_recorder is not None:
             video_recorder.capture_once()
+            video_recorder.dump_paper_stills(op)
 
     _status("done", detail=plan.message or "ok")
     plan.success = True
@@ -463,6 +508,7 @@ def plan_pick_place_mcts(
         }
 
     best: TaskPlan | None = None
+    last_fail: str | None = None
     for cand in cands:
         obj_body = str(cand["object_gt_body"])
         recep_body = str(cand.get("receptacle_gt_body") or "")
@@ -493,16 +539,20 @@ def plan_pick_place_mcts(
         )
         plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())
+        if not plan.success:
+            # Keep the most informative failure for diagnostics.
+            last_fail = str(plan.message or "")
         if plan.success and (best is None or len(best.steps) <= len(plan.steps)):
             best = plan
     if best is not None:
         return best
+    detail = f"last_grounding={last_fail}" if last_fail else f"candidates={len(cands)}"
     return TaskPlan(
         steps=[],
         object_body="",
         receptacle_body=None,
         success=False,
-        message="no_reachable_task",
+        message=f"no_reachable_task:{detail}",
         expanded_nodes=[c.get("object_query", "") for c in cands],
     )
 

@@ -1,0 +1,82 @@
+NOTICE — Nori A3 Description
+==================================
+
+WHAT THIS IS
+------------
+A description of the Nori A3 robot for use in simulation, visualization and
+research: kinematics, approximate inertial properties, collision primitives, and
+visual meshes.
+
+
+NOT FOR SAFETY-CRITICAL USE
+--------------------------
+This model describes a machine with powered arms and a powered lift. It is a
+simplified approximation intended for simulation, visualisation and research.
+
+Do not use it to determine clearances, reach envelopes, stopping distances, load
+capacity, stability or tip limits for any real robot, and do not use it as the
+basis of a safety case or a risk assessment. Its inertial properties are
+estimates, its collision geometry is deliberately coarser than the hardware, and
+its total mass is knowingly below the real value (see ACCURACY).
+
+Safety on a real Nori robot is enforced on the robot itself, not by anything in
+this package.
+
+
+NOT MANUFACTURING DATA
+--------------
+
+  * The meshes are simplified visual approximations. Internal geometry has been
+    removed and surfaces have been decimated. 
+
+  * There is no CAD in this package. 
+
+  * Parts produced from these meshes will not fit, function, or be safe. Do not
+    use them for manufacture, and do not rely on them for any dimension that
+    matters.
+
+
+ACCURACY
+--------
+  * Kinematics — joint axes, limits and link transforms — are measured and
+    verified against hardware.
+
+  * Inertial properties are APPROXIMATE. Masses are measured, but each link is
+    modeled as a uniform-density primitive, so centers of mass and inertia
+    tensors are estimates. They are suitable for kinematics, visualization and
+    general-purpose simulation. They are NOT suitable for torque-level
+    sim-to-real transfer or any safety-critical calculation.
+
+  * Collision geometry is deliberately primitive (boxes, cylinders, spheres),
+    not a faithful hull of the visual meshes.
+
+  * THE LIFT'S JOINT LIMIT IS AN OPERATING CEILING, NOT THE STROKE. The
+    mechanism's physical stroke is 720 mm; lift_extension_joint is limited to
+    700 mm. The 20 mm reserve keeps the carriage off the top mechanical stop and
+    leaves room for overshoot, and it is what the robot's own controllers and
+    teleop tools command. Simulate against 700 mm and you match the hardware's
+    behaviour; the extra 20 mm exists but is not commanded.
+
+  * TOTAL MASS IS 8.93% LIGHT. The links sum to about 18.3 kg; a real robot
+    weighs 20.5 kg. The difference is hardware not modelled as its own link -
+    USB hubs, wiring loom, cable management, larger fasteners - and is assumed
+    distributed in proportion to the rest. Scale by 1.121 for the real total.
+
+  * The lift assembly total is measured; the split across stages is an
+    engineering estimate, and may be cause for uncertainty in this model for stability work.
+
+  * Camera POSITIONS are measured. Camera AIM angles are modelled, but may vary slightly due to material constraints.
+
+
+THIRD-PARTY CONTENT
+-------------------
+  * The lidar is drawn as a PRIMITIVE STAND-IN, not the vendor's geometry. The
+    real RPLIDAR C1 mesh is Slamtec's and is not ours to redistribute, so this
+    bundle ships a stub built from two cylinders matched to the sensor's outer
+    envelope. It is the right size and in the right place; it is not a model of
+    the sensor. No third-party geometry is included in this bundle.
+
+
+COPYRIGHT
+---------
+Copyright 2026 Nori Robotics Inc.

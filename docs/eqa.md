@@ -14,7 +14,7 @@ _Click this large image to follow the link to YouTube:_
 
 In previous EQA work [GraphEQA](https://arxiv.org/abs/2412.14480), researchers provided a multimodal large language models (mLLMs), such as Google's Gemini and OpenAI's GPT, with a prompt that includes a object-centric semantic scene graph and task-relevant robot image observations. GraphEQA utilizes third party scene graph modules [Hydra](https://arxiv.org/abs/2201.13360) based on ROS Noetic. Installing this module can be difficult due to OS and software version compatibility. To provide a more user friendly alternative, we adapted the methods of [GraphEQA](https://arxiv.org/abs/2412.14480) for use with existing code in the Stretch AI repo.
 
-**Three memory models.** Stretch AI has three memory models: **sparse voxel map** (base voxel map, default agent), **DynaMem** (voxel + VL + EQA, this pipeline), and **Graph EQA** (graph-based EQA). For the graph-based option, run `emet run graph-eqa`; for the same stack with optional graph merge and staleness, run `emet run dynagraph` ([Dynagraph](dynagraph.md)). See [GraphEQA docs](graph_eqa.md) for when to use graph memory and how it differs from this EQA pipeline.
+**Three memory models.** Stretch AI has three memory models: **sparse voxel map** (base voxel map, default agent), **DynaMem** (voxel + VL + EQA, this pipeline), and **graph memory** (`emet.memory.graph_eqa` / `GraphEQAMemory`). For the graph-based option, run `emet run graph-eqa`; for the same stack with optional graph merge and staleness, run `emet run dynagraph` ([Dynagraph](dynagraph.md)). Code layout: [graph_memory.md](graph_memory.md). How-to: [graph_eqa.md](graph_eqa.md).
 
 In GraphEQA, mLLMs are expected to answer the question based on task-relevant image observations and plan exploration based on a scene graph string. Stretch AI has useful capabilities that can serve similar roles. For example, [DynaMem system](dynamem.md) finds task-relevant images and VLM models, such as [Qwen](../src/emet/llms/qwen_client.py) and [OpenAI GPT](../src/emet/llms/openai_client.py), extract visual clues from image observations by listing featured objects in the images such as beds, tables, etc.
 
@@ -42,8 +42,8 @@ This module shares or extends core dependencies (mapping, perception, llms) with
 | ----------------------- | ---------------------------------------------------------------- |
 | [`src/emet/app/run_eqa.py`](../src/emet/app/run_eqa.py)       |       Entry point for EQA module                       |
 | [`src/emet/controller/task/dynamem/dynamem_task.py`](../src/emet/controller/task/dynamem/dynamem_task.py)  | An executor wrapper for EQA module (`EQAExecuter`) |
-| [`src/emet/controller/robot_agent_dynamem.py`](../src/emet/controller/robot_agent_dynamem.py) | Robot agent (DynaMem) used for EQA; also see [GraphEQA](graph_eqa.md) for graph-based memory agent |
-| [`src/emet/mapping/voxel/voxel_dynamem.py`](../src/emet/mapping/voxel/voxel_dynamem.py#928)         | We added EQA utilities to [DynaMem voxel.py](../src/emet/mapping/voxel/voxel_dynamem.py)            |
+| [`src/emet/controller/robot_agent_dynamem.py`](../src/emet/controller/robot_agent_dynamem.py) | Robot agent (DynaMem) used for EQA; graph memory: [graph_eqa.md](graph_eqa.md) / [graph_memory.md](graph_memory.md) |
+| [`src/emet/mapping/voxel/dynamem_eqa.py`](../src/emet/mapping/voxel/dynamem_eqa.py) | Classic voxel `query_answer` / frontiers (mixin on DynaMem `SparseVoxelMap`) |
 
 ## Instructions
 
@@ -85,7 +85,7 @@ Other options
 
 - `--not_rotate_in_place`, `-N` : skip initial rotation-in-place scan
 - `--discord`, `-D`: launch Discord bot for a better interface than the terminal and command line
-- `--save_rerun`, `--SR`: save Rerun log files to `dynamem_log/debug_*` as rrd file for offline replay (but rerun window online streaming would be disabled)
+- `--save_rerun`, `--SR`: write `logs/…/data_N.rrd` on rotate / navigate / EQA. Live websocket viewing stays up (`rr.save` only; no extra `rr.init`).
 
 **Example runs**:
 Assume your robot ip is `192.168.1.42`.

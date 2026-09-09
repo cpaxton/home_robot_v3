@@ -69,6 +69,20 @@ episodes:
     floor_z_m: 0.02
     manip_mode: sim
 
+  # Counter-top object -> cabinet, kinematic MCTS path (new official URDF arms reach
+  # table/counter height; the arm's workspace bottoms out around z≈0.36 m, so floor
+  # objects are out of reach — use the counter pick as the sourccey kinematic row).
+  - id: robocasa_sourccey_counter_to_cab_mcts
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_sourccey.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.60
+    explore_steps: 0
+    manip_mode: mcts
+
   # Floor object -> counter, stretch teleport reference.
   - id: robocasa_stretch_floor_to_counter_sim
     tier: S1

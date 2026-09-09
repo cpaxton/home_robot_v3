@@ -53,6 +53,7 @@ def test_ovmm_find_phase_s0_dynagraph_perception():
         backend="dynagraph",
         cpu_only=True,
         perfect_depth=True,
+        agentic_find=False,
         port_offset=int(os.getpid() % 400 + 210),
     )
     metrics = run_episode_find_phase(ep, run_cfg)

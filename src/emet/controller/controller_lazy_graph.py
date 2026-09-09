@@ -13,6 +13,7 @@ import numpy as np
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.memory.graph_eqa.lazy_graph_commit import commit_graph_from_arrival_obs
 from emet.utils.logger import Logger
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -51,7 +52,7 @@ class LazyGraphController(DynagraphController):
                     parameters=self.parameters,
                 )
                 self.graph_memory.maintain(self.obs_count)
-                if getattr(self.rerun_visualizer, "enabled", True):
+                if visualizer_is_enabled(self.rerun_visualizer):
                     self.rerun_visualizer.log_dynagraph_state(
                         self.graph_memory,
                         ground_truth_mode=self.ground_truth_mode,

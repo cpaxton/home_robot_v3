@@ -21,7 +21,7 @@ When running without a display (SSH, servers, Docker):
   ```
   Then connect at `http://<robot-ip>:9090?url=ws://<robot-ip>:9877`.
 - **Correct URL**: Open `http://localhost:9090?url=ws://localhost:9877` (or `http://<server-ip>:9090?url=ws://<server-ip>:9877` when remote). The `?url=ws://...` tells the viewer which WebSocket to connect to. Do **not** open https://app.rerun.io.
-- **Native app spawning instead of web**: If the native Rerun viewer opens instead of the web viewer, use `--headless` or set `RERUN_HEADLESS=1`. The web server now always runs on :9090, so you can open that URL even when the native app spawns.
+- **Native app spawning instead of web**: Native and web are exclusive — spawning the desktop viewer skips `rr.serve` (otherwise the native window stays empty). Use `--headless` or `RERUN_HEADLESS=1` for the web UI at `http://localhost:9090?url=ws://localhost:9877`. See [rerun.md](rerun.md).
 - **No blueprint panel**: Use `--rerun-show-panels` when running DynaMem to reveal the entity tree and view options.
 - **Still not seeing anything** (but `[RERUN] obs=True servo=True`): Data is flowing. Use the full URL: `http://localhost:9090?url=ws://localhost:9877` (the `?url=ws://...` is required to connect to the stream). Also try: (1) `--rerun-show-panels` to reveal the entity tree; (2) check the timeline is playing; (3) hard refresh (Ctrl+Shift+R).
 - **winit / DISPLAY errors**: These occur when a GUI tries to spawn without a display. DynaMem and other apps now detect headless and disable the native Rerun viewer; the web server still runs.

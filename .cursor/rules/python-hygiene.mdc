@@ -1,0 +1,38 @@
+---
+description: Avoid AI-slop Python — no silent except, no getattr soup, no double fallbacks
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Prefer clear failures over defensive soup
+
+Do not wrap ordinary call sites in `try/except Exception`, `getattr(..., None)`, or `callable(...)` “just in case.” If the type always has the attribute, use it. Let missing wiring fail loudly.
+
+```python
+# ❌ BAD
+gm = getattr(self, "graph_memory", None)
+vis = getattr(self, "rerun_visualizer", None)
+try:
+    if gm is not None and vis is not None:
+        vis.log_dynagraph_state(gm)
+except Exception as err:
+    logger.warning(f"graph log failed: {err}")
+
+# ✅ GOOD
+if self.graph_memory is None or not visualizer_is_enabled(self.rerun_visualizer):
+    return
+self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
+```
+
+## Allowed defensiveness
+
+- **Rerun-sdk / viewer I/O** at the visualizer boundary (`log_vlm_context_to_visualizer`, `send_graph_memory_rerun_blueprint`) — a viewer crash must not kill the robot loop. One `except Exception` at that boundary, not at every caller.
+- **`visualizer_is_enabled(v)`** (`enabled is True`) so `MagicMock` / `NullVisualizer` do not pull in `rerun-sdk`.
+- **Test doubles** that are not `NullVisualizer` — do not replace them with a live viewer (`maybe_attach_eval_rerun_visualizer`).
+- **Optional env/CLI overlays** (`_env_truthy`, `resolve_rerun_bool`).
+
+## Other slop to skip
+
+- `int(x or 1)` when `0` is valid; `str(text or "")` when `text` is already `str`.
+- Duplicate work (logging the same Rerun panel from `log_dynagraph_state` *and* the controller).
+- `%s` logging on `emet.utils.logger.Logger` — use f-strings (see `logging.mdc`).

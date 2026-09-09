@@ -2,6 +2,10 @@
 
 Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpaces. Most apps read these at startup; export in the shell before `emet serve` / `emet run`.
 
+**`PYTHONPATH`:** not an `EMET_*` flag. `emet` rewrites it for child processes so ROS `cv2` and leftover `python3.12` site-packages in a 3.10 `.venv` cannot shadow the project stack. See [pythonpath.md](pythonpath.md).
+
+**Prefer YAML.** Robot and mapping policy belongs in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`robots.<id>`, `mapping.*`) or `--set` / `-O`. New `EMET_*` flags are for process-lifetime / host / GPU accidents (locks, VRAM, EGL), not embodiment defaults. See TODO “config over env flags”.
+
 ## MolmoSpaces
 
 **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** — spawn, autoplace, occupancy map, navigation teleport (`EMET_MOLMOSPACES_NAV_TELEPORT`), asset paths, and related test knobs.
@@ -14,7 +18,22 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
+| `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
+
+## Rerun
+
+Live viewer, entity paths, YAML `rerun:` keys, and CLI defaults: **[rerun.md](rerun.md)**.
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `RERUN_HEADLESS` | `RerunVisualizer` | `1` — web server only (no native spawn / auto-open browser). Same as `--headless`. |
+| `RERUN_NATIVE_VIEWER` | `RerunVisualizer` / `build_rerun_visualizer_kwargs` | `1` — native desktop viewer (needs DISPLAY). Exclusive with web `rr.serve`. |
+| `RERUN_BIND_ALL` | `RerunVisualizer` / `--rerun-bind` | `1` — bind HTTP/WS to `0.0.0.0` for remote viewing. |
+| `EMET_RERUN_HEAD_DEPTH` | `RerunVisualizer.log_head_camera` | `1` — log `world/head_camera/depth` on the live stream (off by default). |
+| `EMET_DYNAGRAPH_RERUN_CROPS` | `build_rerun_visualizer_kwargs` | `1` — per-node crop images + mosaic (forces on even if YAML `log_crops: false`). |
+| `EMET_DYNAGRAPH_RERUN_EDGES` | `build_rerun_visualizer_kwargs` | `1` — graph edge line strips (same on-only override as crops). |
+| `EMET_EVAL_RERUN` | OVMM / Habitat / sim eval | `1` — live VLM-context viewer during eval (default **off**). Same as `emet ovmm find\|full --rerun` or `emet-habitat run-episode --rerun`. |
 
 ## Benchmarks
 
@@ -23,6 +42,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_DISABLE_TTS` | `DynamemController` init | Skip Piper TTS (`1`/`true`). OVMM find-phase sets this by default (no audio in batch eval; avoids Piper wedging under Robocasa+VL). |
+| `EMET_SKIP_HEAD_SWEEP` | `DynamemController.look_around` | `1` — skip head pans (single `update()`). Wins over YAML unless `EMET_FORCE_HEAD_SWEEP` is set. Default policy is `robots.<id>.mapping.look_around_head_sweep` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (Stretch and rby1: `false`). The OVMM find slice does **not** export this; YAML is enough. |
+| `EMET_FORCE_HEAD_SWEEP` | `DynamemController.look_around` | `1` — force pans even when YAML/`SKIP` would skip. `PROFILE=stretch-legacy` sets this. |
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). YAML: `eval.export_map`. Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). YAML: `eval.export_map_overlay`. |
 | `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). YAML: `eval.export_map_video`. |
@@ -44,8 +65,12 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_OVMM_OUTPUT_SIM` | `eval_ovmm_find_phases.py` | OVMM sim sweep output. Default `~/runs/emet/ovmm_find_phase` (`configs/ovmm/benchmark.yaml`). |
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |
+| `EMET_AGENTIC_FIND_SKIP_GPU_CHECK` | `scripts/smoke_habitat_ovmm_agentic_find.sh` | `1` — skip the `nvidia-smi` preflight (tests / no-GPU hosts). Agentic find still needs a VLM. |
+| `EMET_OVMM_SKIP_TABLE_MAPPING_POSE` | `ovmm_find_phase.run_mapping_protocol` | Skip rby1 default-table backup + `look_front` before rotate scan (`1`/`true`). |
+| `EMET_OVMM_S0_PARITY` | `ovmm_find_phase.run_episode_find_phase` | Default **on** for S0 ``default_table*`` episodes: pytest-aligned oneshot path (`DynamemTaskExecutor` + live map, no scene cache, interactive dynagraph profile, phrase-only localize). Set `0`/`false` for full OVMM find-phase harness. |
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `scripts/eval_dynamic_exploration.py` | Dynamic exploration sweep output. Default `~/runs/emet/dynamic_exploration` (`configs/benchmarks/dynamic_exploration.yaml`). |
+| `EMET_TAMP_CLUTTER_OUTPUT` | `scripts/eval_tamp_clutter.py` | TAMP clutter-clearance benchmark output. Default `~/runs/emet/tamp_clutter`. |
 | `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
 | `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` | `dynamic_exploration_runner.py` | Heartbeat interval while a dynagraph subprocess is running (default `120`). Writes to stderr + `progress.jsonl`. |
 | `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` | `dynamic_exploration_runner.py` | Warn when `dynagraph.log` mtime is older than this many seconds (default `900`). Surfaces post-VLM / EQA hangs. |
@@ -85,18 +110,30 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_ATTEMPT_LEDGER_PERSIST_ABSENT` | `GraphEQAMemory.clear_retracted_nav_claims` | When `1`, keep close-look ABSENT claim blacklists across questions (ledger rows always persist when the ledger is on). Default **off**. Also `eqa.attempt_ledger.persist_absent_claims`. |
 | `EMET_ATTEMPT_LEDGER_MAX` | `GraphEQAMemory` | Cap on stored `AttemptRecord` rows (default `512`). Also `eqa.attempt_ledger.max_records`. |
 | `EMET_EQA_AGENTIC_MCQ_DEBIAS` | `AgenticEQAExecutor` | Default **on**. Unverified forced answers (budget exhaustion) run the letter-free debias (`vote_mcq_letter`: freeform + ≤2 rotation votes) before the ladder, fixing the last-option (D) bias seen in the trace audit. `0` restores the raw EQA letter. Also `eqa.agentic_mcq_debias`. |
-| `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Ask the per-episode VLM extract (keyword fallback) whether the question needs a close look (clock/state/count/detail); when it does, the router state says so and a 2+-frontier streak redirects to investigate/`look_around` instead of exploring forever (q84 time-question fix). `0` disables. Also `eqa.agentic_close_look`. |
+| `EMET_EQA_AGENTIC_CLOSE_LOOK` | `AgenticEQAExecutor` | Default **on**. Per-episode close-look flag: VLM `extract_target_from_question` **OR** count/clock/state keywords (so a VLM false-negative cannot disable stay on “how many” / “what time”). Router state + `DETECTIONS_REMAIN` / close-map stay. `0` disables. Also `eqa.agentic_close_look`. Tune with other close-map knobs one at a time — [countclock_bisect.md](experiments/countclock_bisect.md#tuning-ladder-one-knob-at-a-time). |
+| `EMET_EQA_LOCATION_MISSING_FIND` | `GraphEQAMemory.query_answer` | Default **on** (`eqa.location_missing_find`; env escape hatch). Location MCQs downgrade while an unattached FIND view (`_eqa_find_obs_ids` `count_mcq_only=False`) remains (mirror count, q47 `wall clock`). `0` disables (6/15 vs 4/5 canary). |
+| `EMET_EQA_CLOSE_MAP_GATE` | `GraphEQAMemory.query_answer` | Default **on** (`eqa.close_map_gate`; env escape hatch). Location MCQs also require voxel `close_map resolved` (`close_map_catalog_fields` `R_M 0.55` `aimed`) before confident (AB `7/15` vs A `6/15`). `0` disables. |
+| `EMET_EQA_IMG_STRICT` | `GraphEQAMemory.query_answer` | Default **off** (`eqa.img_strict`; env escape hatch). Require attached image landmark (`_location_letter_from_attached_images`) to match parsed letter before location confident (`5/15`). `1` enables. |
+| `EMET_CLOSE_MAP_R_M` | `CloseDistanceMap` | Aimed camera range (m) that counts as a resolved close look (default `0.55`). Occupancy exploration is not enough for small objects. See [close_map.md](close_map.md). |
+| `EMET_CLOSE_MAP_AIM_DEG` | `CloseDistanceMap` | Optical-axis cone (deg) for an “aimed” hit (default `25`). |
+| `EMET_CLOSE_MAP_QUERY_RADIUS_M` | `CloseDistanceMap` | XY neighborhood radius (m) when querying a place card (default `0.35`). |
+| `EMET_CLOSE_MAP_ESCAPE_ATTEMPTS` | `decide_close_look` | Agentic find: max approaches on an unresolved XY before escape (default `4`). |
+| `EMET_CLOSE_MAP_CHAT_ESCAPE_ATTEMPTS` | `decide_close_look` | CHAT/TAMP tighter cap so the robot leaves unreachable furniture (default `2`). |
 | `EMET_EQA_AGENTIC_NO_EARLY_UNVERIFIED` | `AgenticEQAExecutor` | Default **on**. Unverified auto-submits (bare `answerable` state) are held while rounds/nav budget remain — the harness forces the debiased ladder answer at exhaustion (q2 early-abandon fix). `0` restores early unverified submits. Also `eqa.agentic_no_early_unverified`. |
 | `EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM` | `AgenticEQAExecutor` | Default **on**. A single VLM assess that saw the target (`present=true`) and offered a letter confirms `verified` — no phrase-token or two-view corroboration needed (verified answers score ~86% vs ~35% forced guesses; raised the verification rate from ~13% of episodes). The `present` guard from the q28/q39 absence fix stays. `0` restores the phrase/two-view gate. Also `eqa.agentic_single_view_confirm`. |
 | `EMET_EQA_AGENTIC_EVIDENCE_IMAGE` | `AgenticEQAExecutor` | Default **on**. Unverified final EQA answers pin the best VLM-assessed view (answerable+present) as Image 1 via `force_obs_ids` instead of a pure diversified pick. `0` restores diversified selection. Also `eqa.agentic_evidence_image`. |
 | `EMET_EQA_HYP_RECALL_K` | `AgenticEQAExecutor` | Top-K evidence cards recalled for the agentic router / fallback (default `6`). Retrieval only — the VLM decides among listed `obs_id`s. |
-| `EMET_EQA_ROOM_LINK_RADIUS_M` | `GraphEQAMemory` room clusters | Planar radius (m) linking object nodes into room CCs with `near` edges (default `2.0`; also `eqa.room_link_radius_m`). |
+| `EMET_EQA_ROOM_LINK_RADIUS_M` | `GraphEQAMemory` room clusters | Planar radius (m) linking object nodes into room CCs with `near` edges for the **proximity** backend (default `2.0`; also `eqa.room_link_radius_m`). |
+| `EMET_EQA_ROOM_CLUSTERING_BACKEND` | `room_clustering.partition` | `proximity` (default, implemented), `occupancy_cc`, or `portal` (latter two error until implemented). Also `eqa.room_clustering.backend`. |
 | `EMET_EQA_ROOM_ASSIGN_MAX_M` | `GraphEQAMemory.graph_room_at_robot` | Max distance (m) from robot XY to a cluster centroid to assign a room (default `3.0`; also `eqa.room_assign_max_m`). |
 | `EMET_EQA_AGENTIC_REQUIRE_VERIFIED` | `AgenticEQAExecutor` | `1` — refuse unverified `submit_answer` (incl. fallback / round exhaust). At exhaustion the episode falls to the forced-answer ladder (see `EMET_EQA_FORCE_ANSWER`), not to a silent `Unknown`. SigLIP is high-recall FP-leaning support for verify — see [agentic_scale.md](experiments/agentic_scale.md#siglip-role-in-agentic-verify-design). |
 | `EMET_EQA_FORCE_ANSWER` | `AgenticEQAExecutor` | Default **on**. At budget / verification exhaustion, run the four-image EQA and commit to best-guess semantic option text instead of returning `Unknown`. The ladder is EQA `Answer:` text (`eqa_answer`) → a view assess that *saw* the target (`vlm_suggested`) → deferred pending choice (`pending_letter`, retained as a metrics tag) → deterministic uniform prior (`uniform_prior`), recorded as `answer_provenance` with a calibrated `answer_confidence` in the episode metrics and the `forced_answer` trace row. Only the Habitat scoring adapter converts the resolved choice index to A–D. H2H summarize / `emet jobs report` print a per-channel breakdown and `accuracy_excl_uniform_prior` so a lucky prior cannot inflate the headline. `0`/`false` restores the legacy abstain (trace row `abstain_unverified`) for A/B. |
 | `EMET_EQA_AGENTIC_VERIFIER` | `AgenticEQAExecutor` | Hybrid where-next backend for ranking places: `none`/`siglip` (paper-router / overnight default), `owlv2`, or `yoloe`. Answerability is Qwen `vlm_assess` on pixels (detector ABSENT/PRESENT is not fed into that prompt and does not unlock submit). |
 | `EMET_EQA_ANSWERABLE_CONFIRM` | `AgenticEQAExecutor` | Hybrid confirm before submit unlock (default **on**). Raw VLM `answerable` unlocks only after phrase/inventory corroboration **or** a second agreeing semantic choice on another obs. `0`/`false` restores legacy immediate unlock. `need_more_views` always defers. Trace: `answerable_deferred` / `answerable_confirmed`. |
 | `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
+| `EMET_EQA_EPISODE_DIR` | Agentic EQA / OVMM find | Episode artifact directory. OVMM batch sets this to ``OUT/<episode>_<backend>/`` so traces and query PNGs land next to the run JSON. |
+| `EMET_AGENTIC_QUERY_IMAGES` | `query_images.dump_query_rgb` | Default **on**. Write the RGB actually sent to Qwen (`vlm_assess` / `capture`) as PNGs. `0`/`false` disables. |
+| `EMET_AGENTIC_QUERY_IMAGES_DIR` | `query_images.dump_query_rgb` | Override dump directory. Default: ``$EMET_EQA_EPISODE_DIR/images`` (or next to the agentic trace). Files: ``rgb_<obs>.png`` plus ``<kind>_r<round>_obs<id>.png``. |
 | `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
 | `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
 | `EMET_USE_SCENE_MAP_CACHE` | OVMM find / dynamic explore | Load cached baseline and skip rotate/explore when present (default `1`). Set `0` or pass `--no-scene-cache`. |
@@ -136,7 +173,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `NATIVE_CRASH_RETRIES` | H2H | Retries of the same qid after a native crash under `skip` (default `1`). |
 | `NATIVE_CRASH_SETTLE_SEC` | H2H | Sleep after native crash before retry/next (default `60`). |
 | `NATIVE_CRASH_STREAK_ABORT` | H2H / `emet hmeqa --streak-abort` | Under `skip`, abort after N **consecutive** native crashes (default `2`; early exit when harness is wedged). `0` = never. |
-| `EMET_SKIP_CPU_AFFINITY` | H2H / `emet eval affinity` | Set `1` to skip pinning away from turbo P-cores (default: affinity **on** / fail-closed). |
+| `EMET_SKIP_CPU_AFFINITY` | H2H / `emet eval affinity` / `python -m emet.utils.cpu_affinity` / `emet jobs --cpu-safe` | Set `1` to skip pinning away from turbo P-cores (default: affinity **on** / fail-closed). |
 | `EMET_EXCLUDE_CPU_MIN_MHZ` | `emet.utils.cpu_affinity` / `emet eval affinity` | Exclude logical CPUs whose sysfs `cpuinfo_max_freq` is ≥ this many MHz (default `6000`). On the i9-14900KF that removes CPUs **8–11**. Do **not** use `taskset -c 0-7,10-31`. |
 | `EMET_CPU_EXCLUDE` / `EMET_CPU_ALLOW` | `emet.utils.cpu_affinity` | Optional extra exclude list, or explicit allow list (csv / ranges). |
 | `EPISODE_COOLDOWN_SEC` | H2H / `emet hmeqa --cooldown` | Seconds to `sync` + sleep after each episode (default `20`; `0` disables). |
@@ -218,12 +255,16 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_MANIP_MODE` | `DynamemTaskExecutor` / `resolve_agent_manip_mode` | `teleport` (default) or `kinematic` (IK + attach). Overrides `agent.manip_mode`. See [molmospaces.md](molmospaces.md) mobile manipulation. |
 | `EMET_MANIP_COLLISION` | kinematic pick/place | `none` (default) or `voxel` (2D obstacle map). Overrides `agent.manip_collision`. |
 | `EMET_MANIP_PLANNER` | kinematic pick/place | `rrt_connect` (default), `rrt`, or `linear`. Joint-space path after IK. Overrides `agent.manip_planner`. |
-| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render a **base chase** view into `third_person_image` (extra EGL cost). Used by `--record-mp4` smokes. |
+| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render a **base chase** view into `third_person_image` (extra EGL cost). `scripted_tamp_pick_place.py --record-mp4` sets this **and** `EMET_SIM_OVERHEAD`. |
 | `EMET_SIM_THIRD_PERSON_CAMERA` | same | Optional body name to follow (default: robot `base_link`). |
 | `EMET_SIM_THIRD_PERSON_DISTANCE` | chase cam | Orbit distance in meters (default `5.5`). |
 | `EMET_SIM_THIRD_PERSON_AZIMUTH` | chase cam | Azimuth **offset** from behind the base `+X` axis, degrees (default `125` = side/rear iso). |
 | `EMET_SIM_THIRD_PERSON_ELEVATION` | chase cam | Orbit elevation degrees (default `-28`). |
 | `EMET_SIM_THIRD_PERSON_LOOKAT_Z` | chase cam | Lookat height above base origin, meters (default `0.75`). |
+| `EMET_SIM_OVERHEAD` | `robosuite_server` full obs | When `1`, render a nadir FREE cam into `overhead_image` (extra EGL). `--record-mp4` sets this. |
+| `EMET_SIM_OVERHEAD_DISTANCE` | overhead cam | Height of the top-down view, meters (default `2.4`). |
+| `EMET_SIM_OVERHEAD_LOOKAT_Y` | overhead cam | Lookat Y offset from the base, meters (default `-0.4` toward the default table). |
+| `EMET_SIM_OVERHEAD_LOOKAT_Z` | overhead cam | Lookat height, meters (default `0.4`). |
 | `EMET_VL_CACHE_SYSTEM_PREFIX` | `qwen3-vl-eqa` / `Qwen3VLClient` | `1`/`0` — cache system-prompt KV across agent turns (default on via `eqa.vl_cache_system_prefix`). CLI: `--cache-vl-prefix` / `--no-cache-vl-prefix`. |
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |
@@ -242,8 +283,11 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_CALIBAN_REPO` | `emet deploy llm` / `deploy_caliban_vl.sh` | Remote checkout with `docker/jetson_llm_server.py` (default `~/src/home_robot_v3`). |
 | `EMET_JETSON_LLM_IMAGE` | Jetson LLM runner | Docker image tag (default `emet-jetson-llm:r35.4.1`). |
 | `EMET_JETSON_LLM_NAME` | `run_jetson_llm_container.sh` | Docker container name (default `emet-jetson-llm`; use a second name for dual-port). |
-| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port for the container (default `8000`; dual-2b VL uses `8001`). |
-| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` (only supported on JP5 Tegra image). `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md) § Quantization. |
+| `EMET_JETSON_VLM_VENV` | `run_jetson_vlm_native.sh` | Native JP7 CUDA venv (default `$REPO/.venv-vlm`). |
+| `EMET_LLM_SERVE_MODEL` | Jetson native / container serve | HF model id override (native VL default `Qwen/Qwen3-VL-8B-Instruct`). |
+| `EMET_LLM_SERVE_DTYPE` | `run_jetson_vlm_native.sh` | Load dtype: `float16` (default), `float32`, or `bfloat16`. |
+| `EMET_LLM_SERVE_PORT` | Jetson runner / serve | Host port (default `8000`; dual-2b VL uses `8001`). |
+| `EMET_LLM_SERVE_QUANT` | `jetson_llm_server.py` | `fp16` only on this server. `awq`/`int4`/`int8`/`bnb` exit with a clear error — see [llm_serve.md](llm_serve.md). |
 | `EMET_LLM_SERVE_API_KEY` | `emet serve llm` + client | Optional Bearer token for the LAN LLM server. |
 | `EMET_LLM_SERVE_DEVICE` | `emet serve llm` | Default device when `--device` omitted (`auto` / `cuda` / `cpu`). |
 | `EMET_GOMP_PRELOAD_DONE` | `openai_server` | Set after aarch64 libgomp re-exec (internal). |

@@ -1,0 +1,162 @@
+{
+  "base_link.stl": {
+    "stl": "arm_l_base_link",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_1.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_1_Support_v1_1.stl": {
+    "stl": "arm_l_Motor_1_Support_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Shoulder_v1_1.stl": {
+    "stl": "arm_l_Shoulder_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_2.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_2",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_2_Support_v1_1.stl": {
+    "stl": "arm_l_Motor_2_Support_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Bicep_Left_v1_1.stl": {
+    "stl": "arm_l_Bicep_Left_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Bicep_Right_v1_1.stl": {
+    "stl": "arm_l_Bicep_Right_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_3.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_3",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_3_support_v1_1.stl": {
+    "stl": "arm_l_Motor_3_support_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Forearm_v1_1.stl": {
+    "stl": "arm_l_Forearm_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_4.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_4",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_4_support_v1_1.stl": {
+    "stl": "arm_l_Motor_4_support_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Wrist_v1_1.stl": {
+    "stl": "arm_l_Wrist_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_5_support_v1_1.stl": {
+    "stl": "arm_l_Motor_5_support_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_5.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_5",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Gripper_Base_v1_1.stl": {
+    "stl": "arm_l_Gripper_Base_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Feetech_Servo_Motor_v1_6.stl": {
+    "stl": "arm_l_Feetech_Servo_Motor_v1_6",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Motor_6_cap_v2_1.stl": {
+    "stl": "arm_l_Motor_6_cap_v2_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  },
+  "Gripper_Finger_v1_1.stl": {
+    "stl": "arm_l_Gripper_Finger_v1_1",
+    "offset_mm": [
+      0,
+      0,
+      0
+    ]
+  }
+}

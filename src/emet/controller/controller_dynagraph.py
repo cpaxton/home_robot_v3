@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import numpy as np
-import rerun as rr
-import rerun.blueprint as rrb
 
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.eval.benchmark_dynagraph import dynagraph_harness_flags
@@ -16,6 +14,11 @@ from emet.memory.graph_eqa.sim_ground_truth_graph import (
     read_sim_object_placements,
     upsert_graph_memory_from_placements,
 )
+from emet.visualization.dynagraph_context import (
+    log_vlm_context_to_visualizer,
+    send_graph_memory_rerun_blueprint,
+)
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 
 class DynagraphController(GraphEQAController):
@@ -72,7 +75,7 @@ class DynagraphController(GraphEQAController):
             self.graph_memory.set_navigation_samples_max(max(self.graph_memory.navigation_samples_max, 8192))
         self.setup_custom_blueprint()
         self._sync_ground_truth_from_session()
-        if self.graph_memory is not None and getattr(self.rerun_visualizer, "enabled", True):
+        if self.graph_memory is not None and visualizer_is_enabled(self.rerun_visualizer):
             if self.ground_truth_mode:
                 self.rerun_visualizer.clear_identity("world/dynagraph/ground_truth/nodes")
             self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
@@ -126,41 +129,23 @@ class DynagraphController(GraphEQAController):
             frame.info["gt_voxel_hits"] = voxel_hits
 
     def setup_custom_blueprint(self) -> None:
-        if getattr(self.rerun_visualizer, "enabled", True) is False:
-            return
-        from emet.visualization.rerun import spatial3d_view_world
-
         gt_column = None
         if self.visualize_ground_truth:
+            # Deferred: rerun-sdk native extensions.
+            import rerun.blueprint as rrb
+
             gt_column = rrb.Vertical(
                 rrb.Spatial3DView(name="Sim GT (reference)", origin="world/dynagraph/ground_truth"),
                 rrb.TextDocumentView(name="Sim GT", origin="world/dynagraph/ground_truth/summary"),
             )
         graph_label = "Graph (ground truth)" if self.ground_truth_mode else "Dynagraph 3D"
-        summary_label = "Graph (GT)" if self.ground_truth_mode else "Dynagraph graph"
-        dynagraph_column = rrb.Vertical(
-            rrb.Spatial3DView(name=graph_label, origin="world/dynagraph"),
-            rrb.TextDocumentView(name=summary_label, origin="world/dynagraph/summary"),
+        summary_label = "Context (VLM)" if not self.ground_truth_mode else "Graph (GT)"
+        send_graph_memory_rerun_blueprint(
+            self.rerun_visualizer,
+            graph_label=graph_label,
+            summary_label=summary_label,
+            extra_right_column=gt_column,
         )
-        right_columns: list = [dynagraph_column]
-        if gt_column is not None:
-            right_columns.append(gt_column)
-        main = rrb.Horizontal(
-            spatial3d_view_world(),
-            rrb.Vertical(
-                rrb.TextDocumentView(name="text", origin="robot_monologue"),
-                rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
-            ),
-            rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
-                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),
-                rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
-            ),
-            rrb.Vertical(*right_columns),
-            column_shares=[3, 1, 1, 1] if gt_column is not None else [3, 1, 1],
-        )
-        collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
-        rr.send_blueprint(rrb.Blueprint(rrb.Vertical(main, rrb.TimePanel(state=True)), collapse_panels=collapse))
 
     def _sync_ground_truth_from_session(self) -> int:
         """Upsert GT graph nodes and log Rerun layers; returns number of GT bodies in session."""
@@ -186,7 +171,7 @@ class DynagraphController(GraphEQAController):
                 placements,
             )
             self._gt_graph_loaded = True
-        if self.visualize_ground_truth and getattr(self.rerun_visualizer, "enabled", True):
+        if self.visualize_ground_truth and visualizer_is_enabled(self.rerun_visualizer):
             self.rerun_visualizer.log_dynagraph_ground_truth(
                 placements,
                 graph_memory=self.graph_memory,
@@ -196,17 +181,18 @@ class DynagraphController(GraphEQAController):
     def refresh_ground_truth(self) -> int:
         """Populate GT graph + Rerun from ``emet_session``; returns GT body count (0 if missing)."""
         n = self._sync_ground_truth_from_session()
-        if self.graph_memory is not None and getattr(self.rerun_visualizer, "enabled", True):
+        if self.graph_memory is not None and visualizer_is_enabled(self.rerun_visualizer):
             self.rerun_visualizer.log_dynagraph_state(
                 self.graph_memory,
                 ground_truth_mode=self.ground_truth_mode,
             )
         return n
 
-    def update(self) -> None:
+    def update(self, *, full_perception: bool | None = None) -> None:
         if self.graph_memory is not None and (self.ground_truth_mode or self.visualize_ground_truth):
             self._sync_ground_truth_from_session()
-        super().update()
+        # Skip GraphEQAController.update (logs before maintain and consumes dynagraph_stride).
+        super(GraphEQAController, self).update(full_perception=full_perception)
         if self.ground_truth_mode:
             self._associate_instances_to_ground_truth()
             self._associate_gt_to_frame_instances()
@@ -217,6 +203,7 @@ class DynagraphController(GraphEQAController):
             self.graph_memory,
             ground_truth_mode=self.ground_truth_mode,
         )
+        log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
         self._rerun_refresh_monologue_panel()
         if self.obs_count % 8 == 0:
             self._maybe_emit_navgrid_ascii(context="dynagraph")

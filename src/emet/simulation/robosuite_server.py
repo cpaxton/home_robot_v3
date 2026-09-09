@@ -90,6 +90,39 @@ from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops, chain_pinhole
 
 logger = log.Logger(__name__)
 
+# Cached per-robot decision for the ``kinematic_manip`` capability so the
+# ArmManipProfile MJCF load happens once per server (not per session build).
+_KINEMATIC_MANIP_OK: dict[str, bool] = {}
+
+
+def _robot_supports_kinematic_manip(robot_name: str) -> bool:
+    """True when the robot opts into latch pick/place and an ArmManipProfile resolves.
+
+    :attr:`RobotSpec.advertise_kinematic_manip` is the opt-in (default False). Offline
+    IK discovery for xlerobot/franka/stretch must not flip live DynaMem/OVMM from
+    teleport to kinematic latch.
+    """
+    key = str(robot_name or "").lower().strip()
+    if not key:
+        return False
+    cached = _KINEMATIC_MANIP_OK.get(key)
+    if cached is not None:
+        return cached
+    ok = False
+    try:
+        from emet.motion.arm_manip_profile import ArmManipProfile
+        from emet.robots import get_robot_spec
+
+        spec = get_robot_spec(key)
+        if spec is not None and bool(getattr(spec, "advertise_kinematic_manip", False)):
+            ArmManipProfile.for_robot(key, arm="left")
+            ok = True
+    except Exception:  # noqa: BLE001  (KeyError / spec / MJCF discovery failures)
+        ok = False
+    _KINEMATIC_MANIP_OK[key] = ok
+    return ok
+
+
 # One ``mujoco.Renderer`` / GL context: multiple resolutions each call ``mjr_makeContext`` and often
 # hit GL_INVALID_OPERATION (0x502) on EGL. Primary + servo reuse one renderer; servo resizes in CPU.
 _PRIMARY_RW, _PRIMARY_RH = 640, 480
@@ -471,6 +504,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._molmospaces_planar_autoplace_after_load()
             self._robocasa_planar_autoplace_after_load()
             self._robocasa_freejoint_autoplace_after_load()
+        self._reassign_robot_geoms_to_dedicated_group()
         self._planar_base_actuator_ids_cache = None
         self._configure_mj_substeps_per_tick()
 
@@ -952,8 +986,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         robot_name = str(getattr(self._spec, "name", "") or "").lower()
-        # Only robots with an ArmManipProfile (rby1 / galaxea_r1) support kinematic pick/place.
-        kinematic_ok = robot_name in ("rby1", "galaxea_r1")
+        # Opt-in via RobotSpec.advertise_kinematic_manip + a resolvable ArmManipProfile.
+        kinematic_ok = _robot_supports_kinematic_manip(robot_name)
         caps: dict[str, Any] = {
             "teleport_base": self._teleport_base_supported(),
             "nav_velocity_drive": True,
@@ -1214,12 +1248,31 @@ class RobosuiteZmqServer(BaseZmqServer):
             return np.flipud(img).copy()
         return img
 
+    def _configure_renderer_geomgroups_for_camera(self, renderer: Any, camera_name: str) -> None:
+        """Hide robot-body geoms for the primary mapping camera (Stretch d435i policy).
+
+        ``RobosuiteZmqServer`` (rby1 / Galaxea / innate_mars) reuses one ``mujoco.Renderer``.
+        Without masking, head depth includes the torso / arms and the voxel map paints a
+        self-obstacle ring at the base → A* ``non navigable point`` / ``sample_nav_failed``.
+        Secondary / tertiary cameras (stereo aux, ee) keep all geom groups visible.
+        """
+        from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import head_camera_geomgroup_mask
+
+        cam_names = list(self._spec.camera_names or ())
+        primary = cam_names[0] if cam_names else None
+        if primary is not None and camera_name == primary:
+            mask = head_camera_geomgroup_mask(self._mjmodel, base_body_name=self._spec.base_link_name)
+        else:
+            mask = np.ones(6, dtype=np.uint8)
+        renderer._scene_option.geomgroup[:] = mask
+
     def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
         """RGB uint8 from ``mujoco.Renderer`` at primary resolution (no pixel postprocess)."""
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 return np.asarray(rgb, dtype=np.uint8).copy()
@@ -1230,11 +1283,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 rgb = np.asarray(rgb, dtype=np.uint8).copy()
                 renderer.enable_depth_rendering()
                 try:
+                    self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
                     renderer.update_scene(self._mjdata, camera=cam)
                     depth = cast(np.ndarray, renderer.render())
                     depth = np.asarray(depth, dtype=np.float32).copy()
@@ -1303,6 +1358,25 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
                 cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
+                renderer.update_scene(self._mjdata, camera=cam)
+                apply_chase_frustum_near(renderer.scene, near=0.05)
+                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        return self._apply_optional_mujoco_render_flip_ud(rgb)
+
+    def _render_overhead_rgb(self) -> np.ndarray | None:
+        """Nadir FREE-camera RGB (table in −Y of spawn)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        from emet.simulation.chase_camera import apply_chase_frustum_near, build_overhead_camera
+
+        body = str(getattr(self._spec, "base_link_name", None) or "base_link")
+        bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
+        if bid < 0:
+            return None
+        with self._mj_lock:
+            with self._render_lock:
+                renderer = self._get_or_create_primary_renderer()
+                cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
                 rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
@@ -1391,6 +1465,72 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._joint_ctrl_hold_client_pin is not None:
             self._joint_ctrl_hold_client_pin.fill(False)
         self._mujoco_stationary.sync_ctrl_and_spec_hold(self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold)
+
+    def _pin_torso_upright(self) -> None:
+        """Force the Galaxea / RB-Y1 torso upright so the ZED head camera sits at head height.
+
+        The merged robocasa / MolmoSpaces scene can override the robot ``home`` keyframe, so the
+        torso PD hold lands on bent setpoints and the head camera swings below the floor as the
+        base rotates (world-z dips negative). A below-floor camera returns the MuJoCo far-plane
+        for ~96% of depth pixels, so the pointcloud is near-empty and the explored mask never
+        grows. Torso home = all four ``torso_jointN`` = 0 per ``galaxea_r1.xml``.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if str(getattr(self._spec, "name", "")).lower() not in ("rby1", "galaxea_r1"):
+            return
+        self._ensure_joint_ctrl_hold_buffers()
+        for i, aname in enumerate(self._spec.actuator_names):
+            if aname in ("torso1", "torso2", "torso3", "torso4"):
+                if self._joint_ctrl_hold is not None and i < int(self._joint_ctrl_hold.shape[0]):
+                    self._joint_ctrl_hold[i] = 0.0
+                aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+                if aid >= 0:
+                    self._mjdata.ctrl[aid] = 0.0
+        for jn in ("torso_joint1", "torso_joint2", "torso_joint3", "torso_joint4"):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid >= 0:
+                self._mjdata.qpos[self._mjmodel.jnt_qposadr[jid]] = 0.0
+        logger.info("_pin_torso_upright: spec=%s torso qpos->0", self._spec.name)
+
+    def _reassign_robot_geoms_to_dedicated_group(self, group: int = 5) -> None:
+        """Move the robot's own geoms to a dedicated geom group so the head camera can mask them.
+
+        ``head_camera_geomgroup_mask`` hides the geom groups occupied by the robot's body. In
+        merged robocasa / MolmoSpaces scenes the robot and the scene fixtures can **share** groups
+        (rby1/Galaxea robot = groups 2,3; robocasa kitchen fixtures also = 2,3), so masking the
+        robot's groups also hides the kitchen: the head camera renders only the floor/background,
+        and depth returns the far-plane sentinel for ~96% of pixels (near-empty pointcloud, the
+        explored mask never grows). Reassigning the robot geoms to a dedicated free group lets the
+        mask hide only the robot.
+        """
+        if self._mjmodel is None:
+            return
+        base = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+        if base < 0:
+            return
+        used = {int(self._mjmodel.geom_group[g]) for g in range(self._mjmodel.ngeom)}
+        free = next((g for g in range(6) if g not in used), None)
+        if free is None:
+            return
+        n = 0
+        for g in range(self._mjmodel.ngeom):
+            body = int(self._mjmodel.geom_bodyid[g])
+            x = body
+            while x > 0:
+                if x == base:
+                    self._mjmodel.geom_group[g] = free
+                    n += 1
+                    break
+                x = int(self._mjmodel.body_parentid[x])
+        if n:
+            logger.info(
+                "reassigned %d robot-body geoms to group %d (spec=%s) so the head camera can mask "
+                "the robot without hiding merged scene fixtures",
+                n,
+                free,
+                self._spec.name,
+            )
 
     def _preserve_joint_ctrl_hold_from_ctrl(self) -> None:
         """Keep PD targets in :attr:`_joint_ctrl_hold` from current ``data.ctrl`` (not from ``qpos``).
@@ -2195,7 +2335,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         elif self._spec.name == "innate_mars":
                             self._pin_spec_actuators_by_name("joint_head")
                         elif self._spec.name in ("rby1", "galaxea_r1"):
-                            self._pin_spec_actuators_by_name("torso2", "torso3")
+                            self._pin_spec_actuators_by_name("torso1", "torso4")
                         else:
                             self._pin_spec_actuators_by_name("head_pan", "head_tilt")
                     else:
@@ -2293,7 +2433,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
         # Chase cam tracking base_link (MjvCamera TRACKING) — not a fixed world/MJCF cam.
-        from emet.simulation.env_flags import env_sim_third_person
+        from emet.simulation.env_flags import env_sim_overhead, env_sim_third_person
 
         if env_sim_third_person() and allow_extra_cams:
             try:
@@ -2303,6 +2443,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["third_person_camera"] = "chase:base_link"
             except Exception as e:
                 logger.debug(f"third_person chase RGB failed: {e!r}")
+        if env_sim_overhead() and allow_extra_cams:
+            try:
+                rgb_oh = self._render_overhead_rgb()
+                if rgb_oh is not None:
+                    message["overhead_image"] = compression.to_jpg(rgb_oh)
+            except Exception as e:
+                logger.debug(f"overhead RGB failed: {e!r}")
         message = self._attach_emet_session(message)
         if self._mjmodel is not None and self._mjdata is not None:
             from emet.simulation.mujoco_lidar import attach_lidar_to_zmq_message
@@ -2542,6 +2689,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._preserve_joint_ctrl_hold_from_ctrl()
                     else:
                         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
+                    # Merged robocasa scenes may override / drop the robot home keyframe, so the
+                    # torso PD hold can land on bent setpoints and swing the head camera below the
+                    # floor. Pin the Galaxea/RB-Y1 torso upright unconditionally.
+                    self._pin_torso_upright()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
                 else:
                     # Robocasa innate_mars / Maurice-style merges often lack MJCF ``home``. Without
@@ -2592,6 +2743,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._preserve_joint_ctrl_hold_from_ctrl()
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
+                # Safety net: merged robocasa loads can drop the robot home keyframe and leave the
+                # torso bent (head camera below floor -> empty depth). Pin upright + refresh qpos0.
+                self._pin_torso_upright()
+                self._preserve_joint_ctrl_hold_from_ctrl()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
                 self._snapshot_stationary_base_freejoint_pose()
                 self._snapshot_stationary_planar_base_qpos()
         if pl_debug and self._mjmodel is not None and self._mjdata is not None:

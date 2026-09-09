@@ -16,6 +16,7 @@
 """Tests for the emet CLI."""
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -42,6 +43,41 @@ def test_cli_help():
     assert "comm" in result.stdout
     assert "hmeqa" in result.stdout
     assert "debug-da3-depth" in result.stdout
+    assert "export-sim-gt" in result.stdout
+    assert "ovmm" in result.stdout
+
+
+def _assert_cli_argv_does_not_import_mujoco(argv: list[str]) -> None:
+    code = (
+        "import os\n"
+        "import sys\n"
+        "os.environ['EMET_UV_RUN'] = '1'\n"
+        "from click.testing import CliRunner\n"
+        "from emet.cli import main\n"
+        f"r = CliRunner().invoke(main, {argv!r})\n"
+        "assert r.exit_code == 0, r.output\n"
+        "assert 'mujoco' not in sys.modules\n"
+        "assert 'emet.app.export_sim_gt' not in sys.modules\n"
+        "assert 'emet.simulation.mujoco_gt_objects' not in sys.modules\n"
+        "assert 'emet.app.eval_ovmm' not in sys.modules\n"
+    )
+    env = os.environ.copy()
+    env["EMET_UV_RUN"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+
+def test_cli_import_and_help_do_not_load_mujoco():
+    """jobs/eval/--help must not import MuJoCo (post-sim wrapper SIGSEGV)."""
+    _assert_cli_argv_does_not_import_mujoco(["--help"])
+    _assert_cli_argv_does_not_import_mujoco(["jobs", "--help"])
+    _assert_cli_argv_does_not_import_mujoco(["eval", "--help"])
+    _assert_cli_argv_does_not_import_mujoco(["eval", "affinity"])
 
 
 def test_eval_group_help():
@@ -98,10 +134,23 @@ def test_habitat_group_help_lists_safe_start():
     assert "info" in result.stdout
 
 
+def test_habitat_run_episode_help_mentions_eval_rerun():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "habitat", "run-episode", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--rerun" in result.stdout
+    assert "EMET_EVAL_RERUN" in result.stdout
+
+
 def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     from types import SimpleNamespace
 
     from click.testing import CliRunner
+
+    monkeypatch.delenv("EMET_EVAL_RERUN", raising=False)
 
     project_root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(project_root / "packages" / "emet_habitat"))
@@ -112,10 +161,12 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     result = CliRunner().invoke(habitat_main, ["run-episode", "--help"])
     assert result.exit_code == 0, result.output
     assert "--eqa-vl-quantization" in result.output
+    assert "--rerun" in result.output
     params = {param.name: param.default for param in habitat_main.commands["run-episode"].params}
     assert params["max_planning_steps"] == 20
     assert params["rotate_in_place"] is True
     assert params["eqa_vl_quantization"] is None
+    assert params["enable_rerun"] is False
 
     captured = {}
     monkeypatch.setattr(
@@ -130,6 +181,17 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured["eqa_vl_quantization"] == "int8"
+    assert "no_rerun" not in captured
+
+    captured.clear()
+    result = CliRunner().invoke(
+        habitat_main,
+        ["run-episode", "--mock-llm", "--rerun"],
+    )
+    assert result.exit_code == 0, result.output
+    # --rerun opts into the live viewer via EMET_EVAL_RERUN; it does not dump .rrd.
+    assert "no_rerun" not in captured
+    assert os.environ.get("EMET_EVAL_RERUN") == "1"
 
 
 def test_habitat_safe_start_help():
@@ -606,6 +668,59 @@ def test_jobs_run_detached_supervisor_registers_itself(tmp_path):
     assert wrapper.index("jobs register --job-id") < wrapper.index('jobs update "$JOB_ID" --status running')
 
 
+def test_jobs_run_cpu_safe_wrapper_uses_light_affinity(tmp_path):
+    """cpu-safe must not invoke the full emet CLI (MuJoCo import after sim teardown)."""
+    import os
+
+    jobs_dir = tmp_path / "jobs"
+    out_dir = tmp_path / "out"
+    marker = out_dir / "child-ran"
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(jobs_dir)
+    env["EMET_SKIP_CPU_AFFINITY"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            "cpu-safe-light-affinity",
+            "--cpu-safe",
+            "--no-gpu-exclusive",
+            "--out-dir",
+            str(out_dir),
+            "--",
+            sys.executable,
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    job_id = result.stdout.strip().splitlines()[-1]
+    record_path = jobs_dir / f"{job_id}.json"
+
+    deadline = time.monotonic() + 10.0
+    record = {}
+    while time.monotonic() < deadline:
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            if record.get("status") in {"done", "failed"}:
+                break
+        time.sleep(0.05)
+
+    assert record.get("status") == "done", record
+    assert marker.read_text(encoding="utf-8") == "ok"
+    wrapper = (out_dir / "job_wrapper.sh").read_text(encoding="utf-8")
+    assert "emet.utils.cpu_affinity" in wrapper
+    assert "eval affinity --apply" not in wrapper
+
+
 def test_jobs_run_serializes_gpu_like_jobs_with_host_lock(tmp_path):
     import os
 
@@ -919,6 +1034,29 @@ def test_run_dynagraph_help():
     assert "staleness" in out2 or "merge" in out2
 
 
+def test_run_lazy_graph_help():
+    """emet run --help lists lazy-graph; shared CLI --help matches dynagraph flags."""
+    env = {**os.environ, "COLUMNS": "240"}
+    r1 = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "run", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert r1.returncode == 0
+    flat = "".join(r1.stdout.lower().split())
+    assert "lazy-graph" in flat
+    r2 = subprocess.run(
+        [sys.executable, "-m", "emet.app.run_lazy_graph", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert r2.returncode == 0
+    out2 = (r2.stdout + r2.stderr).lower()
+    assert "explore-loop" in out2 or "explore_loop" in out2
+
+
 def test_sync_help():
     """emet sync --help works."""
     result = subprocess.run(
@@ -1047,7 +1185,7 @@ def test_install_completion_help():
 
 
 def test_ovmm_help():
-    """emet ovmm --help lists find/full/prepare/sweep/rates/status."""
+    """emet ovmm --help lists find/full/prepare/sweep/rates/status/probe-map/probe-verify."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "ovmm", "--help"],
         capture_output=True,
@@ -1061,6 +1199,48 @@ def test_ovmm_help():
     assert "sweep" in out
     assert "rates" in out
     assert "status" in out
+    assert "probe-map" in out
+    assert "probe-verify" in out
+
+
+def test_ovmm_find_help_mapping_budget():
+    """emet ovmm find --help lists mapping coverage vs find agentic budgets."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "find", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout
+    assert "--mapping-max-nav-steps" in out
+    assert "--explore-steps" in out
+    assert "--agentic-max-rounds" in out
+    assert "--agentic-max-nav-steps" in out
+
+
+def test_ovmm_probe_map_help():
+    """emet ovmm probe-map --help lists --voxel and --cpu-only."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "probe-map", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "--voxel" in out
+    assert "--cpu-only" in out
+
+
+def test_ovmm_find_help_mentions_eval_rerun():
+    """emet ovmm find --help documents the opt-in live Rerun flag."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "ovmm", "find", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--rerun" in result.stdout
+    assert "EMET_EVAL_RERUN" in result.stdout
 
 
 def test_sqa3d_help():

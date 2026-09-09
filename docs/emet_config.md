@@ -121,6 +121,18 @@ robots:
 
 When the runtime robot id is `innate_mars`, these keys deep-merge into `mapping` and `zmq`. See [dynav_config.md](dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in) for opt-in speckle / DBSCAN tuning.
 
+Stretch look-around pans live on the same overlay (not `src/emet/robots/`, which is the Python backend):
+
+```yaml
+robots:
+  stretch:
+    mapping:
+      look_around_head_sweep: false   # off for Stretch hardware too; FORCE / --set true for 4-pan
+  rby1:
+    mapping:
+      look_around_head_sweep: false
+```
+
 ---
 
 ## Robot resolution (when `--robot` is omitted)

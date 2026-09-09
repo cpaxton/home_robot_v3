@@ -7,7 +7,7 @@
 The **mapping** and **memory** refactor on this branch:
 
 - **mapping** (`emet.mapping`): Exposes grid, instance, scene_graph, and voxel (base + Dynamem). See `docs/plans/MAPPING_REFACTOR.md`. Imports like `from emet.mapping import SparseVoxelMap, SparseVoxelMapDynamem` work; Dynamem types also live under `emet.mapping.voxel`.
-- **memory** (`emet.memory`): New package. Exposes `GraphEQAMemory` and (lazy) `SparseVoxelMapDynamem` / `SparseVoxelMapNavigationSpaceDynamem` so GraphEQA can be used without importing mapping.voxel directly. DynaMem implementation remains in `emet.mapping.voxel` and is re-exported from `emet.memory.dynamem`.
+- **memory** (`emet.memory`): Exposes `GraphEQAMemory` / `GraphStore` (`emet.memory.graph_eqa`) and (lazy) `SparseVoxelMapDynamem` / `SparseVoxelMapNavigationSpaceDynamem` so graph memory can be used without importing mapping.voxel directly. DynaMem implementation remains in `emet.mapping.voxel` and is re-exported from `emet.memory.dynamem`. Layout: [graph_memory.md](../graph_memory.md).
 
 The refactor is consistent: mapping = spatial representation; memory = semantic/EQA backends (sparse voxel in mapping, DynaMem and GraphEQA in memory).
 

@@ -84,6 +84,8 @@ def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
 #   world/dynagraph/edges  LineStrips3D (near / on / on_floor relations)
 #   world/dynagraph/gallery TextDocument (markdown list + recording:// links to crops)
 #   world/dynagraph/summary TextDocument (tree view)
+#   world/dynagraph/context TextDocument (always-on VLM prompt / Image-N / router state)
+#   world/dynagraph/context/mosaic Image (numbered EQA attachments)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
 #   world/ee_camera        same for end-effector camera
@@ -104,7 +106,13 @@ def finite_nav_waypoints(
     *,
     z: float = 0.12,
 ) -> np.ndarray:
-    """Return ``(N, 3)`` finite plan waypoints; skip NaN finish markers used by DynaMem."""
+    """Return ``(N, 3)`` finite plan waypoints; skip NaN finish markers used by DynaMem.
+
+    A* / ``clean_path_for_xy`` rows are planar ``xyt``. The third value is yaw in
+    radians (often unwrapped past ±π), **not** height. Using it as Z sent ``wp*``
+    arrows through the floor. Object height is logged separately as ``world/object``.
+    Rows with 4+ values may pass an explicit Z in index 2 (``x, y, z, yaw``).
+    """
     if traj is None:
         return np.zeros((0, 3), dtype=np.float64)
     rows: list[list[float]] = []
@@ -115,10 +123,8 @@ def finite_nav_waypoints(
         if not np.isfinite(arr[0]) or not np.isfinite(arr[1]):
             continue
         zz = float(z)
-        if arr.size >= 3 and np.isfinite(arr[2]) and abs(float(arr[2])) > 1e-6:
-            # Keep object-look markers above the floor; planar xyt stays at z.
-            if abs(float(arr[2])) > 0.5:
-                zz = float(arr[2])
+        if arr.size >= 4 and np.isfinite(arr[2]):
+            zz = float(arr[2])
         rows.append([float(arr[0]), float(arr[1]), zz])
     if not rows:
         return np.zeros((0, 3), dtype=np.float64)
@@ -789,23 +795,6 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
             print("Total time to log robot transforms (ms): ", 1000 * (t2 - t0))
 
 
-class NullVisualizer:
-    """Drop-in replacement for RerunVisualizer that silently ignores all calls.
-
-    Used when rerun is disabled (no display, headless without server, etc.) so
-    that callers don't need null-checks at every call site.
-    """
-
-    enabled = False
-
-    def __getattr__(self, name):
-        return _null_noop
-
-
-def _null_noop(*args, **kwargs):
-    return None
-
-
 def _sim_step_counter(obs: Any) -> int:
     """Simulation step from a ZMQ observation dict (``step``) or ``Observations.seq_id``."""
     if isinstance(obs, dict):
@@ -1089,6 +1078,7 @@ class RerunVisualizer:
         self.step_delay_s = 0.3
         self.collapse_panels = collapse_panels
         self._memory_view = memory_view
+        # Direct RerunVisualizer(...) (show-memory / read-map) still honors the env force-on.
         self._dynagraph_rerun_crops = bool(dynagraph_rerun_crops) or (
             os.environ.get("EMET_DYNAGRAPH_RERUN_CROPS", "").strip().lower() in ("1", "true", "yes", "on")
         )
@@ -2485,6 +2475,7 @@ class RerunVisualizer:
             )
             origins = pts[:-1]
             vectors = pts[1:] - pts[:-1]
+            vectors[:, 2] = 0.0
             log_to_rerun(
                 "world/nav/arrows",
                 rr.Arrows3D(

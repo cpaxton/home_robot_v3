@@ -70,6 +70,51 @@ def overlay_manip_frame(
     return out
 
 
+def _as_rgb_u8(arr: Any) -> np.ndarray | None:
+    if arr is None:
+        return None
+    img = np.asarray(arr)
+    if img.ndim != 3 or img.shape[2] < 3:
+        return None
+    return np.ascontiguousarray(img[:, :, :3], dtype=np.uint8)
+
+
+def collect_paper_rgbs(robot: Any) -> dict[str, np.ndarray]:
+    """Clean (no HUD) RGB stills: kitchen-orbit chase, nadir overhead, head POV, wrist POV."""
+    out: dict[str, np.ndarray] = {}
+    obs = robot.get_observation()
+    if obs is None:
+        return out
+    named = (
+        ("pov_front", "rgb"),
+        ("pov_front_right", "head_rgb_right"),
+        ("pov_wrist", "ee_rgb"),
+        ("third_person", "third_person_image"),
+        ("topdown", "overhead_image"),
+    )
+    for out_name, attr in named:
+        rgb = _as_rgb_u8(getattr(obs, attr, None))
+        if rgb is not None:
+            out[out_name] = rgb
+    return out
+
+
+def save_paper_stills(robot: Any, out_dir: Path | str, tag: str) -> dict[str, Path]:
+    """Write PNG stills under ``out_dir/stills/{tag}_{name}.png``."""
+    import cv2
+
+    dest = Path(out_dir) / "stills"
+    dest.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(tag))[:48] or "frame"
+    for name, rgb in collect_paper_rgbs(robot).items():
+        path = dest / f"{safe}_{name}.png"
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(str(path), bgr)
+        written[name] = path
+    return written
+
+
 def _grab_rgb(robot: Any) -> np.ndarray | None:
     get_obs = getattr(robot, "get_observation", None)
     if not callable(get_obs):
@@ -115,6 +160,11 @@ class ManipVideoRecorder:
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self.stills_dir: Path | None = None
+
+    def dump_paper_stills(self, tag: str) -> dict[str, Path]:
+        dest = self.stills_dir if self.stills_dir is not None else self.out_path.parent
+        return save_paper_stills(self.robot, dest, tag)
 
     def set_status(self, action: str = "", *, goal: str | None = None, detail: str | None = None) -> None:
         with self._lock:

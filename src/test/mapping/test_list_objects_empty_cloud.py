@@ -25,7 +25,7 @@ def test_list_objects_in_an_image_handles_empty_cloud():
     vm.xy_to_grid_coords = MagicMock(return_value=[0, 0])
 
     # Force VLM path to return empty so we exercise the cloud branch.
-    import emet.mapping.voxel.voxel_dynamem as mod
+    import emet.mapping.voxel.dynamem_eqa as mod
 
     orig = mod.dynamem_vllm_call
     mod.dynamem_vllm_call = lambda *a, **k: ""

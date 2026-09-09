@@ -11,9 +11,9 @@ from typing import Any
 
 import numpy as np
 
+from emet.memory.graph_eqa.eval.mujoco_align import _label_matches
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 from emet.memory.graph_eqa.graph_object_fusion.fusion import bounds_3d_iou
-from emet.memory.graph_eqa.mujoco_align import _label_matches
 
 
 @dataclass

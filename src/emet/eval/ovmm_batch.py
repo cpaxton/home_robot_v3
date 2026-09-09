@@ -59,6 +59,7 @@ class OvmmBatchOptions:
     benchmark: str = "configs/ovmm/benchmark.yaml"
     output_dir: str | Path | None = None
     dry_run: bool = False
+    mapping_max_nav_steps: int | None = None
     explore_steps: int | None = None
     no_scene_cache: bool = False
     # None → dynagraph/static_graph use shared AgenticEQA find; True/False override.
@@ -67,6 +68,7 @@ class OvmmBatchOptions:
     oneshot_localize: bool = False
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
+    mapping_rotate_steps: int | None = None
     manip_mode: str | None = None
     full: bool = False
     # TAMP floor suite: run only episodes with floor_object=True.
@@ -128,7 +130,13 @@ def _configured_vl_endpoint() -> str | None:
 def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> int:
     """Run find or full OVMM episodes; write per-run JSON + aggregate CSV."""
     from emet.eval.ovmm_benchmark_config import load_ovmm_benchmark_config
-    from emet.eval.ovmm_find_phase import FindPhaseRunConfig, load_find_phase_episodes, run_episode_find_phase
+    from emet.eval.ovmm_find_phase import (
+        FindPhaseRunConfig,
+        MappingBudgetConflict,
+        load_find_phase_episodes,
+        resolve_mapping_max_nav_steps,
+        run_episode_find_phase,
+    )
 
     root = repo_root or Path(__file__).resolve().parents[3]
     bench = load_ovmm_benchmark_config(opts.benchmark)
@@ -167,6 +175,16 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
     output_dir.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict] = []
 
+    try:
+        mapping_override = resolve_mapping_max_nav_steps(
+            opts.mapping_max_nav_steps,
+            opts.explore_steps,
+            source="emet ovmm CLI",
+            default=None,
+        )
+    except MappingBudgetConflict as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     stride = max(1, int(opts.port_stride))
     agentic_requested = not opts.oneshot_localize and any(
         opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"} for backend in backends
@@ -199,11 +217,22 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 agentic_find=agentic,
                 agentic_max_rounds=opts.agentic_max_rounds,
                 agentic_max_nav_steps=opts.agentic_max_nav_steps,
-                explore_steps_override=opts.explore_steps,
+                mapping_rotate_steps=opts.mapping_rotate_steps,
+                explore_steps_override=mapping_override,
                 use_scene_cache=not opts.no_scene_cache,
                 manip_mode=manip,
             )
             tag = f"{ep.id}_{backend}"
+            ep_dir = output_dir / tag
+            ep_dir.mkdir(parents=True, exist_ok=True)
+            os.environ["EMET_EQA_EPISODE_DIR"] = str(ep_dir)
+            if os.environ.get("EMET_AGENTIC_QUERY_IMAGES", "1").strip().lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }:
+                os.environ["EMET_AGENTIC_QUERY_IMAGES_DIR"] = str(ep_dir / "images")
             label = f"Running {tag}" + (f" manip_mode={manip}" if opts.full else "") + " …"
             print(label, file=sys.stderr)
             try:

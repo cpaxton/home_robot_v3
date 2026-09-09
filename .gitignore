@@ -36,6 +36,9 @@ wheels/
 
 # Habitat EQA harness (micromamba env; not the main uv venv)
 .venv-habitat/
+
+# JetPack 7 native VLM serve (cu130 torch; scripts/run_jetson_vlm_native.sh)
+.venv-vlm/
 .micromamba/
 
 # PyInstaller
@@ -129,8 +132,14 @@ ENV/
 *.swn
 *.swo
 
-# URDF files
+# URDF files (local scratch / generated). Vendored robot URDFs are repo content.
 *.urdf
+!src/emet/assets/**/*.urdf
+!src/test/**/*.urdf
+
+# Unity URDF-exporter sidecars (not used by MuJoCo / emet)
+src/emet/assets/**/*.meta
+src/emet/assets/**/UnityMeshes/
 
 # Webcam calibration images
 webcam_calibration_images/

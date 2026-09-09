@@ -12,16 +12,13 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from emet.controller.controller_graph_eqa import GraphEQAController
-from emet.memory.graph_eqa.agentic_tools import (
-    build_graph_eqa_system_prompt,
-    coerce_room_label,
-    sanitize_room_phrase,
-)
+from emet.memory.graph_eqa.agentic_tools import build_graph_eqa_system_prompt
 from emet.memory.graph_eqa.room_clusters import (
     merge_room_estimates,
     resolve_room_policy,
     room_leave_needed,
 )
+from emet.memory.graph_eqa.room_labels import coerce_room_label, sanitize_room_phrase
 
 
 def test_sanitize_preserves_weird_phrases():
@@ -81,11 +78,11 @@ def test_graph_eqa_system_prompt_byte_stable_for_prefix_kv():
     # Pinned hashes of the format blocks (shared rule atoms must compose identically).
     assert (
         hashlib.sha256(at._EQA_FORMAT_BLOCK_CANONICAL.encode()).hexdigest()
-        == "aaa5ef0d105998b871246381b95902f3362cde2d7956ab0639e0cb9593f8946f"
+        == "cf50ef4634a3ee4ba7bb21a0f083a728908b53060a59d211211cfbefac6aa603"
     )
     assert (
         hashlib.sha256(at._EQA_FORMAT_BLOCK_LLM.encode()).hexdigest()
-        == "bbc015204e2795b3cb84aa5b8cedcc3cdbf564f30cefd8ba06ea323d0f2ed1f1"
+        == "5cad41bf4196635feadefdaff84e337090ec52d100ba2bf85857cf760666d3b1"
     )
     tools: list = []
     for policy in ("canonical", "llm"):

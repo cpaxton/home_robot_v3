@@ -468,7 +468,7 @@ def _run_mcts_manip_phases(
     """
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
-    from emet.motion.arm_manip_profile import resolve_manip_mode_for_robot
+    from emet.motion.arm_manip_profile import kinematic_arm_sides, resolve_manip_mode_for_robot, robot_id_from_client
 
     t_manip0 = time.monotonic()
     mode = resolve_manip_mode_for_robot(robot, manip_mode="auto")
@@ -509,7 +509,6 @@ def _run_mcts_manip_phases(
         out["manip_wall_s"] = float(time.monotonic() - t_manip0)
         return out
 
-    exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
     candidates = [
         {
             "object_query": episode.object,
@@ -518,14 +517,38 @@ def _run_mcts_manip_phases(
             "receptacle_gt_body": recep_gt,
         }
     ]
-    plan = plan_pick_place_mcts(
-        robot,
-        candidates=candidates,
-        executor=exe,
-        approach_standoff_m=0.55,
-        mcts_iterations=150,
-        seed=seed,
-    )
+    # Try each distinct arm: on dual-arm robots the object may sit on the side the
+    # preferred arm cannot reach (sourccey's short arms reach outward).
+    try:
+        rid = robot_id_from_client(robot)
+    except ValueError:
+        rid = ""
+    plan = None
+    exe = None
+    for arm in kinematic_arm_sides(rid):
+        arm_exe = KinematicPickPlaceExecutor(robot, arm=arm, manip_collision="none", traj_dt=0.05)
+        arm_plan = plan_pick_place_mcts(
+            robot,
+            candidates=candidates,
+            executor=arm_exe,
+            approach_standoff_m=0.55,
+            mcts_iterations=150,
+            seed=seed,
+        )
+        plan = arm_plan  # remember the last attempt (may be a failure)
+        if arm_plan.success and arm_plan.receptacle_body == recep_gt:
+            exe = arm_exe
+            break
+    if plan is None:
+        from emet.controller.task.tamp.task_search import TaskPlan
+
+        plan = TaskPlan(
+            steps=[],
+            object_body=gt_body,
+            receptacle_body=recep_gt,
+            success=False,
+            message="no_arm_profile",
+        )
     if plan.success and plan.receptacle_body != recep_gt:
         plan.success = False
         plan.failed_op = "place"
@@ -562,6 +585,7 @@ def _run_mcts_manip_phases(
             }
         )
         return out
+    assert exe is not None
     plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=plan.grasp_poses, manip_mode="kinematic")
 
     after = _read_placements(robot) or before

@@ -12,10 +12,12 @@ from emet.controller.task.tamp.agent_bridge import (
     stable_scene_task_refs,
     store_agent_plan,
 )
+from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
 from emet.controller.task.tamp.task_search import (
     TaskPlan,
     TaskPlanStep,
     approach_pose_for_object_xy,
+    approach_yaw_for_mode,
     execute_task_plan,
     plan_pick_place,
     rank_grasps_by_ik,
@@ -25,8 +27,10 @@ __all__ = [
     "TaskPlan",
     "TaskPlanStep",
     "approach_pose_for_object_xy",
+    "approach_yaw_for_mode",
     "execute_task_plan",
     "plan_pick_place",
+    "plan_clear_clutter",
     "rank_grasps_by_ik",
     "AgentPlanBuild",
     "AgentTaskRef",

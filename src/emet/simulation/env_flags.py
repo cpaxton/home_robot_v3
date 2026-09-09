@@ -68,6 +68,11 @@ def env_sim_third_person() -> bool:
     return _env_truthy("EMET_SIM_THIRD_PERSON")
 
 
+def env_sim_overhead() -> bool:
+    """Include ``overhead_image`` (nadir FREE cam) in full ZMQ observations."""
+    return _env_truthy("EMET_SIM_OVERHEAD")
+
+
 def env_sim_third_person_camera() -> str:
     """Optional body name to follow for chase cam (default falls through to ``base_link``)."""
     raw = os.environ.get("EMET_SIM_THIRD_PERSON_CAMERA", "").strip()

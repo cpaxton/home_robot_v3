@@ -13,8 +13,10 @@ approach standoff but not enforced at the EE.
 
 from __future__ import annotations
 
+import os
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,6 +24,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
 from emet.motion.aabb_arm_collision import AabbArmCollisionChecker
 from emet.motion.arm_manip_profile import (
     ArmManipProfile,
@@ -70,6 +73,53 @@ def _targets_from_grasp_T(
     pregrasp = grasp + approach * float(pregrasp_standoff_m)
     lift = grasp + np.array([0.0, 0.0, float(lift_m)])
     return pregrasp, grasp, lift
+
+
+def write_offline_mjcf_base_xyt(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    xyt: np.ndarray,
+    *,
+    planar_joint_names: Sequence[str] | None = None,
+    freejoint_name: str | None = None,
+    z: float | None = None,
+) -> bool:
+    """Write world XYT into a standalone (unmerged) robot MJCF base.
+
+    Prefers planar slide/hinge joints when all names resolve, otherwise a 7-DoF
+    freejoint. Values are **raw world XYT** — correct for vendored robot MJCFs, not
+    Robocasa-merged models (use :func:`emet.simulation.spawn_planar.write_planar_base_xyt`).
+    """
+    x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
+    names = tuple(str(n) for n in planar_joint_names) if planar_joint_names else ()
+    if len(names) != 3:
+        probe = ("base_x", "base_y", "base_yaw")
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in probe]
+        if all(jid >= 0 for jid in ids):
+            names = probe
+    if len(names) == 3:
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in names]
+        if all(jid >= 0 for jid in ids):
+            for jid, val in zip(ids, (x, y, th), strict=True):
+                data.qpos[int(model.jnt_qposadr[jid])] = float(val)
+            return True
+    if freejoint_name:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
+        if jid >= 0:
+            qadr = int(model.jnt_qposadr[jid])
+            z_use = float(data.qpos[qadr + 2]) if z is None else float(z)
+            half = 0.5 * th
+            data.qpos[qadr : qadr + 7] = [
+                x,
+                y,
+                z_use,
+                float(np.cos(half)),
+                0.0,
+                0.0,
+                float(np.sin(half)),
+            ]
+            return True
+    return False
 
 
 class KinematicPickPlaceExecutor:
@@ -240,33 +290,33 @@ class KinematicPickPlaceExecutor:
                 pass
         return world
 
+    def _planar_joint_names(self) -> tuple[str, ...] | None:
+        spec = getattr(self.robot, "_spec", None)
+        names = getattr(spec, "planar_base_joint_names", None) if spec is not None else None
+        if names and len(names) == 3:
+            return tuple(str(n) for n in names)
+        return None
+
     def _sync_base_freejoint(self) -> None:
         assert self._model is not None and self._data is not None
-        jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, self.profile.base_freejoint_name)
-        if jid < 0:
-            return
-        qadr = int(self._model.jnt_qposadr[jid])
         world = self._world_base_xyt()
         if world is None:
             return
-        x, y, th = float(world[0]), float(world[1]), float(world[2])
-        z = float(self._data.qpos[qadr + 2])
+        z = None
         state = getattr(self.robot, "_state", None)
         if isinstance(state, dict) and state.get("base_xyz") is not None:
             try:
                 z = float(np.asarray(state["base_xyz"], dtype=np.float64).reshape(-1)[2])
             except Exception:
                 pass
-        half = 0.5 * th
-        self._data.qpos[qadr : qadr + 7] = [
-            x,
-            y,
-            z,
-            float(np.cos(half)),
-            0.0,
-            0.0,
-            float(np.sin(half)),
-        ]
+        write_offline_mjcf_base_xyt(
+            self._model,
+            self._data,
+            world,
+            planar_joint_names=self._planar_joint_names(),
+            freejoint_name=getattr(self.profile, "base_freejoint_name", None),
+            z=z,
+        )
 
     def _actuator_to_joint_name(self, aname: str) -> str | None:
         m = re.match(r"(left|right)_arm(\d+)$", aname)
@@ -278,6 +328,12 @@ class KinematicPickPlaceExecutor:
         m = re.match(r"(left|right)_gripper(\d+)$", aname)
         if m:
             return f"{m.group(1)}_gripper_finger_joint{m.group(2)}"
+        if aname in self.joint_names:
+            return aname
+        if aname.endswith("_act"):
+            stem = aname[:-4]
+            if stem in self.joint_names:
+                return stem
         return None
 
     def _sync_qpos_from_robot(self) -> None:
@@ -309,7 +365,9 @@ class KinematicPickPlaceExecutor:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
         val = 0.05 if open_ else 0.0
-        keys = ("right_gripper1", "right_gripper2") if self.arm == "right" else ("left_gripper1", "left_gripper2")
+        keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
+        if not keys:
+            keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
         for k in keys:
             if k in names:
                 hold[k] = val
@@ -372,7 +430,11 @@ class KinematicPickPlaceExecutor:
             self._sync_qpos_from_robot()
 
         ee_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, self.ee_body)
-        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+        spec = getattr(self.robot, "_spec", None)
+        base_name = str(getattr(spec, "base_link_name", None) or "base_link")
+        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, base_name)
+        if base_id < 0:
+            base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
         if ee_id >= 0 and base_id >= 0:
             mujoco.mj_forward(self._model, self._data)
             ee_z = float(self._data.body(ee_id).xpos[2])
@@ -504,35 +566,37 @@ class KinematicPickPlaceExecutor:
         standoff_m: float = 0.55,
         yaw: float | None = None,
     ) -> None:
-        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach."""
-        import os
+        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
 
+        ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
+        :func:`~emet.controller.task.tamp.task_search.approach_pose_for_object_xy`.
+        ``front`` (Galaxea / rby1) stands off radially from the current base.
+        """
         os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
         xy = np.asarray(target_xy, dtype=np.float64).reshape(2)
-        # Stand off along the vector from target toward current base (fallback +Y).
-        cur = self._world_base_xyt()
-        if cur is not None:
-            delta = np.asarray(cur[:2], dtype=np.float64) - xy
-            n = float(np.linalg.norm(delta))
-            if n > 1e-3:
-                delta = delta / n
+        spec = getattr(self.robot, "_spec", None)
+        mode = str(spec.tamp_approach or "front").lower().strip() if spec is not None else "front"
+        if mode == "side":
+            approach = approach_pose_for_object_xy(xy, standoff=standoff_m, mode="side", arm=self.arm)
+            if yaw is not None:
+                approach = np.array([approach[0], approach[1], float(yaw)], dtype=np.float64)
+        else:
+            cur = self._world_base_xyt()
+            if cur is not None:
+                delta = np.asarray(cur[:2], dtype=np.float64) - xy
+                n = float(np.linalg.norm(delta))
+                delta = delta / n if n > 1e-3 else np.array([0.0, 1.0], dtype=np.float64)
             else:
                 delta = np.array([0.0, 1.0], dtype=np.float64)
-        else:
-            delta = np.array([0.0, 1.0], dtype=np.float64)
-        approach_xy = xy + float(standoff_m) * delta
-        if yaw is None:
-            # Face the receptacle from the approach pose.
-            face = xy - approach_xy
-            th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
-        else:
-            th = float(yaw)
-        approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
-        move = getattr(self.robot, "move_base_to", None)
-        if not callable(move):
-            return
+            approach_xy = xy + float(standoff_m) * delta
+            if yaw is None:
+                face = xy - approach_xy
+                th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
+            else:
+                th = float(yaw)
+            approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
         logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
-        move(approach, blocking=True, world_frame=True)
+        self.robot.move_base_to(approach, blocking=True, world_frame=True)
         self._sleep(0.4)
 
     def place_only(
@@ -581,7 +645,7 @@ class KinematicPickPlaceExecutor:
             self._sleep(0.15)
         place = recep_pos + np.array([0.0, 0.0, self.place_z_offset_m])
         preplace = place + np.array([0.0, 0.0, 0.12])
-        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos, "recep_body": recep_body}
+        self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")
@@ -592,8 +656,13 @@ class KinematicPickPlaceExecutor:
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         robot_zmq_detach_body(self.robot, body)
         robot_zmq_set_body_pose(self.robot, body, place)
-        self._sleep(0.15)
+        self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
+        if not ok_place:
+            # Freejoint children can lag one publish step after detach+snap.
+            robot_zmq_set_body_pose(self.robot, body, place)
+            self._sleep(0.2)
+            ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         try:
             self._set_gripper(open_=True)
         except Exception as e:

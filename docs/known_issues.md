@@ -2,7 +2,25 @@
 
 Tracked bugs and investigation notes.
 
-**See also:** [cli.md](cli.md) · [zmq_obs.md](zmq_obs.md) · [dynagraph.md](dynagraph.md) · [graph_eqa.md](graph_eqa.md) · [robots/innate_mars.md](robots/innate_mars.md) · [robots/innate_mars_hardware.md](robots/innate_mars_hardware.md) · [environment_variables.md](environment_variables.md)
+**See also:** [cli.md](cli.md) · [pythonpath.md](pythonpath.md) · [zmq_obs.md](zmq_obs.md) · [dynagraph.md](dynagraph.md) · [graph_eqa.md](graph_eqa.md) · [robots/innate_mars.md](robots/innate_mars.md) · [robots/innate_mars_hardware.md](robots/innate_mars_hardware.md) · [environment_variables.md](environment_variables.md)
+
+---
+
+## `emet serve mujoco` dies on `import scipy` / numpy ABI
+
+**Status:** Mitigated · **Seen:** 2026-08 (sim server child)
+
+### Symptoms
+
+`uv run emet serve mujoco` (or a harness that `Popen`s `python -m emet.simulation.mujoco_server`) fails at import with scipy/numpy ABI errors (`undefined symbol`, `module compiled against API version …`), while `uv run python -c "import scipy"` in the same checkout works.
+
+### Cause
+
+`sanitize_emet_subprocess_env` used to prepend **every** `.venv/lib/python*/site-packages` glob. A leftover `python3.12` directory inside a 3.10 venv put 3.12 wheels on `PYTHONPATH` ahead of the venv’s own. `mujoco_server` imports numpy at **module load**, before in-process `ensure_venv_site_packages_first()`.
+
+### Fix
+
+Prepend only `python{tag}/site-packages` for the tag in `.venv/pyvenv.cfg` `version_info`. Details and debug commands: [pythonpath.md](pythonpath.md).
 
 ---
 
@@ -46,7 +64,7 @@ Three changes address stationary hardware stream growth:
 
 1. **GraphObjectFusion fallback tier** (`fallback_spatial_merge_xy_m`, default **0.45 m**, aligned with `dynagraph_merge_xy_m`). When strict spatial/embedding/bounds gates fail, instance detections merge into the nearest object node within that XY radius.
 2. **Innate Mars fusion YAML wired correctly** — `attach_graph_object_fusion` now reads `graph_object_fusion` from `Parameters` / yacs config (controllers no longer pass `None` when parameters is not a plain `dict`). [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) supplies relaxed gates (embedding off, fallback **0.55 m**).
-3. **VLM sensor labels through fusion** — Qwen-extracted labels in [`dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/dynamem_graph_hooks.py) use `apply_detection` instead of `add_observation` with dedup disabled (~8 new nodes/step before).
+3. **VLM sensor labels through fusion** — Qwen-extracted labels in [`dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/ingest/dynamem_graph_hooks.py) use `apply_detection` instead of `add_observation` with dedup disabled (~8 new nodes/step before).
 
 **Stream status** now reports object / viewpoint / frontier breakdown: `graph 11 obj / 12 vp / 1 fr (24 total)` ([`stream_agent_factory.py`](../src/emet/app/stream_agent_factory.py)).
 
@@ -62,7 +80,7 @@ Several merge paths exist; on stream + hardware they appear **too weak** for noi
 |-----------|---------------|------------------------------|
 | **GraphObjectFusion** | [`graph_object_fusion`](../src/emet/config/agents/default_graph_object_fusion.yaml) in dynav (enabled on stream via [stream_agent_factory](../src/emet/app/stream_agent_factory.py)) | Merges when XY ≤ `spatial_merge_xy_m` (0.42 m), 3D centroid ≤ `min_centroid_dist_m` (0.55 m), bounds IoU, embedding cosine ≥ 0.62. **DA3 depth jitter** and pose/camera noise can push repeated views of the same object outside these gates → **new node every step**. See [fusion.py](../src/emet/memory/graph_eqa/graph_object_fusion/fusion.py) and [dynagraph.md § Configuration keys](dynagraph.md#configuration-keys). |
 | **Label-based pre-dedup** | `graph_instance_dedup_xy_m` (default **0.4 m**; [graph_eqa.md](graph_eqa.md)) | `_graph_dedup_skips` uses :func:`~emet.memory.graph_eqa.graph_stats.labels_compatible_for_dedup` (exact / substring / shared tokens / synonym groups) so ``mug`` vs ``coffee cup`` no longer bypasses XY dedup. See [controller_graph_eqa.py](../src/emet/controller/controller_graph_eqa.py). |
-| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges **compatible** labels within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([setup.py](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py)); fusion fallback covers that path. |
+| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges **compatible** labels within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([attach.py](../src/emet/memory/graph_eqa/graph_object_fusion/attach.py)); fusion fallback covers that path. |
 | **Staleness prune** | `dynagraph_staleness_horizon` (default **256**) | `maintain()` does not drop nodes until they are stale for hundreds of steps — fine for explore loops, **not** for short stationary streams. |
 
 Additional contributors:
@@ -94,7 +112,8 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ### Code touchpoints
 
-- `src/emet/memory/graph_eqa/graph_memory.py` — `add_observation`, `merge_object_detection`, `spatial_merge_m`
+- `src/emet/memory/graph_eqa/ingest/graph_mutate.py` — `add_observation`, `merge_object_detection`
+- `src/emet/memory/graph_eqa/store.py` — `spatial_merge_m` on `GraphStore`
 - `src/emet/memory/graph_eqa/graph_object_fusion/fusion.py` — merge gates
 - `src/emet/controller/controller_graph_eqa.py` — `_graph_dedup_skips`
 - `src/emet/app/stream_agent_factory.py` — `dynagraph_merge_xy_m` / `graph_object_fusion` defaults for stream
@@ -112,7 +131,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 3. **Silent SDPA fallback:** when `flash-attn` was missing, CUDA VL loads quietly used PyTorch SDPA. Habitat MCQ still finished (~4–5 min/ep), but Robocasa multi-image `query_answer` (`prompt≈4500`, 4 RGB) decoded at ~0.02 tok/s (~45 s/token) and looked “stuck” at low GPU util.
 
 ### Mitigation
-- [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches **and visual FIND top-k ranks**, then **always releases** SigLIP before the EQA VLM. Voxel `find_all_images` cannot run after that release.
+- [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches **and visual FIND top-k ranks**, then **always releases** SigLIP before the EQA VLM. Voxel `find_all_images` cannot run after that release. **OVMM find** re-attaches the shared encoder per phase (`re_attach_siglip_encoder` in `emet.eval.ovmm_agentic_find`; CUDA if available, otherwise CPU / `cpu_only`), so FindObj **and** FindRec can still `localize_text` the finished map; HM-EQA keeps the released state.
 - [`release_shared_mask_siglip_encoder`](../src/emet/perception/encoders/siglip_encoder.py) moves weights to CPU and empties the CUDA cache.
 - Answer-only EQA skips robot head/posture I/O (`allow_navigation=False` → `skip_perception_prelude`).
 - Before EQA, [`release_zmq_ports`](../src/emet/utils/port_utils.py) kills MuJoCo **LISTEN** sockets on the session ports so EGL is not sharing the GPU with Qwen (must not use plain `lsof -i:PORT`, which also matches the dynagraph client and SIGTERMs it — exit 241).
@@ -162,6 +181,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 
 - **What dies:** the Cursor agent process (`emet[…]: segfault at 0` null IP, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down GPU context. Also seen as V8 `Illegal instruction` in the `agent`/`node` binary itself (`traps: MainThread[…] trap invalid opcode … in node`).
 - **What survives:** a detached **`emet jobs`** child often keeps running — check registry + `OUT/` before re-launching.
+- **Post-sim job wrapper (2026-08-27):** immediately after a MuJoCo OVMM job releases `gpu.lock`, `emet eval affinity --apply` (full CLI, which used to import MuJoCo via `export-sim-gt`) segfaulted in `mujoco/_functions.so`. The OVMM command never started. Mitigations: **cpu-safe** wrappers pin with `python -m emet.utils.cpu_affinity`; `emet.cli` lazy-loads sim commands so `emet jobs` / `emet eval` / `emet --help` do not import MuJoCo. Do not requeue a GPU smoke in the same agent turn as a just-finished sim job; do not use `--need-mib` / inline `emet eval wait` from the agent (08:04 libc SIGSEGV).
 - **First command on the way back (from the owning checkout):** **`uv run emet status tail`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-uv-run-emet-status-tail)). Do not `tail ~/runs/emet/STATUS.log` (flat path is shared across sibling checkouts). `uv run emet status latest` points at that checkout's newest `OUT/`.
 - Also: full-system **live lock** when chaining Robocasa dynagraph explore → full pytest (MuJoCo-native) → Habitat HM-EQA with VLM in one session (mouse moves; GUI/SSH dead).
 - **Not** explained by a busy GPU: Mode A/B and EGL map failures have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
@@ -183,7 +203,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 ### Mitigation
 
 - **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check` / `diagnose`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
-- Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
+- Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) (no VLM chain). Habitat OVMM VLM on a **separate night**: [`smoke_habitat_ovmm_agentic_find.sh`](../scripts/smoke_habitat_ovmm_agentic_find.sh).
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
 - On Mode A: leave `NATIVE_CRASH_ABORT=1`, inspect `native_crash_*.log` + `journalctl -k` for `libcuda`; retry the failed qid only after `emet eval diagnose` / free GPU — do not treat empty jsonl as a scored miss without a crash capsule.

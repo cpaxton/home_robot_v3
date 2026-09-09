@@ -19,6 +19,9 @@ import click
 import numpy as np
 import zmq
 
+# numpy is imported at module load, before serve() can rewrite sys.path.
+# Child PYTHONPATH must already be ABI-safe — see emet.utils.pythonpath.
+
 # Robocasa is imported lazily when --use-robocasa is used, to avoid loading robosuite/numba
 # on every server start (and to avoid numba init failures when not using Robocasa).
 model_generation_wizard = None
@@ -241,6 +244,7 @@ def main(
 ):
     from emet.utils.pythonpath import ensure_venv_site_packages_first
 
+    # In-process ROS/cv2 + sys.path fix. Too late for numpy (imported at module top).
     ensure_venv_site_packages_first()
 
     # Use EGL for offscreen rendering when headless (or no DISPLAY) to avoid GLFW X11 assertion

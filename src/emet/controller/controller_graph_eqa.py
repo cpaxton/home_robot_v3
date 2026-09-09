@@ -44,12 +44,17 @@ from emet.controller.habitat_nav import (
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
-from emet.utils.logger import Logger
-
-logger = Logger(__name__)
-from emet.memory.graph_eqa.instance_observations import (
+from emet.memory.graph_eqa.ingest.instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
 )
+from emet.utils.logger import Logger
+from emet.visualization.dynagraph_context import (
+    log_vlm_context_to_visualizer,
+    send_graph_memory_rerun_blueprint,
+)
+from emet.visualization.null_visualizer import visualizer_is_enabled
+
+logger = Logger(__name__)
 
 
 def _parse_image_pick(reply: str, n_candidates: int) -> int | None:
@@ -70,12 +75,15 @@ class GraphEQAController(DynamemController):
     feeds the graph memory on each update and uses it in run_eqa.
     """
 
+    ground_truth_mode = False
+
     def __init__(
         self,
         robot: AbstractRobotClient,
         parameters: Parameters | dict,
         semantic_sensor=None,
         save_rerun: bool = False,
+        enable_live_rerun: bool = False,
         use_instance_graph: bool = True,
         realtime_updates: bool = False,
         re: int = 3,
@@ -101,6 +109,7 @@ class GraphEQAController(DynamemController):
             parameters=parameters,
             semantic_sensor=semantic_sensor,
             save_rerun=save_rerun,
+            enable_live_rerun=enable_live_rerun,
             use_instance_memory=use_instance_graph,
             realtime_updates=realtime_updates,
             re=re,
@@ -163,7 +172,7 @@ class GraphEQAController(DynamemController):
                 parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
             )
 
-        from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+        from emet.memory.graph_eqa.graph_object_fusion.attach import attach_graph_object_fusion
 
         self._graph_object_fusion = attach_graph_object_fusion(
             self.graph_memory,
@@ -197,6 +206,23 @@ class GraphEQAController(DynamemController):
         )
         self._habitat_blocked_goals: set[tuple[float, float]] = set()
         self._habitat_recent_goals: list[tuple[float, float]] = []
+
+    def setup_custom_blueprint(self) -> None:
+        """Context (VLM) + EQA mosaic — same column as live Dynagraph, including ``emet run graph-eqa``."""
+        send_graph_memory_rerun_blueprint(self.rerun_visualizer)
+
+    def _log_graph_eqa_rerun(self) -> None:
+        if self.graph_memory is None or not visualizer_is_enabled(self.rerun_visualizer):
+            return
+        self.rerun_visualizer.log_dynagraph_state(
+            self.graph_memory,
+            ground_truth_mode=self.ground_truth_mode,
+        )
+        log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
+
+    def update(self, *, full_perception: bool | None = None) -> None:
+        super().update(full_perception=full_perception)
+        self._log_graph_eqa_rerun()
 
     def look_around(self):
         """Habitat has no head actuators — rotate the base to build coverage."""
@@ -440,11 +466,11 @@ class GraphEQAController(DynamemController):
         gm = getattr(self, "graph_memory", None)
         if gm is None or gm.eqa_client is None:
             return None
-        from emet.memory.graph_eqa.agentic_tools import coerce_room_label
-        from emet.memory.graph_eqa.frontier_regions import (
+        from emet.memory.graph_eqa.spatial.frontier_regions import (
             frontier_region_utility,
             region_from_node,
         )
+        from emet.memory.graph_eqa.spatial.room_labels import coerce_room_label
 
         robot = getattr(self, "robot", None)
         habitat = robot is not None and is_habitat_robot_client(robot)
@@ -664,6 +690,8 @@ class GraphEQAController(DynamemController):
         )
         self._rerun_monologue_base = answer_output
         self._rerun_refresh_monologue_panel()
+        if self.graph_memory is not None and visualizer_is_enabled(self.rerun_visualizer):
+            log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
         if relevant_images and hasattr(self, "_patch_images"):
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)
@@ -818,9 +846,7 @@ class GraphEQAController(DynamemController):
                 target_point = alt
             else:
                 eff_key = goal_key_xy(resolved)
-                if stay and (
-                    eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)
-                ):
+                if stay and (eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved)):
                     logger.info("EQA habitat: already at FIND/readout view; stay for close-up")
                     return answer, discord_text, relevant_images, confidence
                 if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(self.robot, resolved):
@@ -1021,7 +1047,7 @@ class GraphEQAController(DynamemController):
         When ``eqa.agentic_verify`` (or ``EMET_EQA_AGENTIC_VERIFY=1``) is set, uses the
         unified agentic explore/navigate/verify/answer loop instead.
         """
-        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+        from emet.memory.graph_eqa import agentic_verify_enabled, run_agentic_eqa
 
         effective_trace_meta = dict(getattr(self, "_eqa_trace_meta", None) or {})
         effective_trace_meta.update(dict(trace_meta or {}))

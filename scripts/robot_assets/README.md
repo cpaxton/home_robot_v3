@@ -8,11 +8,13 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
    frame alone.
 2. **`urdf_to_mjcf.py`** — turn an arm URDF into an MJCF body fragment, carrying
    over the kinematic chain (joint frames/axes/limits), inertials, and visuals.
-   Used when the vendor already ships a URDF (e.g. `lerobot-vulcan`'s
-   `Arm.urdf` for Sourccey). `--mass-scale` scales link masses/inertias (CAD
-   inertials are often too heavy; tune so the full robot matches the datasheet).
-   Meshes marked `"aligned": true` in the mesh-map are placed at the body origin
-   with identity rotation (see `align_urdf_meshes.py`).
+   Sourccey uses the **updated official** `urdf/ArmLeft/ArmLeft.urdf` (not the
+   legacy `lerobot-vulcan` `Arm.urdf`). `--mass-scale` scales link masses/inertias
+   (CAD inertials are often too heavy; tune so the full robot matches the datasheet).
+   `--recenter-joint shoulder_pan` wraps the fragment so the shoulder pivot sits at
+   `arm_root` (required by `assemble_sourccey.py`). Meshes marked `"aligned": true`
+   in the mesh-map are placed at the body origin with identity rotation
+   (see `align_urdf_meshes.py`).
 3. **`assemble_sourccey.py`** — full-robot example: base/lift/dome/arms/cameras
    assembled into one `sourccey.xml` with planar base joints + actuators.
 4. **`align_urdf_meshes.py`** — bake URDF-joint alignment into arm-link STL meshes
@@ -45,9 +47,12 @@ $ROBOT_ASSETS_PY scripts/robot_assets/step_to_stl.py \
     --out /tmp/meshes/arm_base.stl --scale 0.001
 
 # 3. If a URDF exists, build the arm fragment + preview.
-$ROBOT_ASSETS_PY scripts/robot_assets/urdf_to_mjcf.py \
-    /path/to/Arm.urdf --mesh-map /tmp/mesh_map.json \
-    --mass-scale 0.27 --out /tmp/arm_frag.xml
+# Sourccey (official ArmLeft, checked-in mesh map + shoulder recenter):
+uv run python scripts/robot_assets/urdf_to_mjcf.py \
+    src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf \
+    --mesh-map src/emet/assets/robot/sourccey/mesh_map.json \
+    --mass-scale 0.30 --recenter-joint shoulder_pan \
+    --out src/emet/assets/robot/sourccey/arm_frag.xml
 
 # 3b. If the STEP mesh frames don't match the URDF visual origins (links look
 #     disconnected), bake the URDF-joint alignment into the meshes first:

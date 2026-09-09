@@ -644,7 +644,10 @@ def jobs_run(
     cpu_block = ""
     if use_cpu_safe:
         cpu_block = (
-            '"$EMET_BIN" eval affinity --apply --pid $$ || {\n'
+            # After a previous sim job releases the GPU lock, importing the
+            # full ``emet`` CLI (MuJoCo native) segfaults. Pin via the
+            # stdlib affinity module only.
+            '"$EMET_PY" -m emet.utils.cpu_affinity --apply --apply-pid $$ || {\n'
             '  echo "ERROR: cpu-safe affinity failed (fail-closed)" >&2\n'
             "  exit 2\n"
             "}\n"
@@ -657,6 +660,8 @@ def jobs_run(
         f'JOB_ID="{job_id}"\n'
         f'EMET_BIN="{root}/.venv/bin/emet"\n'
         'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
+        f'EMET_PY="{root}/.venv/bin/python"\n'
+        'if [ ! -x "$EMET_PY" ]; then EMET_PY="python3"; fi\n'
         f"{register_line}"
         f"{gpu_lock_block}"
         f"{wait_lines}"

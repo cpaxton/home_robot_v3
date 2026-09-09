@@ -16,6 +16,7 @@
 # Mapping: grid, instance, scene_graph, voxel. See docs/plans/MAPPING_REFACTOR.md for layout.
 # Some code may be adapted from other open-source works with their respective licenses.
 
+from .close_map import CloseDistanceMap, CloseLookDecision, CloseLookQuery
 from .grid import GridParams
 from .instance import Instance, InstanceMemory, InstanceView
 from .scene_graph import OpenVocabSceneGraph, SceneGraph
@@ -30,6 +31,9 @@ from .voxel import (
 
 __all__ = [
     "GridParams",
+    "CloseDistanceMap",
+    "CloseLookDecision",
+    "CloseLookQuery",
     "Instance",
     "InstanceMemory",
     "InstanceView",

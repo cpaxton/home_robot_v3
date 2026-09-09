@@ -3,6 +3,68 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## ZMQ follow-ups after PR #135
+
+- [ ] Move onboard DINOv3 loading/inference off the publication loop into a
+  bounded latest-frame worker; retain source timing and test stalled inference.
+  Keep onboard DINOv3 disabled during navigation/benchmark acceptance.
+- [ ] Derive simulated lidar hits from sensor site origins/directions in an
+  explicit common frame; test reordered and translated sites.
+- [ ] Validate Mars image header progression, stereo skew and timestamped TF
+  while stationary; propagate provenance to depth and embeddings.
+- [ ] Extend image timing and stale-frame handling across Stretch/simulator
+  publishers without treating legacy unknown timestamps as fresh.
+- [ ] Keep experimental H.264 disabled for acceptance; validate independent
+  cadence, encoder lifecycle and bandwidth before enabling it.
+- [ ] Resume shared navigation acceptance (Sourccey camera orientation and
+  Galaxea contact/actuation), then serial bounded OVMM/TAMP/EQA pilots through
+  one agent harness. Update paper/results only from validated runs.
+
+## Config over env flags
+
+We over-use `EMET_*` for robot/controller policy (head sweep, teleport, TTS, rotate
+steps). Embodiment defaults belong in `robots.<id>` / `mapping.*` in
+[`configs/emet/default.yaml`](configs/emet/default.yaml) (see Stretch
+`look_around_head_sweep`). Env should stay as a rare override (`EMET_FORCE_HEAD_SWEEP`
+for paper pans) or for host/GPU process state. Do not add a new `EMET_*` for
+something that can be a YAML key + `--set`. `run_ovmm_find_recep_slice.sh` no
+longer exports `EMET_SKIP_HEAD_SWEEP` — YAML already defaults pans off; only
+`PROFILE=stretch-legacy` sets `EMET_FORCE_HEAD_SWEEP`. Same pass later for other
+script-exported knobs that duplicate config.
+
+## Eval orchestrator layers (keep three; do not add a fourth matrix script)
+
+Too many bash wrappers all mean “run a bit of Habitat + OVMM + SQA3D.” Canonical
+layers — docs in [`docs/evaluation.md`](docs/evaluation.md) and
+[`docs/experiments/README.md`](docs/experiments/README.md):
+
+| Layer | Entry | Job |
+|-------|--------|-----|
+| Path smoke | `scripts/run_simulation_smoke_battery.sh` | Seven-track merge-gate (often GT/mock) |
+| Overnight regression | `scripts/run_overnight_cross_track_smoke.sh` | Tier-0 + pytest + those tracks. **Never** chain VLM after this. |
+| Fast OVMM | `scripts/run_ovmm_find_recep_slice.sh` | rby1 / teleport (`PROFILE=smoke`) |
+| Habitat OVMM VLM | `scripts/smoke_habitat_ovmm_agentic_find.sh` | One HM3D scene, agentic 4/4 |
+| Paper numbers | `scripts/run_paper_matrix.sh` + `emet hmeqa overnight` | Real sizes, one GPU lock |
+
+Deleted 2026-09-02: `scripts/run_overnight_eval_smoke.sh` (tiny real-VLM matrix +
+figure pack). Replacements above; figures: `scripts/build_eval_figure_pack.py`.
+
+### Later cleanup
+
+- [x] Fold `run_representative_benchmark_sample.sh` into
+      `run_dynagraph_tuned_paper_battery.sh` — **keep both**. Representative =
+      static_graph comparison + S0 matrix + tables; paper battery = seven-track
+      + holdout/bal32 + tuned dynagraph numbers.
+- [x] Make `run_overnight_habitat_eval.sh` a thin wrapper around
+      `emet hmeqa overnight`. Extra slices stay as dedicated scripts
+      (`run_hmeqa_annotated37_h2h.sh`, `run_hmeqa_paper113_h2h.sh`,
+      `run_habitat_iter_subset.sh` for paper-20).
+- [ ] Leave `run_hmeqa_*_h2h.sh` until `emet hmeqa h2h` covers those ID sets;
+      then delete the one-off H2H scripts.
+- [x] `run_habitat_ovmm_joint_gate.sh` vs `run_paper_matrix.sh` — **keep both**.
+      Joint gate = count/clock 15-qid + rby1 OVMM `PROFILE=slice`. Paper
+      matrix = HM-EQA paper-113 (no semantics) + OVMM S0/S1/S2 numbers.
+
 ## Grounded graph room-evidence A/B — no-go for scale; focused history pair authorized (2026-08-23)
 
 Canonical record:
@@ -195,6 +257,127 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
 (sample_target_point projection, chunked-nav-as-progress); PR #111 (stacked) adds the
 `NavOutcome` enum + question-type-aware verification + camera diagnostic. What's left:
 
+**Branch `feat/tamp-ovmm-perf` (2026-08-23 → 2026-08-28):** OVMM-scoped routing — unified
+`_recall_nav_hypotheses`, GT placement seeds, find_recep nearby-investigate bias,
+`nav_outcome` in router Recent actions, richer `trace_meta` from find-phase harness.
+**2026-08-28 unify mapping (this PR):** `run_mapping_protocol` with `explore_steps>0`
+now calls `run_agentic_eqa_result(agent, None, goal="explore and map…", max_nav_steps=n, max_rounds=n+1)`
+— same `AgenticEQAExecutor` `mode=explore` as HM-EQA (router only `explore_frontier`/`finish`),
+coverage-first frontier picks (no object `toward`), arrival `look_ahead` (tilt 0) facing frontier
+then `update` (not `look_front -30°`/pre-sweep), hop-until-arrival for 27-wp kitchens;
+`S0` `explore_steps==0` stays rotate-only. Voxel `localize_text` on finished map now beats
+camera-pose-at-feet cards (`CAMERA_POSE_PLACE` redirect), SigLIP on arrival RGB is the query.
+**Efficiency pivot:** Stretch 3-ep slice took ~3.5 h with 0/3 success — default gate
+is now **rby1** (`PROFILE=smoke` / `slice` in `run_ovmm_find_recep_slice.sh`);
+`look_around` skips head pans on non-Stretch. Docs:
+`docs/experiments/ovmm_agentic_find_teleport.md` + `docs/ovmm_find_phase_benchmark.md`.
+**Integration (2026-08-25):** merged `feat/instance-graph-repair` (PR #130) for
+clock/count FIND view pinning + `close_look_label`; extend investigate bias to
+`find_object` and close-look questions on top.
+
+### 2026-08-28 assessment — does unified mapping fix OVMM failures?
+
+**Historical baseline (pre-unify):** teleport 9-ep sweep ~1/9 FindObj, 0/9 FindRec
+(`recep_slice_20260823_172713` 0/3 in 3.5 h). Real-physics 9-ep ~1/3 obj, 1/6 recep.
+Mapping was `run_mapping_protocol: spin + N×execute_action("")` (DynaMem multi-goal A*,
+`look_around` before drive, `look_front -30°`) → voxel saw floor/sky, not kitchen; find
+started a *new* `AgenticEQAExecutor` and scored wall-node cards; `localize_text("jar")`
+often empty or floor. Stretch 27-wp kitchen paths truncated at 8 wps (never reached).
+
+**Expected after unify (1–2 turn prompt sanity):**
+*Turn 0* `inspect_graph` → hypotheses from `localize_text` on finished voxel map (or none) +
+graph nodes/frontiers; prompt = `Rooms: …` + merged `SCENE_GRAPH` (`CONFIRMED_MEMORY` folded,
+no dupe), `Recent actions: … nav_outcome=…`, stable allowlists. No object `toward` during
+mapping, so frontier picks stay uncovered-first.
+*Turn 1* `explore_frontier` → `target_theta` toward frontier, `look_ahead` 0° at arrival,
+`capture_and_update` → new observation → SigLIP points on that frontier surface enter voxel.
+If a jar/cab was in that frustum, `localize_text` next turn produces `proposal` card
+`obs_id<-3M` that **beats** any `CAMERA_POSE_PLACE` view.
+*Turn 2* find: `inspect_graph` on finished map now has SigLIP-backed proposal; router
+should `investigate(proposal)` before `explore`, `verify_siglip` on that view; one
+`explore` only if `ABSENT` (not 150 wall cards). Prompt after 1–2 turns should list
+`detections: 1+` with `source=voxel` and `views` separate, `visible_frontier_ids` shrinking.
+
+**Verdict:** unify addresses the load-bearing mapping bug (coverage vs object-biased
+`toward`, arrival tilt, hop-until-arrival). Voxel-first find + `CAMERA_POSE_PLACE`
+redirect addresses the scoring bug. It **does not** by itself fix the “recep loop
+explores away” targeting problem — that is still a search/ranking issue (see below).
+Needs a GPU `rby1` smoke + `stretch-kitchen` to confirm `localize_text non-null`
+and that `n_explore` now increments `mapping_n_explore` in JSON.
+
+- [x] **Unify OVMM mapping with agentic explore (2026-08-28):** `run_mapping_protocol` for
+      `explore_steps>0` now uses `mode=explore` coverage loop; arrival `look_ahead` facing
+      frontier; tests for mapping entrypoint/arrival look/voxel-first; docs updated.
+- [x] **Object targeting fixes (2026-08-28, live rby1 S0 + kitchen):** three systematic
+      find-loop bugs found and fixed on the **shared** AgenticEQAExecutor:
+  1. **SigLIP released across find phases** (`agentic/answer.py:_do_submit_answer` →
+     `release_siglip_for_vlm` drops `voxel_map.encoder`; nothing re-attached it). FindRec
+     (second phase) could never `localize_text`. Fixed: `re_attach_siglip_encoder` wired into
+     `warm_siglip_confirmed_memory` (`eval/dynagraph_vram.py`), so each phase localizes on
+     the finished map. Rby1 S0 FindRec went from `recep_localize_source: None` → voxel err 0.0.
+  2. **Voxel proposals re-chased after close ABSENT** — the VLM router re-emits
+     `investigate(obs_id<0)` on the same wall point (`-3000000` visits 2..N). Fixed: proposals
+     are one-shot in `_hypothesis_nav_blocked` (`agentic/capture.py`), not just
+     `_unused_detection_hypothesis` — S0 obj loop went from 3× chases to 1×.
+  3. **Disproven voxel pins were still scored** — a close ABSENT leaves the pin; the harness
+     `pinned_xyz_from_phrases` fallback scored the wall point. Fixed: `unpin_localize_xyz`
+     (`mapping/voxel_localize.py`) called from `_maybe_retract_claim_after_station` on ABSENT,
+     plus clearing the loop-scored voxel record.
+  **Measured (rby1 S0 `default_table_rby1_s0_distinct_recep`, 5 runs): FindObj 5/5 (voxel,
+  err 0.0); FindRec 3/5 (voxel err 0.0 when found).** FindObj is stable; FindRec is SigLIP
+  marginality on the small blue cube (YOLO labels in this scene are garbage:
+  box/sign/tv/monitor/divider — graph recall is useless; voxel is the only reliable path).
+  Mixed gate still validates EQA: countclock **7/15 = gateAB** (no regression from the
+  shared-loop changes).
+- [x] **Kitchen explore stall (2026-08-28):** live agentic mapping still creeps (8–20 hops
+      cover only ~3 m²; the nearest-uncovered frontier clamps to ~0 and the loop re-picked
+      the same frontier). Added a no-progress goal block in `_tool_explore_frontier`
+      (`agentic/explore.py`): after a nav that moved < 0.10 m, block the FRONTIER XY in
+      `_habitat_recent_goals`/`_habitat_blocked_goals` so the next pick chooses a different
+      frontier or falls through to multi-goal explore. Frontier selection now rotates
+      (verified live). Kitchen find still 0/2 — coverage volume, not the loop.
+- [x] **SigLIP re-attach scoped to OVMM (2026-08-28):** re-attach was briefly in the shared
+      `warm_siglip_confirmed_memory`; HM-EQA countclock q47 flipped False, so it is now
+      called only from the OVMM harness `run_ovmm_agentic_localize` (before each phase) —
+      HM-EQA keeps its released-SigLIP behavior.
+- [x] **One-shot proposals refined to close-ABSENT (2026-08-28):** the first one-shot gate
+      blocked a proposal after *any* one nav; countclock dropped to 5/15 (q21/q47/q93
+      flips). Refined: a proposal is blocked only after a **close ABSENT** recorded on that
+      card (`_hypothesis_nav_blocked` + `_unused_detection_hypothesis` now both check
+      `_place_inspect.last_verify == ABSENT`), so HM-EQA count/locate targets stay
+      re-approachable from a new bearing while OVMM wall-chases stay one-shot. **Countclock
+      back to 7/15 = gateAB** (q21/43 recovered; q93 True solo — variance, not systematic).
+- [x] **Cached-map robocasa find (2026-08-30, stretch-kitchen):** with the re-attach +
+      one-shot + unpin fixes, the cached stretch map localizes the **jar (FindObj 1/1,
+      voxel err 0.176 m)**; **FindRec (cab) 0/1** — the VLM never saw the cab (navigated to
+      microwave/fridge). Live-mapping robocasa scored 0/2 (small-object jar SigLIP miss) and
+      took 3.1 h/ep, so the paper S1 column uses the cached-map path. **Paper OVMM S0:
+      obj 5/5, recep 3/5; S1 (cached): obj 1/1, recep 0/1; S2 (molmo): pending.**
+- [x] **fp16-vs-int4 VLM ablation (2026-08-29→30):** countclock fp16 **10/15 vs 6/15**;
+      30-qid clean same-harness **fp16 16/30 vs int4 9/30 (+7, +78%)** — quantization is a
+      real, task-dependent lever (fine-detail count/clock). Records in
+      `paper/data/vlm_quantization/` + `docs/experiments/vlm_quantization.md`; appendix
+      `06_model_choice.tex` `tab:vlm_precision` + discussion (PR #148).
+- [x] **TAMP signal run (2026-08-30, 25-ep subset):** battery 8/8; cleanup **9/10** across
+      4 robots; nav_goal cleared all clutter but the terminal straight-line teleport chord
+      hit furniture (refrigerator) → 0 reached. Fixed in PR #154: post-clear route now uses
+      an **8-connected planner probe** (`nav_path_open_around_disks`) matching the GT
+      validity definition.
+- [x] **TAMP nav_goal landmarks were unwinnable (2026-08-31):** even with the 8-connected
+      post-clear probe, all 15 nav_goal rows scored 0 because `_goal_for_landmark` picked
+      by *straight-line* distance (< 10 m), not navigability — landmarks sat behind
+      furniture barriers. Fixed (`02be11d0`, PR #154): landmark selection now requires an
+      **8-connected route from the robot start** to the approach point (farthest navigable
+      preferred). **Full 15-row rerun: 5/15 success** (rby1 scene-0 3/3, nori scene-0 2/3);
+      remaining failures: stretch `path_open=True` but teleport doesn't land (nav-execution),
+      innate_mars + rby1 scene-1 `path_open=False` (post-clear route from the bin blocked by
+      dense furniture). Two documented next-step fixes.
+- [ ] **Recep/object targeting residual — small-object SigLIP marginality.** FindRec (blue cube)
+      is 2/4 because the cube's SigLIP cosine hovers at the localize bar (top_sim ≈ 0.10–0.14;
+      `localize_text` threshold 0.14). When the map lacks good blue-cube points, no pin forms.
+      Levers: (a) lower the voxel localize bar for find (risky false positives; one-shot
+      proposals now make ABSENT cheap), (b) a closer start-recep look so YOLO/SigLIP see the
+      object, (c) accept variance and report voxel err distribution.
 - [ ] **Recep loop explores away from the target, never converges.** "Where is the table?"
       runs all 8 rounds with `nav=0..2 explore=N`; the router keeps picking
       explore_frontier and the assess returns not-present (table not in those views).
@@ -232,6 +415,84 @@ Context: teleport-mode OVMM find on the shared AgenticEQA loop. PR #110 fixes na
 - [ ] **NavOutcome in durable nav ledger**: propagate the enum through
       `NavAttemptResult` / `graph_memory.record_nav_attempt` instead of relying
       on status/note reconstruction in offline artifacts.
+
+## Next experiments + tuning (2026-08-31)
+
+Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #154
+(TAMP nav_goal 8-connected fix). **EQA is the strong result; OVMM/TAMP are exploratory
+pilots — treat as preliminary until a strong pilot lands (like EQA's).** Four axes:
+
+### 0. OVMM pilot status (preliminary — not paper-commit yet)
+- [ ] **Pattern: FindObj works, FindRec (fixtures) fails.** S0 obj 5/5, recep 3/5; S1
+      (cached robocasa) obj 1/1 jar, recep 0/1 cab; S2 (cached molmo) obj 1/1 bowl, recep
+      0/1 microwave. Small objects localize via voxel; fixture receptacles (cab/cabinet,
+      microwave) are not surfaced by recall (multi-label dilution) — a recall/ranking gap.
+- [ ] **FindRec recall WORKS — the failure is investigate geometry (2026-09-01 debug).**
+      `EMET_DYNAMEM_MAP_DEBUG` on the cached robocasa recep showed the loop recalled 5
+      cabinet cards (`42:cab,44:cab,69:cab,71:cab,15:cab`) and investigated all 5, but every
+      arrival view was "kitchen/toaster" — the **cached graph node XYZs are camera-observation
+      poses, not object positions** (`_obs_nav_anchor` returns `node.xyz`), so the robot
+      approaches where a camera once stood and sees a toaster/counter, not the cabinet. Same
+      artifact class as the jar-wall proposal.
+- [ ] **FindRec phrase-expansion was negative (2026-09-01):** expanding "cab" → "cabinet"/
+      "kitchen cabinet" (from matched graph-node labels) did not change the result —
+      `recep_localize_source` stayed None. Probe of the cached voxel map: 8002 points across
+      the kitchen but **no cabinet-feature points** (the recep's new captures also showed
+      kitchen/toaster), so there is nothing for localize_text to ground. **FindRec on the
+      cached map needs the cache rebuilt with correct object anchors** (live mapping must
+      first produce good coverage + geometry) — defer while OVMM is exploratory. The
+      phrase-expansion code is kept (principled; helps other terse queries).
+- [ ] Explore OVMM as pilots only: backend matrix, OVMM full (pick/place), Habitat-OVMM
+      are deferred until FindRec-recall improves OR the paper explicitly reports FindObj-only
+      with the fixture gap documented. Do not sink GPU into the full matrix yet.
+
+### 1. More experiments (fill the paper tables)
+- [ ] **HM-EQA paper-113 fp16 (full)** on caliban — we have the 30-qid subset (16/30 vs
+      9/30 int4); the full 113 with fp16 replaces/extends `tab:hmeqa_vs_prior` (49.6% int4).
+      ~20–28 h serialized; run after the quick wins below.
+- [ ] **OVMM S2 (molmo) column** — `tab:ovmm_find_backend_tier` S2 is pending. Use the
+      cached `molmo_ithor_train_idx0_stretch_gt` map + agentic find (like the robocasa S1
+      cached path that found the jar). rby1 or stretch.
+- [ ] **TAMP full 200-registry** (E4) after the nav_goal fix lands — fills cleanup S2 +
+      nav_goal rows for `tab:tamp_clutter` (S1 signal already in).
+
+### 2. Improve failing cases
+- [ ] **FindRec (fixture receptacles) on OVMM** — cab/cabinet, microwave are not surfaced by
+      `hypothesize_nav_targets` recall (nodes carry 20+ multi-labels diluting the fixture
+      signal). This is the FindObj-vs-FindRec gap across S0/S1/S2; fix fixture-node ranking
+      for recep questions. Highest-value OVMM lever.
+- [ ] **Clock/count close-look** — q33/q43/q84 fail because the clock is visible but not
+      legible (`read N` re-attaches the full frame, no detector bbox for clocks). Implement
+      the `read N` re-crop / center-zoom so dials become legible without re-navigating
+      (TODO § count/clock "Close-look / legibility").
+- [ ] **Small-object SigLIP marginality** (blue cube, jar) — levers: lower the localize bar
+      for find (cheap now that ABSENT is one-shot), or a closer start-recep look so
+      YOLO/SigLIP see the object.
+
+### 3. Does more budget help?
+- [ ] **Explore-steps sweep on OVMM kitchen** — 8 → 20/40 explore steps: does mapping
+      coverage / FindObj improve (earlier: 8 steps ≈ 3 m², 0/2)? Isolate coverage-volume vs
+      detection.
+- [ ] **Nav/round budget sweep on countclock + paper-113** — more `max_nav_steps` /
+      `max_rounds` for the agentic loop; measure accuracy-vs-budget curve (mean planning
+      steps already logged).
+- [ ] **fp16 full-113 vs budget** — does the fp16 gain grow with more rounds?
+
+### 4. Make tamp / molmospaces / habitat-ovmm work well
+- [ ] **TAMP E1 battery re-run** (after chord-sample + 8-connected nav + navigable-landmark
+      fix) + **E3 small** + **nav_goal 15-row rerun** (scene-0 winnable now) + **fill
+      `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (exclude `skipped_invalid`).
+- [ ] **TAMP → agent**: expose `plan_clear_clutter` as a `clear_clutter` CHAT skill so the
+      LLM agent can parse "clean up the room" / "get to the sofa" end-to-end (the real
+      product blocker; MCTS pick/place already works).
+- [ ] **MolmoSpaces smokes**: `molmo_ithor_rby1_s2_bowl_pp` (manip=sim) reconfirmed; run
+      `scripted_tamp_pick_place` + rby1 iTHOR kinematic smokes when `.venv-molmospaces` warm.
+- [ ] **habitat-ovmm**: validate the robocasa cached-map find + rby1 kitchen (explore_steps
+      20 live) end-to-end via the mixed gate; report S0/S1/S2.
+
+**Status of running jobs:** TAMP nav_goal 8-connected + navigable-landmark rerun (15 rows)
+pending — scene-0 confirmed winnable; TAMP battery 8/8 (pre-fix, re-run needed); OVMM
+molmo-robocasa live sweep cancelled (0/2 robocasa, 3.1 h/ep — use cached-map path for paper).
 
 ## Embodied agent planning (world model + tool calling + motion)
 
@@ -286,6 +547,12 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] **Unified token budget for the EQA prompt**: `eqa_vl.eqa_prompt_max_tokens` default 2500 (`EMET_EQA_PROMPT_MAX_TOKENS`); truncation order HISTORY → CONFIRMED_MEMORY → edges → labels via `build_eqa_prompt_text`.
 - [x] **Router prompt hygiene**: shared `_EQA_RULE_*` atoms in `agentic_tools.py`; byte-stability test pins format-block SHA256 + identity across calls.
 - [x] **HISTORY loop risk**: HISTORY stores one-line outcomes (`Iter: answer=… conf=… action=… salvage=… | reason`) plus `Nav_result`, not raw model replays.
+- [x] **Prompt after 1–2 turns (agentic):** after `inspect_graph` + 1×`explore_frontier(look_ahead→capture)` the state
+      message is `Rooms: …` + merged `SCENE_GRAPH` (no dupe `CONFIRMED_MEMORY`), `Recent actions` with
+      `nav_outcome, target_theta, room_aligned`, stable allowlists
+      `place_ids/place_obs_ids/frontier_ids` via `action_gate`, typed `HISTORY` lines and
+      `visible_event_ids`. Verified 2026-08-28 on `AgenticEQAExecutor` `mode=explore` mock: `target_theta` toward frontier,
+      `look_ahead` before `capture`, `detections` vs `views` split in `inspect_graph`.
 - [ ] **CHAT `_FORMAT_BLOCK` is ~90 lines of routing edge cases** (prompt.py): consider tiered prompt (short default; detailed hints appended only for 4B-class routers) and measure system-prompt chars/tokens with and without hints.
 - [ ] **describe_scene grounding**: currently caption + optional graph labels appended ad hoc (`describe_head_camera_scene_text`, controller_dynamem.py:1049). Define one consistent grounding format shared with `query_scene_graph` so the chat VLM sees the same memory vocabulary as EQA.
 
@@ -351,6 +618,10 @@ Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32
 - [ ] **Robot self-filter lost in DynaMem `add()`**: `voxel_dynamem.py:1109` copies base `voxel.py:403` minus the URDF mesh self-filter — the robot may see itself on real hardware. Reintroduce or document why it is off.
 - [ ] **Split `query_answer` + de-dup renumber/rebuild blocks**: `build_eqa_prompt_text` is extracted (#104); `query_answer` is still ~477 lines — still need `run_eqa_prompt(commands)` / `finalize_eqa_answer(parsed)`. The renumber+rebuild block in `maintain`/`_drop_nodes_near`/`absorb_object_node` is copy-pasted 5×.
 - [ ] **Rooms as first-class nodes**: runtime `RoomCluster` + prompt `Rooms:` / `(room)` tags exist; still recompute every refresh. Persist room id / name / bounds on nodes and in `graph.json` exports.
+- [x] **`room_clustering/` + `partition()` + `proximity`**: naive `near` + XY radius; `room_clusters.py` is the naming/stamp facade.
+- [ ] **`occupancy_cc` room backend**: flood-fill free/explored cells on the voxel 2D map; assign instance nodes to occupancy CCs (respects mapped walls).
+- [ ] **`portal` room backend**: occupancy CCs cut at narrow passages / doors.
+- [ ] **Room clustering backend sweep** once a second geometry backend exists (`eqa.room_clustering.backend` / `EMET_EQA_ROOM_CLUSTERING_BACKEND`). Do not mix with OVMM S0 instance labeling.
 - [ ] **Bound voxel memory growth**: `observations` never pruned, `semantic_memory` keeps every subsampled point, pickles dump everything. Trim frames + downsample old semantic points on a schedule.
 - [ ] **Prefix-KV timeout leaves a live CUDA worker** (`qwen3_vl_client.py:549-569` raises while the generate thread keeps running): next generate can race. Serialize on a lock or hard-kill the worker.
 - [ ] **Silent exception hygiene**: ~23 `except Exception` in graph_memory.py — at least `_logger.debug` with node/obs context. (Bare `except:` in `voxel_dynamem.list_objects_in_an_image` now logs and retries.)
@@ -360,6 +631,114 @@ Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32
 
 - [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
 - [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
+
+## TAMP clutter benchmark + Nori A3 (follow-ups)
+
+Benchmark: [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) ·
+`scripts/eval_tamp_clutter.py` · `scripts/generate_tamp_clutter_registry.py` (200 episodes,
+4 robots: rby1 / stretch / innate_mars / nori). Nori backend: [docs/robots/nori.md](docs/robots/nori.md).
+GT+MCTS battery: [docs/experiments/tamp_clutter_testing.md](docs/experiments/tamp_clutter_testing.md).
+
+**Eval code is merge-ready** (blocked-nav scoring, chord-sampled no-snap, reachable
+landmarks, sim default manip for mars/nori). **#150** / **#151** already on `main`.
+Remaining items are **GPU experiments / product**, not code blockers. Operator table:
+[docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) Remaining experiments
+(E1 battery → E5 latch → E3 small YAML → E4 large registry → fill `tab:tamp_clutter`).
+
+- [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
+      pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
+      That run predates chord-collision + reachable-landmark; re-run below before citing it.
+- [x] **GPU GT+MCTS battery re-run** (2026-09-05, three robots × scenes 0–1; 21/24 pass).
+      Furniture on
+      the spawn→landmark chord can now fail `navclear`. Queue, do not run inline:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py --test-battery \
+        --battery-robots nori --battery-scenes 0,1
+      ```
+
+      The three-robot run is complete at `logs/tamp_validation_20260905/gt_mcts_battery/`;
+      three Innate Mars navigation rows remain tracked below.
+- [ ] **Investigate Innate Mars nav-goal failures (validation 2026-09-05).** The fresh
+      24-case sim-oracle battery scored **21/24**: all cleanup rows passed, and all Nori/rby1
+      rows passed; Innate Mars failed `navblocked_s0` (cleared 8/8, GT probe blocked, final
+      goal not reached), `navclear_s0` (same sampled cabinet goal not reached with no clutter),
+      and `navblocked_s1` (cleared 8/8 but the GT probe classified the ring as unblocked, so
+      the row is invalid). This isolates a Mars navigation/landmark or scene-validity issue,
+      not manipulation: `n_relocated` is correct in every failed blocked row and there are no
+      episode errors. Reproduce from the saved artifacts at
+      `logs/tamp_validation_20260905/gt_mcts_battery/`; compare Mars `move_base_to` / achieved
+      pose with rby1 on the same scene and fix landmark sampling or Mars teleport/nav frame
+      handling before citing the three-robot battery.
+- [ ] **Investigate Sourccey RoboCasa cabinet pre-place IK failure (validation 2026-09-05).**
+      `scripts/scripted_tamp_pick_place.py` reaches and grasps `obj_main` successfully, then
+      fails at `preplace_ik_failed` for `cab_1` at `[0.5, -0.2, 1.85]`; the table scene and
+      infeasible-grasp ranking both pass. Check cabinet opening/target height and the side
+      approach/standoff for the tall cabinet, then rerun the saved command in
+      `logs/tamp_validation_20260905/sourccey_kitchen.log` before claiming RoboCasa support.
+- [ ] **Fill `tab:tamp_clutter`** from `aggregate_tamp_clutter.csv` (scored denominator;
+      exclude `skipped_invalid`). Results section is still placeholders.
+- [ ] **Large registry (200 templates)** via `emet jobs`:
+
+      ```
+      NEED_MIB=8000 uv run emet jobs run --name tamp-clutter --need-mib 8000 -- \
+        uv run python scripts/eval_tamp_clutter.py \
+        --episodes configs/ovmm/clutter_episodes_large.yaml
+      ```
+
+- [x] **rby1 latch paper row smoke** (2026-09-05): `ithor_cleanup_s1_bin_n3` relocated
+      3/3 objects with 100% manipulation success. The large-registry paper row remains open.
+      Default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
+      large-registry rby1 `latch` episodes. Stretch / mars / nori stay `sim` on floor clutter.
+- [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1 default latch
+      `--episode-id ithor_cleanup_s1_bin_n3`. Mars/nori floor objects need `--manip-mode latch`
+      (expected weak: Nori IK bottoms out ~0.29 m vs z≈0.02 floor). Unit/offline path already
+      passes.
+- [x] **Integrate TAMP single-object path smoke** (2026-09-05): the kinematic agent-tools
+      gate passed. **Integrate the multi-object clear chain** remains the real product blocker
+      now that MCTS pick/place
+      works. The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
+      `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
+      exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a
+      `clear_clutter` CHAT skill (resolve scattered objects from scene graph/memory → run the
+      MCTS chain to the bin → optional landmark nav) so the LLM agent can parse "clean up the
+      room" / "get to the sofa" and drive TAMP end-to-end; reuse `AgentTaskRef`/`AgentPlanBuild`
+      handles and the same no-AI test battery for the agent path.
+- [x] **innate_mars actuator naming**: the innate_mars MJCF actuators are *unnamed*, and the
+      robosuite server applies `{"joint": vec}` via `mj_name2id(mjOBJ_ACTUATOR, aname)` —
+      unnamed actuators never receive ctrl from `set_actuator_positions`. Name them (like
+      nori_a3.xml) so the kinematic streaming path actually drives the arm.
+- [ ] **Nori real-hardware client**: implement an `AbstractRobotClient` adapter over
+      `nori-sdk` (WebRTC jog streams → emet motion contract). The SDK is teleop-oriented;
+      absolute-joint moves need the action-completion path.
+- [ ] **Nori MolmoSpaces spawn metadata**: `emet molmospaces write-spawn-metadata --robot nori`
+      → commit `molmospaces_spawn.json`; then `emet serve mujoco --scene ithor --robot nori
+      --headless` smoke (see supported_robots.md extension checklist).
+- [ ] **Nori RoboCasa** row: strip-replace handling / spawn guards if kitchen scenes are wanted.
+- [ ] **Stretch `latch`** via the combined robosuite server — see next section.
+
+## TAMP clutter: kinematic `latch` on Stretch via the combined robosuite server (follow-up)
+
+The capability gate + per-robot arm parser (Phases 1–2) landed **innate_mars** `latch`
+(capability gate in `robosuite_server.py`, curated `ArmChain` on the innate_mars spec);
+Stretch is deferred. Stretch `latch` needs:
+
+- [ ] Point `get_robot_spec("stretch").mjcf_path` at `src/emet/assets/robot/stretch.xml`
+      (or `stretch_mj_3.3.0.xml`) so `ArmManipProfile` can build an offline IK model and
+      `KinematicPickPlaceExecutor._ensure_model()` succeeds.
+- [ ] Fill the Stretch `ArmChain.actuator_names` (MJCF actuators are unnamed today) once
+      the mjcf_path is set.
+- [ ] Route Stretch iTHOR / Robocasa scenes through `RobosuiteZmqServer` (the merged-MJCF
+      path rby1 / innate_mars use) instead of `MujocoZmqServer` — "combine the Stretch sim
+      server". Harness uses `GenericZmqClient` for stretch sim (`EMET_STRETCH_GENERIC_ZMQ=1`
+      already exists). Keep **default-table Stretch on `MujocoZmqServer`** so existing tests /
+      interactive behavior are untouched; gate the switch on scene kind or env.
+- [ ] Enable `ROBOT_DEFAULT_MANIP_MODE["stretch"] = "latch"` after a stretch iTHOR `latch`
+      smoke (`plan_clear_clutter`) passes.
+- [ ] Risks: stretch telescoping prismatic arm IK + RRT; the curated arm chain already
+      lands in Phase 2; verify no regressions on MujocoZmqServer stretch tests
+      (`emet test --no-sim` gate).
 
 ## Manipulation / MolmoSpaces + rby1 (PR #83 follow-ups)
 

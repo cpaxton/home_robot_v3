@@ -263,7 +263,10 @@ def pack_arm_into_actuator_dict(
     *,
     hold: dict[str, float] | None = None,
 ) -> dict[str, float]:
-    """Map arm joint angles into an actuator-name dict (rby1: ``left_arm_joint1`` → ``left_arm1``)."""
+    """Map arm joint angles into an actuator-name dict.
+
+    rby1: ``left_arm_joint1`` → ``left_arm1``. sourccey: ``left_shoulder_pan`` → ``left_shoulder_pan_act``.
+    """
     q = np.asarray(arm_q, dtype=np.float64).reshape(-1)
     if len(q) != len(arm_joint_names):
         raise ValueError(f"arm_q length {len(q)} != joints {len(arm_joint_names)}")
@@ -275,6 +278,10 @@ def pack_arm_into_actuator_dict(
             continue
         if jname in actuator_names:
             out[str(jname)] = float(val)
+            continue
+        act_alias = f"{jname}_act"
+        if act_alias in actuator_names:
+            out[act_alias] = float(val)
     return out
 
 

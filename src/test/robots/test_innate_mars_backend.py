@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from emet.robots.innate_mars import (
+    INNATE_MARS_ACTUATOR_NAMES,
     INNATE_MARS_JOINT_NAMES,
     DummyInnateMarsClient,
     InnateMarsBackend,
@@ -52,6 +53,28 @@ def test_innate_mars_spec():
 def test_innate_mars_mjcf_registered():
     p = get_robot_mjcf_path("innate_mars")
     assert p is not None and p.exists()
+
+
+def test_get_robot_backend_is_innate_mars_backend():
+    from emet.robots import get_robot_backend
+    from emet.robots.innate_mars import InnateMarsBackend
+
+    backend = get_robot_backend("innate_mars")
+    assert isinstance(backend, InnateMarsBackend)
+    assert backend.get_spec().advertise_kinematic_manip is True
+
+
+def test_innate_mars_actuators_are_named():
+    """RobosuiteZmqServer looks up ctrl by mjOBJ_ACTUATOR name == spec.actuator_names."""
+    pytest.importorskip("mujoco")
+    import mujoco
+
+    p = get_robot_mjcf_path("innate_mars")
+    assert p is not None
+    model = mujoco.MjModel.from_xml_path(str(p))
+    for aname in INNATE_MARS_ACTUATOR_NAMES:
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+        assert aid >= 0, f"unnamed or missing actuator {aname!r}"
 
 
 def test_merge_scene_loads():

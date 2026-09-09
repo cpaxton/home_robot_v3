@@ -22,7 +22,10 @@ map_boundary:
   obstacle_barrier_cells: 0
   history_penalty_cells: 0
 
-local_radius: 0.5  # Area around the robot to mark as explored (kind of a hack)
+# Start-pose disk marked explored so A* can leave spawn. Keep this small; do not
+# grow it every mapping frame (``add_local_every_step``). Observation gaps stay
+# unexplored until a camera ray actually covers them.
+local_radius: 0.25
 add_local_every_step: False
 remove_visited_from_obstacles: False
 min_depth: 0.25
@@ -41,6 +44,7 @@ da3_infer_every_n: 2
 da3_stereo: false
 # Heavy perception (YoloE + SigLIP + instance + graph) every N updates; occupancy
 # still updates every frame so navigation stays current. 1 = always (old behavior).
+# Rotate-in-place / look-around mapping captures always run full perception (and DA3).
 perception_every_n: 2
 # da3_use_amp: true   # optional override; omit for auto on CUDA
 # da3_torch_compile: false  # experimental
@@ -107,6 +111,10 @@ eqa:
   # Frontier VLM always re-asks the Question (no frozen question_area).
   # Override: EMET_EQA_ROOM_POLICY=canonical|llm
   room_policy: canonical
+  # Room partition backend. Only proximity (near + XY radius) is implemented.
+  # occupancy_cc / portal: later. Override: EMET_EQA_ROOM_CLUSTERING_BACKEND.
+  room_clustering:
+    backend: proximity
   collect_agentic_trace: false
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
@@ -131,7 +139,9 @@ detection:
 
 # Point cloud cleanup
 filters:
-  # Use a simple convolutional filter
+  # Open/close on 2D explored (and classic SparseVoxelMap obstacles). Fills
+  # 1-cell voxel speckle so map_topdown / A* are not full of holes. Does not
+  # stamp a visit trail — that is ``local_radius`` on the first observation.
   smooth_kernel_size: 3
   # smooth_kernel_size: 4
   # smooth_kernel_size: 0
