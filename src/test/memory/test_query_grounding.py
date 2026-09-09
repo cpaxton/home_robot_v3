@@ -71,6 +71,29 @@ def test_default_query_grounding_never_calls_detector():
     assert agent._grounded_query_target.geometry_source == "vlm_selected_depth_surface"
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+def test_surface_strategy_uses_the_shared_promotion_boundary(accepted):
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "depth_candidates"}
+    agent.graph_memory.eqa_client = Mock(
+        side_effect=[
+            '{"verified":true,"box":[0,0,1000,1000]}',
+            '{"selected_id":0,"target_unambiguous":true}'
+            if accepted
+            else '{"selected_id":null,"target_unambiguous":false}',
+        ]
+    )
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["ok"] is accepted
+    agent.detection_model.predict.assert_not_called()
+    if accepted:
+        assert np.allclose(result["xyz"], [1, 1, 1])
+        assert agent._grounded_query_target.observation_revision == 2
+    else:
+        assert not agent.query_candidates.records
+        assert not agent.graph_memory.get_nodes()
+
+
 @pytest.mark.parametrize("failure", ["stale", "relation", "ambiguous", "absent"])
 def test_view_grounding_abstains_without_creating_candidates(failure):
     agent = controller()
