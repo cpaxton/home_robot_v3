@@ -223,6 +223,11 @@ def run(config, config_path, output, offset):
                 arrived = robot.move_base_to(
                     goal, world_frame=True, blocking=True, timeout=30, navigation_policy="precision"
                 )
+                if not arrived:
+                    row = capture(f"route_{i:02d}_failed", goal)
+                    report["stages"].append({"stage": f"route_{i}", "passed": False, "receipt": row["receipt"]})
+                    reason = (row["receipt"] or {}).get("reason", "navigation failed")
+                    raise RuntimeError(f"route waypoint {i}: {reason}; remaining route not attempted")
                 row = settled_capture(f"route_{i:02d}", goal)
                 passed = (
                     bool(arrived)

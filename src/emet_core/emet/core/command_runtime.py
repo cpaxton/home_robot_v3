@@ -181,7 +181,11 @@ class CommandRuntime:
                 if status == "correct":
                     # Retain identity and the original deadline. Only a confirmed
                     # stop permits a fresh absolute-goal controller dispatch.
-                    if self.cancel_navigation_command() is not True:
+                    try:
+                        stopped = self.cancel_navigation_command() is True
+                    except Exception:
+                        stopped = False
+                    if not stopped:
                         self._finish_cancel("failed", "correction stop unconfirmed", result=result)
                         return
                     remaining = self._navigation_deadline - time.monotonic()

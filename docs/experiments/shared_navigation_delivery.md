@@ -15,7 +15,7 @@ Do not include local virtualenv or third-party symlinks in a PR.
 | Query memory (#163) | foundation | `4c869e03` | Extend published `903b0a87` by seven cohesive memory/evaluation commits; exclude later transport work |
 | Command contract (#164, draft) | query memory | `18f11d11` | Includes prerequisite posture/health probes, idempotent dispatch, receipts, cancellation and deployable runtime |
 | Grounding corrections (#165, draft) | command contract | `4cb7abde` | Camera/targeting/evidence corrections, honest evaluation selection, stationary and live probes |
-| Navigation acceptance | grounding corrections | `fix/shared-navigation-acceptance` | In progress; opt-in completion policy and repeated cross-robot simulation acceptance |
+| Navigation acceptance (#166, draft) | grounding corrections | `fix/shared-navigation-acceptance` | In progress; opt-in completion policy and repeated cross-robot simulation acceptance |
 | Integrated pilot | accepted navigation | pending | Frozen OVMM/TAMP/EQA rows and recorded outcomes |
 | Paper alignment | pilot artifacts | pending | Methods, limitations, results and reproducible figures |
 
@@ -72,6 +72,17 @@ until hardware commissioning. No hardware connection is needed for these gates.
   path. Stretch simulation uses timestamped episode-frame measurements; correction
   preserves the resolved frame rather than unconditionally treating it as world.
   ROS hardware policy support is not advertised until its adapters are validated.
+- Job `20260908_201851_522c32` at `627438f4`, artifacts
+  `/tmp/emet-live-posture-fault-stop-20260908`: hold/turn/return pass again;
+  translation returns `failed`, reason `base posture unsafe`, with
+  `stop_confirmed: true`. Final stopped XY error is 0.09364 m, not a successful
+  arrival. The robot settles upright after stopping. The old probe summary
+  then waited for settling at the unreachable goal; the updated probe records
+  the failed receipt immediately instead. This is a **fault-stop validation**,
+  not a nominal route pass.
+- Focused navigation/load/controller tests: 72 passed, one skipped. Existing
+  Sourccey model and MolmoSpaces merge tests: 15 passed, one skipped. Hardware
+  was not contacted; no integrated learned benchmark has been launched.
 
 ## Remaining gates (not complete)
 

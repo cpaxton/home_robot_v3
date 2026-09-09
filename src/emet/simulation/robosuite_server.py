@@ -820,7 +820,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.ctrl[aid] = 0.0
 
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
-        """Hold planar pose, leaving height/roll/pitch free to settle against contacts.
+        """Legacy full-pose hold, or opt-in planar hold with passive support dynamics.
 
         Pinning all six base coordinates repeatedly cancels suspension/contact
         response. Microscopic floor penetration then loads articulated joints
