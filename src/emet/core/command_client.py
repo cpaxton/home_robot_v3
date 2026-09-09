@@ -60,6 +60,10 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
         raise ValueError("acknowledgement timeout must be positive and finite")
     with client._act_lock:
         boot = _check_peer(client, getattr(client, "_command_boot", None))
+        if "nav_policy" in payload:
+            protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
+            if not all(payload["nav_policy"] in p.get("navigation_policies", []) for p in protocols):
+                raise RuntimeError("Bridge does not advertise the requested navigation policy; motion not sent")
         client._command_boot = boot
         if not hasattr(client, "_command_session"):
             client._command_session = uuid4().hex

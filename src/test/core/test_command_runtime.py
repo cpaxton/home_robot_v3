@@ -47,6 +47,55 @@ def connection(robot):
     return client
 
 
+def test_policy_rejected_before_client_sends_motion():
+    robot = Robot()
+    client = connection(robot)
+    with pytest.raises(RuntimeError, match="does not advertise"):
+        send_command(client, {"xyt": [0, 0, 0], "nav_policy": "precision"})
+    assert robot.starts == 0
+
+
+def test_policy_correction_keeps_identity_absolute_goal_and_deadline(monkeypatch):
+    from emet.core import command_runtime
+
+    clock = [0.0]
+    monkeypatch.setattr(command_runtime, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    class PolicyRobot(Robot):
+        def navigation_policy_names(self):
+            return ("precision",)
+
+        def start_navigation_command(self, action):
+            self.starts += 1
+            self.last_action = action
+            return {"resolved_goal": [2, 0, 0]}
+
+        def navigation_policy_measurement(self):
+            return {"pose": self.pose, "timestamp": clock[0], "stopped": True}
+
+    robot = PolicyRobot()
+    robot.pose = [1, 0, 0]
+    client = connection(robot)
+    action = send_command(client, {"xyt": [1, 0, 0], "nav_relative": True, "nav_policy": "precision"})
+    for now in (0.25, 0.5, 0.75):
+        clock[0] = now
+        robot.poll_navigation_command()
+    assert robot.starts == 2
+    assert robot.last_action["xyt"] == [2, 0, 0]
+    assert robot.last_action["nav_world"] is True
+    assert "nav_relative" not in robot.last_action
+    assert robot.last_action["nav_timeout_s"] == pytest.approx(29.25)
+    robot.pose = [2, 0, 0]
+    for now in (1.0, 1.25, 1.5):
+        clock[0] = now
+        robot.poll_navigation_command()
+    client._state = robot.command_message({})
+    receipt = command_receipt(client, action)
+    assert receipt["status"] == "succeeded"
+    assert receipt["result"]["corrections"] == 1
+    assert len(robot.command_tracker.snapshot()) == 1
+
+
 def test_end_to_end_identity_busy_measured_completion_and_release():
     robot = Robot()
     client = connection(robot)

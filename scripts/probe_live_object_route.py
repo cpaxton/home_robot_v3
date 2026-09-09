@@ -5,7 +5,7 @@
 
 """Gated hold/known-route probe through the production simulation ZMQ bridge.
 
-Physics runs. The production server pins the free base while idle and drives
+Physics runs. The production server holds planar base pose while idle and drives
 it holonomically during navigation; this is not a wheel-actuator dynamics test.
 """
 
@@ -92,7 +92,7 @@ def run(config, config_path, output, offset):
     settings = config["live_probe"]
     report = {
         "robot": config["robot"],
-        "base_idle_mode": "production freejoint pin",
+        "base_idle_mode": "production planar pose hold; height/roll/pitch dynamic",
         "navigation_mode": "production holonomic velocity; teleport disabled",
         "settings": settings,
         "stages": [],
@@ -172,7 +172,28 @@ def run(config, config_path, output, offset):
                 print(json.dumps(row), flush=True)
                 return row
 
-            initial = capture("hold_start", config["base_xyt"])
+            def settled_capture(label, expected):
+                deadline = time.monotonic() + 30
+                stable = 0
+                index = 0
+                while time.monotonic() < deadline:
+                    row = capture(f"{label}_settle_{index:02d}", expected)
+                    good = (
+                        row["xy_error_m"] <= settings["waypoint_xy_tolerance_m"]
+                        and row["yaw_error_rad"] <= settings["yaw_tolerance_rad"]
+                        and row["camera_yaw_error_rad"] <= np.deg2rad(1)
+                        and row["camera_pitch_error_rad"] <= np.deg2rad(1)
+                        and row["base_up_dot_world_z"] is not None
+                        and row["base_up_dot_world_z"] > 0.98
+                    )
+                    stable = stable + 1 if good else 0
+                    if stable >= 3:
+                        return row
+                    index += 1
+                    time.sleep(0.5)
+                raise RuntimeError(f"{label} did not settle within 30 seconds")
+
+            initial = settled_capture("hold_start", config["base_xyt"])
             samples = []
             for i in range(int(settings["hold_seconds"])):
                 time.sleep(1)
@@ -183,8 +204,8 @@ def run(config, config_path, output, offset):
                 and s["yaw_error_rad"] <= settings["yaw_tolerance_rad"]
                 and s["base_up_dot_world_z"] is not None
                 and s["base_up_dot_world_z"] > 0.98
-                and s["camera_yaw_error_rad"] <= settings["yaw_tolerance_rad"]
-                and s["camera_pitch_error_rad"] <= settings["yaw_tolerance_rad"]
+                and s["camera_yaw_error_rad"] <= np.deg2rad(1)
+                and s["camera_pitch_error_rad"] <= np.deg2rad(1)
                 for s in samples
             )
             report["stages"].append(
@@ -198,9 +219,10 @@ def run(config, config_path, output, offset):
             if not hold_pass:
                 raise RuntimeError("hold gate failed; route not attempted")
             for i, goal in enumerate(settings["route"]):
-                arrived = robot.move_base_to(goal, world_frame=True, blocking=True, timeout=30)
-                time.sleep(1)
-                row = capture(f"route_{i:02d}", goal)
+                arrived = robot.move_base_to(
+                    goal, world_frame=True, blocking=True, timeout=30, navigation_policy="precision"
+                )
+                row = settled_capture(f"route_{i:02d}", goal)
                 passed = (
                     bool(arrived)
                     and row["xy_error_m"] <= settings["waypoint_xy_tolerance_m"]

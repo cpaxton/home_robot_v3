@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import threading
+import time
 
 from emet.core.command_tracker import CommandTracker
 
@@ -19,6 +20,14 @@ class CommandRuntime:
         self._navigation_command = None
         self._navigation_fault = False
         self._command_error = None
+        self._arrival_monitor = None
+
+    def navigation_policy_names(self):
+        """Adapters opt in only when timestamped measurements and correction work."""
+        return ()
+
+    def navigation_policy_measurement(self):
+        raise NotImplementedError
 
     def command_message(self, message):
         if message is None:
@@ -26,7 +35,10 @@ class CommandRuntime:
         with self._command_lock:
             return {
                 **message,
-                "command_protocol": self.command_tracker.metadata(),
+                "command_protocol": {
+                    **self.command_tracker.metadata(),
+                    "navigation_policies": list(self.navigation_policy_names()),
+                },
                 "command_receipts": self.command_tracker.snapshot(),
                 "command_error": self._command_error,
             }
@@ -55,8 +67,11 @@ class CommandRuntime:
                         "nav_teleport",
                         "nav_blocking",
                         "nav_timeout_s",
+                        "nav_policy",
                     }:
                         raise ValueError("navigation must be a standalone command")
+                    if "nav_policy" in payload and payload["nav_policy"] not in self.navigation_policy_names():
+                        raise ValueError("unsupported navigation policy")
                     goal = payload["xyt"]
                     if not isinstance(goal, list) or len(goal) != 3 or not all(math.isfinite(float(v)) for v in goal):
                         raise ValueError("navigation goal must contain three finite coordinates")
@@ -106,6 +121,13 @@ class CommandRuntime:
                     self._navigation_command = (session, sequence, None)
                     context = self.start_navigation_command({"nav_timeout_s": 30.0, **payload})
                     self._navigation_command = (session, sequence, context)
+                    self._arrival_monitor = None
+                    if "nav_policy" in payload:
+                        from emet.core.navigation_result import ArrivalMonitor
+
+                        self._arrival_monitor = ArrivalMonitor(context, payload["nav_policy"], now=time.monotonic())
+                        self._navigation_policy = payload["nav_policy"]
+                        self._navigation_deadline = time.monotonic() + float(payload.get("nav_timeout_s", 30))
                     self.command_tracker.transition(session, sequence, "running", result=context)
                 else:
                     self.handle_action({**payload, "step": action.get("step", sequence)})
@@ -127,12 +149,46 @@ class CommandRuntime:
                 return
             session, sequence, context = self._navigation_command
             try:
-                outcome = self.navigation_command_result(context)
+                if self._arrival_monitor is None:
+                    outcome = self.navigation_command_result(context)
+                else:
+                    sample = self.navigation_policy_measurement()
+                    if sample.get("failure"):
+                        self._finish_cancel("failed", sample["failure"])
+                        return
+                    outcome = self._arrival_monitor.update(
+                        sample["pose"],
+                        sample_time=sample["timestamp"],
+                        now=time.monotonic(),
+                        stopped=sample["stopped"],
+                    )
             except Exception as exc:
                 self._finish_cancel("failed", f"navigation status failed: {exc}")
                 return
             if outcome is not None:
                 status, result = outcome
+                if status == "correct":
+                    # Retain identity and the original deadline. Only a confirmed
+                    # stop permits a fresh absolute-goal controller dispatch.
+                    if self.cancel_navigation_command() is not True:
+                        self._finish_cancel("failed", "correction stop unconfirmed", result=result)
+                        return
+                    remaining = self._navigation_deadline - time.monotonic()
+                    if remaining <= 0:
+                        self._finish_cancel("failed", "motion deadline exceeded", result=result)
+                        return
+                    try:
+                        self.start_navigation_command(
+                            {
+                                "xyt": list(context["resolved_goal"]),
+                                "nav_world": True,
+                                "nav_timeout_s": remaining,
+                                "nav_policy": self._navigation_policy,
+                            }
+                        )
+                    except Exception as exc:
+                        self._finish_cancel("failed", f"navigation correction failed: {exc}", result=result)
+                    return
                 if status == "succeeded":
                     self.command_tracker.transition(session, sequence, status, result=result)
                     self._navigation_command = None
