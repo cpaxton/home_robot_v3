@@ -134,7 +134,6 @@ def test_aggregate_benchmark_empty_raises():
 
 
 def test_run_benchmark_end_to_end(monkeypatch):
-    import pickle
     import threading
 
     import zmq
@@ -157,9 +156,7 @@ def test_run_benchmark_end_to_end(monkeypatch):
         ctx.term()
 
     threading.Thread(target=_publish, daemon=True).start()
-    result = run_benchmark(
-        BenchmarkOptions(host="127.0.0.1", port=5511, frames=4, timeout_ms=2000, warmup_frames=1)
-    )
+    result = run_benchmark(BenchmarkOptions(host="127.0.0.1", port=5511, frames=4, timeout_ms=2000, warmup_frames=1))
     assert result.robot_id == "innate_mars"
     assert result.capabilities == {"zmq_obs_slim": True}
     assert result.stats["n_frames"] == 4

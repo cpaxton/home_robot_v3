@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-import os
 import threading
 import time
 import timeit
@@ -30,6 +29,7 @@ def _rate_sleep(period_s: float, elapsed_s: float, minimum_s: float) -> None:
         time.sleep(minimum_s)
         return
     time.sleep(max(minimum_s, period_s - elapsed_s))
+
 
 try:
     from emet.audio.text_to_speech import PiperTextToSpeech

@@ -245,9 +245,7 @@ def format_benchmark_result(stats: dict[str, Any], *, robot_id: str | None = Non
         header += f"  robot={robot_id}"
     lines.append(header)
     lines.append("-" * len(header))
-    lines.append(
-        f"frames       {stats['n_frames']}   ({stats['fps']:.1f} fps over {stats['duration_s']:.1f}s)"
-    )
+    lines.append(f"frames       {stats['n_frames']}   ({stats['fps']:.1f} fps over {stats['duration_s']:.1f}s)")
     server_hz = stats.get("server_hz")
     if server_hz is not None:
         lines.append(f"server hz    {server_hz:.1f}  (from step spans)")
@@ -334,8 +332,8 @@ def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> Benchmark
             try:
                 if sock.recv() is not None:
                     warmup += 1
-            except zmq.Again:
-                raise TimeoutError(f"no ZMQ obs on tcp://{opts.host}:{opts.port} within {opts.timeout_ms} ms")
+            except zmq.Again as exc:
+                raise TimeoutError(f"no ZMQ obs on tcp://{opts.host}:{opts.port} within {opts.timeout_ms} ms") from exc
 
         start_wall = time.monotonic()
         seq = 0
@@ -347,8 +345,8 @@ def run_benchmark(opts: BenchmarkOptions, *, on_sample: Any = None) -> Benchmark
             try:
                 t_recv = time.monotonic()
                 raw = sock.recv()
-            except zmq.Again:
-                raise TimeoutError(f"no ZMQ obs on tcp://{opts.host}:{opts.port} within {opts.timeout_ms} ms")
+            except zmq.Again as exc:
+                raise TimeoutError(f"no ZMQ obs on tcp://{opts.host}:{opts.port} within {opts.timeout_ms} ms") from exc
 
             t_unpickle = time.perf_counter()
             msg = pickle.loads(raw)
@@ -408,9 +406,7 @@ def summarize(result: BenchmarkResult, *, json_out: str | None = None) -> str:
     if result.capabilities:
         text += f"\ncapabilities: {json.dumps(result.capabilities, sort_keys=True)}"
     if result.slim_problems:
-        text += "\nSLIM FORMAT VIOLATION — duplicate JPEG aliases on the wire:\n  " + "\n  ".join(
-            result.slim_problems
-        )
+        text += "\nSLIM FORMAT VIOLATION — duplicate JPEG aliases on the wire:\n  " + "\n  ".join(result.slim_problems)
     if result.lidar_notes:
         text += "\nLIDAR WIRE NOTE:\n  " + "\n  ".join(result.lidar_notes)
     if json_out:

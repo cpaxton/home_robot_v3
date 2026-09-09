@@ -11,7 +11,7 @@ import io
 import os
 import time
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import numpy as np
 import torch
@@ -22,7 +22,6 @@ from torch import Tensor
 from emet.utils.logger import Logger
 
 from .base_encoder import BaseImageTextEncoder
-from .dinov3_encoder import DINOV3_MODELS
 
 logger = Logger(__name__)
 
@@ -136,7 +135,9 @@ class RemoteDinov3Encoder(BaseImageTextEncoder):
                 data = json.loads(resp.read().decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
             self._last_failure_at = time.monotonic()
-            raise RuntimeError(f"remote DINOv3 request failed ({exc}); circuit open for {self._circuit_open_s:.0f}s") from exc
+            raise RuntimeError(
+                f"remote DINOv3 request failed ({exc}); circuit open for {self._circuit_open_s:.0f}s"
+            ) from exc
         emb = data.get("embedding")
         if not emb:
             raise RuntimeError(f"remote DINOv3 missing embedding: {data}")

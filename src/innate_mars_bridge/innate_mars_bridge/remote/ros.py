@@ -43,10 +43,10 @@ from innate_mars_bridge.constants import (
     ODOM_FRAME,
     ODOM_TOPIC,
 )
-from innate_mars_bridge.ros.lidar import RosLidar
 from innate_mars_bridge.joint_layout import pack_innate_mars_joint_positions, pack_innate_mars_joint_velocities
 from innate_mars_bridge.remote.modules.nav import MarsNavigationClient
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
+from innate_mars_bridge.ros.lidar import RosLidar
 from innate_mars_bridge.ros.utils import matrix_from_pose_msg, to_matrix, transform_to_list
 
 # Prefer odom for mapping; fall back when TF trees are split across bringup nodes.

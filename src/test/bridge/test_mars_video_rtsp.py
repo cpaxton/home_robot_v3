@@ -3,7 +3,6 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 import os
-import subprocess
 import textwrap
 
 from innate_mars_bridge.video_rtsp import (
@@ -35,11 +34,13 @@ def test_mars_rtsp_capabilities_none_when_subprocess_exits(tmp_path, monkeypatch
 
 def test_mars_rtsp_capabilities_present_when_subprocess_alive(tmp_path, monkeypatch):
     script = tmp_path / "sleep_rtsp.sh"
-    script.write_text(textwrap.dedent("""\
+    script.write_text(
+        textwrap.dedent("""\
         #!/usr/bin/env bash
         trap 'exit 0' TERM
         while true; do sleep 1; done
-    """))
+    """)
+    )
     script.chmod(0o755)
     monkeypatch.setenv("EMET_MARS_VIDEO_RTSP", "1")
     monkeypatch.setenv("EMET_MARS_VIDEO_RTSP_SCRIPT", str(script))
