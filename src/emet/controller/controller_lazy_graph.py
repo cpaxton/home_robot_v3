@@ -191,7 +191,13 @@ class LazyGraphController(DynagraphController):
             from emet.memory.vlm_region_grounding import ground_vlm_region
 
             frame, detections, matching_ids, verification = ground_vlm_region(
-                frame, query, target_description, client=client, min_depth=vm.min_depth, max_depth=vm.max_depth
+                frame,
+                query,
+                target_description,
+                client=client,
+                min_depth=vm.min_depth,
+                max_depth=vm.max_depth,
+                strategy=(self.parameters.get("query_memory", {}) or {}).get("region_strategy", "point"),
             )
         elif backend == "yoloe":
             frame, detections = self._detect_query_frame(frame, query)

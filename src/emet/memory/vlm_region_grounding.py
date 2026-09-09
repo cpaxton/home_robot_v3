@@ -68,7 +68,7 @@ def region_annotation(rgb, region):
     return image
 
 
-def select_vlm_region(rgb, query, description, *, client, correction=None):
+def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False):
     prompt = (
         f"Locate the visible object referred to by {description or query!r}. Target category hint: {query!r}. "
         "Use pixels, not the hint, as evidence. Return a tight bounding box around the target and an interior "
@@ -79,6 +79,15 @@ def select_vlm_region(rgb, query, description, *, client, correction=None):
         'For abstention return {"verified":false,"reason":"..."}.'
     )
     system = "Ground a robot target in the provided image. Do not invent missing visual evidence."
+    if box_only:
+        prompt = (
+            f"Locate {description or query!r} in the image. Category hint: {query!r}. "
+            "Return a bounding box around the visible target; coordinates are integers normalized "
+            "to 0..1000 in x,y order. Check requested attributes and relationships from pixels. "
+            "Abstain if absent, ambiguous, or the relationship cannot be established. "
+            'Return JSON {"verified":true,"box":[x_min,y_min,x_max,y_max],"reason":"..."} '
+            'or {"verified":false,"reason":"..."}. Do not predict a 3D position or surface point.'
+        )
     images = [Image.fromarray(rgb)]
     if correction is not None:
         prompt += (
@@ -100,8 +109,14 @@ def select_vlm_region(rgb, query, description, *, client, correction=None):
     return parsed, verification
 
 
-def select_supported_region(rgb, depth, query, description, *, client, min_depth, max_depth):
+def select_supported_region(rgb, depth, query, description, *, client, min_depth, max_depth, strategy="point"):
     """One geometry-feedback correction at most; semantic abstentions stand."""
+    if strategy == "depth_candidates":
+        return select_candidate_surface(
+            rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth
+        )
+    if strategy != "point":
+        raise ValueError(f"Unknown region strategy: {strategy}")
     correction = None
     attempts = []
     mask = np.full(depth.shape, -1, dtype=np.int32)
@@ -129,7 +144,55 @@ def select_supported_region(rgb, depth, query, description, *, client, min_depth
     return parsed, mask, audit
 
 
-def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth):
+def select_candidate_surface(rgb, depth, query, description, *, client, min_depth, max_depth):
+    from emet.memory.surface_candidates import candidate_mask, surface_candidate_image, surface_candidates
+
+    parsed, audit = select_vlm_region(rgb, query, description, client=client, box_only=True)
+    mask = np.full(depth.shape, -1, dtype=np.int32)
+    audit.update(strategy="depth_candidates", valid=False)
+    if parsed.get("verified") is not True:
+        audit["reason"] = "VLM abstained or returned invalid output"
+        return parsed, mask, audit
+    try:
+        regions = surface_candidates(depth, parsed.get("box"), min_depth=min_depth, max_depth=max_depth)
+    except (TypeError, ValueError) as exc:
+        audit["reason"] = str(exc)
+        return parsed, mask, audit
+    audit["surface_candidates"] = regions
+    if not regions:
+        audit["reason"] = "no supported surfaces; another view is needed"
+        return parsed, mask, audit
+    prompt = (
+        f"Select a measured surface of {description or query!r}. Image 1 is the original; image 2 "
+        "overlays numbered depth-connected regions. The colored pixels, not the number's location "
+        "or its box, define each region. These are unlabelled geometry proposals and may include "
+        "table, wall, occluders, or mixed objects. Select only a region whose colored pixels belong "
+        "to the requested object, not its support furniture. A partial visible object surface is "
+        "sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. "
+        f"Available IDs: {[r['id'] for r in regions]}. "
+        'Return JSON {"selected_id":integer or null,"target_unambiguous":true or false,"reason":"..."}.'
+    )
+    system = "Choose a visually supported surface, not an object location guess. Reply with JSON only."
+    raw = _call_eqa_client(
+        client, [prompt, Image.fromarray(rgb), surface_candidate_image(rgb, regions)], system_prompt=system
+    )
+    selection = _parse_json_object(raw)
+    chosen = selection.get("selected_id")
+    audit["surface_selection"] = {
+        "prompt": prompt,
+        "system_prompt": system,
+        "raw": raw,
+        "image_order": ["rgb_file", "surface_candidates_rgb_file"],
+    }
+    if selection.get("target_unambiguous") is not True or type(chosen) is not int or not 0 <= chosen < len(regions):
+        audit["reason"] = "no unambiguous surface selected; another view is needed"
+        return parsed, mask, audit
+    mask[candidate_mask(regions[chosen], depth.shape)] = 0
+    audit.update(valid=True, selected_id=chosen, proposal_source="depth_layers")
+    return parsed, mask, audit
+
+
+def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth, strategy="point"):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
     detected = SimpleNamespace(
@@ -141,7 +204,7 @@ def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth
         instance_scores=[1.0],
     )
     parsed, detected.instance, verification = select_supported_region(
-        rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth
+        rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth, strategy=strategy
     )
     if not verification["valid"]:
         return detected, [], [], verification

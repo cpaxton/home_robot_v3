@@ -28,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     params = get_parameters("dynav_config.yaml")
@@ -46,6 +47,7 @@ def main():
                 client=client,
                 min_depth=0.25,
                 max_depth=4.5,
+                strategy=args.strategy,
             )
             result = {"input": row, "selection": parsed, "audit": audit, "surface_points": 0, "xyz": None}
             overlay = region_annotation(rgb, parsed)
@@ -67,6 +69,12 @@ def main():
                 result["geometry_error"] = audit.get("reason")
             if audit.get("correction"):
                 region_annotation(rgb, audit["correction"]["region"]).save(args.output_dir / f"{index}-correction.png")
+            if audit.get("surface_candidates"):
+                from emet.memory.surface_candidates import surface_candidate_image
+
+                surface_candidate_image(rgb, audit["surface_candidates"]).save(
+                    args.output_dir / f"{index}-surfaces.png"
+                )
             overlay.save(args.output_dir / f"{index}-region.png")
             results.append(result)
             (args.output_dir / "results.json").write_text(json.dumps(results, indent=2))

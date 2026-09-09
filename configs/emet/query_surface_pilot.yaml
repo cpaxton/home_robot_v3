@@ -6,6 +6,7 @@ mapping:
   query_driven_memory: true
   query_memory:
     grounding_backend: vlm
+    region_strategy: depth_candidates
   eqa:
     agentic_verify: true
     collect_agentic_trace: true

@@ -110,6 +110,11 @@ def cache_grounding_record(
         record["rgb_file"] = f"{prefix}.png"
         numbered_detection_image(rgb, detections).save(path / f"{prefix}-numbered.png")
         record["numbered_rgb_file"] = f"{prefix}-numbered.png"
+        if verification.get("surface_candidates"):
+            from emet.memory.surface_candidates import surface_candidate_image
+
+            surface_candidate_image(rgb, verification["surface_candidates"]).save(path / f"{prefix}-surfaces.png")
+            record["surface_candidates_rgb_file"] = f"{prefix}-surfaces.png"
         if verification.get("correction"):
             from emet.memory.vlm_region_grounding import region_annotation
 
