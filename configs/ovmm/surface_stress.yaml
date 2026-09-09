@@ -1,0 +1,23 @@
+# Frozen perception diagnostics; kinematic renders, not task/dynamics success.
+# Compare point and depth_candidates on identical RGB-D and model settings.
+base: configs/ovmm/stationary_rby1.yaml
+variants:
+  - name: separated
+  - name: touching
+    targets:
+      object1: {position: [-0.08, -0.8, 0.88]}
+      object2: {position: [0.08, -0.8, 0.88]}
+  - name: occluded
+    targets:
+      object1: {position: [-0.03, -0.65, 0.88]}
+      object2: {position: [0.03, -0.95, 0.88]}
+  - name: farther
+    base_xyt: [0.0, 1.5, -1.5707963267948966]
+    head_tilt: -0.45
+  - name: same_color_touching
+    targets:
+      object1:
+        position: [-0.08, -0.8, 0.88]
+        rgba: [0.9, 0.1, 0.1, 1.0]
+        query: red cube
+      object2: {position: [0.08, -0.8, 0.88]}
