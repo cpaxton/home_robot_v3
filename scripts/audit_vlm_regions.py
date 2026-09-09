@@ -20,7 +20,7 @@ import yaml
 from PIL import Image, ImageDraw
 
 from emet.core.parameters import get_parameters
-from emet.llms.eqa_qwen import Qwen3VLEQAClient
+from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
 from emet.memory.vlm_region_grounding import region_depth_mask, select_vlm_region
 
 
@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     params = get_parameters("dynav_config.yaml")
-    client = Qwen3VLEQAClient("", parameters=params, device="cuda", quantization="int4")
+    _, client = build_graph_eqa_vlm_clients(parameters=params)
     rows = yaml.safe_load(args.manifest.read_text())
     results = []
     for index, row in enumerate(rows):
