@@ -369,8 +369,17 @@ def test_update_robot_qpos0_from_data_does_not_require_full_vector_match():
     qpos0_before = np.array(model.qpos0, copy=True)
     data.qpos[:] = data.qpos + 0.01
     mujoco.mj_forward(model, data)
+    positions_before = data.xpos.copy()
+    rotations_before = data.xmat.copy()
     update_robot_qpos0_from_data(model, data, spec)
-    # at least one robot joint qpos0 should differ from blanket shift of entire vector
+    mujoco.mj_forward(model, data)
+    np.testing.assert_allclose(data.xpos, positions_before, atol=1e-10)
+    np.testing.assert_allclose(data.xmat, rotations_before, atol=1e-10)
+    for jid in range(model.njnt):
+        if model.jnt_type[jid] in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+            adr = model.jnt_qposadr[jid]
+            assert model.qpos0[adr] == qpos0_before[adr]
+    # The free-base reset pose still changes.
     changed = np.any(np.abs(model.qpos0 - qpos0_before) > 1e-9)
     assert changed
 

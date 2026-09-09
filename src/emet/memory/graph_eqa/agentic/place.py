@@ -141,10 +141,8 @@ def _sample_investigate_waypoint_at_anchor(
     _as_xy: Any,
 ) -> np.ndarray | None:
     gm = self.graph_memory
-    if gm is None:
-        return None
     voxel_map, planner = self._voxel_planner()
-    robot_xy = gm._robot_planar_xy(xyt) if hasattr(gm, "_robot_planar_xy") else None
+    robot_xy = tuple(float(v) for v in np.asarray(xyt).reshape(-1)[:2]) if xyt is not None else None
     outer_m = self._investigate_annulus_outer_m()
     r_in = max(0.35, float(getattr(gm, "image_nav_min_approach_m", 0.35) or 0.35))
     if voxel_map is not None and hasattr(voxel_map, "get_2d_map"):
@@ -562,8 +560,6 @@ def _mark_approach_tried(
 
 def _investigate_target_xyz(self, obs_id: int, approach_index: int) -> np.ndarray | None:
     gm = self.graph_memory
-    if gm is None:
-        return None
     xyt = self._robot_xyt_world()
     voxel_map, planner = self._voxel_planner()
     rec = self._place_inspect.get(int(obs_id))

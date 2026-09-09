@@ -164,22 +164,17 @@ def update_robot_qpos0_from_data(
     data: mujoco.MjData,
     spec: RobotSpec,
 ) -> None:
-    """Copy current ``qpos`` into ``qpos0`` for robot DOF only (scene objects keep compile-time ``qpos0``)."""
+    """Update the free-base reset pose without changing articulated joint references.
+
+    For hinges/slides, MuJoCo uses ``qpos0`` as a kinematic reference, not just
+    a reset buffer. Copying settled joint angles there changes the geometry at
+    unchanged ``data.qpos``. Joint home/hold targets belong in keyframes/ctrl.
+    Scene objects and planar-base joint references remain untouched.
+    """
     addrs = freejoint_qpos_qvel_addrs(model, spec.base_link_name)
     if addrs is not None:
         qadr, _ = int(addrs[0]), int(addrs[1])
         model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
-    planar_skip: set[str] = set()
-    planar = getattr(spec, "planar_base_joint_names", None)
-    if planar is not None and len(planar) == 3:
-        planar_skip = {str(jname) for jname in planar}
-    for jname in spec.joint_names:
-        if str(jname) in planar_skip:
-            continue
-        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
-        if jid >= 0:
-            qadr = int(model.jnt_qposadr[jid])
-            model.qpos0[qadr] = float(data.qpos[qadr])
 
 
 def apply_home_keyframe_preserving_planar_base(

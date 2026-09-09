@@ -101,20 +101,25 @@ def _voxel_max_sim_for_obs(self, phrase: str, obs_id: int) -> tuple[float, str] 
         return None
     sm = getattr(vm, "semantic_memory", None)
     counts = getattr(sm, "_obs_counts", None) if sm is not None else None
-    channel = "voxel_global"
+    from emet.memory.graph_eqa.agentic.views import captured_view
+
+    view = captured_view(self, obs_id)
+    # Graph IDs and voxel frame indices are different namespaces. Only an explicit
+    # captured-view binding permits using voxel evidence as current-view evidence.
+    if view is None:
+        return None
     if counts is not None:
         try:
             import torch
 
             c = counts.detach().cpu().long().reshape(-1)
             if c.numel() == a.numel():
-                mask = c == int(obs_id)
+                mask = c == view.source_obs_id
                 if bool(mask.any()):
-                    a = a[mask]
-                    channel = "voxel_obs"
+                    return float(a[mask].max().item()), "voxel_obs"
         except Exception:
             pass
-    return float(a.max().item()), channel
+    return None
 
 
 def _detector_for_verify(self) -> Any | None:
@@ -200,8 +205,6 @@ def _inventory_labels(self, *, limit: int = 12) -> list[str]:
 
 def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]:
     gm = self.graph_memory
-    if gm is None:
-        return {"ok": False, "error": "no graph_memory"}
     text = (phrase or "").strip()
     if not text:
         if self._target_phrase:
@@ -290,10 +293,20 @@ def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]
             "room": verify_target.room,
             "verified": self._verified,
         }
-    rgb = None
+    from emet.memory.graph_eqa.agentic.views import VIEW_ID_BASE, captured_view
+
+    view = captured_view(self, oid)
+    if int(oid) >= VIEW_ID_BASE and view is None:
+        return {
+            "ok": False,
+            "status": "MISSING_VIEW",
+            "obs_id": oid,
+            "error": "captured frame is no longer retained; capture a new view",
+        }
+    rgb = view.rgb if view is not None else None
     live_obs = None
     robot = getattr(self.agent, "robot", None)
-    if robot is not None and hasattr(robot, "get_observation"):
+    if rgb is None and robot is not None and hasattr(robot, "get_observation"):
         try:
             live_obs = robot.get_observation()
             if live_obs is not None and getattr(live_obs, "rgb", None) is not None:
@@ -305,7 +318,18 @@ def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]
         stored_rgb = getattr(stored, "rgb", None) if stored is not None else None
         if isinstance(stored_rgb, np.ndarray) and stored_rgb.ndim == 3:
             rgb = np.asarray(stored_rgb)
-    result = gm.verify_phrase_at_obs(text, int(oid), rgb=rgb, min_sim=self.verify_min_sim)
+    if gm is not None:
+        result = gm.verify_phrase_at_obs(text, int(oid), rgb=rgb, min_sim=self.verify_min_sim)
+    else:
+        from emet.memory.graph_eqa.eqa.graph_eqa_siglip import _feature_vector, encode_observation_rgb
+
+        enc = getattr(getattr(self.agent, "voxel_map", None), "encoder", None)
+        text_feat = _feature_vector(enc.encode_text(text)) if enc is not None else None
+        img_feat = encode_observation_rgb(enc, rgb) if enc is not None and rgb is not None else None
+        sim = float(np.dot(text_feat, img_feat)) if text_feat is not None and img_feat is not None else 0.0
+        result = VerifyResult(
+            status="CANDIDATE", sim=sim, obs_id=int(oid), phrase=text, ok=False, text_feat=text_feat, img_feat=img_feat
+        )
     full_frame_sim = float(result.sim)
     voxel = self._voxel_max_sim_for_obs(text, int(oid))
     voxel_sim = float(voxel[0]) if voxel is not None else None

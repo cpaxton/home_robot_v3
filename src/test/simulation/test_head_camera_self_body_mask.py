@@ -94,7 +94,18 @@ def test_robosuite_primary_camera_applies_self_body_geom_mask():
     renderer = SimpleNamespace(_scene_option=scene_option)
 
     server._configure_renderer_geomgroups_for_camera(renderer, spec.camera_names[0])
-    assert scene_option.geomgroup.tolist() == [1, 1, 0, 0, 1, 1]
+    assert scene_option.geomgroup.tolist() == [1, 1, 0, 0, 0, 0]
 
     server._configure_renderer_geomgroups_for_camera(renderer, spec.camera_names[1])
-    assert scene_option.geomgroup.tolist() == [1, 1, 1, 1, 1, 1]
+    assert scene_option.geomgroup.tolist() == [1, 1, 1, 0, 0, 0]
+
+
+def test_head_camera_does_not_enable_collision_debug_groups():
+    from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import head_camera_geomgroup_mask
+
+    model = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+      <geom name="visual" type="box" size=".1 .1 .1" group="0"/>
+      <geom name="collision_proxy" type="box" size=".2 .2 .2" group="4" rgba="0 1 0 1"/>
+    </worldbody></mujoco>""")
+    # Even with no robot body in the model, preserve the renderer's defaults.
+    assert head_camera_geomgroup_mask(model).tolist() == [1, 1, 1, 0, 0, 0]

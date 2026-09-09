@@ -60,6 +60,18 @@ episodes:
     success_radius_m: 0.75
     mapping_max_nav_steps: 0
 
+  # Native rby1 validation uses MolmoSpaces; the default-table rby1 row below
+  # remains a separate model-integration diagnostic, not the primary baseline.
+  - id: molmo_rby1_ithor_s2_idx0
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    object: bowl
+    start_recep: cabinet
+    goal_recep: microwave
+    object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
+    success_radius_m: 0.75
+    mapping_max_nav_steps: 0
+
   - id: molmo_ithor_s2_idx0_explore15
     tier: S2
     sim: configs/sim/molmospaces_ithor_train_stretch_0.yaml

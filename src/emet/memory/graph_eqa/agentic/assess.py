@@ -119,6 +119,11 @@ def _mcq_letter_from_suggested(self, raw: Any) -> str:
 
 
 def _view_identity_for_obs(self, obs_id: int | None) -> tuple[int, str]:
+    from emet.memory.graph_eqa.agentic.views import captured_view
+
+    view = captured_view(self, obs_id)
+    if view is not None:
+        return 1, view.view_id
     if obs_id is None:
         return 0, ""
     gm = self.graph_memory

@@ -149,9 +149,13 @@ def _best_frontier_point_from_graph(self, text: str | None) -> np.ndarray | None
     gm = getattr(self, "graph_memory", None)
     if gm is None or not getattr(gm, "frontier_nodes_enabled", True):
         return None
+    from emet.controller.habitat_nav import goal_key_xy
     from emet.memory.graph_eqa.spatial.frontier_nodes import exploration_keywords_from_text, keyword_overlap_score
 
-    frontier_nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
+    blocked = getattr(self, "_habitat_blocked_goals", None) or set()
+    frontier_nodes = [
+        n for n in gm.get_nodes() if getattr(n, "is_frontier", False) and goal_key_xy(n.xyz[:2]) not in blocked
+    ]
     if not frontier_nodes:
         return None
     keywords = exploration_keywords_from_text(text)

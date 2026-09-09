@@ -311,6 +311,7 @@ def navigate_to_target_pose(
     target_obs_id: int | None = None,
     _hop: int = 0,
     explore_goal: bool = False,
+    look_at_xy: tuple[float, float] | None = None,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -365,7 +366,13 @@ def navigate_to_target_pose(
             return NavOutcome.PROGRESS
         return NavOutcome.STUCK
 
-    target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
+    target_pose = self.space.sample_navigation(
+        start_pose, self.planner, original_target_pose, mode="exploration" if explore_goal else "navigation"
+    )
+    # A projected base goal can differ substantially from the requested approach.
+    # Recompute bearing there, not at the original waypoint.
+    if target_pose is not None and look_at_xy is not None:
+        target_theta = float(np.arctan2(look_at_xy[1] - target_pose[1], look_at_xy[0] - target_pose[0]))
 
     # A* planning
     if target_pose is not None:
@@ -461,7 +468,6 @@ def navigate_to_target_pose(
                 n_planned=n_planned or None,
                 chunked=truncated,
             )
-            self._record_nav_plan_fields(traj=list(traj))
         else:
             origins = []
             vectors = []
@@ -476,6 +482,15 @@ def navigate_to_target_pose(
                 0.1,
             )
 
+        # Target provenance belongs to navigation, even with a null visualizer.
+        self._record_nav_plan_fields(
+            traj=list(traj),
+            goal_xyt=np.asarray(target_pose).tolist(),
+            object_xyz=np.asarray(original_target_pose).tolist(),
+            look_at_xy=list(look_at_xy) if look_at_xy is not None else None,
+            mode="exploration" if explore_goal else "navigation",
+            localize_source="eqa_target",
+        )
         from emet.controller.nav_confirm import confirm_navigation_plan
 
         if not confirm_navigation_plan(
@@ -579,6 +594,7 @@ def navigate_to_target_pose(
             target_obs_id=target_obs_id,
             _hop=_hop + 1,
             explore_goal=explore_goal,
+            look_at_xy=look_at_xy,
         )
     if progressed:
         return NavOutcome.PROGRESS

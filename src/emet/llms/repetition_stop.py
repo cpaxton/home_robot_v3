@@ -85,10 +85,11 @@ class RepetitionStop(StoppingCriteria):
     is inspected, so repetition already present in the prompt never trips it.
     """
 
-    def __init__(self, prompt_len: int, max_period: int = 6, reps: int = 5) -> None:
+    def __init__(self, prompt_len: int, max_period: int = 6, reps: int = 5, *, tokenizer=None) -> None:
         self._prompt_len = int(prompt_len)
         self._max_period = int(max_period)
         self._reps = int(reps)
+        self._tokenizer = tokenizer
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
         gen = input_ids[0, self._prompt_len :]
@@ -103,15 +104,24 @@ class RepetitionStop(StoppingCriteria):
                     ok = False
                     break
             if ok:
+                # Repeated digits occur in valid IDs and coordinates. Qwen
+                # tokenizes digits separately; five zeros must not truncate a
+                # tool call mid-number. Generation is still token/time bounded.
+                if self._tokenizer is not None:
+                    text = self._tokenizer.decode(block.tolist()).strip()
+                    if text.isdecimal():
+                        continue
                 return True
         return False
 
 
-def repetition_stopping_criteria(prompt_len: int, *, max_period: int = 6, reps: int = 5) -> StoppingCriteriaList:
+def repetition_stopping_criteria(
+    prompt_len: int, *, max_period: int = 6, reps: int = 5, tokenizer=None
+) -> StoppingCriteriaList:
     """``StoppingCriteriaList`` with decode progress + :class:`RepetitionStop` for ``model.generate``."""
     return StoppingCriteriaList(
         [
             DecodeProgressStop(int(prompt_len)),
-            RepetitionStop(int(prompt_len), max_period=max_period, reps=reps),
+            RepetitionStop(int(prompt_len), max_period=max_period, reps=reps, tokenizer=tokenizer),
         ]
     )

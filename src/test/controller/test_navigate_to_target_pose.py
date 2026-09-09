@@ -128,6 +128,9 @@ class _LongChunkPlanner:
 
 
 def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch):
+    from emet.visualization.null_visualizer import NullVisualizer
+
+    nav_agent.rerun_visualizer = NullVisualizer()
     planner = _LongChunkPlanner()
     nav_agent.planner = planner
     nav_agent._min_clearance_m = 0.0
@@ -154,12 +157,19 @@ def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch
         np.array([2.0, 2.0, 0.0]),
         np.array([0.0, 0.0, 0.0]),
         target_theta=0.3,
+        look_at_xy=(2.0, 1.0),
     )
     assert out.ok
     assert planner.n_plan >= 2
     assert nav_agent.robot.execute_trajectory.call_count >= 2
     assert nav_agent._last_nav_attempt.finished is True
     nav_agent.update.assert_called()
+    # The actual sampled endpoint is (1, 1), not the requested (2, 2).
+    # Face the candidate (2, 1) from that endpoint, not using the stale 0.3 yaw.
+    assert abs(pose[2]) < 1e-6
+    np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [1, 1])
+    np.testing.assert_allclose(nav_agent._last_nav_plan["object_xyz"][:2], [2, 2])
+    assert nav_agent._last_nav_plan["look_at_xy"] == [2, 1]
 
 
 def test_navigate_to_target_pose_hop_uses_world_frame_start(nav_agent, monkeypatch):
@@ -273,6 +283,7 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
         explore_goal=False,
     )
     assert out == NavOutcome.SAFETY_REJECTED
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "navigation"
     nav_agent.robot.execute_trajectory.assert_not_called()
 
     out = nav_agent.navigate_to_target_pose(
@@ -282,9 +293,11 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
     )
     assert out.ok
     assert nav_agent.robot.execute_trajectory.called
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
 
 
-def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch):
+@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None])
+def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch, log_plan):
     def _boom(*_a, **_k):
         raise AssertionError("empty-text explore must not pick a new frontier while leftover exists")
 
@@ -307,7 +320,7 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch)
         enabled=False,
         clear_nav_plan=MagicMock(),
         clear_identity=MagicMock(),
-        log_nav_plan=None,
+        log_nav_plan=log_plan,
         log_arrow3D=MagicMock(),
     )
     nav_agent._rerun_refresh_monologue_panel = lambda: None  # type: ignore[method-assign]
@@ -317,3 +330,6 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch)
     goal = np.asarray(traj[-1], dtype=np.float64).reshape(-1)
     assert abs(float(goal[0]) - 3.0) < 1e-6
     assert abs(float(goal[1]) - 4.0) < 1e-6
+    assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]
+    assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
+    np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])

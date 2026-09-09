@@ -582,7 +582,11 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         if ok and frontier_xyz is not None:
             self._retire_visited_frontier(frontier_xyz=frontier_xyz)
             reached = True
-    nav_result = getattr(agent, "_last_nav_attempt", None) if used_nav_target else None
+    nav_result = (
+        getattr(agent, "_last_nav_attempt", None)
+        if used_nav_target or pick_source == "run_exploration_fallback"
+        else None
+    )
     if nav_result is not None:
         from emet.controller.nav_attempt import nav_status_code
 

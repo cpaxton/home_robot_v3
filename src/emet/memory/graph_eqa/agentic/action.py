@@ -237,6 +237,13 @@ def _graph_node_for_obs(self, obs_id: int) -> Any | None:
 
 def _action_target_for_obs(self, obs_id: int) -> ActionTarget:
     """Resolve a mutable adapter ID to stable place/view semantics."""
+    from emet.memory.graph_eqa.agentic.views import captured_view
+
+    captured = captured_view(self, obs_id)
+    if captured is not None:
+        return ActionTarget(
+            kind="view", stable_id=captured.view_id, adapter_id=int(obs_id), view_id=captured.view_id, revision=1
+        )
     oid = int(obs_id)
     gm = self.graph_memory
     world = getattr(gm, "world_evidence", None) if gm is not None else None

@@ -1345,13 +1345,13 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         *,
         world_frame: bool | None = None,
     ) -> bool:
-        for waypoint in trajectory:
-            if not self.move_base_to(
-                waypoint,
-                relative=relative,
-                blocking=blocking,
-                timeout=per_waypoint_timeout,
-                world_frame=world_frame,
-            ):
-                return False
-        return True
+        from emet.controller.trajectory import execute_waypoints
+
+        return execute_waypoints(
+            self,
+            trajectory,
+            relative=relative,
+            world_frame=world_frame,
+            per_waypoint_timeout=per_waypoint_timeout,
+            final_timeout=final_timeout,
+        )

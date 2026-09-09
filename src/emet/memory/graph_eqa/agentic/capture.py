@@ -171,6 +171,9 @@ def _obs_revisions_advanced(self, gm: Any, before_revs: dict[int, int]) -> list[
 
 
 def _tool_capture_and_update(self) -> dict[str, Any]:
+    from emet.memory.graph_eqa.agentic.views import retain_latest_view
+
+    frame_count = len(getattr(getattr(self.agent, "voxel_map", None), "observations", ()))
     before = self._latest_obs_id()
     gm = self.graph_memory
     before_revs = self._obs_revision_snapshot(gm)
@@ -186,6 +189,20 @@ def _tool_capture_and_update(self) -> dict[str, Any]:
             gm.refresh_siglip_confirmed_memory()
     fresh = self._latest_obs_id()
     refreshed_ids = self._obs_revisions_advanced(gm, before_revs)
+    view = retain_latest_view(self, after=frame_count)
+    if view is not None:
+        self._fresh_obs_ids.add(view.obs_id)
+        self._last_capture_status = "OK"
+        row = {"ok": True, "obs_id": view.obs_id, "view_id": view.view_id, "status": "NEW_VIEW"}
+        self._append_trace(
+            {
+                "tool": "capture_and_update",
+                **row,
+                "camera_pose": view.camera_pose.tolist() if view.camera_pose is not None else None,
+                **dump_query_rgb(self, view.obs_id, rgb=view.rgb, kind="capture"),
+            }
+        )
+        return row
 
     # New observation id — full advance.
     if fresh is not None and (before is None or int(fresh) != int(before)):
@@ -282,8 +299,8 @@ def _tool_capture_and_update(self) -> dict[str, Any]:
             "status": "NO_NEW_OBS",
         }
     self._last_capture_status = "NO_OBS"
-    self._append_trace({"tool": "capture_and_update", "ok": True, "obs_id": fresh})
-    return {"ok": True, "obs_id": fresh}
+    self._append_trace({"tool": "capture_and_update", "ok": False, "obs_id": fresh, "status": "NO_OBS"})
+    return {"ok": False, "obs_id": fresh, "status": "NO_OBS"}
 
 
 def _refresh_hypotheses_from_graph(self) -> None:
@@ -503,6 +520,9 @@ def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
 
 def _latest_obs_id(self) -> int | None:
     """Newest non-frontier observation id (the frame just captured), if any."""
+    views = getattr(self, "_captured_views", {})
+    if views:
+        return next(reversed(views))
     gm = self.graph_memory
     observations = list(getattr(gm, "_observations", None) or [])
     for obs in reversed(observations):

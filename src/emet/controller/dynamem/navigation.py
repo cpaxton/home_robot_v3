@@ -18,6 +18,7 @@ from emet.controller.dynamem.constants import (
     _finite_xyz_traj_target,
 )
 from emet.controller.habitat_nav import (
+    NavAttemptResult,
     goal_key_xy,
     pick_uncovered_explore_target,
 )
@@ -150,6 +151,11 @@ def _filter_unsafe_nav_traj(
 
 def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") -> None:
     """Remember the last nav goal so explore multi-goal A* skips it next time."""
+    # A failed chunk invalidates its continuation; otherwise process_text resumes
+    # the saved target before consulting any of the blocked-aware samplers.
+    space = getattr(self, "space", None)
+    if space is not None:
+        space.traj = None
     blocked = getattr(self, "_habitat_blocked_goals", None)
     if blocked is None:
         self._habitat_blocked_goals = set()
@@ -321,13 +327,28 @@ def run_exploration(self):
 
     self.announce_action("Exploring…")
     # "" means the robot has not received any text query from the user and should conduct exploration just to better know the environment
-    status, _ = self.execute_action("")
+    before = np.asarray(self._current_planning_xyt(), dtype=float)[:2].copy()
+    status, target = self.execute_action("")
+    after = np.asarray(self._current_planning_xyt(), dtype=float)[:2]
+    distance = float(np.linalg.norm(after - before))
+    progressed = status is not None and distance >= 0.10
+    goal = tuple(float(v) for v in np.asarray(target).reshape(-1)[:2]) if target is not None else None
+    self._last_nav_attempt = NavAttemptResult(
+        success=progressed,
+        finished=bool(status) and progressed,
+        dist_m=distance,
+        method="exploration",
+        note="ok" if progressed else "no_progress",
+        goal_xy=goal,
+    )
+    if status is not None and not progressed:
+        self._mark_nav_goal_blocked(reason="exploration_no_progress")
     if status is None:
         self.announce_action("Exploring… no valid frontier right now")
         logger.warning("Exploration failed (no valid plan or frontier).")
         return False
     self._maybe_emit_navgrid_ascii(context="explore")
-    return True
+    return progressed
 
 
 def process_text(self, text, start_pose):
@@ -438,7 +459,9 @@ def process_text(self, text, start_pose):
                 debug_text += "## Selected frontier target from graph memory.\n"
                 mode = "exploration"
             else:
-                localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                localized_point = self.space.sample_frontier(
+                    self.planner, start_pose, frontier_text, blocked=getattr(self, "_habitat_blocked_goals", None)
+                )
                 localize_source = "frontier_space" if localized_point is not None else ""
                 mode = "exploration"
 
@@ -492,7 +515,13 @@ def process_text(self, text, start_pose):
         object_xys: list[np.ndarray] = []
         nav_goals: list[np.ndarray] = []
         for cand in cands:
-            g = self.space.sample_navigation(start_pose, self.planner, cand)
+            g = self.space.sample_navigation(
+                start_pose,
+                self.planner,
+                cand,
+                mode="exploration",
+                blocked=getattr(self, "_habitat_blocked_goals", None),
+            )
             if g is None:
                 continue
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
@@ -529,7 +558,13 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
-        point = self.space.sample_navigation(start_pose, self.planner, localized_point)
+        point = self.space.sample_navigation(
+            start_pose,
+            self.planner,
+            localized_point,
+            mode=mode,
+            blocked=getattr(self, "_habitat_blocked_goals", None) if mode == "exploration" else None,
+        )
 
     logger.info(
         "Nav endpoint sample: localize=%s target_xy=(%.2f, %.2f) base_goal=%s",
@@ -684,6 +719,16 @@ def process_text(self, text, start_pose):
             "traj": list(traj),
         }
 
+    if traj:
+        # Planner provenance must not depend on whether a visualizer returns
+        # metadata (NullVisualizer deliberately returns None).
+        self._record_nav_plan_fields(
+            mode=mode,
+            localize_source=localize_source,
+            goal_xyt=list(point),
+            object_xyz=[ox, oy, oz],
+            traj=list(traj),
+        )
     return traj
 
 

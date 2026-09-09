@@ -464,6 +464,15 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     meta["n_room_images"] = int(self._last_router_n_images)
     meta["nearby_obs"] = nearby_meta
     parsed = parse_tool_calls_response(text)
+    if not parsed.get("tool_calls"):
+        self._append_trace(
+            {
+                "event": "router_no_tool_calls",
+                "router_call_id": router_call_id,
+                "raw_reply": text,
+                "max_new_tokens": ROUTER_MAX_NEW_TOKENS,
+            }
+        )
     vlm_room = coerce_room_label(parsed.get("current_room"), room_policy=self.room_policy)
     graph_room = "unknown"
     xyt = self._robot_xyt_world()

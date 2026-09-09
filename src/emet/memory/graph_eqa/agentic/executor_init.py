@@ -186,7 +186,7 @@ def init_executor(
     self._collect_trace = (
         bool(collect_trace)
         if collect_trace is not None
-        else (env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False)))
+        else (bool(trace_path) or env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False)))
     )
     self._trace_path = Path(trace_path) if trace_path else None
     self._trace_meta = dict(trace_meta or {})

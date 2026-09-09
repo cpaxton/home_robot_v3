@@ -485,7 +485,9 @@ class Qwen25VLClient(AbstractVLLMClient):
             gen_kw["no_repeat_ngram_size"] = int(self.no_repeat_ngram_size)
         if pad_id is not None:
             gen_kw["pad_token_id"] = pad_id
-        gen_kw["stopping_criteria"] = repetition_stopping_criteria(int(inputs.input_ids.shape[1]))
+        gen_kw["stopping_criteria"] = repetition_stopping_criteria(
+            int(inputs.input_ids.shape[1]), tokenizer=self.processor.tokenizer
+        )
         generated_ids = self.model.generate(**inputs, **gen_kw)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
@@ -646,7 +648,9 @@ class Qwen35VLClient:
             **proc_inputs,
             max_new_tokens=cap,
             num_beams=self.num_beams,
-            stopping_criteria=repetition_stopping_criteria(int(proc_inputs.input_ids.shape[1])),
+            stopping_criteria=repetition_stopping_criteria(
+                int(proc_inputs.input_ids.shape[1]), tokenizer=self.processor.tokenizer
+            ),
         )
         return self._decode_generation(proc_inputs, generated_ids)
 
@@ -672,7 +676,7 @@ class Qwen35VLClient:
             **proc_inputs,
             max_new_tokens=cap,
             num_beams=self.num_beams,
-            stopping_criteria=repetition_stopping_criteria(int(ids.shape[1])),
+            stopping_criteria=repetition_stopping_criteria(int(ids.shape[1]), tokenizer=self.processor.tokenizer),
         )
         return self._decode_generation(proc_inputs, generated_ids)
 

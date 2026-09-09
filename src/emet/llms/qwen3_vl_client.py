@@ -546,7 +546,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             prefix_len = 0
             prompt_len_for_stop = input_len
 
-        criteria = repetition_stopping_criteria(prompt_len_for_stop)
+        criteria = repetition_stopping_criteria(prompt_len_for_stop, tokenizer=self.processor.tokenizer)
         hard_stop: HardTimeStop | None = None
         timeout_s = resolve_vl_generate_timeout_s()
         if timeout_s is not None:

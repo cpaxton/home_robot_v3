@@ -2,52 +2,36 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""execute_trajectory aborts remaining waypoints after wait_for_waypoint timeout."""
+"""Both clients dispatch each waypoint once and require its command outcome."""
 
-from __future__ import annotations
+from types import SimpleNamespace
+from unittest.mock import Mock
 
-import numpy as np
-
-from emet.controller.zmq_client import StretchZmqClient
+import pytest
 
 
-def test_execute_trajectory_aborts_after_wait_timeout(monkeypatch):
-    client = StretchZmqClient.__new__(StretchZmqClient)
-    moves: list[tuple] = []
-    wait_kwargs: list[dict] = []
-
-    def fake_move(pt, **kwargs):
-        moves.append((tuple(np.asarray(pt).reshape(-1)[:3]), dict(kwargs)))
-
-    waits = [True, False]  # second intermediate wait fails
-
-    def fake_wait(*_a, **kwargs):
-        wait_kwargs.append(kwargs)
-        return waits.pop(0) if waits else True
-
-    client.move_base_to = fake_move  # type: ignore[method-assign]
-    client.wait_for_waypoint = fake_wait  # type: ignore[method-assign]
-
-    traj = [
-        np.array([0.0, 0.0, 0.0]),
-        np.array([1.0, 0.0, 0.0]),
-        np.array([2.0, 0.0, 0.0]),
-        np.array([3.0, 0.0, 0.0]),
-    ]
-    ok = StretchZmqClient.execute_trajectory(
-        client,
-        traj,
-        per_waypoint_timeout=1.0,
-        final_timeout=1.0,
-        world_frame=True,
+@pytest.mark.parametrize("kind", ["stretch", "generic"])
+@pytest.mark.parametrize(
+    "outcomes,expected,calls",
+    [([True, True, True], True, 3), ([True, False], False, 2), ([True, True, False], False, 3)],
+)
+def test_serial_waypoints_stop_on_failure(kind, outcomes, expected, calls):
+    if kind == "stretch":
+        from emet.controller.zmq_client import StretchZmqClient as Client
+    else:
+        from emet.controller.generic_zmq_client import GenericZmqClient as Client
+    robot = SimpleNamespace(move_base_to=Mock(side_effect=outcomes), wait_for_waypoint=Mock())
+    trajectory = [[0, 0, 0], [1, 0, 0], [2, 0, 0]]
+    assert (
+        Client.execute_trajectory(
+            robot, trajectory, per_waypoint_timeout=2, final_timeout=5, blocking=False, world_frame=True
+        )
+        is expected
     )
-    assert ok is False
-    # First waypoint: non-blocking + wait path; second: starts then wait fails — never reaches index 2/3.
-    # Each waypoint calls move_base_to twice (non-blocking then blocking/reliable).
-    reached_x = {m[0][0] for m in moves}
-    assert 0.0 in reached_x
-    assert 1.0 in reached_x
-    assert 2.0 not in reached_x
-    assert 3.0 not in reached_x
-    assert len(wait_kwargs) == 2
-    assert all(np.isinf(kwargs["rot_err_threshold"]) for kwargs in wait_kwargs)
+    assert robot.move_base_to.call_count == calls
+    for index, call in enumerate(robot.move_base_to.call_args_list):
+        assert call.args == (trajectory[index],)
+        assert call.kwargs["blocking"] is True
+        assert call.kwargs["world_frame"] is True
+        assert call.kwargs["timeout"] == (5 if index == 2 else 2)
+    robot.wait_for_waypoint.assert_not_called()
