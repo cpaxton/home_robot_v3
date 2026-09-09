@@ -147,6 +147,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         simulation_rate: int = 80,
         navigation_xy_tolerance: float = 0.07,
         navigation_yaw_tolerance: float = 0.15,
+        passive_base_support: bool = False,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
@@ -164,6 +165,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._scene_xml = scene_xml
         self._scene_model = scene_model
         self.simulation_rate = simulation_rate
+        self._passive_base_support = passive_base_support
         self._environment_descriptor = dict(environment) if environment else None
         self._scene_source_basename = scene_source_basename
         self._session_extra = dict(session_extra) if session_extra else None
@@ -181,6 +183,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_goal_world: np.ndarray | None = None
         self._nav_tol_xy = float(navigation_xy_tolerance)
         self._nav_tol_theta = float(navigation_yaw_tolerance)
+        self._default_nav_tolerances = (self._nav_tol_xy, self._nav_tol_theta)
         self._nav_kp_xy = 0.95
         self._nav_kp_theta = 2.2
         self._nav_v_max = 0.42
@@ -817,7 +820,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.ctrl[aid] = 0.0
 
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
-        """While there is no navigation goal, pin the base free joint to the post-spawn snapshot."""
+        """Legacy full-pose hold, or opt-in planar hold with passive support dynamics.
+
+        Pinning all six base coordinates repeatedly cancels suspension/contact
+        response. Microscopic floor penetration then loads articulated joints
+        even with unchanged position targets and gravity compensation.
+        """
         if self._nav_goal_world is not None:
             return
         if self._mjmodel is None or self._mjdata is None:
@@ -829,9 +837,29 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is None:
             return
         qadr, vadr = addrs
-        self._mjdata.qpos[qadr : qadr + 7] = snap
+        if not self._passive_base_support:
+            self._mjdata.qpos[qadr : qadr + 7] = snap
+            if vadr >= 0:
+                self._mjdata.qvel[vadr : vadr + 6] = 0.0
+            return
+        self._mjdata.qpos[qadr : qadr + 2] = snap[:2]
+        quat = self._mjdata.qpos[qadr + 3 : qadr + 7]
+
+        def yaw(q):
+            w, x, y, z = q
+            return np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+
+        half_delta = (yaw(snap[3:]) - yaw(quat)) / 2
+        delta = np.array([np.cos(half_delta), 0.0, 0.0, np.sin(half_delta)])
+        mujoco.mju_mulQuat(quat, delta, quat.copy())
         if vadr >= 0:
-            self._mjdata.qvel[vadr : vadr + 6] = 0.0
+            self._mjdata.qvel[vadr : vadr + 2] = 0.0
+            rotation = np.empty(9)
+            mujoco.mju_quat2Mat(rotation, quat)
+            rotation = rotation.reshape(3, 3)
+            omega_world = rotation @ self._mjdata.qvel[vadr + 3 : vadr + 6]
+            omega_world[2] = 0.0
+            self._mjdata.qvel[vadr + 3 : vadr + 6] = rotation.T @ omega_world
 
     def _mj_step_once(self) -> None:
         """One MuJoCo step then snap kinematic attachments (if any)."""
@@ -2085,10 +2113,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         if free_addrs is not None:
             _, vadr = free_addrs
             v0 = int(vadr)
-            self._mjdata.qvel[v0 : v0 + 3] = (vx, vy, 0.0)
+            self._mjdata.qvel[v0 : v0 + 2] = (vx, vy)
+            if not self._passive_base_support:
+                self._mjdata.qvel[v0 + 2] = 0.0
             bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
             rotation_world_from_body = np.asarray(self._mjdata.xmat[bid], dtype=np.float64).reshape(3, 3)
-            angular_velocity_body = rotation_world_from_body.T @ np.array([0.0, 0.0, wz], dtype=np.float64)
+            angular_velocity_world = rotation_world_from_body @ self._mjdata.qvel[v0 + 3 : v0 + 6]
+            if not self._passive_base_support:
+                angular_velocity_world[:2] = 0.0
+            angular_velocity_world[2] = wz
+            angular_velocity_body = rotation_world_from_body.T @ angular_velocity_world
             self._mjdata.qvel[v0 + 3 : v0 + 6] = angular_velocity_body
         else:
             ax, ay, aw = planar_aids
@@ -2132,11 +2166,32 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def start_navigation_command(self, action):
+        from emet.core.navigation_result import NAVIGATION_POLICIES
+
+        if action.get("nav_policy"):
+            policy = NAVIGATION_POLICIES[action["nav_policy"]]
+            self._nav_tol_xy, self._nav_tol_theta = policy.xy_tolerance, policy.yaw_tolerance
+        else:
+            self._nav_tol_xy, self._nav_tol_theta = self._default_nav_tolerances
         self._contract_navigation_context = None
         self.handle_action(action)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install a navigation goal")
         return self._contract_navigation_context
+
+    def navigation_policy_names(self):
+        return ("exploration", "precision")
+
+    def navigation_policy_measurement(self):
+        with self._mj_lock:
+            base = self._mjdata.body(self._spec.base_link_name)
+            upright = float(base.xmat[8])
+            return {
+                "pose": self.get_base_xyt(),
+                "timestamp": float(self._mjdata.time),
+                "stopped": self._at_goal and self._nav_goal_world is None,
+                "failure": "base posture unsafe" if not np.isfinite(upright) or upright < 0.98 else None,
+            }
 
     def navigation_command_result(self, context):
         from emet.core.navigation_result import measured_arrival

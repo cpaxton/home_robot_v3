@@ -425,9 +425,28 @@ class MujocoZmqServer(BaseZmqServer):
     def start_navigation_command(self, action):
         self._contract_navigation_context = None
         self.handle_action(action)
+        if action.get("nav_policy"):
+            from emet.core.navigation_result import NAVIGATION_POLICIES
+
+            policy = NAVIGATION_POLICIES[action["nav_policy"]]
+            self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
+            self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")
         return self._contract_navigation_context
+
+    def navigation_policy_names(self):
+        return ("exploration", "precision")
+
+    def navigation_policy_measurement(self):
+        status = self._status
+        if status is None:
+            return {"pose": None, "timestamp": None, "stopped": False}
+        return {
+            "pose": xyt_global_to_base(np.array([status.base.x, status.base.y, status.base.theta]), self._initial_xyt),
+            "timestamp": status.time,
+            "stopped": self.base_controller_at_goal() and not self.active,
+        }
 
     def navigation_command_result(self, context):
         from emet.core.navigation_result import measured_arrival

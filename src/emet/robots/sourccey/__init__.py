@@ -166,7 +166,9 @@ class SourcceyBackend(RobotBackend):
             ),
             planar_spawn_clip_guard_pad_m=0.25,
             planar_spawn_robocasa_first_clearance_m=0.068,
-            robosuite_rgb_depth_ops=("flipud",),
+            # MuJoCo Renderer already returns top-down pixels. Front cameras
+            # have +Y up in the asset; an extra flip inverts their image horizon.
+            robosuite_rgb_depth_ops=(),
         )
 
     def create_client(self, robot_ip: str, **kwargs):

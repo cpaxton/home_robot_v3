@@ -54,7 +54,23 @@ def main() -> int:
     parser.add_argument("--robot", help="Override robot in the scene config (simulation only).")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--stationary", action="store_true", help="Idle-only probe for fixed-base arms.")
+    parser.add_argument("--route-config", type=Path, help="Known episode-frame waypoints and policy (simulation only).")
+    parser.add_argument("--route-repeats", type=int, help="Override configured repetitions for an initial diagnostic.")
     args = parser.parse_args()
+    route = None
+    policy = None
+    if args.route_config:
+        import yaml
+
+        route_config = yaml.safe_load(args.route_config.read_text())
+        points = np.asarray(route_config["route"], dtype=float)
+        repeats = args.route_repeats if args.route_repeats is not None else int(route_config["repeats"])
+        if points.ndim != 2 or points.shape[1] != 3 or not len(points) or not np.isfinite(points).all() or repeats < 1:
+            parser.error("route must contain finite (x, y, yaw) triples and positive repetitions")
+        if args.stationary:
+            parser.error("--route-config cannot be combined with --stationary")
+        route = points.tolist() * repeats
+        policy = route_config["navigation_policy"]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
@@ -85,6 +101,10 @@ def main() -> int:
     robot = None
     reports = []
     failures = []
+    if route is not None:
+        (args.output_dir / "resolved_route.json").write_text(
+            json.dumps({"route": route, "navigation_policy": policy}) + "\n"
+        )
     try:
         if not _wait_port(recv_port, timeout=120.0, proc=server):
             raise RuntimeError("sim server did not bind")
@@ -119,12 +139,25 @@ def main() -> int:
             robot.move_to_nav_posture()
             robot.look_front(blocking=True)
         time.sleep(2.0)
-        for i in range(max(1, int(args.poses)) + 1):
+        for i in range((len(route) if route is not None else max(1, int(args.poses))) + 1):
             try:
                 if i and not args.stationary:
-                    arrived = robot.move_base_to(
-                        [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))], relative=True, blocking=True, timeout=30.0
-                    )
+                    if route is not None:
+                        arrived = robot.move_base_to(
+                            route[i - 1],
+                            relative=False,
+                            world_frame=False,
+                            blocking=True,
+                            timeout=30.0,
+                            navigation_policy=policy,
+                        )
+                    else:
+                        arrived = robot.move_base_to(
+                            [0.0, 0.0, 2.0 * np.pi / max(1, int(args.poses))],
+                            relative=True,
+                            blocking=True,
+                            timeout=30.0,
+                        )
                     if arrived is not True:
                         raise RuntimeError("navigation did not report command-specific success")
             except Exception as e:

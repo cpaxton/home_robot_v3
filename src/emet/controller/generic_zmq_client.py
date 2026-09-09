@@ -1004,6 +1004,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         timeout: float | None = None,
         *,
         world_frame: bool | None = None,
+        navigation_policy: str | None = None,
     ) -> bool:
         if isinstance(xyt, ContinuousNavigationAction):
             xyt = xyt.xyt
@@ -1014,6 +1015,8 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if world_frame is None:
             world_frame = False
         action: dict[str, Any] = {"xyt": xyt[:3].tolist()}
+        if navigation_policy is not None:
+            action["nav_policy"] = navigation_policy
         if relative:
             action["nav_relative"] = True
         elif world_frame:

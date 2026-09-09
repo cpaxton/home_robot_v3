@@ -67,9 +67,21 @@ for necessary robot geometry differences. Do not promote based only on graph siz
   publishers without treating legacy unknown timestamps as fresh.
 - [ ] Keep experimental H.264 disabled for acceptance; validate independent
   cadence, encoder lifecycle and bandwidth before enabling it.
-- [ ] Resume shared navigation acceptance (Sourccey camera orientation and
-  Galaxea contact/actuation), then serial bounded OVMM/TAMP/EQA pilots through
-  one agent harness. Update paper/results only from validated runs.
+- [ ] Complete bounded EQA/Habitat OVMM pilots and separate TAMP controls on
+  frozen integrated revisions. Native DynaMem is a system baseline, not a
+  planner-controlled memory ablation. Update paper only from measured results.
+
+## Deferred embodiment acceptance (not a blocker for the current pilot)
+
+- [ ] Sourccey: inspect obstructed camera view, then repeat hold/turn/translation
+  and scene-health gates. One integrated precision route passed; learned
+  search and physical robustness are not established.
+- [ ] Galaxea proxy: repair matched support/contact/actuation before claiming
+  reliable translation. Existing posture-fault stop evidence is not a route pass.
+- [ ] Validate opt-in navigation policies across Stretch/Mars simulation and
+  timestamped hardware adapters. Do not enable policies on unsupported peers.
+- [ ] Keep passive base support and named settling policies opt-in until their
+  embodiment acceptance passes. No new hardware motion is authorized here.
 
 ## Config over env flags
 
