@@ -31,14 +31,15 @@ _LEGACY_PROFILE_ALIASES: dict[str, str] = {
 _warned_aliases: set[str] = set()
 
 # OVMM find-phase (Emet sim + Habitat proxy): includes oracle + static-graph row.
-OVMM_MEMORY_BACKEND = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
-OVMM_MEMORY_BACKENDS: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, DYNAGRAPH, GROUND_TRUTH)
+OVMM_MEMORY_BACKEND = Literal["dynamem", "static_graph", "dynagraph", "lazy_graph", "ground_truth"]
+OVMM_MEMORY_BACKENDS: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, DYNAGRAPH, LAZY_GRAPH, GROUND_TRUTH)
 # Click Choice: canonical first, then legacy alias for scripts.
 OVMM_MEMORY_BACKEND_CHOICES: tuple[str, ...] = (
     DYNAMEM,
     STATIC_GRAPH,
     "graph_eqa",
     DYNAGRAPH,
+    LAZY_GRAPH,
     GROUND_TRUTH,
 )
 
@@ -47,9 +48,9 @@ SQA3D_MEMORY_BACKEND = Literal["dynamem", "dynagraph"]
 SQA3D_MEMORY_BACKENDS: tuple[str, ...] = (DYNAMEM, DYNAGRAPH)
 
 # HM-EQA Habitat methods.
-HMEQA_METHODS: tuple[str, ...] = (STATIC_GRAPH, DYNAGRAPH)
-HMEQA_METHOD = Literal["static_graph", "dynagraph"]
-HMEQA_METHOD_CHOICES: tuple[str, ...] = (STATIC_GRAPH, "graph_eqa", DYNAGRAPH)
+HMEQA_METHODS: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, DYNAGRAPH, LAZY_GRAPH)
+HMEQA_METHOD = Literal["dynamem", "static_graph", "dynagraph", "lazy_graph"]
+HMEQA_METHOD_CHOICES: tuple[str, ...] = (DYNAMEM, STATIC_GRAPH, "graph_eqa", DYNAGRAPH, LAZY_GRAPH)
 
 # Agent / interactive object-graph plug-ins (plus open_vocab / dynamem voxels).
 AGENT_MEMORY_BACKENDS: tuple[str, ...] = (DYNAGRAPH, LAZY_GRAPH, STATIC_GRAPH, DYNAMEM, "open_vocab")

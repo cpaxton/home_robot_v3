@@ -56,7 +56,7 @@ from emet_habitat.runner import (
 )
 from emet_habitat.simulator import HabitatEQASimulator
 
-MemoryBackendName = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
+MemoryBackendName = Literal["dynamem", "static_graph", "dynagraph", "lazy_graph", "ground_truth"]
 
 
 @dataclass(frozen=True)

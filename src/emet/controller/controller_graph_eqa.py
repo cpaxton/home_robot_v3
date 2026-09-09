@@ -95,6 +95,7 @@ class GraphEQAController(DynamemController):
         cpu_only: bool = False,
         graph_memory_input_path: str | None = None,
         use_sensor_perception: bool = True,
+        semantic_ingest_mode: str = "streaming_objects",
         perception_client=None,
         graph_instance_dedup_xy_m: float | None = None,
         eqa: bool | None = None,
@@ -103,6 +104,8 @@ class GraphEQAController(DynamemController):
         # Instance graph: YoloE + SparseVoxelMap Frame masks; voxel ``run_eqa`` off (no per-frame VLM list_objects).
         # Legacy ``--no-instance-graph``: voxel list_objects + VLM / voxel labels for graph nodes.
         # Optional ``eqa=True`` keeps instance graph but still loads caption/EQA clients (agent --eqa).
+        fusion_settings = parameters.get("graph_object_fusion", {}) or {}
+        use_instance_graph = bool(use_instance_graph and fusion_settings.get("use_instance_nodes", True))
         voxel_eqa = (not use_instance_graph) if eqa is None else bool(eqa)
         super().__init__(
             robot=robot,
@@ -161,6 +164,7 @@ class GraphEQAController(DynamemController):
         self.use_sensor_perception = use_sensor_perception
         self._graph_eqa_use_instance_graph = self.use_instance_graph
         self._graph_eqa_use_sensor_perception = self.use_sensor_perception
+        self._graph_eqa_semantic_ingest_mode = str(semantic_ingest_mode or "streaming_objects")
         if graph_instance_dedup_xy_m is not None:
             self._graph_dedup_xy_m = float(graph_instance_dedup_xy_m)
         elif isinstance(parameters, dict):
@@ -990,6 +994,11 @@ class GraphEQAController(DynamemController):
                         note=(nav_res.note if nav_res else "no_nav"),
                     )
                 if finished.finished:
+                    if getattr(self, "_lazy_graph_mode", False):
+                        self._commit_lazy_graph_arrival(
+                            action_obs_id=action_obs_id,
+                            target_point=target_point,
+                        )
                     break
                 if nav_res is not None and (
                     nav_res.note.startswith("already_at_goal")

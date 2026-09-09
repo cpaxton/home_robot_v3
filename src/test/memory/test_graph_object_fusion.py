@@ -64,6 +64,65 @@ def test_fusion_merges_duplicate_detections():
     assert objs[0].support_count >= 2
 
 
+def test_default_fusion_collapses_drifting_duplicate_detections():
+    """Repeated YoloE detections of one object must not flood the graph.
+
+    Regression for the 2026-09-02 full-113 harness drift: with the old default
+    ``bounds_3d_iou_merge_min=0`` the same object re-detected from viewpoints whose
+    median centroid drifted past the 0.42 m spatial gate created one singleton node
+    per frame, ballooning episodes to 240-300 object nodes at an unchanged VLM budget
+    (and degrading location/state answers). 3D bounds overlap is a same-object signal,
+    so the default config must fold these without needing a hand-tuned threshold.
+    """
+    fusion = GraphObjectFusion(GraphObjectFusionConfig(enabled=True))
+    assert fusion.config.bounds_3d_iou_merge_min > 0.0
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.0
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    bounds = {"min": [-0.5, -0.3, 0.0], "max": [0.5, 0.3, 1.6]}
+    for i in range(6):
+        fusion.apply_detection(
+            mem,
+            rgb,
+            GraphDetectionCandidate(
+                label="cabinet",
+                xyz=np.array([float(i) * 0.15, 0.0, 0.6]),
+                bounds_3d=bounds,
+                countable_instance=True,
+                detection_score=0.6,
+                mask_point_count=100,
+            ),
+        )
+    objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
+    assert len(objs) == 1, f"expected a single fused cabinet node, got {len(objs)}"
+    assert objs[0].support_count == 6
+
+
+def test_default_fusion_keeps_distinct_same_label_instances():
+    """Disjoint 3D bounds must stay distinct (two cabinets are two count targets)."""
+    fusion = GraphObjectFusion(GraphObjectFusionConfig(enabled=True))
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.0
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    b1 = {"min": [0, 0, 0], "max": [0.4, 0.4, 1.6]}
+    b2 = {"min": [3.0, 0, 0], "max": [3.4, 0.4, 1.6]}
+    for bounds, x in ((b1, 0.2), (b2, 3.2)):
+        fusion.apply_detection(
+            mem,
+            rgb,
+            GraphDetectionCandidate(
+                label="cabinet",
+                xyz=np.array([x, 0.0, 0.8]),
+                bounds_3d=bounds,
+                countable_instance=True,
+                detection_score=0.6,
+                mask_point_count=100,
+            ),
+        )
+    objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
+    assert len(objs) == 2
+
+
 def test_fusion_preserves_distinct_stable_instance_ids():
     cfg = GraphObjectFusionConfig(enabled=True, spatial_merge_xy_m=0.5, embedding_min_cosine=0.0)
     fusion = GraphObjectFusion(cfg)

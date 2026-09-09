@@ -88,7 +88,14 @@ def filter_detections_for_graph_admission(
     min_conf = float(cfg.instance_min_confidence)
     min_pts = int(cfg.instance_min_mask_points)
     kept: list[dict[str, Any]] = []
-    stats = {"proposed": len(detections), "rejected_confidence": 0, "rejected_support": 0, "admitted": 0}
+    max_candidates = max(0, int(cfg.max_candidates))
+    stats = {
+        "proposed": len(detections),
+        "rejected_confidence": 0,
+        "rejected_support": 0,
+        "rejected_candidate_cap": 0,
+        "admitted": 0,
+    }
     for d in detections:
         score = float(d.get("detection_score", d.get("score", 0.0)) or 0.0)
         pts = int(d.get("mask_point_count", d.get("point_count", 0)) or 0)
@@ -99,6 +106,19 @@ def filter_detections_for_graph_admission(
             stats["rejected_support"] += 1
             continue
         kept.append(d)
+    # A detector can emit many valid low-quality masks in a cluttered frame. Keep
+    # this bound at admission (rather than only at graph creation) so expensive
+    # crop encoding and pairwise fusion cannot scale without limit.
+    kept.sort(
+        key=lambda d: (
+            float(d.get("detection_score", d.get("score", 0.0)) or 0.0),
+            int(d.get("mask_point_count", d.get("point_count", 0)) or 0),
+        ),
+        reverse=True,
+    )
+    if max_candidates and len(kept) > max_candidates:
+        stats["rejected_candidate_cap"] = len(kept) - max_candidates
+        kept = kept[:max_candidates]
     stats["admitted"] = len(kept)
     return kept, stats
 

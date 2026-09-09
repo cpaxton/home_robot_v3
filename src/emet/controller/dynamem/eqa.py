@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 
 import numpy as np
 import torch
@@ -29,6 +30,12 @@ def _patch_images(self, images: list[Image.Image], patch_size=(480, 640), gap=5)
     """
     Patch a list of PIL Images into a numpy array, used for dicrod bot
     """
+    if not images:
+        # Some valid queries have no retrieved evidence.  Keep the classic
+        # controller's return type image-shaped instead of constructing a
+        # negative-width canvas from ``gap * (n_images - 1)``.
+        return np.zeros((patch_size[1], patch_size[0], 3), dtype=np.uint8)
+
     # Resize all images to the same patch size
     images = [img.resize(patch_size) for img in images]
 
@@ -147,7 +154,8 @@ def run_eqa_one_iter(self, question, max_movement_step: int = 5):
             confidence,
             answer,
         )
-    except:
+    except Exception:
+        logger.error(f"Voxel EQA query failed:\n{traceback.format_exc()}")
         reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
             "Exception happens in LLM querying!",
             "Unknown",
@@ -156,6 +164,14 @@ def run_eqa_one_iter(self, question, max_movement_step: int = 5):
             self.space.sample_frontier(self.planner, self._planning_base_xyt(self.robot.get_base_pose()), text=None),
             [],
         )
+
+    # The classic voxel controller has no GraphEQA memory object for the
+    # benchmark runner to inspect. Preserve its latest structured answer on the
+    # controller so DynaMem rows are scored by the same harness.
+    self._last_eqa_answer = str(answer or "")
+    self._last_eqa_reasoning = str(reasoning or "")
+    self._last_eqa_confidence = bool(confidence)
+    self._last_eqa_confidence_reasoning = str(confidence_reasoning or "")
 
     # Log the texts to rerun visualizer
     confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"

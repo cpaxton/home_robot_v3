@@ -1,0 +1,87 @@
+\section{Scene-graph ingest and merge policy}
+\label{app:graph_fusion_policy}
+
+Dynagraph's scene graph is a single shared index used for both the EQA prompt
+(SCENE\_GRAPH) and count/FIND recall. This appendix records how detections enter
+that graph, why a naive instance feed can flood it, and the merge policy we use to
+keep one graph instead of two.
+
+\subsection{Instance-graph ingest and the singleton flood}
+\label{app:instance_flood}
+
+Per-frame YoloE instance masks are the richest per-view signal: each instance yields a
+median world XYZ, a 3D bounds box, a mask bbox, and a class string
+(\texttt{frame\_instances\_to\_detections}). Feeding every instance of every frame
+into the scene graph as a first-class node triples-to-quadruples the object-node count
+per episode (e.g.\ q8 goes from 19 object nodes to 241 at an unchanged VLM budget of
+$\sim$57 planning steps) and drives the singleton fraction (support count of one) to
+40--53\%. We reproduced this in the 2026-09-02 full-113 run: 16 of 81 overlap qids
+regressed versus the pre-instance-graph baseline, almost all location/state questions
+(``Where did I leave the small gray bench?'', ``Which room should I go to?'',
+``Is the gaming chair under the loft bed?''), while count/clock questions stayed flat
+or improved.
+
+Crucially, the flood is \emph{not} an IoU-threshold effect. A sweep of the 3D-bounds
+merge threshold $t_{\text{iou}}\in\{0.0,0.15,0.3,0.45,0.6\}$ on six regressed qids left
+the mean node count (213--233), the singleton fraction (0.48--0.52), and the answer
+pattern (2--3/6) essentially unchanged. Repeated detections of the same object fail to
+consolidate for structural reasons: YoloE class strings drift frame to frame (so the
+label gate refuses a merge), mask-median centroids drift beyond the 0.42\,m spatial
+gate, and partial-view 3D bounds overlap below any useful threshold. Tuning a single
+IoU knob cannot fix this.
+
+\subsection{Merge policy}
+\label{app:merge_policy}
+
+The graph-object-fusion config (\texttt{graph\_object\_fusion} block) therefore
+separates the merge decision into ordered evidence gates plus admission, keep, and
+growth controls:
+
+\begin{description}
+  \item[Gates] \texttt{gates.\{identity, bounds, embedding, spatial\}} order the
+    evidence that can justify a merge, strongest first. Identity merges on a
+    persistent track ID; bounds merge on 3D IoU; embedding merges on SigLIP-crop
+    appearance similarity; spatial merges on centroid proximity (0.42\,m XY /
+    0.55\,m 3D) with a nearest-node fallback radius. A candidate merges when the first
+    active gate that matches passes.
+  \item[Labels] \texttt{labels.\{require\_match, require\_match\_for\_instances\}}
+    control when class strings gate a merge, with extra synonym / incompatible pairs
+    for fixture dilution (e.g.\ \texttt{cab} $\leftrightarrow$ \texttt{cabinet}) and
+    for pairs that must never merge (\texttt{person} vs \texttt{lamp}).
+  \item[Keep] \texttt{keep.\{prefer\_support, union\_labels, union\_bounds,
+    blend\_embedding, update\_xyz\}} decide which node survives a merge and how its
+    anchor, bounds, labels, and embedding blend.
+  \item[Admission] \texttt{admission.*} filters weak detections before they may
+    enter the graph (confidence $>$ 0.12, $\geq$ 25 mask points).
+  \item[Growth] \texttt{growth.\{max\_object\_nodes, temporal\_window\_steps\}} bound
+    per-episode object-node count (0 = unlimited) and refuse merges into stale nodes.
+\end{description}
+
+\subsubsection{Appearance merging via SigLIP}
+
+Instance detections initially carry no appearance embedding, so the embedding gate is
+a no-op and label drift defeats merging. We attach a SigLIP crop embedding
+(\texttt{gates.embedding.use\_siglip\_crops}) for every instance bbox; cosine
+similarity $\geq$ 0.9 then permits a merge even when the label gate fails, while the
+spatial gate still enforces proximity so two identical-but-distinct instances sitting
+apart remain separate (preserving count recall).
+
+\subsection{Lazy graph: close-look-only commits}
+\label{app:lazy_graph}
+
+An alternative to gate admission instead of merging: \texttt{LazyGraphController}
+never streams YoloE detections into the scene graph during passive mapping. It records
+lightweight viewpoint stamps for navigation, and runs the Qwen label extractor +
+\texttt{add\_observation} only on a successful nav-arrival close look. Detector class
+strings still feed voxel-level FIND recall but never author graph labels. This keeps
+the graph at one node per deliberate inspection, which is the right regime for
+location/state questions at the cost of denser per-instance count recall.
+
+\subsection{Tying to precision}
+
+The fp16-vs-int4 bake-off (Appendix~\ref{app:model_choice}) holds on both ingest
+regimes: the precision lift is a model-weight effect, not an ingest artifact, and
+subsets run under the same graph configuration remain internally comparable. We
+recommend reporting the full-113 row under one frozen \texttt{graph\_object\_fusion}
+block (see \texttt{configs/benchmarks/dynagraph.yaml} pin test) so a silent ingest
+change can never re-baseline a published number again.

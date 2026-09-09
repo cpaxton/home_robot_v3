@@ -86,15 +86,14 @@ def commit_graph_from_arrival_obs(
     else:
         xyz = sensor_builder.world_xyz_for_observation(obs)
 
-    obs_id = int(
-        graph_memory.add_observation(
-            obs.rgb,
-            xyz,
-            labels,
-            description=desc,
-            viewer_xyz=viewer_xyz,
-        )
+    obs_id = graph_memory.add_observation(
+        obs.rgb,
+        xyz,
+        labels,
+        description=desc,
+        viewer_xyz=viewer_xyz,
     )
+    obs_id = int(obs_id)
     logger.info(
         f"lazy_graph commit obs_id={obs_id} labels={labels} "
         f"localize_source={localize_source!r} query={(query_text or '')[:80]!r}"

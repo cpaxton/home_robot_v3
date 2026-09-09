@@ -43,6 +43,8 @@ class GraphStore:
             "proposed": 0,
             "rejected_confidence": 0,
             "rejected_support": 0,
+            "rejected_candidate_cap": 0,
+            "rejected_object_cap": 0,
             "admitted": 0,
             "merged": 0,
             "created": 0,

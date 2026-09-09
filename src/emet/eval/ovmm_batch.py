@@ -187,7 +187,8 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
         return 2
     stride = max(1, int(opts.port_stride))
     agentic_requested = not opts.oneshot_localize and any(
-        opts.agentic_find is not False and backend in {"dynagraph", "static_graph", "graph_eqa"} for backend in backends
+        opts.agentic_find is not False and backend in {"dynagraph", "lazy_graph", "static_graph", "graph_eqa"}
+        for backend in backends
     )
     worker = None
     if agentic_requested and _configured_vl_endpoint() is None:

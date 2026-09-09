@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 from emet.config.embodied_agent_config import GraphObjectFusionConfigRef
@@ -46,10 +46,10 @@ def fusion_config_from_sources(
         return load_graph_object_fusion_config(yaml_path)
     base = GraphObjectFusionConfig()
     if fref is not None:
-        base = GraphObjectFusionConfig(**{**asdict(base), **asdict(fref)})
+        base = GraphObjectFusionConfig.from_mapping({**asdict(base), **asdict(fref)})
     p_fusion = _config_block_to_dict(_parameters_get(parameters, "graph_object_fusion"))
     if p_fusion is not None:
-        base = GraphObjectFusionConfig(**{**asdict(base), **p_fusion})
+        base = GraphObjectFusionConfig.from_mapping({**asdict(base), **p_fusion})
     return base
 
 
@@ -70,5 +70,8 @@ def attach_graph_object_fusion(
     if fc.fallback_spatial_merge_xy_m <= 0.0:
         merge_xy = _parameters_get(parameters, "dynagraph_merge_xy_m")
         if merge_xy is not None and float(merge_xy) > 0.0:
-            fc = GraphObjectFusionConfig(**{**asdict(fc), "fallback_spatial_merge_xy_m": float(merge_xy)})
+            fc = replace(
+                fc,
+                gates=replace(fc.gates, spatial=replace(fc.gates.spatial, fallback_xy_m=float(merge_xy))),
+            )
     return GraphObjectFusion(fc)

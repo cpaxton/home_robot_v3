@@ -256,7 +256,7 @@ def _make_controller(
     mcq_debias: bool | None = None,
     explore_when_uncovered: str | None = None,
 ):
-    from emet.eval.memory_backends import DYNAGRAPH
+    from emet.eval.memory_backends import DYNAGRAPH, DYNAMEM, LAZY_GRAPH
 
     method = _normalize_hmeqa_method(method)
     params = _apply_method_parameters(parameters, method)
@@ -281,12 +281,32 @@ def _make_controller(
         "save_rerun": not no_rerun,
         "enable_live_rerun": eval_rerun_enabled(),
         "cpu_only": not use_real_vlm,
-        "use_sensor_perception": graph_perception,
+        "use_sensor_perception": bool(harness_opts.get("use_sensor_perception", graph_perception)),
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
+        "semantic_ingest_mode": str(harness_opts.get("semantic_ingest_mode", "streaming_objects")),
         "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
-    if method == DYNAGRAPH:
+    if method == DYNAMEM:
+        from emet.controller.controller_dynamem import DynamemController
+
+        # DynaMem's VLM EQA lives in SparseVoxelMap; it intentionally has no
+        # GraphEQAMemory and is the honest no-graph paper baseline.
+        agent = DynamemController(
+            robot=robot,
+            parameters=params,
+            save_rerun=not no_rerun,
+            enable_live_rerun=eval_rerun_enabled(),
+            cpu_only=not use_real_vlm,
+            use_instance_memory=False,
+            manipulation_only=bool(harness_opts.get("manipulation_only", True)),
+            eqa=True,
+        )
+    elif method == DYNAGRAPH:
         agent = DynagraphController(**common)
+    elif method == LAZY_GRAPH:
+        from emet.controller.controller_lazy_graph import LazyGraphController
+
+        agent = LazyGraphController(**common)
     else:
         agent = GraphEQAController(**common)
 
@@ -304,6 +324,15 @@ def _make_controller(
             agent.sensor_builder._perception = keyword_client
             agent.sensor_builder._lazy_vl_client = keyword_client
             agent.sensor_builder.cpu_only = False
+    elif method == DYNAMEM and not mock_llm:
+        # The voxel-only baseline has no GraphEQAMemory, so bind the same
+        # shared VLM clients directly to SparseVoxelMap's EQA interface.
+        from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
+
+        keyword_client, eqa_client = build_graph_eqa_vlm_clients(parameters=params, device=device)
+        voxel_map = agent.get_voxel_map()
+        voxel_map.image_description_client = keyword_client
+        voxel_map.eqa_client = eqa_client
     return agent
 
 
@@ -520,12 +549,15 @@ def run_hmeqa_episode(
             if agent.graph_memory is not None:
                 agent.graph_memory._eqa_decision_trace_dir = str(ep_dir / "eqa_decisions")
 
-        discord_text, _images = agent.run_eqa(
-            eqa_question,
-            max_planning_steps=max_planning_steps,
-            max_movement_step=max_movement_step,
-            trace_meta=trace_meta,
-        )
+        if method == "dynamem":
+            discord_text, _images = agent.run_eqa(eqa_question, max_planning_steps=max_planning_steps)
+        else:
+            discord_text, _images = agent.run_eqa(
+                eqa_question,
+                max_planning_steps=max_planning_steps,
+                max_movement_step=max_movement_step,
+                trace_meta=trace_meta,
+            )
         raw_eqa = ""
         parsed_letter = ""
         model_confident = False
@@ -551,6 +583,20 @@ def run_hmeqa_episode(
                 parsed_letter = extract_mcq_letter(formatted_answer, q.choices)
             if not parsed_letter and not formatted_answer:
                 parsed_letter = extract_mcq_letter_from_raw_eqa(raw_eqa, q.choices)
+        elif method == "dynamem":
+            formatted_answer = str(getattr(agent, "_last_eqa_answer", "") or "")
+            model_confident = bool(getattr(agent, "_last_eqa_confidence", False))
+            raw_eqa = json.dumps(
+                {
+                    "reasoning": getattr(agent, "_last_eqa_reasoning", ""),
+                    "answer": formatted_answer,
+                    "confidence": model_confident,
+                    "confidence_reasoning": getattr(agent, "_last_eqa_confidence_reasoning", ""),
+                }
+            )
+            parsed_letter = _semantic_choice_letter(formatted_answer, q.choices)
+            if not parsed_letter and formatted_answer:
+                parsed_letter = extract_mcq_letter(formatted_answer, q.choices)
         predicted = parsed_letter
         if not predicted and grounded_decision is None:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text

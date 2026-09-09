@@ -16,6 +16,7 @@ from scipy.ndimage import maximum_filter
 from torch import Tensor
 
 from emet.llms.vllm_factory import dynamem_vllm_call
+from emet.utils.json_parse import first_json_dict_lenient
 from emet.utils.morphology import get_edges
 from emet.utils.voxel import scatter3d
 
@@ -77,6 +78,19 @@ class DynamemVoxelEQAMixin:
         os.makedirs(desc_dir, exist_ok=True)
         with open(os.path.join(desc_dir, "output.txt"), "w") as file:
             file.write(answer_outputs)
+
+        data = first_json_dict_lenient(answer_outputs)
+        if data is not None:
+            confidence = data.get("confidence", False)
+            return (
+                str(data.get("reasoning") or ""),
+                str(data.get("answer") or ""),
+                confidence is True or str(confidence).strip().lower() == "true",
+                str(data.get("action") if data.get("action") is not None else "").strip(),
+                str(data.get("confidence_reasoning") or ""),
+            )
+
+        answer_outputs = answer_outputs.replace("*", "").replace("/", "").replace("#", "").lower()
 
         # Answer outputs in the format "Caption: Reasoning: Answer: Confidence: Action: Confidence_reasoning:"
         def extract_between(text, start, end):
@@ -164,7 +178,7 @@ class DynamemVoxelEQAMixin:
             max_new_tokens=self._eqa_max_tokens,
         )
         self._last_eqa_raw = raw_answer_outputs
-        answer_outputs = raw_answer_outputs.replace("*", "").replace("/", "").replace("#", "").lower()
+        answer_outputs = raw_answer_outputs
 
         print(commands)
         print(answer_outputs)
@@ -179,9 +193,15 @@ class DynamemVoxelEQAMixin:
 
         # If the robot is not confident, it should plan exploration
         if not confidence:
-            action = selected_images[int(action) - 1]
-            rgb = np.copy(self.observations[action - 1].rgb.numpy())
-            image = Image.fromarray(rgb.astype(np.uint8), mode="RGB")
+            # Actions index the displayed descriptions, not observation IDs.
+            # Missing/invalid actions mean no navigation; retain the answer.
+            try:
+                display_index = int(action)
+            except (ValueError, TypeError):
+                display_index = 0
+            if not 1 <= display_index <= len(selected_images):
+                return reasoning, answer, confidence, confidence_reasoning, None, relevant_images
+            action = int(selected_images[display_index - 1])
 
             # Cache conversations between the robot and the mLLM for the next iteration of question answering planning
             self.history_outputs.append(

@@ -60,3 +60,38 @@ class LazyGraphController(DynagraphController):
             except Exception as exc:
                 logger.warning(f"lazy_graph arrival commit failed: {exc}")
         return status, object_xyz
+
+    def _commit_lazy_graph_arrival(
+        self,
+        *,
+        action_obs_id: int | None = None,
+        target_point: Any | None = None,
+    ) -> None:
+        """Qwen label-extract commit when the HM-EQA loop arrives at a nav target.
+
+        The classic EQA loop navigates via ``run_eqa_one_iter`` →
+        ``navigate_to_target_pose`` (never ``execute_action``), so without this hook
+        a lazy-graph HM-EQA run would commit nothing and stay graphless. Fires on the
+        ``finished.finished`` arrival point with the current observation.
+        """
+        if self.graph_memory is None or not self._lazy_graph_mode:
+            return
+        obs = self.robot.get_observation()
+        if obs is None:
+            return
+        xyz: np.ndarray | None = None
+        if target_point is not None:
+            xyz = np.asarray(target_point, dtype=float).reshape(-1)[:3]
+        try:
+            commit_graph_from_arrival_obs(
+                graph_memory=self.graph_memory,
+                robot=self.robot,
+                sensor_builder=self.sensor_builder,
+                obs=obs,
+                object_xyz=xyz,
+                frame_step=self.obs_count,
+                parameters=self.parameters,
+            )
+            self.graph_memory.maintain(self.obs_count)
+        except Exception as exc:
+            logger.warning(f"lazy_graph EQA arrival commit failed: {exc}")

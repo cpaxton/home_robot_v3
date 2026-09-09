@@ -13,6 +13,14 @@ uv run emet run agent --memory-backend lazy_graph
 
 Options mirror `emet run dynagraph`. Both apps call [`graph_nav_cli.py`](../src/emet/app/graph_nav_cli.py) via `configure_graph_nav` at import (process-lifetime; no monkeypatch). Tests should use `with configure_graph_nav(...)` so the previous controller is restored.
 
+**HM-EQA harness row:** `emet-habitat run-batch --method lazy_graph` selects the
+close-look-only row (`harness.habitat_eqa.lazy_graph` in
+`configs/benchmarks/dynagraph.yaml`): `use_instance_graph: false`,
+`use_sensor_perception: true`, same `unified_eqa` merge/staleness profile as
+`dynagraph`. This is the ingest mode that keeps the scene graph at one node per
+deliberate inspection — the right regime for location/state questions, at the cost of
+denser per-instance count recall.
+
 ## vs dynagraph
 
 | | dynagraph | lazy_graph |

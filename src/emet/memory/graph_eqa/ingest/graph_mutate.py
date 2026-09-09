@@ -31,7 +31,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def add_observation(
     self,
     rgb: np.ndarray | Image.Image,
@@ -106,9 +105,7 @@ def add_observation(
             if not same_identity and not spatial_match:
                 continue
             sc = int(existing.support_count) + 1
-            new_xyz, covariance, history, changes, belief_confidence = self._position_update(
-                existing, xyz_a, step=step
-            )
+            new_xyz, covariance, history, changes, belief_confidence = self._position_update(existing, xyz_a, step=step)
             merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
             new_desc = description if description else existing.description
             merged_bbox = bbox_i if bbox_i is not None else existing.bbox_xyxy
@@ -200,6 +197,7 @@ def add_observation(
     self._update_edges()
     return obs_id
 
+
 def merge_object_detection(
     self,
     rgb: np.ndarray | Image.Image,
@@ -207,13 +205,21 @@ def merge_object_detection(
     *,
     merge_into_node_id: int | None,
     viewer_xyz: np.ndarray | None = None,
+    blend: Any | None = None,
+    allow_label_mismatch: bool = False,
 ) -> int:
     """
     Add or merge an instance detection (GraphObjectFusion path).
 
     ``candidate`` is a :class:`~emet.memory.graph_eqa.graph_object_fusion.fusion.GraphDetectionCandidate`
     or any object with ``label``, ``xyz``, optional ``bbox_xyxy``, ``bounds_3d``, ``embedding``.
+    ``blend`` (optional ``FusionKeep``) controls which node state merges: union
+    labels/bounds, blend embeddings, and whether the anchor XYZ is updated.
     """
+    _union_labels = bool(getattr(blend, "union_labels", True))
+    _union_bounds = bool(getattr(blend, "union_bounds", True))
+    _blend_embedding = bool(getattr(blend, "blend_embedding", True))
+    _update_xyz = bool(getattr(blend, "update_xyz", True))
     if isinstance(rgb, Image.Image):
         rgb = np.array(rgb)
     label = str(getattr(candidate, "label", "object"))
@@ -261,7 +267,7 @@ def merge_object_detection(
                 from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
 
                 primary = str(existing.labels[0]).strip() if existing.labels else label
-                if not labels_compatible_for_dedup(label, primary):
+                if not allow_label_mismatch and not labels_compatible_for_dedup(label, primary):
                     break
                 merged_labels = sorted(
                     {
@@ -276,15 +282,26 @@ def merge_object_detection(
             else:
                 merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
             sc = int(existing.support_count) + 1
-            new_xyz, covariance, history, changes, belief_confidence = self._position_update(
-                existing, xyz_a, step=step
-            )
-            new_emb = embedding if embedding is not None else existing.embedding
-            if embedding is not None and existing.embedding is not None:
-                a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
-                new_emb = (1.0 - a) * np.asarray(existing.embedding, dtype=np.float32) + a * embedding
+            if _update_xyz:
+                new_xyz, covariance, history, changes, belief_confidence = self._position_update(
+                    existing, xyz_a, step=step
+                )
+            else:
+                new_xyz = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3].copy()
+                covariance, history, changes, belief_confidence = (
+                    existing.position_covariance,
+                    existing.position_history,
+                    existing.change_events,
+                    existing.belief_confidence,
+                )
+            new_emb = existing.embedding
+            if embedding is not None and _blend_embedding:
+                new_emb = embedding
+                if existing.embedding is not None:
+                    a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
+                    new_emb = (1.0 - a) * np.asarray(existing.embedding, dtype=np.float32) + a * embedding
             new_bounds = bounds_3d if bounds_3d is not None else existing.bounds_3d
-            if bounds_3d is not None and existing.bounds_3d is not None:
+            if bounds_3d is not None and existing.bounds_3d is not None and _union_bounds:
                 mn = np.minimum(
                     np.asarray(existing.bounds_3d["min"], dtype=np.float64),
                     np.asarray(bounds_3d["min"], dtype=np.float64),
@@ -300,6 +317,8 @@ def merge_object_detection(
                     "center": c.tolist(),
                     "size": (mx - mn).tolist(),
                 }
+            if not _union_labels:
+                merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
             self._nodes[idx] = replace(
                 existing,
                 xyz=new_xyz,
@@ -347,6 +366,7 @@ def merge_object_detection(
             )
             break
     return obs_id
+
 
 def absorb_object_node(self, src_node_id: int, dst_node_id: int) -> bool:
     """Fold ``src`` object node into ``dst`` and remove ``src`` from the graph."""
@@ -459,6 +479,7 @@ def absorb_object_node(self, src_node_id: int, dst_node_id: int) -> bool:
     self._update_edges()
     return True
 
+
 def upsert_ground_truth_observation(
     self,
     body_key: str,
@@ -524,6 +545,7 @@ def upsert_ground_truth_observation(
         extent_half=ext,
     )
 
+
 def attach_detection_to_ground_truth_node(
     self,
     body_key: str,
@@ -551,6 +573,7 @@ def attach_detection_to_ground_truth_node(
         self._update_edges()
         return True
     return False
+
 
 def record_navigation_sample(
     self,
@@ -585,13 +608,16 @@ def record_navigation_sample(
         self._next_obs_id += 1
         self._ensure_viewpoint_node(nav_obs_id, bx, labels=["viewpoint", "nav"])
 
+
 def get_navigation_samples(self) -> list[GraphNavigationSample]:
     return list(self._nav_samples)
+
 
 def _frontier_desc(self, cluster_id: str) -> str:
     from emet.memory.graph_eqa.spatial.frontier_nodes import FRONTIER_DESC_PREFIX
 
     return f"{FRONTIER_DESC_PREFIX}{cluster_id}"
+
 
 def _find_frontier_node(self, cluster_id: str) -> GraphNode | None:
     desc = self._frontier_desc(cluster_id)
@@ -599,6 +625,7 @@ def _find_frontier_node(self, cluster_id: str) -> GraphNode | None:
         if n.is_frontier and n.description == desc:
             return n
     return None
+
 
 def _remove_frontier_nodes(self, keep_cluster_ids: set[str]) -> None:
     from emet.memory.graph_eqa.spatial.frontier_nodes import FRONTIER_DESC_PREFIX
@@ -622,6 +649,7 @@ def _remove_frontier_nodes(self, keep_cluster_ids: set[str]) -> None:
     self._reindex_world_entities()
     self._rebuild_viewpoint_index()
     self._update_edges()
+
 
 def _frontier_support_attachment(
     self,
@@ -666,6 +694,7 @@ def _frontier_support_attachment(
     crop = np.repeat(np.repeat(crop, scale, axis=0), scale, axis=1)[:96, :96]
     attachment_id = f"map:grid-{row}-{col}:step-{int(step)}"
     return crop, (), (attachment_id,)
+
 
 def sync_frontier_nodes(
     self,
@@ -835,8 +864,10 @@ def sync_frontier_nodes(
     self._update_edges()
     return sum(1 for n in self._nodes if n.is_frontier)
 
+
 def _rebuild_viewpoint_index(self) -> None:
     self._viewpoint_by_obs_id = {int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint}
+
 
 def _find_nearby_viewpoint_node(self, viewer_xyz: np.ndarray) -> GraphNode | None:
     """Nearest viewpoint within ``viewpoint_merge_m`` (stationary-stream dedup)."""
@@ -854,6 +885,7 @@ def _find_nearby_viewpoint_node(self, viewer_xyz: np.ndarray) -> GraphNode | Non
             best_d = d
             best = n
     return best
+
 
 def _ensure_viewpoint_node(
     self,
@@ -903,6 +935,7 @@ def _ensure_viewpoint_node(
     self._viewpoint_by_obs_id[int(obs_id)] = int(node_id)
     return int(node_id)
 
+
 def _ensure_seen_from_edge(self, node_id: int, obs_id: int) -> None:
     """Link object *node_id* to the viewpoint graph node for observation *obs_id*."""
     vp_id = self._viewpoint_by_obs_id.get(int(obs_id))
@@ -912,11 +945,13 @@ def _ensure_seen_from_edge(self, node_id: int, obs_id: int) -> None:
     if edge not in self._edges:
         self._edges.append(edge)
 
+
 def _observation_by_id(self, obs_id: int) -> GraphObservation | None:
     for o in self._observations:
         if int(o.obs_id) == int(obs_id):
             return o
     return None
+
 
 def _update_edges(self) -> None:
     """Compute spatial/context relations and timestamp their uncertain evidence."""
