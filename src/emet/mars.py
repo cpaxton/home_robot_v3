@@ -33,7 +33,33 @@ MARS_ZMQ_PORTS: dict[int, str] = {
     4402: "actions",
     4403: "state",
     4404: "servo",
+    4405: "h264",
 }
+MARS_CORE_ZMQ_PORTS: frozenset[int] = frozenset({4401, 4402, 4403, 4404})
+MARS_OPTIONAL_ZMQ_PORTS: frozenset[int] = frozenset({4405})  # H.264, off unless EMET_ZMQ_H264=1
+
+
+def _mars_zmq_env_exports(
+    *,
+    video_rtsp: bool = False,
+    rtsp_host: str | None = None,
+    metadata_only_obs: bool = False,
+) -> str:
+    """Default Mars bridge ZMQ wire-format env (half-res 4401, no duplicate 4404 JPEG)."""
+    parts = [
+        "export EMET_ZMQ_IMAGE_SCALING=0.5",
+        "export EMET_ZMQ_SERVO_INCLUDE_IMAGES=0",
+    ]
+    if metadata_only_obs:
+        parts.append("export EMET_ZMQ_OBS_INCLUDE_IMAGES=0")
+        parts.append("export EMET_ZMQ_FULL_HZ=15")
+        parts.append("export EMET_ZMQ_SERVO_HZ=10")
+        parts.append("export EMET_ZMQ_SERVO_INCLUDE_IMAGES=1")
+    if video_rtsp:
+        parts.append("export EMET_MARS_VIDEO_RTSP=1")
+        if rtsp_host:
+            parts.append(f"export EMET_MARS_VIDEO_RTSP_HOST={rtsp_host}")
+    return "; ".join(parts) + "; "
 
 
 @dataclass
@@ -73,7 +99,7 @@ class MarsBridgeStatus:
 
     @property
     def all_ports_listening(self) -> bool:
-        return set(MARS_ZMQ_PORTS).issubset(self.listening_ports)
+        return MARS_CORE_ZMQ_PORTS.issubset(self.listening_ports)
 
     @property
     def ready_for_stream(self) -> bool:
@@ -125,13 +151,30 @@ def resolve_mars_target(
     return host.strip(), user.strip(), password, workspace.rstrip("/"), emet_dir.rstrip("/")
 
 
-def _remote_bridge_launch_cmd(*, workspace: str, emet_dir: str, onboard_da3: bool = False) -> str:
+def _remote_bridge_launch_cmd(
+    *,
+    workspace: str,
+    emet_dir: str,
+    onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    rtsp_host: str | None = None,
+    metadata_only_obs: bool = False,
+) -> str:
     emet_core = f"{emet_dir}/emet_core"
     emet_src = f"{emet_dir}/src"
     da3_env = "export EMET_MARS_ONBOARD_DA3=1; " if onboard_da3 else ""
+    dinov3_env = ""
+    if onboard_dinov3:
+        dinov3_env = "export EMET_MARS_ONBOARD_DINOV3=1; export HF_HOME=$HOME/hf-cache; export TRANSFORMERS_CACHE=$HOME/hf-cache; "
     py_paths = f"{emet_core}:{emet_src}"
+    zmq_env = _mars_zmq_env_exports(
+        video_rtsp=video_rtsp,
+        rtsp_host=rtsp_host,
+        metadata_only_obs=metadata_only_obs,
+    )
     return (
-        f"{da3_env}"
+        f"{da3_env}{dinov3_env}{zmq_env}"
         f"source {emet_dir}/bridge_env.sh 2>/dev/null || "
         f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
         f"source ~/innate-os/dds/setup_dds.zsh && "
@@ -143,14 +186,14 @@ def _remote_bridge_launch_cmd(*, workspace: str, emet_dir: str, onboard_da3: boo
 
 def _kill_bridge_remote() -> str:
     """Free ZMQ ports (avoids pkill -f matching the SSH shell command line)."""
-    return "fuser -k 4401/tcp 4402/tcp 4403/tcp 4404/tcp 2>/dev/null || true"
+    return "fuser -k 4401/tcp 4402/tcp 4403/tcp 4404/tcp 4405/tcp 2>/dev/null || true"
 
 
 def _remote_status_cmd() -> str:
     return (
         "pgrep -af 'innate_mars_zmq_server' 2>/dev/null || true; "
         "echo '---'; "
-        "ss -tlnH 2>/dev/null | grep -E ':440[1-4] ' || true; "
+        "ss -tlnH 2>/dev/null | grep -E ':440[1-5] ' || true; "
         "echo '---'; "
         f"tmux has-session -t {TMUX_SESSION} 2>/dev/null && "
         f"tmux capture-pane -t {TMUX_SESSION}:{TMUX_WINDOW} -p 2>/dev/null | tail -12 "
@@ -302,15 +345,17 @@ def _short_ros_message(line: str) -> str:
 
 
 def _compact_ports(status: MarsBridgeStatus) -> str:
-    expected = set(MARS_ZMQ_PORTS)
-    up = status.listening_ports & expected
-    n = len(up)
-    if n == len(expected):
-        return style("4401–4404", fg="green")
+    up_core = status.listening_ports & MARS_CORE_ZMQ_PORTS
+    n = len(up_core)
+    h264 = bool(status.listening_ports & MARS_OPTIONAL_ZMQ_PORTS)
+    if n == len(MARS_CORE_ZMQ_PORTS):
+        label = "4401–4404+h264" if h264 else "4401–4404"
+        return style(label, fg="green")
     if n == 0:
         return style("down", fg="red")
-    missing = ",".join(str(p) for p in sorted(expected - up))
-    return style(f"{n}/4 (missing {missing})", fg="yellow")
+    missing = ",".join(str(p) for p in sorted(MARS_CORE_ZMQ_PORTS - up_core))
+    extra = "+h264" if h264 else ""
+    return style(f"{n}/4 (missing {missing}){extra}", fg="yellow")
 
 
 def print_bridge_status(
@@ -318,6 +363,7 @@ def print_bridge_status(
     *,
     profile: str | None = None,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
     show_next_steps: bool = True,
 ) -> None:
     """Pretty-print bridge health for ``emet mars start`` / ``emet mars status``."""
@@ -340,6 +386,8 @@ def print_bridge_status(
     parts.append(f"ZMQ {_compact_ports(status)}")
     if onboard_da3:
         parts.append(style("DA3", fg="cyan"))
+    if onboard_dinov3:
+        parts.append(style("DINOv3", fg="cyan"))
 
     log_line = status.headline_log()
     show_log = bool(
@@ -402,9 +450,20 @@ def start_bridge_on_robot(
     workspace: str = DEFAULT_INNATE_WORKSPACE,
     emet_dir: str = DEFAULT_EMET_DIR,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    metadata_only_obs: bool = False,
 ) -> None:
     """Start innate_mars_bridge inside innate-os tmux (Zenoh DDS env)."""
-    launch_line = _remote_bridge_launch_cmd(workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
+    launch_line = _remote_bridge_launch_cmd(
+        workspace=workspace,
+        emet_dir=emet_dir,
+        onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
+        video_rtsp=video_rtsp,
+        rtsp_host=host,
+        metadata_only_obs=metadata_only_obs,
+    )
     remote = (
         f"{_kill_bridge_remote()}; "
         "sleep 1; "
@@ -439,6 +498,7 @@ def bridge_status_on_robot(
     *,
     profile: str | None = None,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
     show_next_steps: bool = True,
     workspace: str = DEFAULT_INNATE_WORKSPACE,
 ) -> MarsBridgeStatus:
@@ -447,6 +507,7 @@ def bridge_status_on_robot(
         status,
         profile=profile,
         onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
         show_next_steps=show_next_steps,
     )
     return status
@@ -462,6 +523,9 @@ def mars_start(
     deploy: bool = False,
     preview: bool = False,
     onboard_da3: bool = False,
+    onboard_dinov3: bool = False,
+    video_rtsp: bool = False,
+    metadata_only_obs: bool = False,
     wait_s: float = 20.0,
 ) -> None:
     host, user, password, workspace, emet_dir = resolve_mars_target(
@@ -498,11 +562,22 @@ def mars_start(
             emet_dir=emet_dir,
             start_bridge=False,
             with_da3=onboard_da3,
+            with_dinov3=onboard_dinov3,
             robot="innate_mars",
             root=_project_root(),
         )
 
-    start_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
+    start_bridge_on_robot(
+        host,
+        user,
+        password,
+        workspace=workspace,
+        emet_dir=emet_dir,
+        onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
+        video_rtsp=video_rtsp,
+        metadata_only_obs=metadata_only_obs,
+    )
 
     if wait_s > 0:
         note(f"Waiting {wait_s:.0f}s for bridge startup…")
@@ -514,6 +589,7 @@ def mars_start(
         password,
         profile=profile_name or connection_name or host,
         onboard_da3=onboard_da3,
+        onboard_dinov3=onboard_dinov3,
         show_next_steps=not preview,
         workspace=workspace,
     )
