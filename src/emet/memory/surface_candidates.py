@@ -102,7 +102,7 @@ def candidate_mask(region, shape):
 
 
 def surface_candidate_panels(rgb, regions):
-    """Enlarged candidate panels; retain RGB on support and dim its surroundings.
+    """Enlarged candidate panels; retain RGB only on measured support.
 
     All panels use the same context crop. Labels live outside the image, never
     over small objects. The separate original image remains unmodified.
@@ -119,7 +119,7 @@ def surface_candidate_panels(rgb, regions):
     panels = []
     for region in regions:
         mask = candidate_mask(region, rgb.shape[:2])[top:bottom, left:right]
-        pixels = (crop * 0.15).astype(np.uint8)
+        pixels = np.zeros_like(crop)
         pixels[mask] = crop[mask]
         panels.append((f"Candidate {region['id']}", pixels))
     width, height = 256, 280

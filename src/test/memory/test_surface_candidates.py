@@ -7,6 +7,24 @@ import numpy as np
 import pytest
 
 from emet.memory.surface_candidates import candidate_mask, surface_candidate_image, surface_candidates
+
+
+def test_candidate_panel_excludes_rgb_outside_its_support():
+    from emet.memory.surface_candidates import surface_candidate_panels
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    rgb[:] = [255, 0, 0]
+    rgb[15:25, 15:25] = [0, 0, 255]
+    mask = np.zeros((40, 40), dtype=bool)
+    mask[15:25, 15:25] = True
+    regions = surface_candidates(
+        np.ones((40, 40)), [0, 0, 1000, 1000], min_depth=0.25, max_depth=4, proposal_masks=[mask]
+    )
+    panel = np.asarray(surface_candidate_panels(rgb, regions)[0])
+    assert np.any(np.all(panel == [0, 0, 255], axis=-1))
+    assert not np.any((panel[..., 0] > 0) & (panel[..., 1] == 0) & (panel[..., 2] == 0))
+
+
 from emet.memory.vlm_region_grounding import select_supported_region
 
 
