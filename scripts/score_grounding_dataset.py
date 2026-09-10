@@ -29,6 +29,10 @@ def score(truth_path, results_path):
             elapsed_s=sum(r["elapsed_s"] for r in result.get("effective_requests", [])),
         )
         try:
+            if result["audit"].get("source") == "external_mask_proposals":
+                # Full-image ROI is an implementation detail, not a predicted box.
+                row["box_recall"] = row["box_iou"] = None
+                raise ValueError("no model-predicted search box")
             box = expand_box(result["selection"].get("box"), 0)
             h, w = gt.shape
             x0, y0 = np.floor(np.array(box[:2]) * [w, h] / 1000).astype(int)

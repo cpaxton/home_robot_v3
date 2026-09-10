@@ -50,6 +50,15 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
       records runtime confounds; this is not proof of quantization causality.
 - [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
       then freeze a paired no-regression comparison, not a full sweep.
+- [x] Cache 40 varied Molmo/RoboCasa views with separate simulator masks; run five
+      box ablations plus YOLOE-proposal/Qwen-verifier comparison serially.
+      [Results and artifacts](docs/experiments/grounding_verification_ablation.md):
+      whole-object prompt 7/21 pure surfaces vs baseline 5/21; no held-out recovery.
+- [ ] Fix final-verifier wrong-object acceptance: detector paper-towel case 14
+      selects a mug (zero target overlap). Box self-check alone did not help;
+      improve candidate identification and mask purity before OVMM promotion.
+- [ ] Add clear-view controls alongside blocked/robot-occluded views in the new
+      dataset; do not confuse oracle camera placement with successful search.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
       update paper evidence/limitations only after acceptance; Sourccey and Mars
       remain deferred, not required for this closeout.

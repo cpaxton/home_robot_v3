@@ -69,3 +69,70 @@ mandatory. Missing masks mean abstention, not an implicit detector-free fallback
 This compares proposal pipelines, not just a verifier. Cache and inference run
 serially; include proposal latency when estimating online cost. Production
 controllers do not enable this experimental path automatically.
+
+## Completed pilot (2026-09-10)
+
+Capture caches:
+
+- `/home/cpaxton/runs/emet/grounding-views-20260910`
+- `/home/cpaxton/runs/emet/grounding-robocasa-v2-20260910`
+
+Five-variant source `c6b37fc1`, job `20260910_020936_cb13d5`, outputs
+`/home/cpaxton/runs/emet/grounding-ablation-local-20260910`.
+Detector comparison source `de3a58ac`, job `20260910_021539_5feba4`, outputs
+`/home/cpaxton/runs/emet/grounding-proposal-qwen-20260910`, cached masks in
+`/home/cpaxton/runs/emet/grounding-proposal-cache-20260910`.
+All inference used local Qwen3-VL-8B-Instruct int4, not Caliban FP16.
+Jobs ran serially with the CPU-safe/GPU-exclusive runner and completed.
+
+Of 40 views, 21 have any target pixels: 14 development and 7 held-out.
+All methods reject all 19 zero-visibility views. A few visible targets have only
+14–134 pixels; the held-out layout is particularly robot-occluded. These are
+not 40 clear acquisition opportunities. Additional clear-view controls are needed
+before making broad cross-scene claims, and category labels are not grasp labels.
+
+| Variant | Pure surface / 14 visible development | Accepted below 95% purity | Pure surface / 7 visible held-out |
+| --- | --- | --- | --- |
+| Baseline | 5 | 5 | 0 |
+| Expand 25% each side | 2 | 7 | 0 |
+| Entire-visible-object prompt | 7 | 4 | 0 |
+| Box verification | 5 | 5 | 0 |
+| One correction allowed | 5 | 5 | 0 |
+| YOLOE proposals + Qwen surface verification | 5 | 7 | 0 |
+
+The below-purity column includes boundary contamination, not just wrong-object
+selection. For example baseline bowl masks are 94.4%, 81.0%, and 77.2% pure;
+YOLOE proposals improve those to 97.8%, 95.9%, and 98.8%, respectively. However,
+the portrait YOLOE selection covers only 30.2% of the visible bowl, illustrating
+why purity must be read with recall. Larger boxes generally worsen contamination.
+
+Verification and repair accepted the existing accepted boxes without repairing
+them; both preserve the same five contaminated acceptances. That does not mean
+all verification is useless: this particular extra box check did not help the
+downstream surface problem. The existing selector can reject wrong-only proposals
+(e.g. sponge candidates showing produce and a bottle cap), but is not reliable.
+
+### Manually verified wrong-object acceptance
+
+Detector case 14, Molmo paper-towel/far: Qwen accepts candidate 0 as a paper-towel
+roll. The true target has 78 visible pixels, but the selected 574-pixel mask has
+zero target overlap. Simulator geometry identifies 460 selected pixels as a mug;
+the remainder belongs to a coffee maker, plant, lettuce and counter. The original
+frame and isolated candidate visibly support this diagnosis. This is a genuine
+wrong-object acceptance, not merely the 95% threshold rejecting a near-perfect mask.
+
+Inspect `14-surfaces.png`, `14-surface-0.png`, `14-support.npz` and case 14 in
+`results.json` under the detector comparison output. The model's explanation
+invented paper-roll evidence. Do not promote this verifier based on confident text.
+
+Decision: whole-object prompting is the most promising box-only development
+variant, not a validated winner. Neither it nor the detector-proposal pipeline
+meets final OVMM acceptance. No production configuration or action tolerance was
+changed; no new OVMM/task success is claimed. Next improve mask support and test
+less target-leading candidate identification plus reacquisition on ambiguous
+views. Retain this wrong-mug case as a regression test, alongside clean successes.
+Only advance to a bounded integrated find/OVMM pilot after these failures improve.
+
+Focused grounding tests: 31 passed. The detector full-image ROI is not a predicted
+box; its box-overlap metrics are null in the corrected scorer. Selected-mask
+scores above are unaffected by that reporting correction.
