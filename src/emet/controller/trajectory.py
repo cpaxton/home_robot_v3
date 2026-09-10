@@ -4,6 +4,10 @@
 
 """One serial waypoint contract for ZMQ-backed robot clients."""
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def execute_waypoints(robot, trajectory, *, relative, world_frame, per_waypoint_timeout, final_timeout):
     """Wait for each command's terminal success before dispatching the next.
@@ -21,5 +25,12 @@ def execute_waypoints(robot, trajectory, *, relative, world_frame, per_waypoint_
             blocking=True,
             timeout=final_timeout if index == len(waypoints) - 1 else per_waypoint_timeout,
         ):
+            logger.warning(
+                "Waypoint %d/%d failed: goal=%s terminal_receipt=%s",
+                index + 1,
+                len(waypoints),
+                waypoint,
+                getattr(robot, "_command_receipt", None),
+            )
             return False
     return True

@@ -335,7 +335,8 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
     np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])
 
 
-def test_query_find_never_uses_legacy_localization(nav_agent):
+@pytest.mark.parametrize("visible_target", [False, True])
+def test_query_find_never_uses_legacy_localization(nav_agent, visible_target):
     nav_agent.query_driven_memory = True
     nav_agent.retrieve_query_candidate = MagicMock(return_value=(np.array([1.0, 2.0, 3.0]), {"source_obs_id": 1}))
     nav_agent.propose_query_candidate = MagicMock(return_value=SimpleNamespace(handle=7))
@@ -344,7 +345,15 @@ def test_query_find_never_uses_legacy_localization(nav_agent):
     nav_agent.voxel_map.localize_text.side_effect = AssertionError("legacy detector path")
     nav_agent._rerun_refresh_monologue_panel = lambda: None
     nav_agent.obs_count = 0
+    if visible_target:
+        nav_agent._grounded_query_target = SimpleNamespace(candidate_id=7, xyz=np.array([1.0, 2.0, 3.0]))
+        nav_agent.query_candidates = SimpleNamespace(
+            records={7: SimpleNamespace(handle=7, query="cup", rejected_revision=None)}
+        )
     nav_agent.process_text("cup", np.zeros(3))
-    nav_agent.retrieve_query_candidate.assert_called_once_with("cup")
+    if visible_target:
+        nav_agent.retrieve_query_candidate.assert_not_called()
+    else:
+        nav_agent.retrieve_query_candidate.assert_called_once_with("cup")
     nav_agent.voxel_map.localize_text.assert_not_called()
     nav_agent.voxel_map.verify_point.assert_not_called()
