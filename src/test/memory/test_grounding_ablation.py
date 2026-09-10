@@ -74,6 +74,26 @@ def test_scoring_distinguishes_purity_recall_and_false_acceptance(tmp_path):
     assert score(tmp_path / "truth.json", tmp_path / "results.json")[0]["false_accept"]
 
 
+def test_live_support_only_selection_excludes_reference_scene():
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    client = Mock(return_value='{"selected_id":null,"target_unambiguous":false}')
+    _, _, audit = select_candidate_surface(
+        rgb,
+        np.ones((20, 20)),
+        "cup",
+        "cup",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        proposal_masks=np.ones((1, 20, 20), dtype=bool),
+        presentation="support_only",
+    )
+    assert not audit["valid"]
+    assert audit["surface_selection"]["image_order"] == ["surface_candidate_0_rgb_file"]
+    assert len(client.call_args.args[0]) == 2  # Prompt + one support panel, no RGB reference.
+    assert client.call_args.kwargs["max_new_tokens"] == 512
+
+
 @pytest.mark.parametrize("accept", [True, False])
 def test_external_proposals_need_qwen_acceptance_and_measured_depth(accept):
     rgb = np.zeros((20, 20, 3), dtype=np.uint8)

@@ -193,7 +193,7 @@ def select_candidate_surface(
 
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
-    if presentation not in ("isolated", "context"):
+    if presentation not in ("isolated", "context", "support_only"):
         raise ValueError("Unknown surface presentation")
     if segmenter is not None and proposal_masks is not None:
         raise ValueError("Provide a segmenter or cached masks, not both")
@@ -278,11 +278,19 @@ def select_candidate_surface(
                 f"surface_candidate_{region['id']}_rgb_file",
             )
         ]
+    images = [Image.fromarray(rgb), *panels]
+    if presentation == "support_only":
+        from emet.memory.surface_candidates import support_selection_prompt
+
+        prompt = support_selection_prompt(description or query)
+        system = "Inspect visual evidence carefully. Return JSON only."
+        images = panels
+        image_order = [f"surface_candidate_{r['id']}_rgb_file" for r in regions]
     raw = _call_eqa_client(
         client,
-        [prompt, Image.fromarray(rgb), *panels],
+        [prompt, *images],
         system_prompt=system,
-        max_new_tokens=512 if presentation == "context" else 192,
+        max_new_tokens=192 if presentation == "isolated" else 512,
     )
     selection = _parse_json_object(raw)
     chosen = selection.get("selected_id")
