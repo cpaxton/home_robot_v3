@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--backend", choices=["yoloe", "sam2"], default="yoloe")
+    parser.add_argument("--backend", choices=["yoloe", "sam2", "yoloe_sam2"], default="yoloe")
     parser.add_argument("--boxes-from", type=Path, help="Exact saved Qwen results to prompt SAM2")
     args = parser.parse_args()
     if (args.backend == "sam2") != bool(args.boxes_from):
@@ -36,6 +36,10 @@ def main():
         from emet.perception.detection.yoloe import get_shared_yoloe_perception
 
         detector = get_shared_yoloe_perception(confidence_threshold=0.05, device="cuda", size="l")
+        if args.backend == "yoloe_sam2":
+            from emet.perception.detection.sam2 import SAM2Perception
+
+            segmenter = SAM2Perception(configuration="s")
     records = []
     for index, row in enumerate(rows):
         with np.load(row["arrays"], allow_pickle=False) as arrays:
@@ -59,13 +63,17 @@ def main():
             _, instances, metadata = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[row["query"]])
             ids = np.unique(instances[instances >= 0])
             masks = np.stack([instances == i for i in ids]) if len(ids) else np.empty((0, *rgb.shape[:2]), dtype=bool)
+            if args.backend == "yoloe_sam2":
+                from emet.perception.detection.query_mask_proposals import refine_instance_proposals
+
+                masks = refine_instance_proposals(rgb, instances, segmenter)
         np.savez_compressed(args.output_dir / f"{index}-masks.npz", masks=masks)
         records.append(
             {
                 "input": row,
                 "proposal_count": len(masks),
                 "elapsed_s": time.monotonic() - start,
-                "backend": "sam2.1_s" if boxes is not None else "yoloe_l",
+                "backend": {"sam2": "sam2.1_s", "yoloe": "yoloe_l", "yoloe_sam2": "yoloe_l_sam2.1_s"}[args.backend],
                 "boxes_source": str(args.boxes_from) if args.boxes_from else None,
                 "confidence_threshold": None if boxes is not None else 0.05,
                 "scores": np.asarray(metadata.get("instance_scores", [])).tolist(),

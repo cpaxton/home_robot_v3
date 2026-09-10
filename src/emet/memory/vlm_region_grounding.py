@@ -129,6 +129,7 @@ def select_supported_region(
     segmenter=None,
     presentation="isolated",
     whole_object=False,
+    proposal_masks=None,
 ):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
@@ -143,8 +144,9 @@ def select_supported_region(
             segmenter=segmenter,
             presentation=presentation,
             whole_object=whole_object,
+            proposal_masks=proposal_masks,
         )
-    if segmenter is not None or presentation != "isolated" or whole_object:
+    if segmenter is not None or proposal_masks is not None or presentation != "isolated" or whole_object:
         raise ValueError("Segmentation/presentation options require depth_candidates strategy")
     if strategy != "point":
         raise ValueError(f"Unknown region strategy: {strategy}")
@@ -327,6 +329,7 @@ def ground_vlm_region(
     segmenter=None,
     presentation="isolated",
     whole_object=False,
+    proposal_masks=None,
 ):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
@@ -350,6 +353,7 @@ def ground_vlm_region(
         segmenter=segmenter,
         presentation=presentation,
         whole_object=whole_object,
+        proposal_masks=proposal_masks,
     )
     if not verification["valid"]:
         return detected, [], [], verification

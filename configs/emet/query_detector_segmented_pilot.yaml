@@ -1,0 +1,7 @@
+# Experimental provider alternative; detector scores never authorize a target.
+# YOLOE boxes -> SAM2 masks -> Qwen support-only identity -> measured geometry.
+extends: configs/emet/query_segmented_support_pilot.yaml
+mapping:
+  query_memory:
+    mask_backend: yoloe_sam2
+    whole_object_box: false

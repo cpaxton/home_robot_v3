@@ -200,15 +200,25 @@ class LazyGraphController(DynagraphController):
                 client = self.graph_memory.eqa_client
             query_config = self.parameters.get("query_memory", {}) or {}
             mask_backend = query_config.get("mask_backend", "rgbd")
-            if mask_backend not in ("rgbd", "sam2"):
+            if mask_backend not in ("rgbd", "sam2", "yoloe_sam2"):
                 raise ValueError(f"Unknown query mask backend: {mask_backend}")
             options = {}
-            if mask_backend == "sam2":
+            if mask_backend in ("sam2", "yoloe_sam2"):
                 from emet.perception.detection.sam2 import SAM2Perception
 
                 if getattr(self, "_query_segmenter", None) is None:
                     self._query_segmenter = SAM2Perception(configuration="s")
                 options["segmenter"] = self._query_segmenter
+            if mask_backend == "yoloe_sam2":
+                from emet.perception.detection.query_mask_proposals import refine_instance_proposals
+                from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+                detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
+                _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
+                try:
+                    options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+                except ValueError as exc:
+                    return {"ok": False, "reason": str(exc)}
             if "surface_presentation" in query_config:
                 options["presentation"] = query_config["surface_presentation"]
             if "whole_object_box" in query_config:
@@ -223,6 +233,7 @@ class LazyGraphController(DynagraphController):
                 strategy=(self.parameters.get("query_memory", {}) or {}).get("region_strategy", "point"),
                 **options,
             )
+            verification["mask_backend"] = mask_backend
         elif backend == "yoloe":
             frame, detections = self._detect_query_frame(frame, query)
             matching_ids, verification = select_query_detections(
