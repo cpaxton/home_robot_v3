@@ -21,6 +21,18 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
 - [ ] Improve support segmentation/point localization and missing-candidate
       coverage before integrated acceptance; keep model-strength and assistance
       ablations separate from mandatory geometry/freshness/safety contracts.
+- [x] Compare SAM2 masks on fixed Qwen boxes and connect an opt-in provider to the
+      shared query controller. [Evidence](docs/experiments/segmented_shared_grounding.md):
+      13 pure surfaces vs 9 RGB-D, but wrong-surface acceptance remains.
+- [x] Fix recursive config inheritance losing grandparent robot-client defaults;
+      retain proper override order and reject cycles instead of duplicating settings.
+- [ ] Complete shared segmented find-only sim smoke, then address view preservation
+      and final support acceptance before cross-task EQA/OVMM/TAMP pilots.
+      First integrated run failed voxel localization and timed out at a waypoint;
+      it never reached segmented grounding. Wire query-tier candidate approach and
+      fresh view verification into shared find, not an OVMM-only controller.
+- [x] Stop reporting failed find as success; relay executor failures and reject
+      intermediate search endpoints when navigation exhausts its budget.
 
 - [x] Bounded head-only view recovery, detector-free depth-surface grounding,
       cached image/prompt audit, and explicit shared wrist-adapter CLI.

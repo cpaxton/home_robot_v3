@@ -39,7 +39,7 @@ support an answer without qualifying as an OVMM grasp target.
 | Box expansion | 25% padding worsened contamination | Keep as recorded ablation, disabled |
 | Box self-check / one repair | Did not improve the first pilot | Disabled; not independent verification |
 | Batch target-blind identity -> text match | Misbinds background support; 0 pure / 10 impure on RGB-D candidates | Do not promote; consider one-candidate-at-a-time binding separately |
-| Promptable segmentation | Not tested | Compare cleaner support without granting identity authority |
+| Promptable segmentation | SAM2: 13 pure vs 9 RGB-D on fixed boxes; wrong-surface acceptances remain | Shared opt-in provider, not final authority; see segmented grounding report |
 | Multi-view/reacquisition | Not tested in this new verification battery | Test after offline acceptance; retain pose/time linkage |
 | Stronger model with less assistance | Untested hypothesis above | Minimal/assisted/closed-loop paired comparison |
 
@@ -47,6 +47,7 @@ Findings: [box/proposal comparison](grounding_verification_ablation.md),
 [context/blind comparison](candidate_context_verification.md), and
 [FP16 comparison](caliban_fp16_grounding.md). The FP16 results do not isolate
 quantization causality. Existing EQA smoke success is not OVMM or TAMP acceptance.
+Latest: [SAM2 comparison and shared integration](segmented_shared_grounding.md).
 
 ## Separate best-local candidate
 
