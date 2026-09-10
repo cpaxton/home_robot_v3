@@ -21,6 +21,7 @@ from emet.memory.surface_candidates import (
     candidate_mask,
     context_panel,
     context_selection_prompt,
+    support_selection_prompt,
     surface_candidate_panels,
 )
 
@@ -53,6 +54,10 @@ def verify(client, rgb, regions, query, variant, isolated_prompt=None):
 
     if not regions:
         return None, requests, []
+    if variant == "support_only":
+        panels = surface_candidate_panels(rgb, regions)
+        verdict = call(support_selection_prompt(query), panels)
+        return selected_id(verdict, regions), requests, panels
     if variant == "isolated":
         if not isolated_prompt:
             raise ValueError("isolated control requires the saved original selection prompt")
@@ -100,7 +105,7 @@ def main():
     parser.add_argument(
         "--variants",
         nargs="+",
-        choices=["isolated", "context", "blind_context"],
+        choices=["isolated", "context", "blind_context", "support_only"],
         default=["isolated", "context", "blind_context"],
     )
     parser.add_argument("--baseline", type=Path, required=True)
@@ -108,6 +113,21 @@ def main():
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     inputs = json.loads(args.baseline.read_text())
+    if isinstance(inputs, dict) and "verification" in inputs and "arrays_file" in inputs:
+        # Live grounding records use the same measured-candidate schema. This
+        # permits replaying a manually identified failure without recapturing it.
+        record = inputs
+        inputs = [
+            {
+                "input": {
+                    "arrays": str(args.baseline.parent / record["arrays_file"]),
+                    "rgb": str(args.baseline.parent / record["rgb_file"]),
+                    "query": record["query"],
+                },
+                "audit": record["verification"],
+                "selection": record["verification"].get("region", {}),
+            }
+        ]
     _, client = build_graph_eqa_vlm_clients(parameters=get_parameters(args.config))
     for variant in args.variants:
         folder = args.output_dir / variant

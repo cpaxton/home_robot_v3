@@ -135,6 +135,18 @@ def context_selection_prompt(query):
     )
 
 
+def support_selection_prompt(query):
+    """Identity check without surrounding scene pixels or a prior model verdict."""
+    return (
+        f"Which measured surface shows {query!r}? Each image is one numbered candidate. "
+        "Only measured pixels are visible; black pixels are missing data, not object appearance. "
+        "Judge only the visible pixels, not an imagined nearby object. A partial surface is sufficient "
+        "only when its own appearance supports the requested identity and attributes. "
+        "If it shows support furniture, another object, mixed surfaces, or insufficient identity cues, abstain. "
+        'Return {"selected_id":integer or null,"target_unambiguous":boolean,"reason":"short explanation"}.'
+    )
+
+
 def surface_candidate_panels(rgb, regions):
     """Enlarged candidate panels; retain RGB only on measured support.
 

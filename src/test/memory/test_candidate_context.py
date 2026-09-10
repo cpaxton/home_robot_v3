@@ -46,6 +46,17 @@ def test_missing_candidates_do_not_call_model():
     client.assert_not_called()
 
 
+def test_support_only_verifier_never_receives_original_scene():
+    rgb = np.full((30, 30, 3), 120, dtype=np.uint8)
+    regions = surface_candidates(np.ones((30, 30)), [0, 0, 1000, 1000], min_depth=0.25, max_depth=4)
+    client = Mock(return_value='{"selected_id":null,"target_unambiguous":false}')
+    chosen, requests, panels = verify(client, rgb, regions, "cup", "support_only")
+    assert chosen is None
+    assert requests[0]["image_count"] == len(regions)
+    assert client.call_args.args[0][1:] == panels
+    assert all(panel.size != (30, 30) for panel in panels)
+
+
 def test_best_local_runner_freezes_config_and_pairs_only_requested_verifiers(tmp_path, monkeypatch):
     import run_grounding_ablation
 
