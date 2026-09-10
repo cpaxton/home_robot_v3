@@ -211,17 +211,17 @@ def _apply_defaults_list(cfg: dict[str, Any]) -> dict[str, Any]:
     return _deep_merge(merged, cfg)
 
 
-def _apply_extends(cfg: dict[str, Any]) -> dict[str, Any]:
+def _apply_extends(cfg: dict[str, Any], inheritance_stack: tuple[str, ...] = ()) -> dict[str, Any]:
     extends = cfg.pop("extends", None)
     if extends is None:
         return cfg
     if isinstance(extends, list):
         base: dict[str, Any] = {}
         for ref in extends:
-            loaded = load_config(str(ref), _skip_extends_defaults=True)
+            loaded = load_config(str(ref), _defer_defaults=True, _inheritance_stack=inheritance_stack)
             base = _deep_merge(base, loaded.raw)
         return _deep_merge(base, cfg)
-    loaded = load_config(str(extends), _skip_extends_defaults=True)
+    loaded = load_config(str(extends), _defer_defaults=True, _inheritance_stack=inheritance_stack)
     return _deep_merge(loaded.raw, cfg)
 
 
@@ -424,7 +424,8 @@ def load_config(
     *,
     overrides: list[str] | None = None,
     robot: str | None = None,
-    _skip_extends_defaults: bool = False,
+    _defer_defaults: bool = False,
+    _inheritance_stack: tuple[str, ...] = (),
 ) -> ResolvedEmetConfig:
     """Load nested emet config from *path* with optional dot-path overrides."""
     config_path = path or default_config_path()
@@ -436,9 +437,14 @@ def load_config(
         else:
             raise
 
+    canonical_path = str(Path(full_path).resolve())
+    if canonical_path in _inheritance_stack:
+        raise ValueError(f"Config inheritance cycle: {' -> '.join((*_inheritance_stack, canonical_path))}")
     raw = _load_yaml_file(full_path)
-    if not _skip_extends_defaults:
-        raw = _apply_extends(raw)
+    # Resolve every inheritance hop, but compose defaults only after child
+    # overrides have merged. Skipping parent inheritance loses grandparent defaults.
+    raw = _apply_extends(raw, (*_inheritance_stack, canonical_path))
+    if not _defer_defaults:
         raw = _apply_defaults_list(raw)
     raw = normalize_legacy_yaml(raw)
     resolved = ResolvedEmetConfig(raw=raw, source_path=full_path)
