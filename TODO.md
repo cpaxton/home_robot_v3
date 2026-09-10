@@ -13,9 +13,14 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
       context-assisted, and bounded closed-loop modes; test whether less assistance
       preserves grounding quality. Record cost, latency, model/input settings and
       false acceptance. Keep geometry/freshness/execution checks model-independent.
-- [ ] Run the separate best-local offline preset (whole-object prompt + context)
+- [x] Run the separate best-local offline preset (whole-object prompt + context)
       on original and supplementary caches with a matched isolated control;
       document results before promoting to bounded find/OVMM. Do not change defaults.
+      Result: 9/31 visible targets yield >=95%-pure support, nine impure acceptances;
+      context ties isolated on the same masks. No promotion or new OVMM claim.
+- [ ] Improve support segmentation/point localization and missing-candidate
+      coverage before integrated acceptance; keep model-strength and assistance
+      ablations separate from mandatory geometry/freshness/safety contracts.
 
 - [x] Bounded head-only view recovery, detector-free depth-surface grounding,
       cached image/prompt audit, and explicit shared wrist-adapter CLI.
@@ -72,7 +77,8 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
       identity binding regresses RGB-D components to 0 pure / 10 impure acceptances.
       Do not promote blind matching; context still does not fix mask contamination.
 - [x] Capture 20 supplementary close/high-angle views with scoring-only masks;
-      ten show targets, ten remain blocked. Model inference on these is pending.
+      ten show targets, ten remain blocked. Expanded local sweep completed:
+      four pure-surface recoveries and three contaminated acceptances.
 - [x] Add clear-view controls alongside blocked/robot-occluded views in the new
       dataset; do not confuse oracle camera placement with successful search.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and

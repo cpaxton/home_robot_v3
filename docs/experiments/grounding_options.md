@@ -33,8 +33,8 @@ support an answer without qualifying as an OVMM grasp target.
 
 | Option | Evidence/status | Next decision |
 | --- | --- | --- |
-| Whole-visible-object box prompt | 7 pure surfaces vs baseline 5 on 21 visible targets | Candidate for local sweep, not proven winner |
-| Context-only final selection | Rejects known mug error, retains five pure detector selections | Pair with isolated control on expanded cache |
+| Whole-visible-object box prompt | First pilot: 7 pure vs baseline 5; expanded explicit-preset run: 9/31 visible | Keep experimental; does not meet acceptance |
+| Context-only final selection | Rejects known detector mug error; no score gain on expanded Qwen-box cache | Useful rejection option, not a geometry fix |
 | YOLOE/other cheap proposals | Better bowl masks; misses targets and proposes distractors | Optional search/proposal source, never final authority |
 | Box expansion | 25% padding worsened contamination | Keep as recorded ablation, disabled |
 | Box self-check / one repair | Did not improve the first pilot | Disabled; not independent verification |
@@ -52,8 +52,8 @@ quantization causality. Existing EQA smoke success is not OVMM or TAMP acceptanc
 
 `configs/eval/grounding_best_local.yaml` fixes local Qwen3-VL-8B int4, 512-pixel
 maximum input side, whole-object prompting, and context-only verification.
-This combines promising components whose combination has not previously been
-tested. "Best local" names the experimental candidate, not a validated optimum.
+This combines promising components whose combination had not previously been
+tested before this sweep. "Best local" names the experimental candidate, not a validated optimum.
 No production agent preset inherits it. Blind matching and expansion are disabled.
 
 `scripts/run_grounding_ablation.py --preset configs/eval/grounding_best_local.yaml`
@@ -68,3 +68,46 @@ separate. The expanded 60-row cache contains repeated objects/views, not 60
 independent episodes. Do not tune against held-out outcomes. Advance to a bounded
 find/OVMM pilot only if the candidate preserves correct surfaces, avoids known
 wrong-object acceptance, and has defensible geometry. No full task sweep is implied.
+
+## Expanded local sweep: completed 2026-09-10
+
+Source `b8121694`, serial CPU-safe/GPU-exclusive job `20260910_082055_b0826f`.
+Output `/home/cpaxton/runs/emet/best-local-grounding-20260910` includes the preset,
+resolved parameters, 60-row manifest/truth, proposal-stage responses and masks,
+and paired `verification/isolated` and `verification/context` results/scores/panels.
+Local Qwen3-VL-8B int4 only; no stronger-model calls were made. Runtime about four
+minutes including GPU admission and diagnostic stages, not online agent latency.
+
+| Split | Views / visible targets | Isolated pure / impure accepted | Context pure / impure accepted |
+| --- | --- | --- | --- |
+| Previous development | 28 / 14 | 5 / 6 | 5 / 6 |
+| Previous held-out | 12 / 7 | 0 / 0 | 0 / 0 |
+| Supplementary near views | 20 / 10 | 4 / 3 | 4 / 3 |
+| Total | 60 / 31 | 9 / 9 | 9 / 9 |
+
+Both reject all 29 zero-visibility rows. All accepted masks have some target
+overlap; none is the zero-overlap wrong-object failure seen in the earlier
+detector experiment. The nine impure acceptances are below the unchanged 95%
+purity gate, not nine wholly wrong-object selections. No acceptance gate was relaxed.
+
+Supplementary recoveries: bottle (95.1% purity, 91.9% visible recall), two bowl
+views (98.5%/89.2% and 95.2%/94.6%), and a sponge patch (100%/4.2%). The tiny
+sponge patch emphasizes that a pure surface is not complete geometry or grasp
+acceptance. Accepted paper towel (26.3% purity), sugar cube (53.1%), and broccoli
+(82.0%) still mix substantial non-target support. The visible high-angle sponge,
+turmeric and pickle slice did not produce candidates; more context cannot recover
+an absent proposal. Specific food identity may also require readable labels or a
+better view, not simply a more confident response.
+
+The original whole-object pilot's 7/21 score must not be treated as a guaranteed
+improvement: this run uses a newly resolved explicit preset and fresh generations.
+The controlled comparison here is identical candidate masks with isolated versus
+context verification, which shows no aggregate score gain. Do not attribute any
+cross-run difference solely to the prompt.
+
+Decision: retain the separate local preset for reproducibility, do not promote it
+to final OVMM acceptance. Next prioritize cleaner mask/point support and candidate
+coverage, with context-only as an optional identity check. Keep the stronger-model
+minimal-assistance hypothesis open, while measuring geometry independently. The
+shared find/OVMM/TAMP harness still needs fresh-view and execution acceptance;
+this offline sweep does not establish task success. Focused tests: 35 passed.
