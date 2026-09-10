@@ -31,6 +31,9 @@ def main():
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
     parser.add_argument("--remote-image-format", choices=["jpeg", "png"], default="jpeg")
     parser.add_argument(
+        "--box-ablation", choices=["baseline", "expand_25", "whole_object", "verify", "repair"], default="baseline"
+    )
+    parser.add_argument(
         "--replay-boxes",
         type=Path,
         help="Reuse search-box responses from prior results.json; surface-selection ablation only",
@@ -39,6 +42,10 @@ def main():
     parser.add_argument("--depth-dropout", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if args.box_ablation != "baseline" and args.strategy != "depth_candidates":
+        parser.error("box ablations require depth_candidates")
+    if args.box_ablation == "whole_object" and args.replay_boxes:
+        parser.error("prompt ablation requires fresh localization")
     if args.replay_boxes and args.strategy != "depth_candidates":
         parser.error("--replay-boxes requires depth_candidates")
     if not np.isfinite(args.depth_noise_std_m) or args.depth_noise_std_m < 0 or not 0 <= args.depth_dropout <= 1:
@@ -79,18 +86,23 @@ def main():
                 depth[valid] += noise[valid]
                 depth[rng.random(depth.shape) < args.depth_dropout] = np.nan
                 np.savez_compressed(args.output_dir / f"{index}-input-depth.npz", depth=depth)
+            from grounding_ablation import BoxAblation
+
+            ablation = BoxAblation(selection_client, rgb, row["query"], args.box_ablation)
             parsed, support, audit = select_supported_region(
                 rgb,
                 depth,
                 row["query"],
                 row.get("description", row["query"]),
-                client=selection_client,
+                client=ablation,
                 min_depth=0.25,
                 max_depth=4.5,
                 strategy=args.strategy,
             )
             result = {
                 "input": row,
+                "box_ablation": args.box_ablation,
+                "effective_requests": ablation.requests,
                 "remote_image_format": args.remote_image_format,
                 "replayed_box_source": str(args.replay_boxes) if args.replay_boxes else None,
                 "depth_perturbation": perturbation,
@@ -99,6 +111,8 @@ def main():
                 "surface_points": 0,
                 "xyz": None,
             }
+            for name, image in ablation.verification_images.items():
+                image.save(args.output_dir / f"{index}-{name}.png")
             overlay = region_annotation(rgb, parsed)
             if audit["valid"]:
                 try:

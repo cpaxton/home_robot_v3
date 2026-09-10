@@ -1,0 +1,16 @@
+# Local asset path is overridable in a copied config. Scene remains unmodified.
+# Held-out evaluation requires additional independent scenes, not another view split.
+scenes:
+  - name: molmo_kitchen
+    split: development
+    xml: /home/cpaxton/.cache/molmospaces/resource_cache/scenes/ithor/20251217/scene_arena_9p5swh41.xml
+    targets:
+      - {name: bottle, query: bottle, body_prefix: bottle_8382d4ed00ffcc00a477337974541bb1}
+      - {name: bowl, query: bowl, body_prefix: bowl_6befd62f08fd322391939c2b44d3f839}
+      - {name: sponge, query: sponge, body_prefix: sponge_41cc9aa65073b4cd1fc4d9871335148d}
+      - {name: paper_towel, query: paper towel roll, body_prefix: papertowel_8c3d7f3c8d8e3b95ccf7fae0c1cac322}
+views:
+  - {name: close, distance: 0.75, azimuth: 90, elevation: -20}
+  - {name: oblique, distance: 1.2, azimuth: 135, elevation: -35}
+  - {name: far, distance: 2.0, azimuth: 90, elevation: -15}
+  - {name: portrait, distance: 1.2, azimuth: 90, elevation: -20, image_size: [640, 480]}
