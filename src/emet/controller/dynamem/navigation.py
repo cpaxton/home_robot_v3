@@ -748,4 +748,6 @@ def navigate(self, text, max_step=10):
         if finished is None:
             logger.warning("Navigation failed (blocked or no progress).")
             return None
-    return end_point
+    # An intermediate exploration endpoint is not a localized target. Budget
+    # exhaustion must not let callers proceed to manipulation with that point.
+    return end_point if finished is True else None

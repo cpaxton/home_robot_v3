@@ -584,7 +584,7 @@ class DynamemTaskExecutor:
         Returns:
             True if we should keep going, False if we should stop (quit).
 
-        Task success for the last batch is in ``_last_exec_ok`` (False if pickup/place
+        Task success for the last batch is in ``_last_exec_ok`` (False if find/pickup/place
         failed). Agent loop uses that for tool summaries without treating failure as quit.
         """
         i = 0
@@ -775,6 +775,8 @@ class DynamemTaskExecutor:
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)
+                if point is None:
+                    self._last_exec_ok = False
             elif command == "nod_head":
                 logger.info("[Pickup task] Nodding head.")
                 self.emote_task.get_task("nod_head").run()

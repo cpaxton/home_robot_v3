@@ -906,6 +906,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if executor is None:
             return "Robot not connected."
         ok = executor([("find", text)])
+        ok = bool(ok) and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None

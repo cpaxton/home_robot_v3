@@ -60,6 +60,25 @@ def executor():
     return task, target
 
 
+@pytest.mark.parametrize("point,expected", [(None, False), (np.ones(3), True)])
+def test_find_reports_task_outcome_without_quitting(point, expected, monkeypatch):
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task = object.__new__(DynamemTaskExecutor)
+    task._find = Mock(return_value=point)
+    assert task([("find", "cup")]) is True
+    assert task._last_exec_ok is expected
+
+
+@pytest.mark.parametrize("status,expected", [(False, False), (None, False), (True, True)])
+def test_navigation_only_returns_confirmed_target(status, expected):
+    from emet.controller.dynamem.navigation import navigate
+
+    point = np.ones(3)
+    agent = SimpleNamespace(maybe_save_rerun_recording=Mock(), execute_action=Mock(return_value=(status, point)))
+    result = navigate(agent, "cup", max_step=1)
+    assert (result is point) is expected
+
+
 def test_pick_handoff_passes_geometry_and_revokes_all_aliases():
     task, target = executor()
     alias = task.agent.query_candidates.propose("cup", 1, 0, [1, 1, 1])
