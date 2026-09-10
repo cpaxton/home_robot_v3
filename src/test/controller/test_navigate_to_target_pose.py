@@ -333,3 +333,18 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
     assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]
     assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
     np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])
+
+
+def test_query_find_never_uses_legacy_localization(nav_agent):
+    nav_agent.query_driven_memory = True
+    nav_agent.retrieve_query_candidate = MagicMock(return_value=(np.array([1.0, 2.0, 3.0]), {"source_obs_id": 1}))
+    nav_agent.propose_query_candidate = MagicMock(return_value=SimpleNamespace(handle=7))
+    nav_agent.voxel_map = MagicMock()
+    nav_agent._localize_point_from_graph_memory = MagicMock(side_effect=AssertionError("legacy graph path"))
+    nav_agent.voxel_map.localize_text.side_effect = AssertionError("legacy detector path")
+    nav_agent._rerun_refresh_monologue_panel = lambda: None
+    nav_agent.obs_count = 0
+    nav_agent.process_text("cup", np.zeros(3))
+    nav_agent.retrieve_query_candidate.assert_called_once_with("cup")
+    nav_agent.voxel_map.localize_text.assert_not_called()
+    nav_agent.voxel_map.verify_point.assert_not_called()

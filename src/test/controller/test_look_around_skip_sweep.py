@@ -34,6 +34,16 @@ def _look_around_on(robot) -> DynamemController:
     return agent
 
 
+def test_verified_sweep_stops_and_preserves_gaze(monkeypatch):
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda _: None)
+    agent = _look_around_on(MagicMock(spec=StretchZmqClient))
+    verifier = MagicMock(side_effect=[False, True])
+    assert agent.look_around(on_observation=verifier) is True
+    assert agent.update.call_count == 2
+    assert agent._head_to_sweep.call_count == 2  # No reset to look_front.
+
+
 def _rotate_agent(robot) -> DynamemController:
     agent = _look_around_on(robot)
     agent.save_rerun = False

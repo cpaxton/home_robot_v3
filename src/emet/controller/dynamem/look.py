@@ -162,6 +162,9 @@ def look_around(self, *, on_observation=None):
     Stretch as well as rby1 (single capture at look_front) — hardware 4-pan
     is opt-in. Paper coverage: ``EMET_FORCE_HEAD_SWEEP=1`` or
     ``--set mapping.look_around_head_sweep=true``.
+
+    Optional ``on_observation`` checks each captured view. A true result stops
+    scanning and preserves that gaze; callers must validate observation freshness.
     """
     skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):

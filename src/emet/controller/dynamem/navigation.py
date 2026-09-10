@@ -215,7 +215,12 @@ def execute_action(
     """
     if not self._realtime_updates:
         self.robot.look_front()
-        self.look_around()
+        if text and getattr(self, "query_driven_memory", False):
+            # Search visible views before trusting a weak voxel anchor. This
+            # grounds an approach target, not arrival or manipulation success.
+            self.verify_query_arrival(text)
+        else:
+            self.look_around()
         self.robot.look_front()
         self.robot.switch_to_navigation_mode()
 
@@ -399,8 +404,15 @@ def process_text(self, text, start_pose):
     if query_mode:
         # Retrieval provides approach candidates only. Never invoke the legacy
         # detector/localize_text acceptance path for query-driven memory.
-        localized_point, stats = self.retrieve_query_candidate(text)
-        if localized_point is not None:
+        target = getattr(self, "_grounded_query_target", None)
+        record = self.query_candidates.records.get(target.candidate_id) if target is not None else None
+        if record is not None and record.query == " ".join(text.lower().split()) and record.rejected_revision is None:
+            localized_point = target.xyz
+            query_candidate_handle = record.handle
+            localize_source = "query_grounded_approach"
+        else:
+            localized_point, stats = self.retrieve_query_candidate(text)
+        if localized_point is not None and query_candidate_handle is None:
             record = self.propose_query_candidate(text, localized_point, stats)
             if record is None:
                 localized_point = None
