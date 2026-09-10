@@ -603,12 +603,16 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
+        # Query arrival has an actual RGB-D visibility gate; legacy callers keep
+        # their existing planar heuristic until they adopt that contract.
+        visibility = {"require_planar_visibility": False} if query_mode and mode == "navigation" else {}
         point = self.space.sample_navigation(
             start_pose,
             self.planner,
             localized_point,
             mode=mode,
             blocked=getattr(self, "_habitat_blocked_goals", None) if mode == "exploration" else None,
+            **visibility,
         )
 
     logger.info(
