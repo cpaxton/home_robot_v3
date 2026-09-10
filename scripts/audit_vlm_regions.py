@@ -26,6 +26,7 @@ from emet.memory.vlm_region_grounding import region_annotation, select_supported
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default="dynav_config.yaml", help="Explicit model configuration")
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
@@ -65,7 +66,7 @@ def main():
         len(replay) != len(rows) or any(r["input"] != row for r, row in zip(replay, rows, strict=True))
     ):
         raise ValueError("replayed boxes must match the exact manifest and order")
-    params = get_parameters("dynav_config.yaml")
+    params = get_parameters(args.config)
     params.set("eqa/vl_image_format", args.remote_image_format)
     _, client = build_graph_eqa_vlm_clients(parameters=params)
     results = []

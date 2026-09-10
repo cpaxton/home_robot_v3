@@ -8,6 +8,15 @@ Strike through or move to a PR when done.
 Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).
 Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
 
+Hypotheses/options: [grounding option register](docs/experiments/grounding_options.md).
+- [ ] Add stronger-model (e.g. GPT) paired evaluation: minimal RGB/query,
+      context-assisted, and bounded closed-loop modes; test whether less assistance
+      preserves grounding quality. Record cost, latency, model/input settings and
+      false acceptance. Keep geometry/freshness/execution checks model-independent.
+- [ ] Run the separate best-local offline preset (whole-object prompt + context)
+      on original and supplementary caches with a matched isolated control;
+      document results before promoting to bounded find/OVMM. Do not change defaults.
+
 - [x] Bounded head-only view recovery, detector-free depth-surface grounding,
       cached image/prompt audit, and explicit shared wrist-adapter CLI.
 - [x] Prevent generic embodied presets from re-enabling streaming instances in
@@ -64,7 +73,7 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
       Do not promote blind matching; context still does not fix mask contamination.
 - [x] Capture 20 supplementary close/high-angle views with scoring-only masks;
       ten show targets, ten remain blocked. Model inference on these is pending.
-- [ ] Add clear-view controls alongside blocked/robot-occluded views in the new
+- [x] Add clear-view controls alongside blocked/robot-occluded views in the new
       dataset; do not confuse oracle camera placement with successful search.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
       update paper evidence/limitations only after acceptance; Sourccey and Mars

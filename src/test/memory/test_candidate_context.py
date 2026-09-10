@@ -44,3 +44,29 @@ def test_missing_candidates_do_not_call_model():
     client = Mock()
     assert verify(client, np.zeros((20, 20, 3), dtype=np.uint8), [], "cup", "context")[0] is None
     client.assert_not_called()
+
+
+def test_best_local_runner_freezes_config_and_pairs_only_requested_verifiers(tmp_path, monkeypatch):
+    import run_grounding_ablation
+
+    dataset = tmp_path / "cache"
+    dataset.mkdir()
+    (dataset / "manifest.yaml").write_text("[]")
+    (dataset / "truth.json").write_text("[]")
+    output = tmp_path / "results"
+    preset = Path(__file__).resolve().parents[3] / "configs/eval/grounding_best_local.yaml"
+    calls = Mock()
+    monkeypatch.setattr(run_grounding_ablation.subprocess, "run", calls)
+    monkeypatch.setattr(
+        sys, "argv", ["run", "--datasets", str(dataset), "--output-dir", str(output), "--preset", str(preset)]
+    )
+    run_grounding_ablation.main()
+    assert calls.call_count == 4
+    proposal = calls.call_args_list[0].args[0]
+    verification = calls.call_args_list[1].args[0]
+    assert proposal[proposal.index("--box-ablation") + 1] == "whole_object"
+    assert verification[verification.index("--variants") + 1 :] == ["isolated", "context"]
+    assert "blind_context" not in verification
+    params = json.loads((output / "resolved_parameters.json").read_text())
+    assert params["eqa"]["vl_quantization"] == "int4"
+    assert params["eqa"]["vl_hf_model_id"] == "Qwen/Qwen3-VL-8B-Instruct"

@@ -119,13 +119,20 @@ def verify(client, rgb, regions, query, variant, isolated_prompt=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default="dynav_config.yaml", help="Explicit model configuration")
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        choices=["isolated", "context", "blind_context"],
+        default=["isolated", "context", "blind_context"],
+    )
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     inputs = json.loads(args.baseline.read_text())
-    _, client = build_graph_eqa_vlm_clients(parameters=get_parameters("dynav_config.yaml"))
-    for variant in ("isolated", "context", "blind_context"):
+    _, client = build_graph_eqa_vlm_clients(parameters=get_parameters(args.config))
+    for variant in args.variants:
         folder = args.output_dir / variant
         folder.mkdir()
         results = []
