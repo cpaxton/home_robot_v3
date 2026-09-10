@@ -57,6 +57,13 @@ Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
 - [ ] Fix final-verifier wrong-object acceptance: detector paper-towel case 14
       selects a mug (zero target overlap). Box self-check alone did not help;
       improve candidate identification and mask purity before OVMM promotion.
+- [x] Replay fixed candidates with context crops and target-blind identification.
+      [Results](docs/experiments/candidate_context_verification.md): context rejects
+      the known mug failure without losing five pure detector selections; blind
+      identity binding regresses RGB-D components to 0 pure / 10 impure acceptances.
+      Do not promote blind matching; context still does not fix mask contamination.
+- [x] Capture 20 supplementary close/high-angle views with scoring-only masks;
+      ten show targets, ten remain blocked. Model inference on these is pending.
 - [ ] Add clear-view controls alongside blocked/robot-occluded views in the new
       dataset; do not confuse oracle camera placement with successful search.
 - [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
