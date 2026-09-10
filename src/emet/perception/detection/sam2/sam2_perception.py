@@ -110,7 +110,7 @@ class SAM2Perception(PerceptionModule):
             image: image of shape (H, W, 3)
             xyxy: bounding boxes of shape (N, 4) in (x1, y1, x2, y2) format
         Returns:
-            masks: masks of shape (N, H, W)
+            masks: boolean masks of shape (N, H, W)
         """
         xyxy = np.asarray(xyxy)
         if xyxy.size == 0:
@@ -122,10 +122,15 @@ class SAM2Perception(PerceptionModule):
         self.sam_predictor.set_image(image)
         result_masks = []
         for box in xyxy:
-            masks, scores, logits = self.sam_predictor.predict(box=box, multimask_output=True)
+            masks, scores, logits = self.sam_predictor.predict(box=box, multimask_output=True, return_logits=False)
             index = np.argmax(scores)
             result_masks.append(masks[index])
-        return np.array(result_masks)
+        masks = np.asarray(result_masks)
+        # SAM2's public numpy API casts thresholded masks to float32, even
+        # with return_logits=False. Keep one boolean contract for live and cache.
+        if masks.shape != (len(xyxy), *image.shape[:2]) or not np.isin(masks, [0, 1]).all():
+            raise ValueError("SAM2 must return aligned binary masks, not logits")
+        return masks.astype(bool)
 
     def predict(
         self,

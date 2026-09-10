@@ -35,8 +35,12 @@ def test_box_support_empty_invalid_and_best_mask():
     segmenter.sam_predictor.set_image.assert_not_called()
     with pytest.raises(ValueError):
         segmenter.segment(rgb, np.array([[4, 0, 2, 3]]))
-    masks = np.zeros((3, 30, 40), dtype=bool)
+    masks = np.zeros((3, 30, 40), dtype=np.float32)
     masks[1, 5:20, 6:30] = True
     segmenter.sam_predictor.predict.return_value = (masks, np.array([0.1, 0.9, 0.2]), None)
     actual = segmenter.segment(rgb, np.array([[2, 3, 20, 25]]))
+    assert actual.dtype == bool
     assert np.array_equal(actual[0], masks[1])
+    masks[1, 0, 0] = np.nan
+    with pytest.raises(ValueError, match="binary masks"):
+        segmenter.segment(rgb, np.array([[2, 3, 20, 25]]))
