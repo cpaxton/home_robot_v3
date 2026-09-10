@@ -13,6 +13,34 @@ import pytest
 from emet.controller.dynamem.navigation import execute_action
 
 
+def test_real_lazy_controller_scan_forwards_verification(monkeypatch):
+    from emet.controller.controller_lazy_graph import LazyGraphController
+
+    monkeypatch.setattr("emet.controller.controller_graph_eqa.is_habitat_robot_client", lambda _: False)
+    monkeypatch.setenv("EMET_SKIP_HEAD_SWEEP", "1")
+    monkeypatch.delenv("EMET_FORCE_HEAD_SWEEP", raising=False)
+    agent = object.__new__(LazyGraphController)
+    agent.robot = Mock()
+    agent.parameters = {}
+    agent.announce_action = Mock()
+    agent.update = Mock()
+    verifier = Mock(return_value=True)
+    assert agent.look_around(on_observation=verifier) is True
+    agent.update.assert_called_once_with(full_perception=True)
+    verifier.assert_called_once()
+
+
+def test_habitat_scan_preserves_verified_view():
+    from emet.controller.habitat_nav import habitat_body_scan
+
+    robot = SimpleNamespace(_sim=Mock(), _sync_pose_from_sim=Mock())
+    update = Mock()
+    verifier = Mock(side_effect=[False, True])
+    assert habitat_body_scan(robot, on_step=update, on_observation=verifier) is True
+    assert robot._sim.step.call_count == 2
+    assert update.call_count == 2
+
+
 @pytest.mark.parametrize("accepted", [True, False])
 def test_query_arrival_returns_only_verified_geometry(monkeypatch, accepted):
     monkeypatch.setattr("emet.controller.dynamem.navigation.time.sleep", lambda _: None)
