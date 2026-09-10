@@ -94,12 +94,66 @@ finds in `_last_exec_ok`, makes dispatch relay failures rather than generic Done
 and prevents navigation budget exhaustion from returning an intermediate search
 point as a localized object. Focused tests cover all three contracts.
 
-Remaining integration work: connect query-tier retrieval and fresh view grounding
+At that point, remaining integration work was to connect query-tier retrieval and fresh view grounding
 to the shared find/navigation loop, preserve the distinction between a candidate
 approach and verified arrival, and diagnose the waypoint timeout without relaxing
 safety limits. Then rerun find-only simulation before manipulation. EQA tool
 grounding and pre-manipulation grounding alone do not establish that the legacy
 find route uses the same verifier.
+
+### Shared find wiring (2026-09-10 follow-up)
+
+Implemented in `06cf9c9b` and `a0906b82`: query-driven find bypasses legacy
+`localize_text`/detector acceptance. It first checks captured views through the
+shared verifier, prefers measured target geometry when available, and otherwise
+approaches a bounded query-tier voxel candidate. Neither an approach nor a
+completed frontier is object-find success. Arrival requires new captured evidence
+through the same verifier, and the verified gaze is retained. Manipulation still
+reacquires independently. Rejected candidates do not create ambiguous active
+manipulation references. No default perception settings or safety tolerances changed.
+
+Job `20260910_175826_6a9e85` (source `06cf9c9b`) reached the query-candidate
+planner, but base execution failed before arrival verification. Crucially, the
+agent reported `find -> failed`, not success. The navigation wrapper labels any
+false trajectory result as a waypoint timeout; the underlying terminal command
+receipt is needed to establish the actual cause.
+
+View-first retry `20260910_180138_325416` used source `a0906b82` and exposed a
+missing callback forwarding in `GraphEQAController.look_around`. Fixed in
+`e210adbc`, with tests through the actual lazy-controller inheritance chain and
+the Habitat body-scan equivalent. Retry `20260910_180646_32d5e5` uses that source,
+simulator subprocess output, and terminal command-receipt logging. Do not count
+it as passed until localization and navigation evidence have been checked.
+Heavy jobs use one exclusive GPU lock. The combined focused suite passes 153
+tests (controller, graph/query memory, manipulation handoff, tools and transport).
+
+### Paired mask-provider comparison
+
+Job `20260910_175926_11c501` runs YOLOE-L on the identical 60 cached inputs,
+followed by the same local Qwen isolated/context verification used for SAM2.
+Compare against `sam2-context-20260910`, scoring against the same isolated GT
+files. This compares complete proposal providers: SAM2 uses the saved Qwen box,
+whereas YOLOE uses the query vocabulary. It is not a fixed-box segmentation-only
+ablation. Record missing proposals and impure acceptance alongside pure support;
+neither detector confidence nor a clean mask grants semantic acceptance.
+
+Completed paired results (31 visible, 29 zero-visible queries):
+
+| Provider / verifier | Pure selections | Impure accepted |
+| --- | --- | --- |
+| YOLOE-L / isolated | 8 | 10 |
+| YOLOE-L / context | 8 | 9 |
+| SAM2 / isolated | 13 | 4 |
+| SAM2 / context | 13 | 5 |
+
+Both providers reject all 29 zero-visible views in the context comparison, and
+neither recovers the seven visible held-out queries. SAM2 improves broccoli
+boundaries and recovers supplementary bowl/sugar views; YOLOE recovers a sponge
+view (index 44) where SAM2 has no accepted support. The next sponge view (45)
+illustrates the tradeoff: YOLOE purity/recall 94.2%/99.3%, SAM2 98.8%/82.1%.
+The 95%-purity gate is an evaluation convention, not physical grasp validation.
+Exact masks, Qwen requests, panels and per-row scores are retained under
+`/home/cpaxton/runs/emet/yoloe-paired60-{proposals,grounding,context}-20260910`.
 
 Focused checks so far: 51 perception/grounding tests, 69 shared query/manipulation/
 tool-outcome tests, and 24 config/query-config/replay tests. Suites overlap; do not

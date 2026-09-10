@@ -31,6 +31,13 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
       First integrated run failed voxel localization and timed out at a waypoint;
       it never reached segmented grounding. Wire query-tier candidate approach and
       fresh view verification into shared find, not an OVMM-only controller.
+- [x] Connect query-driven find to shared view-first grounding and fresh arrival
+      verification; preserve verified gaze and keep candidate approach separate
+      from success. Integrated navigation acceptance remains unchecked.
+- [x] Finish paired 60-view SAM2/YOLOE provider comparison (same Qwen verifier):
+      context SAM2 13 pure / 5 impure versus YOLOE 8 / 9; neither recovers held-out.
+- [ ] Inspect the view-first find retry's simulator/grounding evidence before
+      proceeding to bounded OVMM/EQA/TAMP pilots.
 - [x] Stop reporting failed find as success; relay executor failures and reject
       intermediate search endpoints when navigation exhausts its budget.
 
