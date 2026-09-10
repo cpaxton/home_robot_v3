@@ -63,8 +63,6 @@ class SAM2Perception(PerceptionModule):
         if not os.path.exists(checkpoint):
             wget.download(url, out=checkpoint)
 
-        self.sam_predictor = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
-
         if not torch.cuda.is_available():
             if gpu_device_id is not None:
                 print("Warning: CUDA is not available. Falling back to CPU.")
@@ -78,6 +76,9 @@ class SAM2Perception(PerceptionModule):
             device = torch.device(f"cuda:{gpu_device_id}")
 
         self.sam2_predictor = build_sam2(model_cfg, checkpoint, device=device, apply_postprocessing=False)
+        # Share one model between box prompting and automatic generation. Loading
+        # a second model wastes memory and previously ignored the chosen device.
+        self.sam_predictor = SAM2ImagePredictor(self.sam2_predictor)
         self._verbose = verbose
 
         self.mask_generator = SAM2AutomaticMaskGenerator(self.sam2_predictor)
@@ -101,6 +102,7 @@ class SAM2Perception(PerceptionModule):
         return returned_masks
 
     # Prompting SAM with detected boxes
+    @torch.inference_mode()
     def segment(self, image: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
         """
         Get masks for all detected bounding boxes using SAM
@@ -110,6 +112,13 @@ class SAM2Perception(PerceptionModule):
         Returns:
             masks: masks of shape (N, H, W)
         """
+        xyxy = np.asarray(xyxy)
+        if xyxy.size == 0:
+            return np.empty((0, *image.shape[:2]), dtype=bool)
+        if xyxy.ndim != 2 or xyxy.shape[1] != 4 or not np.isfinite(xyxy).all():
+            raise ValueError("SAM2 boxes must be finite Nx4 pixel coordinates")
+        if np.any(xyxy[:, 2:] <= xyxy[:, :2]):
+            raise ValueError("SAM2 boxes must have positive extent")
         self.sam_predictor.set_image(image)
         result_masks = []
         for box in xyxy:
