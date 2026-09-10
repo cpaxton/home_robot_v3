@@ -26,18 +26,21 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
       13 pure surfaces vs 9 RGB-D, but wrong-surface acceptance remains.
 - [x] Fix recursive config inheritance losing grandparent robot-client defaults;
       retain proper override order and reject cycles instead of duplicating settings.
-- [ ] Complete shared segmented find-only sim smoke, then address view preservation
-      and final support acceptance before cross-task EQA/OVMM/TAMP pilots.
-      First integrated run failed voxel localization and timed out at a waypoint;
-      it never reached segmented grounding. Wire query-tier candidate approach and
-      fresh view verification into shared find, not an OVMM-only controller.
 - [x] Connect query-driven find to shared view-first grounding and fresh arrival
       verification; preserve verified gaze and keep candidate approach separate
-      from success. Integrated navigation acceptance remains unchecked.
+      from success. Fix SAM2 float-mask rejection, motor/arrival tolerance mismatch,
+      and 2D table-ray rejection without removing footprint/path safety checks.
 - [x] Finish paired 60-view SAM2/YOLOE provider comparison (same Qwen verifier):
       context SAM2 13 pure / 5 impure versus YOLOE 8 / 9; neither recovers held-out.
-- [ ] Inspect the view-first find retry's simulator/grounding evidence before
-      proceeding to bounded OVMM/EQA/TAMP pilots.
+- [x] Manually inspect nearby find smokes: YOLOE-box -> SAM2 -> Qwen gives verified
+      red-cylinder and blue-block finds (21.6 s / 25.0 s). Earlier context success
+      was a table-mask false positive; Qwen-box retries remain unreliable.
+- [x] Compare raw versus SAM2-refined YOLOE proposals on the same 60-view cache:
+      support-only Qwen gives 8 pure / 10 impure versus 15 / 3. Two refined-mask
+      failures still select the wrong object; held-out remains unrecovered.
+- [ ] Hold the hybrid pilot's harness/model fixed for bounded cluttered find/OVMM,
+      EQA and learned TAMP checks; simple nearby finds are not manipulation or
+      broad-environment acceptance. Do not promote defaults on these two smokes.
 - [x] Stop reporting failed find as success; relay executor failures and reject
       intermediate search endpoints when navigation exhausts its budget.
 

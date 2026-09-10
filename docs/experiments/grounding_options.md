@@ -40,7 +40,9 @@ support an answer without qualifying as an OVMM grasp target.
 | Box self-check / one repair | Did not improve the first pilot | Disabled; not independent verification |
 | Batch target-blind identity -> text match | Misbinds background support; 0 pure / 10 impure on RGB-D candidates | Do not promote; consider one-candidate-at-a-time binding separately |
 | Promptable segmentation | SAM2: 13 pure vs 9 RGB-D on fixed boxes; wrong-surface acceptances remain | Shared opt-in provider, not final authority; see segmented grounding report |
-| Multi-view/reacquisition | Not tested in this new verification battery | Test after offline acceptance; retain pose/time linkage |
+| Support-only final identity | SAM2 cache 12 pure / 1 impure, but another live brown patch was misidentified | Better offline rejection, not a semantic guarantee |
+| YOLOE boxes -> SAM2 -> Qwen support | Two manually verified nearby sim finds (red cylinder / blue block), same frozen harness | Test clutter/longer search and cross-task handoff; keep separate preset |
+| Multi-view/reacquisition | Shared find now checks fresh arrival views; nearby red/blue geometry inspected | Preserve pose/time linkage; no manipulation or long-range claim |
 | Stronger model with less assistance | Untested hypothesis above | Minimal/assisted/closed-loop paired comparison |
 
 Findings: [box/proposal comparison](grounding_verification_ablation.md),

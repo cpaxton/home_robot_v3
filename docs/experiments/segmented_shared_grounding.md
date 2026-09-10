@@ -127,6 +127,129 @@ it as passed until localization and navigation evidence have been checked.
 Heavy jobs use one exclusive GPU lock. The combined focused suite passes 153
 tests (controller, graph/query memory, manipulation handoff, tools and transport).
 
+The `e210adbc` run reached live grounding. Qwen detected the visible cylinder in
+two views, but SAM2 masks were rejected as non-boolean. Its public predictor
+casts thresholded masks to float32; offline caching had explicitly cast them
+back, concealing the live/cache contract mismatch. `41731f4b` normalizes and
+validates binary masks in the shared wrapper, including a float-output test.
+
+The same run's navigation receipt established a separate failure: the controller
+stopped 0.0983 m from the target while measured arrival required <=0.07 m. For
+unnamed commands, the Stretch controller had retained its looser default tolerance.
+`e3fee320` applies the existing exploration policy's 0.07 m / 0.15 rad limits to
+the motor controller as well; acceptance is not relaxed. Explicit precision
+settings remain supported. Retry `20260910_181120_10fd62` freezes these fixes.
+
+That retry produced admitted, visually correct cylinder support (319 measured
+pixels in the first accepted view) and completed base motion, but could not sample
+an object approach. The 2D obstacle ray treated the supporting table as a visual
+occluder. Cancelled the repeated-search diagnostic after identifying this issue;
+its frozen evidence remains available. `4737f79f` lets query-driven approaches
+use fresh RGB-D arrival verification instead of planar visibility. Reachability,
+footprint, standoff and path collision checks remain intact; legacy and frontier
+visibility behavior stays unchanged. Retry `20260910_181633_5f6cd7` freezes this
+change. No end-to-end find success is claimed yet.
+
+The `4737f79f` run completed navigation and reported success, but manual review
+INVALIDATED that success: final record `grounding-15224831f69c4c99bfd774df08b89751`
+selected brown table pixels beside the red cylinder. Qwen's context response
+incorrectly attributed the nearby red object to that support. This is precisely
+why process/tool success is insufficient for the pilot gate.
+
+### Support-only identity ablation
+
+Source `87fc920c`, job `20260910_182151_546179`, replays that live failure and
+both 60-view proposal caches with the original scene omitted from final selection.
+The model receives only isolated measured-pixel panels, without prior reasoning.
+Qwen correctly rejects the live table patch as brown and not a red cylinder.
+
+| Provider / support-only selector | Pure selections / 31 visible | Impure accepted |
+| --- | --- | --- |
+| SAM2 | 12 | 1 |
+| YOLOE-L | 8 | 10 |
+
+SAM2's remaining impure case is the close sugar-cube view (91.5% purity, 100%
+visible recall). It loses one pure selection relative to context but rejects four
+impure ones. This does not transfer uniformly across providers: YOLOE does not
+improve. Neither recovers the held-out slice. This is development following a
+manually found failure, not a new independent held-out result.
+
+`configs/emet/query_segmented_support_pilot.yaml` separately enables the shared
+support-only selector; context and production presets remain unchanged. Source
+`3d609747` is frozen for red-cylinder job `20260910_182453_bb940d` and blue-block
+job `20260910_182511_c74c26`, serial with identical settings. Both require manual
+support inspection before claiming find acceptance. No pick/place is requested.
+
+These Qwen-box live runs were stopped after repeated unsuccessful verification.
+The red run also admitted another brown patch during initial search, explicitly
+reinterpreting the requested color in its reasoning. Support-only is an improved
+offline selector, not a reliable semantic guarantee. The blue run did not finish
+a verified find either. Do not report these cancelled diagnostics as successes.
+
+### Detector boxes, SAM2 refinement, Qwen decision
+
+`configs/emet/query_detector_segmented_pilot.yaml` changes only the proposal
+provider: YOLOE-L supplies query-conditioned boxes, SAM2 supplies masks, then the
+same Qwen support-only selector and measured-depth admission decide acceptance.
+YOLOE labels/scores never grant an instance. This addresses small-object VLM boxes
+landing beside the object without adding a robot-specific search agent.
+
+Source `bf268a7c`, red run `20260910_183408_ddbe85`: **manually verified find
+success**, tool runtime 21.6 s. Initial source observation 3 and fresh arrival
+observation 5 contain the cylinder; final support is 479 measured pixels on the
+red cylinder, not the table. XY is [0.0599, -0.5387] initially and
+[0.0620, -0.5343] at arrival (world metres). The planned base XY was already
+near the start; this proves nearby localization and turning, not long-range
+navigation or grasping. Evidence:
+`/home/cpaxton/runs/emet/shared-hybrid-find-red-20260910/grounding/grounding-f06652c1b27140488557f275a800dd79.json`.
+
+The same frozen provider/settings are used for blue run `20260910_183539_bed3e4`
+and paired-cache job `20260910_183607_080dcc` (YOLOE proposals with versus without
+SAM2 refinement). Both are serial. The combined focused suite passes 195 tests;
+this is not a new EQA/OVMM/TAMP benchmark result. Simulator shutdown emits
+multiprocessing teardown errors after task completion; preserve those logs rather
+than mistaking them for successful or failed perception.
+
+Blue run `20260910_183539_bed3e4`: **manually verified find success**, tool runtime
+25.0 s. Source observation 4 and arrival observation 6 show the blue block; final
+support has 802 measured pixels, XY [-0.0462, -0.5094] m. The final isolated panel
+shows the block, not supporting furniture. These are two nearby-object smokes in
+one simple scene, not independent evidence of broad-environment or OVMM success.
+Final record:
+`/home/cpaxton/runs/emet/shared-hybrid-find-blue-20260910/grounding/grounding-0a073cdb65884c768f937bbb851632c0.json`.
+
+Matched-proposal cache job `20260910_183607_080dcc` completed: SAM2-refined YOLOE
+proposals give **15 pure / 3 impure** with support-only Qwen, versus raw YOLOE's
+**8 / 10** under the same selector. Development: 9 pure / 3 impure; supplementary:
+6 / 0; held-out: 0 / 0. All 29 zero-visible views are rejected. Remaining errors
+include zero-target-overlap selections for sponge (index 9) and paper towel
+(14), plus sugar-cube contamination (16, 93.8% purity). These are real failures,
+not just threshold rounding. Scores and exact inputs are in
+`/home/cpaxton/runs/emet/hybrid-paired60-support-20260910/support_only/scores.json`.
+The improvement supports a prototype, not broad reliable perception or safe grasping.
+
+To reproduce a bounded, find-only run with the optional perception dependencies
+installed (use the repository's configured environment):
+
+```bash
+PYTHONPATH=src EMET_ALLOW_SDPA_ATTN=1 EMET_FORCE_HEAD_SWEEP=1 MUJOCO_GL=egl \
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+python -m emet.app.run_agent \
+  --config configs/emet/query_detector_segmented_pilot.yaml \
+  --memory-backend lazy_graph --robot stretch --start-sim \
+  --sim-config configs/sim/default_table_stretch.yaml --headless --no-discord \
+  --llm qwen3-vl-eqa --eqa --debug-tools \
+  -c "Use find_objects once to locate the red cylinder. Do not pick or place anything."
+```
+
+Set `EMET_EQA_EPISODE_DIR` to a fresh artifact directory to retain grounding
+records. For CPU affinity and serialization, wrap the command with
+`emet jobs run --cpu-safe --gpu-exclusive`; do not launch parallel heavy jobs.
+This remains a pilot preset, not a changed
+production default. Next acceptance should hold this harness/model fixed across
+cluttered find/OVMM, EQA and learned TAMP; task-specific success criteria differ,
+but the query, geometry, freshness and navigation contracts should not.
+
 ### Paired mask-provider comparison
 
 Job `20260910_175926_11c501` runs YOLOE-L on the identical 60 cached inputs,
