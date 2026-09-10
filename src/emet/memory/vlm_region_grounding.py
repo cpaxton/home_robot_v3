@@ -68,7 +68,7 @@ def region_annotation(rgb, region):
     return image
 
 
-def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False):
+def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False, whole_object=False):
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
     prompt = (
@@ -89,6 +89,11 @@ def select_vlm_region(rgb, query, description, *, client, correction=None, box_o
             "Abstain if absent, ambiguous, or the relationship cannot be established. "
             'Return JSON {"verified":true,"box":[x_min,y_min,x_max,y_max],"reason":"..."} '
             'or {"verified":false,"reason":"..."}. Do not predict a 3D position or surface point.'
+        )
+    if whole_object:
+        prompt += (
+            " Enclose the ENTIRE visible extent of the requested object, including its "
+            "top, bottom, left and right edges. Do not return only one face or a small surface patch."
         )
     images = [Image.fromarray(rgb)]
     if correction is not None:
@@ -111,12 +116,36 @@ def select_vlm_region(rgb, query, description, *, client, correction=None, box_o
     return parsed, verification
 
 
-def select_supported_region(rgb, depth, query, description, *, client, min_depth, max_depth, strategy="point"):
+def select_supported_region(
+    rgb,
+    depth,
+    query,
+    description,
+    *,
+    client,
+    min_depth,
+    max_depth,
+    strategy="point",
+    segmenter=None,
+    presentation="isolated",
+    whole_object=False,
+):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
         return select_candidate_surface(
-            rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth
+            rgb,
+            depth,
+            query,
+            description,
+            client=client,
+            min_depth=min_depth,
+            max_depth=max_depth,
+            segmenter=segmenter,
+            presentation=presentation,
+            whole_object=whole_object,
         )
+    if segmenter is not None or presentation != "isolated" or whole_object:
+        raise ValueError("Segmentation/presentation options require depth_candidates strategy")
     if strategy != "point":
         raise ValueError(f"Unknown region strategy: {strategy}")
     correction = None
@@ -146,13 +175,32 @@ def select_supported_region(rgb, depth, query, description, *, client, min_depth
     return parsed, mask, audit
 
 
-def select_candidate_surface(rgb, depth, query, description, *, client, min_depth, max_depth, proposal_masks=None):
+def select_candidate_surface(
+    rgb,
+    depth,
+    query,
+    description,
+    *,
+    client,
+    min_depth,
+    max_depth,
+    proposal_masks=None,
+    segmenter=None,
+    presentation="isolated",
+    whole_object=False,
+):
     from emet.memory.surface_candidates import candidate_mask, surface_candidate_panels, surface_candidates
 
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
+    if presentation not in ("isolated", "context"):
+        raise ValueError("Unknown surface presentation")
+    if segmenter is not None and proposal_masks is not None:
+        raise ValueError("Provide a segmenter or cached masks, not both")
     if proposal_masks is None:
-        parsed, audit = select_vlm_region(rgb, query, description, client=client, box_only=True)
+        parsed, audit = select_vlm_region(
+            rgb, query, description, client=client, box_only=True, whole_object=whole_object
+        )
     else:
         # External masks propose support, never semantic acceptance. The same
         # Qwen surface selector below must still accept a measured candidate.
@@ -164,9 +212,26 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         audit["reason"] = "VLM abstained or returned invalid output"
         return parsed, mask, audit
     try:
+        region_box = parsed.get("box")
+        if segmenter is not None:
+            box = region_box
+            if (
+                not isinstance(box, list)
+                or len(box) != 4
+                or any(type(v) is not int or not 0 <= v <= 1000 for v in box)
+                or box[2] <= box[0]
+                or box[3] <= box[1]
+            ):
+                raise ValueError("Invalid normalized segmentation prompt")
+            height, width = depth.shape
+            pixel_boxes = np.asarray([box], dtype=float) * [width, height, width, height] / 1000
+            proposal_masks = segmenter.segment(rgb, pixel_boxes)
+            # Segmentation may correctly extend beyond a partial prompt box.
+            region_box = [0, 0, 1000, 1000]
+            audit["segmentation"] = {"source": type(segmenter).__name__, "prompt_boxes_xyxy": pixel_boxes.tolist()}
         regions = surface_candidates(
             depth,
-            parsed.get("box"),
+            region_box,
             min_depth=min_depth,
             max_depth=max_depth,
             rgb=rgb,
@@ -193,8 +258,31 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         'Return JSON {"selected_id":integer or null,"target_unambiguous":true or false,"reason":"..."}.'
     )
     system = "Choose a visually supported surface, not an object location guess. Reply with JSON only."
+    panels = surface_candidate_panels(rgb, regions)
+    image_order = ["rgb_file"] + [f"surface_candidate_{r['id']}_rgb_file" for r in regions]
+    if presentation == "context":
+        from emet.memory.surface_candidates import context_panel, context_selection_prompt
+
+        prompt = context_selection_prompt(description or query)
+        system = "Inspect visual evidence carefully. Return JSON only."
+        panels = [
+            image
+            for region, isolated in zip(regions, panels, strict=True)
+            for image in (context_panel(rgb, region), isolated)
+        ]
+        image_order = ["rgb_file"] + [
+            key
+            for region in regions
+            for key in (
+                f"surface_candidate_{region['id']}_context_rgb_file",
+                f"surface_candidate_{region['id']}_rgb_file",
+            )
+        ]
     raw = _call_eqa_client(
-        client, [prompt, Image.fromarray(rgb), *surface_candidate_panels(rgb, regions)], system_prompt=system
+        client,
+        [prompt, Image.fromarray(rgb), *panels],
+        system_prompt=system,
+        max_new_tokens=512 if presentation == "context" else 192,
     )
     selection = _parse_json_object(raw)
     chosen = selection.get("selected_id")
@@ -202,7 +290,8 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         "prompt": prompt,
         "system_prompt": system,
         "raw": raw,
-        "image_order": ["rgb_file"] + [f"surface_candidate_{r['id']}_rgb_file" for r in regions],
+        "image_order": image_order,
+        "presentation": presentation,
     }
     if selection.get("target_unambiguous") is not True or type(chosen) is not int or not 0 <= chosen < len(regions):
         audit["reason"] = "no unambiguous surface selected; another view is needed"
@@ -211,12 +300,26 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
     audit.update(
         valid=True,
         selected_id=chosen,
-        proposal_source="rgbd_components" if proposal_masks is None else "external_masks",
+        proposal_source="box_segmenter"
+        if segmenter is not None
+        else ("rgbd_components" if proposal_masks is None else "external_masks"),
     )
     return parsed, mask, audit
 
 
-def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth, strategy="point"):
+def ground_vlm_region(
+    frame,
+    query,
+    description,
+    *,
+    client,
+    min_depth,
+    max_depth,
+    strategy="point",
+    segmenter=None,
+    presentation="isolated",
+    whole_object=False,
+):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
     detected = SimpleNamespace(
@@ -228,7 +331,17 @@ def ground_vlm_region(frame, query, description, *, client, min_depth, max_depth
         instance_scores=[1.0],
     )
     parsed, detected.instance, verification = select_supported_region(
-        rgb, depth, query, description, client=client, min_depth=min_depth, max_depth=max_depth, strategy=strategy
+        rgb,
+        depth,
+        query,
+        description,
+        client=client,
+        min_depth=min_depth,
+        max_depth=max_depth,
+        strategy=strategy,
+        segmenter=segmenter,
+        presentation=presentation,
+        whole_object=whole_object,
     )
     if not verification["valid"]:
         return detected, [], [], verification

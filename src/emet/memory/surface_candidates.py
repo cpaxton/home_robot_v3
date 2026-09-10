@@ -7,7 +7,7 @@ import base64
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from scipy.ndimage import label
+from scipy.ndimage import binary_erosion, label
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
@@ -99,6 +99,40 @@ def candidate_mask(region, shape):
     mask = np.zeros(shape, dtype=bool)
     mask[top:bottom, left:right] = crop
     return mask
+
+
+CONTEXT_CANDIDATE_INTRO = (
+    "Image 1 is the original scene, not a candidate. Each following pair contains one numbered "
+    "candidate: a context crop with its measured support outlined in yellow, then isolated support "
+    "pixels on black. Use the context to identify the object but ONLY the measured support for selection. "
+    "Nearby objects outside the support do not make that candidate correct. "
+)
+
+
+def context_panel(rgb, region):
+    """Preserve surrounding identity cues; outline support without painting over it."""
+    mask = candidate_mask(region, rgb.shape[:2])
+    left, top, right, bottom = region["bbox_xyxy"]
+    padding = max(32, max(right - left, bottom - top))
+    left, top = max(0, left - padding), max(0, top - padding)
+    right, bottom = min(rgb.shape[1], right + padding), min(rgb.shape[0], bottom + padding)
+    pixels = rgb.copy()
+    pixels[mask & ~binary_erosion(mask)] = [255, 255, 0]
+    tile = Image.fromarray(pixels[top:bottom, left:right])
+    tile.thumbnail((320, 320))
+    panel = Image.new("RGB", (320, 344))
+    panel.paste(tile, ((320 - tile.width) // 2, 24 + (320 - tile.height) // 2))
+    ImageDraw.Draw(panel).text((6, 5), f"Candidate {region['id']} context", fill="white")
+    return panel
+
+
+def context_selection_prompt(query):
+    return CONTEXT_CANDIDATE_INTRO + (
+        f"Select a measured surface of {query!r}. A partial visible target surface is sufficient, "
+        "but support mixed with other objects or background is not. Abstain when distinguishing "
+        "identity cues are missing or inconsistent with the requested object. "
+        'Return {"selected_id":integer or null,"target_unambiguous":boolean,"reason":"short explanation"}.'
+    )
 
 
 def surface_candidate_panels(rgb, regions):

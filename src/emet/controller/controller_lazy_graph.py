@@ -198,6 +198,21 @@ class LazyGraphController(DynagraphController):
             if client is None:
                 self.graph_memory._ensure_llm_clients()
                 client = self.graph_memory.eqa_client
+            query_config = self.parameters.get("query_memory", {}) or {}
+            mask_backend = query_config.get("mask_backend", "rgbd")
+            if mask_backend not in ("rgbd", "sam2"):
+                raise ValueError(f"Unknown query mask backend: {mask_backend}")
+            options = {}
+            if mask_backend == "sam2":
+                from emet.perception.detection.sam2 import SAM2Perception
+
+                if getattr(self, "_query_segmenter", None) is None:
+                    self._query_segmenter = SAM2Perception(configuration="s")
+                options["segmenter"] = self._query_segmenter
+            if "surface_presentation" in query_config:
+                options["presentation"] = query_config["surface_presentation"]
+            if "whole_object_box" in query_config:
+                options["whole_object"] = query_config["whole_object_box"]
             frame, detections, matching_ids, verification = ground_vlm_region(
                 frame,
                 query,
@@ -206,6 +221,7 @@ class LazyGraphController(DynagraphController):
                 min_depth=vm.min_depth,
                 max_depth=vm.max_depth,
                 strategy=(self.parameters.get("query_memory", {}) or {}).get("region_strategy", "point"),
+                **options,
             )
         elif backend == "yoloe":
             frame, detections = self._detect_query_frame(frame, query)

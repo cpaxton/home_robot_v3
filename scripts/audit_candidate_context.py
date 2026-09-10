@@ -11,30 +11,18 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
-from scipy.ndimage import binary_erosion
+from PIL import Image
 
 from emet.core.parameters import get_parameters
 from emet.eval.agentic_vlm_assess import _parse_json_object
 from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
-from emet.memory.surface_candidates import candidate_mask, surface_candidate_panels
-
-
-def context_panel(rgb, region):
-    """Preserve surrounding identity cues; outline support without painting over it."""
-    mask = candidate_mask(region, rgb.shape[:2])
-    left, top, right, bottom = region["bbox_xyxy"]
-    padding = max(32, max(right - left, bottom - top))
-    left, top = max(0, left - padding), max(0, top - padding)
-    right, bottom = min(rgb.shape[1], right + padding), min(rgb.shape[0], bottom + padding)
-    pixels = rgb.copy()
-    pixels[mask & ~binary_erosion(mask)] = [255, 255, 0]
-    tile = Image.fromarray(pixels[top:bottom, left:right])
-    tile.thumbnail((320, 320))
-    panel = Image.new("RGB", (320, 344))
-    panel.paste(tile, ((320 - tile.width) // 2, 24 + (320 - tile.height) // 2))
-    ImageDraw.Draw(panel).text((6, 5), f"Candidate {region['id']} context", fill="white")
-    return panel
+from emet.memory.surface_candidates import (
+    CONTEXT_CANDIDATE_INTRO,
+    candidate_mask,
+    context_panel,
+    context_selection_prompt,
+    surface_candidate_panels,
+)
 
 
 def selected_id(verdict, regions, identities=None):
@@ -74,12 +62,7 @@ def verify(client, rgb, regions, query, variant, isolated_prompt=None):
     panels = []
     for region, isolated in zip(regions, surface_candidate_panels(rgb, regions), strict=True):
         panels.extend([context_panel(rgb, region), isolated])
-    intro = (
-        "Image 1 is the original scene, not a candidate. Each following pair contains one numbered "
-        "candidate: a context crop with its measured support outlined in yellow, then isolated support "
-        "pixels on black. Use the context to identify the object but ONLY the measured support for selection. "
-        "Nearby objects outside the support do not make that candidate correct. "
-    )
+    intro = CONTEXT_CANDIDATE_INTRO
     identities = None
     if variant == "blind_context":
         # No query, detector category, score, or previous model reasoning in this call.
@@ -105,13 +88,7 @@ def verify(client, rgb, regions, query, variant, isolated_prompt=None):
         )
     else:
         verdict = call(
-            intro
-            + (
-                f"Select a measured surface of {query!r}. A partial visible target surface is sufficient, "
-                "but support mixed with other objects or background is not. Abstain when distinguishing "
-                "identity cues are missing or inconsistent with the requested object. "
-                'Return {"selected_id":integer or null,"target_unambiguous":boolean,"reason":"short explanation"}.'
-            ),
+            context_selection_prompt(query),
             [Image.fromarray(rgb), *panels],
         )
     return selected_id(verdict, regions, identities), requests, panels

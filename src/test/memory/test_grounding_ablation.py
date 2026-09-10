@@ -105,3 +105,50 @@ def test_external_proposals_need_qwen_acceptance_and_measured_depth(accept):
     )
     assert not audit["valid"]
     client.assert_not_called()
+
+
+def test_live_segmenter_uses_pixel_box_and_context_without_clipping_refined_mask():
+    rgb = np.zeros((40, 80, 3), dtype=np.uint8)
+    masks = np.zeros((1, 40, 80), dtype=bool)
+    masks[0, 5:30, 10:65] = True
+    segmenter = Mock()
+    segmenter.segment.return_value = masks
+    client = Mock(
+        side_effect=['{"verified":true,"box":[250,250,500,500]}', '{"selected_id":0,"target_unambiguous":true}']
+    )
+    _, support, audit = select_candidate_surface(
+        rgb,
+        np.ones((40, 80)),
+        "cup",
+        "cup",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        segmenter=segmenter,
+        presentation="context",
+        whole_object=True,
+    )
+    assert np.array_equal(segmenter.segment.call_args.args[1], [[20, 10, 40, 20]])
+    assert np.array_equal(support == 0, masks[0])
+    assert audit["proposal_source"] == "box_segmenter"
+    assert audit["surface_selection"]["presentation"] == "context"
+    assert len(client.call_args.args[0]) == 4  # prompt + original + context + isolated
+    assert client.call_args.kwargs["max_new_tokens"] == 512
+    assert "ENTIRE visible extent" in client.call_args_list[0].args[0][0]
+
+
+def test_bad_localization_never_calls_segmenter():
+    segmenter = Mock()
+    client = Mock(return_value='{"verified":true,"box":[500,0,100,1000]}')
+    _, _, audit = select_candidate_surface(
+        np.zeros((20, 20, 3), dtype=np.uint8),
+        np.ones((20, 20)),
+        "cup",
+        "cup",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        segmenter=segmenter,
+    )
+    assert not audit["valid"]
+    segmenter.segment.assert_not_called()

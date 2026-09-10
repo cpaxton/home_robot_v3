@@ -123,6 +123,12 @@ def cache_grounding_record(
                 filename = f"{prefix}-surface-{region['id']}.png"
                 panel.save(path / filename)
                 record[f"surface_candidate_{region['id']}_rgb_file"] = filename
+                if verification.get("surface_selection", {}).get("presentation") == "context":
+                    from emet.memory.surface_candidates import context_panel
+
+                    context_filename = f"{prefix}-surface-{region['id']}-context.png"
+                    context_panel(rgb, region).save(path / context_filename)
+                    record[f"surface_candidate_{region['id']}_context_rgb_file"] = context_filename
         if verification.get("correction"):
             from emet.memory.vlm_region_grounding import region_annotation
 
