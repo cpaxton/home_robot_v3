@@ -336,7 +336,9 @@ class LazyGraphController(DynagraphController):
     def prepare_query_target(self, query: str):
         """Reacquire a unique query reference immediately before manipulation."""
         query = " ".join(query.lower().split())
-        records = [r for r in self.query_candidates.records.values() if r.query == query]
+        records = [
+            r for r in self.query_candidates.records.values() if r.query == query and r.rejected_revision is None
+        ]
         if not records:
             before = len(self.voxel_map.observations)
             self.update(full_perception=True)
@@ -357,6 +359,32 @@ class LazyGraphController(DynagraphController):
             raise ValueError(result["reason"])
         records[0].require_grounding(len(self.voxel_map.observations))
         return self._grounded_query_target
+
+    def verify_query_arrival(self, query: str, *, candidate_handle=None):
+        """A reached search waypoint is not success until a fresh view grounds it."""
+        before = len(self.voxel_map.observations)
+        result = {"ok": False, "reason": "fresh observation required"}
+
+        def verify():
+            nonlocal before, result
+            revision = len(self.voxel_map.observations)
+            if revision <= before:
+                return False
+            if candidate_handle is None:
+                result = self.ground_query_view(query, source_obs_id=revision, target_description=query)
+            else:
+                record = self.query_candidates.records[candidate_handle]
+                if record.query != " ".join(query.lower().split()):
+                    raise ValueError("Search candidate does not match arrival query")
+                result = self.ground_query_candidate(candidate_handle, after_observation=before)
+            before = revision
+            return bool(result["ok"])
+
+        self.look_around(on_observation=verify)
+        self._last_query_find_verification = result
+        if result["ok"]:
+            return np.asarray(result["xyz"], dtype=float)
+        return None
 
     def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
         status, object_xyz = super().execute_action(text)

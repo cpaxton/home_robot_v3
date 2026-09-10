@@ -222,6 +222,10 @@ class DynamemTaskExecutor:
             logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])
+        if getattr(self.agent, "query_driven_memory", False):
+            # Keep the freshly verified view. Manipulation owns its posture and
+            # reacquisition, not an unconditional legacy quarter-turn in find.
+            return point
         self.robot.switch_to_navigation_mode()
         xyt = self.robot.get_base_pose()
         xyt[2] = xyt[2] + np.pi / 2

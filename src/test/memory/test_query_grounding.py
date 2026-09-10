@@ -14,6 +14,26 @@ from emet.controller.controller_lazy_graph import LazyGraphController
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 
+@pytest.mark.parametrize("fresh,accepted", [(True, True), (True, False), (False, True)])
+def test_query_arrival_requires_new_frame_and_verifier_acceptance(fresh, accepted):
+    agent = object.__new__(LazyGraphController)
+    agent.voxel_map = SimpleNamespace(observations=[object()])
+    agent.ground_query_view = Mock(return_value={"ok": accepted, "xyz": [1, 2, 3]})
+
+    def scan(*, on_observation):
+        if fresh:
+            agent.voxel_map.observations.append(object())
+        return on_observation()
+
+    agent.look_around = scan
+    result = agent.verify_query_arrival("cup")
+    assert (result is not None) is (fresh and accepted)
+    if fresh:
+        agent.ground_query_view.assert_called_once_with("cup", source_obs_id=2, target_description="cup")
+    else:
+        agent.ground_query_view.assert_not_called()
+
+
 def controller():
     agent = object.__new__(LazyGraphController)
     agent.parameters = {"graph_object_fusion": {"enabled": True, "instance_min_mask_points": 10}}
