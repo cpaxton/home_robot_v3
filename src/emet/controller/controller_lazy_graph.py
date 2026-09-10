@@ -265,7 +265,9 @@ class LazyGraphController(DynagraphController):
             metadata={
                 "target_description": target_description,
                 "grounding_backend": backend,
-                "detector_vocabulary": [query] if backend == "yoloe" else [],
+                "detector_vocabulary": [query]
+                if backend == "yoloe" or verification.get("mask_backend") == "yoloe_sam2"
+                else [],
                 "retrieval_score": record.retrieval_score if record is not None else None,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
