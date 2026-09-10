@@ -146,17 +146,32 @@ def select_supported_region(rgb, depth, query, description, *, client, min_depth
     return parsed, mask, audit
 
 
-def select_candidate_surface(rgb, depth, query, description, *, client, min_depth, max_depth):
+def select_candidate_surface(rgb, depth, query, description, *, client, min_depth, max_depth, proposal_masks=None):
     from emet.memory.surface_candidates import candidate_mask, surface_candidate_panels, surface_candidates
 
-    parsed, audit = select_vlm_region(rgb, query, description, client=client, box_only=True)
+    if client is None:
+        raise RuntimeError("Query grounding VLM client is not initialized")
+    if proposal_masks is None:
+        parsed, audit = select_vlm_region(rgb, query, description, client=client, box_only=True)
+    else:
+        # External masks propose support, never semantic acceptance. The same
+        # Qwen surface selector below must still accept a measured candidate.
+        parsed = {"verified": True, "box": [0, 0, 1000, 1000], "reason": "unverified external proposals"}
+        audit = {"source": "external_mask_proposals", "valid": False}
     mask = np.full(depth.shape, -1, dtype=np.int32)
     audit.update(strategy="depth_candidates", valid=False)
     if parsed.get("verified") is not True:
         audit["reason"] = "VLM abstained or returned invalid output"
         return parsed, mask, audit
     try:
-        regions = surface_candidates(depth, parsed.get("box"), min_depth=min_depth, max_depth=max_depth, rgb=rgb)
+        regions = surface_candidates(
+            depth,
+            parsed.get("box"),
+            min_depth=min_depth,
+            max_depth=max_depth,
+            rgb=rgb,
+            proposal_masks=proposal_masks,
+        )
     except (TypeError, ValueError) as exc:
         audit["reason"] = str(exc)
         return parsed, mask, audit
@@ -193,7 +208,11 @@ def select_candidate_surface(rgb, depth, query, description, *, client, min_dept
         audit["reason"] = "no unambiguous surface selected; another view is needed"
         return parsed, mask, audit
     mask[candidate_mask(regions[chosen], depth.shape)] = 0
-    audit.update(valid=True, selected_id=chosen, proposal_source="rgbd_components")
+    audit.update(
+        valid=True,
+        selected_id=chosen,
+        proposal_source="rgbd_components" if proposal_masks is None else "external_masks",
+    )
     return parsed, mask, audit
 
 

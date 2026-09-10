@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--strategy", choices=["point", "depth_candidates"], default="point")
     parser.add_argument("--remote-image-format", choices=["jpeg", "png"], default="jpeg")
+    parser.add_argument("--proposal-cache", type=Path, help="Cached external masks; Qwen performs final selection")
     parser.add_argument(
         "--box-ablation", choices=["baseline", "expand_25", "whole_object", "verify", "repair"], default="baseline"
     )
@@ -42,6 +43,10 @@ def main():
     parser.add_argument("--depth-dropout", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if args.proposal_cache and (
+        args.box_ablation != "baseline" or args.replay_boxes or args.strategy != "depth_candidates"
+    ):
+        parser.error("external proposals require baseline depth_candidates without replayed boxes")
     if args.box_ablation != "baseline" and args.strategy != "depth_candidates":
         parser.error("box ablations require depth_candidates")
     if args.box_ablation == "whole_object" and args.replay_boxes:
@@ -52,6 +57,9 @@ def main():
         parser.error("depth noise must be finite/nonnegative and dropout in [0,1]")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     rows = yaml.safe_load(args.manifest.read_text())
+    proposals = json.loads((args.proposal_cache / "manifest.json").read_text()) if args.proposal_cache else None
+    if proposals is not None and [r["input"] for r in proposals] != rows:
+        raise ValueError("proposal cache must match exact inputs and order")
     replay = json.loads(args.replay_boxes.read_text()) if args.replay_boxes else None
     if replay is not None and (
         len(replay) != len(rows) or any(r["input"] != row for r, row in zip(replay, rows, strict=True))
@@ -89,19 +97,38 @@ def main():
             from grounding_ablation import BoxAblation
 
             ablation = BoxAblation(selection_client, rgb, row["query"], args.box_ablation)
-            parsed, support, audit = select_supported_region(
-                rgb,
-                depth,
-                row["query"],
-                row.get("description", row["query"]),
-                client=ablation,
-                min_depth=0.25,
-                max_depth=4.5,
-                strategy=args.strategy,
-            )
+            if proposals is None:
+                parsed, support, audit = select_supported_region(
+                    rgb,
+                    depth,
+                    row["query"],
+                    row.get("description", row["query"]),
+                    client=ablation,
+                    min_depth=0.25,
+                    max_depth=4.5,
+                    strategy=args.strategy,
+                )
+            else:
+                from emet.memory.vlm_region_grounding import select_candidate_surface
+
+                # No synthetic localization call: the next call is surface verification.
+                ablation.first = False
+                with np.load(args.proposal_cache / f"{index}-masks.npz", allow_pickle=False) as cached:
+                    masks = cached["masks"]
+                parsed, support, audit = select_candidate_surface(
+                    rgb,
+                    depth,
+                    row["query"],
+                    row.get("description", row["query"]),
+                    client=ablation,
+                    min_depth=0.25,
+                    max_depth=4.5,
+                    proposal_masks=masks,
+                )
             result = {
                 "input": row,
                 "box_ablation": args.box_ablation,
+                "proposal_cache": str(args.proposal_cache) if args.proposal_cache else None,
                 "effective_requests": ablation.requests,
                 "remote_image_format": args.remote_image_format,
                 "replayed_box_source": str(args.replay_boxes) if args.replay_boxes else None,

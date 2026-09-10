@@ -57,3 +57,15 @@ surface is a diagnostic only, not complete object geometry or a safe grasp.
 No minimum-recall gate is hidden in that count: inspect recall alongside it.
 Never choose a winner only by acceptance rate or condition on successful frames.
 Keep development and held-out outcomes separate; do not tune on held-out results.
+
+## Optional detector-proposal comparison
+
+`scripts/cache_grounding_proposals.py` caches query-conditioned YOLOE-L masks at
+the existing 0.05 proposal threshold. It reads RGB only, not simulator labels.
+`audit_vlm_regions.py --proposal-cache CACHE --strategy depth_candidates` then
+uses those full-image masks instead of a Qwen box. Qwen receives candidate RGB
+panels, not detector scores; measured-depth validity and Qwen acceptance remain
+mandatory. Missing masks mean abstention, not an implicit detector-free fallback.
+This compares proposal pipelines, not just a verifier. Cache and inference run
+serially; include proposal latency when estimating online cost. Production
+controllers do not enable this experimental path automatically.

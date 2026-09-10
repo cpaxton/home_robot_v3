@@ -15,6 +15,8 @@ from build_grounding_dataset import object_geom_ids
 from grounding_ablation import BoxAblation, expand_box
 from score_grounding_dataset import score
 
+from emet.memory.vlm_region_grounding import select_candidate_surface
+
 
 def test_expansion_clips_and_rejects_malformed_boxes():
     assert expand_box([100, 200, 500, 600], 0.25) == [0, 100, 600, 700]
@@ -70,3 +72,36 @@ def test_scoring_distinguishes_purity_recall_and_false_acceptance(tmp_path):
     assert row["pure_surface"] and not row["false_accept"]
     np.savez_compressed(tmp_path / "0-support.npz", mask=~gt)
     assert score(tmp_path / "truth.json", tmp_path / "results.json")[0]["false_accept"]
+
+
+@pytest.mark.parametrize("accept", [True, False])
+def test_external_proposals_need_qwen_acceptance_and_measured_depth(accept):
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    proposed = np.ones((1, 20, 20), dtype=bool)
+    client = Mock(return_value=json.dumps({"selected_id": 0, "target_unambiguous": accept}))
+    _, support, audit = select_candidate_surface(
+        rgb,
+        np.ones((20, 20)),
+        "cup",
+        "cup",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        proposal_masks=proposed,
+    )
+    assert audit["valid"] == accept
+    assert np.any(support == 0) == accept
+    assert client.call_count == 1  # no Qwen-box dependency
+    client.reset_mock()
+    _, _, audit = select_candidate_surface(
+        rgb,
+        np.full((20, 20), np.nan),
+        "cup",
+        "cup",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        proposal_masks=proposed,
+    )
+    assert not audit["valid"]
+    client.assert_not_called()
