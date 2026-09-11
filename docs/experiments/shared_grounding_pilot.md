@@ -6,7 +6,20 @@ red/blue table finds are integration evidence, not OVMM or manipulation success.
 Launch: managed job `20260910_213038_d86e1a`, frozen source `b194395a` at
 `/tmp/emet-cross-task-20260910-frozen`. Artifacts:
 `/home/cpaxton/runs/emet/shared-grounding-cross-task-20260910`.
-Results are pending; `process_status.tsv` records exits, not task acceptance.
+This first launch is invalid for comparing strategies: all four OVMM cases and
+six EQA cases encountered SAM2's missing `iopath` dependency during model
+construction. OVMM serialized the exception despite exit zero. The absent-object
+find then reached its 360-second cap while exploring; learned pick/place never
+started. Retain these artifacts as infrastructure failures and a search timeout,
+not a model-quality score.
+
+September 11 retry: `20260911_185541_56a4c4`, frozen `eed1d868`, artifacts
+`/home/cpaxton/runs/emet/shared-grounding-habitat-retry-20260911`. Installed
+`iopath==0.1.10` and `portalocker==3.2.0` in Habitat, without changing Torch or
+model weights. The runner now constructs SAM2 and executes synthetic box
+inference before episodes, and supports `PHASE=habitat|sim|all` (default all).
+This retry selects Habitat only, with the original cases, budgets and presets.
+`process_status.tsv` records exits, not task acceptance. Retry scores are pending.
 
 ## Fixed comparison
 
