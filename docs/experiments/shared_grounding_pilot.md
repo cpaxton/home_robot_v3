@@ -19,7 +19,38 @@ September 11 retry: `20260911_185541_56a4c4`, frozen `eed1d868`, artifacts
 model weights. The runner now constructs SAM2 and executes synthetic box
 inference before episodes, and supports `PHASE=habitat|sim|all` (default all).
 This retry selects Habitat only, with the original cases, budgets and presets.
-`process_status.tsv` records exits, not task acceptance. Retry scores are pending.
+`process_status.tsv` records exits, not task acceptance. All ten retry processes
+completed without infrastructure exceptions:
+
+| Strategy | EQA q15 / q16 / q25 | OVMM object + receptacle, two scenes |
+| --- | --- | --- |
+| Hybrid | correct / correct / wrong (2/3) | 0/4 |
+| Qwen-box | wrong / correct / correct (2/3) | 0/4 |
+
+These three questions do not establish no regression against the earlier 3/3
+smoke. The strategies disagree on two questions despite equal aggregate scores.
+Hybrid scene 00025 returned an object localization 3.615 m from the target;
+Qwen-box returned a receptacle localization 5.184 m from its evaluator target.
+Neither is a task success. Other phases returned no localization.
+
+Manual review of hybrid scene 00025's accepted support
+`grounding-965b2a585dd64549851ab3ce1af623dd-surface-0.png` shows bedding/fabric,
+not an identifiable lamp. The proposal query is `nearest bed`, while the support
+selector receives the full question about the lamp nearest a bed. Qwen accepts
+the bedding while claiming a small object on it resembles a lamp. This is a
+concrete target/anchor confusion and false semantic acceptance; metric distance
+alone would not reveal it. Preserve identity versus relationship as separate
+verification concerns in the next fix, without handing context pixels back the
+authority to validate an incorrect mask.
+
+The pending learned Stretch pick/place diagnostic was launched separately as
+`20260911_194952_1415c5` on the same `eed1d868`, with a 600-second cap, velocity
+navigation, hybrid preset and no oracle scene plans. It does not rerun the known
+absent-query timeout first. The tool failed after 195.9 seconds with
+`Command 101 failed: terminal command outcome is immutable`; the agent reported
+the failure rather than claiming success. No successful learned pick/place is
+established. The command lifecycle exception needs diagnosis; process completion
+is not physical task acceptance.
 
 ## Fixed comparison
 
