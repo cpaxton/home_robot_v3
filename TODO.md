@@ -41,6 +41,9 @@ Hypotheses/options: [grounding option register](docs/experiments/grounding_optio
 - [ ] Hold the hybrid pilot's harness/model fixed for bounded cluttered find/OVMM,
       EQA and learned TAMP checks; simple nearby finds are not manipulation or
       broad-environment acceptance. Do not promote defaults on these two smokes.
+      Serial [cross-task pilot](docs/experiments/shared_grounding_pilot.md) launched
+      as `20260910_213038_d86e1a` on frozen `b194395a`; includes learned pick/place,
+      not the oracle TAMP battery. Review task evidence, not process exits.
 - [x] Stop reporting failed find as success; relay executor failures and reject
       intermediate search endpoints when navigation exhausts its budget.
 

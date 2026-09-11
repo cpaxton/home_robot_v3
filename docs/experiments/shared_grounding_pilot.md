@@ -3,6 +3,11 @@
 This freezes the September 10 candidate, not a new default. The earlier verified
 red/blue table finds are integration evidence, not OVMM or manipulation success.
 
+Launch: managed job `20260910_213038_d86e1a`, frozen source `b194395a` at
+`/tmp/emet-cross-task-20260910-frozen`. Artifacts:
+`/home/cpaxton/runs/emet/shared-grounding-cross-task-20260910`.
+Results are pending; `process_status.tsv` records exits, not task acceptance.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.
