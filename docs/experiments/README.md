@@ -1,5 +1,8 @@
 # Paper experiments — master index
 
+Interpret results using the [environment guides](../environments/README.md);
+find setup, tests and references through the [documentation guide](../README.md).
+
 **Start here** to run and reproduce Dynagraph paper benchmarks.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).

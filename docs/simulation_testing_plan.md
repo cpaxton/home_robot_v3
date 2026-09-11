@@ -1,5 +1,8 @@
 # Simulation testing plan (seven-track smoke battery)
 
+For learned-agent acceptance, use the [simple sim → RoboCasa → Habitat progression](environments/README.md).
+The mechanical smoke battery below complements it; it does not replace learned task evaluation.
+
 Canonical **sequential smoke battery** for embodied sim + Habitat before multi-day paper sweeps. Runs one GPU-heavy job at a time with shared preflight ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 
 **Orchestrator:** [`scripts/run_simulation_smoke_battery.sh`](../scripts/run_simulation_smoke_battery.sh)

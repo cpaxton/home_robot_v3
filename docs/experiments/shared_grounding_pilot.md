@@ -1,5 +1,9 @@
 # Shared grounding: bounded cross-task pilot
 
+Interpretation: [environment acceptance progression](../environments/README.md),
+[Habitat search scope](../environments/habitat.md),
+[simple-sim controls](../environments/simple_sim.md).
+
 This freezes the September 10 candidate, not a new default. The earlier verified
 red/blue table finds are integration evidence, not OVMM or manipulation success.
 
