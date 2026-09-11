@@ -117,6 +117,11 @@ else
     fi
 fi
 
+if ! "$PY_HAB" -c "import iopath" >/dev/null 2>&1; then
+    echo "Installing SAM2 backbone runtime dependency (iopath) ..."
+    habitat_pip_install 'iopath>=0.1.10'
+fi
+
 if ! "$PY_HAB" -c "
 import habitat_sim
 import emet_habitat
