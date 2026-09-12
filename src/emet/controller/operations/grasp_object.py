@@ -382,7 +382,33 @@ class GraspObjectOperation(ManagedOperation):
         """
         target = getattr(self, "grounded_target", None)
         if target is not None and target.geometry_source == "vlm_selected_depth_surface":
-            return target.select_surface(servo.get_ee_xyz_in_world_frame())
+            try:
+                return target.select_surface(servo.get_ee_xyz_in_world_frame())
+            except ValueError as exc:
+                # Retain the exact wrist view for diagnosing visibility versus
+                # calibration; never relax the geometry gate to make it pass.
+                if os.environ.get("EMET_EQA_EPISODE_DIR"):
+                    from pathlib import Path
+
+                    from emet.memory.query_grounding import cache_grounding_record
+
+                    cache_grounding_record(
+                        Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "wrist_tracking",
+                        query=self.target_object,
+                        revision=target.observation_revision,
+                        source_obs_id=None,
+                        detections=[],
+                        matching_ids=[],
+                        verification={"valid": False, "reason": str(exc), "stage": "wrist_tracking"},
+                        rgb=servo.ee_rgb,
+                        depth=servo.ee_depth,
+                        metadata={
+                            "target_points": target.points.tolist(),
+                            "camera_K": None if servo.ee_camera_K is None else servo.ee_camera_K.tolist(),
+                            "camera_pose": None if servo.ee_camera_pose is None else servo.ee_camera_pose.tolist(),
+                        },
+                    )
+                raise
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
