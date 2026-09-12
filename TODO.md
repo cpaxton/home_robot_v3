@@ -13,6 +13,11 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 - [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
       invalid IK, and reacquire the target after camera/posture changes. Latest
       lifecycle retry reached manipulation but did not pick/place successfully.
+      Side-grasp alignment and pregrasp failure guards are implemented; wrist
+      audit `20260911_202818_77c40c` still rejects two spatial components although
+      the cylinder is visible and projected geometry agrees. Replace ambiguous
+      bounding-box-only wrist tracking with object-specific support association;
+      do not silently select the largest component or widen tolerances.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance

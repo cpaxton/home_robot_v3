@@ -85,6 +85,16 @@ existing episode evidence opt-in. Serial diagnostic `20260911_202818_77c40c`
 uses that frozen source; artifacts `~/runs/emet/wrist-tracking-audit/evidence`.
 No tracking-tolerance relaxation or oracle fallback was introduced.
 
+The wrist audit completed with failed pickup, not a task success. Manual review
+of `wrist_tracking/grounding-054937277d1849de892afab78332be86.png` shows the red
+cylinder clearly. Its stored world median projects to wrist pixel (160.3, 216.1),
+with expected camera depth 0.380 m versus observed 0.370 m. This argues against
+a gross camera-frame error in this observation. Replaying the current expanded
+world bounding box gives two components of 4,726 and 2,005 pixels, triggering the
+intended ambiguity rejection. Bounding-box-only association is insufficient in
+this close view; object-specific wrist support is needed. Neither largest-mask
+fallback nor looser margins is justified by this evidence.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.

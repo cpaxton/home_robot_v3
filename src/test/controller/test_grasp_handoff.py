@@ -80,3 +80,28 @@ def test_pregrasp_propagates_arm_motion_result(arrived):
     op.robot_model.manip_ik_for_grasp_frame.return_value = (np.zeros(11), None, None, True, None)
     op.robot.arm_to.return_value = arrived
     assert op.pregrasp_open_loop(op.get_object_xyz()) is arrived
+
+
+def test_wrist_tracking_failure_saves_calibrated_evidence_without_accepting(tmp_path, monkeypatch):
+    import json
+
+    from emet.memory.grounded_target import GroundedTarget
+
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    op = operation()
+    op.grounded_target = GroundedTarget(1, 2, 3, np.ones((16, 3)), "vlm_selected_depth_surface")
+    servo = SimpleNamespace(
+        ee_rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        ee_depth=np.ones((8, 8)),
+        ee_camera_K=np.eye(3),
+        ee_camera_pose=np.eye(4),
+        get_ee_xyz_in_world_frame=lambda: np.zeros((8, 8, 3)),
+    )
+    with pytest.raises(ValueError, match="absent or ambiguous"):
+        op.get_target_mask(servo, center=(4, 4))
+    records = list((tmp_path / "wrist_tracking").glob("*.json"))
+    assert len(records) == 1
+    record = json.loads(records[0].read_text())
+    assert record["verification"]["valid"] is False
+    assert record["metadata"]["camera_pose"] == np.eye(4).tolist()
+    assert (records[0].parent / record["rgb_file"]).is_file()
