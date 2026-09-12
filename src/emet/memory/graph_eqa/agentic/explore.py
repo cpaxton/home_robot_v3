@@ -661,6 +661,10 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         if isinstance(look_cap, dict) and look_cap.get("ok"):
             cap = look_cap
     verify_out = None
+    if motion_progress and cap.get("ok"):
+        from emet.memory.graph_eqa.agentic.view_quality import recover_exploration_view
+
+        cap = recover_exploration_view(self, cap)
     if cap.get("ok") and cap.get("obs_id") is not None:
         self._policy_approached(hypothesis_id, int(cap["obs_id"]))
         if self.mode == "answer":

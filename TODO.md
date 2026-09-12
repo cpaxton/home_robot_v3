@@ -3,6 +3,134 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## PR #167 VLM-led acceptance (2026-09-09)
+
+Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).
+Do not merge on graph size or a tabletop smoke alone. Required gates are learned
+single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle controls),
+and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
+
+- [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
+      invalid IK, and reacquire the target after camera/posture changes. Latest
+      lifecycle retry reached manipulation but did not pick/place successfully.
+      Side-grasp alignment and pregrasp failure guards are implemented; wrist
+      audit `20260911_202818_77c40c` still rejects two spatial components although
+      the cylinder is visible and projected geometry agrees. Replace ambiguous
+      bounding-box-only wrist tracking with object-specific support association;
+      do not silently select the largest component or widen tolerances.
+      Candidate implementation now reuses head-frame mask/Qwen verification on
+      wrist RGB-D, then checks spatial association to the original target.
+      63 focused tests pass; model replay and sim acceptance are still pending.
+      September 12 GPU blocker: loaded NVIDIA 595.84 versus NVML 595.91;
+      cancelled offline job `20260912_091644_fa11a1` before inference.
+- [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
+      gate, not dropped: both paired strategies scored 0/4 localization phases.
+      Track long-range coverage, first target visibility and relational instance
+      selection separately. The bedding-as-lamp correctness bug still needs a
+      shared fix. [Results](docs/experiments/shared_grounding_pilot.md).
+
+Hypotheses/options: [grounding option register](docs/experiments/grounding_options.md).
+- [ ] Add stronger-model (e.g. GPT) paired evaluation: minimal RGB/query,
+      context-assisted, and bounded closed-loop modes; test whether less assistance
+      preserves grounding quality. Record cost, latency, model/input settings and
+      false acceptance. Keep geometry/freshness/execution checks model-independent.
+- [x] Run the separate best-local offline preset (whole-object prompt + context)
+      on original and supplementary caches with a matched isolated control;
+      document results before promoting to bounded find/OVMM. Do not change defaults.
+      Result: 9/31 visible targets yield >=95%-pure support, nine impure acceptances;
+      context ties isolated on the same masks. No promotion or new OVMM claim.
+- [ ] Improve support segmentation/point localization and missing-candidate
+      coverage before integrated acceptance; keep model-strength and assistance
+      ablations separate from mandatory geometry/freshness/safety contracts.
+- [x] Compare SAM2 masks on fixed Qwen boxes and connect an opt-in provider to the
+      shared query controller. [Evidence](docs/experiments/segmented_shared_grounding.md):
+      13 pure surfaces vs 9 RGB-D, but wrong-surface acceptance remains.
+- [x] Fix recursive config inheritance losing grandparent robot-client defaults;
+      retain proper override order and reject cycles instead of duplicating settings.
+- [x] Connect query-driven find to shared view-first grounding and fresh arrival
+      verification; preserve verified gaze and keep candidate approach separate
+      from success. Fix SAM2 float-mask rejection, motor/arrival tolerance mismatch,
+      and 2D table-ray rejection without removing footprint/path safety checks.
+- [x] Finish paired 60-view SAM2/YOLOE provider comparison (same Qwen verifier):
+      context SAM2 13 pure / 5 impure versus YOLOE 8 / 9; neither recovers held-out.
+- [x] Manually inspect nearby find smokes: YOLOE-box -> SAM2 -> Qwen gives verified
+      red-cylinder and blue-block finds (21.6 s / 25.0 s). Earlier context success
+      was a table-mask false positive; Qwen-box retries remain unreliable.
+- [x] Compare raw versus SAM2-refined YOLOE proposals on the same 60-view cache:
+      support-only Qwen gives 8 pure / 10 impure versus 15 / 3. Two refined-mask
+      failures still select the wrong object; held-out remains unrecovered.
+- [ ] Hold the hybrid pilot's harness/model fixed for bounded cluttered find/OVMM,
+      EQA and learned TAMP checks; simple nearby finds are not manipulation or
+      broad-environment acceptance. Do not promote defaults on these two smokes.
+      Serial [cross-task pilot](docs/experiments/shared_grounding_pilot.md) launched
+      as `20260910_213038_d86e1a` on frozen `b194395a`; includes learned pick/place,
+      not the oracle TAMP battery. Review task evidence, not process exits.
+- [x] Stop reporting failed find as success; relay executor failures and reject
+      intermediate search endpoints when navigation exhausts its budget.
+
+- [x] Bounded head-only view recovery, detector-free depth-surface grounding,
+      cached image/prompt audit, and explicit shared wrist-adapter CLI.
+- [x] Prevent generic embodied presets from re-enabling streaming instances in
+      lazy mode; block oracle TAMP/tool metadata bypasses in query mode.
+- [x] Recover stationary red/blue surfaces without a detector or evaluator-label
+      input; shared opt-in candidate strategy passes clean and noisy cached views.
+      See [surface pilot](docs/experiments/surface_candidate_pilot.md): partial
+      surfaces, not grasp acceptance or real-world robustness.
+- [ ] Recover the visible lamp and handle textured-scene proposal fragmentation;
+      frozen candidate audit still misses lamp and abstains on sofa. Test clutter
+      and occlusion before promoting the strategy or claiming OVMM recovery.
+- [x] Run paired touching/occlusion/same-color/farther-view diagnostics: surface
+      9/10 versus point 4/10 target gates; both 5/5 absent-query abstentions.
+      [Frozen results](docs/experiments/surface_stress_paired.md).
+- [x] Reject the known farther-view wrong-only proposal set with candidate-only
+      panels: frozen boxes/masks preserve nine target recoveries, reject the table
+      patch, and abstain on five absent queries. This is one rejection case.
+- [ ] Recover missing target proposals and expand wrong-only candidate tests
+      before promotion; a safe rejection is not successful localization.
+- [ ] Diagnose unsafe posture during known-route translation (upright dot
+      0.97898). Hold and turns pass; keep posture safety threshold unchanged.
+- [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
+      and independent post-action scoring; oracle TAMP control is not this test.
+- [x] Fix live shared-VLM caption latency: disabled Stretch visualizer spawned a
+      no-op busy loop. With the enabled check, identical integrated captions take
+      0.19–0.66 s instead of timing out at 180 s; tool reaches target rejection.
+      [Evidence and remaining limits](docs/experiments/live_caption_and_candidate_rejection.md).
+- [x] Compare observation coverage using the existing head sweep. Sweeps see the
+      objects and a later integrated grounding frame contains both targets;
+      this does not establish robust reacquisition or manipulation readiness.
+- [x] Test existing head sweep and fix the shared query VLM binding. Grounding
+      previously read an uninitialized graph client instead of the loaded voxel
+      client. Wired run now sees the target but rejects a misplaced table box.
+- [ ] Recover target proposals beyond inaccurate VLM boxes and audit the legacy
+      unconditional 90-degree find-to-manipulation turn; preserve acquisition
+      views and revalidate before action. Keep the table-rejection gate intact.
+- [x] Replay higher-precision Qwen on Caliban: FP16 passes 10/10 stress targets
+      versus int4 9/10; both 5/5 absent cases. FP16 still misses both live-frame
+      boxes. [Precision comparison](docs/experiments/caliban_fp16_grounding.md)
+      records runtime confounds; this is not proof of quantization causality.
+- [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
+      then freeze a paired no-regression comparison, not a full sweep.
+- [x] Cache 40 varied Molmo/RoboCasa views with separate simulator masks; run five
+      box ablations plus YOLOE-proposal/Qwen-verifier comparison serially.
+      [Results and artifacts](docs/experiments/grounding_verification_ablation.md):
+      whole-object prompt 7/21 pure surfaces vs baseline 5/21; no held-out recovery.
+- [ ] Fix final-verifier wrong-object acceptance: detector paper-towel case 14
+      selects a mug (zero target overlap). Box self-check alone did not help;
+      improve candidate identification and mask purity before OVMM promotion.
+- [x] Replay fixed candidates with context crops and target-blind identification.
+      [Results](docs/experiments/candidate_context_verification.md): context rejects
+      the known mug failure without losing five pure detector selections; blind
+      identity binding regresses RGB-D components to 0 pure / 10 impure acceptances.
+      Do not promote blind matching; context still does not fix mask contamination.
+- [x] Capture 20 supplementary close/high-angle views with scoring-only masks;
+      ten show targets, ten remain blocked. Expanded local sweep completed:
+      four pure-surface recoveries and three contaminated acceptances.
+- [x] Add clear-view controls alongside blocked/robot-occluded views in the new
+      dataset; do not confuse oracle camera placement with successful search.
+- [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
+      update paper evidence/limitations only after acceptance; Sourccey and Mars
+      remain deferred, not required for this closeout.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).

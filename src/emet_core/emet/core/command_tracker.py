@@ -125,6 +125,18 @@ class CommandTracker:
                 self._active = None
             return deepcopy(receipt)
 
+    def confirm_navigation_stop(self, session: str, sequence: int) -> dict:
+        """Record later stop confirmation without rewriting a failed outcome."""
+        with self._lock:
+            key = (session, sequence)
+            receipt = self._receipts[key]
+            if self._active != key or receipt["status"] != "failed":
+                raise ValueError("stop recovery requires the active failed navigation")
+            receipt["result"] = {**receipt.get("result", {}), "stop_confirmed": True}
+            receipt["revision"] += 1
+            self._active = None
+            return deepcopy(receipt)
+
     def expired_navigation(self) -> dict | None:
         """Expiry requires adapter cancellation; it is not itself proof of stopping."""
         with self._lock:

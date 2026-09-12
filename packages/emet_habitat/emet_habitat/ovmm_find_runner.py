@@ -73,8 +73,11 @@ class HabitatFindPhaseEpisode:
     mapping_max_nav_steps: int | None = None
     explore_steps: int | None = None
     object_gt_body: str | None = None
+    object_relation: str = "on"  # Legacy manifests remain reproducible.
 
     def __post_init__(self) -> None:
+        if self.object_relation not in {"on", "nearest"}:
+            raise ValueError(f"Unsupported FindObj relation: {self.object_relation}")
         n = resolve_mapping_max_nav_steps(
             self.mapping_max_nav_steps,
             self.explore_steps,
@@ -114,6 +117,7 @@ def load_habitat_find_phase_episodes(path: str | Path) -> list[HabitatFindPhaseE
                 mapping_max_nav_steps=budget,
                 explore_steps=budget,
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
+                object_relation=str(row.get("object_relation", "on")),
             )
         )
     if n_alias:
@@ -167,6 +171,16 @@ def run_habitat_find_phase_episode(
     mapping_wall_s = 0.0
     query_wall_s = 0.0
     try:
+        if episode.object_relation == "nearest":
+            from emet.eval.ovmm_find_phase import bodies_matching_category, pick_find_object_gt_body
+
+            # Evaluator-only validation; no semantic IDs/coordinates enter the agent.
+            for category in (episode.object, episode.start_recep, episode.goal_recep):
+                if not bodies_matching_category(placements, category):
+                    raise ValueError(f"Invalid nearest episode {episode.id}: missing category {category}")
+            selected = pick_find_object_gt_body(placements, episode.object, episode.start_recep)
+            if episode.object_gt_body and episode.object_gt_body != selected:
+                raise ValueError(f"Invalid nearest episode {episode.id}: GT override contradicts nearest selector")
         sim.set_init_pose(init_pose)
         spawn_record = sim.last_init_pose_record
         oracle = run_cfg.backend == "ground_truth"
@@ -281,7 +295,8 @@ def run_habitat_find_phase_episode(
             object_gt_body=episode.object_gt_body,
             max_rounds=run_cfg.agentic_max_rounds,
             max_nav_steps=run_cfg.agentic_max_nav_steps,
-            extra_trace_meta={"scene": episode.scene},
+            extra_trace_meta={"scene": episode.scene, "object_relation": episode.object_relation},
+            object_relation=episode.object_relation,
             placements=placements,
             voxel_map=vm,
             prefer_voxel=prefer_voxel,
@@ -312,6 +327,7 @@ def run_habitat_find_phase_episode(
             "backend": run_cfg.backend,
             "query_driven_memory": run_cfg.query_driven_memory,
             "dataset": "habitat_hm3d",
+            "object_relation": episode.object_relation,
             "object_query": object_query,
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,

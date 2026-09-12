@@ -1,5 +1,8 @@
 # Evaluation runbook
 
+Before choosing a slice, read [environment difficulty and acceptance gates](environments/README.md).
+Use the [figure checklist](environments/figures/README.md) when preparing evidence.
+
 Canonical guide for paper-relevant benchmarks: Habitat HM-EQA, OVMM find-phase (Habitat + sim), and SQA3D. Use this doc for **overnight smoke**, **diagnostics artifacts** (maps, video, crops), and **figure export**.
 
 Deep dives:

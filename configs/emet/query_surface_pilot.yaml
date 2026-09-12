@@ -1,0 +1,15 @@
+# Experimental shared-agent preset, not a paper-winning default.
+# Use --memory-backend lazy_graph. Robot and simulator remain CLI choices.
+# Manipulation additionally needs --visual-servo (current adapter: Stretch).
+extends: configs/emet/default.yaml
+mapping:
+  query_driven_memory: true
+  query_memory:
+    grounding_backend: vlm
+    region_strategy: depth_candidates
+  eqa:
+    agentic_verify: true
+    collect_agentic_trace: true
+    vl_family: qwen3_vl
+    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
+    vl_quantization: int4

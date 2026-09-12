@@ -425,12 +425,14 @@ class MujocoZmqServer(BaseZmqServer):
     def start_navigation_command(self, action):
         self._contract_navigation_context = None
         self.handle_action(action)
-        if action.get("nav_policy"):
-            from emet.core.navigation_result import NAVIGATION_POLICIES
+        from emet.core.navigation_result import NAVIGATION_POLICIES
 
-            policy = NAVIGATION_POLICIES[action["nav_policy"]]
-            self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
-            self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
+        # Unnamed legacy commands still use the measured exploration contract.
+        # Do not stop the motor controller at its looser default (10 cm), then
+        # reject that stop against the server's unchanged 7 cm arrival check.
+        policy = NAVIGATION_POLICIES[action.get("nav_policy") or "exploration"]
+        self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
+        self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")
         return self._contract_navigation_context
@@ -449,11 +451,14 @@ class MujocoZmqServer(BaseZmqServer):
         }
 
     def navigation_command_result(self, context):
-        from emet.core.navigation_result import measured_arrival
+        from emet.core.navigation_result import NAVIGATION_POLICIES, measured_arrival
 
         if not self.base_controller_at_goal():
             return None
-        return measured_arrival(context, self.get_base_pose(), xy_tolerance=0.07, yaw_tolerance=0.15)
+        policy = NAVIGATION_POLICIES["exploration"]
+        return measured_arrival(
+            context, self.get_base_pose(), xy_tolerance=policy.xy_tolerance, yaw_tolerance=policy.yaw_tolerance
+        )
 
     def cancel_navigation_command(self):
         self.active = False

@@ -21,6 +21,27 @@ def test_default_config_path_points_at_repo_default():
     assert path.endswith("configs/emet/default.yaml")
 
 
+def test_multi_level_shared_preset_preserves_robot_mapping_defaults():
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("configs/emet/query_segmented_pilot.yaml", robot="stretch")
+    assert "use_realtime_updates" in params["agent"]
+    assert "moving_threshold" in params["motion"]
+    assert params.get("query_driven_memory") is True
+    assert params.get("query_memory")["mask_backend"] == "sam2"
+    assert params.get("eqa")["vl_hf_model_id"] == "Qwen/Qwen3-VL-8B-Instruct"
+
+
+def test_inheritance_cycles_fail_with_a_clear_error(tmp_path):
+    import pytest
+
+    first, second = tmp_path / "first.yaml", tmp_path / "second.yaml"
+    first.write_text(f"extends: {second}\n")
+    second.write_text(f"extends: {first}\n")
+    with pytest.raises(ValueError, match="Config inheritance cycle"):
+        load_config(str(first))
+
+
 def test_defaults_compose_mapping_and_agent():
     cfg = load_config(default_config_path())
     assert cfg.mapping_dict.get("voxel_size") == 0.1

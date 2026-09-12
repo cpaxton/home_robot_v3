@@ -8,12 +8,36 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from emet.agent.loop import _dispatch_tool_calls
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.kinematic_pick_place import (
     KinematicPickPlaceExecutor,
     KinematicPickPlaceResult,
 )
+
+
+@pytest.mark.parametrize("visual_servo", [False, True])
+def test_query_tools_never_enter_oracle_planning(monkeypatch, visual_servo):
+    from emet.controller.task.tamp import agent_bridge
+
+    oracle = MagicMock(side_effect=AssertionError("oracle geometry must not be used"))
+    monkeypatch.setattr(agent_bridge, "build_agent_pick_place_plan", oracle)
+    monkeypatch.setattr(agent_bridge, "execute_stored_agent_plan", oracle)
+    executor = MagicMock(return_value=True)
+    executor.agent.query_driven_memory = True
+    executor.visual_servo = visual_servo
+    executor._last_exec_ok = True
+    tools = {tool.name: tool for tool in get_tools({"executor": executor})}
+    assert "oracle" in tools["plan_pick_place"].func(object_name="mug", receptacle_name="table")
+    assert "blocked" in tools["execute_pick_place_plan"].func(plan_ref="plan:1")
+    assert "unavailable" in tools["scene_tasks"].func()
+    result = tools["pick_place"].func(object_name="mug", receptacle_name="table")
+    assert "not been independently verified" in result
+    executor.assert_called_once_with([("pickup", "mug"), ("place", "table")])
+    oracle.assert_not_called()
+
 
 # Canned CHAT tool_calls: find then pick_place (no LLM).
 _CANNED_FIND_THEN_PICK_PLACE = [
@@ -73,6 +97,15 @@ def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     assert "[pick_place] Pick/place failed or interrupted." in results
 
 
+def test_failed_find_is_information_not_a_generic_done():
+    exe = _RecordingExecutor(last_exec_ok=False)
+    tools = {t.name: t for t in get_tools({"executor": exe})}
+    ok, results, has_info = _dispatch_tool_calls([{"name": "find_objects", "arguments": {"text": "cup"}}], tools, exe)
+    assert ok  # Task failure does not shut down the agent.
+    assert has_info
+    assert results == ["Executor ran: find -> failed"]
+
+
 def _make_kinematic_dynamem_executor():
     from emet.controller.task.dynamem.dynamem_task import DynamemTaskExecutor
 
@@ -91,6 +124,7 @@ def _make_kinematic_dynamem_executor():
     robot.switch_to_navigation_mode = MagicMock()
 
     agent = MagicMock()
+    agent.query_driven_memory = False
     agent.robot_say = MagicMock(return_value=None)
     agent.get_voxel_map = MagicMock(return_value=None)
 

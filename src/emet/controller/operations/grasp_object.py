@@ -380,6 +380,52 @@ class GraspObjectOperation(ManagedOperation):
         Returns:
             Optional[np.ndarray]: Target mask to move to
         """
+        target = getattr(self, "grounded_target", None)
+        if target is not None and target.geometry_source == "vlm_selected_depth_surface":
+            from types import SimpleNamespace
+
+            verification = {}
+            detected = None
+            try:
+                world_xyz = servo.get_ee_xyz_in_world_frame()
+                if world_xyz is None:
+                    raise ValueError("Target tracking requires world-aligned depth")
+                frame = SimpleNamespace(rgb=servo.ee_rgb, depth=servo.ee_depth, full_world_xyz=world_xyz)
+                # The wrist can be much closer than the navigation map's depth
+                # cutoff. Use finite positive sensor depth, with the same mask
+                # provider and semantic verifier as head-camera grounding.
+                detected, _, matching, verification = self.agent.ground_vlm_frame(
+                    frame, self.target_object, self.target_object, min_depth=0.0
+                )
+                if not verification.get("valid") or len(matching) != 1:
+                    raise ValueError("Wrist target identity absent or ambiguous")
+                return target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
+            except ValueError as exc:
+                # Retain the exact wrist view for diagnosing visibility versus
+                # calibration; never relax the geometry gate to make it pass.
+                if os.environ.get("EMET_EQA_EPISODE_DIR"):
+                    from pathlib import Path
+
+                    from emet.memory.query_grounding import cache_grounding_record
+
+                    cache_grounding_record(
+                        Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "wrist_tracking",
+                        query=self.target_object,
+                        revision=target.observation_revision,
+                        source_obs_id=None,
+                        detections=[],
+                        matching_ids=[],
+                        verification={**verification, "valid": False, "reason": str(exc), "stage": "wrist_tracking"},
+                        rgb=servo.ee_rgb,
+                        depth=servo.ee_depth,
+                        masks=None if detected is None else detected.instance,
+                        metadata={
+                            "target_points": target.points.tolist(),
+                            "camera_K": None if servo.ee_camera_K is None else servo.ee_camera_K.tolist(),
+                            "camera_pose": None if servo.ee_camera_pose is None else servo.ee_camera_pose.tolist(),
+                        },
+                    )
+                raise
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
@@ -540,7 +586,8 @@ class GraspObjectOperation(ManagedOperation):
         prev_center_depth = None
 
         # Move to pregrasp position
-        self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object)
+        if not self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object):
+            return False
 
         # Give a short pause here to make sure ee image is up to date
         time.sleep(0.25)
@@ -585,11 +632,16 @@ class GraspObjectOperation(ManagedOperation):
             center_x += self.detected_center_offset_x  # move closer to top
 
             # Run semantic segmentation on it
-            if self.match_method == "class":
+            detector_free = (
+                getattr(self, "grounded_target", None) is not None
+                and self.grounded_target.geometry_source == "vlm_selected_depth_surface"
+            )
+            if not detector_free and self.match_method == "class":
                 # This means that we are just using an open-vocabulary object detector to find the object so we need to update the vocabulary.
                 self.agent.semantic_sensor.update_vocabulary_list([self.target_object], 1)
                 self.agent.semantic_sensor.set_vocabulary(1)
-            servo = self.agent.semantic_sensor.predict(servo, ee=True)
+            if not detector_free:
+                servo = self.agent.semantic_sensor.predict(servo, ee=True)
             latest_mask = self.get_target_mask(servo, center=(center_x, center_y))
 
             # dilate mask
@@ -891,6 +943,9 @@ class GraspObjectOperation(ManagedOperation):
 
         assert self.target_object is not None, "Target object must be set before running."
 
+        if getattr(self, "grounded_target", None) is not None:
+            self.align_grounded_target_for_grasp()
+
         # open gripper
         self.robot.open_gripper(blocking=True)
 
@@ -946,7 +1001,9 @@ class GraspObjectOperation(ManagedOperation):
 
         # Compute final pregrasp joint state goal and send the robot there
         joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
-        self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True)
+        if not self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True):
+            self.error("Grasp posture motion did not complete.")
+            return
 
         if self.servo_to_grasp:
             # If we try to servo, then do this
@@ -976,7 +1033,27 @@ class GraspObjectOperation(ManagedOperation):
         self.robot.arm_to(current_state)
         self.robot.move_to_manip_posture()
 
-    def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35):
+    def align_grounded_target_for_grasp(self):
+        """Stretch's arm points along -Y; find's camera-facing pose is not a grasp pose.
+
+        Keep this in the existing Stretch grasp adapter, not the shared find
+        policy. Any base/head motion invalidates the old grounding observation.
+        """
+        pose = np.array(self.robot.get_base_pose(), dtype=float, copy=True)
+        delta = np.asarray(self.get_object_xyz())[:2] - pose[:2]
+        if not np.isfinite(delta).all() or np.linalg.norm(delta) < 1e-6:
+            raise ValueError("Cannot orient manipulation toward an invalid target")
+        pose[2] = np.arctan2(delta[1], delta[0]) + np.pi / 2
+        self.robot.switch_to_navigation_mode()
+        if not self.robot.move_base_to(pose, blocking=True):
+            raise RuntimeError("Manipulation orientation did not complete")
+        self.robot.switch_to_manipulation_mode()
+        self.robot.head_to(*constants.look_at_ee, blocking=True)
+        target = self.agent.prepare_query_target(self.target_object)
+        self.grounded_target = target
+        self._object_xyz = np.array(target.xyz, copy=True)
+
+    def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35) -> bool:
         """Move to a pregrasp position in an open loop manner.
 
         Args:
@@ -1002,7 +1079,11 @@ class GraspObjectOperation(ManagedOperation):
         ee_rot = R.from_euler("xyz", rotation).as_quat()
 
         vector_to_object = relative_object_xyz - ee_pos
-        vector_to_object = vector_to_object / np.linalg.norm(vector_to_object)
+        distance = np.linalg.norm(vector_to_object)
+        if not np.isfinite(distance) or distance < 1e-6:
+            self._success = False
+            return False
+        vector_to_object = vector_to_object / distance
 
         # It should not be more than 45 degrees inclined
         vector_to_object[2] = max(vector_to_object[2], vector_to_object[1])
@@ -1017,6 +1098,11 @@ class GraspObjectOperation(ManagedOperation):
             shifted_object_xyz, ee_rot, q0=joint_state
         )
 
+        if not success or target_joint_positions is None or not np.isfinite(target_joint_positions).all():
+            self.error("Failed to find a finite pregrasp IK solution.")
+            self._success = False
+            return False
+
         print("Pregrasp joint positions: ")
         print(" - arm: ", target_joint_positions[HelloStretchIdx.ARM])
         print(" - lift: ", target_joint_positions[HelloStretchIdx.LIFT])
@@ -1024,19 +1110,12 @@ class GraspObjectOperation(ManagedOperation):
         print(" - pitch: ", target_joint_positions[HelloStretchIdx.WRIST_PITCH])
         print(" - yaw: ", target_joint_positions[HelloStretchIdx.WRIST_YAW])
 
-        # get point 10cm from object
-        if not success:
-            print("Failed to find a valid IK solution.")
-            self._success = False
-            return
-        elif (
-            target_joint_positions[HelloStretchIdx.ARM] < -0.05 or target_joint_positions[HelloStretchIdx.LIFT] < -0.05
-        ):
+        if target_joint_positions[HelloStretchIdx.ARM] < -0.05 or target_joint_positions[HelloStretchIdx.LIFT] < -0.05:
             print(
                 f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
             )
             self._success = False
-            return
+            return False
 
         # Make sure arm and lift are positive
         target_joint_positions[HelloStretchIdx.ARM] = max(target_joint_positions[HelloStretchIdx.ARM], 0)
@@ -1051,8 +1130,11 @@ class GraspObjectOperation(ManagedOperation):
         target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
 
         print(f"{self.name}: Moving to pre-grasp position.")
-        self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True)
+        if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
+            self._success = False
+            return False
         print("... done.")
+        return True
 
     def grasp_open_loop(self, object_xyz: np.ndarray):
         """Grasp the object in an open loop manner. We will just move to object_xyz and close the gripper.

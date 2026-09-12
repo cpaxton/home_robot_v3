@@ -602,6 +602,12 @@ def _run_vlm_view_assess(
                 _logger.warning(f"evidence-policy confirm_answerable rejected: {exc}")
             self._verified = True
             self._verified_obs_id = oid
+            # Exploration can discover a target without any retrieval proposal.
+            # Keep image answerability independent of object/action grounding.
+            if getattr(self.agent, "query_driven_memory", False) is True:
+                from emet.memory.graph_eqa.agentic.views import ground_confirmed_view
+
+                ground_confirmed_view(self, oid, str(self._target_phrase or phrase or ""))
         if confirmed:
             self._append_trace(
                 {
@@ -637,6 +643,10 @@ def _run_vlm_view_assess(
         "need_more_views": assessment.need_more_views,
         "suggested_answer": assessment.suggested_answer,
         "reason": assessment.reason,
+        "raw_vlm_response": assessment.raw,
+        "vlm_prompt": getattr(assessment, "prompt", ""),
+        "vlm_system_prompt": getattr(assessment, "system_prompt", ""),
+        "vlm_image_count": getattr(assessment, "image_count", None),
         "policy_state": str(self._evidence_policy.state),
         "verified": self._verified,
         "vlm_answerable": bool(self._verified),

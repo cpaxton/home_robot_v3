@@ -13,6 +13,32 @@ from emet.memory.grounded_target import GroundedTarget
 from emet.memory.query_candidates import QueryCandidates
 
 
+@pytest.mark.parametrize("backend,expects_detector", [("vlm", False), ("yoloe", True)])
+def test_visual_servo_constructor_respects_grounding_backend(backend, expects_detector):
+    from emet.core import AbstractRobotClient
+
+    parameters = {
+        "query_driven_memory": True,
+        "query_memory": {"grounding_backend": backend},
+        "detection": {},
+        "encoder": "siglip",
+    }
+    module = "emet.controller.task.dynamem.dynamem_task"
+    with (
+        patch(f"{module}.create_semantic_sensor") as detector,
+        patch.object(DynamemTaskExecutor, "_build_agent", return_value=Mock()),
+        patch(f"{module}.GraspObjectOperation") as grasp,
+        patch(f"{module}.EmoteTask"),
+    ):
+        task = DynamemTaskExecutor(Mock(spec=AbstractRobotClient), parameters, visual_servo=True, cpu_only=True)
+    assert detector.called is expects_detector
+    assert task.grasp_object is grasp.return_value
+    assert parameters["encoder"] == "siglip"
+    if not expects_detector:
+        assert task.semantic_sensor is None
+        assert parameters["detection"] == {}
+
+
 def executor():
     task = object.__new__(DynamemTaskExecutor)
     store = QueryCandidates()
@@ -32,6 +58,25 @@ def executor():
     task.visual_servo = True
     task.grasp_object = Mock(return_value=True)
     return task, target
+
+
+@pytest.mark.parametrize("point,expected", [(None, False), (np.ones(3), True)])
+def test_find_reports_task_outcome_without_quitting(point, expected, monkeypatch):
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task = object.__new__(DynamemTaskExecutor)
+    task._find = Mock(return_value=point)
+    assert task([("find", "cup")]) is True
+    assert task._last_exec_ok is expected
+
+
+@pytest.mark.parametrize("status,expected", [(False, False), (None, False), (True, True)])
+def test_navigation_only_returns_confirmed_target(status, expected):
+    from emet.controller.dynamem.navigation import navigate
+
+    point = np.ones(3)
+    agent = SimpleNamespace(maybe_save_rerun_recording=Mock(), execute_action=Mock(return_value=(status, point)))
+    result = navigate(agent, "cup", max_step=1)
+    assert (result is point) is expected
 
 
 def test_pick_handoff_passes_geometry_and_revokes_all_aliases():
@@ -124,6 +169,37 @@ def test_visual_servo_operation_uses_geometry_not_centered_distractor():
     world[:] = 10
     with pytest.raises(ValueError, match="absent"):
         operation.get_target_mask(servo, center=(5, 5))
+
+
+def test_vlm_wrist_tracking_requires_shared_semantics_and_world_association():
+    from emet.controller.operations.grasp_object import GraspObjectOperation
+
+    operation = object.__new__(GraspObjectOperation)
+    operation.grounded_target = GroundedTarget(1, 7, 2, np.ones((30, 3)), "vlm_selected_depth_surface")
+    operation.target_object = "mug"
+    masks = np.full((10, 10), -1, dtype=int)
+    masks[:5] = 0
+    operation.agent = SimpleNamespace(
+        ground_vlm_frame=Mock(return_value=(SimpleNamespace(instance=masks), [], [0], {"valid": True}))
+    )
+    operation.get_class_mask = Mock(side_effect=AssertionError("detector must not gate VLM surface"))
+    world = np.ones((10, 10, 3))
+    world[5:] = 10
+    servo = SimpleNamespace(
+        ee_rgb=np.zeros((10, 10, 3), dtype=np.uint8),
+        ee_depth=np.ones((10, 10)),
+        get_ee_xyz_in_world_frame=lambda: world,
+    )
+    selected = operation.get_target_mask(servo, center=(8, 8))
+    assert selected[:5].all() and not selected[5:].any()
+    assert operation.agent.ground_vlm_frame.call_args.kwargs == {"min_depth": 0.0}
+    world[:] = 10
+    with pytest.raises(ValueError, match="absent"):
+        operation.get_target_mask(servo, center=(8, 8))
+    world[:] = 1
+    operation.agent.ground_vlm_frame.return_value = (SimpleNamespace(instance=masks), [], [], {"valid": False})
+    with pytest.raises(ValueError, match="identity absent"):
+        operation.get_target_mask(servo, center=(8, 8))
 
 
 def test_placement_sampling_handles_zero_horizontal_offset():

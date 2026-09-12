@@ -7,14 +7,34 @@
 from __future__ import annotations
 
 import base64
+from io import BytesIO
 from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
+from PIL import Image
 
 from emet.llms.eqa_vl_settings import resolve_vl_endpoint
 from emet.llms.openai_vllm_client import OpenaiVLLMClient, parse_openai_endpoint_spec
 from emet.llms.vllm_factory import create_dynamem_vllm
+
+
+def test_lossless_remote_images_preserve_pixels():
+    client = create_dynamem_vllm(
+        "qwen3_vl",
+        hf_model_id="Qwen/Qwen3-VL-8B-Instruct",
+        vl_model_size="8B",
+        max_tokens=192,
+        device="remote",
+        quantization=None,
+        endpoint="http://localhost:8000/v1",
+        image_format="png",
+    )
+    rgb = np.random.default_rng(0).integers(0, 256, (32, 24, 3), dtype=np.uint8)
+    url = client._content_blocks([rgb], None)[0]["image_url"]["url"]
+    assert url.startswith("data:image/png;base64,")
+    restored = np.asarray(Image.open(BytesIO(base64.b64decode(url.split(",", 1)[1]))))
+    np.testing.assert_array_equal(restored, rgb)
 
 
 def test_parse_openai_endpoint_spec() -> None:

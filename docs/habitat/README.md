@@ -1,5 +1,7 @@
 # Habitat EQA harness
 
+For benchmark scope and difficulty, see [Habitat as a search/EQA stress test](../environments/habitat.md).
+
 Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving emet `GraphEQAMemory` / `DynagraphController`.
 
 | Doc | Contents |

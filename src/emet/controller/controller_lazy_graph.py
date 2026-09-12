@@ -73,6 +73,8 @@ class LazyGraphController(DynagraphController):
         xyz, stats = vm.retrieve_text_candidate(phrase, minimum_similarity=0.0, excluded_obs_ids=rejected)
         if xyz is None:
             return None, stats
+        if (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm") == "vlm":
+            return xyz, {**stats, "recovery_source": "weak_voxel", "yoloe_hit": False}
         source_frame = vm.observations[stats["source_obs_id"] - 1]
         key = (query, id(source_frame))
         cache = getattr(self, "_query_recovery_cache", None)
@@ -138,6 +140,30 @@ class LazyGraphController(DynagraphController):
 
     def ground_query_candidate(self, handle, *, after_observation: int):
         """Promote only from admitted, object-specific geometry in a new frame."""
+        record = self.query_candidates.records[handle]
+        self._grounded_query_target = None
+        record.grounded_revision = None
+        record.invalidation_reason = "reacquisition pending"
+        if len(self.voxel_map.observations) <= max(after_observation, record.source_obs_id):
+            return {"ok": False, "reason": "fresh observation required"}
+        return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
+
+    def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str):
+        """Localize a target in the current captured view without a retrieval prerequisite.
+
+        Historical views remain evidence, but cannot authorize current geometry.
+        No search anchor or instance is created until mask admission succeeds.
+        """
+        self._grounded_query_target = None
+        if source_obs_id < 1 or source_obs_id != len(self.voxel_map.observations):
+            return {"ok": False, "reason": "current captured observation required"}
+        query = " ".join(query.lower().split())
+        if not query or not target_description.strip():
+            return {"ok": False, "reason": "target description required"}
+        return self._ground_query_frame(query, target_description, source_obs_id)
+
+    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None):
+        """Shared mask, semantic verification and instance-admission boundary."""
         from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
         from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
         from emet.memory.graph_eqa.ingest.instance_observations import (
@@ -146,14 +172,8 @@ class LazyGraphController(DynagraphController):
             frame_world_xyz_hw3,
         )
 
-        record = self.query_candidates.records[handle]
-        self._grounded_query_target = None
+        record = self.query_candidates.records.get(handle)
         vm = self.voxel_map
-        # Failed reacquisition must revoke even a previously grounded reference.
-        record.grounded_revision = None
-        record.invalidation_reason = "reacquisition pending"
-        if len(vm.observations) <= max(after_observation, record.source_obs_id):
-            return {"ok": False, "reason": "fresh observation required"}
         frame = vm.observations[-1]
         rgb = frame_rgb_hwc_uint8(frame)
         if rgb is None or frame.depth is None:
@@ -163,18 +183,23 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        # Always condition fresh masks on the target, not streaming ScanNet labels.
-        frame, detections = self._detect_query_frame(frame, record.query)
-        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         from emet.memory.query_grounding import cache_grounding_record, select_query_detections
 
-        matching_ids, verification = select_query_detections(
-            record.query,
-            record.target_description,
-            detections,
-            rgb,
-            client=getattr(self.graph_memory, "eqa_client", None),
-        )
+        backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm")
+        client = getattr(self.graph_memory, "eqa_client", None)
+        if backend == "vlm":
+            try:
+                frame, detections, matching_ids, verification = self.ground_vlm_frame(frame, query, target_description)
+            except ValueError as exc:
+                return {"ok": False, "reason": str(exc)}
+        elif backend == "yoloe":
+            frame, detections = self._detect_query_frame(frame, query)
+            matching_ids, verification = select_query_detections(
+                query, target_description, detections, rgb, client=client
+            )
+        else:
+            raise ValueError(f"Unknown query grounding backend: {backend}")
+        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         import os
         from dataclasses import asdict
         from pathlib import Path
@@ -186,9 +211,9 @@ class LazyGraphController(DynagraphController):
             cache_dir = Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "grounding"
         cache_path = cache_grounding_record(
             cache_dir,
-            query=record.query,
+            query=query,
             revision=len(vm.observations),
-            source_obs_id=record.source_obs_id,
+            source_obs_id=source_obs_id,
             detections=detections,
             matching_ids=matching_ids,
             verification=verification,
@@ -196,19 +221,35 @@ class LazyGraphController(DynagraphController):
             depth=frame.depth,
             masks=frame.instance,
             metadata={
-                "target_description": record.target_description,
-                "detector_vocabulary": [record.query],
-                "retrieval_score": record.retrieval_score,
+                "target_description": target_description,
+                "grounding_backend": backend,
+                "detector_vocabulary": [query]
+                if backend == "yoloe" or verification.get("mask_backend") == "yoloe_sam2"
+                else [],
+                "retrieval_score": record.retrieval_score if record is not None else None,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
                 "max_depth": vm.max_depth,
+                "vlm_config": {
+                    key: (self.parameters.get("eqa", {}) or {}).get(key)
+                    for key in (
+                        "backend",
+                        "vl_family",
+                        "vl_hf_model_id",
+                        "vl_quantization",
+                        "vl_image_max_side",
+                        "vl_image_max_pixels",
+                        "vl_max_tokens",
+                    )
+                },
             },
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
-            self.query_candidates.reject(
-                handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
-            )
+            if handle is not None:
+                self.query_candidates.reject(
+                    handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
+                )
             return {
                 "ok": False,
                 "reason": "target absent or ambiguous",
@@ -218,6 +259,13 @@ class LazyGraphController(DynagraphController):
                 "verification_source": verification["source"],
             }
         det = matches[0]
+        if record is None:
+            try:
+                record = self.query_candidates.propose(query, source_obs_id, len(vm.observations), det["xyz"])
+            except ValueError as exc:
+                return {"ok": False, "reason": str(exc)}
+            record.target_description = target_description
+            handle = record.handle
         candidate = GraphDetectionCandidate(
             label=det["label_short"],
             xyz=np.asarray(det["xyz"]),
@@ -247,17 +295,77 @@ class LazyGraphController(DynagraphController):
             depth = depth.detach().cpu().numpy()
         valid = (mask == det["instance_id"]) & (depth > vm.min_depth) & (depth < vm.max_depth)
         valid &= np.isfinite(world).all(axis=-1) & np.isfinite(depth)
-        self._grounded_query_target = GroundedTarget(handle, obs_id, len(vm.observations), world[valid])
+        self._grounded_query_target = GroundedTarget(
+            handle,
+            obs_id,
+            len(vm.observations),
+            world[valid],
+            geometry_source=verification.get("geometry_source", "detector_mask"),
+        )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
+
+    def ground_vlm_frame(self, frame, query, description, *, min_depth=None):
+        """Shared head/wrist perception without admitting a new memory instance."""
+        from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
+        from emet.memory.vlm_region_grounding import ground_vlm_region
+
+        client = getattr(self.graph_memory, "eqa_client", None) or getattr(self.voxel_map, "eqa_client", None)
+        if client is None:
+            self.graph_memory._ensure_llm_clients()
+            client = self.graph_memory.eqa_client
+        config = self.parameters.get("query_memory", {}) or {}
+        backend = config.get("mask_backend", "rgbd")
+        if backend not in ("rgbd", "sam2", "yoloe_sam2"):
+            raise ValueError(f"Unknown query mask backend: {backend}")
+        options = {}
+        if backend in ("sam2", "yoloe_sam2"):
+            from emet.perception.detection.sam2 import SAM2Perception
+
+            if getattr(self, "_query_segmenter", None) is None:
+                self._query_segmenter = SAM2Perception(configuration="s")
+            options["segmenter"] = self._query_segmenter
+        if backend == "yoloe_sam2":
+            from emet.perception.detection.query_mask_proposals import refine_instance_proposals
+            from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+            rgb = frame_rgb_hwc_uint8(frame)
+            detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
+            _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
+            options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if "surface_presentation" in config:
+            options["presentation"] = config["surface_presentation"]
+        if "whole_object_box" in config:
+            options["whole_object"] = config["whole_object_box"]
+        result = ground_vlm_region(
+            frame,
+            query,
+            description,
+            client=client,
+            min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
+            max_depth=self.voxel_map.max_depth,
+            strategy=config.get("region_strategy", "point"),
+            **options,
+        )
+        result[3]["mask_backend"] = backend
+        return result
 
     def prepare_query_target(self, query: str):
         """Reacquire a unique query reference immediately before manipulation."""
         query = " ".join(query.lower().split())
-        records = [r for r in self.query_candidates.records.values() if r.query == query]
+        records = [
+            r for r in self.query_candidates.records.values() if r.query == query and r.rejected_revision is None
+        ]
         if not records:
-            xyz, stats = self.retrieve_query_candidate(query)
-            candidate = self.propose_query_candidate(query, xyz, stats) if xyz is not None else None
-            records = [candidate] if candidate is not None else []
+            before = len(self.voxel_map.observations)
+            self.update(full_perception=True)
+            if len(self.voxel_map.observations) <= before:
+                raise ValueError("fresh observation required")
+            result = self.ground_query_view(
+                query, source_obs_id=len(self.voxel_map.observations), target_description=query
+            )
+            if not result["ok"]:
+                raise ValueError(result["reason"])
+            return self._grounded_query_target
         if len(records) != 1:
             raise ValueError("Manipulation requires a unique query candidate")
         before = len(self.voxel_map.observations)
@@ -267,6 +375,32 @@ class LazyGraphController(DynagraphController):
             raise ValueError(result["reason"])
         records[0].require_grounding(len(self.voxel_map.observations))
         return self._grounded_query_target
+
+    def verify_query_arrival(self, query: str, *, candidate_handle=None):
+        """A reached search waypoint is not success until a fresh view grounds it."""
+        before = len(self.voxel_map.observations)
+        result = {"ok": False, "reason": "fresh observation required"}
+
+        def verify():
+            nonlocal before, result
+            revision = len(self.voxel_map.observations)
+            if revision <= before:
+                return False
+            if candidate_handle is None:
+                result = self.ground_query_view(query, source_obs_id=revision, target_description=query)
+            else:
+                record = self.query_candidates.records[candidate_handle]
+                if record.query != " ".join(query.lower().split()):
+                    raise ValueError("Search candidate does not match arrival query")
+                result = self.ground_query_candidate(candidate_handle, after_observation=before)
+            before = revision
+            return bool(result["ok"])
+
+        self.look_around(on_observation=verify)
+        self._last_query_find_verification = result
+        if result["ok"]:
+            return np.asarray(result["xyz"], dtype=float)
+        return None
 
     def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
         status, object_xyz = super().execute_action(text)

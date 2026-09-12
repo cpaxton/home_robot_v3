@@ -15,6 +15,7 @@ class GroundedTarget:
     instance_id: int
     observation_revision: int
     points: np.ndarray
+    geometry_source: str = "detector_mask"
 
     def __post_init__(self):
         points = np.array(self.points, dtype=float, copy=True)
@@ -26,6 +27,24 @@ class GroundedTarget:
     @property
     def xyz(self) -> np.ndarray:
         return np.median(self.points, axis=0)
+
+    def select_surface(self, world_xyz, *, margin_m: float = 0.05):
+        """Track one connected observed surface, independent of detector classes."""
+        from scipy.ndimage import label
+
+        if world_xyz is None:
+            raise ValueError("Target tracking requires world-aligned depth")
+        xyz = np.asarray(world_xyz)
+        if xyz.ndim != 3 or xyz.shape[-1] != 3:
+            raise ValueError("Target tracking requires organized world geometry")
+        inside = np.isfinite(xyz).all(axis=-1)
+        inside &= (xyz >= self.points.min(axis=0) - margin_m).all(axis=-1)
+        inside &= (xyz <= self.points.max(axis=0) + margin_m).all(axis=-1)
+        components, n = label(inside)
+        matches = [components == i for i in range(1, n + 1) if (components == i).sum() >= 25]
+        if len(matches) != 1:
+            raise ValueError("Grounded surface absent or ambiguous in current frame")
+        return matches[0]
 
     def select_mask(self, instances, class_mask, world_xyz, *, margin_m: float = 0.05):
         """Require one currently visible instance within the grounded world bounds.

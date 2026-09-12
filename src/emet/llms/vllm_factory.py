@@ -37,7 +37,11 @@ def eqa_prefix_cache_kwargs(eqa_cfg: dict[str, Any] | None) -> dict[str, Any]:
 
 def eqa_vl_client_kwargs(eqa_cfg: dict[str, Any] | None) -> dict[str, Any]:
     """All VL client knobs from ``eqa:`` (prefix cache + image downsample)."""
-    return {**eqa_prefix_cache_kwargs(eqa_cfg), **eqa_vl_image_kwargs(eqa_cfg)}
+    return {
+        **eqa_prefix_cache_kwargs(eqa_cfg),
+        **eqa_vl_image_kwargs(eqa_cfg),
+        "image_format": (eqa_cfg or {}).get("vl_image_format", "jpeg"),
+    }
 
 
 def create_dynamem_vllm(
@@ -53,6 +57,7 @@ def create_dynamem_vllm(
     max_cached_prefixes: int = 1,
     image_max_side: int = 512,
     image_max_pixels: int = 0,
+    image_format: str = "jpeg",
     endpoint: str | None = None,
     model: str | None = None,
 ) -> AbstractVLLMClient:
@@ -76,6 +81,7 @@ def create_dynamem_vllm(
             max_tokens=max_tokens,
             image_max_side=image_max_side,
             image_max_pixels=image_max_pixels,
+            image_format=image_format,
             device="remote",
         )
 

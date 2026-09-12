@@ -1,0 +1,31 @@
+# HM3D find proxy v2. The scorer selects the object nearest ANY start-category
+# body in the horizontal plane; it does not establish a support ("on") relation.
+# Do not pool these scores with the legacy habitat_find_phase_episodes.yaml.
+episodes:
+  - id: hm3d_lamp_bed_00006_nearest_v2
+    scene: "00006-HkseAnWCgqk"
+    floor: 0
+    object: lamp
+    start_recep: bed
+    object_relation: nearest
+    goal_recep: table
+    success_radius_m: 0.75
+    mapping_max_nav_steps: 0
+  - id: hm3d_lamp_bed_00025_nearest_v2
+    scene: "00025-ixTj1aTMup2"
+    floor: 0
+    object: lamp
+    start_recep: bed
+    object_relation: nearest
+    goal_recep: table
+    success_radius_m: 0.75
+    mapping_max_nav_steps: 0
+  - id: hm3d_lamp_bed_00057_nearest_v2
+    scene: "00057-1UnKg1rAb8A"
+    floor: 0
+    object: lamp
+    start_recep: bed
+    object_relation: nearest
+    goal_recep: table
+    success_radius_m: 0.75
+    mapping_max_nav_steps: 0

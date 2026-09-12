@@ -36,7 +36,12 @@ def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     excluded = sample(space, start, target, planner, exploration=True, blocked={(0.4, 0.0), (0.5, 0.0)})
     assert excluded[0] < 0.4
     space._line_of_sight_clear = lambda *args: False
-    assert sample(space, start, target, planner) is None
+    assert sample(space, start, target, planner, exploration=True) is None
+    # A tabletop object can be visible above occupied 2D cells. Its approach
+    # does not require a collision-free ray all the way to the object itself.
+    assert sample(space, start, target, planner) is None  # Legacy behavior.
+    assert sample(space, start, target, planner, require_planar_visibility=False) is not None
     space._line_of_sight_clear = lambda *args: True
     space.is_valid = lambda pose: False
     assert sample(space, start, target, planner) is None
+    assert sample(space, start, target, planner, require_planar_visibility=False) is None

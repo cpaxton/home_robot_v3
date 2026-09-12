@@ -4,10 +4,31 @@
 
 import threading
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
+import pytest
 
 from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+
+@pytest.mark.parametrize("name,xy,yaw", [(None, 0.07, 0.15), ("precision", 0.02, 0.03)])
+def test_stretch_controller_tolerance_matches_command_contract(name, xy, yaw):
+    from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+
+    server = MujocoZmqServer.__new__(MujocoZmqServer)
+    server.controller = Mock()
+
+    def install(action):
+        server._contract_navigation_context = {"resolved_goal": action["xyt"]}
+
+    server.handle_action = install
+    action = {"xyt": [1, 2, 0]}
+    if name:
+        action["nav_policy"] = name
+    assert server.start_navigation_command(action)["resolved_goal"] == [1, 2, 0]
+    server.controller.control.set_linear_error_tolerance.assert_called_once_with(xy)
+    server.controller.control.set_angular_error_tolerance.assert_called_once_with(yaw)
 
 
 def test_generic_policy_reports_tipping_even_at_planar_goal():

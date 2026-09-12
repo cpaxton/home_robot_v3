@@ -14,9 +14,30 @@ from emet.controller.controller_lazy_graph import LazyGraphController
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 
+@pytest.mark.parametrize("fresh,accepted", [(True, True), (True, False), (False, True)])
+def test_query_arrival_requires_new_frame_and_verifier_acceptance(fresh, accepted):
+    agent = object.__new__(LazyGraphController)
+    agent.voxel_map = SimpleNamespace(observations=[object()])
+    agent.ground_query_view = Mock(return_value={"ok": accepted, "xyz": [1, 2, 3]})
+
+    def scan(*, on_observation):
+        if fresh:
+            agent.voxel_map.observations.append(object())
+        return on_observation()
+
+    agent.look_around = scan
+    result = agent.verify_query_arrival("cup")
+    assert (result is not None) is (fresh and accepted)
+    if fresh:
+        agent.ground_query_view.assert_called_once_with("cup", source_obs_id=2, target_description="cup")
+    else:
+        agent.ground_query_view.assert_not_called()
+
+
 def controller():
     agent = object.__new__(LazyGraphController)
     agent.parameters = {"graph_object_fusion": {"enabled": True, "instance_min_mask_points": 10}}
+    agent.parameters["query_memory"] = {"grounding_backend": "yoloe"}
     agent.graph_memory = GraphEQAMemory(parameters={}, defer_llm_clients=True)
     frame = SimpleNamespace(
         rgb=np.zeros((8, 8, 3), dtype=np.uint8),
@@ -47,6 +68,129 @@ def test_retrieval_is_not_an_instance_and_fresh_mask_promotes():
     assert not agent.ground_query_candidate(candidate.handle, after_observation=2)["ok"]
     with pytest.raises(ValueError, match="fresh"):
         candidate.require_grounding(2)
+
+
+def test_current_view_grounds_without_retrieval_or_camera_anchor():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="Where is the mug?")
+    assert result["ok"], result
+    assert np.allclose(result["xyz"], [1, 1, 1])
+    record = next(iter(agent.query_candidates.records.values()))
+    assert record.source_obs_id == 2
+    assert record.require_grounding(2) == result["obs_id"]
+
+
+def test_default_query_grounding_never_calls_detector():
+    agent = controller()
+    agent.parameters.pop("query_memory")
+    agent.graph_memory.eqa_client = Mock(return_value='{"verified":true,"box":[0,0,1000,1000],"point":[500,500]}')
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["ok"], result
+    agent.detection_model.predict.assert_not_called()
+    assert agent._grounded_query_target.geometry_source == "vlm_selected_depth_surface"
+
+
+def test_query_grounding_reuses_deferred_shared_voxel_client():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm"}
+    agent.voxel_map.eqa_client = Mock(return_value='{"verified":true,"box":[0,0,1000,1000],"point":[500,500]}')
+    agent.graph_memory._ensure_llm_clients = Mock(side_effect=AssertionError("must not load another model"))
+    assert agent.ground_query_view("mug", source_obs_id=2, target_description="mug")["ok"]
+    agent.voxel_map.eqa_client.assert_called_once()
+    agent.graph_memory._ensure_llm_clients.assert_not_called()
+
+
+def test_query_grounding_initializes_graph_client_without_shared_voxel_client():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm"}
+
+    def initialize():
+        agent.graph_memory.eqa_client = Mock(return_value='{"verified":false,"reason":"absent"}')
+
+    agent.graph_memory._ensure_llm_clients = Mock(side_effect=initialize)
+    assert not agent.ground_query_view("mug", source_obs_id=2, target_description="mug")["ok"]
+    agent.graph_memory._ensure_llm_clients.assert_called_once()
+    agent.graph_memory.eqa_client.assert_called_once()
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_surface_strategy_uses_the_shared_promotion_boundary(accepted):
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "depth_candidates"}
+    agent.graph_memory.eqa_client = Mock(
+        side_effect=[
+            '{"verified":true,"box":[0,0,1000,1000]}',
+            '{"selected_id":0,"target_unambiguous":true}'
+            if accepted
+            else '{"selected_id":null,"target_unambiguous":false}',
+        ]
+    )
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["ok"] is accepted
+    agent.detection_model.predict.assert_not_called()
+    if accepted:
+        assert np.allclose(result["xyz"], [1, 1, 1])
+        assert agent._grounded_query_target.observation_revision == 2
+    else:
+        assert not agent.query_candidates.records
+        assert not agent.graph_memory.get_nodes()
+
+
+@pytest.mark.parametrize("failure", ["stale", "relation", "ambiguous", "absent"])
+def test_view_grounding_abstains_without_creating_candidates(failure):
+    agent = controller()
+    response = '{"matching_ids": [0], "constraints_verified": false}'
+    if failure == "ambiguous":
+        masks = np.zeros((8, 8), dtype=int)
+        masks[4:] = 1
+        agent.detection_model.predict.return_value = (
+            None,
+            masks,
+            {"instance_classes": np.array([0, 0]), "instance_scores": np.array([0.9, 0.9])},
+        )
+        response = '{"matching_ids": [0, 1], "constraints_verified": true}'
+    elif failure == "absent":
+        agent.detection_model.predict.return_value = (None, -np.ones((8, 8), dtype=int), {})
+    agent.graph_memory.eqa_client = Mock(return_value=response)
+    result = agent.ground_query_view(
+        "mug", source_obs_id=1 if failure == "stale" else 2, target_description="mug on the bed"
+    )
+    assert not result["ok"]
+    assert not agent.query_candidates.records
+    assert not agent.graph_memory.get_nodes()
+    if failure == "stale":
+        agent.detection_model.predict.assert_not_called()
+
+
+def test_manipulation_can_reacquire_visible_target_without_retrieval():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(agent.voxel_map.observations[-1]))
+    target = agent.prepare_query_target("mug")
+    assert target.observation_revision == 3
+    assert np.allclose(target.xyz, [1, 1, 1])
+    agent.update = Mock()  # No new RGB-D must never authorize a second action.
+    with pytest.raises(ValueError, match="fresh"):
+        agent.prepare_query_target("mug")
+
+
+def test_confirmed_view_transition_keeps_geometry_separate_and_runs_once():
+    from emet.memory.graph_eqa.agentic.views import CapturedView, ground_confirmed_view
+
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    ex = SimpleNamespace(
+        agent=agent,
+        question="Where is the mug?",
+        _append_trace=Mock(),
+        _captured_views={123: CapturedView(123, 2, np.zeros((8, 8, 3), dtype=np.uint8), None)},
+    )
+    result = ground_confirmed_view(ex, 123, "mug")
+    assert result["ok"]
+    assert ex._grounded_obs_id == result["obs_id"]
+    assert ground_confirmed_view(ex, 123, "mug") is None
+    agent.detection_model.predict.assert_called_once()
 
 
 @pytest.mark.parametrize("failure", ["depth", "absent", "ambiguous", "disabled", "attribute"])
@@ -222,6 +366,9 @@ def test_rejected_candidate_cannot_be_approached_again():
     ex = AgenticEQAExecutor(agent, "Where is the mug?", router=False)
     ex._hypotheses = [NavHypothesis(phrase="mug", obs_id=record.handle, xyz=np.ones(3), score=1, source="voxel")]
     assert not ex._investigate_hypotheses()
+    from emet.memory.graph_eqa.agentic.tools import build_state_message
+
+    assert f"obs_id={record.handle}" not in build_state_message(ex)
     assert ex._tool_investigate(record.handle)["status"] == "CANDIDATE_REJECTED"
     agent.navigate_to_target_pose.assert_not_called()
 

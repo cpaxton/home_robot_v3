@@ -308,6 +308,10 @@ def _dispatch_tool_calls(
                 return False, results, has_info
             # Keep going; surface pickup/place failures via _last_exec_ok without quitting.
             task_ok = bool(getattr(executor, "_last_exec_ok", True))
+            # Failed actions are information the response must relay, not a
+            # successful fire-and-forget command eligible for a generic "Done".
+            if not task_ok:
+                has_info = True
             cmd_names = [c[0] for c in cmds]
             summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
             results.append(summary)

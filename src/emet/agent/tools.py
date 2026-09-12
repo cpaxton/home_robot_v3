@@ -555,9 +555,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
+    def _query_manipulation() -> bool:
+        agent = getattr(context.get("executor"), "agent", None)
+        return getattr(agent, "query_driven_memory", False) is True
+
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> str:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
+        if task_ok and _query_manipulation():
+            return "Pick/place controller completed; physical success has not been independently verified."
         return (
             f"Pick and place ({object_name} -> {receptacle_name}) done."
             if task_ok
@@ -628,6 +634,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         object_name: str = "",
         receptacle_name: str = "",
     ) -> str:
+        if _query_manipulation():
+            return "TAMP plan unavailable: this planner requires oracle scene geometry. Use pick_place for fresh query grounding."
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
         build = _build_tamp_plan(
@@ -641,6 +649,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return _format_tamp_plan(plan_ref, build)
 
     def execute_pick_place_plan(plan_ref: str) -> str:
+        if _query_manipulation():
+            return "TAMP execution blocked: oracle scene plans are not allowed in query-driven mode."
         from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan
 
         robot = _tamp_robot()
@@ -654,7 +664,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if executor is None and _tamp_robot() is None:
             return "Robot not connected."
         if executor is not None and (
-            bool(getattr(executor, "visual_servo", False))
+            _query_manipulation()
+            or bool(getattr(executor, "visual_servo", False))
             or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
         ):
             return _fallback_pick_place(executor, object_name, receptacle_name)
@@ -742,6 +753,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     # -- scene_tasks ----------------------------------------------------------
     def scene_tasks(object_filter: str = "", robot: str = "") -> str:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        if _query_manipulation():
+            return "Scene metadata unavailable in query-driven mode; inspect camera views and query memory instead."
         from collections import Counter
 
         from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
@@ -893,6 +906,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if executor is None:
             return "Robot not connected."
         ok = executor([("find", text)])
+        ok = bool(ok) and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None

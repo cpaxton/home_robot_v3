@@ -6,6 +6,8 @@ pyzmq
 pyliblzfse
 rerun-sdk>=0.21.0,<0.23.0
 hydra-core
+# SAM2 resolves its backbone lazily during construction, not the wrapper import.
+iopath>=0.1.10
 pin
 hpp-fcl
 open3d

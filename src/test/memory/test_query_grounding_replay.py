@@ -3,6 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -34,6 +35,8 @@ def test_relation_requires_visual_verification_not_shared_words():
     "reply",
     [
         "{}",
+        # Recorded lamp/bed failure: detected object is not proof of relation.
+        '{"matching_ids": [0], "constraints_verified": false}',
         '{"matching_ids": [99], "constraints_verified": true}',
         '{"matching_ids": [0], "constraints_verified": "true"}',
         '{"matching_ids": [0, 0], "constraints_verified": true}',
@@ -65,6 +68,30 @@ def test_cache_replays_admission_without_models(tmp_path):
     assert not replay_grounding_admission(record, cfg)
 
 
+def test_debug_record_retains_exact_verifier_images_and_prompt(tmp_path):
+    from PIL import Image
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    client = Mock(return_value='{"matching_ids": [], "constraints_verified": false}')
+    ids, verification = select_query_detections("lamp", "lamp near a bed", [detection()], rgb, client)
+    path = cache_grounding_record(
+        tmp_path,
+        query="lamp",
+        revision=2,
+        source_obs_id=1,
+        detections=[detection()],
+        matching_ids=ids,
+        verification=verification,
+        rgb=rgb,
+    )
+    record = json.loads(Path(path).read_text())
+    payload = client.call_args.args[0]
+    assert record["verification"]["prompt"] == payload[0]
+    assert record["verification"]["raw"] == client.return_value
+    assert np.array_equal(np.asarray(Image.open(tmp_path / record["rgb_file"])), np.asarray(payload[1]))
+    assert np.array_equal(np.asarray(Image.open(tmp_path / record["numbered_rgb_file"])), np.asarray(payload[2]))
+
+
 def test_voxel_router_client_does_not_attach_graph():
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
@@ -74,6 +101,36 @@ def test_voxel_router_client_does_not_attach_graph():
     ex._voxel_eqa_client = client
     assert ex.eqa_client is client
     assert agent.graph_memory is None
+
+
+def test_surface_candidate_cache_preserves_exact_masks_and_selection_image(tmp_path):
+    from PIL import Image
+
+    from emet.memory.surface_candidates import candidate_mask, surface_candidate_image, surface_candidates
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    depth = np.ones((40, 40))
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.25, max_depth=4)
+    path = cache_grounding_record(
+        tmp_path,
+        query="mug",
+        revision=2,
+        source_obs_id=1,
+        detections=[],
+        matching_ids=[],
+        verification={"surface_candidates": regions, "valid": False},
+        rgb=rgb,
+        depth=depth,
+    )
+    record = json.loads(Path(path).read_text())
+    retained = record["verification"]["surface_candidates"]
+    assert np.array_equal(candidate_mask(retained[0], depth.shape), np.ones(depth.shape, bool))
+    saved = np.asarray(Image.open(tmp_path / record["surface_candidates_rgb_file"]))
+    assert np.array_equal(saved, np.asarray(surface_candidate_image(rgb, regions)))
+    from emet.memory.surface_candidates import surface_candidate_panels
+
+    saved_panel = np.asarray(Image.open(tmp_path / record["surface_candidate_0_rgb_file"]))
+    assert np.array_equal(saved_panel, np.asarray(surface_candidate_panels(rgb, regions)[0]))
 
 
 def test_cache_saves_corresponding_pixels_and_depth(tmp_path):

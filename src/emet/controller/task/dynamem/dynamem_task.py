@@ -140,7 +140,10 @@ class DynamemTaskExecutor:
 
         # Create semantic sensor if visual servoing is enabled
         logger.debug("- Create semantic sensor if visual servoing is enabled")
-        if self.visual_servo:
+        detector_free = bool(self.parameters.get("query_driven_memory", False)) and (
+            (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm") == "vlm"
+        )
+        if self.visual_servo and not detector_free:
             self.parameters["detection"]["module"] = "yoloe" if self.cpu_only else "owlsam"
             self.semantic_sensor = create_semantic_sensor(
                 parameters=self.parameters,
@@ -148,7 +151,8 @@ class DynamemTaskExecutor:
                 verbose=False,
             )
         else:
-            self.parameters["encoder"] = None
+            if not self.visual_servo:
+                self.parameters["encoder"] = None
             self.semantic_sensor = None
 
         logger.debug("- Start robot agent with data collection")
@@ -218,6 +222,10 @@ class DynamemTaskExecutor:
             logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])
+        if getattr(self.agent, "query_driven_memory", False):
+            # Keep the freshly verified view. Manipulation owns its posture and
+            # reacquisition, not an unconditional legacy quarter-turn in find.
+            return point
         self.robot.switch_to_navigation_mode()
         xyt = self.robot.get_base_pose()
         xyt[2] = xyt[2] + np.pi / 2
@@ -580,7 +588,7 @@ class DynamemTaskExecutor:
         Returns:
             True if we should keep going, False if we should stop (quit).
 
-        Task success for the last batch is in ``_last_exec_ok`` (False if pickup/place
+        Task success for the last batch is in ``_last_exec_ok`` (False if find/pickup/place
         failed). Agent loop uses that for tool summaries without treating failure as quit.
         """
         i = 0
@@ -771,6 +779,8 @@ class DynamemTaskExecutor:
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)
+                if point is None:
+                    self._last_exec_ok = False
             elif command == "nod_head":
                 logger.info("[Pickup task] Nodding head.")
                 self.emote_task.get_task("nod_head").run()

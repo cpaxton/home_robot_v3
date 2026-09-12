@@ -1,0 +1,8 @@
+scenes:
+  - {name: robocasa_seed0, kind: robocasa, split: development, layout: 1, style: 1, seed: 0}
+  - {name: robocasa_seed1, kind: robocasa, split: held_out, layout: 2, style: 2, seed: 1}
+views:
+  - {name: close, distance: 0.75, azimuth: 90, elevation: -20}
+  - {name: oblique, distance: 1.2, azimuth: 135, elevation: -35}
+  - {name: far, distance: 2.0, azimuth: 90, elevation: -15}
+  - {name: portrait, distance: 1.2, azimuth: 90, elevation: -20, image_size: [640, 480]}

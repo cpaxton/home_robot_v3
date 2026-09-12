@@ -1,0 +1,28 @@
+# Supplementary acquisition controls, not a new held-out split.
+# Reuse the exact generated scene assets/placements from the first cache.
+scenes:
+  - name: molmo_clear
+    split: supplementary
+    xml: /home/cpaxton/.cache/molmospaces/resource_cache/scenes/ithor/20251217/scene_arena_9p5swh41.xml
+    targets:
+      - {name: bottle, query: bottle, body_prefix: bottle_8382d4ed00ffcc00a477337974541bb1}
+      - {name: bowl, query: bowl, body_prefix: bowl_6befd62f08fd322391939c2b44d3f839}
+      - {name: sponge, query: sponge, body_prefix: sponge_41cc9aa65073b4cd1fc4d9871335148d}
+      - {name: paper_towel, query: paper towel roll, body_prefix: papertowel_8c3d7f3c8d8e3b95ccf7fae0c1cac322}
+  - name: robocasa0_clear
+    split: supplementary
+    xml: /home/cpaxton/runs/emet/grounding-robocasa-v2-20260910/robocasa_seed0.xml
+    targets:
+      - {name: sugar_cube, query: sugar cube, body_prefix: obj_main}
+      - {name: broccoli, query: broccoli, body_prefix: distr_counter_main}
+      - {name: bell_pepper, query: bell pepper, body_prefix: distr_cab_main}
+  - name: robocasa1_clear
+    split: supplementary
+    xml: /home/cpaxton/runs/emet/grounding-robocasa-v2-20260910/robocasa_seed1.xml
+    targets:
+      - {name: turmeric, query: turmeric, body_prefix: obj_main}
+      - {name: pickle_slice, query: pickle slice, body_prefix: distr_counter_main}
+      - {name: lime, query: lime, body_prefix: distr_cab_main}
+views:
+  - {name: near_high, distance: 0.55, azimuth: 0, elevation: -60}
+  - {name: near_reverse, distance: 0.75, azimuth: 270, elevation: -35}
