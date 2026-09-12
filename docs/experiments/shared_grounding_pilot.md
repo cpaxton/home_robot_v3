@@ -56,6 +56,15 @@ the failure rather than claiming success. No successful learned pick/place is
 established. The command lifecycle exception needs diagnosis; process completion
 is not physical task acceptance.
 
+Lifecycle follow-up `efba8d7f`: reproduced the exception when a goal had already
+failed with stop unconfirmed, then a later cancellation confirmed stopping and
+attempted to rewrite the terminal status to cancelled. The fix retains the failed
+outcome/reason and records later stop confirmation separately, releasing motion
+ownership only on confirmed stop. Both core/deploy copies match; 37 focused
+command, trajectory and adapter tests pass. Same-preset bounded sim retry:
+`20260911_200332_5b6840`, artifacts `~/runs/emet/lifecycle-manip-retry/evidence`.
+Its physical task result is pending; unit recovery does not establish pick/place.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.
