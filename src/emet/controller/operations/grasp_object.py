@@ -958,7 +958,9 @@ class GraspObjectOperation(ManagedOperation):
 
         # Compute final pregrasp joint state goal and send the robot there
         joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
-        self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True)
+        if not self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True):
+            self.error("Grasp posture motion did not complete.")
+            return
 
         if self.servo_to_grasp:
             # If we try to servo, then do this
@@ -1085,7 +1087,9 @@ class GraspObjectOperation(ManagedOperation):
         target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
 
         print(f"{self.name}: Moving to pre-grasp position.")
-        self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True)
+        if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
+            self._success = False
+            return False
         print("... done.")
         return True
 

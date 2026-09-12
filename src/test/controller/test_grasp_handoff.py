@@ -70,3 +70,13 @@ def test_servo_stops_after_failed_pregrasp():
         assert op.visual_servo_to_object(None) is False
     sleep.assert_not_called()
     op.robot.get_servo_observation.assert_not_called()
+
+
+@pytest.mark.parametrize("arrived", [True, False])
+def test_pregrasp_propagates_arm_motion_result(arrived):
+    op = operation()
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (np.zeros(3), np.array([0, 0, 0, 1]))
+    op.robot_model.manip_ik_for_grasp_frame.return_value = (np.zeros(11), None, None, True, None)
+    op.robot.arm_to.return_value = arrived
+    assert op.pregrasp_open_loop(op.get_object_xyz()) is arrived
