@@ -6,7 +6,18 @@ Strike through or move to a PR when done.
 ## PR #167 VLM-led acceptance (2026-09-09)
 
 Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).
-Do not merge on graph size or the EQA 3/3 smoke alone: OVMM remains 0/4.
+Do not merge on graph size or a tabletop smoke alone. Required gates are learned
+single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle controls),
+and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
+
+- [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
+      invalid IK, and reacquire the target after camera/posture changes. Latest
+      lifecycle retry reached manipulation but did not pick/place successfully.
+- [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
+      gate, not dropped: both paired strategies scored 0/4 localization phases.
+      Track long-range coverage, first target visibility and relational instance
+      selection separately. The bedding-as-lamp correctness bug still needs a
+      shared fix. [Results](docs/experiments/shared_grounding_pilot.md).
 
 Hypotheses/options: [grounding option register](docs/experiments/grounding_options.md).
 - [ ] Add stronger-model (e.g. GPT) paired evaluation: minimal RGB/query,
