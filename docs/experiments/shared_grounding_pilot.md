@@ -95,6 +95,23 @@ intended ambiguity rejection. Bounding-box-only association is insufficient in
 this close view; object-specific wrist support is needed. Neither largest-mask
 fallback nor looser margins is justified by this evidence.
 
+September 12 candidate fix shares `ground_vlm_frame` between head and wrist:
+same configured provider and semantic selector, followed by the original
+grounded-target spatial mask association. Wrist verification does not ingest a
+new instance. Positive wrist depth is accepted below the navigation-map minimum
+because grasp views can be closer than mapping views; zero/invalid depth remains
+excluded. The former box-only connected-component gate is not a semantic mask.
+63 focused tests pass, including semantic abstention and wrong-world-target
+rejection. Added per-frame VLM work may increase servo latency and must be
+measured; no real-robot or learned-manipulation acceptance is claimed.
+
+Offline red-cylinder, blue-cube and absent-banana queries on the exact saved
+wrist view were submitted as `20260912_091644_fa11a1`, then cancelled before
+inference: NVML reports a driver/library mismatch (loaded kernel 595.84,
+userspace 595.91). GPU repair is required before cached-model and live validation.
+The three inputs all reference the previously listed wrist capture; they are
+diagnostic queries on one view, not an expanded independent test set.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.

@@ -18,6 +18,11 @@ and EQA regression checks. Follow the [environment progression](docs/environment
       the cylinder is visible and projected geometry agrees. Replace ambiguous
       bounding-box-only wrist tracking with object-specific support association;
       do not silently select the largest component or widen tolerances.
+      Candidate implementation now reuses head-frame mask/Qwen verification on
+      wrist RGB-D, then checks spatial association to the original target.
+      63 focused tests pass; model replay and sim acceptance are still pending.
+      September 12 GPU blocker: loaded NVIDIA 595.84 versus NVML 595.91;
+      cancelled offline job `20260912_091644_fa11a1` before inference.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance
