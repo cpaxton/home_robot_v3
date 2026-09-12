@@ -73,7 +73,17 @@ The grasp adapter now owns a measured target-facing side rotation and fresh
 reacquisition; find remains unchanged. Failed/nonfinite pregrasp IK now returns
 failure instead of falling through into visual servo. 23 focused tests pass.
 Bounded same-preset sim check: `20260911_202359_853d5b`, artifacts
-`~/runs/emet/grasp-handoff-retry/evidence`; task result pending.
+`~/runs/emet/grasp-handoff-retry/evidence`. The retry completed orientation and
+reacquisition, then reached pregrasp (IK arm -0.039 m, clamped by the legacy 5 cm
+allowance). Wrist tracking rejected absent/ambiguous current-frame support;
+pickup failed and place was skipped. This is not manipulation acceptance.
+
+`3b2ce750` additionally propagates arm-motion failure rather than treating valid
+IK as execution success (25 focused tests pass). `a7c45096` retains wrist RGB,
+depth, calibration and grounded world points on tracking rejection under the
+existing episode evidence opt-in. Serial diagnostic `20260911_202818_77c40c`
+uses that frozen source; artifacts `~/runs/emet/wrist-tracking-audit/evidence`.
+No tracking-tolerance relaxation or oracle fallback was introduced.
 
 ## Fixed comparison
 
