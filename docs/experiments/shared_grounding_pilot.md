@@ -63,7 +63,17 @@ outcome/reason and records later stop confirmation separately, releasing motion
 ownership only on confirmed stop. Both core/deploy copies match; 37 focused
 command, trajectory and adapter tests pass. Same-preset bounded sim retry:
 `20260911_200332_5b6840`, artifacts `~/runs/emet/lifecycle-manip-retry/evidence`.
-Its physical task result is pending; unit recovery does not establish pick/place.
+The retry reached manipulation without the lifecycle exception, but failed
+pregrasp with arm extension -0.180 m and subsequently lost current-frame target
+support. No pick/place success. This run did not necessarily exercise stop recovery.
+
+Manipulation handoff follow-up `40288111`: the verified find pose faced the
+object with the camera, while Stretch's side-grasp expects the target along -Y.
+The grasp adapter now owns a measured target-facing side rotation and fresh
+reacquisition; find remains unchanged. Failed/nonfinite pregrasp IK now returns
+failure instead of falling through into visual servo. 23 focused tests pass.
+Bounded same-preset sim check: `20260911_202359_853d5b`, artifacts
+`~/runs/emet/grasp-handoff-retry/evidence`; task result pending.
 
 ## Fixed comparison
 
