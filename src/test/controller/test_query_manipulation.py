@@ -171,18 +171,34 @@ def test_visual_servo_operation_uses_geometry_not_centered_distractor():
         operation.get_target_mask(servo, center=(5, 5))
 
 
-def test_vlm_surface_tracking_does_not_require_semantic_masks():
+def test_vlm_wrist_tracking_requires_shared_semantics_and_world_association():
     from emet.controller.operations.grasp_object import GraspObjectOperation
 
     operation = object.__new__(GraspObjectOperation)
     operation.grounded_target = GroundedTarget(1, 7, 2, np.ones((30, 3)), "vlm_selected_depth_surface")
+    operation.target_object = "mug"
+    masks = np.full((10, 10), -1, dtype=int)
+    masks[:5] = 0
+    operation.agent = SimpleNamespace(
+        ground_vlm_frame=Mock(return_value=(SimpleNamespace(instance=masks), [], [0], {"valid": True}))
+    )
     operation.get_class_mask = Mock(side_effect=AssertionError("detector must not gate VLM surface"))
     world = np.ones((10, 10, 3))
     world[5:] = 10
-    servo = SimpleNamespace(get_ee_xyz_in_world_frame=lambda: world)
-    assert operation.get_target_mask(servo, center=(8, 8))[:5].all()
+    servo = SimpleNamespace(
+        ee_rgb=np.zeros((10, 10, 3), dtype=np.uint8),
+        ee_depth=np.ones((10, 10)),
+        get_ee_xyz_in_world_frame=lambda: world,
+    )
+    selected = operation.get_target_mask(servo, center=(8, 8))
+    assert selected[:5].all() and not selected[5:].any()
+    assert operation.agent.ground_vlm_frame.call_args.kwargs == {"min_depth": 0.0}
     world[:] = 10
     with pytest.raises(ValueError, match="absent"):
+        operation.get_target_mask(servo, center=(8, 8))
+    world[:] = 1
+    operation.agent.ground_vlm_frame.return_value = (SimpleNamespace(instance=masks), [], [], {"valid": False})
+    with pytest.raises(ValueError, match="identity absent"):
         operation.get_target_mask(servo, center=(8, 8))
 
 

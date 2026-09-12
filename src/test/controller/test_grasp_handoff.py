@@ -97,6 +97,7 @@ def test_wrist_tracking_failure_saves_calibrated_evidence_without_accepting(tmp_
         ee_camera_pose=np.eye(4),
         get_ee_xyz_in_world_frame=lambda: np.zeros((8, 8, 3)),
     )
+    op.agent.ground_vlm_frame.return_value = (SimpleNamespace(instance=np.full((8, 8), -1)), [], [], {"valid": False})
     with pytest.raises(ValueError, match="absent or ambiguous"):
         op.get_target_mask(servo, center=(4, 4))
     records = list((tmp_path / "wrist_tracking").glob("*.json"))

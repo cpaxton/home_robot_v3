@@ -382,8 +382,24 @@ class GraspObjectOperation(ManagedOperation):
         """
         target = getattr(self, "grounded_target", None)
         if target is not None and target.geometry_source == "vlm_selected_depth_surface":
+            from types import SimpleNamespace
+
+            verification = {}
+            detected = None
             try:
-                return target.select_surface(servo.get_ee_xyz_in_world_frame())
+                world_xyz = servo.get_ee_xyz_in_world_frame()
+                if world_xyz is None:
+                    raise ValueError("Target tracking requires world-aligned depth")
+                frame = SimpleNamespace(rgb=servo.ee_rgb, depth=servo.ee_depth, full_world_xyz=world_xyz)
+                # The wrist can be much closer than the navigation map's depth
+                # cutoff. Use finite positive sensor depth, with the same mask
+                # provider and semantic verifier as head-camera grounding.
+                detected, _, matching, verification = self.agent.ground_vlm_frame(
+                    frame, self.target_object, self.target_object, min_depth=0.0
+                )
+                if not verification.get("valid") or len(matching) != 1:
+                    raise ValueError("Wrist target identity absent or ambiguous")
+                return target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
             except ValueError as exc:
                 # Retain the exact wrist view for diagnosing visibility versus
                 # calibration; never relax the geometry gate to make it pass.
@@ -399,9 +415,10 @@ class GraspObjectOperation(ManagedOperation):
                         source_obs_id=None,
                         detections=[],
                         matching_ids=[],
-                        verification={"valid": False, "reason": str(exc), "stage": "wrist_tracking"},
+                        verification={**verification, "valid": False, "reason": str(exc), "stage": "wrist_tracking"},
                         rgb=servo.ee_rgb,
                         depth=servo.ee_depth,
+                        masks=None if detected is None else detected.instance,
                         metadata={
                             "target_points": target.points.tolist(),
                             "camera_K": None if servo.ee_camera_K is None else servo.ee_camera_K.tolist(),

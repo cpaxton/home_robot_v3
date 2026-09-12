@@ -188,52 +188,10 @@ class LazyGraphController(DynagraphController):
         backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm")
         client = getattr(self.graph_memory, "eqa_client", None)
         if backend == "vlm":
-            from emet.memory.vlm_region_grounding import ground_vlm_region
-
-            if client is None:
-                # The shared agent binds its deferred VLM to voxel memory.
-                # Query grounding must reuse it, not interpret an uninitialized
-                # graph client as a semantic rejection (or load a second model).
-                client = getattr(vm, "eqa_client", None)
-            if client is None:
-                self.graph_memory._ensure_llm_clients()
-                client = self.graph_memory.eqa_client
-            query_config = self.parameters.get("query_memory", {}) or {}
-            mask_backend = query_config.get("mask_backend", "rgbd")
-            if mask_backend not in ("rgbd", "sam2", "yoloe_sam2"):
-                raise ValueError(f"Unknown query mask backend: {mask_backend}")
-            options = {}
-            if mask_backend in ("sam2", "yoloe_sam2"):
-                from emet.perception.detection.sam2 import SAM2Perception
-
-                if getattr(self, "_query_segmenter", None) is None:
-                    self._query_segmenter = SAM2Perception(configuration="s")
-                options["segmenter"] = self._query_segmenter
-            if mask_backend == "yoloe_sam2":
-                from emet.perception.detection.query_mask_proposals import refine_instance_proposals
-                from emet.perception.detection.yoloe import get_shared_yoloe_perception
-
-                detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
-                _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
-                try:
-                    options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
-                except ValueError as exc:
-                    return {"ok": False, "reason": str(exc)}
-            if "surface_presentation" in query_config:
-                options["presentation"] = query_config["surface_presentation"]
-            if "whole_object_box" in query_config:
-                options["whole_object"] = query_config["whole_object_box"]
-            frame, detections, matching_ids, verification = ground_vlm_region(
-                frame,
-                query,
-                target_description,
-                client=client,
-                min_depth=vm.min_depth,
-                max_depth=vm.max_depth,
-                strategy=(self.parameters.get("query_memory", {}) or {}).get("region_strategy", "point"),
-                **options,
-            )
-            verification["mask_backend"] = mask_backend
+            try:
+                frame, detections, matching_ids, verification = self.ground_vlm_frame(frame, query, target_description)
+            except ValueError as exc:
+                return {"ok": False, "reason": str(exc)}
         elif backend == "yoloe":
             frame, detections = self._detect_query_frame(frame, query)
             matching_ids, verification = select_query_detections(
@@ -345,6 +303,51 @@ class LazyGraphController(DynagraphController):
             geometry_source=verification.get("geometry_source", "detector_mask"),
         )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
+
+    def ground_vlm_frame(self, frame, query, description, *, min_depth=None):
+        """Shared head/wrist perception without admitting a new memory instance."""
+        from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
+        from emet.memory.vlm_region_grounding import ground_vlm_region
+
+        client = getattr(self.graph_memory, "eqa_client", None) or getattr(self.voxel_map, "eqa_client", None)
+        if client is None:
+            self.graph_memory._ensure_llm_clients()
+            client = self.graph_memory.eqa_client
+        config = self.parameters.get("query_memory", {}) or {}
+        backend = config.get("mask_backend", "rgbd")
+        if backend not in ("rgbd", "sam2", "yoloe_sam2"):
+            raise ValueError(f"Unknown query mask backend: {backend}")
+        options = {}
+        if backend in ("sam2", "yoloe_sam2"):
+            from emet.perception.detection.sam2 import SAM2Perception
+
+            if getattr(self, "_query_segmenter", None) is None:
+                self._query_segmenter = SAM2Perception(configuration="s")
+            options["segmenter"] = self._query_segmenter
+        if backend == "yoloe_sam2":
+            from emet.perception.detection.query_mask_proposals import refine_instance_proposals
+            from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+            rgb = frame_rgb_hwc_uint8(frame)
+            detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
+            _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
+            options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if "surface_presentation" in config:
+            options["presentation"] = config["surface_presentation"]
+        if "whole_object_box" in config:
+            options["whole_object"] = config["whole_object_box"]
+        result = ground_vlm_region(
+            frame,
+            query,
+            description,
+            client=client,
+            min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
+            max_depth=self.voxel_map.max_depth,
+            strategy=config.get("region_strategy", "point"),
+            **options,
+        )
+        result[3]["mask_backend"] = backend
+        return result
 
     def prepare_query_target(self, query: str):
         """Reacquire a unique query reference immediately before manipulation."""
