@@ -116,6 +116,11 @@ independent environment seeds), Qwen int4, original task and physical scorer.
 Stop at the first failed case for diagnosis; remaining cases are unrun, not
 failures or passes. Render each completed case using its matching wrapper XML.
 
+V6 stopped with original 2/2 and clearance repeat 1 failed (three unrun).
+V7 repeats this exact order/configuration on `ef533ed3` after fixing the
+rendered-camera versus published-grasp calibration mismatch. A separate
+clearance retry passed; it is excluded from the new six-case panel.
+
 For Stage D, submit the two-step request through the learned CHAT loop, not two
 externally scripted tool invocations. The shared loop permits three tool-bearing
 rounds, including observation and action results, followed by a no-tool summary.

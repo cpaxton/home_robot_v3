@@ -14,6 +14,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
 
 - [ ] Finish the frozen original/clearance/mirrored physical panel; no version
       has passed it. Preserve failed trials and separate development successes.
+      V6 (`b7441826`) passes original 2/2, fails clearance repeat 1; three unrun.
+      `ef533ed3` fixes a measured 8.7 mm camera-to-grasp discrepancy and renders
+      RGB-D with acquisition poses from one snapshot. Exact failed-case retry
+      `20260913_195231_e4d996` physically picks and places; no new aperture or
+      tolerance tuning. Fresh v7 must establish repeatability on `ef533ed3`.
       [Failure history and artifacts](docs/experiments/shared_grounding_pilot.md)
       cover release tips, navigation, delayed slip and wrist proposal failures.
 - [ ] Validate tracked grasp/carry/release after `e47c0fe8` (observed-bound

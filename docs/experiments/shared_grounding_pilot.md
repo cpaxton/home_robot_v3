@@ -7,8 +7,12 @@ passes cached semantic/association controls and works live. The narrower-apertur
 row initially picks but loses the payload during transport. Stationary holds
 reproduce the loss; a matched NoSlip solver control suppresses creep while still
 releasing on open. With subsequent alignment and wheel-control repairs, the
-explicit NoSlip mirrored-scene row passes pickup and placement once. A complete
-matching-physics panel is still required; clutter robustness remains unproven.
+explicit NoSlip mirrored-scene row passes pickup and placement once. Frozen v6
+then passes the original fixture twice but fails the first separated-neighbor
+grasp. A camera-to-grasp calibration mismatch is now measured and repaired;
+the same failed case now physically picks and places. A fresh v7 panel is next.
+A complete matching-physics panel is still
+required; clutter robustness remains unproven.
 Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
 
 Panel history: v3 passes both original
@@ -166,6 +170,49 @@ picked/final object, overview and top-down images. This is one development pass,
 not six-case acceptance or evidence of long-horizon manipulation.
 Do not pool this numerical-physics ablation with earlier panels; any comparative
 task evaluation must freeze matching physics.
+
+### Frozen panel v6 and camera calibration repair
+
+Job `20260913_193318_c4008b`, frozen source `b7441826`, uses the tracked-narrow
+preset with explicit NoSlip wrappers for all three predeclared fixtures.
+Results: original **2/2 physical pickup and placement**, separated-neighbor
+repeat 1 **false/false**, three remaining cases **unrun** after the stop gate.
+Original process durations are 231/236 wall seconds; pickup occurs at
+76.274/84.026 simulated seconds and final placement at 158.088/162.988.
+Both final object reconstructions were manually inspected. Artifacts:
+`~/runs/emet/manipulation-panel-v6-20260913`.
+
+The separated-neighbor failure is before closure: arm extension stalls at
+approximately 0.180 m against a 0.202 m command. The private trace and final
+qpos reconstruction show the right rubber fingertip contacting the target,
+not the neighboring cube. The final wrist surface remains semantically valid
+and spatially associated. Frame `grounding-a29ba1c4f88447e0833765635cc3b992`
+shows the cylinder biased toward the right pad despite near-zero computed
+lateral error. Comparing published camera-relative grasp geometry against the
+rendered MJCF reveals a lateral displacement of **8.676 mm**, plus approximately
+0.770/3.686 mm on the other camera axes. That lateral mismatch exceeds the
+candidate's 5 mm servo gate. The server used URDF transforms queried after
+rendering, not the actual rendered sensor/grasp geometry.
+
+Fix `ef533ed3` captures one native state under the physics lock, renders all
+RGB/depth views from that snapshot, and publishes its camera and grasp-link
+world poses. The head pose includes the existing clockwise image rotation.
+Only robot/sensor geometry enters observations; object state remains private.
+Missing acquisition poses suppress the message rather than falling back to
+later FK. Policy, contact offset, aperture, tolerance and physics are unchanged.
+Twelve focused tests cover nonzero base/wrist poses, snapshot immutability,
+sync/threaded RGB-D consistency and no later-FK fallback; the broader suite
+remains **433 passed, 4 skipped**. This does not claim that separately queried
+joint feedback or the state-only FK stream is acquisition-synchronous.
+Live failed-case retry `20260913_195231_e4d996` uses the same clearance NoSlip
+row under the repaired source, artifacts `~/runs/emet/clearance-camera-snapshot`.
+It passes **physical pickup and placement**, at 80.966 and 171.088 simulated
+seconds (255 wall seconds total). The final observed grasp error is 3.31 mm.
+Saved wrist geometry now matches the native camera-relative grasp transform;
+the final object reconstruction was manually inspected on the designated cube.
+This development retry is not pooled with v6. Fresh v7 uses frozen `ef533ed3`
+and the identical six-case order/settings declared for v6; only the snapshot
+repair differs from v6 code. Stop on the first physical failure again.
 
 ### Frozen panel v1 (stopped, not accepted)
 
