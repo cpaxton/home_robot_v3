@@ -913,36 +913,9 @@ class MujocoZmqServer(BaseZmqServer):
         if "posture" in action:
             self.set_posture(action["posture"])
         if "gripper" in action:
-            # Get current gripper pose
-            positions, _, _ = self.get_joint_state()
-            current_gripper_pos = positions[HelloStretchIdx.GRIPPER]
-            target_gripper_pos = action["gripper"]
-            step = 0.01
-            t0 = timeit.default_timer()
-            if current_gripper_pos < target_gripper_pos:
-                while current_gripper_pos < target_gripper_pos:
-                    current_gripper_pos += step
-                    positions, _, _ = self.get_joint_state()
-                    # TODO: remove debug print
-                    # print(current_gripper_pos, positions[HelloStretchIdx.GRIPPER])
-                    self.robot_sim.move_to("gripper", current_gripper_pos)
-                    time.sleep(0.01)
-                    dt = timeit.default_timer() - t0
-                    if dt > 5:
-                        logger.error("Gripper move took too long")
-                        break
-            else:
-                while current_gripper_pos > target_gripper_pos:
-                    current_gripper_pos -= step
-                    positions, _, _ = self.get_joint_state()
-                    # TODO: remove debug print
-                    # print(current_gripper_pos, positions[HelloStretchIdx.GRIPPER])
-                    self.robot_sim.move_to("gripper", current_gripper_pos)
-                    time.sleep(0.02)
-                    dt = timeit.default_timer() - t0
-                    if dt > 5:
-                        logger.error("Gripper move took too long")
-                        break
+            # Physics-time profiling owns speed and limits. Do not block action
+            # dispatch with load-dependent wall-clock aperture increments.
+            self.robot_sim.move_to("gripper", action["gripper"])
         elif "say" in action:
             pass
         if "joint" in action:

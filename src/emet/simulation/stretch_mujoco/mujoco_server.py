@@ -689,7 +689,7 @@ class MujocoServer:
                 else:
                     if actuator_name == Actuators.gripper.name:
                         current_value = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
-                        self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(current_value + pos)
+                        self.position_targets.set(actuator_name, self._to_sim_gripper_range(current_value + pos))
                     else:
                         current_value = self.mjdata.actuator(actuator_name).length[0]
                         self.position_targets.set(actuator_name, current_value + pos)
@@ -701,7 +701,7 @@ class MujocoServer:
                 actuator_name = command.actuator_name
                 pos = command.pos
                 if actuator_name == Actuators.gripper.name:
-                    self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(pos)
+                    self.position_targets.set(actuator_name, self._to_sim_gripper_range(pos))
                 elif actuator_name in (Actuators.base_translate.name, Actuators.base_rotate.name):
                     raise NotImplementedError(f"Cannot set move_to for {actuator_name}, which is a relative joint.")
                 else:
