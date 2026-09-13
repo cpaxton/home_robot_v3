@@ -21,8 +21,18 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       3/3 targets and reject 6/6 negatives; live approach now exposes fingertip
       collision with the neighboring cube. Separate 4 cm aperture row `80ea85c3`
       then reaches 0.91 mm observed alignment and physically picks, but the object
-      creeps in the fingers and drops during transport. Stationary hold controls
-      are running (`20260913_184804_c62875`); do not promote or loosen physical gates.
+      creeps in the fingers and drops during transport. Stationary controls
+      reproduce the drop; NoSlip=10 retains the same checkpoint with ~31 μm
+      drift and still releases when opened. Explicit solver-only live row
+      exposes fingertip/target contact before closure. `e8b4fbcc` makes lateral
+      insertion honor the same 5 mm grasp tolerance; retry exposes a low-speed
+      wheel-friction dead zone. `83d10c4e` derives compensation from the model;
+      serial default/NoSlip route checks `20260913_191358_296e9f` pass 28/28 moves.
+      Mirrored NoSlip retry `20260913_192032_dd8d83` physically picks and places;
+      this single development pass does not satisfy the frozen six-case gate.
+      Reconcile arm-base completion tolerance with the finer
+      server tracking contract. Do not pool different-physics results
+      or promote hardware retention from this simulator diagnostic.
 - [ ] Add collision-aware approach selection before claiming clutter robustness.
       Narrowing an aperture is not a collision planner; an identity-positive
       partial surface is not proof of complete grasp geometry.

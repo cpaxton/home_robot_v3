@@ -3,11 +3,12 @@
 ## September 13: separated-neighbor pickup and carry controls
 
 Latest: no full six-case panel is accepted yet. Observed-bound wrist tracking
-passes cached semantic/association controls and works live. The latest live
-failure is a real fingertip collision with neighboring clutter, before pickup.
-A separate 4 cm aperture variant is under test; it is not collision-aware planning.
-The narrower row subsequently reaches 0.91 mm observed alignment and physically
-picks, but loses the payload during transport. Retention remains unresolved.
+passes cached semantic/association controls and works live. The narrower-aperture
+row initially picks but loses the payload during transport. Stationary holds
+reproduce the loss; a matched NoSlip solver control suppresses creep while still
+releasing on open. With subsequent alignment and wheel-control repairs, the
+explicit NoSlip mirrored-scene row passes pickup and placement once. A complete
+matching-physics panel is still required; clutter robustness remains unproven.
 Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
 
 Panel history: v3 passes both original
@@ -107,9 +108,64 @@ acceptance. Focused tests: 40 passed; the preceding broad code suite passes
 426 tests with four simulation skips.
 
 Captured-state control `20260913_184804_c62875` compares 50-second stationary
-holds at original and level wrist pitch from 86 s and 98 s checkpoints. It keeps
-grip force/contact physics unchanged and is diagnostic only. Do not infer that
-slower navigation or a stronger grip will fix retention without these controls.
+holds at original and level wrist pitch from 86 s and 98 s checkpoints. Both
+86 s holds retain the object but creep approximately 13 mm along grasp X. From
+98 s, the original-pitch hold drops after 45.14 s without navigation; leveling
+retains it but still creeps. Grip force/contact physics are unchanged.
+
+The installed MuJoCo 3.5.0 model uses Newton, elliptic cones, `impratio=20` and
+`noslip_iterations=0`. Its [modeling guide](https://mujoco.readthedocs.io/en/3.5.0/modeling.html#preventing-slip)
+documents gradual soft-contact slip and the optional NoSlip postprocessor.
+Solver-only control `20260913_185132_9b7aa9` repeats the 98 s stationary hold
+with NoSlip=10: retention for 50 s and only approximately 31 μm relative drift.
+The paired open-gripper negative drops after 0.688 s; this is not attachment.
+These controls support a solver-induced contribution, not hardware grasp safety.
+Both diagnostic scripts are archived beside their managed job logs.
+
+`a4a2efe3` adds an explicit NoSlip mirrored-scene wrapper and configuration;
+compiled-model tests confirm unchanged geometry, friction, actuator parameters,
+initial poses and other solver settings. All three fixture tests pass. Default
+scenes remain unchanged. Live row `20260913_185544_7bbd8f` keeps the tracked-narrow
+agent fixed but stops before pickup on an obstructed approach. Final saved-state
+reconstruction shows `rubber_tip_right` contacting the target itself; arm reaches
+0.1733 m against a 0.1960 m command. The wrist mask remains valid. Replay figures:
+`~/runs/emet/mirrored-tracked-noslip/replay`. The prior 12 mm hard-coded lateral
+alignment threshold was inconsistent with the candidate's 5 mm closure gate.
+Fix `e8b4fbcc` uses the configured grasp tolerance for both, preserving the default
+12 mm behavior. Focused tests: 41 passed. Retry `20260913_190144_6ae8b9` stops on
+the no-progress guard during lateral alignment, before pickup. No fingertip
+contact is present in the final reconstructed state. Base commands can be
+accepted inside the client's 2 cm joint tolerance while the finer motion has
+barely progressed. Recorded wheel references near 0.525 demand about 31.5 N·m
+(`gear=3`, `kv=20`), below the unchanged 35 N·m modeled joint friction.
+
+Candidate `83d10c4e` derives Coulomb-friction feedforward from the loaded wheel
+model rather than changing friction, minimum speed or task budgets. A common
+speed fraction reserves actuator-limit headroom; reference slew and unbiased
+zero/cancel behavior remain. Native small-wheel tests reproduce the uncompensated
+dead zone and verify compensated velocity in both directions and with negative
+gearing; 44 wheel/translation tests pass. Their physics fixture uses the native
+implicit integration and rotor inertia; an initial overly stiff fixture failed
+numerically and is not counted as a passing experiment.
+Serial route job `20260913_191358_296e9f` passes **14/14** precision moves on
+default physics (max XY 1.244 cm, yaw 0.01092 rad) and **14/14** on NoSlip
+(max XY 1.223 cm, yaw 0.01184 rad). All receipts succeed without corrections.
+Health still lacks full body telemetry; this is a bounded route diagnostic,
+not the five-repeat navigation acceptance run or hardware validation. Broader
+offline suite: **433 passed, 4 skipped**.
+
+Physical development retry `20260913_192032_dd8d83` on frozen `83d10c4e`,
+`query_geometry_tracked_narrow_pilot.yaml` and the explicit mirrored NoSlip scene
+passes **pickup true / placement true**, at 81.578 and 149.288 simulated seconds.
+Final observed grasp error is approximately 3.53 mm, within the unchanged 5 mm
+gate. Final trace records support contact without gripper contact after retreat;
+manually inspected qpos reconstructions show the cylinder held at pickup and
+resting on the blue cube after release. Artifacts:
+`~/runs/emet/mirrored-noslip-friction`, including `replay/manifest.json` and
+picked/final object, overview and top-down images. This is one development pass,
+not six-case acceptance or evidence of long-horizon manipulation.
+Do not pool this numerical-physics ablation with earlier panels; any comparative
+task evaluation must freeze matching physics.
 
 ### Frozen panel v1 (stopped, not accepted)
 
