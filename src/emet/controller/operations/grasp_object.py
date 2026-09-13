@@ -1183,7 +1183,7 @@ class GraspObjectOperation(ManagedOperation):
         # be at its limit. Height/depth change together after lateral alignment.
         opening_axis = servo.ee_pose[:3, 1]
         lateral = np.dot(delta, opening_axis) * opening_axis
-        if np.linalg.norm(lateral) > 0.012:
+        if np.linalg.norm(lateral) > self.geometry_servo_tolerance_m:
             delta = lateral
         delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
         joint_state = self.robot.get_joint_positions().copy()

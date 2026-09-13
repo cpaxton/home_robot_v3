@@ -43,7 +43,8 @@ def test_tight_grasp_gate_corrects_mirrored_run_residual_before_closing():
     candidate.geometry_servo_tolerance_m = 0.005
     assert candidate.geometry_servo_step(servo, mask) is None
     candidate._grasp.assert_not_called()
-    np.testing.assert_allclose(candidate.robot_model.manip_ik_for_grasp_frame.call_args.args[0], error)
+    # Lateral alignment must now meet the same tighter gate before insertion.
+    np.testing.assert_allclose(candidate.robot_model.manip_ik_for_grasp_frame.call_args.args[0], [0, error[1], 0])
 
 
 @pytest.mark.parametrize("tolerance", [0, -0.005, 0.013, float("nan"), float("inf")])
@@ -87,6 +88,14 @@ def test_aligned_grasp_advances_without_relaxing_closure_distance():
     command = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
     assert command[0] > 0
     assert np.linalg.norm(command) == pytest.approx(0.05)
+    op._grasp.assert_not_called()
+
+
+def test_tight_grasp_tolerance_also_gates_lateral_alignment_before_insertion():
+    op, servo, mask = fixture([0.1, 0.008, -0.02])
+    op.geometry_servo_tolerance_m = 0.005
+    assert op.geometry_servo_step(servo, mask) is None
+    np.testing.assert_allclose(op.robot_model.manip_ik_for_grasp_frame.call_args.args[0], [0, 0.008, 0])
     op._grasp.assert_not_called()
 
 
