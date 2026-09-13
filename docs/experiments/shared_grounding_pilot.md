@@ -23,6 +23,10 @@ test checks geometry, inertia, limits and all other initial coordinates.
 | `20260913_095547_9ec2d2` | `c1468a11` | true / false | Payload remains held through all placement corrections; falsely low observed object bottom makes alignment raise the object and refuse release |
 | `20260913_100708_0f6983` | `076fa458` | true / false | Registered depth fixes the camera contract, but minority mask-edge depth still drives oscillating placement corrections; payload remains held |
 | `20260913_102057_336037` | `ea16a60f` | true / false (cancelled) | Receptacle reacquisition fails before visual placement; navigation repeatedly executes the same truncated prefix without progress; cancelled and independently scored |
+| `20260913_103007_684ea5` | `89581c70` | **true / true** | Complete receptacle route, bounded visual placement corrections, released cylinder stably supported by cube at end; agent process also exits zero |
+| `20260913_103442_018239` | `89581c70` | true / false | Unchanged repeat takes a longer route; payload slips during final turn, and empty-gripper placement is correctly rejected |
+| `20260913_104630_1f3338` | `f7c024d3` | true / false | Payload retained, but Qwen accepts a mixed cube/cylinder receptacle mask; wrong support geometry and final nonconvergence prevent placement |
+| `20260913_110132_edd836` | `cfb61c3d` | **true / true** | Coherent support geometry, longer transport retained, verified final release onto cube; process exit zero |
 
 Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
 `~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
@@ -200,7 +204,69 @@ unsafe routes without a false arrival marker, and stops chunk continuation
 without measured translation. Forty-five focused tests pass, including
 single/multi-goal detours and disconnected diagonals. The fresh learned retry
 `20260913_103007_684ea5` uses the reproducible driver with explicit contact and
-separated-neighbor presets; its physical result is pending.
+separated-neighbor presets. It passes independent pickup and final placement:
+pickup at 59.134 s, final supported state at 117.584 s, no gripper/other contact.
+Final cylinder center is approximately (-0.2632, -0.5612, 0.5996) m. Placement
+corrections have z components -3.39, +1.64 and +1.46 cm; raw captures and depth
+support statistics are retained. Agent process exits zero after 165 s. The
+combined focused suite passes 168 tests. This is the **first separated-neighbor
+diagnostic pass**, not the original-clutter or cross-task gate. An unchanged
+repeat, `20260913_103442_018239`, fails: pickup at 55.834 s, last finger contact
+at 95.960 s during the later turn, then object falls to floor. Final grounding
+correctly finds no held target. Current repaired configuration is **1/2**, not
+reliable. Do not advance to original clutter yet. Private matched replay
+`20260913_104239_40cb0e` compares the recorded commands, wheel-reference slew
+limits and the simulator's full-close endpoint; these are diagnostics, not
+extra agent successes or changes to production grip limits.
+All four replays retain the object, **including the recorded-command control**;
+the 10 Hz snapshots with reconstructed velocity do not reproduce the live loss.
+Do not use them to claim a causal benefit for smoothing or stronger closure.
+The replay figures confirm both live endpoints (cube support versus dropped
+object); they do not replace the original traces.
+
+The wheel contract audit separately finds independent actuator saturation:
+requested geared wheel targets exceed their limits and clip to equal speeds,
+driving straight despite a turn request. The next fix scales both targets by
+one feasible fraction, preserving the requested curvature without raising any
+speed/force limit. Twenty-nine wheel/translation tests pass. No new grip force
+or acceleration tuning is promoted from the inconclusive replay.
+`7ee502f3` implements this wheel-target scaling. Learned retry
+`20260913_104630_1f3338` and subsequent ten-move navigation control
+`20260913_104659_c274cb` share frozen `f7c024d3` (the extra commit only hides
+rangefinder debug rays in offline figures). Both finish. The navigation control
+completes ten moves with no failures, but health remains `incomplete_telemetry`.
+The learned run retains the payload but fails placement. Initially the residual
+vertical correction suggests loaded-joint tracking bias; inspecting the raw
+receptacle mask reveals a more important error: Qwen selects a combined cube
+and held-cylinder proposal, producing a false support top at about 0.82 m
+(real cube top 0.56 m). Do not tune release tolerance against that geometry.
+
+`cfb61c3d` applies the existing 8 cm depth-adjacency boundary to external masks
+as well as raw RGB-D proposals. The saved mixed mask separates into cube support
+at roughly 0.92–0.99 m camera depth and held-object support at 0.58–0.63 m.
+No color/category rule is added; smooth sloped and textured objects remain
+connected. Coplanar/touching mixed objects still need semantic/multiview checks.
+Thirty-four focused tests pass. Learned retry `20260913_110132_edd836` passes
+pickup (57.634 s) and final placement (130.088 s), with process exit zero after
+187 s. It retains the payload on the longer route and grounds the real cube
+support. One visual correction precedes release; final z error is 1.48 cm,
+within the unchanged 1.5 cm gate. Unchanged repeat `20260913_110659_839e2c`
+is pending. No accumulated-motion workaround or looser release gate was added.
+
+The independent IK audit also fixes a joint-layout contract: full eleven-joint
+seeds must convert to nine solver joints once and return a full configuration,
+preserving passive joints. Both IK entry points pass an actual zero-error FK/IK
+round trip, alongside 41 focused tests. This later fix is not in that running
+retry. Future private traces also retain measured velocity, activation and
+solver warm-start; sampled traces are still not exact command replays.
+
+Rendering caveat: the existing simulator hides robot geometry from head RGB-D
+to avoid mapping self-obstacles; wrist images retain it. This removes real
+head-camera self-occlusion during placement. Do not infer real perception
+robustness from these passes. Validate robot-visible observations with proper
+mapping self-filtering before hardware claims. Offline replay figures explicitly
+show robot visual geometry and are labelled reconstructed views, not agent
+observations.
 
 `query_geometry_aperture_pilot.yaml` is an additional, not-yet-live-tested
 clearance ablation. It measures both identified finger markers in calibrated
@@ -209,6 +275,11 @@ marker/thickness/uncertainty margin. Missing markers/depth/standoff stop the
 grasp. This is not an inner-jaw calibration or collision-free guarantee. Keep
 geometry-only and aperture variants separate in reporting. Original-clutter
 clearance, room OVMM and learned TAMP gates remain pending.
+
+`query_geometry_contact_aperture_pilot.yaml` combines the same contact setting
+with that aperture margin for the next original-clutter diagnostic. The two
+component controls remain unchanged. This tests a combined system, not an
+isolated contact-depth effect.
 
 ## September 13: manipulation command delivery audit
 

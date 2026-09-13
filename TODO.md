@@ -124,12 +124,31 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       navigation before placement (physical pick true/place false). Fixed
       diagonal search/execution disagreement, false arrival after safety
       truncation, and missing chunk progress guard (45 tests). Driver-based
-      retry `20260913_103007_684ea5` pending. Navigation control
+      retry `20260913_103007_684ea5` is the first independently verified
+      separated-neighbor pick/place pass (168 focused tests). Unchanged repeat
+      `20260913_103442_018239` loses the payload during a longer turn (1/2 on
+      repaired configuration). Matched carry replay `20260913_104239_40cb0e`
+      did not reproduce the original loss. Original-clutter combined contact/aperture preset prepared, not
+      yet live tested; keep that stage closed until retention is repeatable. Navigation control
       `20260913_095730_685498` passes all ten moves; health still reports
       incomplete telemetry. Preserve all failed diagnostics.
       Observed-aperture child preset is unit
       tested but not yet live tested. Do not promote either on graph size or
       a controller return without physical placement evidence.
+- [ ] Continue after wheel-curvature retry `20260913_104630_1f3338` (pick true,
+      place false: mixed receptacle/held-object mask) and navigation control
+      `20260913_104659_c274cb` (ten moves pass, incomplete telemetry). Replay controls did
+      not reproduce the previous slip, so no stronger closure or smoothing was
+      adopted. Wheel saturation now preserves curvature (29 focused tests);
+      independently verify retention and placement, not only command completion.
+      External masks now obey the existing measured depth boundary (34 tests);
+      retry `20260913_110132_edd836` passes physical pick/place on the longer
+      route. Unchanged repeat `20260913_110659_839e2c` runs on frozen `cfb61c3d`. Do not
+      compensate motion error or loosen release thresholds against a mixed mask.
+- [ ] Validate robot-visible head RGB-D and mapping self-filtering: current
+      simulator hides the robot in head renders, removing manipulation
+      self-occlusion. Wrist views retain it. Disclose this fixture limitation;
+      do not treat tabletop passes as real-perception acceptance.
 - [ ] Repeat precision-route validation and complete posture/actuator telemetry.
       Manager-lock version passed six moves then stalled on move seven; frozen
       pre-lock and native-lock controls each pass ten moves. Native-lock control

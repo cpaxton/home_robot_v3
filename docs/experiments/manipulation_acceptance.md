@@ -115,6 +115,11 @@ independent joint-state scoring. See [TODO](../../TODO.md).
 Archive accepted as well as rejected wrist frames, before/after views, top-down
 routes and chase-camera views where available. Include a failed case, not only a
 successful montage. Link artifacts and exact commands from the experiment report.
+For private physical traces, `scripts/render_manipulation_trace.py TRACE --scene
+SCENE.xml --output FRESH_DIR` produces overview, top-down and object views at
+initial, pickup, last-contact and final states. Run in the trace's frozen
+checkout under the exclusive GPU lock. These are explicitly labelled qpos
+reconstructions, not agent images or new executions; retain the manifest.
 Update environment notes and paper claims only after scoring: distinguish view
 evidence from localized instances, system rows from causal ablations, and bounded
 single-room manipulation from unresolved long-range Habitat-OVMM. Sourccey,
