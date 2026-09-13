@@ -19,6 +19,8 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 
 ## Plan index
 
+- **[agent_multiroom_environments.md](agent_multiroom_environments.md)** – Small agent-task preflight, visual evidence, paper exports, and integration boundaries. Paid pilot deferred.
+
 - **[ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)** – Multi-robot, multi-simulator refactor (emet rename, robots/simulators abstraction).
 - **[GRAPH_EQA_PLAN.md](GRAPH_EQA_PLAN.md)** – Plan for adding GraphEQA as a graph-based EQA memory model.
 - **[MAPPING_REFACTOR.md](MAPPING_REFACTOR.md)** – Mapping module layout, instance/memory split, and shared UI.

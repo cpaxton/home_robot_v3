@@ -44,6 +44,10 @@ must download that image; generated files remain owned by the invoking user.
 
 ## Benchmarks and results
 
+- Small multi-room assisted preflight, replay tools and figure export:
+  [agent-task runbook](../docs/experiments/agent_task_preflight.md). Its appendix
+  explicitly separates fixture controls from learned-agent and live ZMQ acceptance.
+
 - **Paper experiments (start here):** [docs/experiments/README.md](../docs/experiments/README.md)
 - **Habitat HM-EQA results vs prior art:** [docs/experiments/habitat_eqa_results.md](../docs/experiments/habitat_eqa_results.md)
 - **Classic vs agentic-verify summaries:** [data/hmeqa_agentic_h2h/](data/hmeqa_agentic_h2h/) + [data/README.md](data/README.md)

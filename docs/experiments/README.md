@@ -2,6 +2,10 @@
 
 **Start here** to run and reproduce Dynagraph paper benchmarks.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
+
+Small embodied-task preflight and visual tooling:
+[agent_task_preflight.md](agent_task_preflight.md). The separate
+[hosted pilot](agent_hosted_pilot.md) is planned and disabled.
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).
 
 | Need | Go to |

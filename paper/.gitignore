@@ -6,4 +6,5 @@
 *.log
 *.out
 *.pdf
+!figs/agent_task_*.pdf
 *.synctex.gz

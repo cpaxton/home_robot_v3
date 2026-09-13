@@ -1,0 +1,55 @@
+\section{Multi-room agent-task preflight}
+\label{app:agent_task_preflight}
+
+We introduce three small multi-room cases for validating the agent interface and
+evaluation machinery before larger experiments: cross-room delivery, two-object
+collection, and a moved-object revisit. A deterministic three-room MuJoCo fixture
+uses the packaged rby1 geometry, open placement trays, and a fixed scene seed.
+Success requires each target's measured center to lie within its specified XYZ
+placement region and the object not to be held. Negative controls include no
+action, incorrect destinations, partial completion, and stale plans.
+
+The initial controls invoke the existing CHAT planning/execution tool registry
+with ground-truth object geometry, synthetic grasps, footprint-checked kinematic
+navigation, and object-pose teleportation. Rendering uses forward kinematics and
+a recorded fixture-only downward head-camera mount. These controls establish
+repeatable assisted execution and evaluator behavior; they do not establish
+contact-stable manipulation, learned perception, agent planning, or memory
+recovery. The moved-object witness has privileged knowledge of the relocation.
+Live ZMQ and sustained learned-agent integration are separate acceptance gates.
+
+Recorded events separate policy-visible state from private evaluator truth and
+link tool outcomes, observations, trajectories, and goal predicates. Offline
+exports produce synchronized replay, video, and figures from the same evidence.
+Absent learned memory is explicitly marked as unrecorded rather than reconstructed
+from ground truth. The initial release makes no paid model calls.
+
+\IfFileExists{figs/agent_task_architecture.pdf}{%
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/agent_task_architecture.pdf}
+  \caption{Agent-task evidence flow. Solid components are exercised by the
+  assisted preflight; dashed connections identify shared agent/memory integration
+  still requiring validation in this benchmark.}
+  \label{fig:agent_task_architecture}
+\end{figure}}{}
+
+\IfFileExists{data/agent_task_preflight/table.tex}{%
+\begin{table}[t]
+  \centering
+  \input{data/agent_task_preflight/table.tex}
+  \caption{Assisted fixture reset/replay controls. Repeats use the same fixed
+  scene and seed; counts are reproducibility checks, not independent samples
+  supporting a learned-agent success rate.}
+  \label{tab:agent_task_preflight}
+\end{table}}{}
+
+\IfFileExists{figs/agent_task_moved_object_revisit.pdf}{%
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/agent_task_moved_object_revisit.pdf}
+  \caption{Before/after evaluator view of the moved-object assisted control.
+  The path is measured from the fixture adapter. Object positions are evaluator
+  ground truth, not the agent's semantic memory.}
+  \label{fig:agent_task_revisit}
+\end{figure}}{}

@@ -302,5 +302,8 @@ def eval_recover(need_mib: int | None, skip_wait: bool, max_rounds: int | None) 
 
 
 def register(main: click.Group) -> None:
+    from emet.cli_cmds.agent_tasks import agent_tasks_group
+
+    eval_group.add_command(agent_tasks_group)
     main.add_command(status_group)
     main.add_command(eval_group)

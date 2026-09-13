@@ -158,6 +158,7 @@ webcam_calibration_images/
 !paper/figs/**/*.png
 !paper/figs/**/*.jpg
 !paper/figs/**/*.jpeg
+!paper/figs/agent_task_*.pdf
 !src/emet/assets/**/*.png
 !src/emet/assets/**/*.jpg
 !src/emet/assets/**/*.jpeg

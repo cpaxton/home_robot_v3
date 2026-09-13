@@ -1,0 +1,87 @@
+{
+  "episodes": [
+    {
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "simulator_truth",
+        "manipulation": "object_pose_teleport",
+        "navigation": "footprint_checked_kinematic",
+        "physics": "forward_kinematics_only"
+      },
+      "event_hashes": [
+        "b40ed328381eabf3c71115789ba39d0bff2a14dc1443d7554a403cb3caa58311",
+        "178a4050042b4ab56ad5a2a15f512c6216c1b984fe949cc9bfda92a0747108ba",
+        "fd5e2fe4670ae816025acaba542039dbed34c83cf8208a26865fad6b814fa51d"
+      ],
+      "figure_sha256": "3dbd5b18059d5d326302503a2f74b179a952f21cef80db9d2c114ab2c28caa7d",
+      "goal_count": 1,
+      "id": "cross_room_delivery",
+      "repeats": 3,
+      "robot": "rby1",
+      "source_revisions": [
+        "e8564ac60f606725243fd359f94390b9d02a5868"
+      ],
+      "successful": 3
+    },
+    {
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "simulator_truth",
+        "manipulation": "object_pose_teleport",
+        "navigation": "footprint_checked_kinematic",
+        "physics": "forward_kinematics_only"
+      },
+      "event_hashes": [
+        "0df6f3b2d40515ae9262ad3c480df51a09e486b47808b151159406f5f2485158",
+        "4c54e11a2b5b6a57eee37f727df356ebe913c8f3c292b4e087861dd1085fce5a",
+        "c2396b0f50dc1522924e8472ae8ddbb018f0ff00746d0b12de28b9982628cf56"
+      ],
+      "figure_sha256": "673bd7691ddb8727d5347bf8210f1fb374888b7cdf3a93582439d6c266df2d02",
+      "goal_count": 2,
+      "id": "two_object_collection",
+      "repeats": 3,
+      "robot": "rby1",
+      "source_revisions": [
+        "e8564ac60f606725243fd359f94390b9d02a5868"
+      ],
+      "successful": 3
+    },
+    {
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "simulator_truth",
+        "manipulation": "object_pose_teleport",
+        "navigation": "footprint_checked_kinematic",
+        "physics": "forward_kinematics_only"
+      },
+      "event_hashes": [
+        "2b071c48b3e477f0469dd99b0d648fbfa3109b0f2da2087ba78cdf34b29c505a",
+        "d58bf7be8511339afaaf28a421c517ebe6764e5e0cd9c1f10ab1c5445e2e5511",
+        "3b8b5b4961af491cfdaed3e585d3fd605b13b59385ef24f0a4d61ba6539556db"
+      ],
+      "figure_sha256": "24da75bd948caef99620a0b946bb47e719f9d69e3235add23b44178f55879125",
+      "goal_count": 2,
+      "id": "moved_object_revisit",
+      "repeats": 3,
+      "robot": "rby1",
+      "source_revisions": [
+        "e8564ac60f606725243fd359f94390b9d02a5868"
+      ],
+      "successful": 3
+    }
+  ],
+  "implementation_sha256": {
+    "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+    "fixture.py": "e138bab1e1931113a3074c0c7de65548ab7d2a94d193a6730ff3438b3c2bcbb7",
+    "publication.py": "caa581ff948741655e1bbe56ec2c4b627da28eaad7615fce6025a5e4cbdd95c9",
+    "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+    "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+    "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+    "visualize.py": "f7e978e6ad914c33d7d07177de0eacb2b0742ef9933f1ed3697d2d9c842d2005",
+    "worker.py": "a35f66792cab095452cc07607550d24bad6a02a56a97757c29feefee4f90c22d"
+  },
+  "paid_cost_usd": 0,
+  "schema_version": 1,
+  "scope": "assisted fixture / CHAT registry only; no learned or ZMQ certification",
+  "suite_fingerprint": "d850de53520837e23e2a28fd48934e1b71b0dc90f227ce40a18a39942d4f55d7"
+}
