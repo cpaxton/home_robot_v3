@@ -143,7 +143,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       independently verify retention and placement, not only command completion.
       External masks now obey the existing measured depth boundary (34 tests);
       retry `20260913_110132_edd836` passes physical pick/place on the longer
-      route. Unchanged repeat `20260913_110659_839e2c` runs on frozen `cfb61c3d`. Do not
+      route. Unchanged repeat `20260913_110659_839e2c` fails on a navigation
+      deadline and payload slip: this version is 1/2, not reliable. Stable
+      approach/final-yaw phase handoff (`ded0a3a3`) is under live test in
+      `20260913_112012_a863a5`; arrival tolerances/deadlines are unchanged. Do not
       compensate motion error or loosen release thresholds against a mixed mask.
 - [ ] Validate robot-visible head RGB-D and mapping self-filtering: current
       simulator hides the robot in head renders, removing manipulation

@@ -27,6 +27,7 @@ test checks geometry, inertia, limits and all other initial coordinates.
 | `20260913_103442_018239` | `89581c70` | true / false | Unchanged repeat takes a longer route; payload slips during final turn, and empty-gripper placement is correctly rejected |
 | `20260913_104630_1f3338` | `f7c024d3` | true / false | Payload retained, but Qwen accepts a mixed cube/cylinder receptacle mask; wrong support geometry and final nonconvergence prevent placement |
 | `20260913_110132_edd836` | `cfb61c3d` | **true / true** | Coherent support geometry, longer transport retained, verified final release onto cube; process exit zero |
+| `20260913_110659_839e2c` | `cfb61c3d` | true / false | Intermediate waypoint exceeds 10 s deadline; repeated approach/final-yaw reversals near the XY boundary coincide with payload loss |
 
 Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
 `~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
@@ -251,13 +252,27 @@ pickup (57.634 s) and final placement (130.088 s), with process exit zero after
 187 s. It retains the payload on the longer route and grounds the real cube
 support. One visual correction precedes release; final z error is 1.48 cm,
 within the unchanged 1.5 cm gate. Unchanged repeat `20260913_110659_839e2c`
-is pending. No accumulated-motion workaround or looser release gate was added.
+fails before placement: a 10 s intermediate-waypoint deadline expires and the
+payload slips during navigation. This version is again **1/2**, not reliable.
+No accumulated-motion workaround or looser release gate was added.
+
+The failed repeat stays upright (roll/pitch below about one degree around loss),
+and reconstructed contacts show no robot/table collision. Wheel commands switch
+between clockwise final-yaw rotation and counterclockwise XY approach near the
+7 cm exploration boundary. The stateless phase switch has no positional buffer
+for braking/turn drift. `ded0a3a3` acquires XY within half the acceptance radius,
+then keeps final-yaw control until drift exceeds the original radius. Arrival
+still requires the original XY/yaw tolerances; new goals reset the phase.
+Thirty-four phase, translation and wheel tests pass. Live retry
+`20260913_112012_a863a5` tests this hypothesis with the same contact preset,
+scene and unchanged deadlines. Boundary chatter is established in the trace;
+eliminating it is not yet proof of reliable payload retention.
 
 The independent IK audit also fixes a joint-layout contract: full eleven-joint
 seeds must convert to nine solver joints once and return a full configuration,
 preserving passive joints. Both IK entry points pass an actual zero-error FK/IK
-round trip, alongside 41 focused tests. This later fix is not in that running
-retry. Future private traces also retain measured velocity, activation and
+round trip, alongside 41 focused tests. This later fix is not in the `cfb61c3d`
+trials but is included in `ded0a3a3`. Private traces now retain measured velocity, activation and
 solver warm-start; sampled traces are still not exact command replays.
 
 Rendering caveat: the existing simulator hides robot geometry from head RGB-D
