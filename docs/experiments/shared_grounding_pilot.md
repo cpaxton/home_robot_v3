@@ -2,14 +2,114 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: no full six-case panel is accepted yet. Panel v3 passes both original
+Latest: no full six-case panel is accepted yet. Observed-bound wrist tracking
+passes cached semantic/association controls and works live. The latest live
+failure is a real fingertip collision with neighboring clutter, before pickup.
+A separate 4 cm aperture variant is under test; it is not collision-aware planning.
+The narrower row subsequently reaches 0.91 mm observed alignment and physically
+picks, but loses the payload during transport. Retention remains unresolved.
+Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
+
+Panel history: v3 passes both original
 repeats but times out during clearance-scene navigation. Panel v4 repairs that
 transport and passes both clearance repeats, then exposes a delayed grasp slip
-in mirrored clutter. Panel v5 is frozen on `b781c4d8`, preserving the verified
-grasp pose and requiring a tighter 5 mm final position gate in the candidate.
+in mirrored clutter. Panel v5 on `b781c4d8` stops before pickup on its first
+mirrored case: detector proposals overflow, then Qwen-box/SAM recovery yields
+no supported surface. Five cases are unrun. This does not exercise the new
+verified-pose handoff or tighter 5 mm final grasp gate.
 Individual development successes and fourteen passed navigation moves are not
-a substitute for the complete gate. Single-room OVMM, learned TAMP and paired
-EQA acceptance remain pending.
+a substitute for the complete gate.
+
+V5 artifacts: `~/runs/emet/manipulation-panel-v5-20260913`, managed job
+`20260913_180405_4ed3fa`. Wrist frame
+`grounding-857eb2e5483e45848ecd3619b4e8f07b` clearly shows the cylinder.
+Qwen's normalized box `[420,560,500,687]` maps to pixel bounds
+`[201.6,151.2,240,185.49]` on the 480×270 image, omitting the lower and right
+extent. Final semantic verification is not reached. Cached mask/depth diagnosis
+must distinguish bad prompting from segmentation failure before another panel.
+
+Cached diagnostic `20260913_181328_67b30b` reproduces the recorded box: SAM's
+highest-score mask contains only 51 scattered pixels, none forming a 25-pixel
+depth-connected surface. All 51 have valid depth; this is not a missing-depth
+failure. A manually bounded full-object box (diagnostic only, never policy input)
+produces 1,454 connected pixels on the cylinder. Matched prompt check
+`20260913_181543_bccba6` on the failed and preceding wrist images yields 1/2
+positive recoveries with the original box prompt and 2/2 with the existing
+whole-object prompt; both reject 2/2 absent-banana queries. However, the latter
+still omits the cylinder's lower extent on the failed view. Do not promote a
+partial identity-positive mask as complete grasp geometry or claim generalization
+from these two development images. Artifacts:
+`~/runs/emet/wrist-whole-box-check-20260913`.
+Targeted live retry `20260913_181756_ed9bbb` retains frozen `b781c4d8` and the
+unchanged setdown preset but also fails before pickup (physical false/false).
+The recovery box again misses the full target; Qwen correctly rejects SAM's
+106-pixel patch left of the cylinder. This is a semantic rejection of a bad
+proposal, not v5's empty-surface rejection. It is not a new panel and cannot
+erase v5's failure or validate the grasp handoff. Focused offline contracts:
+63 passed.
+
+### Observed-bound tracking candidate (not accepted)
+
+`e47c0fe8` adds the separate `query_geometry_tracked_pilot.yaml` preset. During
+known-target wrist tracking, project the previously verified world bounds through
+the current calibrated camera pose and intrinsics, then use the box to prompt
+SAM. No simulator labels, manual boxes, padding or new retries enter policy.
+The original observed bounds are only proposals, not current visibility or a
+complete object model. Qwen must verify the new measured surface and the existing
+world-association gate must accept it. Invalid/off-camera projections fail closed.
+Search/head proposals retain the control's YOLOE/SAM and bounded recovery path;
+existing presets are unchanged. This is a shared geometry operation, with live
+integration currently limited to the existing Stretch wrist-grasp adapter.
+
+Cached check `20260913_182544_cedc8a` recovers **3/3** saved target views, including
+both previously failed frames, with successful world association. All **6/6**
+absent-banana and wrong-object blue-cube queries against the same projected region
+are rejected. Manually inspected masks cover the visible cylinder in both failed
+frames; v5 now has 1,482 connected pixels. Artifacts:
+`~/runs/emet/wrist-projected-check-20260913`. These are correlated development
+frames, not independent task successes or a new held-out set.
+Broader offline regression: **423 passed, 4 skipped** (live simulation disabled).
+Live development trial `20260913_182802_c70308` on `e47c0fe8` preserves wrist
+tracking through the approach, then safely refuses closure: measured grasp error
+stalls around 9–10 mm, outside the candidate's 5 mm gate. Physical false/false;
+no carrying or release is exercised. Artifacts:
+`~/runs/emet/mirrored-projected-tracking`.
+
+The grasp servo rebuilt each IK goal from newly measured joints, retaining
+steady tracking bias and compounding wrist sag. Candidate `2ef5d49f` instead
+integrates fresh visual error into a persistent command reference with fixed
+orientation, saturating the requested displacement at the existing 5 cm measured
+step limit. The three-step no-progress stop and 5 mm closure gate remain intact.
+Reset clears both reference and stall history. 114 focused grasp/place tests pass,
+including a steady-bias regression. Frozen live check `20260913_183357_e4f4cc`
+uses the same tracked preset and fails safely before pickup: the last verified
+wrist frame is valid, but arm extension stops at approximately 0.1275 m against
+a 0.1684 m command. Reconstructing the final saved qpos with MuJoCo forward
+kinematics shows `rubber_tip_left` contacting the neighboring cube (`object1`),
+with about 1.7 mm penetration. The target remains on the table and the robot
+remains upright. This is an obstructed approach, not missing identity or a reason
+to relax arm completion. Artifacts: `~/runs/emet/mirrored-tracked-reference`.
+
+Explicit aperture ablation `80ea85c3` adds
+`query_geometry_tracked_narrow_pilot.yaml`, changing only the observed marker-span
+margin from 6 cm to the existing allowed minimum of 4 cm. Narrowing occurs only
+at the existing depth-verified standoff, with unchanged marker checks, closure
+gate, force limits and physical scoring. This is development tuning, **not**
+collision-aware grasp planning or a hardware recommendation. The 6 cm control
+remains intact. Job `20260913_184054_44dbd0` completes with **pickup true / place
+false**, pickup at 81.170 simulated seconds. Final observed grasp-center error is
+`[0.586,0.436,0.545]` mm (0.911 mm norm), below the unchanged 5 mm gate. The object
+clears the table, then gradually creeps forward in the fingers: approximately
+4.1 mm grasp-frame X at 86 s, 19.8 mm at 120.236 s, and 21.0 mm at last contact
+122.276 s. It drops during a subsequent turn, but drift precedes that turn.
+Artifacts: `~/runs/emet/mirrored-tracked-narrow`. This is not manipulation
+acceptance. Focused tests: 40 passed; the preceding broad code suite passes
+426 tests with four simulation skips.
+
+Captured-state control `20260913_184804_c62875` compares 50-second stationary
+holds at original and level wrist pitch from 86 s and 98 s checkpoints. It keeps
+grip force/contact physics unchanged and is diagnostic only. Do not infer that
+slower navigation or a stronger grip will fix retention without these controls.
 
 ### Frozen panel v1 (stopped, not accepted)
 

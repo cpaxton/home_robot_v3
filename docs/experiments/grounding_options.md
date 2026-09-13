@@ -43,6 +43,8 @@ support an answer without qualifying as an OVMM grasp target.
 | Support-only final identity | SAM2 cache 12 pure / 1 impure, but another live brown patch was misidentified | Better offline rejection, not a semantic guarantee |
 | YOLOE boxes -> SAM2 -> Qwen support | Two manually verified nearby sim finds (red cylinder / blue block), same frozen harness | Test clutter/longer search and cross-task handoff; keep separate preset |
 | Multi-view/reacquisition | Shared find now checks fresh arrival views; nearby red/blue geometry inspected | Preserve pose/time linkage; no manipulation or long-range claim |
+| Whole-object recovery for wrist geometry | Sep 13: 2/2 cached positives versus 1/2 with original prompt; both reject 2/2 absent queries, but a recovered mask still truncates the target | Do not promote based on identity alone; incomplete support biases grasp center |
+| Project previously observed world bounds for tracking | Opt-in `query_geometry_tracked_pilot.yaml`: known-target SAM prompt only; original search, fresh semantic verification and association remain intact | Test cached wrong-object/absent controls, then physical pickup and retention; not complete-object reconstruction |
 | Stronger model with less assistance | Untested hypothesis above | Minimal/assisted/closed-loop paired comparison |
 
 Findings: [box/proposal comparison](grounding_verification_ablation.md),

@@ -11,24 +11,21 @@ single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle contro
 and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
-- [ ] Resolve release instability before restarting the frozen six-case panel.
-      `20260913_164029_e59ea7` physically picks and carries but slides the
-      cylinder off its support during gripper opening, before retreat.
-      Inspect saved-state opening controls; preserve current alignment and
-      physical scoring thresholds. Evidence: `~/runs/emet/grasp-proposal-recovery`.
-      Physics-time gripper candidate `a6fc3687` passes a fresh learned retry
-      (`20260913_165731_d3bff6`), but frozen panel v2 stops at 1/2 original
-      passes: another release tip, four variations unrun. Controlled physical
-      set-downs retain support (6/6) versus suspended release (0/2).
-      Separate near-support preset `46e380d7` passes original and separated-
-      neighbor development controls and both original panel v3 repeats. V3
-      then times out during clearance-scene transport, retaining the object.
-      Monitored waypoints plus an explicit 30 s ceiling pass both clearance
-      repeats in v4 (`6b020ecd`), but mirrored clutter exposes delayed slip
-      while stationary. The later VLM rejection is correct: the object fell.
-      `b781c4d8` preserves verified pose at closure and tightens candidate grasp
-      error to 5 mm; panel v5 starts with mirrored clutter. Do not mark this
-      resolved until the predeclared original/clearance/mirrored repeats pass.
+
+- [ ] Finish the frozen original/clearance/mirrored physical panel; no version
+      has passed it. Preserve failed trials and separate development successes.
+      [Failure history and artifacts](docs/experiments/shared_grounding_pilot.md)
+      cover release tips, navigation, delayed slip and wrist proposal failures.
+- [ ] Validate tracked grasp/carry/release after `e47c0fe8` (observed-bound
+      proposals) and `2ef5d49f` (bounded servo reference). Cached checks recover
+      3/3 targets and reject 6/6 negatives; live approach now exposes fingertip
+      collision with the neighboring cube. Separate 4 cm aperture row `80ea85c3`
+      then reaches 0.91 mm observed alignment and physically picks, but the object
+      creeps in the fingers and drops during transport. Stationary hold controls
+      are running (`20260913_184804_c62875`); do not promote or loosen physical gates.
+- [ ] Add collision-aware approach selection before claiming clutter robustness.
+      Narrowing an aperture is not a collision planner; an identity-positive
+      partial surface is not proof of complete grasp geometry.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.
       Keep capture evaluator-only and distinguish replay from live evidence.
