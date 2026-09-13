@@ -31,6 +31,13 @@ and EQA regression checks. Follow the [environment progression](docs/environment
       0.369 to 0.166 m, gripper closed, then placement navigation timed out with
       stop confirmed. No verified held object or successful place. Next: verify
       physical pickup and diagnose post-grasp navigation; 65 focused tests pass.
+      Navigation root cause isolated: Stretch wheel commands/feedback confused
+      geared actuator velocity with joint velocity. Fix `76ebf9a1` passes 44
+      focused tests and the matched half-turn in 7.01 s (baseline times out).
+      No limits/tolerance/deadline relaxation. Integrated retry
+      `20260912_233137_f012c2` completes initial navigation but fresh grounding
+      rejects absent/ambiguous target before pickup. Post-grasp navigation and
+      physical grasp verification remain unvalidated in the integrated harness.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance

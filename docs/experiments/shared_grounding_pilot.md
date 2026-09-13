@@ -145,6 +145,44 @@ Do not score gripper closure as physical pickup. Next isolate physical grasp
 verification and post-grasp navigation; do not loosen tracking tolerances or
 launch broader acceptance pilots yet. Multiprocessing teardown errors remain.
 
+### Placement-navigation timeout: wheel transmission units
+
+The failing placement waypoint is approximately an in-place 175-degree turn,
+not a long drive. Isolated baseline `20260912_232620_453a49` (source `933fa725`)
+reproduces it without perception models or manipulation. The nominal 10 s
+command budget is stretched by the existing sim-time ratio: failure occurs at
+12.27 wall seconds, measured yaw -2.369 versus goal -3.05 rad (0.681 rad short).
+Pose samples show continued slow rotation, not a stationary obstacle stall.
+The earlier diagnostic `20260912_232447_3fc9ac` never launched simulation because
+its temporary route YAML was malformed; exclude it from navigation results.
+
+Stretch's MJCF wheel velocity actuators use `gear=3`. The bridge previously
+sent wheel-joint rad/s directly to actuator controls, and interpreted actuator
+velocity as wheel-joint velocity in feedback. MuJoCo's [transmission semantics](https://mujoco.readthedocs.io/en/latest/XMLreference.html#actuator-general-gear)
+scale actuator velocity by gear. Fix `76ebf9a1` multiplies commands by the model's
+actual gear and reads joint `qvel` for wheel-speed telemetry. No MJCF friction,
+limits, navigation deadline, arrival tolerance, or speed-boost changes.
+15 tests cover command/feedback units with unit, positive non-unit and negative
+gears; the broader adapter/command suite passes 44 tests.
+
+Matched fixed diagnostic `20260912_232858_58901d` succeeds: first positioning
+command 1.35 s, half-turn 7.01 s, return turn 6.46 s. Terminal half-turn error
+is 0.055 m / 0.142 rad, within unchanged exploration tolerances 0.07 m / 0.15 rad.
+These are exploration-contract passes, not precision-navigation acceptance.
+Both runs use the existing `probe_rby1_camera.py` on seed-0 default-table Stretch,
+with a temporary wrapper selecting the unnamed contract and nominal 10 s timeout,
+and logging pose samples. Route: `(0.13, 0.0085, 0.006)`,
+`(0.13, 0.0085, -3.05)`, `(0.13, 0.0085, 0.006)` in episode coordinates.
+Artifacts: `~/runs/emet/nav-turn-{trace-v2,geared}`, including observations and
+images; managed job logs retain timestamped `NAV_SAMPLE` and `NAV_RESULT` lines.
+Integrated same-preset learned retry `20260912_233137_f012c2` uses frozen
+`76ebf9a1`; artifacts `~/runs/emet/manipulation-wheel-units/evidence`. Initial
+navigation completes without timeout, but fresh target grounding rejects
+`target absent or ambiguous` before pickup (tool 17.7 s); place is skipped.
+This run does not exercise post-grasp navigation, and does not establish
+manipulation success. Keep that integration gate open despite the isolated
+navigation fix passing. Existing multiprocessing/EGL teardown errors persist.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.
