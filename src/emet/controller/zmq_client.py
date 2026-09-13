@@ -918,6 +918,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     print("Opening gripper:", joint_state[HelloStretchIdx.GRIPPER])
                 gripper_err = np.abs(joint_state[HelloStretchIdx.GRIPPER] - gripper_target)
                 if gripper_err < 0.1:
+                    self._carry_configuration = None
                     return True
                 t1 = timeit.default_timer()
                 if t1 - t0 > timeout:
@@ -989,10 +990,44 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             logger.info("Waiting for manipulation mode")
         self._wait_for_mode("manipulation", verbose=verbose)
 
+    _carry_configuration: np.ndarray | None = None
+
+    def set_carry_configuration(self, joint_positions):
+        """Preserve payload orientation/height until confirmed gripper opening.
+
+        This is a posture constraint, not a claim of independently verified
+        object holding. It uses existing joint commands on older bridges too.
+        """
+        q = np.array(joint_positions, dtype=float, copy=True)
+        if q.shape != constants.STRETCH_NAVIGATION_Q.shape or not np.isfinite(q).all():
+            raise ValueError("Carry posture requires a finite full joint configuration")
+        q[HelloStretchIdx.ARM] = min(q[HelloStretchIdx.ARM], constants.STRETCH_NAVIGATION_Q[HelloStretchIdx.ARM])
+        self._carry_configuration = q
+
+    def _move_to_carry_posture(self, *, navigation):
+        self.switch_to_manipulation_mode()
+        q = self.get_joint_positions().copy()
+        for idx in (
+            HelloStretchIdx.LIFT,
+            HelloStretchIdx.ARM,
+            HelloStretchIdx.WRIST_ROLL,
+            HelloStretchIdx.WRIST_PITCH,
+            HelloStretchIdx.WRIST_YAW,
+        ):
+            q[idx] = self._carry_configuration[idx]
+        head = constants.look_front if navigation else constants.look_at_ee
+        if not self.arm_to(q, head=head, blocking=True):
+            raise RuntimeError("Carry posture did not complete; stopping without folding the payload")
+        if navigation:
+            self.switch_to_navigation_mode()
+
     def move_to_nav_posture(self) -> None:
         """Move the robot to the navigation posture. This is where the head is looking forward and the arm is tucked in."""
         if not self._zmq_manipulation_supported():
             self.switch_to_navigation_mode()
+            return
+        if self._carry_configuration is not None:
+            self._move_to_carry_posture(navigation=True)
             return
         next_action = {"posture": "navigation", "step": self._iter}
         next_action = self.send_action(next_action)
@@ -1004,6 +1039,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def move_to_manip_posture(self):
         """This is the pregrasp posture where the head is looking down and right and the arm is tucked in."""
         if not self._zmq_manipulation_supported():
+            return
+        if self._carry_configuration is not None:
+            self._move_to_carry_posture(navigation=False)
             return
         next_action = {"posture": "manipulation", "step": self._iter}
         self.send_action(next_action)

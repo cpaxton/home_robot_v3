@@ -240,7 +240,10 @@ class PlaceObjectOperation(ManagedOperation):
             pitch_from_vertical = 0.0
 
         # Joint compute a joitn state goal and associated ee pos/rot
-        joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
+        # Keep a query-grounded payload's carry orientation. Rotating an
+        # unmodeled held object can roll it out of the fingers (or spill it).
+        if self.held_query is None:
+            joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
         if not self.robot.arm_to(joint_state, blocking=True):
             self.error("Placement orientation did not complete; retaining the object.")
             return

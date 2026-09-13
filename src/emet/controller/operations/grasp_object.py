@@ -45,6 +45,7 @@ class GraspObjectOperation(ManagedOperation):
     lift_distance: float = 0.2
     servo_to_grasp: bool = False
     _success: bool = False
+    pickup_executed: bool = False
     talk: bool = True
     verbose: bool = False
 
@@ -377,6 +378,7 @@ class GraspObjectOperation(ManagedOperation):
     def reset(self):
         """Reset the operation. This clears the history and sets the success flag to False. It also clears the tracked object features."""
         self._success = False
+        self.pickup_executed = False
         self._geometry_previous_pose = None
         self._geometry_stalled_steps = 0
         self.tracked_object_features = None
@@ -1074,12 +1076,16 @@ class GraspObjectOperation(ManagedOperation):
         if self.talk and self._success:
             self.agent.robot_say(f"I think I grasped the {self.sayable_target_object()}.")
 
-        # Go back to manipulation posture
-        # Shrink arm first
-        current_state = self.robot.get_joint_positions()
-        current_state[HelloStretchIdx.ARM] = 0
-        self.robot.arm_to(current_state)
-        self.robot.move_to_manip_posture()
+        # A payload must not be folded or lowered as if the gripper were empty.
+        # On failure, do not add unverified retraction/posture motions.
+        if self._success:
+            self.pickup_executed = True
+            self.robot.set_carry_configuration(self.robot.get_joint_positions())
+            try:
+                self.robot.move_to_manip_posture()
+            except RuntimeError:
+                self._success = False
+                raise
 
     def align_grounded_target_for_grasp(self):
         """Stretch's arm points along -Y; find's camera-facing pose is not a grasp pose.

@@ -323,18 +323,25 @@ class DynamemTaskExecutor:
                 self.agent.current_object = instance
                 operation = self.grasp_object
                 attempted = True
-                ok = bool(
-                    operation(
-                        target_object=query,
-                        object_xyz=target.xyz,
-                        grounded_target=target,
-                        match_method="class",
-                        show_object_to_grasp=False,
-                        show_servo_gui=False,
-                        delete_object_after_grasp=False,
-                        try_open_loop=False,
+                try:
+                    ok = bool(
+                        operation(
+                            target_object=query,
+                            object_xyz=target.xyz,
+                            grounded_target=target,
+                            match_method="class",
+                            show_object_to_grasp=False,
+                            show_servo_gui=False,
+                            delete_object_after_grasp=False,
+                            try_open_loop=False,
+                        )
                     )
-                )
+                finally:
+                    # A failed carry transition does not undo a completed
+                    # close/lift. Conservatively block a second pickup until
+                    # that potentially held object is resolved.
+                    if operation.pickup_executed is True:
+                        self._held_query_instance = instance
             if ok:
                 self._held_query_instance = None if place else instance
             # This reports the existing adapter's execution outcome, not an

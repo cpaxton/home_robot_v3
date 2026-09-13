@@ -125,6 +125,16 @@ def test_missing_final_object_alignment_never_releases():
     op.robot.open_gripper.assert_not_called()
 
 
+def test_query_place_keeps_existing_payload_orientation():
+    op = operation()
+    op.held_query = "red cylinder"
+    op.align_held_object_for_release = Mock(return_value=False)
+    op.robot.get_observation.return_value.joint[HelloStretchIdx.WRIST_PITCH] = -0.25
+    with patch("emet.controller.operations.place_object.time.sleep"):
+        op.run()
+    assert op.robot.arm_to.call_args_list[0].args[0][HelloStretchIdx.WRIST_PITCH] == -0.25
+
+
 def test_visual_placement_corrects_observed_object_offset_and_drop_height():
     op = operation()
     op.held_query = "red cylinder"

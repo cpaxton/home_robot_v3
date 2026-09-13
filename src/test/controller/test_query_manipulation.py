@@ -165,6 +165,16 @@ def test_failed_place_retains_only_unreleased_object(released):
     assert task._held_query_instance is (None if released else held)
 
 
+def test_failed_carry_transition_retains_potentially_held_instance():
+    task, target = executor()
+    task.grasp_object.pickup_executed = True
+    task.grasp_object.side_effect = RuntimeError("Carry posture did not complete")
+    assert task._pickup("mug") is False
+    assert task._held_query_instance.global_id == target.instance_id
+    assert task._pickup("another object") is False
+    assert task.grasp_object.call_count == 1
+
+
 def test_tracking_rejects_missing_or_ambiguous_geometry():
     _, target = executor()
     xyz = np.ones((8, 8, 3))
