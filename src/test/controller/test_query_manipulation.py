@@ -236,8 +236,13 @@ def test_vlm_wrist_tracking_requires_shared_semantics_and_world_association():
     with pytest.raises(ValueError, match="absent"):
         operation.get_target_mask(servo, center=(8, 8))
     world[:] = 1
-    operation.agent.ground_vlm_frame.return_value = (SimpleNamespace(instance=masks), [], [], {"valid": False})
-    with pytest.raises(ValueError, match="identity absent"):
+    operation.agent.ground_vlm_frame.return_value = (
+        SimpleNamespace(instance=masks),
+        [],
+        [],
+        {"valid": False, "reason": "too many surface candidates"},
+    )
+    with pytest.raises(ValueError, match="identity absent.*too many surface candidates"):
         operation.get_target_mask(servo, center=(8, 8))
 
 

@@ -12,6 +12,10 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
 
+class SurfaceCandidateOverflow(ValueError):
+    """Proposal geometry exceeds the bounded semantic selection budget."""
+
+
 def _connected_surfaces(depth, valid, colors=None):
     """Measured adjacency, shared by RGB-D and external-mask proposals."""
     indices = np.arange(depth.size).reshape(depth.shape)
@@ -93,7 +97,7 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
                 }
             )
             if len(regions) > 8:
-                raise ValueError("too many surface candidates; another view or segmentation is needed")
+                raise SurfaceCandidateOverflow("too many surface candidates; another view or segmentation is needed")
     return regions
 
 

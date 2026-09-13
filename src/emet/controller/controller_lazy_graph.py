@@ -336,16 +336,27 @@ class LazyGraphController(DynagraphController):
             options["presentation"] = config["surface_presentation"]
         if "whole_object_box" in config:
             options["whole_object"] = config["whole_object_box"]
-        result = ground_vlm_region(
-            frame,
-            query,
-            description,
+        options.update(
             client=client,
             min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
             max_depth=self.voxel_map.max_depth,
             strategy=config.get("region_strategy", "point"),
-            **options,
         )
+        result = ground_vlm_region(frame, query, description, **options)
+        if (
+            backend == "yoloe_sam2"
+            and config.get("recover_proposals_with_vlm", False)
+            and result[3].get("failure_kind") in {"candidate_overflow", "no_supported_surfaces"}
+        ):
+            # One alternative proposal source on the SAME observation. Never
+            # override a semantic abstention, relax the surface budget, or use
+            # detector labels as acceptance. Qwen boxes remain untrusted until
+            # SAM depth support passes the ordinary final VLM verification.
+            initial_audit = result[3]
+            options.pop("proposal_masks")
+            options["segmenter"] = self._query_segmenter
+            result = ground_vlm_region(frame, query, description, **options)
+            result[3]["proposal_recovery"] = {"backend": "sam2", "initial_attempt": initial_audit}
         result[3]["mask_backend"] = backend
         return result
 

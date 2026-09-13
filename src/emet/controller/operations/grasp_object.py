@@ -431,7 +431,8 @@ class GraspObjectOperation(ManagedOperation):
                     frame, self.target_object, self.target_object, min_depth=0.0
                 )
                 if not verification.get("valid") or len(matching) != 1:
-                    raise ValueError("Wrist target identity absent or ambiguous")
+                    detail = verification.get("reason") or "no unique verified surface"
+                    raise ValueError(f"Wrist target identity absent or ambiguous: {detail}")
                 associated_mask = target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
                 return associated_mask
             except ValueError as exc:

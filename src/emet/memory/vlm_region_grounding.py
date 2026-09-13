@@ -191,7 +191,12 @@ def select_candidate_surface(
     presentation="isolated",
     whole_object=False,
 ):
-    from emet.memory.surface_candidates import candidate_mask, surface_candidate_panels, surface_candidates
+    from emet.memory.surface_candidates import (
+        SurfaceCandidateOverflow,
+        candidate_mask,
+        surface_candidate_panels,
+        surface_candidates,
+    )
 
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
@@ -241,10 +246,14 @@ def select_candidate_surface(
         )
     except (TypeError, ValueError) as exc:
         audit["reason"] = str(exc)
+        audit["failure_kind"] = (
+            "candidate_overflow" if isinstance(exc, SurfaceCandidateOverflow) else "invalid_geometry"
+        )
         return parsed, mask, audit
     audit["surface_candidates"] = regions
     if not regions:
         audit["reason"] = "no supported surfaces; another view is needed"
+        audit["failure_kind"] = "no_supported_surfaces"
         return parsed, mask, audit
     prompt = (
         f"Select a measured surface of {description or query!r}. Image 1 is the original reference, NOT a candidate. "

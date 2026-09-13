@@ -34,6 +34,30 @@ def scene():
     return np.zeros((60, 80, 3), dtype=np.uint8), depth
 
 
+def test_unrelated_fragmented_proposal_reports_budget_failure_before_semantics():
+    rgb, depth = scene()
+    target = np.zeros_like(depth, dtype=bool)
+    target[2:8, 2:8] = True
+    clutter = np.zeros_like(target)
+    for column in range(8):
+        clutter[50:56, column * 10 : column * 10 + 6] = True
+    client = Mock(side_effect=AssertionError("overflow must not become semantic absence"))
+    _, mask, audit = select_supported_region(
+        rgb,
+        depth,
+        "object",
+        "object",
+        client=client,
+        min_depth=0.0,
+        max_depth=4,
+        strategy="depth_candidates",
+        proposal_masks=[target, clutter],
+    )
+    assert not audit["valid"] and audit["failure_kind"] == "candidate_overflow"
+    assert np.all(mask == -1)
+    client.assert_not_called()
+
+
 def test_depth_layers_separate_object_and_support_with_noise_and_holes():
     rgb, depth = scene()
     depth += np.random.default_rng(0).normal(0, 0.005, depth.shape)
