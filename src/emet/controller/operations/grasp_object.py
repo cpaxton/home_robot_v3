@@ -1153,15 +1153,18 @@ class GraspObjectOperation(ManagedOperation):
         if self._geometry_stalled_steps >= 3:
             self.error("Repeated geometry corrections produced no measured progress.")
             return False
-        # Grasp-frame +X points out of the palm. Align across the opening
+        # Grasp-frame Y spans the finger opening. Align along that axis
         # while still separated, before inserting the fingers. A diagonal
         # approach can sweep a finger into neighboring clutter even when the
         # final centered aperture would clear it. This is not a collision
         # planner: stop on any failed motion and retain the existing gates.
-        approach_axis = servo.ee_pose[:3, 0]
-        transverse = delta - np.dot(delta, approach_axis) * approach_axis
-        if np.linalg.norm(transverse) > 0.012:
-            delta = transverse
+        # Do not force the full plane perpendicular to tilted grasp X:
+        # lowering in that plane also retracts the arm, which can already
+        # be at its limit. Height/depth change together after lateral alignment.
+        opening_axis = servo.ee_pose[:3, 1]
+        lateral = np.dot(delta, opening_axis) * opening_axis
+        if np.linalg.norm(lateral) > 0.012:
+            delta = lateral
         delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
         joint_state = self.robot.get_joint_positions().copy()
         ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)

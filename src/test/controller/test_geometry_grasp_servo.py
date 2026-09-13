@@ -54,7 +54,8 @@ def test_grasp_aligns_across_opening_before_inserting_fingers(rotation):
     command = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
     local = rotation.T @ command
     assert local[0] == pytest.approx(0, abs=1e-10)
-    assert local[1] > 0 and local[2] < 0
+    assert local[1] > 0
+    assert local[2] == pytest.approx(0, abs=1e-10)
     assert np.linalg.norm(command) == pytest.approx(0.05)
     op._grasp.assert_not_called()
 
