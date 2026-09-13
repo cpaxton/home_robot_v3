@@ -95,7 +95,9 @@ def test_physics_ack_cannot_overwrite_a_new_joint_command():
 
 
 def test_cancel_wait_does_not_block_physics_consumption():
-    assert simulator(CommandProxy()).cancel_base_motion(timeout=0.5)
+    proxy = CommandProxy()
+    assert simulator(proxy).cancel_base_motion(timeout=0.5)
+    assert proxy.command.base_velocity.stop
 
 
 def _spawned_command_writer(proxy, started, finished):

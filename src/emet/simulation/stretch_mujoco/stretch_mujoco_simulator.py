@@ -625,7 +625,7 @@ class StretchMujocoSimulator:
         with self._command_lock:
             command = self.data_proxies.get_command()
             command.teleport_base.trigger = False
-            command.set_base_velocity(CommandBaseVelocity(v_linear=0.0, omega=0.0, trigger=True))
+            command.set_base_velocity(CommandBaseVelocity(v_linear=0.0, omega=0.0, trigger=True, stop=True))
             self.data_proxies.set_command(command)
         # The physics process needs the shared lock to consume this stop.
         deadline = time.monotonic() + timeout

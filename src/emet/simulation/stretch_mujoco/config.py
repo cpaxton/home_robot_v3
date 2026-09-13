@@ -29,4 +29,11 @@ manipulation_base_xy_tolerance = 0.005
 
 base_motion = {"timeout": 15, "default_x_vel": 0.3, "default_r_vel": 1.0}
 
+# Wheel-joint reference acceleration (rad/s²), independent of transmission
+# gearing. Abrupt arc-to-turn commands can eject a held object even when each
+# velocity is within the actuator limits. Explicit cancellation bypasses this
+# profile; ordinary velocity commands, including zero, use it. Simulator-only,
+# not a calibrated real-robot acceleration limit.
+wheel_reference_acceleration = 8.0 / 3.0
+
 # TODO: Add params to tune joints response motion profiles

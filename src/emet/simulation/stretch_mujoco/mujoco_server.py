@@ -137,6 +137,9 @@ class BaseController:
 
     def push_command(self, command: CommandMove | CommandBaseVelocity):
         """Push a command to the base. Call `update()` to set the next trajectory."""
+        if isinstance(command, CommandBaseVelocity) and command.stop:
+            self._clear_command(is_stop_motion=True)
+            return
         self.last_command = command
         self.start_pose = self.get_base_pose()
 
@@ -144,7 +147,7 @@ class BaseController:
         self.last_command = None
 
         if is_stop_motion:
-            self._set_base_velocity(0.0, 0.0)
+            self._set_base_velocity(0.0, 0.0, immediate=True)
 
     def update(self):
         """
@@ -199,7 +202,7 @@ class BaseController:
 
         self._set_base_velocity(0, config.base_motion["default_r_vel"] * sign)
 
-    def _set_base_velocity(self, v_linear: float, omega: float) -> None:
+    def _set_base_velocity(self, v_linear: float, omega: float, *, immediate: bool = False) -> None:
         """
         Set the base velocity of the robot
         Args:
@@ -230,7 +233,18 @@ class BaseController:
         # wheels can drive straight despite a turn request). Slow both wheels
         # together to preserve the requested twist within physical limits.
         for name, target in targets:
-            self.mujoco_server.mjdata.actuator(name).ctrl = speed_fraction * target
+            actuator = self.mujoco_server.mjdata.actuator(name)
+            desired = speed_fraction * target
+            if not immediate:
+                # Advance once per physics tick, not per incoming command or
+                # wall-clock interval. Bound wheel-joint acceleration even with
+                # non-unit/negative gearing. Transient curvature can differ
+                # while the two wheels accelerate toward the requested twist.
+                gear = self.mujoco_server.mjmodel.actuator(name).gear[0]
+                step = abs(gear) * config.wheel_reference_acceleration * self.mujoco_server.mjmodel.opt.timestep
+                current = float(actuator.ctrl[0])
+                desired = current + np.clip(desired - current, -step, step)
+            actuator.ctrl = desired
 
 
 class MujocoServer:
@@ -710,7 +724,7 @@ class MujocoServer:
                 theta=tb.theta,
             ):
                 self.base_controller.last_command = None
-                self.base_controller._set_base_velocity(0.0, 0.0)
+                self.base_controller._clear_command(is_stop_motion=True)
             else:
                 logger.warning(
                     f"teleport_base failed (no free joint on base_link?); goal=({tb.x:.3f}, {tb.y:.3f}, {tb.theta:.3f})"
