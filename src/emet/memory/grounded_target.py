@@ -5,6 +5,7 @@
 """Ephemeral, observation-backed geometry passed to manipulation adapters."""
 
 from dataclasses import dataclass
+from itertools import product
 
 import numpy as np
 
@@ -27,6 +28,43 @@ class GroundedTarget:
     @property
     def xyz(self) -> np.ndarray:
         return np.median(self.points, axis=0)
+
+    def project_box(self, camera_K, camera_pose, image_shape):
+        """Project observed world bounds as an unverified segmentation prompt.
+
+        This is neither current visibility nor complete object geometry. A
+        fresh mask still needs semantic verification and world association.
+        Reject bounds crossing the camera plane rather than inventing a box.
+        """
+        intrinsic = np.asarray(camera_K, dtype=float)
+        pose = np.asarray(camera_pose, dtype=float)
+        if (
+            intrinsic.shape != (3, 3)
+            or pose.shape != (4, 4)
+            or not np.isfinite(intrinsic).all()
+            or not np.isfinite(pose).all()
+            or intrinsic[0, 0] <= 0
+            or intrinsic[1, 1] <= 0
+            or not np.allclose(intrinsic[2], [0, 0, 1])
+            or not np.allclose(pose[3], [0, 0, 0, 1])
+            or not np.allclose(pose[:3, :3].T @ pose[:3, :3], np.eye(3), atol=1e-5)
+            or not np.isclose(np.linalg.det(pose[:3, :3]), 1, atol=1e-5)
+        ):
+            raise ValueError("Target projection requires calibrated camera intrinsics and a rigid world pose")
+        height, width = image_shape
+        if height <= 0 or width <= 0:
+            raise ValueError("Target projection requires a nonempty image")
+        corners = np.asarray(list(product(*zip(self.points.min(axis=0), self.points.max(axis=0), strict=True))))
+        camera = (corners - pose[:3, 3]) @ pose[:3, :3]
+        if np.any(camera[:, 2] <= 0):
+            raise ValueError("Grounded bounds cross or lie behind the camera plane")
+        pixels = camera @ intrinsic.T
+        pixels = pixels[:, :2] / pixels[:, 2:]
+        lo = np.clip(pixels.min(axis=0), [0, 0], [width, height])
+        hi = np.clip(pixels.max(axis=0), [0, 0], [width, height])
+        if not np.isfinite(pixels).all() or np.any(hi <= lo):
+            raise ValueError("Grounded bounds have no visible image extent")
+        return np.concatenate([lo, hi])
 
     def select_surface(self, world_xyz, *, margin_m: float = 0.05):
         """Track one connected observed surface, independent of detector classes."""

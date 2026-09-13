@@ -304,7 +304,7 @@ class LazyGraphController(DynagraphController):
         )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
 
-    def ground_vlm_frame(self, frame, query, description, *, min_depth=None):
+    def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None):
         """Shared head/wrist perception without admitting a new memory instance."""
         from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
         from emet.memory.vlm_region_grounding import ground_vlm_region
@@ -318,13 +318,26 @@ class LazyGraphController(DynagraphController):
         if backend not in ("rgbd", "sam2", "yoloe_sam2"):
             raise ValueError(f"Unknown query mask backend: {backend}")
         options = {}
+        tracking_proposal = None
         if backend in ("sam2", "yoloe_sam2"):
             from emet.perception.detection.sam2 import SAM2Perception
 
             if getattr(self, "_query_segmenter", None) is None:
                 self._query_segmenter = SAM2Perception(configuration="s")
             options["segmenter"] = self._query_segmenter
-        if backend == "yoloe_sam2":
+        if tracking_target is not None and config.get("track_grounded_box", False):
+            if backend not in ("sam2", "yoloe_sam2"):
+                raise ValueError("Projected target tracking requires a box segmenter")
+            rgb = frame_rgb_hwc_uint8(frame)
+            box = tracking_target.project_box(frame.camera_K, frame.camera_pose, rgb.shape[:2])
+            options["proposal_masks"] = options.pop("segmenter").segment(rgb, box[None])
+            tracking_proposal = {
+                "source": "projected_observed_bounds",
+                "candidate_id": tracking_target.candidate_id,
+                "observation_revision": tracking_target.observation_revision,
+                "prompt_box_xyxy": box.tolist(),
+            }
+        elif backend == "yoloe_sam2":
             from emet.perception.detection.query_mask_proposals import refine_instance_proposals
             from emet.perception.detection.yoloe import get_shared_yoloe_perception
 
@@ -345,6 +358,7 @@ class LazyGraphController(DynagraphController):
         result = ground_vlm_region(frame, query, description, **options)
         if (
             backend == "yoloe_sam2"
+            and tracking_proposal is None
             and config.get("recover_proposals_with_vlm", False)
             and result[3].get("failure_kind") in {"candidate_overflow", "no_supported_surfaces"}
         ):
@@ -358,6 +372,8 @@ class LazyGraphController(DynagraphController):
             result = ground_vlm_region(frame, query, description, **options)
             result[3]["proposal_recovery"] = {"backend": "sam2", "initial_attempt": initial_audit}
         result[3]["mask_backend"] = backend
+        if tracking_proposal is not None:
+            result[3]["tracking_proposal"] = tracking_proposal
         return result
 
     def prepare_query_target(self, query: str):

@@ -429,12 +429,18 @@ class GraspObjectOperation(ManagedOperation):
                 world_xyz = servo.get_ee_xyz_in_world_frame()
                 if world_xyz is None:
                     raise ValueError("Target tracking requires world-aligned depth")
-                frame = SimpleNamespace(rgb=servo.ee_rgb, depth=servo.ee_depth, full_world_xyz=world_xyz)
+                frame = SimpleNamespace(
+                    rgb=servo.ee_rgb,
+                    depth=servo.ee_depth,
+                    full_world_xyz=world_xyz,
+                    camera_K=getattr(servo, "ee_camera_K", None),
+                    camera_pose=getattr(servo, "ee_camera_pose", None),
+                )
                 # The wrist can be much closer than the navigation map's depth
                 # cutoff. Use finite positive sensor depth, with the same mask
                 # provider and semantic verifier as head-camera grounding.
                 detected, _, matching, verification = self.agent.ground_vlm_frame(
-                    frame, self.target_object, self.target_object, min_depth=0.0
+                    frame, self.target_object, self.target_object, min_depth=0.0, tracking_target=target
                 )
                 if not verification.get("valid") or len(matching) != 1:
                     detail = verification.get("reason") or "no unique verified surface"

@@ -1,0 +1,8 @@
+# Experimental observed-target tracking, not a new search/semantic authority.
+# Preserve the setdown control. No box expansion, GT input or retry budget.
+extends: configs/emet/query_geometry_setdown_pilot.yaml
+mapping:
+  query_memory:
+    # Known-target views use projected observed bounds -> SAM -> fresh Qwen
+    # verification. Search remains YOLOE/SAM with bounded proposal recovery.
+    track_grounded_box: true

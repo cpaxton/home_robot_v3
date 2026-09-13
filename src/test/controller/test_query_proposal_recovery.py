@@ -27,6 +27,51 @@ def test_recovery_is_enabled_only_in_experimental_preset():
     assert candidate.data == control.data
 
 
+def test_tracking_preset_only_changes_proposal_source_for_known_targets():
+    from emet.core.parameters import get_parameters
+
+    candidate = get_parameters("configs/emet/query_geometry_tracked_pilot.yaml")
+    control = get_parameters("configs/emet/query_geometry_setdown_pilot.yaml")
+    assert candidate.data["query_memory"].pop("track_grounded_box") is True
+    assert candidate.data == control.data
+
+
+@pytest.mark.parametrize("valid,kind", [(True, None), (False, None), (False, "candidate_overflow")])
+def test_projected_bounds_are_only_proposals_and_do_not_retry_rejection(monkeypatch, valid, kind):
+    detector = Mock(side_effect=AssertionError("Known-target tracking must not reload detector proposals"))
+    monkeypatch.setattr("emet.perception.detection.yoloe.get_shared_yoloe_perception", detector)
+    segmenter = Mock()
+    segmenter.segment.return_value = np.ones((1, 10, 10), dtype=bool)
+    target = SimpleNamespace(
+        candidate_id=8, observation_revision=9, project_box=Mock(return_value=np.array([1.0, 2.0, 8.0, 9.0]))
+    )
+    audit = {"valid": valid, "failure_kind": kind}
+    ground = Mock(return_value=(None, [], [], audit))
+    monkeypatch.setattr("emet.memory.vlm_region_grounding.ground_vlm_region", ground)
+    controller = SimpleNamespace(
+        graph_memory=SimpleNamespace(eqa_client=Mock()),
+        voxel_map=SimpleNamespace(min_depth=0.25, max_depth=2.5),
+        parameters={
+            "query_memory": {
+                "mask_backend": "yoloe_sam2",
+                "track_grounded_box": True,
+                "recover_proposals_with_vlm": True,
+            }
+        },
+        device="cpu",
+        _query_segmenter=segmenter,
+    )
+    frame = SimpleNamespace(rgb=np.zeros((10, 10, 3), dtype=np.uint8), camera_K=np.eye(3), camera_pose=np.eye(4))
+    result = LazyGraphController.ground_vlm_frame(controller, frame, "cup", "cup", tracking_target=target)
+    ground.assert_called_once()
+    assert ground.call_args.kwargs["proposal_masks"] is segmenter.segment.return_value
+    assert "segmenter" not in ground.call_args.kwargs
+    np.testing.assert_array_equal(segmenter.segment.call_args.args[1], [[1, 2, 8, 9]])
+    assert result[3]["valid"] is valid
+    assert result[3]["tracking_proposal"]["observation_revision"] == 9
+    assert "proposal_recovery" not in result[3]
+
+
 @pytest.mark.parametrize(
     "kind,enabled,recover",
     [
@@ -59,7 +104,11 @@ def test_recovery_is_one_alternative_proposal_not_a_semantic_retry(monkeypatch, 
         _query_segmenter=segmenter,
     )
     frame = SimpleNamespace(rgb=np.zeros((10, 10, 3), dtype=np.uint8))
-    result = LazyGraphController.ground_vlm_frame(controller, frame, "cup", "cup", min_depth=0.0)
+    ignored_target = Mock()
+    result = LazyGraphController.ground_vlm_frame(
+        controller, frame, "cup", "cup", min_depth=0.0, tracking_target=ignored_target
+    )
+    ignored_target.project_box.assert_not_called()
     assert ground.call_count == (2 if recover else 1)
     assert not result[3]["valid"]
     if recover:

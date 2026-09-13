@@ -231,7 +231,10 @@ def test_vlm_wrist_tracking_requires_shared_semantics_and_world_association():
     )
     selected = operation.get_target_mask(servo, center=(8, 8))
     assert selected[:5].all() and not selected[5:].any()
-    assert operation.agent.ground_vlm_frame.call_args.kwargs == {"min_depth": 0.0}
+    assert operation.agent.ground_vlm_frame.call_args.kwargs == {
+        "min_depth": 0.0,
+        "tracking_target": operation.grounded_target,
+    }
     world[:] = 10
     with pytest.raises(ValueError, match="absent"):
         operation.get_target_mask(servo, center=(8, 8))
