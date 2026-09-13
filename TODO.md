@@ -11,9 +11,10 @@ single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle contro
 and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
-- [ ] Add private physical pickup/placement scoring and calibrate it against
-      held, knocked, dropped and wrong-support controls. Object displacement and
-      a tool returning true are not sufficient physical success evidence.
+- [ ] Calibrate private physical pickup/placement scoring against live held,
+      knocked, dropped and wrong-support controls. Recorder/scorer and synthetic
+      negative tests are implemented; live failures correctly fail the gate.
+      Object displacement and tool success are not sufficient physical evidence.
 - [ ] Implement door/drawer articulation separately: handle/axis grounding,
       constrained contact-aware execution, force/travel limits, recovery, and
       independent joint-state scoring. For this PR use explicitly open/pre-opened
@@ -67,6 +68,17 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       displacement versus mixed mask/pose timing; do not widen the threshold.
       Audit zero center depths and repeated manipulation base goals. Head
       completion receipts and sim image timestamps remain gaps.
+      September 13: command retry identity, embedded-base tolerance and shared
+      physics-command writeback race fixed. Private trace proved a lift request
+      was being dropped; matched retry now reaches nine wrist approach steps.
+      Still no pickup: replay shows the right fingertip colliding with the blue
+      cube next to the red target. Next: separated-neighbor control and observed-
+      geometry aperture/approach-clearance planning; do not loosen success gates.
+- [ ] Repeat precision-route validation and complete posture/actuator telemetry.
+      Manager-lock version passed six moves then stalled on move seven; frozen
+      pre-lock and native-lock controls each pass ten moves. Native-lock control
+      has max XY 1.958 cm / yaw 0.02874 rad, zero corrections. Keep the failed
+      run and do not infer broad no-regression or full health acceptance yet.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance

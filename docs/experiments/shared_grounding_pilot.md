@@ -1,5 +1,95 @@
 # Shared grounding: bounded cross-task pilot
 
+## September 13: manipulation command delivery audit
+
+The next battery and stop gates are in [bounded acceptance](manipulation_acceptance.md).
+These diagnostics do **not** establish a passing manipulation gate.
+
+| Job | Frozen source | Task outcome | Evidence |
+| --- | --- | --- | --- |
+| `20260913_012127_e3d28d` | `afc32857` | Pickup failed; place skipped | Two accepted wrist captures; stopped on failed servo motion |
+| `20260913_013027_fc29a4` | `aa2739d4` | Pickup failed before wrist approach; place skipped | Private physical score false/false; zero gripper-contact samples; tool failure correctly retained |
+| `20260913_013657_dc2c7d` | `1a9959bb` | Pregrasp and nine wrist steps pass; approach stalls; place skipped | Private physical score false/false; replay identifies right fingertip contacting neighboring cube |
+
+Artifacts are `~/runs/emet/grasp-command-identity-retry/evidence` and
+`~/runs/emet/grasp-precision-physical-retry/hybrid_learned_pick_place`. The latter
+contains `physical_trace.jsonl`, `physical_result.json`, `process.log`, and
+`evidence/manipulation_outcomes.jsonl`. The agent process exits zero, but the
+driver exits one on physical failure. This is intentional, not an infrastructure
+exception. Broken-pipe errors during teardown remain a separate cleanup issue.
+
+The first run's short base correction requested 5.2 cm, while the dynamic motor
+tolerance stopped at roughly 2.6 cm error, outside the arm client's 2 cm gate.
+`60fb8652` applies the existing precision policy to manipulation base goals.
+It does not relax client, geometry or grasp acceptance. Retransmissions now
+retain command identity, and the grasp loop honors failed motion/invalid depth.
+
+The second run exposed a separate lost-command bug: the server logs a lift goal
+of 0.643286 m, but the private actuator trace stays at 0.600 m and the measured
+lift stays near 0.593 m. This is not a failure to physically follow the requested
+actuator setpoint: **the setpoint itself never changed**.
+
+![Requested lift versus actual actuator target and measured joint position](lost_lift_command.png)
+
+Figure source: that run's private trace, wall-time interval
+`1789277543.5–1789277548.0`; `ctrl[2]` and `qpos[9]`, checked against the frozen
+default-scene model (48 qpos). Dashed line is the request in the server log.
+
+The physics consumer reads a serialized command snapshot, clears triggers, then
+writes the entire snapshot back. Writers previously held a different lock, so
+this acknowledgement could erase a concurrently submitted joint command.
+`1a9959bb` shares the interprocess lock across read/modify/write on both sides,
+and releases it before waiting for stop consumption. A deterministic concurrent
+writer/consumer test and stop-wait test pass (25 focused simulation tests).
+Matched live retry `20260913_013657_dc2c7d` on `1a9959bb` passes pregrasp and
+nine wrist association steps, approaching from 0.368 to 0.220 m. Unlike the
+previous run, lift and arm requests appear in the actuator trace. It then stops
+on a genuinely stalled approach, reports pickup failure and skips place. Private
+physical scoring is false/false with zero red-cylinder gripper-contact samples.
+Artifacts: `~/runs/emet/grasp-atomic-command-retry/hybrid_learned_pick_place`.
+
+Offline `mj_forward` replay of the frozen model with recorded `qpos` and `ctrl`
+isolates a collision with the *neighbor*: `rubber_tip_right` contacts blue cube
+`object1`, penetrating about 1.65 mm at wall time `1789277958.553609` and 2.10 mm
+at `1789277961.4929755`. The red cylinder remains supported on the table. These
+are replayed contact geometries, not saved live contact-force measurements.
+The red-only live contact trace cannot by itself establish robot-to-neighbor
+collisions; the replay supplies that additional evidence.
+
+![Last accepted wrist view: red target between fingers, neighboring blue cube at the right finger](grasp_neighbor_clearance.png)
+
+Unedited final accepted wrist capture `grounding-7d6f1abc90184d659eecc60b8109b14c`,
+recorded at wall time `1789277959.3625605`. Contact attribution above comes from
+the state replay, not solely from this image.
+
+Next diagnosis: a predeclared separated-neighbor fixture control, then
+geometry-aware grasp aperture/approach clearance. Do not silently remove the
+blue cube from the original task, widen association thresholds, or call a
+smaller graph a manipulation improvement. The tabletop gate still fails, so
+room OVMM and learned TAMP have not advanced. A neighboring precision navigation
+control `20260913_014326_489ec4` on `1a9959bb` succeeds on six route moves,
+then fails move seven: XY error 0.02120 m, yaw error 1.08045 rad, stop confirmed,
+reason `navigation stalled`. The remaining three moves are not run. Frozen
+pre-lock control `20260913_014724_bf28d2` on `aa2739d4` passes all ten moves
+(max XY 0.01723 m; max yaw 0.02901 rad). Its overall health status is still
+`incomplete_telemetry`, because posture/actuator telemetry is missing.
+
+This pair blocks a no-regression claim. One possible contributor is the added
+manager-lock RPC overhead in the physics loop; a separate controller/progress
+issue near the 2 cm XY boundary also needs consideration. `a244ac25` retains
+atomicity with a native spawn-context lock, avoiding per-tick manager lock RPCs.
+An actual spawned-process exclusion test passes. The same-route native-lock
+control `20260913_015157_35365a` passes all ten moves, zero corrections, max XY
+0.01958 m and max yaw 0.02874 rad. As with the baseline, the full health probe
+is `incomplete_telemetry`, not full robot acceptance. This is one matched control,
+not evidence that all navigation regressions are ruled out or that IPC overhead
+alone caused the preceding failure. Keep that failed run in the record.
+The final combined focused suite passes 161 tests (command lifecycle, navigation,
+grasp handoff, query memory, physical scoring and simulator command atomicity).
+This includes the native-lock spawned-process test.
+
+## Earlier frozen pilot
+
 Interpretation: [environment acceptance progression](../environments/README.md),
 [Habitat search scope](../environments/habitat.md),
 [simple-sim controls](../environments/simple_sim.md).
