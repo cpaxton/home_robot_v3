@@ -23,8 +23,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Separate near-support preset `46e380d7` passes original and separated-
       neighbor development controls and both original panel v3 repeats. V3
       then times out during clearance-scene transport, retaining the object.
-      Monitored waypoints plus an explicit 30 s ceiling are frozen in panel v4
-      (`6b020ecd`); the outer task cap is unchanged. Do not mark this
+      Monitored waypoints plus an explicit 30 s ceiling pass both clearance
+      repeats in v4 (`6b020ecd`), but mirrored clutter exposes delayed slip
+      while stationary. The later VLM rejection is correct: the object fell.
+      `b781c4d8` preserves verified pose at closure and tightens candidate grasp
+      error to 5 mm; panel v5 starts with mirrored clutter. Do not mark this
       resolved until the predeclared original/clearance/mirrored repeats pass.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.

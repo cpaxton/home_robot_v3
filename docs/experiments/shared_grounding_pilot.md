@@ -2,11 +2,11 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: no full six-case panel is accepted yet. The near-support candidate
-`46e380d7` passes both original repeats in panel v3, but the first separated-
-neighbor case times out during navigation while retaining the payload. Earlier
-panels exposed transport and release failures. Panel v4 is frozen on `6b020ecd`,
-with monitored trajectory waypoints and an explicitly increased waypoint ceiling.
+Latest: no full six-case panel is accepted yet. Panel v3 passes both original
+repeats but times out during clearance-scene navigation. Panel v4 repairs that
+transport and passes both clearance repeats, then exposes a delayed grasp slip
+in mirrored clutter. Panel v5 is frozen on `b781c4d8`, preserving the verified
+grasp pose and requiring a tighter 5 mm final position gate in the candidate.
 Individual development successes and fourteen passed navigation moves are not
 a substitute for the complete gate. Single-room OVMM, learned TAMP and paired
 EQA acceptance remain pending.
@@ -181,6 +181,33 @@ with order declared before launch: separated neighbor twice, mirrored clutter
 twice, original twice. The six fixtures and scoring gates are unchanged; the
 failed fixture runs first. It stops on failure and does not pool previous
 panels or development controls. Root: `~/runs/emet/manipulation-panel-v4-20260913`.
+
+V4 stops at **2/3 completed passes**, three unrun. Clearance repeats physically
+pick/place at 73.622/175.188 s and 71.888/161.088 s. Mirrored repeat 1 picks at
+74.030 s but loses contact near 122.2 s while wheel commands are zero. The
+object migrates toward the fingertip edge before falling. Later placement
+grounding correctly rejects the empty view; the red cylinder is on the floor,
+not hidden behind the blue support. This is **not a VLM false negative**.
+
+The last accepted grasp error is approximately `[3.60, -10.02, 3.07]` mm, inside
+the previous 12 mm gate but appreciably shallower than the 3–4 mm residuals of
+stronger grasps. The closure helper also reissues a supposedly zero approach
+from measured joints, replacing a 0.1893 m arm target with 0.1780 m and resetting
+wrist angles after visual verification. `b781c4d8` removes that redundant move
+for geometry-servo grasps and gives the candidate a 5 mm closure gate. The
+12 mm control remains the default, contact calibration and forces are unchanged,
+and the existing bounded-correction/no-progress logic still applies. Unit tests
+check the logged residual requests a correction, rather than closure, and that
+verified geometry proceeds directly to closure before lift. This is a grasp
+repair hypothesis requiring live retention evidence, not proof from tolerance
+selection alone. Focused tests: 111 pass; full offline pack: 410 pass, four
+simulation-gated skips (5.45 s).
+
+Panel v5 `20260913_180405_4ed3fa` freezes `b781c4d8` and the set-down preset.
+Predeclared order: mirrored twice, clearance twice, original twice, so the newly
+failed fixture runs first. Same six-case scoring and stop-on-failure protocol;
+no pooling of earlier source versions. Root:
+`~/runs/emet/manipulation-panel-v5-20260913`.
 
 The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
