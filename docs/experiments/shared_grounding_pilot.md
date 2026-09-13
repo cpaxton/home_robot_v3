@@ -108,12 +108,38 @@ The same managed job first passes all 15 native profile/held-object regressions
 (22.00 s). The broader offline suite passes 395 tests with four live-simulation
 skips (5.56 s).
 
-Frozen panel v2 `20260913_170342_d04c9e` runs the six predeclared cases on
-`a6fc3687` / `query_geometry_recovery_pilot.yaml`, serially and stopping on
-failure. Root: `~/runs/emet/manipulation-panel-v2-20260913`. It does not pool the
+Frozen panel v2 `20260913_170342_d04c9e` stopped at **1/2 original-scene passes**
+on `a6fc3687` / `query_geometry_recovery_pilot.yaml`; all four variation cases
+are unrun. Repeat 1 physically picks and places (72.908 / 138.188 s), with a
+visually audited upright cylinder after retreat. Repeat 2 physically picks at
+73.520 s but tips off the cube during opening at 128.39–128.69 s, before retreat.
+Thus physics-time opening alone is not a sufficient release repair.
+Root: `~/runs/emet/manipulation-panel-v2-20260913`. It does not pool the
 development pass above or panel v1. Room OVMM, learned TAMP and paired EQA remain
 gated on the basic physical panel; the legacy oracle TAMP driver is not a
 substitute for learned multistep evidence.
+
+Supported-release diagnostic `20260913_171247_8bf793` holds each pre-opening
+checkpoint's base/arm reference fixed for 1.5 s, optionally lowering the lift
+reference by 5, 10 or 15 mm through the production profiler, then opens at the
+same speed. Both no-lowering controls tip; all six lowered controls retain
+support after eight simulated seconds. The 10–15 mm interventions leave the
+object closer to the support center. Even the previously passing checkpoint
+tips under this controlled dwell, illustrating sensitivity rather than an exact
+replay of that live success. This supports testing set-down rather than more
+opening-rate tuning. A private fixture retains one paired negative/positive
+control in the native physics tests.
+
+Candidate `46e380d7` adds `query_geometry_setdown_pilot.yaml`: 5 mm observed
+bottom-to-support clearance and a tighter 5 mm vertical gate, versus the
+preserved recovery row's 20 mm / 15 mm. Perception, grasp calibration, XY gate,
+three-correction budget, 5 cm motion/reference bounds and physical scoring are
+unchanged. Geometry near a support is **not contact/force verification**, and
+hidden payload geometry or biased depth can still invalidate this approach.
+No ground-truth contact feedback enters the policy. Sixty focused placement,
+query and observation tests pass. Managed retry `20260913_171734_634eb7` runs
+the native tests, then original and separated-neighbor learned controls
+serially, stopping on failure; artifacts `~/runs/emet/grasp-near-support`.
 
 The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and

@@ -17,7 +17,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Inspect saved-state opening controls; preserve current alignment and
       physical scoring thresholds. Evidence: `~/runs/emet/grasp-proposal-recovery`.
       Physics-time gripper candidate `a6fc3687` passes a fresh learned retry
-      (`20260913_165731_d3bff6`); frozen panel v2 is running. Do not mark this
+      (`20260913_165731_d3bff6`), but frozen panel v2 stops at 1/2 original
+      passes: another release tip, four variations unrun. Controlled physical
+      set-downs retain support (6/6) versus suspended release (0/2).
+      Separate near-support preset `46e380d7` is under test; do not mark this
       resolved until the predeclared original/clearance/mirrored repeats pass.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.
