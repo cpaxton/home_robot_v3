@@ -118,6 +118,7 @@ class GraspObjectOperation(ManagedOperation):
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
     use_geometry_servo: bool = False
+    observed_aperture_margin_m: float | None = None
     detected_center_offset_x: int = 0  # -10
     detected_center_offset_y: int = 0  # -40
     percentage_of_image_when_grasping: float = 0.2
@@ -180,6 +181,13 @@ class GraspObjectOperation(ManagedOperation):
         self._try_open_loop = try_open_loop
         self.grounded_target = grounded_target
         self.use_geometry_servo = bool((self.parameters.get("grasp", {}) or {}).get("geometry_servo", False))
+        self.observed_aperture_margin_m = (self.parameters.get("grasp", {}) or {}).get("observed_aperture_margin_m")
+        self._aperture_trace = []
+        if self.observed_aperture_margin_m is not None:
+            if not np.isfinite(self.observed_aperture_margin_m) or self.observed_aperture_margin_m < 0.04:
+                raise ValueError("Observed aperture requires at least 4 cm marker/geometry margin")
+            if grounded_target is None:
+                raise ValueError("Observed aperture requires an observation-grounded target")
         if self.use_geometry_servo and grounded_target is None:
             raise ValueError("Geometry servo requires an observation-grounded target")
         if grounded_target is not None and (try_open_loop or not servo_to_grasp):
@@ -446,6 +454,7 @@ class GraspObjectOperation(ManagedOperation):
                             "joint": None if getattr(servo, "joint", None) is None else servo.joint.tolist(),
                             "ee_pose": None if getattr(servo, "ee_pose", None) is None else servo.ee_pose.tolist(),
                             "geometry_servo": self.use_geometry_servo,
+                            "aperture": getattr(self, "_aperture_trace", []),
                         },
                     )
         # Find the best masks
@@ -610,6 +619,8 @@ class GraspObjectOperation(ManagedOperation):
         prev_center_depth = None
 
         # Move to pregrasp position
+        if self.observed_aperture_margin_m is not None and not self.prepare_observed_aperture():
+            return False
         if not self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object):
             return False
 
@@ -1125,6 +1136,52 @@ class GraspObjectOperation(ManagedOperation):
             self.error("Geometry-servo correction did not complete.")
             return False
         return None
+
+    def prepare_observed_aperture(self):
+        """Narrow while still separated, using measured fingers and target extent.
+
+        This is opt-in on the experimental preset. Missing markers, depth or
+        standoff stop the grasp; no guessed command-to-width calibration or
+        object-category lookup is used.
+        """
+        from emet.utils.gripper import measure_observed_aperture
+
+        previous = None
+        deadline = time.monotonic() + 20.0
+        for _ in range(20):
+            frame_deadline = min(deadline, time.monotonic() + 2.0)
+            servo = self.robot.get_servo_observation()
+            while servo is previous and time.monotonic() < frame_deadline:
+                time.sleep(0.05)
+                servo = self.robot.get_servo_observation()
+            if servo is None or servo is previous or time.monotonic() >= deadline:
+                self.error("Fresh aperture observation unavailable.")
+                return False
+            try:
+                span, width = measure_observed_aperture(servo, self.grounded_target.points, self.gripper_aruco_detector)
+            except ValueError as exc:
+                self.error(str(exc))
+                return False
+            current = float(self.robot.get_joint_positions()[HelloStretchIdx.GRIPPER])
+            if not np.isfinite(current):
+                self.error("Finite gripper feedback required for aperture adjustment.")
+                return False
+            self._aperture_trace.append({"span_m": span, "object_extent_m": width, "gripper": current})
+            self.info(f"Observed marker span {span:.3f} m; target extent {width:.3f} m")
+            if span < width + self.observed_aperture_margin_m / 2:
+                self.error("Insufficient observed aperture margin.")
+                return False
+            if span <= width + self.observed_aperture_margin_m + 0.005:
+                return True
+            target = max(float(self.robot_model.GRIPPER_CLOSED), current - 0.025)
+            if target >= current:
+                return False
+            self.robot.gripper_to(target, blocking=True)
+            # Require a delivered frame after the blocking command, not the
+            # cached pre-command geometry. The arm/base remain stationary.
+            previous = self.robot.get_servo_observation()
+        self.error("Observed aperture adjustment did not converge.")
+        return False
 
     def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35) -> bool:
         """Move to a pregrasp position in an open loop manner.
