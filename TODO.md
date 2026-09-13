@@ -16,6 +16,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       cylinder off its support during gripper opening, before retreat.
       Inspect saved-state opening controls; preserve current alignment and
       physical scoring thresholds. Evidence: `~/runs/emet/grasp-proposal-recovery`.
+      Physics-time gripper candidate `a6fc3687` passes a fresh learned retry
+      (`20260913_165731_d3bff6`); frozen panel v2 is running. Do not mark this
+      resolved until the predeclared original/clearance/mirrored repeats pass.
+- [ ] Improve private high-rate manipulation replay capture if contact failures
+      recur: 10 Hz sampled controls do not reproduce the latest release ejection.
+      Keep capture evaluator-only and distinguish replay from live evidence.
 - [ ] Calibrate private physical pickup/placement scoring against live held,
       knocked, dropped and wrong-support controls. Recorder/scorer and synthetic
       negative tests are implemented; live failures correctly fail the gate.

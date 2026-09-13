@@ -98,8 +98,22 @@ blocks dispatch and overshoots requested apertures. The candidate removes it
 and routes open/close and relative gripper commands through the existing
 physics-time, joint-limit-clamped position profiler. No new controller class,
 task-specific release offset, contact-model change or longer timeout is added.
-Seven gripper contract tests and 35 placement/aperture tests pass. A fresh live
-retry is required to evaluate this candidate.
+Seven gripper contract tests and 35 placement/aperture tests pass.
+
+Fresh learned retry `20260913_165731_d3bff6`, frozen `a6fc3687`, passes physical
+pickup (73.520 s) and placement (165.788 s), including retention after retreat.
+Artifacts: `~/runs/emet/grasp-physics-gripper`. It follows a longer route than
+the failed trial, so this is a new integrated pass, not an isolated causal A/B.
+The same managed job first passes all 15 native profile/held-object regressions
+(22.00 s). The broader offline suite passes 395 tests with four live-simulation
+skips (5.56 s).
+
+Frozen panel v2 `20260913_170342_d04c9e` runs the six predeclared cases on
+`a6fc3687` / `query_geometry_recovery_pilot.yaml`, serially and stopping on
+failure. Root: `~/runs/emet/manipulation-panel-v2-20260913`. It does not pool the
+development pass above or panel v1. Room OVMM, learned TAMP and paired EQA remain
+gated on the basic physical panel; the legacy oracle TAMP driver is not a
+substitute for learned multistep evidence.
 
 The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
