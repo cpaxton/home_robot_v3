@@ -23,6 +23,10 @@ def execute_waypoints(robot, trajectory, *, relative, world_frame, per_waypoint_
             relative=relative,
             world_frame=world_frame,
             blocking=True,
+            # Request measured settling, freshness and progress monitoring on
+            # every segment, not only the later precision approach. Both ZMQ
+            # clients speak this same server-owned navigation contract.
+            navigation_policy="exploration",
             timeout=final_timeout if index == len(waypoints) - 1 else per_waypoint_timeout,
         ):
             logger.warning(
