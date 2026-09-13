@@ -1,0 +1,7 @@
+# Diagnostic control, not a replacement for the original close-neighbor task.
+kind: default_mujoco
+robot: stretch
+scene_path: src/emet/assets/robot/scene_clearance_control.xml
+headless: true
+port_offset: 0
+seed: 0
