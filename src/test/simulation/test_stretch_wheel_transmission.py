@@ -15,6 +15,26 @@ from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBase
 from emet.simulation.stretch_mujoco.mujoco_server import BaseController, MujocoServer
 
 
+@pytest.fixture
+def control_profile():
+    # SAM2 initializes its own Hydra root on import in the combined test
+    # process. The native navigation server runs separately without SAM2.
+    # Isolate that process-local state and restore it for neighboring tests.
+    from hydra.core.global_hydra import GlobalHydra
+
+    from emet.utils.config import get_control_config
+
+    global_hydra = GlobalHydra.instance()
+    previous = global_hydra.hydra
+    global_hydra.clear()
+    try:
+        yield get_control_config
+    finally:
+        global_hydra.clear()
+        if previous is not None:
+            global_hydra.initialize(previous)
+
+
 def wheel_model(gear):
     model = mujoco.MjModel.from_xml_string(f"""
     <mujoco>
@@ -114,26 +134,23 @@ def test_explicit_cancel_clears_reference_immediately():
     np.testing.assert_array_equal(data.ctrl, 0)
 
 
-def test_native_navigation_profile_brakes_within_wheel_acceleration_envelope():
-    from emet.utils.config import get_control_config
-
-    profile = get_control_config("noplan_velocity_stretch_sim")
+def test_native_navigation_profile_brakes_within_wheel_acceleration_envelope(control_profile):
+    profile = control_profile("noplan_velocity_stretch_sim")
     radius = config.robot_settings["wheel_diameter"] / 2
     half_separation = config.robot_settings["wheel_separation"] / 2
     assert profile.acc_lin + half_separation * profile.acc_ang < radius * config.wheel_reference_acceleration
 
 
 @pytest.mark.parametrize("profile_name", ["noplan_velocity_sim", "noplan_velocity_stretch_sim"])
-def test_coupled_goal_handoff_with_acceleration_limited_wheels(profile_name):
+def test_coupled_goal_handoff_with_acceleration_limited_wheels(profile_name, control_profile):
     from emet.motion.control.goto_controller import GotoVelocityController
-    from emet.utils.config import get_control_config
 
     model, data = wheel_model(3)
     model.opt.timestep = 0.01
     model.actuator_ctrllimited[:] = 1
     model.actuator_ctrlrange[:] = [-6, 6]
     base = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
-    nav = GotoVelocityController(get_control_config(profile_name))
+    nav = GotoVelocityController(control_profile(profile_name))
     goal = np.array([0.4, 0, np.pi / 2])
     pose = np.zeros(3)
     nav.update_goal(goal)
