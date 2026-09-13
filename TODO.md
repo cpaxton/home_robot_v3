@@ -20,9 +20,17 @@ and EQA regression checks. Follow the [environment progression](docs/environment
       do not silently select the largest component or widen tolerances.
       Candidate implementation now reuses head-frame mask/Qwen verification on
       wrist RGB-D, then checks spatial association to the original target.
-      63 focused tests pass; model replay and sim acceptance are still pending.
-      September 12 GPU blocker: loaded NVIDIA 595.84 versus NVML 595.91;
-      cancelled offline job `20260912_091644_fa11a1` before inference.
+      63 focused tests pass again after reboot. GPU driver mismatch is repaired.
+      Offline replay `20260912_153104_dafcde`: red support associates (1,397
+      pixels); blue support rejects association to red; absent banana abstains.
+      This is three queries on one saved frame, not manipulation acceptance.
+      Live retry `20260912_153738_fb4a22` passed wrist association but crashed
+      comparing wrist geometry with absent head semantic labels; no pickup.
+      `2db1b757` checks the actual wrist target mask, with regression coverage.
+      Same-preset retry `20260912_201500_bb5284`: wrist tracking converged from
+      0.369 to 0.166 m, gripper closed, then placement navigation timed out with
+      stop confirmed. No verified held object or successful place. Next: verify
+      physical pickup and diagnose post-grasp navigation; 65 focused tests pass.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance

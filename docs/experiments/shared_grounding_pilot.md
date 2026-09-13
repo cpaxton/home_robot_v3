@@ -112,6 +112,39 @@ userspace 595.91). GPU repair is required before cached-model and live validatio
 The three inputs all reference the previously listed wrist capture; they are
 diagnostic queries on one view, not an expanded independent test set.
 
+Post-reboot replay `20260912_153104_dafcde`, frozen `dd29d217`, completed after
+kernel/userspace driver alignment to 595.91.07 and successful full SAM2 inference
+preflight. Artifacts are `~/runs/emet/wrist-postboot-{proposals,baseline,support}`.
+YOLOE→SAM2 produced one red-cylinder proposal, one blue-cube proposal, and zero
+absent-banana proposals. Support-only Qwen accepted red and blue (selector times
+1.23 s and 0.99 s respectively); banana abstained without a model call.
+Manual inspection of `wrist-postboot-support/support_only/0-panel-0.png` confirms
+the red support depicts the cylinder. Reprojecting the saved calibrated depth
+and applying unchanged original-red-target association accepts 1,397 red pixels
+and rejects the blue mask. This validates the intended distinction on this
+saved frame, not robustness during motion or physical pickup. The focused
+63-test suite also passes post-reboot. Live bounded pick/place retry
+`20260912_153738_fb4a22` uses the same frozen source and preset; evidence goes to
+`~/runs/emet/wrist-live-postboot/evidence`. The tool failed after 40.3 s:
+wrist semantic/world association completed, then a legacy shape check accessed
+`servo.semantic.shape`, despite head semantic labels being absent on this path.
+No pickup or place succeeded. Process exit zero is not task success; teardown
+also emitted multiprocessing broken-pipe/reset errors. Fix `2db1b757` validates
+the selected wrist mask against wrist world geometry instead, with tests for
+absent head labels and mismatched wrist resolution (11 handoff tests pass).
+Same-preset bounded retry `20260912_201500_bb5284` retains all model and control
+settings; artifacts `~/runs/emet/wrist-shape-retry/evidence`. The focused suite
+passes 65 tests. The retry completes the wrist approach from 0.369 to 0.166 m,
+closes the gripper, and advances to finding the blue cube. It then fails
+placement navigation at the first waypoint: command 186, `motion deadline
+exceeded`, `stop_confirmed: true`. Tool duration is 182.3 s; overall pick/place
+fails. There is no independent confirmation of a held object. Post-grasp head
+image `grounding/grounding-6b9317d388ee4aa09d068ca40238fbdf.png` shows the blue
+cube and a small red region beyond the table, not a verified in-gripper cylinder.
+Do not score gripper closure as physical pickup. Next isolate physical grasp
+verification and post-grasp navigation; do not loosen tracking tolerances or
+launch broader acceptance pilots yet. Multiprocessing teardown errors remain.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.
