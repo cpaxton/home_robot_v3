@@ -11,6 +11,11 @@ single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle contro
 and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
+- [ ] Resolve release instability before restarting the frozen six-case panel.
+      `20260913_164029_e59ea7` physically picks and carries but slides the
+      cylinder off its support during gripper opening, before retreat.
+      Inspect saved-state opening controls; preserve current alignment and
+      physical scoring thresholds. Evidence: `~/runs/emet/grasp-proposal-recovery`.
 - [ ] Calibrate private physical pickup/placement scoring against live held,
       knocked, dropped and wrong-support controls. Recorder/scorer and synthetic
       negative tests are implemented; live failures correctly fail the gate.

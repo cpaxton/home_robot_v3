@@ -96,7 +96,10 @@ on the opposite side. Model-equality tests check that only the neighbor pose
 changes. Run each twice on one frozen candidate/configuration. Earlier
 development passes on different source or aperture settings are not pooled
 into that six-case panel. Keep the detector preset as the frozen control;
-the current development candidate uses the separate contact/aperture preset.
+the current development candidate uses the separate
+`query_geometry_recovery_pilot.yaml` preset, which inherits contact/aperture
+settings and opts into one bounded alternative proposal pass. Record that
+difference explicitly; do not pool its results with the contact/aperture control.
 
 For Stage D, submit the two-step request through the learned CHAT loop, not two
 externally scripted tool invocations. The shared loop permits three tool-bearing

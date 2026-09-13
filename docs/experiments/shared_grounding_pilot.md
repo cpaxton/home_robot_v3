@@ -75,8 +75,33 @@ Both cylinder masks satisfy the original world-association gate (6,621 and
 `~/runs/emet/wrist-proposal-recovery-sdpa`. These four fixed-image checks are
 perception diagnostics, not cross-object generalization or manipulation passes.
 
-Live original-task retry `20260913_164029_e59ea7` is running on `eeec07fd`,
-with the separate recovery preset and repaired CHAT loop. The focused combined
+Live original-task retry `20260913_164029_e59ea7` on `eeec07fd`, with the
+separate recovery preset and repaired CHAT loop, finishes **pickup true / place
+false**. Pickup is independently verified at 71.072 simulated seconds; the
+payload survives transport. Final observed placement error is approximately
+`[4.35, 2.04, 2.18]` mm and the controller completes, explicitly without physical
+verification. The private trace shows the cylinder slides off the cube during
+gripper opening (127.58–128.09 s), before arm retreat, and finishes on the table.
+Artifacts: `~/runs/emet/grasp-proposal-recovery`, including robot-visible qpos
+replay images in `replay/`. This is neither a placement pass nor a reason to
+relax alignment tolerances. Saved-state opening-rate controls are the next
+diagnostic; the fresh six-case panel remains gated.
+
+Opening diagnostics `20260913_165057_7d6cbc` and
+`20260913_165418_4dfb57` show contact sensitivity: slower is not monotonically
+better. The proposed 0.02 m/s slide-reference profile retains support from all
+four checkpoints (two from this run, two from the previous passing original
+trial). However, 10 Hz recorded controls also retain support in the latter
+comparison and **do not reproduce the live ejection**; do not call this causal
+proof. The bridge's wall-clock opening loop is nevertheless load-dependent,
+blocks dispatch and overshoots requested apertures. The candidate removes it
+and routes open/close and relative gripper commands through the existing
+physics-time, joint-limit-clamped position profiler. No new controller class,
+task-specific release offset, contact-model change or longer timeout is added.
+Seven gripper contract tests and 35 placement/aperture tests pass. A fresh live
+retry is required to evaluate this candidate.
+
+The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
 live navigation remain separately reported above.
 
