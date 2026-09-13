@@ -1,8 +1,8 @@
-# Experimental Stretch SG3 contact-depth calibration. Grasp-frame +Y points
+# Experimental Stretch SG3 contact-depth calibration. Grasp-frame -X points
 # toward the palm: target that point, inserting the nominal grasp link farther.
 # The 15 mm offset retained the cylinder in a matched static physics replay;
 # it is not calibrated for real hardware or established across objects yet.
 extends: configs/emet/query_geometry_manipulation_pilot.yaml
 mapping:
   grasp:
-    contact_offset_m: [0.0, 0.015, 0.0]
+    contact_offset_m: [-0.015, 0.0, 0.0]

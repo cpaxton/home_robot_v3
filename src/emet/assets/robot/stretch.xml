@@ -390,7 +390,9 @@
                               </body>
                             </body>
                           </body>
-                          <body name="link_grasp_center" pos="0 0 0.23" euler="-1.5707963267949 -1.5707963267948 0"> </body>
+                          <!-- URDF fixed-axis RPY (-pi/2, -pi/2, 0). MuJoCo's
+                               intrinsic Euler convention would permute axes. -->
+                          <body name="link_grasp_center" pos="0 0 0.23" quat="0.5 -0.5 -0.5 -0.5"> </body>
                           <!-- Gripper Mechanism -->
                             <body name="link_gripper_slider" euler="0 0 0" pos="0 0 0" gravcomp="1">
                               <joint name="joint_gripper_slide" class="finger_slide"/>
