@@ -18,13 +18,13 @@ def orient_arm_toward_target(robot, xyz):
     """Turn the -Y arm toward a world target, then wait for post-motion RGB-D."""
     from emet.controller.dynamem.look import wait_post_motion_obs
 
-    pose = np.array(robot.get_base_pose(), dtype=float, copy=True)
+    pose = np.array(robot.get_base_pose_world(), dtype=float, copy=True)
     delta = np.asarray(xyz)[:2] - pose[:2]
     if not np.isfinite(delta).all() or np.linalg.norm(delta) < 1e-6:
         raise ValueError("Cannot orient manipulation toward an invalid target")
     pose[2] = np.arctan2(delta[1], delta[0]) + np.pi / 2
     robot.switch_to_navigation_mode()
-    if not robot.move_base_to(pose, blocking=True, navigation_policy="precision"):
+    if not robot.move_base_to(pose, blocking=True, navigation_policy="precision", world_frame=True):
         raise RuntimeError("Manipulation orientation did not complete")
     robot.switch_to_manipulation_mode()
     robot.head_to(*constants.look_at_ee, blocking=True)

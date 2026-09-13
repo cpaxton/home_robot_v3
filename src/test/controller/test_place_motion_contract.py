@@ -21,6 +21,7 @@ def operation():
     op.robot_model.manip_fk.return_value = (np.array([0, -0.2, 0.8]), np.array([0, 0, 0, 1]))
     op.robot.get_observation.return_value = SimpleNamespace(joint=np.zeros(11))
     op.robot.get_base_pose.return_value = np.zeros(3)
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
     op.robot.arm_to.return_value = True
     op.robot.open_gripper.return_value = True
     op.sample_placement_position = Mock(return_value=np.array([0, -0.5, 0.6]))
@@ -80,6 +81,17 @@ def test_place_does_not_mutate_cached_observation():
     assert op.was_successful()
     assert joint[HelloStretchIdx.WRIST_PITCH] == 0
     assert all(call.kwargs.get("blocking") is True for call in op.robot.arm_to.call_args_list)
+
+
+def test_place_ik_transforms_world_target_with_world_base_pose():
+    op = operation()
+    op.robot.get_base_pose_world.return_value = np.array([4, -2, np.pi / 2])
+    op.robot.get_base_pose.return_value = np.zeros(3)
+    op.sample_placement_position.return_value = np.array([4.5, -2, 0.6])
+    with patch("emet.controller.operations.place_object.time.sleep"):
+        op.run()
+    np.testing.assert_allclose(op._get_place_joint_state.call_args.kwargs["pos"][:2], [0, -0.5], atol=1e-10)
+    op.robot.get_base_pose.assert_not_called()
 
 
 def test_place_reads_joint_state_after_posture_change():

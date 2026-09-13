@@ -1022,7 +1022,7 @@ class GraspObjectOperation(ManagedOperation):
             self.robot.open_gripper(blocking=True)
 
         # Get the current base pose of the robot
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
 
         # Note that these are in the robot's current coordinate frame;
         # they're not global coordinates, so this is ok to use to compute motions.
@@ -1225,7 +1225,7 @@ class GraspObjectOperation(ManagedOperation):
             object_xyz (np.ndarray): Location to grasp
             distance_from_object (float, optional): Distance from object. Defaults to 0.2.
         """
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
 
         joint_state = self.robot.get_joint_positions()
@@ -1318,7 +1318,7 @@ class GraspObjectOperation(ManagedOperation):
         """
 
         model = self.robot.get_robot_model()
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
         joint_state = self.robot.get_joint_positions()
 

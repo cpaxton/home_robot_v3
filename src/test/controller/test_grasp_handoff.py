@@ -21,6 +21,7 @@ def operation():
     op._object_xyz = np.array([0.08, -0.53, 0.52])
     op.target_object = "red cylinder"
     op.agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, -1.4])
+    op.agent.robot.get_base_pose_world.return_value = np.array([0.0, 0.0, -1.4])
     op.agent.robot.move_base_to.return_value = True
     return op
 
@@ -36,6 +37,7 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     op.align_grounded_target_for_grasp()
     pose = op.robot.move_base_to.call_args.args[0]
     assert op.robot.move_base_to.call_args.kwargs["navigation_policy"] == "precision"
+    assert op.robot.move_base_to.call_args.kwargs["world_frame"] is True
     np.testing.assert_allclose(pose[:2], [0, 0])
     assert pose[2] == pytest.approx(np.arctan2(-0.53, 0.08) + np.pi / 2)
     op.agent.prepare_query_target.assert_called_once_with("red cylinder")
@@ -51,6 +53,19 @@ def test_failed_alignment_does_not_reacquire_or_move_arm():
         op.align_grounded_target_for_grasp()
     op.agent.prepare_query_target.assert_not_called()
     op.robot.arm_to.assert_not_called()
+
+
+def test_world_target_alignment_does_not_use_episode_relative_odometry(monkeypatch):
+    op = operation()
+    op._object_xyz = np.array([4.0, -2.5, 0.52])
+    op.robot.get_base_pose_world.return_value = np.array([4.0, -2.0, 1.0])
+    op.robot.get_base_pose.return_value = np.zeros(3)
+    op.agent.prepare_query_target.return_value = SimpleNamespace(xyz=op._object_xyz)
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **k: None)
+    op.align_grounded_target_for_grasp()
+    np.testing.assert_allclose(op.robot.move_base_to.call_args.args[0], [4, -2, 0], atol=1e-10)
+    assert op.robot.move_base_to.call_args.kwargs["world_frame"] is True
+    op.robot.get_base_pose.assert_not_called()
 
 
 @pytest.mark.parametrize("ik", [None, "negative_arm", "nan"])
@@ -98,6 +113,7 @@ def test_pregrasp_selects_reachable_standoff_without_clamping_invalid_ik():
 def test_pregrasp_angle_clipping_preserves_metric_standoff():
     op = operation()
     op.robot.get_base_pose.return_value = np.zeros(3)
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
     op.robot.get_joint_positions.return_value = np.zeros(11)
     op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, 0, 1]), np.array([0, 0, 0, 1]))
     op.robot_model.manip_ik_for_grasp_frame.return_value = (np.zeros(11), None, None, True, None)

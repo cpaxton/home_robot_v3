@@ -126,8 +126,8 @@ class PlaceObjectOperation(ManagedOperation):
             return False
         # TODO: this should be deteriministic
         # It currently is, but if you change this to something sampling-base dwe must update the test
-        object_xyz = self.sample_placement_position(self.robot.get_base_pose())
-        start = self.robot.get_base_pose()
+        start = self.robot.get_base_pose_world()
+        object_xyz = self.sample_placement_position(start)
         dist = np.linalg.norm(object_xyz[:2] - start[:2])
         # Check if the object is close enough to place upon
         # We need to be within the manipulation radius + place_step_size + voxel_size
@@ -221,7 +221,7 @@ class PlaceObjectOperation(ManagedOperation):
         joint_state = np.array(self.robot.get_observation().joint, copy=True)
 
         # Get object xyz coords
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         placement_xyz = self.sample_placement_position(xyt)
         print(" - Place object at", placement_xyz)
 
