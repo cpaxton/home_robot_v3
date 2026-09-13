@@ -2,12 +2,79 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: `34ba733a` passes the original close-neighbor physical pick/place case
-**1/1**, including a longer transport route. Its matched easier-scene control
-is running. Earlier `cffc74d4` passes **2/2** separated-neighbor placements
-and **14/14** empty-hand precision-navigation moves. The frozen six-case
-manipulation panel, single-room OVMM, learned TAMP and paired EQA acceptance
-remain pending; do not pool evolving development versions as one success rate.
+Latest: the frozen six-case panel on `6e54ddd1` **stopped at original scene
+1/2**: both pickups pass, but the second run loses its payload during transport.
+Four cases did not run. Earlier development versions passed individual
+original/separated-neighbor trials and fourteen navigation moves; those are
+not a substitute for repeatability. Single-room OVMM, learned TAMP and paired
+EQA acceptance remain pending.
+
+### Frozen panel v1 (stopped, not accepted)
+
+Job `20260913_120543_168dcb`, source `6e54ddd1`, uses the contact/aperture preset
+and predeclared original/separated/mirrored fixtures twice each, stopping on
+failure. Artifacts are under `~/runs/emet/manipulation-panel-v1-20260913`.
+Each completed case retains physical scoring and robot-visible replay figures.
+Original repeat 1 passes (pickup 64.136 s, final placement 140.388 s); original
+repeat 2 passes pickup at 63.734 s but loses finger contact near 109.63 s.
+The latter stops before release when current visual grounding cannot find the
+held object. Both agent processes exit zero; independent scoring rejects the
+second case. Four unrun cases are **pending**, not failures or successes.
+
+Unlike the older boundary chatter, this trace shows a progressing arc followed
+by an abrupt in-place turn. The base stays upright; payload-relative drift
+grows before ejection. Private replay `20260913_121747_00b35f` compares recorded
+wheel targets with slew-limited targets from three measured qpos/qvel/warm-start
+checkpoints. Recorded targets reproduce ejection from 107 s and 109 s (peak
+object/gripper distances 0.856 and 0.798 m); the 108 s checkpoint retains it.
+At 8 transmission-rad/s², all three retain it within 1.5 cm. This establishes
+a local counterfactual, not learned task acceptance. The production candidate
+now limits wheel-joint references to 8/3 rad/s² (independent of gearing), with
+explicit cancellation bypassing the ramp. A captured 109 s checkpoint tests
+both the failing recorded controls and the production profile. Grip force,
+contact physics, arrival tolerances and release thresholds are unchanged.
+Native regression `20260913_122750_28088e` passes both old-target negative and
+production-profile positive controls (2 tests, 9.02 s). Wheel/cancellation/phase
+tests pass (39). The first live route `20260913_123021_2f4538` on `663877a7`
+then catches a side effect: ten ordinary moves pass, but coupled goal
+`[0.4, 0, pi/2]` overshoots by 3.23 cm and stalls. Cancellation confirms rest.
+The generic feedback profile assumes 1 m/s² braking, incompatible with the
+new actuator ramp. `e33bb5d1` adds an inherited native Stretch profile
+(v=0.09 m/s, w=0.5 rad/s, braking a=0.06 m/s² and alpha=0.4 rad/s²), leaving
+other robot adapters and all tolerances/deadlines unchanged. An integrated
+wheel-reference test reproduces the old handoff overshoot and checks the repair.
+Full retry `20260913_123817_b165a0` passes **14/14** moves: max XY error
+1.363 cm, max yaw error 0.02042 rad, zero corrections. Health remains
+`incomplete_telemetry`, not full hardware acceptance.
+Original learned-task retry `20260913_124152_159563` on `e33bb5d1` fails
+**before pickup** (physical false/false, process zero, 87 s wall). The wrist
+image visibly contains the cylinder, but the proposal/verification pipeline
+rejects identity at the final approach (last accepted error about 1.7 cm).
+This run does not exercise carrying. Diagnostic `20260913_124712_3cb5b1`
+replays the last accepted and rejected images through unchanged YOLOE/SAM2 and
+depth-surface generation. The failure audit previously overwrote the inner
+grounding reason with a generic identity error; retain that reason going forward.
+
+### Shared multi-step loop (offline validation)
+
+CHAT previously stopped after action-only tools or selected observation tools,
+and instructed every other follow-up to summarize without further tools. It
+could not reliably execute an observation followed by two manipulation steps.
+The repaired loop (`7a6e7541`) feeds every result back within three tool-bearing rounds,
+refreshes the optional camera each round, and ends with a no-tool summary at
+budget exhaustion. Structured failures/exceptions stop the remaining batch and
+further tools for that turn without quitting the interactive session. Motion
+and pick/place tools expose structured outcomes rather than relying on failure
+wording; controller completion remains physically unverified. The prompt uses
+the same contract, with no task-specific fast-reply whitelist.
+
+Offline agent tests: **113 passed, 4 skipped** (simulation disabled). Mocked
+full-loop tests cover observation→action→action, action-only continuation, batch
+failure, fresh follow-up images and budget exhaustion, including a model that
+still emits tools in the forced-final response. These changes are not in the
+running `e33bb5d1` trial and are **not learned TAMP acceptance**.
+
+### Development history
 
 `default_table_stretch_clearance.yaml` changes only the blue neighbor's x
 position (-0.02 → -0.25 m). The original fixture is untouched; a model-equality
@@ -338,8 +405,9 @@ pass (53); original-scene retry `20260913_115500_c04c71` passes pickup at
 63.534 s and final placement at 139.488 s (process zero, 196 s). It traverses
 a longer chunked route before reacquiring the receptacle. Final visual height
 error is 1.37 cm, inside the unchanged gate. Matched separated-neighbor control
-`20260913_115609_934cb7` uses the same code and contact/aperture preset; only
-the neighbor pose changes. The mirrored-neighbor fixture is predeclared in
+`20260913_115609_934cb7` passes pickup at 65.360 s and final placement at
+134.788 s (process zero, 191 s). It uses the same code and contact/aperture
+preset; only the neighbor pose changes. The mirrored-neighbor fixture is predeclared in
 [acceptance](manipulation_acceptance.md), not chosen after testing outcomes.
 
 This sequence is **not a general collision-free approach planner**. No

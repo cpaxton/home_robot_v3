@@ -98,6 +98,13 @@ development passes on different source or aperture settings are not pooled
 into that six-case panel. Keep the detector preset as the frozen control;
 the current development candidate uses the separate contact/aperture preset.
 
+For Stage D, submit the two-step request through the learned CHAT loop, not two
+externally scripted tool invocations. The shared loop permits three tool-bearing
+rounds, including observation and action results, followed by a no-tool summary.
+Failure stops the remaining batch and turn; completed actions must not be
+replayed. Preserve model tool-call traces and score both ordered physical
+subgoals independently. Offline loop tests are not multistep physical evidence.
+
 Physical pickup acceptance requires at least 5 cm lift, gripper contact and stable
 object-to-gripper pose for one simulated second, without support contact. Placement
 requires release onto the designated support and a stable pose for one simulated

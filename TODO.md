@@ -160,7 +160,19 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       negative arm IK. Finger-axis-only alignment (`34ba733a`) preserves valid
       extension in captured-pose IK; retry `20260913_115500_c04c71` passes
       physical pick/place on the original fixture and longer transport route
-      (1/1). Matched easier-scene control `20260913_115609_934cb7` is running.
+      (1/1). Matched easier-scene control `20260913_115609_934cb7` also passes.
+      Frozen panel `20260913_120543_168dcb` on `6e54ddd1` then stops at original
+      1/2: second run loses payload during an arc-to-turn transition. Four
+      cases remain unrun. Measured-state replay `20260913_121747_00b35f`
+      reproduces ejection at 2/3 checkpoints; wheel slew 8 retains all 3.
+      Production wheel-joint reference profile (8/3 rad/s²) and captured
+      negative/positive regression pass. First route catches incompatible
+      generic braking (3.23 cm coupled-goal overshoot); native profile
+      `e33bb5d1` passes unchanged 14-move retry `20260913_123817_b165a0`.
+      Failed-task retry `20260913_124152_159563` instead rejects wrist identity
+      before pickup (false/false); cached-image candidate replay
+      `20260913_124712_3cb5b1` is diagnosing it. Carrying not exercised yet.
+      Require physical scoring before rerunning a fresh frozen panel.
       Mirrored neighbor at x=+0.18 m is predeclared for the six-case panel;
       do not pool evolving diagnostic versions into that frozen acceptance.
       This is not a general collision-free approach planner; validate varied
@@ -171,6 +183,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       simulator hides the robot in head renders, removing manipulation
       self-occlusion. Wrist views retain it. Disclose this fixture limitation;
       do not treat tabletop passes as real-perception acceptance.
+- [x] Repair CHAT multi-step continuation: shared bounded observation/action
+      loop, matching prompt, fresh optional images, structured motion and
+      manipulation outcomes, and no batch/follow-up execution after failure.
+      113 offline agent tests pass (4 simulation-gated tests skipped), including
+      two-step requests and forced-final tool rejection. Not in the frozen
+      `e33bb5d1` carry retry; learned TAMP physical acceptance remains pending.
 - [ ] Repeat precision-route validation and complete posture/actuator telemetry.
       Manager-lock version passed six moves then stalled on move seven; frozen
       pre-lock and native-lock controls each pass ten moves. Native-lock control
