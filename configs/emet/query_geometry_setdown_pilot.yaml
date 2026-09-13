@@ -1,6 +1,7 @@
-# Separate release-policy diagnostic. A near-support geometric set-down is
+# Bounded manipulation diagnostic. A near-support geometric set-down is
 # not force/contact verification and has not been validated on hardware.
-# Preserve the recovery-only row and all its perception/grasp settings.
+# Preserve the recovery-only control. Perception and contact calibration are
+# unchanged; final grasp alignment is tighter to realize that calibration.
 extends: configs/emet/query_geometry_recovery_pilot.yaml
 mapping:
   # Full pose waypoints can combine translation and a turn. The conservative
@@ -9,6 +10,8 @@ mapping:
   # checks and the outer episode cap remain active. This is a declared budget
   # difference, not an isolated release-only ablation.
   find_phase_nav_step_timeout_s: 30.0
+  grasp:
+    geometry_servo_tolerance_m: 0.005
   place:
     release_clearance_m: 0.005
     release_z_tolerance_m: 0.005

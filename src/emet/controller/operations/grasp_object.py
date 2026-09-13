@@ -119,6 +119,7 @@ class GraspObjectOperation(ManagedOperation):
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
     use_geometry_servo: bool = False
+    geometry_servo_tolerance_m: float = 0.012
     contact_offset_m = (0.0, 0.0, 0.0)
     _geometry_previous_pose = None
     _geometry_stalled_steps: int = 0
@@ -185,6 +186,11 @@ class GraspObjectOperation(ManagedOperation):
         self._try_open_loop = try_open_loop
         self.grounded_target = grounded_target
         self.use_geometry_servo = bool((self.parameters.get("grasp", {}) or {}).get("geometry_servo", False))
+        self.geometry_servo_tolerance_m = float(
+            (self.parameters.get("grasp", {}) or {}).get("geometry_servo_tolerance_m", 0.012)
+        )
+        if not np.isfinite(self.geometry_servo_tolerance_m) or not 0 < self.geometry_servo_tolerance_m <= 0.012:
+            raise ValueError("Geometry-servo tolerance must be positive and at most 12 mm")
         self.contact_offset_m = np.asarray(
             (self.parameters.get("grasp", {}) or {}).get("contact_offset_m", [0.0, 0.0, 0.0]), dtype=float
         )
@@ -538,7 +544,10 @@ class GraspObjectOperation(ManagedOperation):
 
         print("Distance:", distance)
         joint_state = self.robot.get_joint_positions()
-        if not self.open_loop or distance is not None:
+        # Geometry servo has already verified the contact pose. Reissuing a
+        # nominally zero approach from measured joints replaces its setpoint
+        # with tracking error and resets wrist roll/yaw before closure.
+        if not self.use_geometry_servo and (not self.open_loop or distance is not None):
             # Now compute what to do
             base_x = joint_state[HelloStretchIdx.BASE_X]
             wrist_pitch = joint_state[HelloStretchIdx.WRIST_PITCH]
@@ -1140,7 +1149,7 @@ class GraspObjectOperation(ManagedOperation):
         delta = center - contact_center
         distance = float(np.linalg.norm(delta))
         self.info(f"Observed grasp-center error (world m): {delta}")
-        if distance <= 0.012:
+        if distance <= self.geometry_servo_tolerance_m:
             return self._grasp()
         if distance > 0.5:
             self.error("Grounded object is outside the local grasp approach budget.")

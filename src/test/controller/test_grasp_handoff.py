@@ -169,6 +169,25 @@ def test_grasp_propagates_approach_and_lift_failure(motions):
         op.robot.close_gripper.assert_not_called()
 
 
+def test_geometry_grasp_does_not_overwrite_verified_pose_before_closure():
+    op = operation()
+    op.cheer = Mock()
+    op.talk = False
+    op.use_geometry_servo = True
+    op.open_loop = False
+    measured = np.arange(11, dtype=float) / 100
+    op.robot.get_joint_positions.return_value = measured
+    events = []
+    op.robot.close_gripper.side_effect = lambda **kw: events.append("close")
+    op.robot.arm_to.side_effect = lambda *a, **kw: (events.append("lift"), True)[1]
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        assert op._grasp()
+    assert events == ["close", "lift"]
+    expected = measured.copy()
+    expected[HelloStretchIdx.LIFT] += 0.3
+    np.testing.assert_array_equal(op.robot.arm_to.call_args.args[0], expected)
+
+
 def test_center_depth_excludes_nonfinite_sensor_values():
     op = operation()
     servo = SimpleNamespace(ee_depth=np.array([[np.inf, np.nan], [0.0, 0.2]]))

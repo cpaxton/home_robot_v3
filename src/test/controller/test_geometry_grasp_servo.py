@@ -34,6 +34,27 @@ def test_centered_observed_geometry_authorizes_grasp_without_pixel_depth_constan
     op.robot.arm_to.assert_not_called()
 
 
+def test_tight_grasp_gate_corrects_mirrored_run_residual_before_closing():
+    # Last accepted error in the weak mirrored grasp, before a delayed slip.
+    error = [0.0036036, -0.010019, 0.003071]
+    control, servo, mask = fixture(error)
+    assert control.geometry_servo_step(servo, mask) is True
+    candidate, servo, mask = fixture(error)
+    candidate.geometry_servo_tolerance_m = 0.005
+    assert candidate.geometry_servo_step(servo, mask) is None
+    candidate._grasp.assert_not_called()
+    np.testing.assert_allclose(candidate.robot_model.manip_ik_for_grasp_frame.call_args.args[0], error)
+
+
+@pytest.mark.parametrize("tolerance", [0, -0.005, 0.013, float("nan"), float("inf")])
+def test_geometry_servo_tolerance_cannot_disable_or_loosen_the_closure_gate(tolerance):
+    op, _, _ = fixture([0, 0, 0])
+    op.parameters = {"grasp": {"geometry_servo": True, "geometry_servo_tolerance_m": tolerance}}
+    with pytest.raises(ValueError, match="tolerance"):
+        op.configure(grounded_target=Mock(), servo_to_grasp=True, try_open_loop=False)
+    op._grasp.assert_not_called()
+
+
 def test_offset_geometry_moves_at_most_five_cm_and_does_not_close():
     op, servo, mask = fixture([0.1, 0, 0.02])
     assert op.geometry_servo_step(servo, mask) is None
