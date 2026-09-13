@@ -46,6 +46,31 @@ def test_wheel_commands_match_transmission_velocity(gear, velocity):
     np.testing.assert_allclose(data.actuator_force, 0, atol=1e-12)
 
 
+@pytest.mark.parametrize("velocity", [(0.3, 0.5), (-0.3, 0.5), (0.3, -0.5), (0, 2)])
+@pytest.mark.parametrize("gear", [3, -2])
+def test_saturated_wheels_preserve_commanded_curvature(velocity, gear):
+    model, data = wheel_model(gear)
+    model.actuator_ctrllimited[:] = 1
+    model.actuator_ctrlrange[:] = [-3, 6]
+    controller = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+    controller._set_base_velocity(*velocity)
+    assert np.all(data.ctrl >= -3) and np.all(data.ctrl <= 6)
+    actual_twist = np.asarray(utils.diff_drive_fwd_kinematics(*(data.ctrl / gear)))
+    desired = np.asarray(velocity)
+    fraction = np.dot(actual_twist, desired) / np.dot(desired, desired)
+    assert 0 < fraction < 1
+    np.testing.assert_allclose(actual_twist, fraction * desired, atol=1e-12)
+
+
+def test_common_wheel_limit_does_not_scale_an_in_range_command():
+    model, data = wheel_model(3)
+    model.actuator_ctrllimited[:] = 1
+    model.actuator_ctrlrange[:] = [-6, 6]
+    controller = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+    controller._set_base_velocity(0.01, 0.02)
+    np.testing.assert_allclose(data.ctrl, 3 * np.asarray(utils.diff_drive_inv_kinematics(0.01, 0.02)))
+
+
 @pytest.mark.parametrize("gear", [1, 3, -2])
 def test_base_velocity_telemetry_uses_joint_not_actuator_speed(gear):
     model, data = wheel_model(gear)

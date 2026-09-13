@@ -211,12 +211,26 @@ class BaseController:
         # MuJoCo velocity servos target transmission velocity, not joint
         # velocity: actuator_velocity = gear * wheel_joint_velocity.
         # Read the MJCF gear rather than assuming the Stretch asset uses 1.
+        targets = []
+        speed_fraction = 1.0
         for name, wheel_velocity in (
             (Actuators.left_wheel_vel.name, w_left),
             (Actuators.right_wheel_vel.name, w_right),
         ):
-            gear = self.mujoco_server.mjmodel.actuator(name).gear[0]
-            self.mujoco_server.mjdata.actuator(name).ctrl = gear * wheel_velocity
+            actuator = self.mujoco_server.mjmodel.actuator(name)
+            target = float(actuator.gear[0] * wheel_velocity)
+            if actuator.ctrllimited[0]:
+                lo, hi = actuator.ctrlrange
+                if not lo <= 0 <= hi:
+                    raise ValueError("Wheel velocity limits must include zero")
+                if target > hi or target < lo:
+                    speed_fraction = min(speed_fraction, float((hi if target > 0 else lo) / target))
+            targets.append((name, target))
+        # Independent actuator clipping changes curvature (both saturated
+        # wheels can drive straight despite a turn request). Slow both wheels
+        # together to preserve the requested twist within physical limits.
+        for name, target in targets:
+            self.mujoco_server.mjdata.actuator(name).ctrl = speed_fraction * target
 
 
 class MujocoServer:
