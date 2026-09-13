@@ -222,19 +222,33 @@ class BaseController:
         ):
             actuator = self.mujoco_server.mjmodel.actuator(name)
             target = float(actuator.gear[0] * wheel_velocity)
+            # A velocity actuator is proportional feedback, not an ideal motor
+            # speed source. Compensate the loaded model's Coulomb joint friction
+            # so small nonzero commands can overcome its breakaway torque.
+            # In actuator units: gear * kv * bias = sign(qdot) * frictionloss.
+            bias = 0.0
+            if target != 0:
+                model = self.mujoco_server.mjmodel
+                dof = int(model.jnt_dofadr[int(actuator.trnid[0])])
+                gain = float(actuator.gainprm[0])
+                if gain <= 0:
+                    raise ValueError("Wheel velocity actuator requires positive feedback gain")
+                bias = float(np.sign(target) * model.dof_frictionloss[dof] / (abs(actuator.gear[0]) * gain))
             if actuator.ctrllimited[0]:
                 lo, hi = actuator.ctrlrange
                 if not lo <= 0 <= hi:
                     raise ValueError("Wheel velocity limits must include zero")
-                if target > hi or target < lo:
-                    speed_fraction = min(speed_fraction, float((hi if target > 0 else lo) / target))
-            targets.append((name, target))
+                if not lo <= bias <= hi:
+                    raise ValueError("Wheel actuator limits cannot overcome modeled joint friction")
+                if target + bias > hi or target + bias < lo:
+                    speed_fraction = min(speed_fraction, float(((hi if target > 0 else lo) - bias) / target))
+            targets.append((name, target, bias))
         # Independent actuator clipping changes curvature (both saturated
         # wheels can drive straight despite a turn request). Slow both wheels
         # together to preserve the requested twist within physical limits.
-        for name, target in targets:
+        for name, target, bias in targets:
             actuator = self.mujoco_server.mjdata.actuator(name)
-            desired = speed_fraction * target
+            desired = speed_fraction * target + bias
             if not immediate:
                 # Advance once per physics tick, not per incoming command or
                 # wall-clock interval. Bound wheel-joint acceleration even with

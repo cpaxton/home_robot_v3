@@ -35,13 +35,14 @@ def control_profile():
             global_hydra.initialize(previous)
 
 
-def wheel_model(gear):
+def wheel_model(gear, friction=0):
     model = mujoco.MjModel.from_xml_string(f"""
     <mujoco>
+      <option integrator="implicitfast"/>
       <worldbody>
-        <body><joint name="joint_left_wheel" type="hinge"/>
+        <body><joint name="joint_left_wheel" type="hinge" frictionloss="{friction}" armature="0.1"/>
           <geom type="sphere" size="0.05"/></body>
-        <body pos="1 0 0"><joint name="joint_right_wheel" type="hinge"/>
+        <body pos="1 0 0"><joint name="joint_right_wheel" type="hinge" frictionloss="{friction}" armature="0.1"/>
           <geom type="sphere" size="0.05"/></body>
       </worldbody>
       <actuator>
@@ -99,6 +100,44 @@ def test_common_wheel_limit_does_not_scale_an_in_range_command():
     controller = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
     settle_reference(controller, (0.01, 0.02))
     np.testing.assert_allclose(data.ctrl, 3 * np.asarray(utils.diff_drive_inv_kinematics(0.01, 0.02)))
+
+
+@pytest.mark.parametrize("gear", [3, -2])
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_native_friction_compensation_removes_small_velocity_dead_zone(gear, direction):
+    model, data = wheel_model(gear, friction=35)
+    model.opt.noslip_iterations = 10
+    velocity = direction * 0.003
+    wheels = np.asarray(utils.diff_drive_inv_kinematics(velocity, 0))
+    # Uncompensated motor torque cannot overcome the unchanged modeled friction.
+    data.ctrl[:] = gear * wheels
+    for _ in range(1000):
+        mujoco.mj_step(model, data)
+    assert np.max(np.abs(data.qvel)) < 1e-4
+    mujoco.mj_resetData(model, data)
+    controller = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+    for _ in range(1000):
+        controller._set_base_velocity(velocity, 0)
+        mujoco.mj_step(model, data)
+    np.testing.assert_allclose(data.qvel, wheels, atol=1e-4)
+    # Zero has no feedforward and explicit cancellation remains immediate.
+    controller._set_base_velocity(0, 0, immediate=True)
+    np.testing.assert_array_equal(data.ctrl, 0)
+
+
+def test_friction_compensation_reserves_limit_headroom_without_changing_curvature():
+    model, data = wheel_model(3, friction=35)
+    model.actuator_ctrllimited[:] = 1
+    model.actuator_ctrlrange[:] = [-3, 6]
+    controller = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+    velocity = (0.3, 0.5)
+    wheels = np.asarray(utils.diff_drive_inv_kinematics(*velocity))
+    bias = np.sign(3 * wheels) * model.dof_frictionloss / (3 * 20)
+    settle_reference(controller, velocity)
+    assert np.all(data.ctrl >= -3) and np.all(data.ctrl <= 6)
+    fractions = (data.ctrl - bias) / (3 * wheels)
+    assert 0 < fractions[0] < 1
+    np.testing.assert_allclose(fractions, fractions[0])
 
 
 @pytest.mark.parametrize("gear", [1, 3, -2])
