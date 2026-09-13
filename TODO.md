@@ -20,7 +20,8 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       (`20260913_165731_d3bff6`), but frozen panel v2 stops at 1/2 original
       passes: another release tip, four variations unrun. Controlled physical
       set-downs retain support (6/6) versus suspended release (0/2).
-      Separate near-support preset `46e380d7` is under test; do not mark this
+      Separate near-support preset `46e380d7` passes original and separated-
+      neighbor development controls; frozen panel v3 is running. Do not mark this
       resolved until the predeclared original/clearance/mirrored repeats pass.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.

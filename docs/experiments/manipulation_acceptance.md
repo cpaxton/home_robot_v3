@@ -5,6 +5,8 @@ passing results. The goal remains **one learned agent across EQA, OVMM and
 multistep manipulation**, with robot adapters rather than task-specific oracle
 policies. See [current evidence](shared_grounding_pilot.md) and the
 [environment progression](../environments/README.md).
+The [PR review map](../plans/PR167_review.md) separates the dependency layers
+and lists the evidence needed before landing this mixed change set.
 
 ## Frozen settings and reporting
 

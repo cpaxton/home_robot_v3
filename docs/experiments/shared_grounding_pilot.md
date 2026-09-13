@@ -2,12 +2,13 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: the frozen six-case panel on `6e54ddd1` **stopped at original scene
-1/2**: both pickups pass, but the second run loses its payload during transport.
-Four cases did not run. Earlier development versions passed individual
-original/separated-neighbor trials and fourteen navigation moves; those are
-not a substitute for repeatability. Single-room OVMM, learned TAMP and paired
-EQA acceptance remain pending.
+Latest: neither frozen six-case panel is accepted. Both stopped at **1/2
+original-scene passes**, with four variations unrun: v1 loses the payload in
+transport; v2 carries successfully but tips during opening. The near-support
+release candidate `46e380d7` passes fresh original and separated-neighbor
+development trials; frozen panel v3 is running. Individual development successes and
+fourteen passed navigation moves are not a substitute for the frozen repeatability
+gate. Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
 
 ### Frozen panel v1 (stopped, not accepted)
 
@@ -140,6 +141,19 @@ No ground-truth contact feedback enters the policy. Sixty focused placement,
 query and observation tests pass. Managed retry `20260913_171734_634eb7` runs
 the native tests, then original and separated-neighbor learned controls
 serially, stopping on failure; artifacts `~/runs/emet/grasp-near-support`.
+The eight native tests pass (25.49 s), including suspended-release negative and
+set-down positive controls. Original learned retry passes physical pickup at
+73.622 s and placement at 167.688 s (235 s process wall time). Final observed
+height error is 0.577 mm; the replay shows the cylinder upright on the cube,
+with the gripper clear after retreat. Separated-neighbor control also passes:
+pickup 71.582 s, placement 171.388 s (242 s process wall), final observed height
+error 3.758 mm after two bounded corrections. These are development trials.
+Full offline contracts: 403 passed, four simulation-gated skips (5.44 s).
+
+Frozen panel v3 `20260913_172740_b4ca6c` uses `46e380d7` and the set-down preset
+for all six predeclared fixtures/repeats. Root:
+`~/runs/emet/manipulation-panel-v3-20260913`. It runs serially, stops on failure,
+and does not pool the development controls above.
 
 The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
