@@ -171,7 +171,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       `e33bb5d1` passes unchanged 14-move retry `20260913_123817_b165a0`.
       Failed-task retry `20260913_124152_159563` instead rejects wrist identity
       before pickup (false/false); cached-image candidate replay
-      `20260913_124712_3cb5b1` is diagnosing it. Carrying not exercised yet.
+      `20260913_124712_3cb5b1` reproduces surface-budget overflow from a false
+      gripper proposal (8 components plus the target), before Qwen. A separate
+      `query_geometry_recovery_pilot.yaml` row permits one Qwen-box/SAM proposal
+      recovery on geometric failure, never semantic rejection. Cached int4/SDPA
+      test `20260913_130039_59db80` passes 2/2 positives and 2/2 absent queries;
+      original live retry `20260913_164029_e59ea7` is running on `eeec07fd`.
       Require physical scoring before rerunning a fresh frozen panel.
       Mirrored neighbor at x=+0.18 m is predeclared for the six-case panel;
       do not pool evolving diagnostic versions into that frozen acceptance.

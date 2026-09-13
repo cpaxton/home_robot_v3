@@ -51,9 +51,34 @@ Original learned-task retry `20260913_124152_159563` on `e33bb5d1` fails
 image visibly contains the cylinder, but the proposal/verification pipeline
 rejects identity at the final approach (last accepted error about 1.7 cm).
 This run does not exercise carrying. Diagnostic `20260913_124712_3cb5b1`
-replays the last accepted and rejected images through unchanged YOLOE/SAM2 and
-depth-surface generation. The failure audit previously overwrote the inner
-grounding reason with a generic identity error; retain that reason going forward.
+reproduces the cause from cached images: the cylinder contributes one measured
+component, but a second proposal covering the gripper contributes eight. The
+combined budget overflows **before Qwen verification**. Both proposals overlap
+the target's local bounds, so proximity filtering alone cannot safely remove
+the gripper. The failure audit previously overwrote the inner grounding reason
+with a generic identity error; the repair now retains that reason.
+
+The separate `query_geometry_recovery_pilot.yaml` preset opts into one Qwen-box
+→ SAM alternative on the **same frame**, only for empty/overflowing proposal
+geometry. Semantic rejection and invalid geometry do not trigger retries. The
+ordinary final surface verification, eight-surface budget and post-selection
+world association remain mandatory. The original contact/aperture-only,
+detector-only and Qwen-box controls are unchanged.
+
+Cached-model setup `20260913_125717_a45548` failed before inference because
+the replay command omitted the live driver's SDPA permission. Matched int4/SDPA
+retry `20260913_130039_59db80` on `eeec07fd` passes both visible-cylinder views
+and rejects both absent-banana queries (**2/2 positive, 2/2 negative**). The
+formerly rejected frame exercises recovery; the earlier good frame does not.
+Both cylinder masks satisfy the original world-association gate (6,621 and
+6,103 pixels). Saved prompts, responses and masks:
+`~/runs/emet/wrist-proposal-recovery-sdpa`. These four fixed-image checks are
+perception diagnostics, not cross-object generalization or manipulation passes.
+
+Live original-task retry `20260913_164029_e59ea7` is running on `eeec07fd`,
+with the separate recovery preset and repaired CHAT loop. The focused combined
+suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
+live navigation remain separately reported above.
 
 ### Shared multi-step loop (offline validation)
 
@@ -71,8 +96,8 @@ the same contract, with no task-specific fast-reply whitelist.
 Offline agent tests: **113 passed, 4 skipped** (simulation disabled). Mocked
 full-loop tests cover observation→action→action, action-only continuation, batch
 failure, fresh follow-up images and budget exhaustion, including a model that
-still emits tools in the forced-final response. These changes are not in the
-running `e33bb5d1` trial and are **not learned TAMP acceptance**.
+still emits tools in the forced-final response. These changes were not in the
+`e33bb5d1` trial and are **not learned TAMP acceptance**.
 
 ### Development history
 
