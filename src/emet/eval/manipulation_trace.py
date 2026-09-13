@@ -77,6 +77,12 @@ class ManipulationTrace:
             "other_contact": bool(touched - self.gripper_ids - self.support_ids),
             "contacts": contacts,
             "qpos": data.qpos.tolist(),
+            # Preserve measured dynamics for local checkpoint diagnostics;
+            # differencing 10 Hz positions is not a reliable initial velocity.
+            # This remains sampled evidence, not an exact command replay log.
+            "qvel": data.qvel.tolist(),
+            "act": data.act.tolist(),
+            "qacc_warmstart": data.qacc_warmstart.tolist(),
             "ctrl": data.ctrl.tolist(),
         }
         self.stream.write(json.dumps(row, allow_nan=False) + "\n")

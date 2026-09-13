@@ -99,6 +99,8 @@ def test_mujoco_recorder_keeps_contact_and_pose_evidence_private(tmp_path):
     mujoco.mj_forward(model, data)
     config = {"object_body": "object", "support_body": "support", "ee_body": "ee", "gripper_bodies": ["finger"]}
     original_qpos = data.qpos.copy()
+    data.qvel[:] = np.arange(model.nv) * 0.1
+    data.qacc_warmstart[:] = np.arange(model.nv) * 0.01
     path = tmp_path / "trace.jsonl"
     writer = ManipulationTrace(model, config, path)
     writer.record(model, data)
@@ -110,6 +112,9 @@ def test_mujoco_recorder_keeps_contact_and_pose_evidence_private(tmp_path):
     assert row["support_contact"]
     assert not row["gripper_contact"]
     assert row["contacts"]
+    np.testing.assert_array_equal(row["qvel"], data.qvel)
+    np.testing.assert_array_equal(row["qacc_warmstart"], data.qacc_warmstart)
+    assert row["act"] == data.act.tolist()
     invalid = copy.deepcopy(config)
     invalid["support_body"] = "object"
     with pytest.raises(ValueError):
