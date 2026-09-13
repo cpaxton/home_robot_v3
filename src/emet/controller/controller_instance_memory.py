@@ -1856,14 +1856,14 @@ class InstanceMemoryController(BaseController):
         return msg
 
     def open_cabinet(self, object_goal: str, **kwargs) -> bool:
-        """Open a cabinet."""
-        print("Not implemented yet.")
-        return True
+        """Articulation is unsupported by this controller."""
+        logger.warning("Open cabinet is unsupported; no motion executed.")
+        return False
 
     def close_cabinet(self, object_goal: str, **kwargs) -> bool:
-        """Close a cabinet."""
-        print("Not implemented yet.")
-        return True
+        """Articulation is unsupported by this controller."""
+        logger.warning("Close cabinet is unsupported; no motion executed.")
+        return False
 
     def wave(self, **kwargs) -> bool:
         """Wave."""
