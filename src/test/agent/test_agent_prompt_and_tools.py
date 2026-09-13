@@ -231,12 +231,15 @@ def test_prompt_includes_all_tool_names():
         assert t.name in prompt, f"Tool '{t.name}' not found in system prompt"
 
 
-def test_prompt_distinguishes_info_vs_action_tools():
+def test_prompt_uses_one_bounded_observation_action_loop():
     from emet.agent.prompt import build_agent_system_prompt
 
     prompt = build_agent_system_prompt()
-    assert "Info tools return text" in prompt
-    assert "Action-only tools do not feed a tool-results summary" in prompt
+    assert "All tools return results for the next round" in prompt
+    assert "continue only unfinished parts" in prompt
+    assert "Tool failure stops execution for this turn" in prompt
+    assert "Do not repeat completed actions" in prompt
+    assert "the turn ends after the action" not in prompt
     assert "take_picture alone" in prompt
     assert "send_image" in prompt
     assert "{{" not in prompt, "Prompt contains literal {{ — model will copy double braces"

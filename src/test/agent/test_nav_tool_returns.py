@@ -98,8 +98,9 @@ def test_explore_surfaces_rejected_clearance():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["explore"].func()
-    assert "rejected_low_clearance" in out
-    assert "Last plan:" in out
+    assert not out.ok
+    assert "rejected_low_clearance" in out.note
+    assert "Last plan:" in out.note
 
 
 def test_list_scene_relations_falls_back_to_graph_eqa():

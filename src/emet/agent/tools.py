@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.agent.tool_outcome import ToolOutcome
 from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
 from emet.mapping.voxel_localize import localize_text_xyz, voxel_map_from_agent
 from emet.memory.graph_eqa.graph_stats import format_graph_size_report
@@ -372,20 +373,22 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def _exec(cmd: str, args: Any = "") -> str:
+    def _exec(cmd: str, args: Any = "") -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([(cmd, args)])
-        return "Done." if ok else "Command was interrupted or failed."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        keep_going = executor([(cmd, args)])
+        ok = bool(keep_going and getattr(executor, "_last_exec_ok", True))
+        return ToolOutcome(ok, note="Done." if ok else "Command was interrupted or failed.")
 
     # -- explore -------------------------------------------------------------
-    def explore() -> str:
+    def explore() -> ToolOutcome:
         executor = context.get("executor")
         robot = context.get("robot")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("explore", "")])
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        result = _exec("explore")
+        ok = result.ok
         agent = _agent_from_context(context)
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
@@ -401,7 +404,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if gsize:
             _logger.info(gsize)
             parts.append(f"[{gsize}]")
-        return " ".join(parts)
+        result.note = " ".join(parts)
+        return result
 
     tools.append(
         Tool(
@@ -559,16 +563,28 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         agent = getattr(context.get("executor"), "agent", None)
         return getattr(agent, "query_driven_memory", False) is True
 
-    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> str:
+    def _pick_place_outcome(ok: bool, note: str) -> ToolOutcome:
+        return ToolOutcome(
+            ok=ok,
+            status="controller_completed" if ok else "failed",
+            note=note,
+            tool="pick_place",
+            payload={"physical_success_verified": False},
+        )
+
+    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> ToolOutcome:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         if task_ok and _query_manipulation():
-            return "Pick/place controller completed; physical success has not been independently verified."
-        return (
+            return _pick_place_outcome(
+                True, "Pick/place controller completed; physical success has not been independently verified."
+            )
+        note = (
             f"Pick and place ({object_name} -> {receptacle_name}) done."
             if task_ok
             else "Pick/place failed or interrupted."
         )
+        return _pick_place_outcome(task_ok, note)
 
     def _build_tamp_plan(
         *,
@@ -659,10 +675,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         ok, message = execute_stored_agent_plan(robot, context, str(plan_ref))
         return f"TAMP execution {'succeeded' if ok else 'failed'}: {message}."
 
-    def pick_place(object_name: str, receptacle_name: str) -> str:
+    def pick_place(object_name: str, receptacle_name: str) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
-            return "Robot not connected."
+            return _pick_place_outcome(False, "Robot not connected.")
         if executor is not None and (
             _query_manipulation()
             or bool(getattr(executor, "visual_servo", False))
@@ -678,13 +694,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
             plan_ref = store_agent_plan(context, _tamp_robot(), build)
             ok, message = execute_stored_agent_plan(_tamp_robot(), context, plan_ref)
-            return (
-                f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else f"Pick/place failed: {message}."
+            return _pick_place_outcome(
+                ok,
+                f"Pick and place ({object_name} -> {receptacle_name}) done."
+                if ok
+                else f"Pick/place failed: {message}.",
             )
         if build.live_sim:
-            return f"Pick/place not run: {build.reason or 'TAMP planning failed'}."
+            return _pick_place_outcome(False, f"Pick/place not run: {build.reason or 'TAMP planning failed'}.")
         if executor is None:
-            return "Pick/place not run: no configured manipulation controller."
+            return _pick_place_outcome(False, "Pick/place not run: no configured manipulation controller.")
         return _fallback_pick_place(executor, object_name, receptacle_name)
 
     tools.append(
@@ -1054,18 +1073,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def scan_environment() -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok = executor([("rotate_in_place", "")])
-        if not ok:
-            return "Scan interrupted or failed."
+    def scan_environment() -> ToolOutcome:
+        result = _exec("rotate_in_place")
+        if not result.ok:
+            return result
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)
-            return f"Completed in-place ≈360° scan; map/memory updated. [{gsize}]"
-        return "Completed in-place ≈360° scan; map/memory updated."
+        result.note = "Completed in-place ≈360° scan; map/memory updated." + (f" [{gsize}]" if gsize else "")
+        return result
 
     tools.append(
         Tool(
@@ -1082,20 +1098,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def rotate_base(degrees: float = 90.0) -> str:
+    def rotate_base(degrees: float = 90.0) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         try:
             deg = float(degrees)
         except (TypeError, ValueError):
-            return f"Invalid degrees: {degrees!r}."
+            return ToolOutcome(False, status="invalid_argument", note=f"Invalid degrees: {degrees!r}.")
+        if not np.isfinite(deg):
+            return ToolOutcome(False, status="invalid_argument", note="Degrees must be finite.")
         deg = float(np.clip(deg, -360.0, 360.0))
-        ok = executor([("rotate_base", str(deg))])
-        if not ok:
-            return "Rotate failed or interrupted."
+        result = _exec("rotate_base", str(deg))
+        if not result.ok:
+            return result
         context["last_rotate_degrees"] = deg
-        return f"Rotated about {deg:.0f}° in place."
+        result.note = f"Rotated about {deg:.0f}° in place."
+        return result
 
     tools.append(
         Tool(
@@ -1123,7 +1142,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def face_toward(object_label: str) -> str:
+    def face_toward(object_label: str) -> ToolOutcome:
         """Yaw in place to face a scene-graph / voxel object (no XY drive)."""
         import math
 
@@ -1133,37 +1152,41 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         robot = context.get("robot")
         label = (object_label or "").strip()
         if not label:
-            return "Need an object label to face (e.g. 'aquarium', 'shelf')."
+            return ToolOutcome(
+                False, status="invalid_argument", note="Need an object label to face (e.g. 'aquarium', 'shelf')."
+            )
         if executor is None or robot is None or not hasattr(robot, "get_base_pose"):
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         agent = getattr(executor, "agent", None)
         xy, source = resolve_object_xy(agent, label)
         if xy is None:
-            return (
-                f"I don't have a map location for {label!r} yet — "
-                "I can rotate_base blindly or describe_scene from here."
+            return ToolOutcome(
+                False,
+                status="not_localized",
+                note=f"I don't have a map location for {label!r} yet — "
+                "I can rotate_base blindly or describe_scene from here.",
             )
         try:
             pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
         except Exception as e:
-            return f"Could not read base pose: {e}"
+            return ToolOutcome.from_exception("face_toward", e)
         if pose.size < 3:
-            return "Base pose incomplete."
+            return ToolOutcome(False, status="invalid_pose", note="Base pose incomplete.")
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
             msg = f"Already roughly facing {label!r} ({source})."
         else:
             deg = float(np.clip(deg, -180.0, 180.0))
-            ok = executor([("rotate_base", str(deg))])
-            if not ok:
-                return f"Tried to face {label!r} ({source}) but rotate failed."
+            result = _exec("rotate_base", str(deg))
+            if not result.ok:
+                return result
             context["last_rotate_degrees"] = deg
             msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
         hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
         if hint:
             msg = f"{msg} {hint}"
-        return msg
+        return ToolOutcome(True, note=msg)
 
     tools.append(
         Tool(
@@ -1190,33 +1213,40 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def move_forward(meters: float = 0.1) -> str:
+    def move_forward(meters: float = 0.1) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         try:
             dist = float(meters)
         except (TypeError, ValueError):
-            return f"Invalid meters: {meters!r}."
+            return ToolOutcome(False, status="invalid_argument", note=f"Invalid meters: {meters!r}.")
+        if not np.isfinite(dist):
+            return ToolOutcome(False, status="invalid_argument", note="Meters must be finite.")
         dist = float(np.clip(dist, 0.0, 1.5))
         # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
         agent = getattr(executor, "agent", None)
         if agent is not None and hasattr(agent, "move_forward_meters"):
             commanded = float(agent.move_forward_meters(dist))
             if commanded < 0.02:
-                return (
-                    "I don't have enough explored map to drive that way yet "
+                return ToolOutcome(
+                    False,
+                    status="blocked",
+                    note="I don't have enough explored map to drive that way yet "
                     "(empty map, local free disk too small, or obstacle too close). "
                     "Want me to scan_environment or rotate_base in place first so I can see "
-                    "what's ahead?"
+                    "what's ahead?",
                 )
             if commanded + 1e-3 < dist:
-                return f"Moved forward {commanded:.2f} m (map-clipped from {dist:.2f} m so I don't hit anything)."
-            return f"Moved forward {commanded:.2f} m (map clear along path)."
-        ok = executor([("move_forward", str(dist))])
-        if not ok:
-            return "Move forward failed or interrupted."
-        return f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
+                return ToolOutcome(
+                    True,
+                    note=f"Moved forward {commanded:.2f} m (map-clipped from {dist:.2f} m so I don't hit anything).",
+                )
+            return ToolOutcome(True, note=f"Moved forward {commanded:.2f} m (map clear along path).")
+        result = _exec("move_forward", str(dist))
+        if result.ok:
+            result.note = f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
+        return result
 
     tools.append(
         Tool(

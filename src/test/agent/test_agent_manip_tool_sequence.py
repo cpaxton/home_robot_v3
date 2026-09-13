@@ -34,7 +34,8 @@ def test_query_tools_never_enter_oracle_planning(monkeypatch, visual_servo):
     assert "blocked" in tools["execute_pick_place_plan"].func(plan_ref="plan:1")
     assert "unavailable" in tools["scene_tasks"].func()
     result = tools["pick_place"].func(object_name="mug", receptacle_name="table")
-    assert "not been independently verified" in result
+    assert result.ok and result.payload["physical_success_verified"] is False
+    assert "not been independently verified" in result.note
     executor.assert_called_once_with([("pickup", "mug"), ("place", "table")])
     oracle.assert_not_called()
 
@@ -65,7 +66,7 @@ def test_canned_find_then_pick_place_dispatch_order():
     """Agent dispatch maps find_objects → find, pick_place → guarded fallback commands."""
     exe = _RecordingExecutor()
     tools = {t.name: t for t in get_tools({"executor": exe})}
-    ok, results, _has_info = _dispatch_tool_calls(
+    ok, results, _failed = _dispatch_tool_calls(
         list(_CANNED_FIND_THEN_PICK_PLACE),
         tools,
         exe,  # type: ignore[arg-type]
@@ -75,14 +76,14 @@ def test_canned_find_then_pick_place_dispatch_order():
         [("find", "bowl")],
         [("pickup", "bowl"), ("place", "table")],
     ]
-    assert "[pick_place] Pick and place (bowl -> table) done." in results
+    assert "[pick_place] ok status=controller_completed Pick and place (bowl -> table) done." in results
 
 
 def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     """Failed manip sets _last_exec_ok; dispatch summary says failed (not quit)."""
     exe = _RecordingExecutor(last_exec_ok=False)
     tools = {t.name: t for t in get_tools({"executor": exe})}
-    ok, results, _has_info = _dispatch_tool_calls(
+    ok, results, _failed = _dispatch_tool_calls(
         [
             {
                 "name": "pick_place",
@@ -94,15 +95,15 @@ def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     )
     assert ok  # keep going
     assert exe.calls == [[("pickup", "bowl"), ("place", "table")]]
-    assert "[pick_place] Pick/place failed or interrupted." in results
+    assert "[pick_place] failed status=failed Pick/place failed or interrupted." in results
 
 
 def test_failed_find_is_information_not_a_generic_done():
     exe = _RecordingExecutor(last_exec_ok=False)
     tools = {t.name: t for t in get_tools({"executor": exe})}
-    ok, results, has_info = _dispatch_tool_calls([{"name": "find_objects", "arguments": {"text": "cup"}}], tools, exe)
+    ok, results, failed = _dispatch_tool_calls([{"name": "find_objects", "arguments": {"text": "cup"}}], tools, exe)
     assert ok  # Task failure does not shut down the agent.
-    assert has_info
+    assert failed
     assert results == ["Executor ran: find -> failed"]
 
 
@@ -152,7 +153,7 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
 
     monkeypatch.delenv("EMET_MANIP_PLANNER", raising=False)
     exe = _make_kinematic_dynamem_executor()
-    exe._find = MagicMock(return_value=None)  # type: ignore[method-assign]
+    exe._find = MagicMock(return_value=[0.5, 0.0, 0.5])  # type: ignore[method-assign]
 
     kin_calls: list[tuple] = []
     planners: list[str] = []
@@ -183,7 +184,7 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
     monkeypatch.setattr(sim_manipulation, "sim_teleport_place", _teleport_place)
 
     tools = {t.name: t for t in get_tools({"executor": exe})}
-    ok, results, _has_info = _dispatch_tool_calls(
+    ok, results, _failed = _dispatch_tool_calls(
         list(_CANNED_FIND_THEN_PICK_PLACE),
         tools,
         exe,
@@ -196,7 +197,7 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
     ]
     assert teleport_calls == []
     assert planners == ["rrt_connect", "rrt_connect"]
-    assert "[pick_place] Pick and place (bowl -> table) done." in results
+    assert "[pick_place] ok status=controller_completed Pick and place (bowl -> table) done." in results
     # find_objects, then a nav attempt each for pickup and place.
     assert exe._find.call_count == 3
 
