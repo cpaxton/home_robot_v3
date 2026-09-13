@@ -28,6 +28,8 @@ test checks geometry, inertia, limits and all other initial coordinates.
 | `20260913_104630_1f3338` | `f7c024d3` | true / false | Payload retained, but Qwen accepts a mixed cube/cylinder receptacle mask; wrong support geometry and final nonconvergence prevent placement |
 | `20260913_110132_edd836` | `cfb61c3d` | **true / true** | Coherent support geometry, longer transport retained, verified final release onto cube; process exit zero |
 | `20260913_110659_839e2c` | `cfb61c3d` | true / false | Intermediate waypoint exceeds 10 s deadline; repeated approach/final-yaw reversals near the XY boundary coincide with payload loss |
+| `20260913_112012_a863a5` | `ded0a3a3` | **true / true** | Stable phase handoff, shorter route, verified pickup and final placement; unchanged repeat required |
+| `20260913_112432_810490` | `ded0a3a3` | true / false | Payload retained; clean cylinder mask, but placement corrections accumulate wrist sag and stall at 1.59 cm height error; release correctly refused |
 
 Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
 `~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
@@ -265,8 +267,31 @@ then keeps final-yaw control until drift exceeds the original radius. Arrival
 still requires the original XY/yaw tolerances; new goals reset the phase.
 Thirty-four phase, translation and wheel tests pass. Live retry
 `20260913_112012_a863a5` tests this hypothesis with the same contact preset,
-scene and unchanged deadlines. Boundary chatter is established in the trace;
-eliminating it is not yet proof of reliable payload retention.
+scene and unchanged deadlines. It passes pickup at 57.734 s and final placement
+at 118.808 s (process zero, 168 s), but takes the shorter route. Unchanged repeat
+`20260913_112432_810490` retains the object through navigation but fails visual
+placement: height error stalls at 1.587 cm, outside the unchanged 1.5 cm gate.
+This version remains **1/2**. Boundary chatter is established in the earlier
+failed trace; shorter successful transport is not proof of long-route retention.
+The neighboring ten-move precision route `20260913_112148_6772e1` passes all
+moves: maximum XY error 0.01937 m, yaw error 0.02895 rad, zero corrections.
+Health remains `incomplete_telemetry`. The next route revision (`53d2f06a`)
+adds four coupled translation/final-heading goals, for fourteen moves per
+repetition; the previous isolated-turn controls missed this phase transition.
+The combined focused suite passes 253 tests, including arrival/trajectory
+contracts and bridge tests with the bridge package on `PYTHONPATH`.
+
+The latest placement mask contains only the cylinder, unlike the earlier mixed
+support failure. Across its four captures, measured wrist pitch moves from
+-0.351 to -0.371, -0.393 and -0.418 rad. The controller reuses each loaded angle
+as the next target despite intending to preserve orientation. After the first
+correction, measured EE height stays at about 0.5908 m while lift commands rise.
+`cffc74d4` preserves one orientation reference and accumulates current visual
+position corrections into the commanded reference. It rejects reference-to-
+measured displacement over 5 cm, keeps the three-motion limit, and still requires
+fresh observed geometry inside the original release gate. Bias and no-motion
+tests pass (23 placement tests). Retry `20260913_113323_333844` and expanded
+fourteen-move route `20260913_113326_d91f20` run serially on that frozen source.
 
 The independent IK audit also fixes a joint-layout contract: full eleven-joint
 seeds must convert to nine solver joints once and return a full configuration,

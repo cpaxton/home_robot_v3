@@ -145,8 +145,15 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       retry `20260913_110132_edd836` passes physical pick/place on the longer
       route. Unchanged repeat `20260913_110659_839e2c` fails on a navigation
       deadline and payload slip: this version is 1/2, not reliable. Stable
-      approach/final-yaw phase handoff (`ded0a3a3`) is under live test in
-      `20260913_112012_a863a5`; arrival tolerances/deadlines are unchanged. Do not
+      approach/final-yaw phase handoff (`ded0a3a3`) passes physical pick/place
+      in `20260913_112012_a863a5` on the shorter route; unchanged repeat
+      `20260913_112432_810490` retains payload but fails placement (1/2):
+      repeatedly re-seeding wrist targets from loaded angles compounds sag.
+      Bounded fixed-reference correction (`cffc74d4`) is in live retry
+      `20260913_113323_333844`; expanded route `20260913_113326_d91f20` follows.
+      Ten-move nav control passes (253
+      focused tests); next route adds four coupled translation/turn goals.
+      Arrival tolerances/deadlines are unchanged. Do not
       compensate motion error or loosen release thresholds against a mixed mask.
 - [ ] Validate robot-visible head RGB-D and mapping self-filtering: current
       simulator hides the robot in head renders, removing manipulation
