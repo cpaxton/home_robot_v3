@@ -65,6 +65,30 @@ def test_depth_edge_outlier_does_not_move_object_center():
     assert op.geometry_servo_step(servo, mask) is True
 
 
+def test_contact_calibration_is_applied_in_grasp_frame_not_world():
+    op, servo, mask = fixture([-0.015, 0, 0])
+    servo.ee_pose[:3, :3] = Rotation.from_euler("z", np.pi / 2).as_matrix()
+    op.contact_offset_m = np.array([0, 0.015, 0])
+    assert op.geometry_servo_step(servo, mask) is True
+    op._grasp.assert_called_once()
+
+
+def test_nominal_link_center_does_not_close_before_contact_point_is_aligned():
+    op, servo, mask = fixture([0, 0, 0])
+    op.contact_offset_m = np.array([0, 0.015, 0])
+    assert op.geometry_servo_step(servo, mask) is None
+    np.testing.assert_allclose(op.robot_model.manip_ik_for_grasp_frame.call_args.args[0], [0, -0.015, 0])
+    op._grasp.assert_not_called()
+
+
+@pytest.mark.parametrize("offset", [[0, 0], [0, float("nan"), 0], [0, 0.06, 0]])
+def test_invalid_contact_calibration_is_rejected(offset):
+    op, _, _ = fixture([0, 0, 0])
+    op.parameters = {"grasp": {"geometry_servo": True, "contact_offset_m": offset}}
+    with pytest.raises(ValueError, match="contact offset"):
+        op.configure(grounded_target=Mock(), servo_to_grasp=True, try_open_loop=False)
+
+
 def test_world_delta_is_independent_of_episode_odometry_origin():
     ee_world = np.eye(4)
     ee_world[:3, :3] = Rotation.from_euler("z", np.pi / 2).as_matrix()

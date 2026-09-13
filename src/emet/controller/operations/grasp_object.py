@@ -119,6 +119,7 @@ class GraspObjectOperation(ManagedOperation):
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
     use_geometry_servo: bool = False
+    contact_offset_m = (0.0, 0.0, 0.0)
     _geometry_previous_pose = None
     _geometry_stalled_steps: int = 0
     observed_aperture_margin_m: float | None = None
@@ -184,6 +185,17 @@ class GraspObjectOperation(ManagedOperation):
         self._try_open_loop = try_open_loop
         self.grounded_target = grounded_target
         self.use_geometry_servo = bool((self.parameters.get("grasp", {}) or {}).get("geometry_servo", False))
+        self.contact_offset_m = np.asarray(
+            (self.parameters.get("grasp", {}) or {}).get("contact_offset_m", [0.0, 0.0, 0.0]), dtype=float
+        )
+        if (
+            self.contact_offset_m.shape != (3,)
+            or not np.isfinite(self.contact_offset_m).all()
+            or np.linalg.norm(self.contact_offset_m) > 0.05
+        ):
+            raise ValueError("Grasp contact offset must be a finite grasp-frame vector within 5 cm")
+        if np.any(self.contact_offset_m) and not self.use_geometry_servo:
+            raise ValueError("Grasp contact offset requires geometry servo")
         self.observed_aperture_margin_m = (self.parameters.get("grasp", {}) or {}).get("observed_aperture_margin_m")
         self._aperture_trace = []
         if self.observed_aperture_margin_m is not None:
@@ -460,6 +472,7 @@ class GraspObjectOperation(ManagedOperation):
                             "joint": None if getattr(servo, "joint", None) is None else servo.joint.tolist(),
                             "ee_pose": None if getattr(servo, "ee_pose", None) is None else servo.ee_pose.tolist(),
                             "geometry_servo": self.use_geometry_servo,
+                            "contact_offset_m": np.asarray(self.contact_offset_m).tolist(),
                             "aperture": getattr(self, "_aperture_trace", []),
                         },
                     )
@@ -1120,7 +1133,10 @@ class GraspObjectOperation(ManagedOperation):
         # Edge pixels can mix object/background depth. Trim each axis before
         # estimating a center; a surface median is biased toward visible faces.
         center = np.quantile(points, [0.05, 0.95], axis=0).mean(axis=0)
-        delta = center - servo.ee_pose[:3, 3]
+        # Tool-center calibration belongs to the gripper, not an object label.
+        # A nominal grasp link need not coincide with the useful pad center.
+        contact_center = servo.ee_pose[:3, 3] + servo.ee_pose[:3, :3] @ self.contact_offset_m
+        delta = center - contact_center
         distance = float(np.linalg.norm(delta))
         self.info(f"Observed grasp-center error (world m): {delta}")
         if distance <= 0.012:
