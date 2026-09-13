@@ -201,8 +201,15 @@ class BaseController:
         """
         scale = float(getattr(self, "_base_speed_scale", 1.0))
         w_left, w_right = utils.diff_drive_inv_kinematics(v_linear * scale, omega * scale)
-        self.mujoco_server.mjdata.actuator(Actuators.left_wheel_vel.name).ctrl = w_left
-        self.mujoco_server.mjdata.actuator(Actuators.right_wheel_vel.name).ctrl = w_right
+        # MuJoCo velocity servos target transmission velocity, not joint
+        # velocity: actuator_velocity = gear * wheel_joint_velocity.
+        # Read the MJCF gear rather than assuming the Stretch asset uses 1.
+        for name, wheel_velocity in (
+            (Actuators.left_wheel_vel.name, w_left),
+            (Actuators.right_wheel_vel.name, w_right),
+        ):
+            gear = self.mujoco_server.mjmodel.actuator(name).gear[0]
+            self.mujoco_server.mjdata.actuator(name).ctrl = gear * wheel_velocity
 
 
 class MujocoServer:
@@ -585,8 +592,10 @@ class MujocoServer:
         new_status.gripper.pos = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
         new_status.gripper.vel = self.mjdata.actuator("gripper").velocity[0]  # This is still in sim gripper range
 
-        left_wheel_vel = self.mjdata.actuator("left_wheel_vel").velocity[0]
-        right_wheel_vel = self.mjdata.actuator("right_wheel_vel").velocity[0]
+        # Odometry kinematics require wheel-joint rad/s, not the geared
+        # actuator velocities (3x joint velocity in the current Stretch MJCF).
+        left_wheel_vel = self.mjdata.joint("joint_left_wheel").qvel[0]
+        right_wheel_vel = self.mjdata.joint("joint_right_wheel").qvel[0]
         (
             new_status.base.x_vel,
             new_status.base.theta_vel,
