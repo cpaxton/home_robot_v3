@@ -103,6 +103,19 @@ the current development candidate uses the separate
 settings and opts into one bounded alternative proposal pass. Record that
 difference explicitly; do not pool its results with the contact/aperture control.
 
+The next **v6 numerical-physics panel** freezes
+`query_geometry_tracked_narrow_pilot.yaml` across all six cases and uses
+`default_table_stretch_noslip.yaml`, `default_table_stretch_clearance_noslip.yaml`
+and `default_table_stretch_right_neighbor_noslip.yaml`, in that order, twice
+each. These wrappers change only `noslip_iterations` from 0 to 10; compiled-model
+tests check every fixture against its original. The source SHA is recorded by
+each driver invocation. This is an explicit solver ablation, not promotion of
+new production physics. Do not pool the earlier mirrored development pass or
+default-solver panel results. All cases retain seed 0 (execution repeats, not
+independent environment seeds), Qwen int4, original task and physical scorer.
+Stop at the first failed case for diagnosis; remaining cases are unrun, not
+failures or passes. Render each completed case using its matching wrapper XML.
+
 For Stage D, submit the two-step request through the learned CHAT loop, not two
 externally scripted tool invocations. The shared loop permits three tool-bearing
 rounds, including observation and action results, followed by a no-tool summary.

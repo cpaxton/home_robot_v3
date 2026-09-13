@@ -28,10 +28,11 @@ def test_control_changes_only_neighbor_pose(scene, neighbor_x):
     np.testing.assert_array_equal(control.body_pos, expected_pos)
 
 
-def test_noslip_ablation_only_changes_solver_iterations():
+@pytest.mark.parametrize("scene", ["scene", "scene_clearance_control", "scene_right_neighbor"])
+def test_noslip_ablation_only_changes_solver_iterations(scene):
     assets = Path(__file__).resolve().parents[2] / "emet/assets/robot"
-    control = mujoco.MjModel.from_xml_path(str(assets / "scene_right_neighbor.xml"))
-    candidate = mujoco.MjModel.from_xml_path(str(assets / "scene_right_neighbor_noslip.xml"))
+    control = mujoco.MjModel.from_xml_path(str(assets / f"{scene}.xml"))
+    candidate = mujoco.MjModel.from_xml_path(str(assets / f"{scene}_noslip.xml"))
     assert control.names == candidate.names
     for field in (
         "qpos0",
