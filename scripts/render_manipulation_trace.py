@@ -71,6 +71,7 @@ def main():
     renderer = mujoco.Renderer(model, height=480, width=640)
     option = mujoco.MjvOption()
     option.geomgroup[:] = [1, 1, 1, 0, 0, 0]  # Show robot visuals, not collision meshes.
+    option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
     try:
         for stage, i in frames:
             row = rows[i]
