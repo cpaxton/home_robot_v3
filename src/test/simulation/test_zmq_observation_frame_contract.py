@@ -42,7 +42,10 @@ def _minimal_stretch_server() -> MujocoZmqServer:
     server.head_K = np.eye(3)
     server._emet_session = {EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": _ORIGIN.tolist()}}
     server._camera_data = MagicMock(
-        cam_d435i_rgb=np.zeros((64, 64, 3), dtype=np.uint8), cam_d435i_depth=np.ones((64, 64))
+        cam_d435i_rgb=np.zeros((64, 64, 3), dtype=np.uint8),
+        cam_d435i_depth=np.ones((64, 64)),
+        cam_d435i_pose=_WORLD_CAM.copy(),
+        ee_pose=np.eye(4),
     )
     server.robot_sim = MagicMock()
     server.robot_sim.get_ee_pose.return_value = np.eye(4)
@@ -80,6 +83,9 @@ def test_stretch_servo_head_cam_pose_is_world():
     server._camera_data = MagicMock(cam_d435i_rgb=img, cam_d435i_depth=dep, cam_d405_rgb=img, cam_d405_depth=dep)
     ee_cam = np.eye(4)
     ee_cam[:3, 3] = [4.2, -1.8, 1.0]
+    server._camera_data.cam_d405_pose = ee_cam.copy()
+    server._camera_data.cam_d435i_pose = _WORLD_CAM.copy()
+    server._camera_data.ee_pose = np.eye(4)
     with (
         patch.object(server, "_stretch_sim_publish_ok", return_value=True),
         patch.object(server, "get_joint_state", return_value=(np.zeros(11), np.zeros(11), np.zeros(11))),
@@ -94,6 +100,22 @@ def test_stretch_servo_head_cam_pose_is_world():
     assert msg is not None
     np.testing.assert_allclose(msg["head_cam/pose"][:3, 3], _WORLD_CAM[:3, 3], atol=1e-6)
     np.testing.assert_allclose(msg["ee_cam/pose"][:3, 3], ee_cam[:3, 3], atol=1e-6)
+    server.robot_sim.get_link_pose.assert_not_called()
+    server.robot_sim.get_ee_pose.assert_not_called()
+
+
+def test_stretch_missing_acquisition_pose_does_not_fall_back_to_later_fk():
+    server = _minimal_stretch_server()
+    server._camera_data.cam_d435i_pose = None
+    with (
+        patch.object(server, "_stretch_sim_publish_ok", return_value=True),
+        patch.object(server, "get_base_pose", return_value=np.zeros(3)),
+        patch.object(server, "get_joint_state", return_value=(np.zeros(11), np.zeros(11), np.zeros(11))),
+        patch("emet.simulation.mujoco_server_stretch.compression.to_jpg", side_effect=lambda x: x),
+        patch("emet.simulation.mujoco_server_stretch.compression.to_jp2", side_effect=lambda x: x),
+    ):
+        assert server.get_full_observation_message() is None
+    server.robot_sim.get_ee_pose.assert_not_called()
 
 
 def test_stretch_episode_relative_helper_differs_from_published_pose():

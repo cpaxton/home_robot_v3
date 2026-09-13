@@ -1000,12 +1000,11 @@ class MujocoZmqServer(BaseZmqServer):
         xyt = self.get_base_pose()
         if xyt is None:
             return None
-        try:
-            # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
-            # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
-            head_cam_world = self._head_camera_opencv_world()
-            ee_world = self.robot_sim.get_ee_pose()
-        except (ConnectionError, ConnectionResetError, OSError):
+        # Use acquisition geometry, not later joint feedback or a different URDF.
+        # Only robot/sensor poses are published; scene-object state stays private.
+        head_cam_world = cam_data.cam_d435i_pose
+        ee_world = cam_data.ee_pose
+        if head_cam_world is None or ee_world is None:
             return None
 
         # Get the other fields from an observation
@@ -1114,11 +1113,10 @@ class MujocoZmqServer(BaseZmqServer):
         positions, _, _ = self.get_joint_state()
         if self._initial_xyt is None:
             return None
-        try:
-            ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
-            head_pose_cam = self._head_camera_opencv_world()
-            ee_pose_mat = self.robot_sim.get_ee_pose()
-        except (ConnectionError, ConnectionResetError, OSError):
+        ee_pose_cam = cam_data.cam_d405_pose
+        head_pose_cam = cam_data.cam_d435i_pose
+        ee_pose_mat = cam_data.ee_pose
+        if ee_pose_cam is None or head_pose_cam is None or ee_pose_mat is None:
             return None
 
         message = {
