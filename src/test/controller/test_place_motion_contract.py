@@ -209,3 +209,57 @@ def test_visual_placement_rejects_untrusted_or_failed_correction(failure):
         assert op.align_held_object_for_release(goal) is False
     if failure != "motion":
         op.robot.arm_to.assert_not_called()
+
+
+def test_visual_placement_compensates_tracking_bias_without_accumulating_wrist_sag():
+    op = operation()
+    op.held_query = "red cylinder"
+    measured = np.zeros(11)
+    measured[:3] = [0, -0.5, 0.70]
+    op.robot.get_joint_positions.side_effect = lambda: measured.copy()
+    op.robot_model.manip_fk.side_effect = lambda q: (q[:3].copy(), np.array([q[3], 0, 0, 1]))
+
+    def ik(pos, quat, seed):
+        q = seed.copy()
+        q[:3] = pos
+        q[3] = quat[0]
+        return q, True
+
+    def move(q, **kwargs):
+        measured[:] = q
+        measured[2] -= 0.016  # Steady loaded tracking error, not image noise.
+        measured[3] -= 0.02  # Must not become the next orientation target.
+        return True
+
+    def observe(*args, **kwargs):
+        pose = np.eye(4)
+        pose[:3, 3] = measured[:3]
+        points = measured[:3] + np.array([[0, 0, -0.04], [0, 0, -0.04], [0, 0, 0]])
+        return SimpleNamespace(ee_pose=pose), points
+
+    op._get_place_joint_state.side_effect = ik
+    op.robot.arm_to.side_effect = move
+    with patch("emet.controller.operations.query_observation.observe_query_points", side_effect=observe):
+        assert op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
+    assert op.robot.arm_to.call_count == 2
+    commands = op._get_place_joint_state.call_args_list
+    assert commands[1].args[0][2] > commands[0].args[0][2]
+    for command in commands:
+        np.testing.assert_array_equal(command.args[1], [0, 0, 0, 1])
+
+
+def test_visual_placement_bounds_unexecuted_reference_corrections():
+    op = operation()
+    op.held_query = "red cylinder"
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    pose = np.eye(4)
+    pose[:3, 3] = [0, -0.5, 0.70]
+    points = np.array([[0, -0.5, 0.66], [0, -0.5, 0.66], [0, -0.5, 0.7]])
+    # A motion API returning success without movement cannot wind up a large
+    # target: two repeated 4 cm corrections exceed the 5 cm measured budget.
+    with patch(
+        "emet.controller.operations.query_observation.observe_query_points",
+        return_value=(SimpleNamespace(ee_pose=pose), points),
+    ):
+        assert not op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
+    assert op.robot.arm_to.call_count == 1

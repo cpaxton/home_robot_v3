@@ -168,6 +168,7 @@ class PlaceObjectOperation(ManagedOperation):
         from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
 
         support_top = float(self.get_target().point_cloud[:, 2].quantile(0.95))
+        reference_pos = reference_rot = None
         for attempt in range(4):
             obs, points = observe_query_points(self.agent, self.robot, self.held_query, stage="place_alignment")
             if obs.ee_pose is None or np.min(np.linalg.norm(points - obs.ee_pose[:3, 3], axis=1)) > 0.12:
@@ -195,8 +196,19 @@ class PlaceObjectOperation(ManagedOperation):
             delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
             joint_state = self.robot.get_joint_positions().copy()
             ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
+            if reference_pos is None:
+                reference_pos = np.array(ee_pos, copy=True)
+                reference_rot = np.array(ee_rot, copy=True)
             delta_base = world_delta_to_model_base(delta, obs.ee_pose, ee_rot)
-            q, success = self._get_place_joint_state(ee_pos + delta_base, ee_rot, joint_state)
+            # Correct the command reference, not each newly sagged measured
+            # pose. Re-seeding from measurement repeats the same setpoint
+            # under steady tracking bias and compounds wrist sag. The latest
+            # observation still decides both the correction and release.
+            reference_pos += delta_base
+            if np.linalg.norm(reference_pos - ee_pos) > 0.05 + 1e-8:
+                self.error("Placement reference exceeds the measured tracking budget.")
+                return False
+            q, success = self._get_place_joint_state(reference_pos.copy(), reference_rot, joint_state)
             if not success or q is None or not np.isfinite(q).all():
                 self.error("No feasible visual placement correction.")
                 return False
