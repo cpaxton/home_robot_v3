@@ -13,11 +13,18 @@ from emet.controller.controller_lazy_graph import LazyGraphController
 def test_recovery_is_enabled_only_in_experimental_preset():
     from emet.core.parameters import get_parameters
 
-    candidate = get_parameters("configs/emet/query_geometry_contact_aperture_pilot.yaml")
+    candidate = get_parameters("configs/emet/query_geometry_recovery_pilot.yaml")
     assert candidate.get("query_memory")["recover_proposals_with_vlm"] is True
-    for name in ("query_detector_segmented_pilot", "query_segmented_support_pilot"):
+    for name in (
+        "query_detector_segmented_pilot",
+        "query_segmented_support_pilot",
+        "query_geometry_contact_aperture_pilot",
+    ):
         control = get_parameters(f"configs/emet/{name}.yaml")
         assert not control.get("query_memory").get("recover_proposals_with_vlm", False)
+    control = get_parameters("configs/emet/query_geometry_contact_aperture_pilot.yaml")
+    candidate.data["query_memory"].pop("recover_proposals_with_vlm")
+    assert candidate.data == control.data
 
 
 @pytest.mark.parametrize(
