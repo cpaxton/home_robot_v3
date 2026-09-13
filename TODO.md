@@ -10,6 +10,19 @@ Do not merge on graph size or a tabletop smoke alone. Required gates are learned
 single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle controls),
 and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
 
+Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
+- [ ] Add private physical pickup/placement scoring and calibrate it against
+      held, knocked, dropped and wrong-support controls. Object displacement and
+      a tool returning true are not sufficient physical success evidence.
+- [ ] Implement door/drawer articulation separately: handle/axis grounding,
+      constrained contact-aware execution, force/travel limits, recovery, and
+      independent joint-state scoring. For this PR use explicitly open/pre-opened
+      receptacles; do not claim articulation. Shared agent and plan-wrapper stubs
+      now return false without motion instead of reporting a successful no-op.
+- [ ] Execute the staged Stretch manipulation → single-room OVMM → learned TAMP
+      → paired EQA/find battery. Freeze cases/settings first; stop on physical
+      manipulation failures. Keep oracle TAMP controls separate from learned runs.
+
 - [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
       invalid IK, and reacquire the target after camera/posture changes. Latest
       lifecycle retry reached manipulation but did not pick/place successfully.
