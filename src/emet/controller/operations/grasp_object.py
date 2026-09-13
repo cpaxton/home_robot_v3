@@ -1153,7 +1153,16 @@ class GraspObjectOperation(ManagedOperation):
         if self._geometry_stalled_steps >= 3:
             self.error("Repeated geometry corrections produced no measured progress.")
             return False
-        delta *= min(1.0, 0.05 / distance)
+        # Grasp-frame +X points out of the palm. Align across the opening
+        # while still separated, before inserting the fingers. A diagonal
+        # approach can sweep a finger into neighboring clutter even when the
+        # final centered aperture would clear it. This is not a collision
+        # planner: stop on any failed motion and retain the existing gates.
+        approach_axis = servo.ee_pose[:3, 0]
+        transverse = delta - np.dot(delta, approach_axis) * approach_axis
+        if np.linalg.norm(transverse) > 0.012:
+            delta = transverse
+        delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
         joint_state = self.robot.get_joint_positions().copy()
         ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
         delta_base = world_delta_to_model_base(delta, servo.ee_pose, ee_rot)

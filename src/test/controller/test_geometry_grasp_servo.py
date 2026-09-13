@@ -38,7 +38,33 @@ def test_offset_geometry_moves_at_most_five_cm_and_does_not_close():
     op, servo, mask = fixture([0.1, 0, 0.02])
     assert op.geometry_servo_step(servo, mask) is None
     target = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
-    assert np.linalg.norm(target) == pytest.approx(0.05)
+    assert 0 < np.linalg.norm(target) <= 0.05
+    op._grasp.assert_not_called()
+
+
+@pytest.mark.parametrize("rotation", [np.eye(3), Rotation.from_euler("xyz", [0.2, -0.3, 1.1]).as_matrix()])
+def test_grasp_aligns_across_opening_before_inserting_fingers(rotation):
+    offset = rotation @ np.array([0.18, 0.05, -0.08])
+    op, servo, mask = fixture(offset)
+    servo.ee_pose[:3, :3] = rotation
+    # Equal model/world grasp orientation makes the requested model delta
+    # directly comparable to the world-frame measured correction.
+    op.robot_model.manip_fk.return_value = (np.zeros(3), Rotation.from_matrix(rotation).as_quat())
+    assert op.geometry_servo_step(servo, mask) is None
+    command = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
+    local = rotation.T @ command
+    assert local[0] == pytest.approx(0, abs=1e-10)
+    assert local[1] > 0 and local[2] < 0
+    assert np.linalg.norm(command) == pytest.approx(0.05)
+    op._grasp.assert_not_called()
+
+
+def test_aligned_grasp_advances_without_relaxing_closure_distance():
+    op, servo, mask = fixture([0.1, 0.003, -0.004])
+    assert op.geometry_servo_step(servo, mask) is None
+    command = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
+    assert command[0] > 0
+    assert np.linalg.norm(command) == pytest.approx(0.05)
     op._grasp.assert_not_called()
 
 
