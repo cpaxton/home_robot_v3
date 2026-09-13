@@ -240,7 +240,7 @@ class GraspObjectOperation(ManagedOperation):
         ] = 1
 
         # Ignore depth of 0 (bad value)
-        depth_mask = np.bitwise_and(servo.ee_depth > 1e-8, mask)
+        depth_mask = np.isfinite(servo.ee_depth) & (servo.ee_depth > 1e-8) & mask
 
         depth = servo.ee_depth[target_mask & depth_mask]
         if len(depth) == 0:
@@ -386,6 +386,9 @@ class GraspObjectOperation(ManagedOperation):
 
             verification = {}
             detected = None
+            matching = []
+            associated_mask = None
+            failure = None
             try:
                 world_xyz = servo.get_ee_xyz_in_world_frame()
                 if world_xyz is None:
@@ -399,10 +402,14 @@ class GraspObjectOperation(ManagedOperation):
                 )
                 if not verification.get("valid") or len(matching) != 1:
                     raise ValueError("Wrist target identity absent or ambiguous")
-                return target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
+                associated_mask = target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
+                return associated_mask
             except ValueError as exc:
-                # Retain the exact wrist view for diagnosing visibility versus
-                # calibration; never relax the geometry gate to make it pass.
+                failure = str(exc)
+                raise
+            finally:
+                # Preserve accepted steps as well as failures so object/mask
+                # drift can be reconstructed without another model run.
                 if os.environ.get("EMET_EQA_EPISODE_DIR"):
                     from pathlib import Path
 
@@ -414,8 +421,15 @@ class GraspObjectOperation(ManagedOperation):
                         revision=target.observation_revision,
                         source_obs_id=None,
                         detections=[],
-                        matching_ids=[],
-                        verification={**verification, "valid": False, "reason": str(exc), "stage": "wrist_tracking"},
+                        matching_ids=matching,
+                        verification={
+                            **verification,
+                            "semantic_valid": verification.get("valid", False),
+                            "association_valid": associated_mask is not None,
+                            "valid": associated_mask is not None,
+                            "reason": failure,
+                            "stage": "wrist_tracking",
+                        },
                         rgb=servo.ee_rgb,
                         depth=servo.ee_depth,
                         masks=None if detected is None else detected.instance,
@@ -423,9 +437,11 @@ class GraspObjectOperation(ManagedOperation):
                             "target_points": target.points.tolist(),
                             "camera_K": None if servo.ee_camera_K is None else servo.ee_camera_K.tolist(),
                             "camera_pose": None if servo.ee_camera_pose is None else servo.ee_camera_pose.tolist(),
+                            "recorded_at": time.time(),
+                            "image_timing": getattr(servo, "image_timing", None),
+                            "joint": None if getattr(servo, "joint", None) is None else servo.joint.tolist(),
                         },
                     )
-                raise
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
@@ -509,7 +525,7 @@ class GraspObjectOperation(ManagedOperation):
                 lift_component = 0
 
             # Move the arm in closer
-            self.robot.arm_to(
+            moved = self.robot.arm_to(
                 [
                     base_x,
                     np.clip(
@@ -525,6 +541,9 @@ class GraspObjectOperation(ManagedOperation):
                 head=constants.look_at_ee,
                 blocking=True,
             )
+            if not moved:
+                self.error("Final grasp approach did not complete; gripper remains open.")
+                return False
             time.sleep(0.1)
 
         self.robot.close_gripper(loose=self.grasp_loose, blocking=True)
@@ -536,8 +555,7 @@ class GraspObjectOperation(ManagedOperation):
         # Lifted joint state
         lifted_joint_state = joint_state.copy()
         lifted_joint_state[HelloStretchIdx.LIFT] += 0.3
-        self.robot.arm_to(lifted_joint_state, head=constants.look_at_ee, blocking=True)
-        return True
+        return bool(self.robot.arm_to(lifted_joint_state, head=constants.look_at_ee, blocking=True))
 
     def blue_highlight_mask(self, img):
         """Get a binary mask for the blue highlights in the image."""
@@ -755,9 +773,8 @@ class GraspObjectOperation(ManagedOperation):
 
             # check not moving threshold
             if not_moving_count > max_not_moving_count:
-                self.info("Not moving; try to grasp.")
-                success = self._grasp()
-                break
+                self.error("Visual servo stalled; refusing an unverified grasp.")
+                return False
 
             # If we have a target mask, compute the median depth of the object
             # Otherwise we will just try to grasp if we are close enough - assume we lost track!
@@ -807,7 +824,7 @@ class GraspObjectOperation(ManagedOperation):
             lift = min(lift, prev_lift)
 
             # If we are aligned, try to grasp
-            if aligned or center_in_mask:
+            if (aligned or center_in_mask) and np.isfinite(center_depth) and center_depth > 1e-8:
                 # First, check to see if we are close enough to grasp
                 if center_depth < self.median_distance_when_grasping and center_depth > 1e-8:
                     print(
@@ -893,11 +910,14 @@ class GraspObjectOperation(ManagedOperation):
             print("  arm =", arm)
             print("pitch =", wrist_pitch)
 
-            self.robot.arm_to(
+            moved = self.robot.arm_to(
                 [base_x, lift, arm, 0, wrist_pitch, 0],
                 head=constants.look_at_ee,
                 blocking=True,
             )
+            if not moved:
+                self.error("Visual servo motion did not complete; stopping approach.")
+                return False
             prev_lift = lift
             time.sleep(self.expected_network_delay)
 

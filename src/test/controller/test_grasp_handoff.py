@@ -77,6 +77,59 @@ def test_servo_stops_after_failed_pregrasp():
     op.robot.get_servo_observation.assert_not_called()
 
 
+@pytest.mark.parametrize("center_depth", [0.0, 0.3])
+def test_servo_stops_on_failed_motion_without_grasping(center_depth):
+    op = operation()
+    op.intro = op.warn = op.error = Mock()
+    op.gripper_aruco_detector = Mock()
+    op.pregrasp_open_loop = Mock(return_value=True)
+    op.grounded_target = SimpleNamespace(geometry_source="vlm_selected_depth_surface")
+    op.track_image_center = True
+    op.open_loop = False
+    mask = np.ones((8, 8), dtype=bool)
+    op.get_target_mask = Mock(return_value=mask)
+    op._compute_center_depth = Mock(return_value=center_depth)
+    op.observations = Mock()
+    op.observations.get_latest_centroid.return_value = np.array([4, 4])
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    op.robot.get_servo_observation.return_value = SimpleNamespace(
+        ee_rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        ee_depth=np.full((8, 8), 0.3),
+        get_ee_xyz_in_world_frame=lambda: np.ones((8, 8, 3)),
+    )
+    op.robot_model.manip_fk.return_value = (np.array([0, 0, 0.5]), None)
+    op.robot.arm_to.return_value = False
+    op._grasp = Mock()
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        assert op.visual_servo_to_object(None) is False
+    op.robot.arm_to.assert_called_once()
+    if center_depth == 0:
+        # No forward arm/lift approach from missing center support.
+        np.testing.assert_array_equal(op.robot.arm_to.call_args.args[0][:3], np.zeros(3))
+    op._grasp.assert_not_called()
+
+
+@pytest.mark.parametrize("motions", [[False], [True, False], [True, True]])
+def test_grasp_propagates_approach_and_lift_failure(motions):
+    op = operation()
+    op.cheer = op.error = Mock()
+    op.talk = False
+    op.open_loop = False
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    op.robot.arm_to.side_effect = motions
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        assert op._grasp() is all(motions)
+    if not motions[0]:
+        op.robot.close_gripper.assert_not_called()
+
+
+def test_center_depth_excludes_nonfinite_sensor_values():
+    op = operation()
+    servo = SimpleNamespace(ee_depth=np.array([[np.inf, np.nan], [0.0, 0.2]]))
+    mask = np.ones((2, 2), dtype=bool)
+    assert op._compute_center_depth(servo, mask, 1, 1) == pytest.approx(0.2)
+
+
 @pytest.mark.parametrize("world_shape", [(8, 8, 3), (4, 4, 3)])
 def test_servo_validates_wrist_mask_without_head_semantics(world_shape):
     op = operation()
@@ -125,7 +178,8 @@ def test_pregrasp_propagates_arm_motion_result(arrived):
     assert op.pregrasp_open_loop(op.get_object_xyz()) is arrived
 
 
-def test_wrist_tracking_failure_saves_calibrated_evidence_without_accepting(tmp_path, monkeypatch):
+@pytest.mark.parametrize("accepted", [False, True])
+def test_wrist_tracking_saves_calibrated_evidence(tmp_path, monkeypatch, accepted):
     import json
 
     from emet.memory.grounded_target import GroundedTarget
@@ -138,14 +192,24 @@ def test_wrist_tracking_failure_saves_calibrated_evidence_without_accepting(tmp_
         ee_depth=np.ones((8, 8)),
         ee_camera_K=np.eye(3),
         ee_camera_pose=np.eye(4),
-        get_ee_xyz_in_world_frame=lambda: np.zeros((8, 8, 3)),
+        get_ee_xyz_in_world_frame=lambda: np.ones((8, 8, 3)),
     )
-    op.agent.ground_vlm_frame.return_value = (SimpleNamespace(instance=np.full((8, 8), -1)), [], [], {"valid": False})
-    with pytest.raises(ValueError, match="absent or ambiguous"):
-        op.get_target_mask(servo, center=(4, 4))
+    op.agent.ground_vlm_frame.return_value = (
+        SimpleNamespace(instance=np.full((8, 8), 0 if accepted else -1)),
+        [],
+        [0] if accepted else [],
+        {"valid": accepted},
+    )
+    if accepted:
+        assert op.get_target_mask(servo, center=(4, 4)).all()
+    else:
+        with pytest.raises(ValueError, match="absent or ambiguous"):
+            op.get_target_mask(servo, center=(4, 4))
     records = list((tmp_path / "wrist_tracking").glob("*.json"))
     assert len(records) == 1
     record = json.loads(records[0].read_text())
-    assert record["verification"]["valid"] is False
+    assert record["verification"]["valid"] is accepted
+    assert record["verification"]["semantic_valid"] is accepted
+    assert record["verification"]["association_valid"] is accepted
     assert record["metadata"]["camera_pose"] == np.eye(4).tolist()
     assert (records[0].parent / record["rgb_file"]).is_file()

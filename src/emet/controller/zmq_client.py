@@ -707,7 +707,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             # In this case, we assume if moving arm you should look at ee
             _next_action["head_to"] = constants.look_at_ee
         _next_action["manip_blocking"] = blocking
-        self.send_action(_next_action, reliable=reliable)
+        sent_action = self.send_action(_next_action, reliable=reliable)
 
         # Handle blocking
         steps = 0
@@ -716,7 +716,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             while not self._finish:
                 if steps % 40 == 39:
                     # Resend the action until we get there
-                    self.send_action(_next_action, reliable=reliable)
+                    # Retry the same command identity. A new send_action would
+                    # restart the embedded base goal and its settling state.
+                    self.send_message(sent_action)
                     if verbose:
                         print("Resending action", joint_angles)
 
