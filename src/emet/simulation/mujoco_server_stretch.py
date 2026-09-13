@@ -595,9 +595,9 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Set the posture
         if posture == "navigation":
-            self.manip_to(constants.STRETCH_NAVIGATION_Q, all_joints=True)
+            self.manip_to(constants.STRETCH_NAVIGATION_Q, all_joints=True, skip_gripper=True)
         elif posture == "manipulation":
-            self.manip_to(constants.STRETCH_PREGRASP_Q, all_joints=True)
+            self.manip_to(constants.STRETCH_PREGRASP_Q, all_joints=True, skip_gripper=True)
         else:
             logger.error(f"Posture {posture} not supported")
             return False

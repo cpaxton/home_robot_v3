@@ -19,7 +19,9 @@
       </default>
       <default class="lift">
         <joint type="slide" axis="0 0 1" damping="35" stiffness="0.03" armature="0.01" range="0.0 1.1" frictionloss="1.5"/>
-        <general ctrlrange="0.0 1.1" gainprm="400" biasprm="0 -200 -100" forcerange="-70 70"/>
+        <!-- Position servo must hold a payload inside the 2 cm joint contract.
+             Preserve the 70 N force limit; stronger feedback reduces load sag. -->
+        <position ctrlrange="0.0 1.1" kp="800" kv="140" forcerange="-70 70"/>
       </default>
       <default class="telescope">
         <joint type="slide" axis="0 0 1" damping="50" stiffness="0.02" armature="0.01" range="0 0.13" frictionloss="1.5"/>
