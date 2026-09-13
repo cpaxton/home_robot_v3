@@ -1,0 +1,113 @@
+{
+  "scope": "v2 procedural visual fixtures; fixed-observation QA; deterministic scorer controls are not model scores",
+  "layouts": [
+    {
+      "layout": "base",
+      "questions": 10,
+      "public_fingerprint": "07317684b34cb2d281ab54a373d29659a382775d245c8d2b625d096957972714",
+      "suite_fingerprint": "a22bd3a4f382e9debf972ba2f46a547d7194ba3eaf2dca6c1dc2ebc3ee7cfab3",
+      "readability_passed": true,
+      "perfect_answer_control": "10/10",
+      "wrong_color_control": "9/10",
+      "missing_temporal_view_control": "9/10",
+      "source_sha256": {
+        "fixture.py": "967cfbfdfcdec175184892f97035ab0882426298d37b323576a5a1dbe5d34210",
+        "qa.py": "aaea512d44a12aa794c0d3b1423988fb95648f217fe30457b12b3efc6a52ee73",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710"
+      }
+    },
+    {
+      "layout": "furnished",
+      "questions": 10,
+      "public_fingerprint": "07317684b34cb2d281ab54a373d29659a382775d245c8d2b625d096957972714",
+      "suite_fingerprint": "cb0ccd7fff57f92c70a64aa3b3de421e4cdf3d5f2fc7fa75c71b36f68a6b8bd2",
+      "readability_passed": true,
+      "perfect_answer_control": "10/10",
+      "wrong_color_control": "9/10",
+      "missing_temporal_view_control": "9/10",
+      "source_sha256": {
+        "fixture.py": "967cfbfdfcdec175184892f97035ab0882426298d37b323576a5a1dbe5d34210",
+        "qa.py": "aaea512d44a12aa794c0d3b1423988fb95648f217fe30457b12b3efc6a52ee73",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710"
+      }
+    },
+    {
+      "layout": "four_room",
+      "questions": 10,
+      "public_fingerprint": "fe9ab83234e08e2b360ec3c4df9e81b5d9efa62f67e7dfa85caf5279c3fb0e9c",
+      "suite_fingerprint": "d92883b410da5de94dfe6fd6a9380061f3611d9ab552372d596dbccb61d0185f",
+      "readability_passed": true,
+      "perfect_answer_control": "10/10",
+      "wrong_color_control": "9/10",
+      "missing_temporal_view_control": "9/10",
+      "source_sha256": {
+        "fixture.py": "967cfbfdfcdec175184892f97035ab0882426298d37b323576a5a1dbe5d34210",
+        "qa.py": "aaea512d44a12aa794c0d3b1423988fb95648f217fe30457b12b3efc6a52ee73",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710"
+      }
+    }
+  ],
+  "action_controls": [
+    {
+      "layout": "base",
+      "episode": "cross_room_delivery_1",
+      "status": "completed",
+      "event_hash": "a21e3f52744738188c5021ce0de8069d9fb7b28994934f18aceeab9b8620a1d8"
+    },
+    {
+      "layout": "base",
+      "episode": "moved_object_revisit_1",
+      "status": "completed",
+      "event_hash": "8f4c1f141baebf4cbb4a2a18404a1053d86ec844a640069a401f0627b1e40ed9"
+    },
+    {
+      "layout": "base",
+      "episode": "two_object_collection_1",
+      "status": "completed",
+      "event_hash": "38312f6f558766f9df5f97f32e487c3dc5f6f2abcde3ec49b24fb529121f6e44"
+    },
+    {
+      "layout": "furnished",
+      "episode": "cross_room_delivery_1",
+      "status": "completed",
+      "event_hash": "7fc1bb6323d7c70a7b188108f9f60f443bc0e9f5a13c6be7e97823725393e402"
+    },
+    {
+      "layout": "furnished",
+      "episode": "moved_object_revisit_1",
+      "status": "completed",
+      "event_hash": "23d4bbcbb313faf4377a25032d1bd0cbec8f10c445b40c9b8617de89085c912e"
+    },
+    {
+      "layout": "furnished",
+      "episode": "two_object_collection_1",
+      "status": "completed",
+      "event_hash": "32670a06b01414a29d6a5a479454984b08ee0a971c23f3863631a56aba2fd7a1"
+    },
+    {
+      "layout": "four_room",
+      "episode": "cross_room_delivery_1",
+      "status": "completed",
+      "event_hash": "f07b30f2dbbe54d7ba426432893039e2e3ae90f1d1afe45c8f902cef09fd15fb"
+    },
+    {
+      "layout": "four_room",
+      "episode": "moved_object_revisit_1",
+      "status": "completed",
+      "event_hash": "a94da4fa90716f2b3af7e9201d9e916275dcc417777c08b7fc6c7cdf10c2a62d"
+    },
+    {
+      "layout": "four_room",
+      "episode": "two_object_collection_1",
+      "status": "completed",
+      "event_hash": "111494c37c6fb3b1e82894e905a577bc8c1d8bba007b99838acca9091f496ccb"
+    }
+  ],
+  "paid_cost_usd": 0,
+  "figure_sha256": "949ec4e7e41a070b1395caa6a1778f0405bdb27329b7c037a97a3454e8ebb676",
+  "local_vlm": {
+    "model": "qwen35-0.8B",
+    "completed": 6,
+    "total": 10
+  }
+}

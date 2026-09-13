@@ -93,3 +93,50 @@ recorded separately from evaluator truth.
   ground truth, not the agent's semantic memory.}
   \label{fig:agent_task_revisit}
 \end{figure}}{}
+
+
+\subsection{Visual fixtures and question-answering preflight}
+A second visual profile adds recognizable procedural furnishings: appliances and
+cabinets in the kitchen, a sofa in the living room, bookshelves in the study, and
+chairs in the dining room. Task receptacles have visible rims, the green object
+is named a cube to match its geometry, and placement returns the robot to a
+room-center observation pose. RGB observations are recorded at $960\times540$.
+These are still assisted procedural fixtures, not native household datasets.
+
+Ten question types cover attributes, counting, image-relative spatial relations,
+occupancy, room appearance, named-room recall, multi-view inventory, temporal
+change, placement verification, and insufficient evidence. The initial QA mode
+supplies fixed views; it does not evaluate active exploration. Only named-room
+recall receives explicit room metadata. Temporal and placement images use staged
+state changes. Each answer must follow its declared schema and cite its supplied
+view IDs; correctness and evidence completeness are scored separately. Correct
+citations alone do not prove that a model inspected the image.
+
+A QA pack is rejected if any required target has fewer than 128 segmentation
+pixels, a bounding-box dimension below eight pixels, or touches an image boundary.
+Public image/question files are separated from private answer keys and evaluator
+state. The local QA runner sends RGB through the shared bounded task agent, using
+view-advance and answer-submission tools. Every question starts fresh model
+history. Image hashes and model input events record the supplied evidence.
+
+All three layouts passed these readability checks and positive/negative scorer
+controls; all nine action task/layout controls remained solvable under the new
+profile. Controls do not establish learned QA accuracy. One cached Qwen3.5-0.8B RGB
+run passed 6/10 questions: color, counting, relative position, empty-tray occupancy,
+kitchen identification, and abstention. Multi-view inventory and room recall
+produced no accepted answers; temporal direction was correct but lacked a required
+citation, and placement verification was incorrect. This is a development
+diagnostic after a recorded tool-array syntax repair, not a general accuracy estimate.
+Earlier policy results
+above used the earlier visual profile and should not be pooled with this one.
+
+\IfFileExists{figs/agent_task_visual_qa_v2.pdf}{%
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/agent_task_visual_qa_v2.pdf}
+  \caption{Actual robot-camera views from the second procedural visual profile.
+  Distinct furnishings provide room cues; the final dining view shows both
+  placements without cropping the task receptacles. The shown placement is a
+  staged QA observation, not a learned manipulation result.}
+  \label{fig:agent_task_visual_qa_v2}
+\end{figure}}{}

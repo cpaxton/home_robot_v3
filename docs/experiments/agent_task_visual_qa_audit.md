@@ -1,5 +1,9 @@
 # Visual answerability audit — 2026-09-13
 
+Historical review of the first visual profile. Its findings are addressed by
+[the v2 scene and QA implementation](agent_task_visual_qa_v2.md); the observations
+below describe the earlier renders.
+
 The current integrated benchmark contains **three action tasks**, repeated across
 three layouts. It does not yet score question answers. The local model used in
 the existing diagnostics receives camera-visible label text, not RGB. Reviewing

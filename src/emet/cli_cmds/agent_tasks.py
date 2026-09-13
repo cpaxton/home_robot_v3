@@ -359,3 +359,90 @@ def export_command(run, paper_dir):
     click.echo(json.dumps(result, indent=2))
     if not result["complete"]:
         raise click.ClickException("evidence package incomplete")
+
+
+def _qa_worker(arguments, out, timeout):
+    """Own the native/model worker and preserve its log on failure or deadline."""
+    from emet.utils.process_tree import popen_session, terminate_process_tree
+
+    if out.exists():
+        raise click.ClickException("output already exists; choose a fresh directory")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    log_path = out.with_suffix(".log")
+    env = os.environ.copy()
+    env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    env.setdefault("OMP_NUM_THREADS", "4")
+    cmd = [sys.executable, "-m", "emet.eval.agent_tasks.qa", "--out", str(out), *arguments]
+    click.echo(f"QA worker log: {log_path}")
+    with log_path.open("x") as log:
+        proc = popen_session(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            terminate_process_tree(proc, grace_s=2)
+            raise click.ClickException(f"QA worker timed out; retained evidence: {out}") from None
+        except BaseException:
+            terminate_process_tree(proc, grace_s=2)
+            raise
+    if code:
+        raise click.ClickException(f"QA worker failed; inspect {log_path}")
+    click.echo(f"QA output: {out}")
+
+
+@agent_tasks_group.command("qa-build")
+@suite_option
+@click.option("--out", required=True, type=click.Path(path_type=Path))
+@click.option("--timeout", default=180, type=click.IntRange(1, 600))
+def qa_build_command(suite, out, timeout):
+    """Render ten QA cases, enforcing target readability; no model calls."""
+    from emet.eval.agent_tasks.spec import default_suite
+
+    _qa_worker(["--suite", str(suite or default_suite())], out, timeout)
+
+
+@agent_tasks_group.command("qa-agent")
+@click.argument("public", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--out", required=True, type=click.Path(path_type=Path))
+@click.option("--model", default="qwen35-0.8B", type=click.Choice(["qwen35-0.8B", "qwen35-2B", "qwen35-4B"]))
+@click.option("--question", multiple=True)
+@click.option("--max-rounds", default=8, type=click.IntRange(1, 32))
+@click.option("--timeout", default=1800, type=click.IntRange(1, 7200))
+def qa_agent_command(public, out, model, question, max_rounds, timeout):
+    """Run image-scoped QA through the shared task agent and a cached CPU VLM."""
+    args = ["--public", str(public), "--model", model, "--max-rounds", str(max_rounds)]
+    for qid in question:
+        args.extend(["--question", qid])
+    _qa_worker(args, out, timeout)
+
+
+@agent_tasks_group.command("qa-score")
+@click.argument("pack", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--answers", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--out", type=click.Path(path_type=Path))
+def qa_score_command(pack, answers, out):
+    """Score structured answers and evidence IDs against the private key."""
+    from emet.eval.agent_tasks.qa import export_gallery, load_public, score_answers
+
+    try:
+        responses = json.loads(answers.read_text())
+        result = score_answers(pack, responses)
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if out:
+        report = out.with_suffix(".html")
+        if out.exists() or report.exists():
+            raise click.ClickException("score or report output already exists")
+        with out.open("x") as f:
+            json.dump(result, f, indent=2)
+        export_gallery(
+            pack,
+            load_public(pack / "public"),
+            json.loads((pack / "private_answers.json").read_text())["keys"],
+            responses=responses,
+            destination=report,
+        )
+        click.echo(f"QA result gallery: {report}")
+    click.echo(json.dumps(result, indent=2))
+    if not result["success"]:
+        raise click.ClickException("QA answers or evidence failed")

@@ -2,7 +2,8 @@
 
 Roadmap: [implementation plan](../plans/agent_multiroom_environments.md).
 Paper entry: `paper/main.tex`. Paid pilot: [planned, disabled](agent_hosted_pilot.md).
-Visual review: [image spot check and proposed QA cases](agent_task_visual_qa_audit.md).
+Visual review: [original image audit](agent_task_visual_qa_audit.md).
+Current scenes and scored QA: [visual QA v2 runbook](agent_task_visual_qa_v2.md).
 
 ## Run the shared task agent
 

@@ -79,6 +79,7 @@ def run_agent_task(
     observe: Callable | None = None,
     on_event: Callable | None = None,
     cancelled: Callable | None = None,
+    completed: Callable | None = None,
 ) -> dict:
     """Execute one task; completion is a model claim, independent of task scoring.
 
@@ -123,6 +124,8 @@ def run_agent_task(
     if hasattr(llm_client, "reset"):
         llm_client.reset()
     for round_index in range(max_rounds):
+        if completed and completed():
+            return finish("tool_completed")
         if cancelled and cancelled():
             return finish("cancelled")
         if time.monotonic() - start >= timeout_s:
@@ -163,6 +166,29 @@ def run_agent_task(
                 emit("response_repair", original=raw, repaired=repaired, kind_of_repair="closing_punctuation_only")
                 parsed = parse_tool_calls_response(repaired)
                 calls = parsed["tool_calls"]
+        if not calls:
+            # Some clients return a complete tool array without its envelope.
+            # Accept only valid known calls; never infer an action or arguments.
+            candidate = raw.strip().removeprefix("```json").removesuffix("```").strip()
+            try:
+                array = json.loads(candidate)
+            except ValueError:
+                array = None
+            if (
+                isinstance(array, list)
+                and 0 < len(array) <= 32
+                and all(
+                    isinstance(c, dict) and c.get("name") in names and isinstance(c.get("arguments", {}), dict)
+                    for c in array
+                )
+            ):
+                calls = array
+                emit(
+                    "response_repair",
+                    original=raw,
+                    repaired=json.dumps({"tool_calls": calls}),
+                    kind_of_repair="complete_tool_array_envelope",
+                )
         if not calls:
             # Accept complete leading actions from a broken/truncated batch.
             # No argument is repaired or inferred; later incomplete actions wait.
@@ -238,4 +264,6 @@ def run_agent_task(
             emit("tool_result", command_id=command_id, tool=call, result=outcome)
             if not keep_going:
                 return finish("cancelled", "tool requested stop")
+            if completed and completed():
+                return finish("tool_completed")
     return finish("round_budget_exhausted")

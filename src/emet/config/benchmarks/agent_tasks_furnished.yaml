@@ -1,5 +1,5 @@
 schema_version: 1
-name: furnished_agent_tasks_v1
+name: furnished_agent_tasks_v2
 robot: rby1
 seed: 0
 scene:
@@ -64,7 +64,7 @@ scene:
       - 0.85
       - 1
     green_marker:
-      label: green marker
+      label: green cube
       position:
       - 8.0
       - -1.2
@@ -131,6 +131,7 @@ scene:
     - 0.9
     - 8.7
     - 1.6
+  visual_profile: semantic_rooms_v2
 episodes:
 - id: cross_room_delivery
   instruction: Find the red cylinder in the kitchen and put it on the red tray in
@@ -173,7 +174,7 @@ episodes:
   - red_cylinder
   - blue_cube
 - id: moved_object_revisit
-  instruction: First look at the red cylinder in the kitchen. Move the green marker
+  instruction: First look at the red cylinder in the kitchen. Move the green cube
     to the green tray in the living room, then find the red cylinder again and deliver
     it to the red tray in the dining room.
   goals:

@@ -1,0 +1,284 @@
+{
+  "scope": "one local RGB QA development run; fixed observations",
+  "manifest": {
+    "max_rounds": 8,
+    "mode": "shared_task_agent_rgb_qa",
+    "model": "qwen35-0.8B",
+    "model_id": "/home/cpaxton/.cache/huggingface/hub/models--Qwen--Qwen3.5-0.8B/snapshots/2fc06364715b967f1860aea9cf38778875588b17",
+    "model_revision": "2fc06364715b967f1860aea9cf38778875588b17",
+    "paid_cost_usd": 0,
+    "public_fingerprint": "fe9ab83234e08e2b360ec3c4df9e81b5d9efa62f67e7dfa85caf5279c3fb0e9c",
+    "question_ids": [
+      "color",
+      "tray_count",
+      "relative_position",
+      "empty_trays",
+      "room_identity",
+      "observed_room",
+      "inventory",
+      "moved",
+      "placement",
+      "unknown_location"
+    ],
+    "source_sha256": {
+      "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+      "agent/task.py": "f297a00274c823545df7770f25457767b407eb27157d998bffac435ffdc95032",
+      "eval/agent_tasks/qa.py": "aaea512d44a12aa794c0d3b1423988fb95648f217fe30457b12b3efc6a52ee73"
+    }
+  },
+  "answers": {
+    "color": {
+      "answer": "red",
+      "evidence": [
+        "view:0"
+      ]
+    },
+    "empty_trays": {
+      "answer": "no",
+      "evidence": [
+        "view:2"
+      ]
+    },
+    "inventory": {},
+    "moved": {
+      "answer": "left",
+      "evidence": [
+        "view:0"
+      ]
+    },
+    "observed_room": {},
+    "placement": {
+      "answer": "no",
+      "evidence": [
+        "view:5"
+      ]
+    },
+    "relative_position": {
+      "answer": "right",
+      "evidence": [
+        "view:1"
+      ]
+    },
+    "room_identity": {
+      "answer": "kitchen",
+      "evidence": [
+        "view:0"
+      ]
+    },
+    "tray_count": {
+      "answer": 2,
+      "evidence": [
+        "view:2"
+      ]
+    },
+    "unknown_location": {
+      "answer": "unknown",
+      "evidence": [
+        "view:0"
+      ]
+    }
+  },
+  "score": {
+    "completed": 6,
+    "total": 10,
+    "success": false,
+    "questions": [
+      {
+        "id": "color",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      },
+      {
+        "id": "empty_trays",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      },
+      {
+        "id": "inventory",
+        "answer_correct": false,
+        "evidence_complete": false,
+        "passed": false
+      },
+      {
+        "id": "moved",
+        "answer_correct": true,
+        "evidence_complete": false,
+        "passed": false
+      },
+      {
+        "id": "observed_room",
+        "answer_correct": false,
+        "evidence_complete": false,
+        "passed": false
+      },
+      {
+        "id": "placement",
+        "answer_correct": false,
+        "evidence_complete": true,
+        "passed": false
+      },
+      {
+        "id": "relative_position",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      },
+      {
+        "id": "room_identity",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      },
+      {
+        "id": "tray_count",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      },
+      {
+        "id": "unknown_location",
+        "answer_correct": true,
+        "evidence_complete": true,
+        "passed": true
+      }
+    ],
+    "scope": "answer and cited evidence correctness; citations alone do not prove model inspection"
+  },
+  "evidence": {
+    "color": {
+      "event_hash": "ebfba4f2734d991b306849daef09425a258fc5da635768898741cf6f43796372",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.5098263940017205,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:0"
+      ]
+    },
+    "tray_count": {
+      "event_hash": "e9c3705730741fec9701f00854d3615b84cafbaa0e522e38a968afd22dd80a84",
+      "outcome": {
+        "actions": 2,
+        "elapsed_s": 8.385625594994053,
+        "message": "",
+        "rounds": 2,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:2"
+      ]
+    },
+    "relative_position": {
+      "event_hash": "8a4e615f5aa2c709ed32892316051ef66f3cdde4bd8a9de8e934698c62d31606",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.608228548007901,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:1"
+      ]
+    },
+    "empty_trays": {
+      "event_hash": "9c9369eea32053ba265b165cd5eb9e938a5bb9b9a35f1b7fc970ece924b944dd",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.486002981007914,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:2"
+      ]
+    },
+    "room_identity": {
+      "event_hash": "01d546421acbcee2c7272a30e726d273e40b28e464704269f8c8096b79d1038e",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.6223029760003556,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:0"
+      ]
+    },
+    "observed_room": {
+      "event_hash": "e96e4c3ad2ddbab3aa794a3f3a98a22f1351b380823c29e22c5974077bbc4a2c",
+      "outcome": {
+        "actions": 8,
+        "elapsed_s": 71.95765791200392,
+        "message": "",
+        "rounds": 8,
+        "status": "round_budget_exhausted"
+      },
+      "seen_views": [
+        "view:0",
+        "view:1"
+      ]
+    },
+    "inventory": {
+      "event_hash": "44ff2cfd56436f95958024e011919611d91008d88793ab3f6a36e31587c3861f",
+      "outcome": {
+        "actions": 8,
+        "elapsed_s": 73.29035040900635,
+        "message": "",
+        "rounds": 8,
+        "status": "round_budget_exhausted"
+      },
+      "seen_views": [
+        "view:0",
+        "view:1"
+      ]
+    },
+    "moved": {
+      "event_hash": "4ba098bce125eb9320f29d0be0666574f73a445fd2217a50849b05c11150f53b",
+      "outcome": {
+        "actions": 3,
+        "elapsed_s": 13.726706881003338,
+        "message": "",
+        "rounds": 3,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:0",
+        "view:4"
+      ]
+    },
+    "placement": {
+      "event_hash": "a2c9897a70a739a761df1a92f4530163f55cc81186fd3ffcc8f77eaec620cdaa",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.530814369005384,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:5"
+      ]
+    },
+    "unknown_location": {
+      "event_hash": "eb76b8469916c36b606562b4406ac45607d0b7fd9d2cd49c71d931a128de55b0",
+      "outcome": {
+        "actions": 1,
+        "elapsed_s": 3.5864413649978815,
+        "message": "",
+        "rounds": 1,
+        "status": "tool_completed"
+      },
+      "seen_views": [
+        "view:0"
+      ]
+    }
+  }
+}

@@ -30,8 +30,12 @@ def obstacles(scene: dict) -> list[list[float]]:
         result.extend([[x - 0.1, ymin, x + 0.1, door["y_min"]], [x - 0.1, door["y_max"], x + 0.1, ymax]])
     for room in rooms:
         x = (room["bounds"][0] + room["bounds"][2]) / 2
-        result.append([x - 0.8, -1.6, x + 0.8, -1.15])
+        result.append([x - 0.8, -1.6, x + 0.8, -1.08 if scene.get("visual_profile") == "semantic_rooms_v2" else -1.15])
     result.extend(item["bounds"] for item in scene.get("furniture", []))
+    if scene.get("visual_profile") == "semantic_rooms_v2":
+        for room in rooms:
+            x = (room["bounds"][0] + room["bounds"][2]) / 2
+            result.append([x - 1.75, -1.88, x + 1.75, -1.28])
     return result
 
 
@@ -82,6 +86,7 @@ class FixtureRobot:
         root = ET.parse(robot_path).getroot()
         camera = root.find(".//camera[@name='zed_camera']")
         pitch = math.radians(self.scene["head_pitch_degrees"])
+        camera.set("fovy", "65")
         camera.set("xyaxes", f"0 -1 0 {math.sin(pitch)} 0 {math.cos(pitch)}")
         compiler = root.find("compiler")
         compiler.set("assetdir", str((robot_path.parent / "meshes").resolve()))
@@ -94,16 +99,32 @@ class FixtureRobot:
         ET.SubElement(world, "geom", name="fixture_floor", type="plane", size="15 8 .05", rgba=".88 .87 .83 1")
         for i, (x0, y0, x1, y1) in enumerate(obstacles(self.scene)):
             is_table = i >= 4 + 2 * len(self.scene["doors"])
-            height = 0.25 if is_table else 1.15
+            # Detailed furniture below replaces the obstacle proxy visually.
+            if self.scene.get("visual_profile") == "semantic_rooms_v2" and i >= 4 + 2 * len(self.scene["doors"]) + len(
+                self.scene["rooms"]
+            ) + len(self.scene.get("furniture", [])):
+                continue
+            height = 0.2575 if is_table else 1.15
             ET.SubElement(
                 world,
                 "geom",
                 name=f"fixture_obstacle_{i}",
                 type="box",
-                pos=f"{(x0 + x1) / 2} {(y0 + y1) / 2} {height}",
-                size=f"{(x1 - x0) / 2} {(y1 - y0) / 2} {height}",
+                pos=f"{(x0 + x1) / 2} {(y0 + y1) / 2} {0.475 if is_table else height}",
+                size=f"{(x1 - x0) / 2} {(y1 - y0) / 2} {0.04 if is_table else height}",
                 rgba=".48 .32 .19 1" if is_table else ".72 .77 .80 1",
             )
+        from .scene_style import dress_rooms
+
+        if self.scene.get("visual_profile") == "semantic_rooms_v2":
+            dress_rooms(world, self.scene)
+        for room in self.scene["rooms"]:
+            x = (room["bounds"][0] + room["bounds"][2]) / 2
+            for dx in [-0.68, 0.68]:
+                for y in [-1.5, -1.18]:
+                    ET.SubElement(
+                        world, "geom", type="box", pos=f"{x + dx} {y} .225", size=".035 .035 .225", rgba=".25 .19 .14 1"
+                    )
         for name, obj in self.scene["objects"].items():
             body = ET.SubElement(world, "body", name=name, pos=" ".join(map(str, obj["position"])))
             if obj["movable"]:
@@ -112,10 +133,19 @@ class FixtureRobot:
                 body,
                 "geom",
                 type=obj["shape"],
-                size=".04 .04 .04" if obj["movable"] else ".17 .17 .02",
+                size=".04 .04 .04" if obj["movable"] else ".13 .13 .005",
+                pos="0 0 0" if obj["movable"] else "0 0 -.025",
                 mass=".05",
                 rgba=" ".join(map(str, obj["color"])),
             )
+            if not obj["movable"]:
+                for pos, size in [
+                    ("-.125 0 -.005", ".005 .13 .015"),
+                    (".125 0 -.005", ".005 .13 .015"),
+                    ("0 -.125 -.005", ".12 .005 .015"),
+                    ("0 .125 -.005", ".12 .005 .015"),
+                ]:
+                    ET.SubElement(body, "geom", type="box", pos=pos, size=size, rgba=" ".join(map(str, obj["color"])))
         scene_path = output / "fixture.xml"
         ET.ElementTree(root).write(scene_path)
         self.model = mujoco.MjModel.from_xml_path(str(scene_path))
@@ -124,7 +154,7 @@ class FixtureRobot:
         # mistaken for contact-stable manipulation or wheel-driven navigation.
         self.xyt = list(self.scene["start_xyt"])
         self._write_base()
-        self.renderer = mujoco.Renderer(self.model, height=360, width=640) if render else None
+        self.renderer = mujoco.Renderer(self.model, height=540, width=960) if render else None
         self.np = np
 
     def _write_base(self):
@@ -187,6 +217,14 @@ class FixtureRobot:
         self.relocate(body, position)
         self.held = [body] if position[2] > 0.65 else []
         self._last_step = int(action["step"])
+        if not self.held:
+            self.verification_view()
+
+    def verification_view(self):
+        """Move to a real room-center observation pose after assisted placement."""
+        room = next(r for r in self.scene["rooms"] if r["bounds"][0] < self.xyt[0] < r["bounds"][2])
+        x = (room["bounds"][0] + room["bounds"][2]) / 2
+        self.move_base_to([x, 0.0, -math.pi / 2])
 
     def images(self) -> dict:
         import mujoco
@@ -216,7 +254,7 @@ class FixtureRobot:
                 "position_world": self.data.cam_xpos[cid].tolist(),
                 "rotation_world_from_camera": self.data.cam_xmat[cid].reshape(3, 3).tolist(),
                 "vertical_fov_degrees": float(self.model.cam_fovy[cid]),
-                "resolution_hw": [360, 640],
+                "resolution_hw": [540, 960],
                 "camera_axes": "right_up_back",
             }
         return result
@@ -241,13 +279,18 @@ class FixtureRobot:
         for name, position in self.positions().items():
             body_id = int(self.model.body(name).id)
             geom_ids = self.np.flatnonzero(self.model.geom_bodyid == body_id)
-            pixels = int(
-                self.np.count_nonzero(
-                    self.np.isin(mask[:, :, 0], geom_ids) & (mask[:, :, 1] == int(mujoco.mjtObj.mjOBJ_GEOM))
-                )
-            )
+            object_mask = self.np.isin(mask[:, :, 0], geom_ids) & (mask[:, :, 1] == int(mujoco.mjtObj.mjOBJ_GEOM))
+            pixels = int(self.np.count_nonzero(object_mask))
             if pixels >= 3:
-                result[name] = {"position": position, "pixels": pixels}
+                ys, xs = self.np.where(object_mask)
+                result[name] = {
+                    "position": position,
+                    "pixels": pixels,
+                    "bbox_xyxy": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
+                    "clipped": bool(
+                        xs.min() == 0 or ys.min() == 0 or xs.max() == mask.shape[1] - 1 or ys.max() == mask.shape[0] - 1
+                    ),
+                }
         return result
 
     def close(self):

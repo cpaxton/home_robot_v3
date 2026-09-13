@@ -148,3 +148,10 @@ def test_complete_actions_survive_extra_batch_punctuation(monkeypatch):
 @pytest.mark.parametrize("text", ['{"name":', '{"name":"unterminated', "please act now"])
 def test_punctuation_repair_never_invents_values(text):
     assert repair_missing_delimiters(text) == text
+
+
+def test_complete_tool_array_recovery_preserves_arguments(monkeypatch):
+    response = '```json\n[{"name":"act","arguments":{}}]\n```'
+    result, _, events, executed = run_responses(monkeypatch, [response, FINISH])
+    assert result["status"] == "model_finished" and len(executed) == 1
+    assert any(k == "response_repair" and v["kind_of_repair"] == "complete_tool_array_envelope" for k, v in events)
