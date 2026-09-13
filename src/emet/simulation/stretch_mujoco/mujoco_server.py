@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import contextlib
+import json
 import os
 import platform
 import signal
@@ -367,6 +368,17 @@ class MujocoServer:
         self.physics_fps_counter = FpsCounter()
         self._fall_monitor = FallOverMonitor(base_body_name="base_link")
 
+        self._eval_trace = None
+        trace_config = os.environ.get("EMET_SIM_EVAL_CONFIG")
+        if trace_config:
+            from emet.eval.manipulation_trace import ManipulationTrace
+
+            self._eval_trace = ManipulationTrace(
+                self.mjmodel,
+                json.loads(Path(trace_config).read_text()),
+                Path(os.environ["EMET_SIM_EVAL_TRACE"]),
+            )
+
         self.sensor_manager = MujocoServerSensorManagerThreaded(
             sensor_hz=15,
             sensors_to_use=StretchSensors.from_mjmodel(self.mjmodel),
@@ -455,6 +467,8 @@ class MujocoServer:
             self.sensor_manager.sensors_thread.join()
 
         self.camera_manager.close()
+        if self._eval_trace is not None:
+            self._eval_trace.close()
 
     def _run_ui_simulation(self, show_viewer_ui: bool) -> None:
         """
@@ -556,6 +570,9 @@ class MujocoServer:
         monitor = getattr(self, "_fall_monitor", None)
         if monitor is not None:
             monitor.maybe_report(model, data)
+        trace = getattr(self, "_eval_trace", None)
+        if trace is not None:
+            trace.record(model, data)
 
     def pull_status(self):
         """

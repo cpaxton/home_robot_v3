@@ -249,6 +249,26 @@ class DynamemTaskExecutor:
         return get_vm() if callable(get_vm) else getattr(agent, "voxel_map", None)
 
     def _query_manipulation(self, query: str, *, place: bool) -> bool:
+        """Run the shared adapter and retain its outcome separately from physics."""
+        try:
+            return self._execute_query_manipulation(query, place=place)
+        finally:
+            import json
+            import os
+            import time
+            from pathlib import Path
+
+            output = os.environ.get("EMET_EQA_EPISODE_DIR")
+            if output and hasattr(self, "last_query_manipulation"):
+                try:
+                    path = Path(output) / "manipulation_outcomes.jsonl"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    with path.open("a") as stream:
+                        stream.write(json.dumps({**self.last_query_manipulation, "wall_time": time.time()}) + "\n")
+                except (OSError, TypeError) as exc:
+                    logger.warning(f"Could not save manipulation outcome: {exc}")
+
+    def _execute_query_manipulation(self, query: str, *, place: bool) -> bool:
         """Learned geometry handoff; never dispatch to simulator oracle adapters."""
         import torch
 

@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Bounded diagnostic battery, not a sweep or a task-success aggregator.
 # Run from a frozen checkout through emet jobs --cpu-safe --gpu-exclusive.
-# Required: OUT, HABITAT_BIN, AGENT_PY. Optional SAM2_SOURCE for environments
+# Required: OUT and executables for the selected phase. Optional SAM2_SOURCE for environments
 # without an installed SAM2 package. See docs/experiments/shared_grounding_pilot.md.
 set -euo pipefail
 : "${OUT:?fresh output directory required}"
-: "${HABITAT_BIN:?emet-habitat executable required}"
-: "${AGENT_PY:?shared agent Python executable required}"
 PHASE="${PHASE:-all}"
 case "$PHASE" in
-    all|habitat|sim) ;;
-    *) echo "Unknown PHASE: $PHASE (all, habitat, sim)" >&2; exit 2 ;;
+    all|habitat|eqa) : "${HABITAT_BIN:?emet-habitat executable required}" ;;
+    sim|manipulation) ;;
+    *) echo "Unknown PHASE: $PHASE (all, habitat, eqa, sim, manipulation)" >&2; exit 2 ;;
 esac
+if [[ "$PHASE" == all || "$PHASE" == sim || "$PHASE" == manipulation ]]; then
+    : "${AGENT_PY:?shared agent Python executable required}"
+fi
 if [[ -e "$OUT" ]]; then
     echo "Refusing to reuse output directory: $OUT" >&2
     exit 2
@@ -23,6 +25,7 @@ export PYTHONPATH="$PWD/src:$PWD/packages/emet_habitat${SAM2_SOURCE:+:$SAM2_SOUR
 unset EMET_VL_ENDPOINT EMET_SIM_NAV_TELEPORT
 git rev-parse HEAD > "$OUT/source.txt"
 git diff --exit-code
+git diff --cached --exit-code
 sha256sum configs/emet/query*pilot.yaml > "$OUT/config_sha256.txt"
 cp configs/emet/query*pilot.yaml "$OUT/"
 cp "${BASH_SOURCE[0]}" "$OUT/driver.sh"
@@ -45,7 +48,7 @@ run_case() {
     # Stop after timeouts: inspect child-process cleanup before another heavy job.
     if [[ "$rc" == 124 || "$rc" == 137 ]]; then exit "$rc"; fi
 }
-if [[ "$PHASE" != sim ]]; then
+if [[ "$PHASE" == all || "$PHASE" == habitat || "$PHASE" == eqa ]]; then
     habitat_env="$(dirname "$(dirname "$HABITAT_BIN")")"
     LD_LIBRARY_PATH="$habitat_env/lib:${LD_LIBRARY_PATH:-}" \
         "$habitat_env/bin/python" scripts/check_sam2_runtime.py > "$OUT/habitat_preflight.log" 2>&1
@@ -56,6 +59,7 @@ if [[ "$PHASE" != sim ]]; then
             export EMET_CONFIG="$PWD/configs/emet/query_segmented_support_pilot.yaml"
         fi
         for scene in 00006 00025; do
+            if [[ "$PHASE" == eqa ]]; then break; fi
             name="${variant}_ovmm_${scene}"
             run_case "$name" 600s "$HABITAT_BIN" run-ovmm-find-episode \
                 --episodes configs/ovmm/habitat_find_phase_nearest_v2.yaml \
@@ -73,7 +77,7 @@ if [[ "$PHASE" != sim ]]; then
         done
     done
 fi
-if [[ "$PHASE" != habitat ]]; then
+if [[ "$PHASE" == all || "$PHASE" == sim || "$PHASE" == manipulation ]]; then
     "$AGENT_PY" scripts/check_sam2_runtime.py > "$OUT/agent_preflight.log" 2>&1
     export EMET_CONFIG="$PWD/configs/emet/query_detector_segmented_pilot.yaml"
     export EMET_FORCE_HEAD_SWEEP=1
@@ -81,9 +85,19 @@ if [[ "$PHASE" != habitat ]]; then
         --memory-backend lazy_graph --robot stretch --start-sim
         --sim-config configs/sim/default_table_stretch.yaml --headless --no-discord
     --sim-show-subprocess-output --llm qwen3-vl-eqa --eqa --debug-tools)
-    run_case hybrid_absent_find 360s "${agent[@]}" \
-        -c 'Use find_objects once to locate a yellow banana. Do not pick or place anything. Report failure if it cannot be located.'
+    if [[ "$PHASE" != manipulation ]]; then
+        run_case hybrid_absent_find 360s "${agent[@]}" \
+            -c 'Use find_objects once to locate a yellow banana. Do not pick or place anything. Report failure if it cannot be located.'
+    fi
+    export EMET_SIM_EVAL_CONFIG="$PWD/configs/benchmarks/tabletop_physical_eval.json"
+    export EMET_SIM_EVAL_TRACE="$OUT/hybrid_learned_pick_place/physical_trace.jsonl"
+    cp "$EMET_SIM_EVAL_CONFIG" "$OUT/physical_eval_config.json"
+    cp configs/sim/default_table_stretch.yaml "$OUT/sim_config.yaml"
     run_case hybrid_learned_pick_place 600s "${agent[@]}" --visual-servo \
         -c 'Use pick_place to put the red cylinder on the blue cube. Report any failure; do not use oracle scene tasks or plans.'
+    # Process completion is not task success. Private GT stays on disk and is
+    # scored only after the agent exits; no evaluator labels enter observations.
+    "$AGENT_PY" -m emet.eval.manipulation_trace "$EMET_SIM_EVAL_TRACE" \
+        --output "$OUT/hybrid_learned_pick_place/physical_result.json" || exit 1
 fi
 exit "$overall"

@@ -13,6 +13,20 @@ from emet.memory.grounded_target import GroundedTarget
 from emet.memory.query_candidates import QueryCandidates
 
 
+@pytest.mark.parametrize("visual_servo", [True, False])
+def test_saved_tool_outcome_does_not_claim_physical_verification(tmp_path, monkeypatch, visual_servo):
+    import json
+
+    task, _ = executor()
+    task.visual_servo = visual_servo
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    assert task._pickup("mug") is visual_servo
+    result = json.loads((tmp_path / "manipulation_outcomes.jsonl").read_text())
+    assert result["ok"] is visual_servo
+    assert result["physical_success_verified"] is False
+    assert result["wall_time"] > 0
+
+
 @pytest.mark.parametrize("backend,expects_detector", [("vlm", False), ("yoloe", True)])
 def test_visual_servo_constructor_respects_grounding_backend(backend, expects_detector):
     from emet.core import AbstractRobotClient
