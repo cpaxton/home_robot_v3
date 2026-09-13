@@ -12,11 +12,30 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
 
+def _connected_surfaces(depth, valid, colors=None):
+    """Measured adjacency, shared by RGB-D and external-mask proposals."""
+    indices = np.arange(depth.size).reshape(depth.shape)
+    rows, cols = [], []
+    for a, b in ((np.s_[:-1, :], np.s_[1:, :]), (np.s_[:, :-1], np.s_[:, 1:])):
+        compatible = valid[a] & valid[b] & (np.abs(depth[a] - depth[b]) <= 0.08)
+        if colors is not None:
+            compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
+        rows.append(indices[a][compatible])
+        cols.append(indices[b][compatible])
+    rows, cols = np.concatenate(rows), np.concatenate(cols)
+    graph = coo_matrix((np.ones(len(rows), dtype=bool), (rows, cols)), shape=(depth.size, depth.size)).tocsr()
+    _, components = connected_components(graph, directed=False)
+    sizes = np.bincount(components[valid.ravel()])
+    components = components.reshape(depth.shape)
+    for index in np.flatnonzero(sizes >= 25):
+        yield valid & (components == index)
+
+
 def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None):
     """Split a VLM search box into measured depth layers and connected components.
 
-    Optional class-agnostic masks replace depth-layer proposals, not depth
-    validity checks. Touching/coplanar objects need not separate. Overflow fails
+    Optional class-agnostic masks constrain candidates but still split at depth
+    discontinuities. Touching/coplanar objects need not separate. Overflow fails
     closed instead of silently discarding a possibly relevant small surface.
     """
     depth = np.asarray(depth)
@@ -38,22 +57,8 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
         if rgb.shape != (*depth.shape, 3) or rgb.dtype != np.uint8:
             raise ValueError("RGB must be uint8 and aligned with depth")
         colors = rgb[y0:y1, x0:x1].astype(float)
-        indices = np.arange(roi.size).reshape(roi.shape)
-        rows, cols = [], []
-        for a, b in ((np.s_[:-1, :], np.s_[1:, :]), (np.s_[:, :-1], np.s_[:, 1:])):
-            compatible = valid[a] & valid[b]
-            compatible &= np.abs(roi[a] - roi[b]) <= 0.08
-            # Class-agnostic appearance boundary: no category/color vocabulary.
-            # This avoids joining target and support through a few depth outliers.
-            compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
-            rows.append(indices[a][compatible])
-            cols.append(indices[b][compatible])
-        rows, cols = np.concatenate(rows), np.concatenate(cols)
-        graph = coo_matrix((np.ones(len(rows), dtype=bool), (rows, cols)), shape=(roi.size, roi.size)).tocsr()
-        _, pixel_components = connected_components(graph, directed=False)
-        sizes = np.bincount(pixel_components[valid.ravel()])
-        pixel_components = pixel_components.reshape(roi.shape)
-        masks = (valid & (pixel_components == index) for index in np.flatnonzero(sizes >= 25))
+        # Class-agnostic appearance boundary: no category/color vocabulary.
+        masks = _connected_surfaces(roi, valid, colors)
     elif proposal_masks is None:
         # Split only at measured gaps, not an assumed foreground or object depth.
         values = np.unique(roi[valid])
@@ -61,12 +66,13 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
         layers = np.searchsorted(cuts, roi)
         masks = (valid & (layers == index) for index in range(len(cuts) + 1))
     else:
-        masks = []
+        external_masks = []
         for mask in proposal_masks:
             mask = np.asarray(mask)
             if mask.dtype != bool or mask.shape != depth.shape:
                 raise ValueError("proposal masks must be boolean and aligned with depth")
-            masks.append(mask[y0:y1, x0:x1] & valid)
+            external_masks.append(mask[y0:y1, x0:x1] & valid)
+        masks = (surface for mask in external_masks for surface in _connected_surfaces(roi, mask))
     regions = []
     for mask in masks:
         components, count = label(mask)

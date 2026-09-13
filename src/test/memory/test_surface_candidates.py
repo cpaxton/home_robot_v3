@@ -66,6 +66,28 @@ def test_touching_coplanar_objects_are_not_falsely_claimed_separable():
     assert len(regions) == 2
 
 
+def test_external_union_mask_cannot_join_depth_separated_objects():
+    depth = np.ones((20, 20))
+    depth[:, 10:] = 0.6
+    proposal = np.ones_like(depth, dtype=bool)
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.25, max_depth=4, proposal_masks=[proposal])
+    assert len(regions) == 2
+    masks = [candidate_mask(r, depth.shape) for r in regions]
+    assert all(np.ptp(depth[mask]) == 0 for mask in masks)
+    assert np.array_equal(masks[0] | masks[1], proposal)
+
+
+def test_external_mask_keeps_smooth_sloped_geometry_and_ignores_color_texture():
+    depth = np.tile(np.linspace(0.5, 1.0, 20), (20, 1))
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    rgb[:, 10:] = 255
+    regions = surface_candidates(
+        depth, [0, 0, 1000, 1000], min_depth=0.25, max_depth=4, rgb=rgb, proposal_masks=[np.ones_like(depth, bool)]
+    )
+    assert len(regions) == 1
+    assert regions[0]["points"] == 400
+
+
 def test_appearance_boundaries_separate_depth_connected_target_and_support():
     rgb, depth = scene()
     depth[:] = 1  # no geometric separation at all
