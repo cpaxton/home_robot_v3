@@ -42,6 +42,22 @@ def test_generic_policy_reports_tipping_even_at_planar_goal():
     assert server.navigation_policy_measurement()["failure"] == "base posture unsafe"
 
 
+def test_stretch_manipulation_base_uses_precision_not_dynamic_nav_tolerance():
+    from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+
+    server = MujocoZmqServer.__new__(MujocoZmqServer)
+    server.control_mode = "manipulation"
+    server._manip_xyt = np.zeros(3)
+    server.robot_sim = Mock()
+    server.controller = Mock()
+    server.get_base_pose = lambda: np.zeros(3)
+    server.set_goal_pose = Mock()
+    server.manip_to(np.array([0.052, 0.6, 0.1, 0, -0.3, 0]))
+    np.testing.assert_allclose(server.set_goal_pose.call_args.args[0], [0.052, 0, 0])
+    server.controller.control.set_linear_error_tolerance.assert_called_once_with(0.02)
+    server.controller.control.set_angular_error_tolerance.assert_called_once_with(0.03)
+
+
 def test_stretch_policy_uses_timestamped_pose_in_resolved_episode_frame():
     from emet.simulation.mujoco_server_stretch import MujocoZmqServer
 
