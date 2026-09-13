@@ -102,3 +102,12 @@ def test_aperture_preset_preserves_geometry_only_control():
     assert control["grasp"] == {"geometry_servo": True}
     assert candidate["grasp"] == {"geometry_servo": True, "observed_aperture_margin_m": 0.06}
     assert candidate["query_memory"] == control["query_memory"]
+
+
+def test_combined_clutter_preset_changes_only_aperture_from_contact_control():
+    from emet.config.loader import load_config
+
+    control = load_config("configs/emet/query_geometry_contact_pilot.yaml").mapping_dict
+    candidate = load_config("configs/emet/query_geometry_contact_aperture_pilot.yaml").mapping_dict
+    assert candidate["grasp"].pop("observed_aperture_margin_m") == 0.06
+    assert candidate == control

@@ -1,0 +1,7 @@
+# Original-clutter diagnostic: combine the separately tracked contact calibration
+# and observed-aperture preparation. Not a replacement for the frozen control,
+# and not established on real hardware or across objects.
+extends: configs/emet/query_geometry_contact_pilot.yaml
+mapping:
+  grasp:
+    observed_aperture_margin_m: 0.06
