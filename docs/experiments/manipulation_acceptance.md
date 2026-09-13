@@ -87,6 +87,17 @@ do not claim statistical equivalence from three questions. Specify the two varie
 fixtures, room task bodies/supports and effective row configurations *before*
 launching those stages. Unspecified cases are pending, not implicit passes.
 
+Stage B fixtures are now predeclared: original
+`default_table_stretch.yaml` (blue neighbor x=-0.02 m), separated-neighbor
+`default_table_stretch_clearance.yaml` (x=-0.25 m), and mirrored-clutter
+`default_table_stretch_right_neighbor.yaml` (x=+0.18 m). The target remains at
+x=+0.08 m; the mirrored fixture retains the original 10 cm center separation
+on the opposite side. Model-equality tests check that only the neighbor pose
+changes. Run each twice on one frozen candidate/configuration. Earlier
+development passes on different source or aperture settings are not pooled
+into that six-case panel. Keep the detector preset as the frozen control;
+the current development candidate uses the separate contact/aperture preset.
+
 Physical pickup acceptance requires at least 5 cm lift, gripper contact and stable
 object-to-gripper pose for one simulated second, without support contact. Placement
 requires release onto the designated support and a stable pose for one simulated
