@@ -97,7 +97,7 @@ class PlaceObjectOperation(ManagedOperation):
         # Choose closest point to xyt
         idx = distances.argmin()
         # Get the point
-        point = target.point_cloud[idx].cpu().numpy()
+        point = target.point_cloud[idx].cpu().numpy().copy()
         if self.verbose:
             print(" - Closest point to robot is", point)
             print(" - Distance to robot is", distances[idx])
@@ -249,11 +249,12 @@ class PlaceObjectOperation(ManagedOperation):
             return
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
-        # Get max xyz
-        max_xyz = self.get_target().point_cloud.max(axis=0)[0]
+        # Use the same robust support top as visual release alignment. A single
+        # mixed-depth pixel must not send the held object far above its support.
+        support_top = float(self.get_target().point_cloud[:, 2].quantile(0.95))
 
         # Placement is at xy = object_xyz[:2], z = max_xyz[2] + margin
-        place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], max_xyz[2] + self.place_height_margin])
+        place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], support_top + self.place_height_margin])
 
         if self.show_place_in_voxel_grid:
             self.agent.get_voxel_map().show(orig=place_xyz, xyt=xyt, footprint=self.robot_model.get_footprint())

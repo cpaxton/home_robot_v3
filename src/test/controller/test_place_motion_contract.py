@@ -94,6 +94,24 @@ def test_place_ik_transforms_world_target_with_world_base_pose():
     op.robot.get_base_pose.assert_not_called()
 
 
+def test_support_depth_outlier_does_not_raise_the_placement_approach():
+    op = operation()
+    points = torch.tensor([[0, -0.5, 0.56]] * 100 + [[0, -0.3, 0.9]])
+    op.get_target.return_value.point_cloud = points
+    with patch("emet.controller.operations.place_object.time.sleep"):
+        op.run()
+    assert op._get_place_joint_state.call_args.kwargs["pos"][2] == pytest.approx(0.66)
+
+
+def test_sampling_placement_does_not_edit_the_receptacle_cloud():
+    op = operation()
+    points = torch.tensor([[0.0, -0.4, 0.55], [0, -0.6, 0.55]])
+    op.get_target.return_value.point_cloud = points
+    before = points.clone()
+    PlaceObjectOperation.sample_placement_position(op, np.zeros(3))
+    assert torch.equal(points, before)
+
+
 def test_place_reads_joint_state_after_posture_change():
     op = operation()
     op.robot.move_to_manip_posture.side_effect = lambda: setattr(
