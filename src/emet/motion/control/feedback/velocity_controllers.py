@@ -79,6 +79,11 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         """Reset error tolerances to default values"""
         self.lin_error_tol = self.cfg.lin_error_tol
         self.ang_error_tol = self.cfg.ang_error_tol
+        self.reset_goal()
+
+    def reset_goal(self):
+        """Forget the approach/heading phase when a new target is installed."""
+        self._at_goal_xy = False
 
     @staticmethod
     def _velocity_feedback_control(x_err, a, v_max):
@@ -142,8 +147,20 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
             in_reverse = True
             heading_err = normalize_ang_error(heading_err + np.pi)
 
-        # Go to goal XY position if not there yet
+        # Acquire XY inside half the acceptance radius before turning. Keep
+        # that phase until drift exceeds the *unchanged* acceptance radius.
+        # A single boundary otherwise alternates approach and final-yaw turns
+        # as braking/rotation moves the base a few millimeters across it.
         if lin_err_abs > self.lin_error_tol:
+            self._at_goal_xy = False
+        elif lin_err_abs <= self.lin_error_tol / 2:
+            self._at_goal_xy = True
+
+        if lin_err_abs <= self.lin_error_tol and abs(ang_err) <= self.ang_error_tol:
+            return 0.0, 0.0, True
+
+        # Go to goal XY position if not acquired yet.
+        if not self._at_goal_xy:
             # Compute linear velocity -- move towards goal XY
             v_raw = self._velocity_feedback_control(lin_err_abs, self.acc_lin, self.v_max)
             v_limit = self._turn_rate_limit(
