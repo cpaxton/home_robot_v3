@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from emet.simulation.stretch_mujoco.config import wrist_position_rates
+from emet.simulation.stretch_mujoco.config import joint_position_rates
 from emet.simulation.stretch_mujoco.position_targets import PositionTargets
 
 
@@ -23,7 +23,9 @@ def test_contact_depth_changes_retention_without_changing_physics(insertion):
     data.qpos[:] = captured["qpos"]
     data.ctrl[:] = captured["ctrl"]
     mujoco.mj_forward(model, data)
-    targets = PositionTargets(model, data, wrist_position_rates)
+    # Retain the exact original counterfactual controller settings: this
+    # fixture isolates depth, not subsequent arm/lift profiling changes.
+    targets = PositionTargets(model, data, {k: v for k, v in joint_position_rates.items() if k.startswith("wrist_")})
 
     def step(seconds):
         for _ in range(round(seconds / model.opt.timestep)):

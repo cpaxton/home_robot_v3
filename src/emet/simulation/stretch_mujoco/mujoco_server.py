@@ -362,7 +362,7 @@ class MujocoServer:
         self.mjmodel = model
 
         self.mjdata = MjData(self.mjmodel)
-        self.position_targets = PositionTargets(self.mjmodel, self.mjdata, config.wrist_position_rates)
+        self.position_targets = PositionTargets(self.mjmodel, self.mjdata, config.joint_position_rates)
 
         self._base_in_pos_motion = False
 

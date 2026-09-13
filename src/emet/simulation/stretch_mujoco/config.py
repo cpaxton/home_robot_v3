@@ -16,10 +16,10 @@ robot_settings = {
 
 depth_limits = {"d405": 1, "d435i": 10}
 
-# Conservative simulated wrist setpoint speeds (rad/s). Direct position steps
-# previously produced ~21 rad/s pitch motion and ejected a held object. These
-# are simulator settings, not a claim of calibrated real-robot limits.
-wrist_position_rates = {"wrist_yaw": 0.8, "wrist_pitch": 0.8, "wrist_roll": 0.8}
+# Conservative manipulation setpoint speeds (m/s for arm/lift, rad/s for
+# wrist). Both wrist folding and a full-extension position step can eject a
+# payload. These are simulator settings, not calibrated real-robot limits.
+joint_position_rates = {"arm": 0.1, "lift": 0.15, "wrist_yaw": 0.8, "wrist_pitch": 0.8, "wrist_roll": 0.8}
 
 # The base is also a manipulation joint. Its 2 cm navigation deadband used to
 # discard small visual-servo corrections entirely. Keep ordinary navigation
