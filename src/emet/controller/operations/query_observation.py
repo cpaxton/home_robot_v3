@@ -54,7 +54,8 @@ def observe_query_points(agent, robot, query, *, stage):
     try:
         detected, _, matching, verification = agent.ground_vlm_frame(frame, query, query, min_depth=0.0)
         if not verification.get("valid") or len(matching) != 1:
-            raise ValueError("Manipulation target identity absent or ambiguous")
+            detail = verification.get("reason") or "no unique verified surface"
+            raise ValueError(f"Manipulation target identity absent or ambiguous: {detail}")
         mask = (detected.instance == matching[0]) & np.isfinite(world).all(axis=-1)
         mask &= np.isfinite(obs.depth) & (obs.depth > 0)
         mask, depth_support = trim_depth_outliers(obs.depth, mask)
