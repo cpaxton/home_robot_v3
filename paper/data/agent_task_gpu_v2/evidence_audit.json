@@ -1,0 +1,95 @@
+[
+  {
+    "episode": "cross_room_delivery",
+    "event_hash": "4ece8d29a085aecda2e8e91bd4ac9c9353168cd4eaa9b126d00c0162c00f5d1d",
+    "image_events_verified": 29,
+    "source_files_verified": [
+      "eval/agent_tasks/__init__.py",
+      "eval/agent_tasks/agent_runner.py",
+      "eval/agent_tasks/fixture.py",
+      "eval/agent_tasks/publication.py",
+      "eval/agent_tasks/qa.py",
+      "eval/agent_tasks/recording.py",
+      "eval/agent_tasks/runner.py",
+      "eval/agent_tasks/scene_style.py",
+      "eval/agent_tasks/spec.py",
+      "eval/agent_tasks/visualize.py",
+      "eval/agent_tasks/worker.py",
+      "agent/loop.py",
+      "agent/prompt.py",
+      "agent/task.py",
+      "agent/tools.py",
+      "llms/__init__.py"
+    ],
+    "artifact_hashes_verified": {
+      "episode.mp4": "eaeab081cc4a18fc3a2bce8571d8b379ba2f377e00ee5508848d5180557f2ef7",
+      "episode.rrd": "f2cceeda8ce8d2ac0bbe8f75e7f7031272e760bd207c3d634458b0d46c43dd81",
+      "overview.pdf": "7b0feba775c73eff4aef6f83862239b1aea22546ef176886f60b8c301bddf55f",
+      "overview.png": "accee456d0a8e5227398619dffcd87007c12c62e2f0e1fd02b4f2dd4df0d34d9",
+      "report.html": "26714c5e3b3b1912e6cf5900cbc06f2c2c2212dce7fe2f37a4a44ec5eeb4ee0d",
+      "storyboard.png": "3956e680a6481b8ffec436c41c1634f0ff9b0b807a8bbab4a18ace16b5188d24"
+    }
+  },
+  {
+    "episode": "two_object_collection",
+    "event_hash": "e149dcddb29b11f676f7ebb24b1be22fe7cac523ac9008ff9eb4aba58027850b",
+    "image_events_verified": 186,
+    "source_files_verified": [
+      "eval/agent_tasks/__init__.py",
+      "eval/agent_tasks/agent_runner.py",
+      "eval/agent_tasks/fixture.py",
+      "eval/agent_tasks/publication.py",
+      "eval/agent_tasks/qa.py",
+      "eval/agent_tasks/recording.py",
+      "eval/agent_tasks/runner.py",
+      "eval/agent_tasks/scene_style.py",
+      "eval/agent_tasks/spec.py",
+      "eval/agent_tasks/visualize.py",
+      "eval/agent_tasks/worker.py",
+      "agent/loop.py",
+      "agent/prompt.py",
+      "agent/task.py",
+      "agent/tools.py",
+      "llms/__init__.py"
+    ],
+    "artifact_hashes_verified": {
+      "episode.mp4": "784b3ae65eb48bc30ee7b9bd0d035de5bd51d17c93e3c70e2207b1fa6fc3d70b",
+      "episode.rrd": "2920e35701f3b2b93ac527d65bb3aeb56416b532f61bf1d8ebef3ce650839756",
+      "overview.pdf": "42f887487b7f7a8c57a2bde983dd41c087152e0f4bb08eacd045450f16856608",
+      "overview.png": "023545095d9ddd45298dcade8c130b4e3f7b5d5acd1aee9345c0a4ce2058d471",
+      "report.html": "b8de5f321ebfca346ca0ff49441099e060a784934ad44b64a274741fceb29815",
+      "storyboard.png": "e5b60c1efda09d840ae47c4cbe04b5d6d71e98db68dddb477f6244cc07b78143"
+    }
+  },
+  {
+    "episode": "moved_object_revisit",
+    "event_hash": "f07c806e834e4469c55df3076345830e068af6acb851120a542ab8f0744d4933",
+    "image_events_verified": 238,
+    "source_files_verified": [
+      "eval/agent_tasks/__init__.py",
+      "eval/agent_tasks/agent_runner.py",
+      "eval/agent_tasks/fixture.py",
+      "eval/agent_tasks/publication.py",
+      "eval/agent_tasks/qa.py",
+      "eval/agent_tasks/recording.py",
+      "eval/agent_tasks/runner.py",
+      "eval/agent_tasks/scene_style.py",
+      "eval/agent_tasks/spec.py",
+      "eval/agent_tasks/visualize.py",
+      "eval/agent_tasks/worker.py",
+      "agent/loop.py",
+      "agent/prompt.py",
+      "agent/task.py",
+      "agent/tools.py",
+      "llms/__init__.py"
+    ],
+    "artifact_hashes_verified": {
+      "episode.mp4": "94a3844989e73606b34d02097536ceeda25a3ee303fa28ee9663c8dcb5152e18",
+      "episode.rrd": "ff78d70f91fc900e82ef35ef0d1b7e48de150aec879e9a734f5477d402374b36",
+      "overview.pdf": "3ce06a6220be354ffe2f774b9131e73d617796d05230551dc44fd3b449151431",
+      "overview.png": "1515da352962f539291785d22033ffeddd10e68da01e0c87e302e59028f69709",
+      "report.html": "8486cd74a25793e479898ff231c5fc20f122345f900a1c98daf1928ab7e9b2fc",
+      "storyboard.png": "9f855730bf4430ca6600685c9f4d2d67fd8c23e9f263057d65cb0fcdd5229674"
+    }
+  }
+]

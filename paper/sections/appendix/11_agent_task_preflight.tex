@@ -140,3 +140,37 @@ above used the earlier visual profile and should not be pooled with this one.
   staged QA observation, not a learned manipulation result.}
   \label{fig:agent_task_visual_qa_v2}
 \end{figure}}{}
+
+
+\subsection{Queued CUDA action rollouts}
+A separate, sequential Qwen2.5-3B-Instruct CUDA batch used the second visual profile
+and a fixed source snapshot. Each episode had a 16-decision limit, 128 generated
+tokens per call, and a 300-second deadline. All three workers completed with full
+visual evidence, but no episode passed the complete task contract. Delivery
+claimed completion without manipulation; collection delivered one requested object
+but selected the green cube for other placements. Revisit recovered the relocated
+cylinder and passed both final placement and temporal predicates, but continued
+acting until its decision budget expired. This distinguishes a usable benchmark
+integration from reliable agent completion. These are visible-label text-policy
+runs with assisted skills, separate from the RGB QA results above. The earlier CPU
+runs differ in code and scene profile and are not a controlled device comparison.
+
+\IfFileExists{data/agent_task_gpu_v2/table.tex}{%
+\begin{table}[t]
+  \centering
+  \input{data/agent_task_gpu_v2/table.tex}
+  \caption{Completed CUDA preflight batch. Placement counts alone do not establish
+  episode success: the agent must also terminate, and the revisit case must meet
+  its temporal predicate. One diagnostic per layout/task; no paid calls.}
+  \label{tab:agent_task_gpu_v2}
+\end{table}}{}
+
+\IfFileExists{figs/agent_task_gpu_v2_moved_object_revisit.pdf}{%
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/agent_task_gpu_v2_moved_object_revisit.pdf}
+  \caption{Measured before/after state of the CUDA revisit diagnostic. Both objects
+  reached their destinations after relocation recovery. The episode nevertheless
+  failed because the policy continued requesting actions and exhausted its budget.}
+  \label{fig:agent_task_gpu_v2_revisit}
+\end{figure}}{}

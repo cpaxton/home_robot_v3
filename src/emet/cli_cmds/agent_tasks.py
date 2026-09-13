@@ -47,12 +47,18 @@ def list_environments_command():
 @agent_tasks_group.command("export-agents")
 @click.argument("runs", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--paper-dir", required=True, type=click.Path(path_type=Path))
-def export_agents_command(runs, paper_dir):
+@click.option(
+    "--bundle",
+    default="agent_task_policy",
+    show_default=True,
+    help="Separate paper data/figure prefix for this cohort.",
+)
+def export_agents_command(runs, paper_dir, bundle):
     """Export actual local-policy diagnostics (including failures) into the paper."""
     from emet.eval.agent_tasks.publication import export_agent_paper
 
     try:
-        result = export_agent_paper(list(runs), paper_dir)
+        result = export_agent_paper(list(runs), paper_dir, bundle=bundle)
     except (ValueError, KeyError, OSError) as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(json.dumps(result, indent=2))

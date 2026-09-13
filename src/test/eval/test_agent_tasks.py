@@ -321,3 +321,17 @@ def test_policy_publication_keeps_failures_but_rejects_invalid_evidence(suite, t
         assert result["runs"][0]["status"] == "task_failed"
         assert result["runs"][0]["completed"] == 0
         assert "task failed" in (tmp_path / "paper/data/agent_task_policy/table.tex").read_text()
+        original = (tmp_path / "paper/data/agent_task_policy/summary.json").read_bytes()
+        export_agent_paper([root], tmp_path / "paper", bundle="agent_task_gpu_v2")
+        assert (tmp_path / "paper/data/agent_task_policy/summary.json").read_bytes() == original
+        assert (tmp_path / "paper/data/agent_task_gpu_v2/table.tex").exists()
+        assert (tmp_path / "paper/figs/agent_task_gpu_v2_cross_room_delivery.pdf").exists()
+
+
+@pytest.mark.parametrize("bundle", ["../outside", "/absolute", "bad-name"])
+def test_policy_publication_rejects_unsafe_bundle(tmp_path, bundle):
+    from emet.eval.agent_tasks.publication import export_agent_paper
+
+    with pytest.raises(ValueError, match="safe lowercase identifier"):
+        export_agent_paper([], tmp_path / "paper", bundle=bundle)
+    assert not (tmp_path / "paper").exists()

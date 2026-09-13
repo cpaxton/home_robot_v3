@@ -1,5 +1,7 @@
 # Visual task environments and scored QA, v2
 
+Follow-up: [completed CUDA action rollouts](agent_task_gpu_preflight.md).
+
 The three bundled layouts now use `semantic_rooms_v2`. Kitchens have appliances,
 cabinets and tiled backsplashes; living rooms have sofas; studies have bookshelves;
 dining rooms have chairs. Colored wall treatments support these geometric cues.

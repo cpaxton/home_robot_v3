@@ -1,0 +1,210 @@
+{
+  "paid_cost_usd": 0,
+  "runs": [
+    {
+      "actions": 2,
+      "agent_status": "model_finished",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_complete_call_recovery",
+        "search": "bounded_camera_visible_room_sweep",
+        "skill_interface": "atomic",
+        "tool_dispatch": "ordered_batch_with_fresh_navigation_observations",
+        "topology": "known_room_names"
+      },
+      "completed": 0,
+      "elapsed_s": 15.98119222499372,
+      "episode": "cross_room_delivery",
+      "episode_fingerprint": "06b4efd20250ac5b8962acf90db7794f7aafaf455255ed890710b1acd2913ebd",
+      "event_hash": "4ece8d29a085aecda2e8e91bd4ac9c9353168cd4eaa9b126d00c0162c00f5d1d",
+      "figure": "agent_task_gpu_v2_cross_room_delivery.pdf",
+      "figure_sha256": "7b0feba775c73eff4aef6f83862239b1aea22546ef176886f60b8c301bddf55f",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "7282c68af76579535a0ca38fa4cb9f027e07e2df2d44c1753e2f3e76568f5a59",
+        "fixture.py": "902e3f0db4e829f2741d9e1b323ed1ba632a870d5f320f3db17857719e4a2c1c",
+        "publication.py": "fd5dcfbcf9eac81c55ec6c1ab1a23b2edcca9b5a3313da1a1433284631fa8ade",
+        "qa.py": "416f402cff94ded751de25054907607f2b007d1927c71d25324353b2a7a6a2ad",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "75e6716b65750bb30f5fbca52a869ce78004002f16174ddd4dff6fa247723826",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cuda",
+        "max_tokens": 128,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_call_elapsed_s": 1.0263384179997956,
+      "model_rounds": 2,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.bfloat16",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 0,
+      "response_repairs": 0,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "f297a00274c823545df7770f25457767b407eb27157d998bffac435ffdc95032",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "48f9ec219953d1a2f4f4de5b89eb370d44c3fe19",
+      "source_run": "/tmp/emet-gpu-rollouts-20260913/cross_room_delivery",
+      "status": "task_failed",
+      "suite": "three_room_preflight_v2",
+      "suite_fingerprint": "a22bd3a4f382e9debf972ba2f46a547d7194ba3eaf2dca6c1dc2ebc3ee7cfab3",
+      "temporal_order_passed": true,
+      "total": 1
+    },
+    {
+      "actions": 18,
+      "agent_status": "round_budget_exhausted",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_complete_call_recovery",
+        "search": "bounded_camera_visible_room_sweep",
+        "skill_interface": "atomic",
+        "tool_dispatch": "ordered_batch_with_fresh_navigation_observations",
+        "topology": "known_room_names"
+      },
+      "completed": 1,
+      "elapsed_s": 88.82278016000055,
+      "episode": "two_object_collection",
+      "episode_fingerprint": "2d9d71c87ed1773f995096eee303adba31169a5ed910c3894e8a8ff82dfc7c2b",
+      "event_hash": "e149dcddb29b11f676f7ebb24b1be22fe7cac523ac9008ff9eb4aba58027850b",
+      "figure": "agent_task_gpu_v2_two_object_collection.pdf",
+      "figure_sha256": "42f887487b7f7a8c57a2bde983dd41c087152e0f4bb08eacd045450f16856608",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "7282c68af76579535a0ca38fa4cb9f027e07e2df2d44c1753e2f3e76568f5a59",
+        "fixture.py": "902e3f0db4e829f2741d9e1b323ed1ba632a870d5f320f3db17857719e4a2c1c",
+        "publication.py": "fd5dcfbcf9eac81c55ec6c1ab1a23b2edcca9b5a3313da1a1433284631fa8ade",
+        "qa.py": "416f402cff94ded751de25054907607f2b007d1927c71d25324353b2a7a6a2ad",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "75e6716b65750bb30f5fbca52a869ce78004002f16174ddd4dff6fa247723826",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cuda",
+        "max_tokens": 128,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_call_elapsed_s": 7.885971023002639,
+      "model_rounds": 16,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.bfloat16",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 3,
+      "response_repairs": 1,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "f297a00274c823545df7770f25457767b407eb27157d998bffac435ffdc95032",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "48f9ec219953d1a2f4f4de5b89eb370d44c3fe19",
+      "source_run": "/tmp/emet-gpu-rollouts-20260913/two_object_collection",
+      "status": "task_failed",
+      "suite": "furnished_agent_tasks_v2",
+      "suite_fingerprint": "cb0ccd7fff57f92c70a64aa3b3de421e4cdf3d5f2fc7fa75c71b36f68a6b8bd2",
+      "temporal_order_passed": true,
+      "total": 2
+    },
+    {
+      "actions": 15,
+      "agent_status": "round_budget_exhausted",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_complete_call_recovery",
+        "search": "bounded_camera_visible_room_sweep",
+        "skill_interface": "atomic",
+        "tool_dispatch": "ordered_batch_with_fresh_navigation_observations",
+        "topology": "known_room_names"
+      },
+      "completed": 2,
+      "elapsed_s": 112.23482368599798,
+      "episode": "moved_object_revisit",
+      "episode_fingerprint": "1229f08f7f7aa02bf4610a864fd02b0ac73d8f668742feaf5db41f1b24eb7e15",
+      "event_hash": "f07c806e834e4469c55df3076345830e068af6acb851120a542ab8f0744d4933",
+      "figure": "agent_task_gpu_v2_moved_object_revisit.pdf",
+      "figure_sha256": "3ce06a6220be354ffe2f774b9131e73d617796d05230551dc44fd3b449151431",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "7282c68af76579535a0ca38fa4cb9f027e07e2df2d44c1753e2f3e76568f5a59",
+        "fixture.py": "902e3f0db4e829f2741d9e1b323ed1ba632a870d5f320f3db17857719e4a2c1c",
+        "publication.py": "fd5dcfbcf9eac81c55ec6c1ab1a23b2edcca9b5a3313da1a1433284631fa8ade",
+        "qa.py": "416f402cff94ded751de25054907607f2b007d1927c71d25324353b2a7a6a2ad",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "scene_style.py": "8b5e9f75d459276e17f91a46322dcc948da44c6b299930873c36d5c14b638710",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "75e6716b65750bb30f5fbca52a869ce78004002f16174ddd4dff6fa247723826",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cuda",
+        "max_tokens": 128,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_call_elapsed_s": 7.259394679014804,
+      "model_rounds": 16,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.bfloat16",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 4,
+      "response_repairs": 0,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "f297a00274c823545df7770f25457767b407eb27157d998bffac435ffdc95032",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "48f9ec219953d1a2f4f4de5b89eb370d44c3fe19",
+      "source_run": "/tmp/emet-gpu-rollouts-20260913/moved_object_revisit",
+      "status": "task_failed",
+      "suite": "four_room_agent_tasks_v2",
+      "suite_fingerprint": "d92883b410da5de94dfe6fd6a9380061f3611d9ab552372d596dbccb61d0185f",
+      "temporal_order_passed": true,
+      "total": 2
+    }
+  ],
+  "scope": "one local-policy diagnostic per selected layout/task; assisted perception and skills"
+}

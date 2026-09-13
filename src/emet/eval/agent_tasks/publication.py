@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from collections import defaultdict
 from pathlib import Path
@@ -156,8 +157,10 @@ def export_paper(batch: Path, paper: Path) -> dict:
     return summary
 
 
-def export_agent_paper(runs: list[Path], paper: Path) -> dict:
+def export_agent_paper(runs: list[Path], paper: Path, *, bundle: str = "agent_task_policy") -> dict:
     """Publish actual local-policy outcomes, including failures, separately from witnesses."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", bundle):
+        raise ValueError("bundle must be a safe lowercase identifier")
     rows = []
     sources = []
     seen = set()
@@ -187,6 +190,10 @@ def export_agent_paper(runs: list[Path], paper: Path) -> dict:
                 "episode_fingerprint": manifest["episode_fingerprint"],
                 "elapsed_s": metrics.get("elapsed_s"),
                 "response_repairs": metrics.get("response_repairs", 0),
+                "temporal_order_passed": metrics.get("temporal_order_passed"),
+                "model_call_elapsed_s": sum(
+                    e["policy"].get("elapsed_s", 0) for e in events if e["kind"] == "model_output"
+                ),
                 "assistance": manifest["assistance"],
                 "status": metrics["status"],
                 "completed": metrics["completed"],
@@ -205,13 +212,13 @@ def export_agent_paper(runs: list[Path], paper: Path) -> dict:
         sources.append((root, key))
     if not rows:
         raise ValueError("no policy runs selected")
-    data, figures = paper / "data/agent_task_policy", paper / "figs"
+    data, figures = paper / "data" / bundle, paper / "figs"
     data.mkdir(parents=True, exist_ok=True)
     figures.mkdir(parents=True, exist_ok=True)
     for row, (root, key) in zip(rows, sources, strict=True):
-        dst = figures / f"agent_task_policy_{key[1]}.pdf"
+        dst = figures / f"{bundle}_{key[1]}.pdf"
         if sum(other["episode"] == key[1] for other in rows) > 1:
-            dst = figures / f"agent_task_policy_{hashlib.sha256(key[0].encode()).hexdigest()[:8]}_{key[1]}.pdf"
+            dst = figures / f"{bundle}_{hashlib.sha256(key[0].encode()).hexdigest()[:8]}_{key[1]}.pdf"
         shutil.copyfile(root / "overview.pdf", dst)
         row["figure"] = dst.name
         row["figure_sha256"] = hashlib.sha256(dst.read_bytes()).hexdigest()
