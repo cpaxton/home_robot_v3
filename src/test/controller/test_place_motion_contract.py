@@ -37,6 +37,10 @@ def test_near_support_release_preset_preserves_recovery_control():
 
     control = load_config("configs/emet/query_geometry_recovery_pilot.yaml").mapping_dict
     candidate = load_config("configs/emet/query_geometry_setdown_pilot.yaml").mapping_dict
+    from emet.controller.dynamem.look import _find_phase_nav_timeout
+
+    assert _find_phase_nav_timeout(SimpleNamespace(parameters=candidate)) == 30.0
+    assert candidate.pop("find_phase_nav_step_timeout_s") == 30.0
     assert candidate.pop("place") == {"release_clearance_m": 0.005, "release_z_tolerance_m": 0.005}
     assert candidate == control
 

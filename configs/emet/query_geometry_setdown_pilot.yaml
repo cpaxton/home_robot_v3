@@ -3,6 +3,12 @@
 # Preserve the recovery-only row and all its perception/grasp settings.
 extends: configs/emet/query_geometry_recovery_pilot.yaml
 mapping:
+  # Full pose waypoints can combine translation and a turn. The conservative
+  # native base profile cannot reliably finish those within the old 10 s.
+  # Match the existing final-approach ceiling; server progress/stale-pose
+  # checks and the outer episode cap remain active. This is a declared budget
+  # difference, not an isolated release-only ablation.
+  find_phase_nav_step_timeout_s: 30.0
   place:
     release_clearance_m: 0.005
     release_z_tolerance_m: 0.005
