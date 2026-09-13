@@ -104,6 +104,17 @@ def test_aperture_preset_preserves_geometry_only_control():
     assert candidate["query_memory"] == control["query_memory"]
 
 
+def test_narrow_tracking_row_changes_only_the_declared_aperture_margin():
+    from emet.core.parameters import get_parameters
+
+    control = get_parameters("configs/emet/query_geometry_tracked_pilot.yaml")
+    candidate = get_parameters("configs/emet/query_geometry_tracked_narrow_pilot.yaml")
+    assert control.data["grasp"]["observed_aperture_margin_m"] == 0.06
+    assert candidate.data["grasp"]["observed_aperture_margin_m"] == 0.04
+    candidate.data["grasp"]["observed_aperture_margin_m"] = 0.06
+    assert candidate.data == control.data
+
+
 def test_combined_clutter_preset_changes_only_aperture_from_contact_control():
     from emet.config.loader import load_config
 
