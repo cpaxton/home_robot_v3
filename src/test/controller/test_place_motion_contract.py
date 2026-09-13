@@ -16,6 +16,7 @@ def operation():
     op = object.__new__(PlaceObjectOperation)
     op._name = "place_test"
     op.agent = Mock()
+    op.parameters = {}
     op.robot = op.agent.robot
     op.robot_model = op.robot.get_robot_model.return_value
     op.robot_model.manip_fk.return_value = (np.array([0, -0.2, 0.8]), np.array([0, 0, 0, 1]))
@@ -29,6 +30,55 @@ def operation():
     op._get_place_joint_state = Mock(return_value=(np.zeros(11), True))
     op.talk = False
     return op
+
+
+def test_near_support_release_preset_preserves_recovery_control():
+    from emet.config.loader import load_config
+
+    control = load_config("configs/emet/query_geometry_recovery_pilot.yaml").mapping_dict
+    candidate = load_config("configs/emet/query_geometry_setdown_pilot.yaml").mapping_dict
+    assert candidate.pop("place") == {"release_clearance_m": 0.005, "release_z_tolerance_m": 0.005}
+    assert candidate == control
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("release_clearance_m", -0.01),
+        ("release_clearance_m", float("nan")),
+        ("release_clearance_m", 0.1),
+        ("release_z_tolerance_m", 0),
+        ("release_z_tolerance_m", float("inf")),
+        ("release_z_tolerance_m", 0.02),
+    ],
+)
+def test_release_configuration_cannot_request_penetration_or_relax_height_gate(key, value):
+    op = operation()
+    op.parameters = {"place": {key: value}}
+    with pytest.raises(ValueError):
+        op.configure(held_query="red cylinder")
+    op.robot.arm_to.assert_not_called()
+
+
+def test_near_support_release_requires_another_observed_correction():
+    op = operation()
+    op.parameters = {"place": {"release_clearance_m": 0.005, "release_z_tolerance_m": 0.005}}
+    op.configure(held_query="red cylinder")
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    pose = np.eye(4)
+    pose[:3, 3] = [0, -0.5, 0.65]
+    # The old 2 cm gap / 1.5 cm tolerance accepts this 1.7 cm gap. The
+    # near-support row must lower by 1.2 cm, then inspect another fresh frame.
+    high = np.array([[0, -0.5, 0.617]] * 20)
+    low = np.array([[0, -0.5, 0.605]] * 20)
+    with patch(
+        "emet.controller.operations.query_observation.observe_query_points",
+        side_effect=[(SimpleNamespace(ee_pose=pose), high), (SimpleNamespace(ee_pose=pose), low)],
+    ) as observe:
+        assert op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
+    assert observe.call_count == 2
+    assert op.robot.arm_to.call_count == 1
+    assert op._get_place_joint_state.call_args.args[0][2] == pytest.approx(0.8 - 0.012)
 
 
 @pytest.mark.parametrize("motions", [[False], [True, False]])

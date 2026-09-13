@@ -1,0 +1,8 @@
+# Separate release-policy diagnostic. A near-support geometric set-down is
+# not force/contact verification and has not been validated on hardware.
+# Preserve the recovery-only row and all its perception/grasp settings.
+extends: configs/emet/query_geometry_recovery_pilot.yaml
+mapping:
+  place:
+    release_clearance_m: 0.005
+    release_z_tolerance_m: 0.005

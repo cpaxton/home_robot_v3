@@ -34,6 +34,8 @@ class PlaceObjectOperation(ManagedOperation):
     require_object: bool = True
     released: bool = False
     held_query: str | None = None
+    release_clearance_m: float = 0.02
+    release_z_tolerance_m: float = 0.015
 
     def __init__(self, name, agent: RobotAgent, require_object: bool = True, *args, **kwargs):
         super().__init__(name, agent, *args, **kwargs)
@@ -65,6 +67,13 @@ class PlaceObjectOperation(ManagedOperation):
         self.use_pitch_from_vertical = use_pitch_from_vertical
         self.require_object = require_object
         self.held_query = held_query
+        place = self.parameters.get("place", {}) or {}
+        self.release_clearance_m = float(place.get("release_clearance_m", 0.02))
+        self.release_z_tolerance_m = float(place.get("release_z_tolerance_m", 0.015))
+        if not np.isfinite(self.release_clearance_m) or not 0 <= self.release_clearance_m <= 0.02:
+            raise ValueError("Observed release clearance must be between 0 and 2 cm")
+        if not np.isfinite(self.release_z_tolerance_m) or not 0 < self.release_z_tolerance_m <= 0.015:
+            raise ValueError("Observed release height tolerance must be positive and at most 1.5 cm")
 
     def get_target(self) -> Instance:
         """Get the target object to place."""
@@ -180,11 +189,11 @@ class PlaceObjectOperation(ManagedOperation):
                 [
                     placement_xyz[0] - center[0],
                     placement_xyz[1] - center[1],
-                    support_top + 0.02 - bounds[0, 2],
+                    support_top + self.release_clearance_m - bounds[0, 2],
                 ]
             )
             self.info(f"Observed placement correction (world m): {delta}")
-            if np.linalg.norm(delta[:2]) <= 0.015 and abs(delta[2]) <= 0.015:
+            if np.linalg.norm(delta[:2]) <= 0.015 and abs(delta[2]) <= self.release_z_tolerance_m:
                 return True
             if attempt == 3:
                 break

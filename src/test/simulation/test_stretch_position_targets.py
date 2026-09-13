@@ -92,3 +92,38 @@ def test_saved_physical_hold_survives_wrist_fold_only_with_profile(profiled):
     else:
         assert obj[2] < 0.1
         assert peak_velocity > 10
+
+
+@pytest.mark.parametrize("lower", [0.0, 0.01])
+def test_saved_release_requires_near_support_setdown(lower):
+    # Matched physical intervention, not learned acceptance. Opening while
+    # suspended pushes this payload off the narrow support even at bounded
+    # finger speed. Set down using the ordinary lift profile before opening.
+    root = Path(__file__).resolve().parent
+    captured = json.loads((root / "fixtures/stretch_release_gap.json").read_text())
+    model = mujoco.MjModel.from_xml_path(str(root.parents[1] / "emet/assets/robot" / captured["scene"]))
+    data = mujoco.MjData(model)
+    initial = captured["initial"]
+    for field in ("qpos", "qvel", "act", "ctrl"):
+        getattr(data, field)[:] = initial[field]
+    data.time = initial["sim_time"]
+    mujoco.mj_forward(model, data)
+    data.qacc_warmstart[:] = initial["qacc_warmstart"]
+    targets = PositionTargets(model, data, joint_position_rates)
+    targets.set("lift", float(data.actuator("lift").ctrl[0]) - lower)
+    for tick in range(round(8 / model.opt.timestep)):
+        if tick == round(1.5 / model.opt.timestep):
+            targets.set("gripper", 0.04)
+        targets.step()
+        mujoco.mj_step(model, data)
+    touching = {
+        frozenset(model.body(model.geom_bodyid[g]).name for g in c.geom)
+        for c in data.contact[: data.ncon]
+        if c.dist <= 0
+    }
+    if lower:
+        assert frozenset(("object2", "object1")) in touching
+        assert data.body("object2").xpos[2] > 0.59
+    else:
+        assert frozenset(("object2", "table")) in touching
+        assert data.body("object2").xpos[2] < 0.51
