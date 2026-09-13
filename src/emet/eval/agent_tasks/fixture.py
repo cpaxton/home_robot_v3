@@ -31,6 +31,7 @@ def obstacles(scene: dict) -> list[list[float]]:
     for room in rooms:
         x = (room["bounds"][0] + room["bounds"][2]) / 2
         result.append([x - 0.8, -1.6, x + 0.8, -1.15])
+    result.extend(item["bounds"] for item in scene.get("furniture", []))
     return result
 
 
@@ -69,7 +70,7 @@ class FixtureRobot:
 
         self.suite = suite
         self.scene = suite["scene"]
-        self._spec = SimpleNamespace(name="galaxea_r1", tamp_approach="front")
+        self._spec = SimpleNamespace(name="rby1", tamp_approach="front")
         self._last_step = 0
         self.session_id = uuid.uuid4().hex
         self.on_motion = None
@@ -197,8 +198,10 @@ class FixtureRobot:
             self.renderer.update_scene(self.data, camera=camera)
             result[key] = self.renderer.render().copy()
         camera = mujoco.MjvCamera()
-        camera.lookat[:] = [4, 0, 0]
-        camera.distance, camera.azimuth, camera.elevation = 12, 90, -89
+        xmin = min(r["bounds"][0] for r in self.scene["rooms"])
+        xmax = max(r["bounds"][2] for r in self.scene["rooms"])
+        camera.lookat[:] = [(xmin + xmax) / 2, 0, 0]
+        camera.distance, camera.azimuth, camera.elevation = max(12, xmax - xmin), 90, -89
         self.renderer.update_scene(self.data, camera=camera)
         result["overhead"] = self.renderer.render().copy()
         return result
@@ -216,6 +219,35 @@ class FixtureRobot:
                 "resolution_hw": [360, 640],
                 "camera_axes": "right_up_back",
             }
+        return result
+
+    def visible_objects(self) -> dict:
+        """Oracle labels gated by actual head-camera segmentation pixels.
+
+        This is explicit perception assistance: walls and occluders still hide
+        objects, but recognizing the visible pixels does not require a detector.
+        """
+        import mujoco
+
+        if self.renderer is None:
+            raise ValueError("agent observations require rendering")
+        self.renderer.update_scene(self.data, camera="zed_camera")
+        self.renderer.enable_segmentation_rendering()
+        try:
+            mask = self.renderer.render().copy()
+        finally:
+            self.renderer.disable_segmentation_rendering()
+        result = {}
+        for name, position in self.positions().items():
+            body_id = int(self.model.body(name).id)
+            geom_ids = self.np.flatnonzero(self.model.geom_bodyid == body_id)
+            pixels = int(
+                self.np.count_nonzero(
+                    self.np.isin(mask[:, :, 0], geom_ids) & (mask[:, :, 1] == int(mujoco.mjtObj.mjOBJ_GEOM))
+                )
+            )
+            if pixels >= 3:
+                result[name] = {"position": position, "pixels": pixels}
         return result
 
     def close(self):

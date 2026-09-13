@@ -22,16 +22,19 @@ It is not ProcTHOR/BEHAVIOR, a realistic household benchmark, or an official tas
 
 This effort owns scene/task definitions, evaluator predicates, researcher tools,
 evidence recording, certification and paper exports. The active agent effort owns
-the task loop, perception, grounding, navigation and semantic-memory lifecycle.
+perception, grounding, navigation and the semantic-memory lifecycle. This branch
+adds an opt-in bounded task mode around the shared loop; integration back into
+the active agent worktrees should reconcile that small loop change.
 
 Use the existing CHAT `plan_pick_place` / `execute_pick_place_plan` registry and
 one-shot plan handles. Never interpret absence of the word "fail" as success.
 The scorer independently checks measured object positions and held state.
 
-The next integration contract is a bounded task execution entry behind
-`run_agent.py`: consume action outcomes, continue beyond three decisions, replan,
-and return completion/failure/cancellation/exhaustion. The initial fixture invokes
-the real CHAT tool functions but does **not** replace or certify that agent loop.
+The bounded task execution entry is now `emet.agent.task.run_agent_task`, shared
+with `run_agent.py --task-mode` and the benchmark runner. It consumes action outcomes,
+continues beyond three decisions and reports model finish, cancellation, timeout,
+protocol failure and budget exhaustion. `--task-suite` launches fixtures directly
+from the app. Actual local-model diagnostics are separate from assisted witnesses.
 
 Record immutable event-time `policy` state separately from private `evaluator`
 state. Attach images and observation/command IDs. Learned integrations must supply
@@ -49,8 +52,9 @@ and object-pose teleportation. No contact dynamics or IK success is claimed.
 Its head camera has a recorded fixture-only downward mount; robot assets are not
 changed. A witness certificate applies only to this assistance profile.
 
-Next: live ZMQ integration, observed room/object discovery, actual memory revision,
-and one bounded local-model attempt per case. Then curate certified ProcTHOR homes,
+Implemented: visible-pixel-gated observations, historical object-cache revision,
+three/four-room layouts and bounded local-model task runs. Remaining: multi-room
+live ZMQ integration, learned room/object discovery and the actual DynaGraph memory lifecycle. Then curate certified ProcTHOR homes,
 add suitable robots, freeze development/held-out splits, and eventually evaluate
 a small native OmniGibson/BDDL placement pilot.
 

@@ -264,3 +264,60 @@ def test_paper_export_rejects_unmatched_evidence(suite, tmp_path, fault):
     with pytest.raises(ValueError, match="artifact hash|assistance changed"):
         export_paper(tmp_path, tmp_path / "paper")
     assert not (tmp_path / "paper").exists()
+
+
+@pytest.mark.parametrize("fault", [None, "mock", "altered_artifact", "no_model_output"])
+def test_policy_publication_keeps_failures_but_rejects_invalid_evidence(suite, tmp_path, fault):
+    from emet.eval.agent_tasks.publication import export_agent_paper
+
+    root = tmp_path / "policy"
+    episode = suite["episodes"][0]
+    manifest = {
+        "suite": suite,
+        "episode": episode,
+        "suite_fingerprint": fingerprint(suite),
+        "episode_fingerprint": fingerprint(episode),
+        "control": "local_agent",
+        "models": {"policy": "test", "mock": fault == "mock"},
+        "assistance": {"manipulation": "teleport"},
+        "source_revision": "test",
+        "implementation_sha256": {},
+    }
+    rec = Recorder(root, manifest)
+    rec.append("start" if fault == "no_model_output" else "model_output", policy={"raw": "invalid"})
+    rec.close()
+    write_json(
+        root / "metrics.json",
+        {
+            "event_hash": rec.last_hash,
+            "agent_ran": True,
+            "status": "task_failed",
+            "completed": 0,
+            "total": 1,
+            "model_rounds": 1,
+            "actions": 0,
+            "agent_status": "model_protocol_failed",
+        },
+    )
+    names = ["overview.pdf", "overview.png", "report.html", "storyboard.png", "episode.rrd", "episode.mp4"]
+    for name in names:
+        (root / name).write_bytes(b"test artifact")
+    write_json(
+        root / "artifacts.json",
+        {
+            "complete": True,
+            "source_event_hash": rec.last_hash,
+            "sha256": {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in names},
+        },
+    )
+    if fault == "altered_artifact":
+        (root / "overview.pdf").write_bytes(b"changed")
+    if fault:
+        with pytest.raises(ValueError, match="actual local-model|did not execute|artifact hash"):
+            export_agent_paper([root], tmp_path / "paper")
+        assert not (tmp_path / "paper").exists()
+    else:
+        result = export_agent_paper([root], tmp_path / "paper")
+        assert result["runs"][0]["status"] == "task_failed"
+        assert result["runs"][0]["completed"] == 0
+        assert "task failed" in (tmp_path / "paper/data/agent_task_policy/table.tex").read_text()

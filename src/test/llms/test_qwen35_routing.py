@@ -34,3 +34,9 @@ def test_qwen25_still_uses_qwen25_client(mock_cls):
     client = get_llm_client("qwen25-3B-Instruct-Int4", prompt="sys", device="cuda")
     assert client is mock_cls.return_value
     mock_cls.assert_called_once()
+
+
+@patch("emet.llms.qwen3_5_client.Qwen35Client")
+def test_explicit_cpu_no_quantization_is_preserved(mock_cls):
+    get_llm_client("qwen35-0.8B", prompt="sys", device="cpu", quantization=None)
+    assert mock_cls.call_args.kwargs["quantization"] is None

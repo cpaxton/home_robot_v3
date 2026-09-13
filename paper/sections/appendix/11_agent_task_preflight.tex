@@ -16,7 +16,7 @@ a recorded fixture-only downward head-camera mount. These controls establish
 repeatable assisted execution and evaluator behavior; they do not establish
 contact-stable manipulation, learned perception, agent planning, or memory
 recovery. The moved-object witness has privileged knowledge of the relocation.
-Live ZMQ and sustained learned-agent integration are separate acceptance gates.
+Multi-room live ZMQ and full learned-memory integration are separate acceptance gates.
 
 Recorded events separate policy-visible state from private evaluator truth and
 link tool outcomes, observations, trajectories, and goal predicates. Offline
@@ -29,9 +29,49 @@ from ground truth. The initial release makes no paid model calls.
   \centering
   \includegraphics[width=\linewidth]{figs/agent_task_architecture.pdf}
   \caption{Agent-task evidence flow. Solid components are exercised by the
-  assisted preflight; dashed connections identify shared agent/memory integration
-  still requiring validation in this benchmark.}
+  initial assisted witness stage; dashed connections identify integration outside
+  that stage. The shared local-policy runtime is evaluated separately below.}
   \label{fig:agent_task_architecture}
+\end{figure}}{}
+
+\subsection{Local-policy task interface}
+The next preflight stage runs a cached local language model through the shared
+agent's bounded task mode, also exposed by \texttt{run\_agent.py}. This mode
+preserves conversation history across decisions and continues after tool results.
+The environment provides bounded camera-based room search, navigation, and either
+combined pick-and-place or separate plan/execution calls. All manipulation still
+uses the shared guarded planning and execution implementation with the assistance
+profile described above.
+
+Three layouts are available: the original three-room fixture, a three-room layout
+with extra furniture, and a four-room layout including a study. Object recognition
+is assisted: labels and positions enter the observation cache only when the
+corresponding object has pixels in the rendered head-camera segmentation. Hidden
+world changes leave cached observations unchanged until a later observation.
+This cache is not the learned voxel/semantic-graph backend. Policy prompts,
+responses, syntax repairs, command outcomes and historical cache contents are
+recorded separately from evaluator truth.
+
+\IfFileExists{data/agent_task_policy/table.tex}{%
+\begin{table}[t]
+  \centering
+  \input{data/agent_task_policy/table.tex}
+  \caption{Local-policy task diagnostics with assisted perception and skills.
+  Each row is one declared layout/task run; these are integration checks, not
+  independent estimates of general agent performance. Interface code changed
+  between these development runs. Exact models, assistance,
+  source hashes and event hashes are retained in the accompanying summary.}
+  \label{tab:agent_task_policy}
+\end{table}}{}
+
+\IfFileExists{figs/agent_task_policy_moved_object_revisit.pdf}{%
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/agent_task_policy_moved_object_revisit.pdf}
+  \caption{Measured state and trajectory from an actual local-policy run in the
+  four-room fixture. The evaluator view records the outcome even when the policy
+  fails, exhausts its budget, or narrates its actions incorrectly.}
+  \label{fig:agent_task_policy}
 \end{figure}}{}
 
 \IfFileExists{data/agent_task_preflight/table.tex}{%

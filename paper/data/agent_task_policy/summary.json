@@ -1,0 +1,194 @@
+{
+  "paid_cost_usd": 0,
+  "runs": [
+    {
+      "actions": 2,
+      "agent_status": "model_finished",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_closing_punctuation_repair",
+        "skill_interface": "atomic",
+        "topology": "known_room_names"
+      },
+      "completed": 1,
+      "elapsed_s": 63.82316739499947,
+      "episode": "cross_room_delivery",
+      "episode_fingerprint": "06b4efd20250ac5b8962acf90db7794f7aafaf455255ed890710b1acd2913ebd",
+      "event_hash": "5c89ca91560157beffcf913d40765c392d50ba8e65ee9e8b9d6a05d397c83afa",
+      "figure": "agent_task_policy_cross_room_delivery.pdf",
+      "figure_sha256": "de6dff274fcfd57016efabf4b028bced8aafb188314fcb79bfaa81e827cd9806",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "effd5598bfeccdab9177aa8f85a4d90afbe3df98a99421c5d4e87819d38a872f",
+        "fixture.py": "817837001bbe47b9b71aa773c550dfff2cb8a3cf2aa1b46f90732becc6ccad7d",
+        "publication.py": "caa581ff948741655e1bbe56ec2c4b627da28eaad7615fce6025a5e4cbdd95c9",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "b2b7ed1448925e9549a2146da4de616e936cec1371ef3749c2f68112fa2c1bbf",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cpu",
+        "max_tokens": 128,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_rounds": 3,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.float32",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 1,
+      "response_repairs": 0,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "bd3f8720f70b1955b6bd6a54b861a65755b31de257a0d0e4339c5c00a123f6f6",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "8dc9413d6b51f2385ed3cbb5c0f51a3faa9c1ca5",
+      "source_run": "/tmp/emet-agent-local-baseline/base/cross_room_delivery",
+      "status": "completed",
+      "suite": "three_room_preflight_v1",
+      "suite_fingerprint": "d850de53520837e23e2a28fd48934e1b71b0dc90f227ce40a18a39942d4f55d7",
+      "total": 1
+    },
+    {
+      "actions": 32,
+      "agent_status": "round_budget_exhausted",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_closing_punctuation_repair",
+        "search": "bounded_camera_visible_room_sweep",
+        "skill_interface": "atomic",
+        "topology": "known_room_names"
+      },
+      "completed": 2,
+      "elapsed_s": 354.2701814200045,
+      "episode": "two_object_collection",
+      "episode_fingerprint": "2d9d71c87ed1773f995096eee303adba31169a5ed910c3894e8a8ff82dfc7c2b",
+      "event_hash": "021a12c0a2f7d42e16f677a4959ab81acb5e8cc2163afda8bfc5aa2854fa4bbd",
+      "figure": "agent_task_policy_two_object_collection.pdf",
+      "figure_sha256": "f087e4bd96520127f3484af2be741461cd84ef7d69b17de73f83989be0d53402",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "c43bcce56df1f9ac786cb8d1ba3e0715a77ebeeda0ae274bcd6cbaecf7120185",
+        "fixture.py": "817837001bbe47b9b71aa773c550dfff2cb8a3cf2aa1b46f90732becc6ccad7d",
+        "publication.py": "efa1868dfec9a421d7c30768268928dd6a1871417828bede7592172ba972798f",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "988f0e82ec6b5ce2ef61854c435d25c638ae2ff2112047e292572d0b5a0bd35e",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cpu",
+        "max_tokens": 96,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_rounds": 8,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.float32",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 2,
+      "response_repairs": 7,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "9555266b6206be0ff46840e5446694b9bdfabf3f30c7e3680d7eae6bc8d0bdbf",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "8dc9413d6b51f2385ed3cbb5c0f51a3faa9c1ca5",
+      "source_run": "/tmp/emet-agent-ordered-batch/two_object_collection",
+      "status": "task_failed",
+      "suite": "furnished_agent_tasks_v1",
+      "suite_fingerprint": "592e3ef996abd9ad2f3aa0ffe8ba352fd0394e42039d64e00d4e6e033dd62228",
+      "total": 2
+    },
+    {
+      "actions": 9,
+      "agent_status": "model_protocol_failed",
+      "assistance": {
+        "fixture_head_pitch_degrees": 35.0,
+        "geometry": "camera_visible_oracle_labels",
+        "manipulation": "object_pose_teleport",
+        "memory": "observed_object_cache_not_dynagraph",
+        "navigation": "footprint_checked_kinematic",
+        "policy_input": "text_observations",
+        "response_parser": "shared_parser_plus_recorded_closing_punctuation_repair",
+        "search": "bounded_camera_visible_room_sweep",
+        "skill_interface": "atomic",
+        "topology": "known_room_names"
+      },
+      "completed": 1,
+      "elapsed_s": 498.75938758900156,
+      "episode": "moved_object_revisit",
+      "episode_fingerprint": "53fc88984f7bb123bf825b135a4207659509a3b3093f8f2068ec71c38f6494b5",
+      "event_hash": "7a6b64e88657c26b62b38ba76b15a52c80efc52029de6ae155491756a2c0912c",
+      "figure": "agent_task_policy_moved_object_revisit.pdf",
+      "figure_sha256": "3f585aeba51c52d30ee5abc4b27142a1608be1dfd8ccef3cdf10a02ecc7ea1f7",
+      "implementation_sha256": {
+        "__init__.py": "622da421227941e9b868d7bc75d2d6b3906806fb793dab2787d3bc118473bafb",
+        "agent_runner.py": "69190a29721a5aebdb9006505c0f8cffccf7d09e201ff9debdc5b4e59bbb812f",
+        "fixture.py": "817837001bbe47b9b71aa773c550dfff2cb8a3cf2aa1b46f90732becc6ccad7d",
+        "publication.py": "efa1868dfec9a421d7c30768268928dd6a1871417828bede7592172ba972798f",
+        "recording.py": "5457d7249bd869fbe7958bd9668587886bc7293c9dda676cfa1d9e68e5f74022",
+        "runner.py": "f45a6e7b348bc54870da87bb009e57b195e53067fddbf697a1e940945fa62064",
+        "spec.py": "622c05f9db56a1186fb895e88d82d7fbd9803aed2a6d05a73b362dc9cdb7e0ac",
+        "visualize.py": "70b0101934da0c1dafd78e1aeb5618d7361be3c7079d26424285bdd949c8196c",
+        "worker.py": "71c41f688bd2fd835246063f734e7afcbf685db65c15a77a70ceba7fd1b33a04"
+      },
+      "model": {
+        "device": "cpu",
+        "max_tokens": 128,
+        "mock": false,
+        "policy": "qwen25-3B-Instruct"
+      },
+      "model_rounds": 12,
+      "model_runtime": {
+        "client_type": "Qwen25Client",
+        "dtype": "torch.float32",
+        "memory": {},
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "model_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+      },
+      "observation_revisions": 3,
+      "response_repairs": 0,
+      "shared_implementation_sha256": {
+        "agent/loop.py": "316e0f9718c862492ee1a41aa1dffb68597b9a171aad85647823bd47cf2ece1d",
+        "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+        "agent/task.py": "8672aca4b6130516117e5e13d18f6fa2801bdfe32f32b46ccdcf8ba54cf3ede7",
+        "agent/tools.py": "3f12b1631cd64e0e90b9561e3371330ee06e8d270a7dc418a044fc3b99579868",
+        "llms/__init__.py": "42cc1792b8e446c1f5622b08c25380f7d005f28da3cac58ce7adda744284bd4d"
+      },
+      "source_revision": "8dc9413d6b51f2385ed3cbb5c0f51a3faa9c1ca5",
+      "source_run": "/tmp/emet-agent-local-baseline/four_room/moved_object_revisit",
+      "status": "task_failed",
+      "suite": "four_room_agent_tasks_v1",
+      "suite_fingerprint": "733e89c429a23ad71c4d69bd5fe3d1ac048df3fb231b800d2d62db551d3d8c66",
+      "total": 2
+    }
+  ],
+  "scope": "one local-policy diagnostic per selected layout/task; assisted perception and skills"
+}

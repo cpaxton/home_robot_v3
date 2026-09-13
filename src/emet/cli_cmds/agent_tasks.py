@@ -16,13 +16,142 @@ import click
 def agent_tasks_group():
     """Preflight, run, inspect, replay and export embodied-task evidence.
 
-    Initial execution is an explicitly assisted MuJoCo fixture through shared
-    CHAT tools. It makes no model calls and does not certify learned execution.
+    Run assisted MuJoCo witnesses or the shared task agent with cached local
+    models. Paid providers are disabled. Evidence declares all simulation assistance.
     """
 
 
 def suite_option(fn):
     return click.option("--suite", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None)(fn)
+
+
+@agent_tasks_group.command("list")
+def list_environments_command():
+    """List bundled environment layouts and their task instructions."""
+    from emet.eval.agent_tasks.spec import default_suite, load_suite
+
+    rows = []
+    for path in sorted(default_suite().parent.glob("agent_tasks*.yaml")):
+        suite = load_suite(path)
+        rows.append(
+            {
+                "suite": str(path),
+                "name": suite["name"],
+                "rooms": [r["id"] for r in suite["scene"]["rooms"]],
+                "tasks": [{"id": e["id"], "instruction": e["instruction"]} for e in suite["episodes"]],
+            }
+        )
+    click.echo(json.dumps(rows, indent=2))
+
+
+@agent_tasks_group.command("export-agents")
+@click.argument("runs", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--paper-dir", required=True, type=click.Path(path_type=Path))
+def export_agents_command(runs, paper_dir):
+    """Export actual local-policy diagnostics (including failures) into the paper."""
+    from emet.eval.agent_tasks.publication import export_agent_paper
+
+    try:
+        result = export_agent_paper(list(runs), paper_dir)
+    except (ValueError, KeyError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(result, indent=2))
+
+
+@agent_tasks_group.command("agent")
+@suite_option
+@click.option("--episode", required=True)
+@click.option("--out", required=True, type=click.Path(path_type=Path))
+@click.option(
+    "--model",
+    default="qwen25-3B-Instruct",
+    type=click.Choice(["qwen35-0.8B", "qwen35-2B", "qwen35-4B", "qwen25-3B-Instruct"]),
+)
+@click.option("--device", default="cpu", type=click.Choice(["cpu", "cuda"]))
+@click.option("--max-rounds", default=24, type=click.IntRange(1, 128))
+@click.option("--max-tokens", default=128, type=click.IntRange(32, 1024))
+@click.option("--skill-interface", default="atomic", type=click.Choice(["atomic", "plan_execute"]))
+@click.option("--timeout", default=1800, type=click.IntRange(1, 7200))
+def agent_command(suite, episode, out, model, device, max_rounds, max_tokens, skill_interface, timeout):
+    """Run the actual shared task agent with a cached local model; paid providers disabled."""
+    from emet.eval.agent_tasks.spec import default_suite, load_suite, select_episode
+    from emet.utils.process_tree import popen_session, terminate_process_tree
+
+    suite = Path(suite or default_suite()).resolve()
+    select_episode(load_suite(suite), episode)
+    if out.exists():
+        raise click.ClickException("output already exists; use a fresh directory")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        sys.executable,
+        "-m",
+        "emet.eval.agent_tasks.worker",
+        "--suite",
+        str(suite),
+        "--episode",
+        episode,
+        "--out",
+        str(out.resolve()),
+        "--agent-model",
+        model,
+        "--device",
+        device,
+        "--max-rounds",
+        str(max_rounds),
+        "--max-tokens",
+        str(max_tokens),
+        "--skill-interface",
+        skill_interface,
+        "--timeout",
+        str(timeout),
+    ]
+    env = os.environ.copy()
+    env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    env.setdefault("OMP_NUM_THREADS", "4")
+    env.setdefault("MPLCONFIGDIR", "/tmp/emet-agent-mpl")
+    log_path = out.with_suffix(".log")
+    click.echo(f"Shared task agent: {model} on {device}; log: {log_path}")
+    with log_path.open("x") as log:
+        proc = popen_session(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            terminate_process_tree(proc, grace_s=2)
+            code = -1
+        except BaseException:
+            terminate_process_tree(proc, grace_s=2)
+            raise
+    path = out / "metrics.json"
+    if not path.is_file() and (out / "manifest.json").is_file():
+        from emet.eval.agent_tasks.recording import load_run, write_json
+        from emet.eval.agent_tasks.visualize import export_run
+
+        manifest, events, _ = load_run(out)
+        last_score = next((e["evaluator"]["score"] for e in reversed(events) if "score" in e["evaluator"]), {})
+        write_json(
+            path,
+            {
+                "completed": 0,
+                "total": len(manifest["episode"]["goals"]),
+                **last_score,
+                "success": False,
+                "status": "timeout" if code == -1 else "native_failure",
+                "event_hash": events[-1]["hash"] if events else "",
+                "agent_ran": any(e["kind"] == "model_output" for e in events),
+                "model_rounds": sum(e["kind"] == "model_output" for e in events),
+                "actions": sum(e["kind"] == "tool_start" for e in events),
+                "agent_status": "timeout" if code == -1 else "native_failure",
+                "paid_cost_usd": 0,
+                "evidence_complete": False,
+                "interrupted": True,
+            },
+        )
+        export_run(out)
+    metrics = json.loads(path.read_text()) if path.is_file() else {"status": "native_failure"}
+    click.echo(json.dumps(metrics, indent=2))
+    if code or not metrics.get("evidence_complete"):
+        raise click.ClickException(f"agent task or evidence gate failed; inspect {out}")
 
 
 @agent_tasks_group.command("preflight")

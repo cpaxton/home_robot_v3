@@ -372,7 +372,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
                 hf_model_id=f"Qwen/Qwen3.5-{model_size}",
                 max_tokens=mt,
                 device=dev,
-                quantization=quantization_option or "int4",
+                quantization=kwargs["quantization"] if "quantization" in kwargs else (quantization_option or "int4"),
                 cache_system_prefix=False,
                 **eqa_vl_image_kwargs(eqa_cfg),
             )

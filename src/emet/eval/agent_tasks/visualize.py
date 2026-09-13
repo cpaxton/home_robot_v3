@@ -19,19 +19,23 @@ def _map_svg(scene: dict, event: dict, trajectory: list) -> str:
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" role="img" aria-label="Evaluator floor plan">'
     ]
 
+    xmin = min(r["bounds"][0] for r in scene["rooms"])
+    xmax = max(r["bounds"][2] for r in scene["rooms"])
+    xscale = 1104 / (xmax - xmin)
+
     def xy(x, y):
-        return 45 + (x + 2) * 92, 400 - (y + 2) * 78
+        return 45 + (x - xmin) * xscale, 400 - (y + 2) * 78
 
     for room in scene["rooms"]:
         x0, y0, x1, y1 = room["bounds"]
         x, y = xy(x0, y1)
         out.append(
-            f'<rect x="{x}" y="{y}" width="{(x1 - x0) * 92}" height="{(y1 - y0) * 78}" fill="#eef2f5" stroke="#bbc5cf"/>'
+            f'<rect x="{x}" y="{y}" width="{(x1 - x0) * xscale}" height="{(y1 - y0) * 78}" fill="#eef2f5" stroke="#bbc5cf"/>'
         )
         out.append(f'<text x="{x + 15}" y="{y + 28}" font-size="19" fill="#334155">{html.escape(room["id"])}</text>')
     for x0, y0, x1, y1 in obstacles(scene):
         x, y = xy(x0, y1)
-        out.append(f'<rect x="{x}" y="{y}" width="{(x1 - x0) * 92}" height="{(y1 - y0) * 78}" fill="#667788"/>')
+        out.append(f'<rect x="{x}" y="{y}" width="{(x1 - x0) * xscale}" height="{(y1 - y0) * 78}" fill="#667788"/>')
     if trajectory:
         points = " ".join(f"{x},{y}" for x, y in (xy(*p[:2]) for p in trajectory))
         out.append(f'<polyline points="{points}" fill="none" stroke="#a16207" stroke-width="3"/>')
@@ -63,13 +67,13 @@ def _map_svg(scene: dict, event: dict, trajectory: list) -> str:
         x, y = xy(*pose[:2])
         radius = scene["footprint_radius_m"]
         out.append(
-            f'<ellipse cx="{x}" cy="{y}" rx="{radius * 92}" ry="{radius * 78}" fill="#0891b233" stroke="#087f9c" stroke-width="2"/>'
+            f'<ellipse cx="{x}" cy="{y}" rx="{radius * xscale}" ry="{radius * 78}" fill="#0891b233" stroke="#087f9c" stroke-width="2"/>'
         )
         out.append(
             f'<line x1="{x}" y1="{y}" x2="{x + 25 * math.cos(pose[2])}" y2="{y - 25 * math.sin(pose[2])}" stroke="#087f9c" stroke-width="4"/>'
         )
     out.append(
-        '<path d="M55 445h92m-92 -5v10m92 -10v10" stroke="#334155"/><text x="85" y="470" font-size="14">1 m</text>'
+        f'<path d="M55 445h{xscale}m-{xscale} -5v10m{xscale} -10v10" stroke="#334155"/><text x="85" y="470" font-size="14">1 m</text>'
     )
     out.append(
         '<text x="260" y="455" font-size="16" fill="#334155">Evaluator truth · amber: executed route · cyan: robot footprint</text></svg>'
@@ -87,6 +91,36 @@ def export_html(root: Path, manifest: dict, events: list, metrics: dict):
             trajectory.append(pose)
         row = dict(event)
         row["map_svg"] = _map_svg(scene, event, trajectory)
+        memory = event.get("policy", {}).get("memory", {})
+        room_names = [r["id"] for r in scene["rooms"]]
+        max_entries = max(
+            (sum(isinstance(v, dict) and v.get("room") == room for v in memory.values()) for room in room_names),
+            default=0,
+        )
+        cache_height = max(340, 100 + max_entries * 57)
+        elements = [
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 {cache_height}" role="img" aria-label="Observed object cache">'
+        ]
+        for i, room in enumerate(room_names):
+            x = 30 + i * 870 / len(room_names)
+            width = 840 / len(room_names)
+            elements.append(
+                f'<rect x="{x}" y="10" width="{width}" height="{cache_height - 30}" rx="12" fill="#eef5fa" stroke="#9eb3c5"/>'
+            )
+            elements.append(f'<text x="{x + 12}" y="38" font-size="19">{html.escape(room)}</text>')
+            known = [v for v in memory.values() if isinstance(v, dict) and v.get("room") == room]
+            for j, value in enumerate(known):
+                y = 77 + j * 57
+                elements.append(f'<circle cx="{x + 17}" cy="{y}" r="5" fill="#087f9c"/>')
+                elements.append(f'<text x="{x + 30}" y="{y + 5}" font-size="15">{html.escape(value["label"])}</text>')
+                elements.append(
+                    f'<text x="{x + 30}" y="{y + 23}" font-size="12" fill="#64748b">{html.escape(value["observation_id"])}</text>'
+                )
+            if not known:
+                elements.append(
+                    f'<text x="{x + 12}" y="80" font-size="13" fill="#64748b">No object observations</text>'
+                )
+        row["memory_svg"] = "".join(elements) + "</svg>"
         row["images"] = {
             key: "data:image/png;base64," + base64.b64encode((root / path).read_bytes()).decode()
             for key, path in event["images"].items()
@@ -103,24 +137,25 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;max-height:340px;
 button{padding:8px 18px;border:1px solid #64748b;background:white;border-radius:6px;cursor:pointer}svg{width:100%}.tag{display:inline-block;padding:6px 10px;background:#e0f2fe;border-radius:5px;margin:4px}
 .missing{padding:40px 10px;background:#f1f5f9;text-align:center;color:#64748b}@media(max-width:850px){.grid{grid-template-columns:1fr}}</style>
 <main><div class="muted">DYNAGRAPH / BENCHMARK PREFLIGHT</div><h1 id="title"></h1><p id="instruction"></p>
-<div class="bar"><span class="tag" id="result"></span><span class="tag">Assisted control · no learned policy</span><span class="tag">Paid calls: 0</span><p id="assistance" class="muted"></p></div>
+<div class="bar"><span class="tag" id="result"></span><span class="tag" id="policy-mode"></span><span class="tag">Paid calls: 0</span><p id="assistance" class="muted"></p></div>
 <section><div class="controls"><button id="play">Play</button><label for="step">Step</label><input id="step" type="range" min="0" value="0"><output id="time"></output></div></section>
 <section><h2>Room layout and measured trajectory</h2><div id="map"></div></section>
 <div class="grid"><section><h2>Robot head observation</h2><div id="head"></div></section><section><h2>Evaluator overhead view</h2><div id="overhead"></div></section>
 <section><h2>Decision and tool outcome</h2><pre id="policy"></pre></section><section><h2>Independent subgoal score</h2><pre id="score"></pre></section>
-<section><h2>Agent memory at this step</h2><pre id="memory"></pre></section><section><h2>Exact model input references</h2><pre id="inputs"></pre></section></div>
+<section><h2>Observed object cache at this step</h2><p class="muted">Only recorded object observations; this is not learned DynaGraph memory.</p><div id="memory-map"></div><pre id="memory"></pre></section><section><h2>Exact model input references</h2><pre id="inputs"></pre></section></div>
 <section><h2>Run provenance and limits</h2><pre id="manifest"></pre></section></main>
 <script id="data" type="application/json">__DATA__</script><script>
 const d=JSON.parse(document.getElementById('data').textContent), es=d.events, slider=document.getElementById('step');
 const text=(id,v)=>document.getElementById(id).textContent=typeof v==='string'?v:JSON.stringify(v,null,2);
 text('title',d.manifest.episode.id.replaceAll('_',' '));text('instruction',d.manifest.episode.instruction);
 text('result',d.metrics.status+' · '+d.metrics.completed+'/'+d.metrics.total+' placement goals');
-text('assistance',d.manifest.assistance);text('manifest',d.manifest);slider.max=Math.max(0,es.length-1);
+text('policy-mode',d.manifest.control==='local_agent'?'Local model · assisted skills':'Assisted control · no learned policy');text('assistance',d.manifest.assistance);text('manifest',d.manifest);slider.max=Math.max(0,es.length-1);
 function showImage(id,e){const el=document.getElementById(id);el.replaceChildren();if(e.images[id]){const img=document.createElement('img');img.src=e.images[id];img.alt=id+' at '+e.observation_id;el.appendChild(img);}else{const p=document.createElement('div');p.className='missing';p.textContent='No image recorded at this event. Select an observation/tool boundary.';el.appendChild(p);}}
 function show(){const e=es[+slider.value];if(!e)return;text('time',e.step+' · '+e.elapsed_s.toFixed(1)+' s · '+e.kind);document.getElementById('map').innerHTML=e.map_svg;
 showImage('head',e);showImage('overhead',e);text('policy',e.policy);text('score',e.evaluator.score||'No measured score at this event');
-text('memory',e.policy.memory||'Not recorded: scripted fixture controls do not run the learned voxel/graph memory. Evaluator object positions are not agent beliefs.');
-text('inputs',e.policy.input_observation_ids||'No model was called at this event.');}
+text('memory',e.policy.memory??'No observation cache recorded at this event. Evaluator object positions are not agent beliefs.');
+document.getElementById('memory-map').innerHTML=e.memory_svg;
+text('inputs',e.kind==='model_input'?{text:e.policy.text,image_observation_ids:e.policy.model_input_observation_ids,has_image:e.policy.has_image}:'No model was called at this event.');}
 slider.oninput=show;let timer=null;document.getElementById('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;text('play','Play');return;}text('play','Pause');timer=setInterval(()=>{slider.value=(+slider.value+1)%es.length;show();},350);};show();
 </script></html>"""
     (root / "report.html").write_text(template.replace("__DATA__", data))
@@ -168,7 +203,13 @@ def export_figures(root: Path, manifest: dict, events: list, metrics: dict):
             )
         x, y, _ = event["evaluator"]["robot_xyt"]
         ax.add_patch(Circle((x, y), scene["footprint_radius_m"], color="#0891b2", alpha=0.35))
-        ax.set(xlim=(-2.3, 10.3), ylim=(-2.4, 2.3), aspect="equal", xlabel="World x (m)", ylabel="World y (m)")
+        ax.set(
+            xlim=(min(r["bounds"][0] for r in scene["rooms"]) - 0.3, max(r["bounds"][2] for r in scene["rooms"]) + 0.3),
+            ylim=(-2.4, 2.3),
+            aspect="equal",
+            xlabel="World x (m)",
+            ylabel="World y (m)",
+        )
         ax.set_title(
             f"{label} · step {event['step']} · {event['evaluator']['score']['completed']}/{metrics['total']} goals",
             loc="left",

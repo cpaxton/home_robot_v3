@@ -154,3 +154,82 @@ def export_paper(batch: Path, paper: Path) -> dict:
         + "\n\\bottomrule\n\\end{tabular}\n"
     )
     return summary
+
+
+def export_agent_paper(runs: list[Path], paper: Path) -> dict:
+    """Publish actual local-policy outcomes, including failures, separately from witnesses."""
+    rows = []
+    sources = []
+    seen = set()
+    for root in runs:
+        manifest, events, metrics = load_run(root)
+        if manifest.get("control") != "local_agent" or manifest["models"].get("mock"):
+            raise ValueError("policy export requires an actual local-model run")
+        if not any(e["kind"] == "model_output" for e in events) or not metrics.get("agent_ran"):
+            raise ValueError("policy did not execute")
+        artifacts = json.loads((root / "artifacts.json").read_text())
+        if not artifacts["complete"] or artifacts["source_event_hash"] != metrics["event_hash"]:
+            raise ValueError("policy export requires complete matched visual evidence")
+        for name in ("overview.pdf", "overview.png", "report.html", "storyboard.png", "episode.rrd", "episode.mp4"):
+            if hashlib.sha256((root / name).read_bytes()).hexdigest() != artifacts["sha256"][name]:
+                raise ValueError(f"artifact hash mismatch: {name}")
+        key = (manifest["suite"]["name"], manifest["episode"]["id"])
+        if key in seen:
+            raise ValueError("duplicate policy layout/task; export one declared diagnostic per pair")
+        seen.add(key)
+        rows.append(
+            {
+                "suite": key[0],
+                "episode": key[1],
+                "model": manifest["models"],
+                "model_runtime": next((e["policy"] for e in events if e["kind"] == "model_ready"), {}),
+                "suite_fingerprint": manifest["suite_fingerprint"],
+                "episode_fingerprint": manifest["episode_fingerprint"],
+                "elapsed_s": metrics.get("elapsed_s"),
+                "response_repairs": metrics.get("response_repairs", 0),
+                "assistance": manifest["assistance"],
+                "status": metrics["status"],
+                "completed": metrics["completed"],
+                "total": metrics["total"],
+                "model_rounds": metrics["model_rounds"],
+                "actions": metrics["actions"],
+                "event_hash": metrics["event_hash"],
+                "source_revision": manifest["source_revision"],
+                "implementation_sha256": manifest["implementation_sha256"],
+                "shared_implementation_sha256": manifest.get("shared_implementation_sha256", {}),
+                "observation_revisions": len(metrics.get("observed_memory_revisions", [])),
+                "agent_status": metrics["agent_status"],
+                "source_run": str(root.resolve()),
+            }
+        )
+        sources.append((root, key))
+    if not rows:
+        raise ValueError("no policy runs selected")
+    data, figures = paper / "data/agent_task_policy", paper / "figs"
+    data.mkdir(parents=True, exist_ok=True)
+    figures.mkdir(parents=True, exist_ok=True)
+    for row, (root, key) in zip(rows, sources, strict=True):
+        dst = figures / f"agent_task_policy_{key[1]}.pdf"
+        if sum(other["episode"] == key[1] for other in rows) > 1:
+            dst = figures / f"agent_task_policy_{hashlib.sha256(key[0].encode()).hexdigest()[:8]}_{key[1]}.pdf"
+        shutil.copyfile(root / "overview.pdf", dst)
+        row["figure"] = dst.name
+        row["figure_sha256"] = hashlib.sha256(dst.read_bytes()).hexdigest()
+    summary = {
+        "scope": "one local-policy diagnostic per selected layout/task; assisted perception and skills",
+        "paid_cost_usd": 0,
+        "runs": rows,
+    }
+    write_json(data / "summary.json", summary)
+    table_rows = [
+        f"{r['episode'].replace('_', ' ')} & {r['completed']}/{r['total']} & "
+        f"{r['model_rounds']} & {r['status'].replace('_', ' ')} \\\\"
+        for r in rows
+    ]
+    (data / "table.tex").write_text(
+        "% Local policy diagnostics, not assisted witnesses.\n"
+        "\\begin{tabular}{lrrl}\n\\toprule\nTask & Goals & Decisions & Outcome \\\\\n\\midrule\n"
+        + "\n".join(table_rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
+    return summary

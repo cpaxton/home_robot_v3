@@ -483,6 +483,18 @@ log = Logger(__name__)
 )
 @click.pass_context
 @emet_config_options()
+@click.option(
+    "--task-mode", is_flag=True, help="Continue tool use across actions until task completion or a bounded budget."
+)
+@click.option("--task-max-rounds", default=24, type=click.IntRange(1, 128), show_default=True)
+@click.option(
+    "--task-suite",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Run a benchmark fixture through shared task mode with a cached local model.",
+)
+@click.option("--task-episode", default=None, help="Episode ID from --task-suite.")
+@click.option("--task-out", type=click.Path(), default=None, help="Fresh evidence directory for --task-suite.")
 def main(
     ctx: click.Context,
     llm: str,
@@ -549,6 +561,11 @@ def main(
     llm_host: str | None = None,
     llm_port: int = DEFAULT_LLM_PORT,
     vl_port: int | None = None,
+    task_mode: bool = False,
+    task_max_rounds: int = 24,
+    task_suite: str | None = None,
+    task_episode: str | None = None,
+    task_out: str | None = None,
 ) -> None:
     """Run the agent chatbot (default: fast ``qwen35-4B`` text tool-router).
 
@@ -578,6 +595,27 @@ def main(
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+    if task_suite:
+        if not task_episode or not task_out:
+            raise click.UsageError("--task-suite requires --task-episode and --task-out")
+        if offline or no_llm or start_sim or start_habitat or eqa_eval or llm_host:
+            raise click.UsageError("--task-suite owns its simulator and requires a cached local policy")
+        from pathlib import Path
+
+        from emet.cli_cmds.agent_tasks import agent_command
+
+        ctx.invoke(
+            agent_command,
+            suite=Path(task_suite),
+            episode=task_episode,
+            out=Path(task_out),
+            model=llm,
+            device=device,
+            max_rounds=task_max_rounds,
+            max_tokens=max_tokens,
+            timeout=1800,
+        )
+        return
     if eqa_eval:
         if habitat_question_id is None:
             raise click.UsageError("--eqa-eval requires --habitat-question-id.")
@@ -879,6 +917,8 @@ def main(
                 tool_debug=debug_tools,
                 agent_name=agent_name,
                 commands=cmd_list,
+                task_mode=task_mode,
+                task_max_rounds=task_max_rounds,
                 port_offset=port_offset,
                 agent_config=config_path,
                 device=device,

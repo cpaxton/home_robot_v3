@@ -561,6 +561,8 @@ def run_agent_with_robot(
     embodied_overlay: EmbodiedAgentConfig | None = None,
     thinking_status: bool | None = None,
     agent_section: Any | None = None,
+    task_mode: bool = False,
+    task_max_rounds: int = 24,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -1149,6 +1151,27 @@ def run_agent_with_robot(
 
             chat_log.log("user", user_text)
             print_terminal(f"user: {user_text}", color="green")
+            if task_mode:
+                from emet.agent.task import run_agent_task
+
+                def task_observe():
+                    update_xyt()
+                    state = {"base_pose": np.asarray(context["xyt_for_query"]).tolist()}
+                    obs = robot_client.get_observation() if vl_include_camera else None
+                    return state, getattr(obs, "rgb", None)
+
+                task_result = run_agent_task(
+                    user_text,
+                    llm_client=llm_client,
+                    tools=tools,
+                    executor=executor,
+                    robot=robot_client,
+                    max_rounds=task_max_rounds,
+                    observe=task_observe,
+                    on_event=lambda kind, payload: chat_log.log(kind, json.dumps(payload, default=str)),
+                )
+                print_terminal(f"task: {task_result['status']} — {task_result['message']}")
+                continue
             if debug_llm:
                 print(colored(f"[DEBUG] User: {user_text!r}", "yellow"))
 
