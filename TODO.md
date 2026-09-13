@@ -106,8 +106,27 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       corrected palm offset is grasp-frame -X. Retry `20260913_093103_771bbf`
       still slips; executed insertion is smaller than the static intervention.
       Also fixed world-target versus episode-base mixing in grasp/place
-      geometry (62 focused tests); `20260913_093656_0b9dbd` queued after
-      physical regression controls. Preserve all failed diagnostics.
+      geometry (62 focused tests); `20260913_093656_0b9dbd` reaches placement
+      but still loses the payload. Twenty-five mm contact trial
+      `20260913_094303_496e65` retains it through transport, then exposes an
+      untrimmed support-height outlier, a base translation that turns toward
+      lateral residuals, and premature arm completion while base yaw moves.
+      Robust height, translation-joint control, measured settling, and arm/lift
+      reference profiles implemented (90 focused tests). Full-task retry
+      `20260913_095547_9ec2d2` keeps the object held but refuses release because
+      depth contamination gives a false object bottom. Root cause: 15 mm head
+      RGB/depth baseline despite an aligned-pixel bridge contract. Fixed the
+      virtual registered-depth viewpoint (four render/geometry tests); retry
+      `20260913_100708_0f6983` still refuses release on residual mask-depth
+      tails (payload retained). Conservative median/MAD trimming now records
+      support statistics and abstains below 80% retained support (28 tests);
+      matched retry `20260913_102057_336037` cancelled on repeated no-progress
+      navigation before placement (physical pick true/place false). Fixed
+      diagonal search/execution disagreement, false arrival after safety
+      truncation, and missing chunk progress guard (45 tests). Driver-based
+      retry `20260913_103007_684ea5` pending. Navigation control
+      `20260913_095730_685498` passes all ten moves; health still reports
+      incomplete telemetry. Preserve all failed diagnostics.
       Observed-aperture child preset is unit
       tested but not yet live tested. Do not promote either on graph size or
       a controller return without physical placement evidence.

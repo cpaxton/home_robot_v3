@@ -18,6 +18,11 @@ test checks geometry, inertia, limits and all other initial coordinates.
 | `20260913_091308_642f8d` | `9714349f` | true / false | Preserved wrist/lift posture retains pickup and retraction; cylinder gradually moves toward pad edges and loses contact during base-turn braking |
 | `20260913_092427_1e2e65` | `b91d761e` | true / false | First contact-offset pilot moves sideways because its calibration used the wrong diagnostic frame convention; still loses the payload |
 | `20260913_093103_771bbf` | `69d8e478` | true / false | Corrected insertion direction improves initial depth but still slips during transport; closure tolerance and loaded arm displacement remain relevant |
+| `20260913_093656_0b9dbd` | `292e84df` | true / false | World-frame handoff reaches the receptacle and starts placement; payload has already slipped |
+| `20260913_094303_496e65` | `0a539b30` | true / false | 25 mm contact pilot retains payload through transport; loses it during a placement approach distorted by a height outlier and an unintended base turn |
+| `20260913_095547_9ec2d2` | `c1468a11` | true / false | Payload remains held through all placement corrections; falsely low observed object bottom makes alignment raise the object and refuse release |
+| `20260913_100708_0f6983` | `076fa458` | true / false | Registered depth fixes the camera contract, but minority mask-edge depth still drives oscillating placement corrections; payload remains held |
+| `20260913_102057_336037` | `ea16a60f` | true / false (cancelled) | Receptacle reacquisition fails before visual placement; navigation repeatedly executes the same truncated prefix without progress; cancelled and independently scored |
 
 Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
 `~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
@@ -135,7 +140,67 @@ fix, not an offset tuned for the tabletop origin. Physical regression job
 `20260913_093628_3c845e` passes all 34 tests (114 s), including matched retention,
 frame agreement, loaded lift, wrist profiling, command atomicity and wheel
 transmission. Live retry `20260913_093656_0b9dbd` starts afterward under the
-exclusive experiment lock; its result is pending.
+exclusive experiment lock. It reaches placement, but the payload has slipped.
+
+`0a539b30` advances only the experimental contact preset to the replay-tested
+25 mm offset. Job `20260913_094303_496e65` retains the object through transport
+and receptacle reacquisition (contact through 94.23 s), then loses it during
+the placement approach. A mixed-depth point at z=0.749 m raises the requested
+EE height to 0.849 m although the cube top is 0.56 m. Its short 4.3 cm arm-base
+command also starts a general SE(2) correction: the base turns while the arm is
+extended, and the client reports joint-position completion before base yaw
+settles. The saved final image shows the dropped red object on the table beside
+the blue cube; the near-gripper check correctly prevents an empty release.
+
+Three separate fixes follow: `f5ac318e` uses robust support height and avoids
+mutating sampled cloud points; `c508574d` executes the arm base component as a
+signed translation with heading hold and requires 100 ms of quiet measured
+joint/base velocities before completion; `c1468a11` reuses the existing
+physics-time limiter for arm (0.1 m/s) and lift (0.15 m/s) references. Default
+navigation stays pose-based. No force limits, object geometry, friction or
+physical scoring gates change. Ninety focused tests pass, including motion
+contracts and wrist/translation reference tests. Full-task retry
+`20260913_095547_9ec2d2` runs before neighboring precision navigation control
+`20260913_095730_685498`; the shared evaluation checkout remains frozen until
+both finish. The manipulation retry keeps the object held to the end, but its
+four alignment frames contain 10–15% support/table depth inside the correctly
+selected red mask. The resulting z correction stays +0.10 m despite repeated
+upward moves. The final object is still held: this failure is not a slip or
+Qwen identity mistake. Navigation completes all ten route moves with no
+failures; overall health remains `incomplete_telemetry`, not full acceptance.
+
+The depth contamination has a source bug: the MJCF head depth eye is 15 mm
+from RGB, while the bridge publishes color intrinsics/pose and advertises
+registered pixels. `076fa458` moves only the virtual aligned-depth viewpoint to
+the color optical center in both Stretch assets. It does not change physical
+objects. Render control `20260913_100547_d6990c` passes four tests, reproducing
+incorrect object-pixel depth with the old offset and verifying agreement with
+registered rendering. Full-task retry `20260913_100708_0f6983` still refuses
+release: the selected mask includes minority support-depth pixels, and its
+four z corrections are +9.9, -5.5, +2.1 and +10.0 cm. Correct registration alone
+does not guarantee clean semantic-mask depth. The object remains held.
+
+`ea16a60f` trims minority depth tails in the already verified placement mask
+using a median/MAD band, retaining at least 80% of valid pixels or abstaining.
+It preserves raw masks/depth and records filtering statistics. This assumes
+dominant coherent object support, not arbitrary multimodal geometry; no motion
+or physical success tolerance changes. Twenty-eight focused tests pass.
+The matched learned retry `20260913_102057_336037` never reaches this check:
+after pickup it loses the receptacle view and repeatedly executes the same
+short navigation prefix. It is cancelled after about five minutes; preserved
+trace scoring confirms pickup but not placement. Do not count it as a depth
+filter outcome or omit it from complete-system failures.
+
+The navigation audit exposes search/execution disagreement: eight-connected
+search allows diagonal edges through blocked corners that the execution LOS
+check rejects. The safety filter then discards the unsafe suffix but retains
+the original arrival marker and hides the rejection. `89581c70` shares
+no-corner-cutting neighbors across both searches and reachability, rejects
+unsafe routes without a false arrival marker, and stops chunk continuation
+without measured translation. Forty-five focused tests pass, including
+single/multi-goal detours and disconnected diagonals. The fresh learned retry
+`20260913_103007_684ea5` uses the reproducible driver with explicit contact and
+separated-neighbor presets; its physical result is pending.
 
 `query_geometry_aperture_pilot.yaml` is an additional, not-yet-live-tested
 clearance ablation. It measures both identified finger markers in calibrated
