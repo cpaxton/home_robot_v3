@@ -122,6 +122,8 @@ class GraspObjectOperation(ManagedOperation):
     geometry_servo_tolerance_m: float = 0.012
     contact_offset_m = (0.0, 0.0, 0.0)
     _geometry_previous_pose = None
+    _geometry_reference_pos = None
+    _geometry_reference_rot = None
     _geometry_stalled_steps: int = 0
     observed_aperture_margin_m: float | None = None
     detected_center_offset_x: int = 0  # -10
@@ -398,6 +400,8 @@ class GraspObjectOperation(ManagedOperation):
         self._success = False
         self.pickup_executed = False
         self._geometry_previous_pose = None
+        self._geometry_reference_pos = None
+        self._geometry_reference_rot = None
         self._geometry_stalled_steps = 0
         self.tracked_object_features = None
         self.observations.clear_history()
@@ -1185,7 +1189,19 @@ class GraspObjectOperation(ManagedOperation):
         joint_state = self.robot.get_joint_positions().copy()
         ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
         delta_base = world_delta_to_model_base(delta, servo.ee_pose, ee_rot)
-        q, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(ee_pos + delta_base, ee_rot, q0=joint_state)
+        if self._geometry_reference_pos is None:
+            self._geometry_reference_pos = np.array(ee_pos, copy=True)
+            self._geometry_reference_rot = np.array(ee_rot, copy=True)
+        # Integrate measured visual error into the command reference. Rebuilding
+        # from each lagging measurement repeats a biased setpoint and compounds
+        # wrist sag. Saturation prevents windup beyond the existing 5 cm local
+        # step budget; fresh evidence and the no-progress guard still gate closure.
+        offset = self._geometry_reference_pos + delta_base - ee_pos
+        offset *= min(1.0, 0.05 / max(np.linalg.norm(offset), 1e-8))
+        self._geometry_reference_pos = ee_pos + offset
+        q, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
+            self._geometry_reference_pos.copy(), self._geometry_reference_rot, q0=joint_state
+        )
         if (
             not success
             or q is None

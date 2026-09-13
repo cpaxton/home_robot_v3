@@ -150,3 +150,47 @@ def test_repeated_no_motion_stops_instead_of_spending_the_servo_budget():
     assert [op.geometry_servo_step(servo, mask) for _ in range(4)] == [None, None, None, False]
     assert op.robot.arm_to.call_count == 3
     op._grasp.assert_not_called()
+
+
+def test_reference_corrects_persistent_tracking_bias_instead_of_reissuing_same_goal():
+    op, servo, mask = fixture([0.04, 0, 0])
+    op.geometry_servo_tolerance_m = 0.005
+    assert op.geometry_servo_step(servo, mask) is None
+    first = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
+    np.testing.assert_allclose(first, [0.04, 0, 0])
+    # A 12 mm steady tracking error survives a completed arm command.
+    measured = first - [0.012, 0, 0]
+    servo.ee_pose[:3, 3] = measured
+    op.robot_model.manip_fk.return_value = (measured, np.array([0, 0, 0, 1]))
+    assert op.geometry_servo_step(servo, mask) is None
+    second = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
+    np.testing.assert_allclose(second, [0.052, 0, 0])
+    servo.ee_pose[:3, 3] = second - [0.012, 0, 0]
+    assert op.geometry_servo_step(servo, mask) is True
+    op._grasp.assert_called_once()
+
+
+def test_reference_saturates_within_measured_step_budget_and_preserves_orientation():
+    op, servo, mask = fixture([0.2, 0, 0])
+    assert op.geometry_servo_step(servo, mask) is None
+    initial_rot = op.robot_model.manip_ik_for_grasp_frame.call_args.args[1].copy()
+    measured = np.array([0.025, 0, 0])
+    servo.ee_pose[:3, 3] = measured
+    sagged = Rotation.from_euler("y", 0.03)
+    servo.ee_pose[:3, :3] = sagged.as_matrix()
+    op.robot_model.manip_fk.return_value = (measured, sagged.as_quat())
+    assert op.geometry_servo_step(servo, mask) is None
+    goal, rotation = op.robot_model.manip_ik_for_grasp_frame.call_args.args
+    assert np.linalg.norm(goal - measured) <= 0.05 + 1e-10
+    np.testing.assert_allclose(rotation, initial_rot)
+    op._grasp.assert_not_called()
+
+
+def test_reset_discards_grasp_reference_and_stall_history():
+    op, servo, mask = fixture([0.2, 0, 0])
+    op.observations = Mock()
+    op.geometry_servo_step(servo, mask)
+    assert op._geometry_reference_pos is not None
+    op.reset()
+    assert op._geometry_reference_pos is None and op._geometry_reference_rot is None
+    assert op._geometry_previous_pose is None and op._geometry_stalled_steps == 0
