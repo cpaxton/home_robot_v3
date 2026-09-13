@@ -60,6 +60,7 @@ from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import (
     MujocoServerCameraManagerThreaded,
 )
 from emet.simulation.stretch_mujoco.mujoco_server_sensor_manager import MujocoServerSensorManagerThreaded
+from emet.simulation.stretch_mujoco.position_targets import PositionTargets
 from emet.simulation.stretch_mujoco.utils import FpsCounter
 from emet.utils.logger import Logger
 
@@ -361,6 +362,7 @@ class MujocoServer:
         self.mjmodel = model
 
         self.mjdata = MjData(self.mjmodel)
+        self.position_targets = PositionTargets(self.mjmodel, self.mjdata, config.wrist_position_rates)
 
         self._base_in_pos_motion = False
 
@@ -662,7 +664,7 @@ class MujocoServer:
                         self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(current_value + pos)
                     else:
                         current_value = self.mjdata.actuator(actuator_name).length[0]
-                        self.mjdata.actuator(actuator_name).ctrl = current_value + pos
+                        self.position_targets.set(actuator_name, current_value + pos)
 
         # move_to
         for _, command in command_status.move_to.items():
@@ -675,7 +677,7 @@ class MujocoServer:
                 elif actuator_name in (Actuators.base_translate.name, Actuators.base_rotate.name):
                     raise NotImplementedError(f"Cannot set move_to for {actuator_name}, which is a relative joint.")
                 else:
-                    self.mjdata.actuator(actuator_name).ctrl = pos
+                    self.position_targets.set(actuator_name, pos)
 
         # set_base_velocity
         if command_status.base_velocity is not None and command_status.base_velocity.trigger:
@@ -743,7 +745,9 @@ class MujocoServer:
         if command_status.keyframe is not None and command_status.keyframe.trigger:
             command_status.keyframe.trigger = False
             self.mjdata.ctrl = self.mjmodel.keyframe(command_status.keyframe.name).ctrl
+            self.position_targets.reset()
 
+        self.position_targets.step()
         self.base_controller.update()
 
         self.data_proxies.set_command(command_status)

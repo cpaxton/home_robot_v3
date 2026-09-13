@@ -16,6 +16,11 @@ robot_settings = {
 
 depth_limits = {"d405": 1, "d435i": 10}
 
+# Conservative simulated wrist setpoint speeds (rad/s). Direct position steps
+# previously produced ~21 rad/s pitch motion and ejected a held object. These
+# are simulator settings, not a claim of calibrated real-robot limits.
+wrist_position_rates = {"wrist_yaw": 0.8, "wrist_pitch": 0.8, "wrist_roll": 0.8}
+
 
 base_motion = {"timeout": 15, "default_x_vel": 0.3, "default_r_vel": 1.0}
 
