@@ -72,6 +72,44 @@ def test_servo_stops_after_failed_pregrasp():
     op.robot.get_servo_observation.assert_not_called()
 
 
+@pytest.mark.parametrize("world_shape", [(8, 8, 3), (4, 4, 3)])
+def test_servo_validates_wrist_mask_without_head_semantics(world_shape):
+    op = operation()
+    op.intro = Mock()
+    op.warn = Mock()
+    op.gripper_aruco_detector = Mock()
+    op.pregrasp_open_loop = Mock(return_value=True)
+    op.grounded_target = SimpleNamespace(geometry_source="vlm_selected_depth_surface")
+    op.track_image_center = True
+    op.open_loop = False
+    mask = np.ones((8, 8), dtype=bool)
+    op.get_target_mask = Mock(return_value=mask)
+    op._compute_center_depth = Mock(return_value=0.3)
+    op.observations = Mock()
+    op.observations.get_latest_centroid.return_value = np.array([4, 4])
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    servo = SimpleNamespace(
+        ee_rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        semantic=None,
+        get_ee_xyz_in_world_frame=lambda: np.ones(world_shape),
+    )
+    op.robot.get_servo_observation.return_value = servo
+    op.show_point_cloud = True
+    # Stop at the first consumer of the validated 3D point, before any motion.
+    op._debug_show_point_cloud = Mock(side_effect=RuntimeError("validated wrist point"))
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        if world_shape[:2] == mask.shape:
+            with pytest.raises(RuntimeError, match="validated wrist point"):
+                op.visual_servo_to_object(None)
+            np.testing.assert_array_equal(op._debug_show_point_cloud.call_args.args[1], np.ones(3))
+        else:
+            with pytest.raises(ValueError, match="target mask shape"):
+                op.visual_servo_to_object(None)
+            op._debug_show_point_cloud.assert_not_called()
+    op.agent.semantic_sensor.predict.assert_not_called()
+    op.robot.arm_to.assert_not_called()
+
+
 @pytest.mark.parametrize("arrived", [True, False])
 def test_pregrasp_propagates_arm_motion_result(arrived):
     op = operation()

@@ -709,9 +709,10 @@ class GraspObjectOperation(ManagedOperation):
             else:
                 failed_counter = 0
                 mask_center = mask_center.astype(int)
-                assert (
-                    world_xyz.shape[0] == servo.semantic.shape[0] and world_xyz.shape[1] == servo.semantic.shape[1]
-                ), "World xyz shape does not match semantic shape."
+                # This is wrist geometry; head semantic labels may be absent
+                # (or have a different resolution) for query-grounded grasps.
+                if world_xyz.shape[:2] != target_mask.shape:
+                    raise ValueError("Wrist world xyz shape does not match target mask shape")
                 current_xyz = world_xyz[int(mask_center[0]), int(mask_center[1])]
                 if self.show_point_cloud:
                     self._debug_show_point_cloud(servo, current_xyz)
