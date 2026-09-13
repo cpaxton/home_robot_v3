@@ -1,8 +1,10 @@
 # Experimental Stretch SG3 contact-depth calibration. Grasp-frame -X points
 # toward the palm: target that point, inserting the nominal grasp link farther.
-# The 15 mm offset retained the cylinder in a matched static physics replay;
+# Both 15/25 mm insertion retained a matched static replay, but the live 15 mm
+# pilot still slipped (less insertion executed within the 12 mm closure gate).
+# This preset tests the predeclared 25 mm contact depth without relaxing gates;
 # it is not calibrated for real hardware or established across objects yet.
 extends: configs/emet/query_geometry_manipulation_pilot.yaml
 mapping:
   grasp:
-    contact_offset_m: [-0.015, 0.0, 0.0]
+    contact_offset_m: [-0.025, 0.0, 0.0]
