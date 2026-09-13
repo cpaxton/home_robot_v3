@@ -45,6 +45,16 @@ Habitat-OVMM; it is not yet the four-row Stage E panel. Avoid `PHASE=all` for th
 staged battery. The driver fails if independent tabletop physical scoring fails,
 even when the agent process exits zero.
 
+For explicit simulator-only ablations, set `SIM_AGENT_CONFIG` and `SIM_CONFIG`
+to the selected agent and scene YAML paths. Defaults remain the detector preset
+and original tabletop; these overrides do not change Habitat/EQA rows. The
+driver saves both selected files, hashes and the exact command alongside agent
+process status and independent physical scoring. For example, the current
+separated-neighbor contact diagnostic uses
+`SIM_AGENT_CONFIG=configs/emet/query_geometry_contact_pilot.yaml` and
+`SIM_CONFIG=configs/sim/default_table_stretch_clearance.yaml`. It is not an
+original-clutter acceptance result.
+
 `EMET_SIM_EVAL_CONFIG` selects explicit evaluator-only object/support/EE/gripper
 body names, and `EMET_SIM_EVAL_TRACE` selects a fresh JSONL destination. Neither
 is part of observations or tools. The Stretch simulator records at 10 Hz in
