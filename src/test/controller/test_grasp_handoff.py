@@ -25,10 +25,14 @@ def operation():
     return op
 
 
-def test_grounded_grasp_turns_arm_toward_target_then_reacquires():
+def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     op = operation()
     target = SimpleNamespace(xyz=np.array([0.09, -0.52, 0.52]))
     op.agent.prepare_query_target.return_value = target
+    events = []
+    op.robot.head_to.side_effect = lambda *args, **kwargs: events.append("head")
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **kw: events.append("fresh"))
+    op.agent.prepare_query_target.side_effect = lambda query: (events.append("ground"), target)[1]
     op.align_grounded_target_for_grasp()
     pose = op.robot.move_base_to.call_args.args[0]
     np.testing.assert_allclose(pose[:2], [0, 0])
@@ -36,6 +40,7 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires():
     op.agent.prepare_query_target.assert_called_once_with("red cylinder")
     assert op.grounded_target is target
     np.testing.assert_allclose(op.get_object_xyz(), target.xyz)
+    assert events == ["head", "fresh", "ground"]
 
 
 def test_failed_alignment_does_not_reacquire_or_move_arm():

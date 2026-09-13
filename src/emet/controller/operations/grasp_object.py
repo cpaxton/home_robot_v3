@@ -1050,6 +1050,11 @@ class GraspObjectOperation(ManagedOperation):
             raise RuntimeError("Manipulation orientation did not complete")
         self.robot.switch_to_manipulation_mode()
         self.robot.head_to(*constants.look_at_ee, blocking=True)
+        from emet.controller.dynamem.look import wait_post_motion_obs
+
+        # The head command can finish before the full RGB-D stream publishes
+        # its new gaze. Never reacquire from the cached pre-turn observation.
+        wait_post_motion_obs(self.robot, timeout=2.0)
         target = self.agent.prepare_query_target(self.target_object)
         self.grounded_target = target
         self._object_xyz = np.array(target.xyz, copy=True)
