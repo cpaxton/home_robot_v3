@@ -114,6 +114,53 @@ def test_explicit_cancel_clears_reference_immediately():
     np.testing.assert_array_equal(data.ctrl, 0)
 
 
+def test_native_navigation_profile_brakes_within_wheel_acceleration_envelope():
+    from emet.utils.config import get_control_config
+
+    profile = get_control_config("noplan_velocity_stretch_sim")
+    radius = config.robot_settings["wheel_diameter"] / 2
+    half_separation = config.robot_settings["wheel_separation"] / 2
+    assert profile.acc_lin + half_separation * profile.acc_ang < radius * config.wheel_reference_acceleration
+
+
+@pytest.mark.parametrize("profile_name", ["noplan_velocity_sim", "noplan_velocity_stretch_sim"])
+def test_coupled_goal_handoff_with_acceleration_limited_wheels(profile_name):
+    from emet.motion.control.goto_controller import GotoVelocityController
+    from emet.utils.config import get_control_config
+
+    model, data = wheel_model(3)
+    model.opt.timestep = 0.01
+    model.actuator_ctrllimited[:] = 1
+    model.actuator_ctrlrange[:] = [-6, 6]
+    base = BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+    nav = GotoVelocityController(get_control_config(profile_name))
+    goal = np.array([0.4, 0, np.pi / 2])
+    pose = np.zeros(3)
+    nav.update_goal(goal)
+    nav.control.set_linear_error_tolerance(0.02)
+    nav.control.set_angular_error_tolerance(0.03)
+    acquired_xy = False
+    peak_handoff_xy_error = 0.0
+    # Kinematic reference integration isolates braking compatibility, not
+    # wheel traction or task acceptance. Control at 20 Hz, wheel ticks 100 Hz.
+    for tick in range(2000):
+        if tick % 5 == 0:
+            nav.update_pose_feedback(pose)
+            command = nav.compute_control()
+        base._set_base_velocity(*command)
+        v, w = utils.diff_drive_fwd_kinematics(*(data.ctrl / 3))
+        pose += model.opt.timestep * np.array([v * np.cos(pose[2]), v * np.sin(pose[2]), w])
+        acquired_xy |= nav.control._at_goal_xy
+        if acquired_xy:
+            peak_handoff_xy_error = max(peak_handoff_xy_error, np.linalg.norm(pose[:2] - goal[:2]))
+    if profile_name == "noplan_velocity_stretch_sim":
+        assert np.linalg.norm(pose[:2] - goal[:2]) < 0.02
+        assert abs(pose[2] - goal[2]) < 0.03
+        assert peak_handoff_xy_error < 0.02
+    else:
+        assert peak_handoff_xy_error > 0.02, "Old feedback must reproduce unsafe handoff braking"
+
+
 @pytest.mark.parametrize("gear", [1, 3, -2])
 def test_base_velocity_telemetry_uses_joint_not_actuator_speed(gear):
     model, data = wheel_model(gear)

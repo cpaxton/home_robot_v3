@@ -206,7 +206,7 @@ class MujocoZmqServer(BaseZmqServer):
         scene_model: str | None = None,
         simulation_rate: int = 80,
         camera_hz: int = 15,
-        config_name: str = "noplan_velocity_sim",
+        config_name: str = "noplan_velocity_stretch_sim",
         objects_info: dict[str, Any] | None = None,
         no_cameras: bool = False,
         environment: dict[str, Any] | None = None,
