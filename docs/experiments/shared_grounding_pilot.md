@@ -183,6 +183,65 @@ This run does not exercise post-grasp navigation, and does not establish
 manipulation success. Keep that integration gate open despite the isolated
 navigation fix passing. Existing multiprocessing/EGL teardown errors persist.
 
+Follow-up `20260912_233819_e45145`, source `94149560`: one repeat of the existing
+`configs/benchmarks/navigation_acceptance.yaml` using `probe_rby1_camera.py`
+(`--route-repeats 1`), default-table Stretch, no perception models. All ten
+commands succeed under the named precision contract (2 cm / 0.03 rad), including
+±10° and ±30° turns and 20 cm forward/return translation. Maximum terminal
+errors: 0.01939 m and 0.02953 rad; zero corrective redispatches. Artifacts:
+`~/runs/emet/nav-geared-precision`. The probe summary is `incomplete_telemetry`,
+not full acceptance: Stretch omits the requested base-up/actuator-target fields.
+This is one route repeat on one robot/environment, not cross-robot robustness.
+
+Manual comparison of the final two frames from `manipulation-wheel-units`
+shows the red cylinder on the extreme lower-right edge of accepted frame
+`grounding-4e5d1b8424ba4aeda2f56cb0e358c07f.png`, and no visible cylinder in
+rejected `grounding-8a445c194f364a029016ffcaa02cb195.png`. The rejection has no
+supported proposals; Qwen is not rejecting a clearly visible cylinder there.
+The sweep permits an early return within 0.35 rad of commanded head pose,
+even during motion. Residual camera motion is a hypothesis to measure before
+changing verification. Camera-only trace `20260912_234053_eb1405` confirms the
+mechanism: after the soft-wait handoff, saved camera rotation changes another
+8.9145 degrees; base displacement is under a micrometre and yaw change under
+0.003 degrees. `~/runs/emet/head-handoff-trace/handoff/head_0.png` shows the
+cylinder and cube, while `head_3.png` shows neither. First sample is already
+0.20 s after soft-wait return; this is a lower bound on total post-return drift.
+The full observations have `image_timing: null`; do not infer capture latency
+from joint-state sampling alone.
+
+Fix `d9bb2ce3` uses the robot adapter's blocking head move and existing newer-frame
+wait for verification callbacks only; ordinary mapping retains its soft sweep.
+91 focused head-sweep/query/grounding/manipulation tests pass. This does not
+upgrade the underlying head-motion API to a verified success contract; clients
+that silently time out remain a follow-up. Serial job `20260912_234501_ffeb03`
+checks the fixed camera handoff, then the same bounded learned command. Artifacts
+`~/runs/emet/head-handoff-settled` and `~/runs/emet/settled-gaze-retry/evidence`.
+Fixed camera handoff rotates just 0.0037 degrees across the corresponding saved
+views after a 1.05 s head/frame wait (versus 8.9145 degrees before). Integrated
+retry passes arrival verification and immediate fresh grounding, then rejects
+after the subsequent side-grasp rotation/head movement: final
+`grounding-930a1f12ee68467e86625b9a83089794.png` shows floor and table edge.
+Tool duration 30.1 s; no pickup or place. The grasp adapter did not wait for the
+RGB-D stream to advance after that second movement. Candidate `4f946d1d` adds
+the existing post-motion frame wait there, without changing mask acceptance;
+46 targeted tests pass, including head → frame wait → grounding order.
+Bounded retry `20260912_234917_6b6fdf`, artifacts
+`~/runs/emet/grasp-fresh-frame-retry/evidence`, completes with failed pickup
+(tool 62.1 s). Both head-camera handoffs pass and wrist servo approaches from
+0.368 to 0.218 m. Final calibrated wrist capture
+`wrist_tracking/grounding-006bc3656f6440b19ab073405e0573ec` shows the cylinder
+partly behind a gripper finger and clipped at the lower image boundary. Qwen
+selects candidate 4, but its resulting instance-0 mask fails original-target
+world association: only 1,339 / 3,385 valid pixels (39.6%) lie in the original
+bounds plus the unchanged 5 cm margin, versus the required 80%. Selected support
+median `(0.118, -0.465, 0.476)` differs from original target median
+`(0.079, -0.539, 0.523)`. Do not relax the threshold on this example. Distinguish
+object displacement/contact, mixed mask support, and camera/pose timing before
+changing tracking. Several servo-center depths are zero and manipulation base
+goals are repeatedly reissued; inspect these control paths next. No gripper
+closure or place success in this retry. The full 91-test focused suite still
+passes; these are correctness repairs, not long-horizon manipulation acceptance.
+
 ## Fixed comparison
 
 - Hybrid: `query_detector_segmented_pilot.yaml`, YOLOE boxes → SAM2.

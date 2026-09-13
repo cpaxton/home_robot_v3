@@ -38,6 +38,22 @@ and EQA regression checks. Follow the [environment progression](docs/environment
       `20260912_233137_f012c2` completes initial navigation but fresh grounding
       rejects absent/ambiguous target before pickup. Post-grasp navigation and
       physical grasp verification remain unvalidated in the integrated harness.
+      One precision-route repeat (`20260912_233819_e45145`) passes all 10 moves
+      at 2 cm / 0.03 rad; full probe remains incomplete due to missing posture
+      telemetry. Last grounding frames show cylinder leaving the image edge;
+      camera-only replay confirms another 8.9 degrees of view rotation after
+      soft sweep returns, carrying visible objects out of frame. `d9bb2ce3`
+      waits for blocking head motion/new frame on verification sweeps only;
+      91 tests pass; camera drift falls to 0.0037 degrees. Integrated retry
+      `20260912_234501_ffeb03` passes arrival/fresh grounding, then loses the
+      view after side-grasp rotation. `4f946d1d` waits for post-turn RGB-D there;
+      91 focused tests pass. Retry `20260912_234917_6b6fdf` passes both head
+      handoffs and reaches wrist approach, then rejects original-target 3D
+      association (39.6% support in bounds, required 80%). Qwen selects the red
+      cylinder, now partly finger-occluded/clipped. Diagnose contact/object
+      displacement versus mixed mask/pose timing; do not widen the threshold.
+      Audit zero center depths and repeated manipulation base goals. Head
+      completion receipts and sim image timestamps remain gaps.
 - [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
       gate, not dropped: both paired strategies scored 0/4 localization phases.
       Track long-range coverage, first target visibility and relational instance
