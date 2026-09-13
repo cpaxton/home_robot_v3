@@ -117,6 +117,7 @@ class GraspObjectOperation(ManagedOperation):
     track_image_center: bool = True  # Set to False if you want to use aruco marker, but since the position between gripper center and the image is fixed, this is not needed.
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
+    use_geometry_servo: bool = False
     detected_center_offset_x: int = 0  # -10
     detected_center_offset_y: int = 0  # -40
     percentage_of_image_when_grasping: float = 0.2
@@ -178,6 +179,9 @@ class GraspObjectOperation(ManagedOperation):
         self.match_method = match_method
         self._try_open_loop = try_open_loop
         self.grounded_target = grounded_target
+        self.use_geometry_servo = bool((self.parameters.get("grasp", {}) or {}).get("geometry_servo", False))
+        if self.use_geometry_servo and grounded_target is None:
+            raise ValueError("Geometry servo requires an observation-grounded target")
         if grounded_target is not None and (try_open_loop or not servo_to_grasp):
             raise ValueError("Grounded targets require closed-loop visual tracking")
         if self.match_method not in ["class", "feature"]:
@@ -440,6 +444,8 @@ class GraspObjectOperation(ManagedOperation):
                             "recorded_at": time.time(),
                             "image_timing": getattr(servo, "image_timing", None),
                             "joint": None if getattr(servo, "joint", None) is None else servo.joint.tolist(),
+                            "ee_pose": None if getattr(servo, "ee_pose", None) is None else servo.ee_pose.tolist(),
+                            "geometry_servo": self.use_geometry_servo,
                         },
                     )
         # Find the best masks
@@ -661,6 +667,12 @@ class GraspObjectOperation(ManagedOperation):
             if not detector_free:
                 servo = self.agent.semantic_sensor.predict(servo, ee=True)
             latest_mask = self.get_target_mask(servo, center=(center_x, center_y))
+
+            if self.use_geometry_servo:
+                result = self.geometry_servo_step(servo, latest_mask)
+                if result is not None:
+                    return result
+                continue
 
             # dilate mask
             kernel = np.ones((3, 3), np.uint8)
@@ -1067,6 +1079,53 @@ class GraspObjectOperation(ManagedOperation):
         self.grounded_target = target
         self._object_xyz = np.array(target.xyz, copy=True)
 
+    def geometry_servo_step(self, servo, mask):
+        """Place the measured grasp center at robust observed object bounds.
+
+        Unlike the legacy fixed-pixel/depth gate, this uses the calibrated
+        end-effector pose. Return None after a completed correction, or the
+        final grasp/failure result. World geometry remains Qwen-verified and
+        associated with the original target before reaching this method.
+        """
+        from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
+
+        world = servo.get_ee_xyz_in_world_frame()
+        if world is None or servo.ee_pose is None or np.asarray(servo.ee_pose).shape != (4, 4):
+            self.error("Geometry servo requires calibrated wrist and end-effector poses.")
+            return False
+        points = world[np.asarray(mask, dtype=bool) & np.isfinite(world).all(axis=-1)]
+        if len(points) < 10 or not np.isfinite(servo.ee_pose).all():
+            return False
+        # Edge pixels can mix object/background depth. Trim each axis before
+        # estimating a center; a surface median is biased toward visible faces.
+        center = np.quantile(points, [0.05, 0.95], axis=0).mean(axis=0)
+        delta = center - servo.ee_pose[:3, 3]
+        distance = float(np.linalg.norm(delta))
+        self.info(f"Observed grasp-center error (world m): {delta}")
+        if distance <= 0.012:
+            return self._grasp()
+        if distance > 0.5:
+            self.error("Grounded object is outside the local grasp approach budget.")
+            return False
+        delta *= min(1.0, 0.05 / distance)
+        joint_state = self.robot.get_joint_positions().copy()
+        ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
+        delta_base = world_delta_to_model_base(delta, servo.ee_pose, ee_rot)
+        q, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(ee_pos + delta_base, ee_rot, q0=joint_state)
+        if (
+            not success
+            or q is None
+            or not np.isfinite(q).all()
+            or q[HelloStretchIdx.ARM] < 0
+            or q[HelloStretchIdx.LIFT] < 0
+        ):
+            self.error("No feasible geometry-servo correction.")
+            return False
+        if not self.robot.arm_to(q, head=constants.look_at_ee, blocking=True):
+            self.error("Geometry-servo correction did not complete.")
+            return False
+        return None
+
     def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35) -> bool:
         """Move to a pregrasp position in an open loop manner.
 
@@ -1101,6 +1160,11 @@ class GraspObjectOperation(ManagedOperation):
 
         # It should not be more than 45 degrees inclined
         vector_to_object[2] = max(vector_to_object[2], vector_to_object[1])
+        direction_norm = np.linalg.norm(vector_to_object)
+        if direction_norm < 1e-6:
+            self.error("No horizontal pregrasp approach direction.")
+            return False
+        vector_to_object /= direction_norm
 
         print("Absolute object xyz was:", object_xyz)
         print("Relative object xyz was:", relative_object_xyz)

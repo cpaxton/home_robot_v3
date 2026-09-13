@@ -4,8 +4,14 @@
 """Shared geometry handoff for Stretch's side-facing pick and place adapters."""
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from emet.motion import constants
+
+
+def world_delta_to_model_base(delta, ee_world_pose, ee_base_quaternion):
+    """Use the common grasp frame, independent of episode-relative odometry yaw."""
+    return Rotation.from_quat(ee_base_quaternion).as_matrix() @ ee_world_pose[:3, :3].T @ delta
 
 
 def orient_arm_toward_target(robot, xyz):

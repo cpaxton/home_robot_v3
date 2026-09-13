@@ -79,7 +79,8 @@ class PlaceObjectOperation(ManagedOperation):
         return self.agent.prepare_query_target(query)
 
     def get_target_center(self):
-        return self.get_target().point_cloud.mean(axis=0)
+        points = self.get_target().point_cloud
+        return (points.quantile(0.05, dim=0) + points.quantile(0.95, dim=0)) / 2
 
     def sample_placement_position(self, xyt) -> np.ndarray:
         """Sample a placement position for the object on the receptacle."""
@@ -164,19 +165,21 @@ class PlaceObjectOperation(ManagedOperation):
         stop on missing identity, geometry, reachability or motion completion.
         """
         from emet.controller.operations.query_observation import observe_query_points
+        from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
 
-        support_top = float(self.get_target().point_cloud[:, 2].max())
+        support_top = float(self.get_target().point_cloud[:, 2].quantile(0.95))
         for attempt in range(4):
             obs, points = observe_query_points(self.agent, self.robot, self.held_query, stage="place_alignment")
             if obs.ee_pose is None or np.min(np.linalg.norm(points - obs.ee_pose[:3, 3], axis=1)) > 0.12:
                 self.error("Observed object is not near the gripper; retaining it without release.")
                 return False
-            center = (points.min(axis=0) + points.max(axis=0)) / 2
+            bounds = np.quantile(points, [0.05, 0.95], axis=0)
+            center = bounds.mean(axis=0)
             delta = np.array(
                 [
                     placement_xyz[0] - center[0],
                     placement_xyz[1] - center[1],
-                    support_top + 0.02 - points[:, 2].min(),
+                    support_top + 0.02 - bounds[0, 2],
                 ]
             )
             self.info(f"Observed placement correction (world m): {delta}")
@@ -192,9 +195,7 @@ class PlaceObjectOperation(ManagedOperation):
             delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
             joint_state = self.robot.get_joint_positions().copy()
             ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
-            yaw = float(self.robot.get_base_pose()[2])
-            c, s = np.cos(yaw), np.sin(yaw)
-            delta_base = np.array([c * delta[0] + s * delta[1], -s * delta[0] + c * delta[1], delta[2]])
+            delta_base = world_delta_to_model_base(delta, obs.ee_pose, ee_rot)
             q, success = self._get_place_joint_state(ee_pos + delta_base, ee_rot, joint_state)
             if not success or q is None or not np.isfinite(q).all():
                 self.error("No feasible visual placement correction.")

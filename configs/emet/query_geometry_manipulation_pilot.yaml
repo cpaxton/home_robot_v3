@@ -1,0 +1,6 @@
+# Experimental shared query harness: calibrated 3D grasp centering rather than
+# a fixed wrist pixel/depth gate. Keep the previous preset as a paired control.
+extends: configs/emet/query_detector_segmented_pilot.yaml
+mapping:
+  grasp:
+    geometry_servo: true

@@ -95,6 +95,18 @@ def test_pregrasp_selects_reachable_standoff_without_clamping_invalid_ik():
     assert op.robot_model.manip_ik_for_grasp_frame.call_count == 2
 
 
+def test_pregrasp_angle_clipping_preserves_metric_standoff():
+    op = operation()
+    op.robot.get_base_pose.return_value = np.zeros(3)
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, 0, 1]), np.array([0, 0, 0, 1]))
+    op.robot_model.manip_ik_for_grasp_frame.return_value = (np.zeros(11), None, None, True, None)
+    target = np.array([0, -0.2, 0])
+    assert op.pregrasp_open_loop(target, distance_from_object=0.3)
+    requested = op.robot_model.manip_ik_for_grasp_frame.call_args.args[0]
+    assert np.linalg.norm(requested - target) == pytest.approx(0.3)
+
+
 @pytest.mark.parametrize("center_depth", [0.0, 0.3])
 def test_servo_stops_on_failed_motion_without_grasping(center_depth):
     op = operation()
