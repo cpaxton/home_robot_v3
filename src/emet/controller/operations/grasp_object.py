@@ -1104,16 +1104,32 @@ class GraspObjectOperation(ManagedOperation):
 
         print("Absolute object xyz was:", object_xyz)
         print("Relative object xyz was:", relative_object_xyz)
-        shifted_object_xyz = relative_object_xyz - (distance_from_object * vector_to_object)
-        print("Pregrasp xyz:", shifted_object_xyz)
+        # A fixed standoff can put the requested arm behind its retracted
+        # limit. Try bounded, still-separated poses along the same approach
+        # ray, largest standoff first. Never clamp an infeasible IK solution.
+        minimum_standoff = 0.20
+        if not np.isfinite(distance_from_object) or distance_from_object < minimum_standoff:
+            self.error("Pregrasp must remain at least 20 cm from the target.")
+            return False
+        target_joint_positions = None
+        for standoff in np.linspace(distance_from_object, minimum_standoff, 6):
+            shifted_object_xyz = relative_object_xyz - standoff * vector_to_object
+            candidate, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
+                shifted_object_xyz, ee_rot, q0=joint_state
+            )
+            if (
+                success
+                and candidate is not None
+                and np.isfinite(candidate).all()
+                and candidate[HelloStretchIdx.ARM] >= 0
+                and candidate[HelloStretchIdx.LIFT] >= 0
+            ):
+                target_joint_positions = candidate.copy()
+                print("Pregrasp xyz:", shifted_object_xyz, "standoff:", standoff)
+                break
 
-        # IK
-        target_joint_positions, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
-            shifted_object_xyz, ee_rot, q0=joint_state
-        )
-
-        if not success or target_joint_positions is None or not np.isfinite(target_joint_positions).all():
-            self.error("Failed to find a finite pregrasp IK solution.")
+        if target_joint_positions is None:
+            self.error("No feasible separated pregrasp IK solution.")
             self._success = False
             return False
 
@@ -1124,24 +1140,9 @@ class GraspObjectOperation(ManagedOperation):
         print(" - pitch: ", target_joint_positions[HelloStretchIdx.WRIST_PITCH])
         print(" - yaw: ", target_joint_positions[HelloStretchIdx.WRIST_YAW])
 
-        if target_joint_positions[HelloStretchIdx.ARM] < -0.05 or target_joint_positions[HelloStretchIdx.LIFT] < -0.05:
-            print(
-                f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
-            )
-            self._success = False
-            return False
-
-        # Make sure arm and lift are positive
-        target_joint_positions[HelloStretchIdx.ARM] = max(target_joint_positions[HelloStretchIdx.ARM], 0)
-        target_joint_positions[HelloStretchIdx.LIFT] = max(target_joint_positions[HelloStretchIdx.LIFT], 0)
-
         # Zero out roll and yaw
         target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
         target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
-
-        # Lift the arm up a bit
-        target_joint_positions_lifted = target_joint_positions.copy()
-        target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
 
         print(f"{self.name}: Moving to pre-grasp position.")
         if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
