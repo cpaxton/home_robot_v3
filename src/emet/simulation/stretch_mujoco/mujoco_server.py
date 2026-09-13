@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from multiprocessing import get_context
 from multiprocessing.managers import DictProxy, SyncManager
 from pathlib import Path
 from typing import Any
@@ -121,7 +122,9 @@ class MujocoServerProxies:
             _cameras=manager.dict({"val": StatusStretchCameras.default()}),
             _sensors=manager.dict({"val": StatusStretchSensors.default()}),
             _joint_limits=manager.dict({"val": {}}),
-            command_lock=manager.RLock(),
+            # The simulator child explicitly uses spawn. A native shared lock
+            # avoids two extra manager RPCs on every physics tick.
+            command_lock=get_context("spawn").RLock(),
         )
 
 

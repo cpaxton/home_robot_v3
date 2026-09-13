@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandMove, StatusCommand
-from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
+from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer, MujocoServerProxies
 from emet.simulation.stretch_mujoco.stretch_mujoco_simulator import StretchMujocoSimulator
 
 
@@ -96,3 +96,35 @@ def test_physics_ack_cannot_overwrite_a_new_joint_command():
 
 def test_cancel_wait_does_not_block_physics_consumption():
     assert simulator(CommandProxy()).cancel_base_motion(timeout=0.5)
+
+
+def _spawned_command_writer(proxy, started, finished):
+    started.set()
+    with proxy.command_lock:
+        command = proxy.get_command()
+        command.set_move_to(CommandMove("lift", True, 0.643))
+        proxy.set_command(command)
+    finished.set()
+
+
+def test_native_command_lock_is_shared_with_spawned_simulator():
+    import multiprocessing
+
+    ctx = multiprocessing.get_context("spawn")
+    with ctx.Manager() as manager:
+        proxy = MujocoServerProxies.default(manager)
+        started, finished = ctx.Event(), ctx.Event()
+        child = ctx.Process(target=_spawned_command_writer, args=(proxy, started, finished))
+        try:
+            with proxy.command_lock:
+                child.start()
+                assert started.wait(10)
+                assert not finished.wait(0.05)
+            child.join(10)
+            assert child.exitcode == 0
+            assert finished.is_set()
+            assert proxy.get_command().move_to["lift"].pos == 0.643
+        finally:
+            if child.is_alive():
+                child.terminate()
+                child.join(5)
