@@ -14,6 +14,31 @@ from emet.controller.dynamem.look import wait_post_motion_obs
 from emet.memory.query_grounding import cache_grounding_record
 
 
+def trim_depth_outliers(depth, mask):
+    """Trim minority mixed-depth pixels from an already verified object mask.
+
+    The median/MAD estimate assumes dominant object support, not a perfect
+    silhouette. Preserve at least 80% of valid support or abstain. The 2 cm
+    floor avoids a zero-width band on planar or quantized depth surfaces.
+    """
+    values = depth[mask]
+    if len(values) < 10:
+        raise ValueError("Insufficient observed manipulation geometry")
+    median = float(np.median(values))
+    mad = float(np.median(np.abs(values - median)))
+    band = max(0.02, 3 * mad)
+    supported = mask & (np.abs(depth - median) <= band)
+    if supported.sum() < max(10, 0.8 * len(values)):
+        raise ValueError("Manipulation mask has insufficient coherent depth support")
+    return supported, {
+        "median_m": median,
+        "mad_m": mad,
+        "band_m": band,
+        "input_pixels": len(values),
+        "retained_pixels": int(supported.sum()),
+    }
+
+
 def observe_query_points(agent, robot, query, *, stage):
     before = getattr(robot, "_seq_id", None)
     wait_post_motion_obs(robot, timeout=2.0)
@@ -32,6 +57,8 @@ def observe_query_points(agent, robot, query, *, stage):
             raise ValueError("Manipulation target identity absent or ambiguous")
         mask = (detected.instance == matching[0]) & np.isfinite(world).all(axis=-1)
         mask &= np.isfinite(obs.depth) & (obs.depth > 0)
+        mask, depth_support = trim_depth_outliers(obs.depth, mask)
+        verification = {**verification, "depth_support": depth_support}
         points = world[mask]
         if len(points) < 10:
             raise ValueError("Insufficient observed manipulation geometry")

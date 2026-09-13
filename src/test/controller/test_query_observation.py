@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from emet.controller.operations.query_observation import observe_query_points
+from emet.controller.operations.query_observation import observe_query_points, trim_depth_outliers
 
 
 @pytest.mark.parametrize("fresh", [False, True])
@@ -35,3 +35,28 @@ def test_manipulation_geometry_requires_fresh_unique_semantics(fresh, valid, mon
     if not fresh:
         agent.ground_vlm_frame.assert_not_called()
     agent.prepare_query_target.assert_not_called()
+
+
+def test_minority_background_depth_does_not_define_object_extent():
+    depth = np.linspace(0.8, 0.85, 100).reshape(10, 10)
+    depth[-1] = 1.2
+    mask, audit = trim_depth_outliers(depth, np.ones((10, 10), dtype=bool))
+    assert mask.sum() == 90
+    assert not mask[-1].any()
+    assert audit["input_pixels"] == 100
+    assert audit["retained_pixels"] == 90
+
+
+def test_heavily_contaminated_mask_abstains_instead_of_selecting_tiny_support():
+    depth = np.ones((10, 10))
+    depth[:3] = 2
+    with pytest.raises(ValueError, match="coherent depth"):
+        trim_depth_outliers(depth, np.ones((10, 10), dtype=bool))
+
+
+def test_planar_depth_and_small_sensor_noise_keep_supported_pixels():
+    depth = np.ones((10, 10))
+    depth[0] += 0.005
+    mask, audit = trim_depth_outliers(depth, np.ones((10, 10), dtype=bool))
+    assert mask.all()
+    assert audit["band_m"] == 0.02
