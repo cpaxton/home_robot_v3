@@ -154,7 +154,17 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       pass `20260913_113742_45c27b` (2/2 diagnostics). Height error now corrects
       from 1.577 to 0.488 cm. Expanded route `20260913_113326_d91f20` passes
       all 14 moves, incomplete health telemetry; 255 focused tests pass.
-      Original-clutter contact/aperture pilot `20260913_114456_d0f9e2` is next.
+      Original-clutter contact/aperture pilot `20260913_114456_d0f9e2` fails
+      before pickup: right finger contacts cube during diagonal approach.
+      Full transverse alignment `20260913_115105_65d8ba` instead rejects
+      negative arm IK. Finger-axis-only alignment (`34ba733a`) preserves valid
+      extension in captured-pose IK; retry `20260913_115500_c04c71` passes
+      physical pick/place on the original fixture and longer transport route
+      (1/1). Matched easier-scene control `20260913_115609_934cb7` is running.
+      Mirrored neighbor at x=+0.18 m is predeclared for the six-case panel;
+      do not pool evolving diagnostic versions into that frozen acceptance.
+      This is not a general collision-free approach planner; validate varied
+      clutter and the earlier neighboring control before promoting it.
       Arrival tolerances/deadlines are unchanged. Do not
       compensate motion error or loosen release thresholds against a mixed mask.
 - [ ] Validate robot-visible head RGB-D and mapping self-filtering: current

@@ -2,10 +2,12 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: `cffc74d4` passes **2/2** separated-neighbor physical pick/place trials
-and **14/14** empty-hand precision-navigation moves. Original-clutter testing
-is running; single-room OVMM, learned TAMP and paired EQA acceptance remain
-pending. These development diagnostics do not establish cross-task reliability.
+Latest: `34ba733a` passes the original close-neighbor physical pick/place case
+**1/1**, including a longer transport route. Its matched easier-scene control
+is running. Earlier `cffc74d4` passes **2/2** separated-neighbor placements
+and **14/14** empty-hand precision-navigation moves. The frozen six-case
+manipulation panel, single-room OVMM, learned TAMP and paired EQA acceptance
+remain pending; do not pool evolving development versions as one success rate.
 
 `default_table_stretch_clearance.yaml` changes only the blue neighbor's x
 position (-0.02 → -0.25 m). The original fixture is untouched; a model-equality
@@ -312,6 +314,38 @@ zero corrections; health still reports `incomplete_telemetry`. It is an
 empty-hand control, not long-route payload-retention evidence. The next learned
 case `20260913_114456_d0f9e2` uses the unchanged original fixture and the
 predeclared `query_geometry_contact_aperture_pilot.yaml` on frozen `cffc74d4`.
+
+### Return to original clutter
+
+These are distinct from the separated-neighbor results above. The aperture
+preset is still experimental; neither scene nor physics is changed for retries.
+
+| Job | Source | Physical pick/place | Finding |
+| --- | --- | --- | --- |
+| `20260913_114456_d0f9e2` | `cffc74d4` | false / false | Aperture narrows from 16.4 to 10.5 cm; diagonal approach contacts neighboring cube before lateral alignment and motion fails |
+| `20260913_115105_65d8ba` | `458ed72b` | false / false | Full transverse-plane alignment requests negative arm extension at the retracted limit; rejected before approach |
+| `20260913_115500_c04c71` | `34ba733a` | **true / true** | Finger-axis alignment reaches pickup; longer chunked transport retains the payload; final physical placement passes |
+
+The first trace reconstructs right-finger/cube contact at about 43.43 s,
+before the target is between the fingers. `458ed72b` separates alignment from
+insertion, but the plane perpendicular to tilted grasp X couples lowering to
+arm retraction. Captured-pose IK requests -4.4 mm extension from a +5.5 mm
+current extension. `34ba733a` instead aligns only along grasp-frame Y, the
+finger-opening axis, while separated; height and depth change together after
+that lateral error is within the existing 12 mm gate. The same captured-pose
+IK preserves +5.5 mm extension. Rotated-frame, aperture and placement tests
+pass (53); original-scene retry `20260913_115500_c04c71` passes pickup at
+63.534 s and final placement at 139.488 s (process zero, 196 s). It traverses
+a longer chunked route before reacquiring the receptacle. Final visual height
+error is 1.37 cm, inside the unchanged gate. Matched separated-neighbor control
+`20260913_115609_934cb7` uses the same code and contact/aperture preset; only
+the neighbor pose changes. The mirrored-neighbor fixture is predeclared in
+[acceptance](manipulation_acceptance.md), not chosen after testing outcomes.
+
+This sequence is **not a general collision-free approach planner**. No
+object-label or fixture-location branch is added, and failed motion still stops
+the grasp. Validate on the earlier neighbor fixture and varied clutter before
+promoting the new sequence or making broader manipulation claims.
 
 The independent IK audit also fixes a joint-layout contract: full eleven-joint
 seeds must convert to nine solver joints once and return a full configuration,
