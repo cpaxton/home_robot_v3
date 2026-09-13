@@ -72,6 +72,7 @@ class MujocoServerProxies:
     _cameras: "DictProxy[str, StatusStretchCameras]"
     _sensors: "DictProxy[str, StatusStretchSensors]"
     _joint_limits: "DictProxy[str, dict[Actuators, tuple[float, float]]]"
+    command_lock: Any
 
     def __setattr__(self, name: str, value) -> None:
         try:
@@ -120,6 +121,7 @@ class MujocoServerProxies:
             _cameras=manager.dict({"val": StatusStretchCameras.default()}),
             _sensors=manager.dict({"val": StatusStretchSensors.default()}),
             _joint_limits=manager.dict({"val": {}}),
+            command_lock=manager.RLock(),
         )
 
 
@@ -566,7 +568,11 @@ class MujocoServer:
 
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()
-        self.push_command(self.data_proxies.get_command())
+        # Consume/acknowledge under the same interprocess lock as writers.
+        # Otherwise this tick can overwrite a newly submitted arm command with
+        # its older snapshot after clearing trigger flags.
+        with self.data_proxies.command_lock:
+            self.push_command(self.data_proxies.get_command())
         monitor = getattr(self, "_fall_monitor", None)
         if monitor is not None:
             monitor.maybe_report(model, data)
