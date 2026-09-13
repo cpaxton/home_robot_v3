@@ -118,6 +118,8 @@ class GraspObjectOperation(ManagedOperation):
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
     use_geometry_servo: bool = False
+    _geometry_previous_pose = None
+    _geometry_stalled_steps: int = 0
     observed_aperture_margin_m: float | None = None
     detected_center_offset_x: int = 0  # -10
     detected_center_offset_y: int = 0  # -40
@@ -375,6 +377,8 @@ class GraspObjectOperation(ManagedOperation):
     def reset(self):
         """Reset the operation. This clears the history and sets the success flag to False. It also clears the tracked object features."""
         self._success = False
+        self._geometry_previous_pose = None
+        self._geometry_stalled_steps = 0
         self.tracked_object_features = None
         self.observations.clear_history()
 
@@ -1117,6 +1121,15 @@ class GraspObjectOperation(ManagedOperation):
             return self._grasp()
         if distance > 0.5:
             self.error("Grounded object is outside the local grasp approach budget.")
+            return False
+        measured = servo.ee_pose[:3, 3]
+        if self._geometry_previous_pose is not None and np.linalg.norm(measured - self._geometry_previous_pose) < 0.002:
+            self._geometry_stalled_steps += 1
+        else:
+            self._geometry_stalled_steps = 0
+        self._geometry_previous_pose = measured.copy()
+        if self._geometry_stalled_steps >= 3:
+            self.error("Repeated geometry corrections produced no measured progress.")
             return False
         delta *= min(1.0, 0.05 / distance)
         joint_state = self.robot.get_joint_positions().copy()

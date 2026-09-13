@@ -71,3 +71,10 @@ def test_world_delta_is_independent_of_episode_odometry_origin():
     ee_base = Rotation.from_euler("x", 0.3).as_quat()
     result = world_delta_to_model_base(np.array([0, 0.1, 0]), ee_world, ee_base)
     np.testing.assert_allclose(result, [0.1, 0, 0], atol=1e-10)
+
+
+def test_repeated_no_motion_stops_instead_of_spending_the_servo_budget():
+    op, servo, mask = fixture([0.1, 0, 0])
+    assert [op.geometry_servo_step(servo, mask) for _ in range(4)] == [None, None, None, False]
+    assert op.robot.arm_to.call_count == 3
+    op._grasp.assert_not_called()

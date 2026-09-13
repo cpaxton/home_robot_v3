@@ -639,13 +639,13 @@ class MujocoZmqServer(BaseZmqServer):
                     print("Setting base to", xyt_goal)
                     print("Current base is", self.get_base_pose())
                     self.set_goal_pose(xyt_goal, relative=False)
-                    # Arm commands include a base joint whose client completion
-                    # tolerance is 2 cm. Dynamic navigation tolerances can stop
-                    # short of that even for a 5 cm servo correction.
+                    # An arm's base component must execute fine visual-servo
+                    # corrections, not discard them inside a nav deadband.
                     from emet.core.navigation_result import NAVIGATION_POLICIES
+                    from emet.simulation.stretch_mujoco.config import manipulation_base_xy_tolerance
 
                     policy = NAVIGATION_POLICIES["precision"]
-                    self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
+                    self.controller.control.set_linear_error_tolerance(manipulation_base_xy_tolerance)
                     self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
                 else:
                     self.robot_sim.move_to(mujoco_actuators[idx], q[i])

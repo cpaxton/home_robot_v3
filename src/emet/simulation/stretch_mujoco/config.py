@@ -21,6 +21,11 @@ depth_limits = {"d405": 1, "d435i": 10}
 # are simulator settings, not a claim of calibrated real-robot limits.
 wrist_position_rates = {"wrist_yaw": 0.8, "wrist_pitch": 0.8, "wrist_roll": 0.8}
 
+# The base is also a manipulation joint. Its 2 cm navigation deadband used to
+# discard small visual-servo corrections entirely. Keep ordinary navigation
+# policies unchanged and target 5 mm when executing an arm's base component.
+manipulation_base_xy_tolerance = 0.005
+
 
 base_motion = {"timeout": 15, "default_x_vel": 0.3, "default_r_vel": 1.0}
 
