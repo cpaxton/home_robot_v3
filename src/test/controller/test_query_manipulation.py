@@ -135,12 +135,13 @@ def test_failures_are_not_success(failure):
 
 def test_place_consumes_fresh_receptacle_points_and_observes_after():
     task, target = executor()
-    task._held_query_instance = SimpleNamespace(global_id=99)
+    task._held_query_instance = SimpleNamespace(global_id=99, name="mug")
     with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
         operation.return_value.return_value = True
         operation.return_value.prepare_query_target.return_value = target
 
-        def place():
+        def place(**kwargs):
+            assert kwargs == {"held_query": "mug"}
             assert task.agent.current_object.global_id == 99
             assert np.allclose(task.agent.current_receptacle.point_cloud.numpy(), target.points)
             return True
@@ -154,7 +155,7 @@ def test_place_consumes_fresh_receptacle_points_and_observes_after():
 @pytest.mark.parametrize("released", [False, True])
 def test_failed_place_retains_only_unreleased_object(released):
     task, target = executor()
-    held = SimpleNamespace(global_id=99)
+    held = SimpleNamespace(global_id=99, name="mug")
     task._held_query_instance = held
     with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
         operation.return_value.prepare_query_target.return_value = target

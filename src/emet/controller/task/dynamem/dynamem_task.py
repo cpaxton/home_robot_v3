@@ -313,7 +313,7 @@ class DynamemTaskExecutor:
                 self.agent.current_receptacle = instance
                 attempted = True
                 try:
-                    ok = bool(operation())
+                    ok = bool(operation(held_query=held.name))
                 finally:
                     # Release can succeed before retreat fails. Do not retain
                     # an object-in-hand claim after confirmed gripper opening.

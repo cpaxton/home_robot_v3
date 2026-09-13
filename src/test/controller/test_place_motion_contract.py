@@ -113,3 +113,59 @@ def test_place_reacquires_after_arm_facing_rotation():
         assert op.prepare_query_target("blue cube") is fresh
     orient.assert_called_once_with(op.robot, old.xyz)
     assert op.agent.prepare_query_target.call_count == 2
+
+
+def test_missing_final_object_alignment_never_releases():
+    op = operation()
+    op.held_query = "red cylinder"
+    op.align_held_object_for_release = Mock(return_value=False)
+    with patch("emet.controller.operations.place_object.time.sleep"):
+        op.run()
+    assert not op.was_successful()
+    op.robot.open_gripper.assert_not_called()
+
+
+def test_visual_placement_corrects_observed_object_offset_and_drop_height():
+    op = operation()
+    op.held_query = "red cylinder"
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    pose = np.eye(4)
+    pose[:3, 3] = [0, -0.5, 0.68]
+    obs = SimpleNamespace(ee_pose=pose)
+    offset = np.array([[0, -0.53, 0.67], [0.02, -0.51, 0.71]])
+    aligned = np.array([[-0.01, -0.51, 0.62], [0.01, -0.49, 0.66]])
+    with patch(
+        "emet.controller.operations.query_observation.observe_query_points", side_effect=[(obs, offset), (obs, aligned)]
+    ):
+        assert op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
+    assert op.robot.arm_to.call_count == 1
+    requested = op._get_place_joint_state.call_args.args[0]
+    delta = requested - np.array([0, -0.2, 0.8])
+    assert delta[0] < 0 and delta[1] > 0 and delta[2] < 0
+    assert np.linalg.norm(delta) == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize("failure", ["far_object", "far_goal", "motion", "invalid_ik"])
+def test_visual_placement_rejects_untrusted_or_failed_correction(failure):
+    op = operation()
+    op.held_query = "red cylinder"
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    pose = np.eye(4)
+    pose[:3, 3] = [0, -0.5, 0.7]
+    points = np.array([[0, -0.5, 0.67], [0.02, -0.48, 0.71]])
+    goal = np.array([0, -0.5, 0.6])
+    if failure == "far_object":
+        points += 1
+    elif failure == "far_goal":
+        goal[:2] += 1
+    elif failure == "motion":
+        op.robot.arm_to.return_value = False
+    else:
+        op._get_place_joint_state.return_value = (None, False)
+    with patch(
+        "emet.controller.operations.query_observation.observe_query_points",
+        return_value=(SimpleNamespace(ee_pose=pose), points),
+    ):
+        assert op.align_held_object_for_release(goal) is False
+    if failure != "motion":
+        op.robot.arm_to.assert_not_called()

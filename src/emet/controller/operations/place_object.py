@@ -33,6 +33,7 @@ class PlaceObjectOperation(ManagedOperation):
     # Do we require an object to be present?
     require_object: bool = True
     released: bool = False
+    held_query: str | None = None
 
     def __init__(self, name, agent: RobotAgent, require_object: bool = True, *args, **kwargs):
         super().__init__(name, agent, *args, **kwargs)
@@ -46,6 +47,7 @@ class PlaceObjectOperation(ManagedOperation):
         place_step_size: float = 0.25,
         use_pitch_from_vertical: bool = True,
         require_object: bool = True,
+        held_query: str | None = None,
     ):
         """Configure the place operation.
 
@@ -62,6 +64,7 @@ class PlaceObjectOperation(ManagedOperation):
         self.place_step_size = place_step_size
         self.use_pitch_from_vertical = use_pitch_from_vertical
         self.require_object = require_object
+        self.held_query = held_query
 
     def get_target(self) -> Instance:
         """Get the target object to place."""
@@ -153,6 +156,55 @@ class PlaceObjectOperation(ManagedOperation):
 
         return target_joint_positions, success
 
+    def align_held_object_for_release(self, placement_xyz):
+        """Center observed payload geometry, not the nominal empty-gripper origin.
+
+        The freshly grounded support is assumed static during this local motion.
+        Keep the wrist orientation fixed; use bounded visual corrections and
+        stop on missing identity, geometry, reachability or motion completion.
+        """
+        from emet.controller.operations.query_observation import observe_query_points
+
+        support_top = float(self.get_target().point_cloud[:, 2].max())
+        for attempt in range(4):
+            obs, points = observe_query_points(self.agent, self.robot, self.held_query, stage="place_alignment")
+            if obs.ee_pose is None or np.min(np.linalg.norm(points - obs.ee_pose[:3, 3], axis=1)) > 0.12:
+                self.error("Observed object is not near the gripper; retaining it without release.")
+                return False
+            center = (points.min(axis=0) + points.max(axis=0)) / 2
+            delta = np.array(
+                [
+                    placement_xyz[0] - center[0],
+                    placement_xyz[1] - center[1],
+                    support_top + 0.02 - points[:, 2].min(),
+                ]
+            )
+            self.info(f"Observed placement correction (world m): {delta}")
+            if np.linalg.norm(delta[:2]) <= 0.015 and abs(delta[2]) <= 0.015:
+                return True
+            if attempt == 3:
+                break
+            if np.linalg.norm(delta) > 0.15:
+                self.error("Observed placement correction exceeds the local motion budget.")
+                return False
+            # Limit any one visual correction to 5 cm; never blindly traverse
+            # a large discrepancy between the object and its support.
+            delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
+            joint_state = self.robot.get_joint_positions().copy()
+            ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
+            yaw = float(self.robot.get_base_pose()[2])
+            c, s = np.cos(yaw), np.sin(yaw)
+            delta_base = np.array([c * delta[0] + s * delta[1], -s * delta[0] + c * delta[1], delta[2]])
+            q, success = self._get_place_joint_state(ee_pos + delta_base, ee_rot, joint_state)
+            if not success or q is None or not np.isfinite(q).all():
+                self.error("No feasible visual placement correction.")
+                return False
+            if not self.robot.arm_to(q, blocking=True):
+                self.error("Visual placement correction did not complete.")
+                return False
+        self.error("Visual placement alignment did not converge; retaining the object.")
+        return False
+
     def run(self) -> None:
         self.intro("Placing the object on the receptacle.")
         self._successful = False
@@ -218,6 +270,11 @@ class PlaceObjectOperation(ManagedOperation):
             self.error("Placement approach did not complete; retaining the object.")
             return
         time.sleep(0.5)
+
+        if self.held_query is not None:
+            if not self.align_held_object_for_release(placement_xyz):
+                return
+            target_joint_positions = self.robot.get_joint_positions().copy()
 
         # Open the gripper
         if not self.robot.open_gripper(blocking=True):
