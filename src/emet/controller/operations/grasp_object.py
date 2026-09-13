@@ -1060,21 +1060,9 @@ class GraspObjectOperation(ManagedOperation):
         Keep this in the existing Stretch grasp adapter, not the shared find
         policy. Any base/head motion invalidates the old grounding observation.
         """
-        pose = np.array(self.robot.get_base_pose(), dtype=float, copy=True)
-        delta = np.asarray(self.get_object_xyz())[:2] - pose[:2]
-        if not np.isfinite(delta).all() or np.linalg.norm(delta) < 1e-6:
-            raise ValueError("Cannot orient manipulation toward an invalid target")
-        pose[2] = np.arctan2(delta[1], delta[0]) + np.pi / 2
-        self.robot.switch_to_navigation_mode()
-        if not self.robot.move_base_to(pose, blocking=True):
-            raise RuntimeError("Manipulation orientation did not complete")
-        self.robot.switch_to_manipulation_mode()
-        self.robot.head_to(*constants.look_at_ee, blocking=True)
-        from emet.controller.dynamem.look import wait_post_motion_obs
+        from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
 
-        # The head command can finish before the full RGB-D stream publishes
-        # its new gaze. Never reacquire from the cached pre-turn observation.
-        wait_post_motion_obs(self.robot, timeout=2.0)
+        orient_arm_toward_target(self.robot, self.get_object_xyz())
         target = self.agent.prepare_query_target(self.target_object)
         self.grounded_target = target
         self._object_xyz = np.array(target.xyz, copy=True)

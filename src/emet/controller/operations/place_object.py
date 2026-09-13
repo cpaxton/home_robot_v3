@@ -32,6 +32,7 @@ class PlaceObjectOperation(ManagedOperation):
 
     # Do we require an object to be present?
     require_object: bool = True
+    released: bool = False
 
     def __init__(self, name, agent: RobotAgent, require_object: bool = True, *args, **kwargs):
         super().__init__(name, agent, *args, **kwargs)
@@ -65,6 +66,14 @@ class PlaceObjectOperation(ManagedOperation):
     def get_target(self) -> Instance:
         """Get the target object to place."""
         return self.agent.current_receptacle
+
+    def prepare_query_target(self, query):
+        """Find's camera-facing pose must become a fresh arm-facing place pose."""
+        from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
+
+        target = self.agent.prepare_query_target(query)
+        orient_arm_toward_target(self.robot, target.xyz)
+        return self.agent.prepare_query_target(query)
 
     def get_target_center(self):
         return self.get_target().point_cloud.mean(axis=0)
@@ -147,16 +156,16 @@ class PlaceObjectOperation(ManagedOperation):
     def run(self) -> None:
         self.intro("Placing the object on the receptacle.")
         self._successful = False
+        self.released = False
 
-        # Get initial (carry) joint posture
-        obs = self.robot.get_observation()
-        joint_state = obs.joint
         model = self.robot.get_robot_model()
 
         # Switch to place position
         print(" - Move to manip posture")
         self.robot.move_to_manip_posture()
         self.robot.switch_to_manipulation_mode()
+        # Read after the posture change; never mutate the cached observation.
+        joint_state = np.array(self.robot.get_observation().joint, copy=True)
 
         # Get object xyz coords
         xyt = self.robot.get_base_pose()
@@ -179,7 +188,9 @@ class PlaceObjectOperation(ManagedOperation):
 
         # Joint compute a joitn state goal and associated ee pos/rot
         joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
-        self.robot.arm_to(joint_state)
+        if not self.robot.arm_to(joint_state, blocking=True):
+            self.error("Placement orientation did not complete; retaining the object.")
+            return
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
         # Get max xyz
@@ -197,23 +208,30 @@ class PlaceObjectOperation(ManagedOperation):
         self.attempt(f"Trying to place the object on the receptacle at {place_xyz}.")
         if self.talk:
             self.agent.robot_say("Trying to place the object on the receptacle.")
-        if not success:
+        if not success or target_joint_positions is None or not np.isfinite(target_joint_positions).all():
             self.error("Could not place object!")
             return
 
         # Move to the target joint state
         self.robot.switch_to_manipulation_mode()
-        self.robot.arm_to(target_joint_positions, blocking=True)
+        if not self.robot.arm_to(target_joint_positions, blocking=True):
+            self.error("Placement approach did not complete; retaining the object.")
+            return
         time.sleep(0.5)
 
         # Open the gripper
-        self.robot.open_gripper(blocking=True)
+        if not self.robot.open_gripper(blocking=True):
+            self.error("Gripper release did not complete; stopping without retreat.")
+            return
+        self.released = True
         time.sleep(0.5)
 
         # Move directly up
         target_joint_positions_lifted = target_joint_positions.copy()
         target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
-        self.robot.arm_to(target_joint_positions_lifted, blocking=True)
+        if not self.robot.arm_to(target_joint_positions_lifted, blocking=True):
+            self.error("Post-release retreat did not complete.")
+            return
 
         # Return arm to initial configuration and switch to nav posture
         self.robot.move_to_nav_posture()
@@ -223,5 +241,5 @@ class PlaceObjectOperation(ManagedOperation):
         self.cheer("We believe we successfully placed the object.")
 
     def was_successful(self):
-        self.error("Success detection not implemented.")
+        # Execution completion only; independent physical scoring is separate.
         return self._successful

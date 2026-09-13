@@ -294,7 +294,11 @@ class DynamemTaskExecutor:
         previous_object = self.agent.current_object
         previous_receptacle = self.agent.current_receptacle
         try:
-            target = self.agent.prepare_query_target(query)
+            if place:
+                operation = PlaceObjectOperation("place_grounded_query", self.agent)
+                target = operation.prepare_query_target(query)
+            else:
+                target = self.agent.prepare_query_target(query)
             self.last_query_manipulation.update(candidate_id=target.candidate_id, instance_id=target.instance_id)
             instance = Instance(
                 global_id=target.instance_id,
@@ -307,9 +311,14 @@ class DynamemTaskExecutor:
             if place:
                 self.agent.current_object = held
                 self.agent.current_receptacle = instance
-                operation = PlaceObjectOperation("place_grounded_query", self.agent)
                 attempted = True
-                ok = bool(operation())
+                try:
+                    ok = bool(operation())
+                finally:
+                    # Release can succeed before retreat fails. Do not retain
+                    # an object-in-hand claim after confirmed gripper opening.
+                    if operation.released is True:
+                        self._held_query_instance = None
             else:
                 self.agent.current_object = instance
                 operation = self.grasp_object

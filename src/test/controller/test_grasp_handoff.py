@@ -35,6 +35,7 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     op.agent.prepare_query_target.side_effect = lambda query: (events.append("ground"), target)[1]
     op.align_grounded_target_for_grasp()
     pose = op.robot.move_base_to.call_args.args[0]
+    assert op.robot.move_base_to.call_args.kwargs["navigation_policy"] == "precision"
     np.testing.assert_allclose(pose[:2], [0, 0])
     assert pose[2] == pytest.approx(np.arctan2(-0.53, 0.08) + np.pi / 2)
     op.agent.prepare_query_target.assert_called_once_with("red cylinder")

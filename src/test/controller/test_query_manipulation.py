@@ -138,6 +138,7 @@ def test_place_consumes_fresh_receptacle_points_and_observes_after():
     task._held_query_instance = SimpleNamespace(global_id=99)
     with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
         operation.return_value.return_value = True
+        operation.return_value.prepare_query_target.return_value = target
 
         def place():
             assert task.agent.current_object.global_id == 99
@@ -148,6 +149,19 @@ def test_place_consumes_fresh_receptacle_points_and_observes_after():
         assert task._place("table", None)
     assert task._held_query_instance is None
     assert task.last_query_manipulation["observed_after_action"]
+
+
+@pytest.mark.parametrize("released", [False, True])
+def test_failed_place_retains_only_unreleased_object(released):
+    task, target = executor()
+    held = SimpleNamespace(global_id=99)
+    task._held_query_instance = held
+    with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
+        operation.return_value.prepare_query_target.return_value = target
+        operation.return_value.return_value = False
+        operation.return_value.released = released
+        assert task._place("table", None) is False
+    assert task._held_query_instance is (None if released else held)
 
 
 def test_tracking_rejects_missing_or_ambiguous_geometry():
