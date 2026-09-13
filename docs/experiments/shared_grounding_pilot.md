@@ -2,6 +2,11 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
+Latest: `cffc74d4` passes **2/2** separated-neighbor physical pick/place trials
+and **14/14** empty-hand precision-navigation moves. Original-clutter testing
+is running; single-room OVMM, learned TAMP and paired EQA acceptance remain
+pending. These development diagnostics do not establish cross-task reliability.
+
 `default_table_stretch_clearance.yaml` changes only the blue neighbor's x
 position (-0.02 → -0.25 m). The original fixture is untouched; a model-equality
 test checks geometry, inertia, limits and all other initial coordinates.
@@ -30,6 +35,8 @@ test checks geometry, inertia, limits and all other initial coordinates.
 | `20260913_110659_839e2c` | `cfb61c3d` | true / false | Intermediate waypoint exceeds 10 s deadline; repeated approach/final-yaw reversals near the XY boundary coincide with payload loss |
 | `20260913_112012_a863a5` | `ded0a3a3` | **true / true** | Stable phase handoff, shorter route, verified pickup and final placement; unchanged repeat required |
 | `20260913_112432_810490` | `ded0a3a3` | true / false | Payload retained; clean cylinder mask, but placement corrections accumulate wrist sag and stall at 1.59 cm height error; release correctly refused |
+| `20260913_113323_333844` | `cffc74d4` | **true / true** | Fixed placement reference, physical pickup and final placement; process zero |
+| `20260913_113742_45c27b` | `cffc74d4` | **true / true** | Unchanged repeat; second visual correction reduces height error from 1.577 cm to 0.488 cm; stable physical placement |
 
 Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
 `~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
@@ -290,8 +297,21 @@ correction, measured EE height stays at about 0.5908 m while lift commands rise.
 position corrections into the commanded reference. It rejects reference-to-
 measured displacement over 5 cm, keeps the three-motion limit, and still requires
 fresh observed geometry inside the original release gate. Bias and no-motion
-tests pass (23 placement tests). Retry `20260913_113323_333844` and expanded
-fourteen-move route `20260913_113326_d91f20` run serially on that frozen source.
+tests pass (23 placement tests). Retry `20260913_113323_333844` passes pickup
+at 59.034 s and final placement at 116.972 s (process zero, 167 s). Unchanged
+repeat `20260913_113742_45c27b` passes pickup at 58.034 s and final placement
+at 118.298 s (process zero, 169 s). The repeat exercises the former stall:
+height correction changes from -3.181 cm to +1.577 cm, then +0.488 cm after
+the second move. The pre-fix method fails the new tracking-bias unit test;
+the fixed method passes. The full focused suite passes 255 tests.
+
+This is **2/2 separated-neighbor diagnostic placement**, not original-clutter
+or room-task acceptance. Expanded route `20260913_113326_d91f20` passes all
+fourteen precision moves, including coupled translations/final turns, with
+zero corrections; health still reports `incomplete_telemetry`. It is an
+empty-hand control, not long-route payload-retention evidence. The next learned
+case `20260913_114456_d0f9e2` uses the unchanged original fixture and the
+predeclared `query_geometry_contact_aperture_pilot.yaml` on frozen `cffc74d4`.
 
 The independent IK audit also fixes a joint-layout contract: full eleven-joint
 seeds must convert to nine solver joints once and return a full configuration,

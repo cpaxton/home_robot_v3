@@ -150,9 +150,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       `20260913_112432_810490` retains payload but fails placement (1/2):
       repeatedly re-seeding wrist targets from loaded angles compounds sag.
       Bounded fixed-reference correction (`cffc74d4`) is in live retry
-      `20260913_113323_333844`; expanded route `20260913_113326_d91f20` follows.
-      Ten-move nav control passes (253
-      focused tests); next route adds four coupled translation/turn goals.
+      `20260913_113323_333844`: physical pass, followed by an unchanged physical
+      pass `20260913_113742_45c27b` (2/2 diagnostics). Height error now corrects
+      from 1.577 to 0.488 cm. Expanded route `20260913_113326_d91f20` passes
+      all 14 moves, incomplete health telemetry; 255 focused tests pass.
+      Original-clutter contact/aperture pilot `20260913_114456_d0f9e2` is next.
       Arrival tolerances/deadlines are unchanged. Do not
       compensate motion error or loosen release thresholds against a mixed mask.
 - [ ] Validate robot-visible head RGB-D and mapping self-filtering: current
