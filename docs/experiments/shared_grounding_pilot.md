@@ -2,13 +2,14 @@
 
 ## September 13: separated-neighbor pickup and carry controls
 
-Latest: neither frozen six-case panel is accepted. Both stopped at **1/2
-original-scene passes**, with four variations unrun: v1 loses the payload in
-transport; v2 carries successfully but tips during opening. The near-support
-release candidate `46e380d7` passes fresh original and separated-neighbor
-development trials; frozen panel v3 is running. Individual development successes and
-fourteen passed navigation moves are not a substitute for the frozen repeatability
-gate. Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
+Latest: no full six-case panel is accepted yet. The near-support candidate
+`46e380d7` passes both original repeats in panel v3, but the first separated-
+neighbor case times out during navigation while retaining the payload. Earlier
+panels exposed transport and release failures. Panel v4 is frozen on `6b020ecd`,
+with monitored trajectory waypoints and an explicitly increased waypoint ceiling.
+Individual development successes and fourteen passed navigation moves are not
+a substitute for the complete gate. Single-room OVMM, learned TAMP and paired
+EQA acceptance remain pending.
 
 ### Frozen panel v1 (stopped, not accepted)
 
@@ -150,10 +151,36 @@ pickup 71.582 s, placement 171.388 s (242 s process wall), final observed height
 error 3.758 mm after two bounded corrections. These are development trials.
 Full offline contracts: 403 passed, four simulation-gated skips (5.44 s).
 
-Frozen panel v3 `20260913_172740_b4ca6c` uses `46e380d7` and the set-down preset
-for all six predeclared fixtures/repeats. Root:
-`~/runs/emet/manipulation-panel-v3-20260913`. It runs serially, stops on failure,
-and does not pool the development controls above.
+Frozen panel v3 `20260913_172740_b4ca6c` uses `46e380d7` and the set-down preset.
+It stops at **2/3 completed passes**, three unrun. Original repeats both pass
+(pickup/place 73.010/137.088 s and 72.602/165.488 s). Separated repeat 1 picks at
+73.214 s but times out before placement, retaining the object. It is a task
+failure, not a release-policy trial. Root:
+`~/runs/emet/manipulation-panel-v3-20260913`.
+
+The failed waypoint combines a 40 cm drive with a 90° turn. The trace shows
+continuous movement to approximately `(0.295, 0.204, -1.328)` for world goal
+`(0.3, 0.2, -1.571)`, then a deadline stop, not a fallen robot or blocked path.
+The old ten-second intermediate deadline is inconsistent with some coupled
+moves under the conservative base profile. `6b020ecd` explicitly sets the
+candidate's existing `find_phase_nav_step_timeout_s` option to 30 s, matching
+the existing final-approach ceiling. The outer 600 s task cap, physical scoring
+and arrival tolerances are unchanged. This **changes a declared system budget**;
+do not report the row as a release-only ablation or unchanged-budget comparison.
+
+The audit also found intermediate commands omitted `nav_policy`, bypassing the
+server's freshness/progress/settling monitor. `db851c20` routes both ZMQ clients'
+shared waypoint executor through the existing exploration policy. Its 7 cm /
+0.15 rad arrival tolerances match the legacy native check; it adds measured
+settling, stale/no-progress rejection and bounded correction. Ninety-eight
+focused navigation, command, query and placement tests pass. No robot-name
+conditional or automatic timeout extension is added.
+
+Panel v4 `20260913_174607_4b2f47` is frozen on `6b020ecd` / set-down preset,
+with order declared before launch: separated neighbor twice, mirrored clutter
+twice, original twice. The six fixtures and scoring gates are unchanged; the
+failed fixture runs first. It stops on failure and does not pool previous
+panels or development controls. Root: `~/runs/emet/manipulation-panel-v4-20260913`.
 
 The focused combined
 suite passes **388 tests, 4 simulation-gated skips**; native carry physics and
