@@ -70,3 +70,37 @@ def test_query_arrival_returns_only_verified_geometry(monkeypatch, accepted):
         agent.query_candidates.reject.assert_not_called()
     else:
         agent.query_candidates.reject.assert_called_once()
+
+
+@pytest.mark.parametrize("moved", [False, True])
+def test_chunk_continuation_requires_measured_progress(monkeypatch, moved):
+    monkeypatch.setattr("emet.controller.dynamem.navigation.time.sleep", lambda _: None)
+    monkeypatch.setattr("emet.controller.nav_confirm.confirm_navigation_plan", lambda *a, **kw: True)
+    start = np.zeros(3)
+    endpoint = np.array([0.2, 0, 0])
+    agent = SimpleNamespace(
+        _realtime_updates=True,
+        robot=Mock(),
+        query_driven_memory=False,
+        _current_planning_xyt=Mock(side_effect=[start, endpoint if moved else start]),
+        process_text=Mock(side_effect=[[start, endpoint], [[np.nan] * 3, endpoint]]),
+        _last_nav_plan={"mode": "navigation"},
+        _record_nav_plan_fields=Mock(),
+        _mark_nav_goal_blocked=Mock(),
+        announce_action=Mock(),
+        _find_phase_nav_timeout=Mock(return_value=1),
+        _navigation_origin_xyt=Mock(return_value=start),
+        pos_err_threshold=0.1,
+        rot_err_threshold=0.1,
+        update=Mock(),
+    )
+    status, point = execute_action(agent, "cup")
+    if moved:
+        assert status is True
+        assert point is endpoint
+        agent._mark_nav_goal_blocked.assert_not_called()
+        assert agent.process_text.call_count == 2
+    else:
+        assert status is None and point is None
+        agent._mark_nav_goal_blocked.assert_called_once_with(reason="navigation_no_progress")
+        assert agent.process_text.call_count == 1

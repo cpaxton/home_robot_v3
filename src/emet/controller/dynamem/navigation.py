@@ -141,8 +141,9 @@ def _filter_unsafe_nav_traj(
     min_along = float(min(clearances)) if clearances else None
     if not kept:
         return [], reject or "rejected_low_clearance", min_along
-    if reject is not None and len(kept) <= 1 and start_xy is not None:
-        # Only start survived → nothing useful to execute.
+    if reject is not None:
+        # Do not label a truncated prefix as a complete route or attach its
+        # original arrival marker. Replan instead of repeating the same prefix.
         return [], reject, min_along
     if object_tail:
         kept.extend(object_tail)
@@ -335,8 +336,13 @@ def execute_action(
             return None, None
         self.robot.look_front()
         self.update()
+        next_start = self._current_planning_xyt()
+        if np.linalg.norm(np.asarray(next_start)[:2] - np.asarray(start)[:2]) < 0.01:
+            self._mark_nav_goal_blocked(reason="navigation_no_progress")
+            logger.warning("Navigation chunk completed without measured translation; stopping continuation")
+            return None, None
         self._record_nav_plan_fields(outcome="ok_chunk")
-        start = self._current_planning_xyt()
+        start = next_start
     logger.info("execute_action: still chunked after %d hops", DYNAMEM_NAV_MAX_HOPS)
     return False, None
 
@@ -665,6 +671,7 @@ def process_text(self, text, start_pose):
             explore_goal=(mode == "exploration"),
         )
         if reject_reason is not None or not traj:
+            self.space.traj = None
             logger.warning(
                 "Nav plan rejected after safety filter: %s (min_clearance=%s)",
                 reject_reason,
