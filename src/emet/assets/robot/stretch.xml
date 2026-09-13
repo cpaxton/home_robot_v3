@@ -466,7 +466,10 @@
           <geom mesh="link_head_tilt_1" class="collision"/>
           <body name="realsense" pos="0.0406 0.0053 0.0307" euler="0 0 0">
             <camera name="d435i_camera_rgb" pos="0 0.015 0" euler="1.57 -1.57 0" />
-            <camera name="d435i_camera_depth" euler="1.57 -1.57 0"/>
+            <!-- The bridge publishes depth registered to color, using color K
+                 and pose. Render this virtual aligned-depth view at the RGB
+                 optical center, not the raw stereo eye 15 mm away. -->
+            <camera name="d435i_camera_depth" pos="0 0.015 0" euler="1.57 -1.57 0"/>
           </body>
           <body name="link_SE3_head_nav_cam" pos="0.04 -0.0412 -0.0246" euler="0 1.5707963 0">
             <joint name="joint_head_nav_cam" class="head_tilt" stiffness="10"/>
