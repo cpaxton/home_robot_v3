@@ -647,6 +647,7 @@ class MujocoZmqServer(BaseZmqServer):
                     policy = NAVIGATION_POLICIES["precision"]
                     self.controller.control.set_linear_error_tolerance(manipulation_base_xy_tolerance)
                     self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
+                    self.controller.translation_only = True
                 else:
                     self.robot_sim.move_to(mujoco_actuators[idx], q[i])
 

@@ -109,6 +109,23 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         else:
             return w_max * lin_err / (np.sin(heading_diff) + heading_diff * np.cos(heading_diff) + 1e-5)
 
+    def translation_control(self, xyt_err: np.ndarray) -> tuple[float, float, bool]:
+        """Execute a base translation joint, holding its reference heading.
+
+        Unlike an SE(2) navigation goal, millimeters of lateral drift must not
+        cause a turn toward the residual position while the arm is extended.
+        Lateral displacement is not a commanded degree of freedom here.
+        Conservative proportional approach also bounds near-goal braking.
+        """
+        longitudinal, _, yaw = xyt_err
+        if abs(longitudinal) <= self.lin_error_tol and abs(yaw) <= self.ang_error_tol:
+            return 0.0, 0.0, True
+        v = np.clip(longitudinal, -min(self.v_max, 0.08), min(self.v_max, 0.08))
+        w = np.clip(2 * yaw, -min(self.w_max, 0.15), min(self.w_max, 0.15))
+        if abs(longitudinal) <= self.lin_error_tol or abs(yaw) > 0.15:
+            v = 0.0
+        return float(v), float(w), False
+
     def __call__(self, xyt_err: np.ndarray, allow_reverse: bool = False) -> tuple[float, float, bool]:
         v_cmd = w_cmd = 0
         in_reverse = False

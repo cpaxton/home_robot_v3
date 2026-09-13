@@ -59,6 +59,7 @@ def test_stretch_manipulation_base_executes_fine_corrections_without_changing_na
     server.controller.control.set_linear_error_tolerance.assert_called_once_with(0.005)
     server.controller.control.set_angular_error_tolerance.assert_called_once_with(0.03)
     assert NAVIGATION_POLICIES["precision"].xy_tolerance == 0.02
+    assert server.controller.translation_only is True
 
 
 def test_stretch_policy_uses_timestamped_pose_in_resolved_episode_frame():

@@ -107,6 +107,7 @@ class GotoVelocityController:
 
         self.active = False
         self.track_yaw = True
+        self.translation_only = False
         self._is_done = False
 
         self.verbose = verbose
@@ -135,6 +136,7 @@ class GotoVelocityController:
 
     def update_goal(self, xyt_goal: np.ndarray, relative: bool = False):
         self._is_done = False
+        self.translation_only = False
         if relative:
             self.xyt_goal = xyt_base_to_global(xyt_goal, self.xyt_loc)
         else:
@@ -193,7 +195,10 @@ class GotoVelocityController:
             allow_reverse = True
 
         # Compute control
-        v_cmd, w_cmd, done = self.control(xyt_err, allow_reverse=allow_reverse)
+        if self.translation_only:
+            v_cmd, w_cmd, done = self.control.translation_control(xyt_err)
+        else:
+            v_cmd, w_cmd, done = self.control(xyt_err, allow_reverse=allow_reverse)
         self._is_done = done
 
         if self.verbose:

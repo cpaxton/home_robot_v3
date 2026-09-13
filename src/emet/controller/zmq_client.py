@@ -713,6 +713,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         steps = 0
         if blocking:
             t0 = timeit.default_timer()
+            settled_since = None
             while not self._finish:
                 if steps % 40 == 39:
                     # Resend the action until we get there
@@ -747,9 +748,23 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     and (wrist_pitch_diff < self._wrist_pitch_joint_tolerance)
                     and (wrist_yaw_diff < self._wrist_yaw_joint_tolerance)
                 ):
-                    # sleep to prevent ros2 streaming latency
-                    time.sleep(0.5)
-                    return True
+                    controlled = [
+                        HelloStretchIdx.BASE_X,
+                        HelloStretchIdx.BASE_THETA,
+                        HelloStretchIdx.ARM,
+                        HelloStretchIdx.LIFT,
+                        HelloStretchIdx.WRIST_ROLL,
+                        HelloStretchIdx.WRIST_PITCH,
+                        HelloStretchIdx.WRIST_YAW,
+                    ]
+                    moving = joint_velocities is None or not np.isfinite(joint_velocities[controlled]).all()
+                    moving = moving or np.max(np.abs(joint_velocities[controlled])) >= 0.01
+                    if moving:
+                        settled_since = None
+                    elif settled_since is None:
+                        settled_since = t1
+                    elif t1 - settled_since >= 0.1:
+                        return True
                 elif t1 - t0 > min_time and np.linalg.norm(joint_velocities) < 0.01:
                     logger.info("Arm not moving, we are done")
                     logger.info("Arm joint velocities", joint_velocities)
@@ -759,6 +774,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     time.sleep(0.5)
                     return False
                 else:
+                    settled_since = None
                     if verbose:
                         print(
                             f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
