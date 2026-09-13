@@ -74,6 +74,43 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Still no pickup: replay shows the right fingertip colliding with the blue
       cube next to the red target. Next: separated-neighbor control and observed-
       geometry aperture/approach-clearance planning; do not loosen success gates.
+      Separated-neighbor controls now physically pick up the cylinder, isolating
+      the original neighbor obstruction. Carry exposed loaded lift sag and
+      unprofiled wrist motion (~21 rad/s), plus a lazy-controller placement API
+      gap. Lift/posture fixes and a 0.8 rad/s wrist reference limiter are tested;
+      matched held-object replay retains contact instead of ejecting the object.
+      Placement shares reach/alignment contracts and guards all release motions.
+      Retry `20260913_081154_ea1dcd` exposed infeasible fixed pregrasp; bounded
+      reachable standoffs fix it. `20260913_081801_d64db7` physically picks and
+      carries, but releases off-center above the cube and drops onto the table.
+      Final observed-payload alignment is implemented with bounded moves and
+      cached visual evidence; retry `20260913_083212_06fb47` rejects the payload
+      after it slips during carrying (not a VLM false negative). Hidden
+      payload geometry and moving supports remain limitations; no real-robot
+      acceptance is claimed. Original clutter still needs aperture clearance.
+      Geometry-servo preset now targets robust observed 3D bounds with the
+      measured grasp frame, retaining the old fixed-pixel/depth preset as a
+      control. Trial `20260913_084739_a09908` exposes a fine base-joint deadband;
+      5 mm actuator targeting and bounded no-progress stop implemented, retry
+      `20260913_085624_0c7f62` reaches 5.7 mm error and verified pickup, then
+      loses the payload during transport. Payload-aware posture preservation
+      is implemented (66 focused tests); full-task retry
+      `20260913_091308_642f8d` still loses contact during transport. Wheel
+      acceleration limiting does not eliminate the loss in matched replay.
+      Contact geometry shows gradual migration toward pad edges; matched
+      preclosure trials lose a nominal-depth grasp even stationary, while
+      15/25 mm additional insertion survives 35 s hold. Separate contact-point
+      calibration preset implemented; `20260913_092427_1e2e65` fails because its
+      offset uses the wrong diagnostic marker axes. Fixed the massless MJCF
+      marker's intrinsic/fixed-axis Euler mismatch against published URDF;
+      corrected palm offset is grasp-frame -X. Retry `20260913_093103_771bbf`
+      still slips; executed insertion is smaller than the static intervention.
+      Also fixed world-target versus episode-base mixing in grasp/place
+      geometry (62 focused tests); `20260913_093656_0b9dbd` queued after
+      physical regression controls. Preserve all failed diagnostics.
+      Observed-aperture child preset is unit
+      tested but not yet live tested. Do not promote either on graph size or
+      a controller return without physical placement evidence.
 - [ ] Repeat precision-route validation and complete posture/actuator telemetry.
       Manager-lock version passed six moves then stalled on move seven; frozen
       pre-lock and native-lock controls each pass ten moves. Native-lock control

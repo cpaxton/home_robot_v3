@@ -1,5 +1,150 @@
 # Shared grounding: bounded cross-task pilot
 
+## September 13: separated-neighbor pickup and carry controls
+
+`default_table_stretch_clearance.yaml` changes only the blue neighbor's x
+position (-0.02 → -0.25 m). The original fixture is untouched; a model-equality
+test checks geometry, inertia, limits and all other initial coordinates.
+
+| Job | Source | Physical pick/place | Finding |
+| --- | --- | --- | --- |
+| `20260913_074731_6dfa15` | `336956a3` | true / false | Wrist reaches 0.163 m and lifts the cylinder, but loaded lift sags 2.33 cm, outside the unchanged 2 cm completion gate |
+| `20260913_075853_3d9d40` | `63f7ed1b` | true / false | Lift completes; cylinder is lost during wrist folding; placement then crashes on missing shared `manipulation_radius` property |
+| `20260913_081154_ea1dcd` | `4e1f7df2` | false / false | Fixed 30 cm pregrasp requests -5.8 cm extension after precision alignment; correctly rejects motion |
+| `20260913_081801_d64db7` | `7e3d4d43` | true / false | Reachable 20 cm pregrasp, pickup, carry, receptacle navigation and place controller complete; released cylinder briefly touches cube then falls to table |
+| `20260913_083212_06fb47` | `c6b6b761` | true / false | Cylinder slips during carrying; final visual check correctly rejects absent object and prevents empty release |
+| `20260913_084739_a09908` | `424db036` | false / false | Calibrated 3D servo reaches ~1.4 cm error, but 12 mm base corrections are discarded inside the 2 cm arm-base deadband |
+| `20260913_085624_0c7f62` | `a29d664d` | true / false | Fine base corrections reach ~5.7 mm grasp-center error and verified pickup; object slips during later transport; visual release check rejects the absent payload |
+| `20260913_091308_642f8d` | `9714349f` | true / false | Preserved wrist/lift posture retains pickup and retraction; cylinder gradually moves toward pad edges and loses contact during base-turn braking |
+| `20260913_092427_1e2e65` | `b91d761e` | true / false | First contact-offset pilot moves sideways because its calibration used the wrong diagnostic frame convention; still loses the payload |
+| `20260913_093103_771bbf` | `69d8e478` | true / false | Corrected insertion direction improves initial depth but still slips during transport; closure tolerance and loaded arm displacement remain relevant |
+
+Artifacts: `~/runs/emet/grasp-separated-neighbor-control` and
+`~/runs/emet/grasp-loaded-carry-control`, including physical traces/results and
+accepted/rejected wrist captures. These are diagnostics, **not acceptance passes**.
+Both establish sustained physical pickup, not successful carrying or placement.
+
+`63f7ed1b` preserves the gripper command through simulator posture changes,
+matching the real bridge, and increases lift feedback/damping without increasing
+the 70 N force limit. Static payload controls at 0, 0.5 and 0.75 kg pass the
+existing position gate. This does not establish general grasp reliability.
+
+Replay from the second run's held state (sim time 66.18 s), with identical
+physics and arm retraction, reproduces payload ejection on a direct pitch target:
+peak measured wrist speed is 20.90 rad/s. `bb8685e9` adds a physics-time
+0.8 rad/s wrist reference limiter. The matched replay retains finger contact,
+with peak measured speed 1.04 rad/s. These are conservative simulator settings,
+not calibrated hardware limits or a guarantee on measured speed/acceleration.
+The captured fixture and old-controller negative replay are regression tests.
+
+`4e1f7df2` exposes reach on the common controller, shares precision arm-facing
+alignment/reacquisition between pick and place, reads fresh copied joint state,
+and prevents release after failed approach/IK. Release and retreat failures
+remain failures; confirmed release clears held-object state even if retreat
+fails. `7e3d4d43` replaces the fixed pregrasp with six bounded standoffs, largest
+first, down to 20 cm; infeasible IK is rejected, not clipped at a negative joint.
+
+The next live control retains the cylinder throughout carry/navigation. At
+release, however, its center is offset about 2–3 cm from the nominal end-effector
+origin. It briefly contacts the cube then falls onto the table. The tool reports
+controller completion with an explicit physical-unverified disclaimer; the
+independent scorer rejects placement. Artifacts are
+`~/runs/emet/grasp-reachable-place-control`.
+
+`c6b6b761` adds Qwen-verified current head RGB-D before release, without instance
+creation or oracle state. It corrects observed payload XY alignment and visible
+lower-surface height over the freshly grounded static support, with at most
+three 5 cm moves, and abstains on missing freshness/identity/near-gripper support,
+invalid IK or failed motion. Each alignment frame/mask/prompt is retained. This
+is a local placement prototype: visible geometry may not reveal a hidden object
+bottom, the support is assumed static, and it is **not real-robot acceptance**.
+The first trial of that check correctly rejects a lost payload. Its saved head
+frame shows only the receptacle; private tracing confirms the cylinder fell
+before placement. No missing-object detection should be counted as a VLM error.
+
+`424db036` adds a **separate** `query_geometry_manipulation_pilot.yaml` preset:
+the same Qwen-associated wrist surfaces, but robust 5th/95th-percentile 3D bounds
+and the measured grasp-center pose replace the fixed pixel/depth closure gate.
+Corrections are bounded to 5 cm and require valid IK and completed motion.
+The old preset remains the control. Placement also trims depth-edge outliers.
+The geometry trial stabilizes at about 12 mm lateral / 7 mm vertical error;
+actuator traces show no base response to the remaining 12 mm requests.
+
+`a29d664d` targets 5 mm for the simulated arm's base-joint component, leaving
+ordinary exploration/precision navigation policies and the 12 mm 3D grasp gate
+unchanged. A new no-progress guard stops after three completed corrections
+without measured end-effector movement. Job `20260913_085624_0c7f62` reaches
+about 5.7 mm error and sustained pickup, but loses the cylinder during later
+transport. The empty-hand navigation posture lowers the lift and folds the
+wrist despite a potentially held payload.
+
+`9714349f` captures lift/wrist posture after pickup and preserves it through
+transport and placement preparation, retracting the arm using existing joint
+commands. Confirmed opening clears the constraint; failed carry transition
+retains conservative held-object state. This constraint is not holding proof.
+Matched stationary replays (`20260913_090821_557461`) retain contact in **both**
+postures: relative translation drift is 9.2 mm folded versus 5.1 mm preserved,
+rotation drift 0.140 versus 0.093 rad. They do not establish the cause of loss
+under navigation. The earlier scratch replay's absolute-height predicate was
+invalid for comparing intentionally different lift heights; use contact and
+relative drift, not that predicate. Live job `20260913_091308_642f8d` still fails
+placement: verified pickup at 53.33 s, contact loss at 70.05 s during base-turn
+braking. The last wrist frame correctly centers the intended red object.
+Private contact replay places its center at pad-local x=-16 mm after lifting,
+drifting to -27 mm before loss (pad half-width 20 mm). This suggests insufficient
+contact depth rather than missing visual identity.
+
+Matched recorded-command replay `20260913_091820_d1cead` loses the payload with
+both unchanged wheel references and references limited to 8 transmission-rad/s².
+Smoothing delays but does not eliminate loss; no braking workaround was added.
+Grasp-depth counterfactual `20260913_092110_b42b80` tests this contact-geometry
+hypothesis from the saved preclosure state, without changing physics. With the
+same close/lift/retract and 35 s stationary hold, 0 mm insertion loses the object,
+while 15/25 mm insertion retains it within 14.7/13.5 mm of the nominal EE link.
+This is a diagnostic grasp-depth intervention, not an agent success count.
+
+`b91d761e` provides a bounded grasp-frame `contact_offset_m` calibration and a
+separate `query_geometry_contact_pilot.yaml` preset (15 mm toward the palm from
+the nominal grasp link). The desired robot contact point, transformed by the
+measured EE orientation, is aligned with observed object geometry. There is no
+object-label rule, physics/friction change, or relaxed closure tolerance. This
+is not a hardware calibration or proof of cross-object reliability. Full-task
+job `20260913_092427_1e2e65` still fails: its executed grasp is shifted sideways,
+not deeper. The simulator's massless `link_grasp_center` marker used intrinsic
+MuJoCo Euler angles copied from fixed-axis URDF RPY, rotating its axes about
+120 degrees relative to the published URDF frame. The diagnostic calibration
+mistakenly used marker +Y instead of published-frame -X (toward the palm).
+
+`69d8e478` expresses the fixed marker using the URDF-equivalent quaternion,
+checks orientation at three wrist pitches (residual below 3 mrad), and corrects
+the experimental offset to `[-0.015, 0, 0]`. It changes no collision geometry,
+mass or inertia, and does not alter the already-URDF-based published pose.
+Job `20260913_093103_771bbf` still loses the payload at 73.11 s. The commanded
+arm extension at closure is 0.173 m versus 0.167 m in the nominal run: the
+executed depth improvement is smaller than the 15 mm static intervention.
+Keep the 12 mm closure gate, visible-surface bias and loaded arm displacement
+in view; corrected axes alone do not establish robust holding. Original
+geometry-only centering remains an explicit control. `ea26ace8` saves the
+private preclosure fixture and matched retention tests for reproducibility.
+
+The subsequent coordinate audit finds grasp/place absolute geometry using
+episode-relative `get_base_pose()` with world-frame point clouds. `292e84df`
+uses `get_base_pose_world()` and explicitly world-frame alignment goals;
+nonzero-origin grasp/placement tests pass (62 focused tests). This is a contract
+fix, not an offset tuned for the tabletop origin. Physical regression job
+`20260913_093628_3c845e` passes all 34 tests (114 s), including matched retention,
+frame agreement, loaded lift, wrist profiling, command atomicity and wheel
+transmission. Live retry `20260913_093656_0b9dbd` starts afterward under the
+exclusive experiment lock; its result is pending.
+
+`query_geometry_aperture_pilot.yaml` is an additional, not-yet-live-tested
+clearance ablation. It measures both identified finger markers in calibrated
+RGB-D and narrows at standoff toward the observed target extent plus a 6 cm
+marker/thickness/uncertainty margin. Missing markers/depth/standoff stop the
+grasp. This is not an inner-jaw calibration or collision-free guarantee. Keep
+geometry-only and aperture variants separate in reporting. Original-clutter
+clearance, room OVMM and learned TAMP gates remain pending.
+
 ## September 13: manipulation command delivery audit
 
 The next battery and stop gates are in [bounded acceptance](manipulation_acceptance.md).

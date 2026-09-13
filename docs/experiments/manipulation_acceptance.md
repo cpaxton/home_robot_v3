@@ -16,6 +16,16 @@ do not expose them through the agent's observations or use scripted grasp/telepo
 actions. Record source SHA, effective configuration, seeds, model/endpoint,
 commands and budgets for each case. Do not edit running source.
 
+Contact-depth and geometry-servo development presets are separate diagnostic
+rows, not replacements for that frozen control. In particular,
+`query_geometry_contact_pilot.yaml` specifies a robot-frame contact-point
+offset; its value is not a universal object-localization correction. Published
+RGB-D geometry and absolute manipulation targets use world coordinates, while
+`get_base_pose()` is episode-relative on ZMQ clients. Use `get_base_pose_world()`
+for those transforms and explicitly world-frame navigation goals. Robot tool
+offsets must use the published URDF grasp axes, not a visually inferred axis
+from a simulator marker. Validate nonzero episode origins and wrist rotations.
+
 Run heavy cases **serially**, through `emet jobs --cpu-safe --gpu-exclusive`.
 Use fresh artifact directories and bounded subprocess deadlines. After a timeout,
 check simulator/model cleanup before starting the next case. No real robot is
