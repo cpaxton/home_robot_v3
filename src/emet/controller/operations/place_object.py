@@ -25,7 +25,7 @@ class PlaceObjectOperation(ManagedOperation):
     lift_distance: float = 0.2
     place_height_margin: float = 0.1
     show_place_in_voxel_grid: bool = False
-    place_step_size: float = 0.35
+    place_step_size: float = 0.25
     use_pitch_from_vertical: bool = True
     verbose: bool = True
     talk: bool = True
@@ -84,6 +84,26 @@ class PlaceObjectOperation(ManagedOperation):
         from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
 
         target = self.agent.prepare_query_target(query)
+        start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        bounds = (float(self.agent.manipulation_radius), float(self.agent.manipulation_radius) + self.place_step_size)
+        if not np.isfinite(target.xyz).all() or not np.isfinite(start).all():
+            raise ValueError("Finite geometry is required for the placement workspace")
+        if np.linalg.norm(target.xyz[:2] - start[:2]) > bounds[1]:
+            # Seeing a receptacle does not establish that its placement surface
+            # is reachable. Carry posture preserves the payload while the same
+            # footprint/path-checked planner approaches it; no blind base step.
+            self.robot.move_to_nav_posture()
+            self.robot.switch_to_navigation_mode()
+            if not self.agent.navigate_to_target_pose(
+                target.xyz, start, look_at_xy=tuple(target.xyz[:2]), distance_range=bounds
+            ):
+                raise RuntimeError("Could not reach a collision-checked placement workspace")
+            measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+            if (
+                not np.isfinite(measured).all()
+                or np.linalg.norm(target.xyz[:2] - measured[:2]) > bounds[1] + self.agent.voxel_size
+            ):
+                raise RuntimeError("Measured placement workspace is still too far away")
         orient_arm_toward_target(self.robot, target.xyz)
         return self.agent.prepare_query_target(query)
 

@@ -16,6 +16,8 @@ def operation():
     op = object.__new__(PlaceObjectOperation)
     op._name = "place_test"
     op.agent = Mock()
+    op.agent.manipulation_radius = 0.55
+    op.agent.voxel_size = 0.05
     op.parameters = {}
     op.robot = op.agent.robot
     op.robot_model = op.robot.get_robot_model.return_value
@@ -198,6 +200,42 @@ def test_place_reacquires_after_arm_facing_rotation():
         assert op.prepare_query_target("blue cube") is fresh
     orient.assert_called_once_with(op.robot, old.xyz)
     assert op.agent.prepare_query_target.call_count == 2
+    op.agent.navigate_to_target_pose.assert_not_called()
+
+
+@pytest.mark.parametrize("arrived", [True, False])
+def test_far_receptacle_requires_safe_navigation_before_arm_alignment(arrived):
+    op = operation()
+    target = SimpleNamespace(xyz=np.array([1, 0, 0.9]))
+    fresh = SimpleNamespace(xyz=np.array([1.01, 0, 0.9]))
+    op.agent.prepare_query_target.side_effect = [target, fresh]
+    op.agent.navigate_to_target_pose.return_value = arrived
+    op.robot.get_base_pose_world.side_effect = [np.zeros(3), np.array([0.3, 0, 0])]
+    with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
+        if arrived:
+            assert op.prepare_query_target("sink") is fresh
+            orient.assert_called_once_with(op.robot, target.xyz)
+        else:
+            with pytest.raises(RuntimeError, match="placement workspace"):
+                op.prepare_query_target("sink")
+            orient.assert_not_called()
+            assert op.agent.prepare_query_target.call_count == 1
+    call = op.agent.navigate_to_target_pose.call_args
+    assert call.kwargs["distance_range"] == pytest.approx((0.55, 0.8))
+    np.testing.assert_array_equal(call.args[0], target.xyz)
+    op.robot.move_base_to.assert_not_called()
+    op.robot.open_gripper.assert_not_called()
+
+
+def test_placement_workspace_rejects_motion_success_without_measured_arrival():
+    op = operation()
+    op.agent.prepare_query_target.return_value = SimpleNamespace(xyz=np.array([1, 0, 0.9]))
+    op.agent.navigate_to_target_pose.return_value = True
+    with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
+        with pytest.raises(RuntimeError, match="still too far"):
+            op.prepare_query_target("sink")
+        orient.assert_not_called()
+    op.robot.open_gripper.assert_not_called()
 
 
 def test_missing_final_object_alignment_never_releases():
