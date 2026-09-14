@@ -19,6 +19,17 @@ selected robot/scene adapter works first; the existence of a YAML does not
 establish support. The [Stretch kitchen config](../../configs/sim/robocasa_pick_place_stretch.yaml)
 is a launch specification, not a passed acceptance result.
 
+For the current open-sink pilot, use the separate
+[open-receptacle config](../../configs/sim/robocasa_counter_to_sink_stretch.yaml).
+Generation-only checks found that the same seed can produce different target
+categories across processes and different placements within one process.
+Archive and reuse the generated scene **and task metadata** for paired tests;
+verify the instruction matches the actual fixture before launching the agent.
+Saved generated XML now expands mutable robot includes, but still requires
+the matching external mesh/texture assets. Also record the actual adapter
+spawn: open-floor autoplace can move it metres from RoboCasa's suggested hint.
+See the [retained failures and reproducibility probe](../experiments/shared_grounding_pilot.md).
+
 Setup: [simulation configs](../sim_configs.md).
 Protocols: [OVMM find](../ovmm_find_phase_benchmark.md),
 [full OVMM](../ovmm_full_benchmark.md),

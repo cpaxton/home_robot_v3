@@ -30,6 +30,15 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       accepted pear mask remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
       Record adapter autoplace versus benchmark start (2.034 m displacement in
       seed 0); freeze explicit visible/search starts before the Stage C panel.
+      Retry `20260913_205646_cf97b0` was cancelled: seed 0 generated a can while
+      the instruction requested a pear. Generation-only repeats confirm seed
+      nondeterminism; use frozen scene/task metadata for paired comparisons.
+- [ ] Fix upstream RoboCasa generation ordering and test determinism across
+      processes as well as repeated calls. Python hash-seed pinning alone did
+      not stabilize object positions. Preserve generated geometry and validate
+      task identity before agent startup; do not count mismatched fixtures as
+      policy failures. Compiled XML export now expands mutable robot includes
+      (`cfb8558a`); external assets still require the same installation.
 - [ ] Reconcile arm-base completion tolerance with finer server tracking, and
       align state-only FK/joint feedback with the acquisition geometry contract.
 - [ ] Before claiming a solver necessity or hardware grasp safety, repeat

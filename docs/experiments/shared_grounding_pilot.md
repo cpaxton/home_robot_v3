@@ -78,6 +78,33 @@ unexplored hypotheses or relax semantic/depth checks. The focused grounding,
 handoff and manipulation suite passes **123 tests**, including absent/stale
 reacquisition and true ambiguity controls. A new frozen exact-case retry is
 required; this software fix is not yet a room manipulation success.
+
+Retry `20260913_205646_cf97b0` on `33fa549f` was **cancelled and excluded from
+the paired comparison**: despite `--sim-seed 0`, startup generated a **can**
+instead of the declared pear. Its different search route is not evidence for
+or against the handoff fix. The unchanged pear instruction was incompatible
+with that generated task. Logs/images/partial trace remain under
+`~/runs/emet/open-sink-pear-grounded-handoff`; do not render that trace against
+the earlier pear XML or score the can as though it were the requested target.
+
+Generation-only probe `20260913_210843_a03324` confirms the mismatch. It runs
+seed 0 twice per process, with `PYTHONHASHSEED=0` and `1` in separate processes:
+hash-0 generates pears at different counter positions in its two repeats;
+hash-1 generates cans. Results and exact script:
+`~/runs/emet/robocasa-seed-repeat`. Thus merely fixing Python's hash seed is
+not sufficient. The installed dependency contains unordered counter-region
+deduplication (`list(set(valid_geoms))`); this is a suspected contributor,
+not yet a demonstrated complete cause or a fixed dependency. Freeze generated
+scene/task metadata for paired evaluations rather than trusting a seed alone.
+
+`cfb8558a` expands robot includes when writing generated XML, fixing a separate
+provenance hazard: the previous saved scene referenced `stretch_temp_abs.xml`,
+which later generations overwrite. Generation regression
+`20260913_211223_c6b15d` passes after deliberately overwriting that include and
+reloading the archived model. External mesh/texture assets remain required.
+The explicit visible-start control is prepared from the archived **pear** room,
+not a new random generation; record its start intervention separately from
+adapter-start search and retain native NoSlip=0.
 This is not the eight-case Stage C panel; visible/search starts and the Molmo
 counterpart remain to be frozen.
 
