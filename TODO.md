@@ -31,23 +31,19 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Keep archived/corrected dynamics separate; do not tune object densities.
 - [ ] Complete repeatable room pickup **and placement**, then freeze Stage C's
       visible/search starts and actual task identities for both environments.
-      Current evidence: one corrected-dynamics pickup T / placement F, followed
-      by F/F repeats exposing base completion and false-stall checks. Current
-      candidate `096ab093` has bounded extraction, sim-scaled waits, 5 mm base
-      completion in the geometry preset, and a measured-progress stall window.
-      Empty-gripper simulator control `20260913_224425_cd1725` passes 9/9
-      motions (<5 mm base errors). Learned room retry `20260913_224729_017788`
-      completes pickup and carry retraction, but drops the payload before place
-      on the corrected-inertia NoSlip=0 fixture. The trace shows slow slip even
-      during stationary holds. Matched 50 s fixed-control continuation drops it
-      under NoSlip=0 but retains it under NoSlip=10 (2.64 mm relative drift).
-      Solver-only learned retry `20260913_230112_fb9a85` instead stopped before
-      pickup at a too-close, IK-infeasible viewing pose. `19691f45` adds a
-      kinematics-derived grasp workspace through the existing collision-checked
-      navigator; it leaves find/EQA sampling and the 20 cm pregrasp minimum intact.
-      Same NoSlip=10 fixture retry `20260913_231231_143de9` is running. Keep
-      numerical-physics rows separate and production defaults unchanged.
-      **537 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
+      Latest completed room retry `20260913_231231_143de9`: pickup T / place F;
+      payload retained through all 408 post-64 s samples, but placement point
+      was 1.017 m away and rejected before release. Earlier corrected-inertia
+      NoSlip=0 runs dropped the payload even while stationary. Matched 50 s
+      fixed-control continuation drops it under NoSlip=0 but retains it under
+      NoSlip=10 (2.64 mm drift); keep physics rows separate, defaults unchanged.
+      Candidate `67c4c90b` adds kinematics-derived pickup and distant-placement
+      workspaces through the shared collision-checked navigator, with real-preset
+      radius accounting (`9f0a895b`). Find/EQA sampling and release gates are
+      unchanged. Same NoSlip=10 fixture retry `20260913_232336_224534` is running.
+      Motion fixes already have a 9/9 empty-gripper simulator control plus
+      bounded extraction, sim-scaled waits and measured-progress stall tests.
+      **540 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits
       remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).

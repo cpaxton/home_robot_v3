@@ -328,6 +328,33 @@ behavior, navigation failure/no progress, and the actual kinematic failure;
 Serial same-fixture retry `20260913_231231_143de9` runs frozen `19691f45` under
 `~/runs/emet/open-sink-pear-workspace-noslip` with explicit NoSlip=10.
 
+It finishes **pickup T / placement F** in 270 wall seconds, pickup at 63.734 s.
+The pear stays held through the entire remaining trace: all 408 samples from
+64 s through 105.548 s have gripper contact, no other contact, and maximum
+relative displacement is 6.784 mm. Final reconstruction confirms it remains
+between the fingers. Placement is never released: the learned sink view is
+valid, but the chosen placement point is **1.017 m** from the base and the
+operation rejects it as too far. The pickup relocation path was not entered
+in this episode; its viewing pose already supported the separated pregrasp.
+
+Review caught a configuration error in the newly added pickup relocation:
+the real preset's nominal end-effector planning radius is **0.55 m**, not the
+synthetic test fixture's 0.8 m. An object's radial approach range must include
+its pregrasp separation at **both** ends. `9f0a895b` corrects that accounting
+and loads the actual preset in the real-kinematics regression. No live success
+is attributed to the previously unexercised path.
+
+`67c4c90b` adds the corresponding distant-receptacle approach before placement:
+retain carry posture, navigate within the existing radius/placement-step bounds
+using the shared voxel planner, check measured arrival, then turn and reacquire.
+Nearby placements do not add navigation; planner failure or no measured arrival
+stops before manipulation. The existing local reach and observed-release gates
+are unchanged. The class's step-size default now matches `configure` (0.25 m).
+**540 offline tests pass / 4 skip**. Same-scene/model/preset retry
+`20260913_232336_224534` runs frozen `67c4c90b` under
+`~/runs/emet/open-sink-pear-place-workspace`; this remains a development diagnostic,
+not the frozen cross-room acceptance panel.
+
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
 tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests
