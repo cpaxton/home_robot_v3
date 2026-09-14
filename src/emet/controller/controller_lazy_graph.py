@@ -175,6 +175,9 @@ class LazyGraphController(DynagraphController):
         record = self.query_candidates.records.get(handle)
         vm = self.voxel_map
         frame = vm.observations[-1]
+        # Detection backends may return a reduced frame without calibration.
+        # Retain geometry from the actual captured observation for offline review.
+        observation_frame = frame
         rgb = frame_rgb_hwc_uint8(frame)
         if rgb is None or frame.depth is None:
             return {"ok": False, "reason": "RGB-D required"}
@@ -221,6 +224,13 @@ class LazyGraphController(DynagraphController):
             depth=frame.depth,
             masks=frame.instance,
             metadata={
+                **{
+                    name: None
+                    if getattr(observation_frame, name, None) is None
+                    else getattr(observation_frame, name).tolist()
+                    for name in ("camera_K", "camera_pose", "base_pose")
+                },
+                "xyz_frame": getattr(observation_frame, "xyz_frame", None),
                 "target_description": target_description,
                 "grounding_backend": backend,
                 "detector_vocabulary": [query]

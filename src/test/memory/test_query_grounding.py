@@ -81,6 +81,34 @@ def test_current_view_grounds_without_retrieval_or_camera_anchor():
     assert record.require_grounding(2) == result["obs_id"]
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+@pytest.mark.parametrize("array_type", ["numpy", "torch", "missing"])
+def test_head_grounding_cache_retains_captured_calibration(tmp_path, accepted, array_type):
+    import json
+
+    import torch
+
+    agent = controller()
+    agent.parameters["query_memory"]["grounding_cache_dir"] = str(tmp_path)
+    frame = agent.voxel_map.observations[-1]
+    if array_type != "missing":
+        convert = np.asarray if array_type == "numpy" else torch.as_tensor
+        frame.camera_K = convert(np.diag([100.0, 100.0, 1.0]))
+        frame.camera_pose = convert(np.eye(4))
+        frame.base_pose = convert([1.0, 2.0, 0.3])
+    agent.graph_memory.eqa_client = Mock(
+        return_value=json.dumps({"matching_ids": [0] if accepted else [], "constraints_verified": accepted})
+    )
+    assert agent.ground_query_view("mug", source_obs_id=2, target_description="mug")["ok"] is accepted
+    record = json.loads(next(tmp_path.glob("*.json")).read_text())
+    for name in ("camera_K", "camera_pose", "base_pose"):
+        expected = None if array_type == "missing" else getattr(frame, name).tolist()
+        assert record["metadata"][name] == expected
+    # The detector's reduced frame lacks these fields; capture must use the
+    # original observation, including when verification rejects the target.
+    assert record["verification"]["valid"] is accepted
+
+
 def test_default_query_grounding_never_calls_detector():
     agent = controller()
     agent.parameters.pop("query_memory")
