@@ -12,32 +12,21 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
-- [ ] Finish the frozen original/clearance/mirrored physical panel; no version
-      has passed it. Preserve failed trials and separate development successes.
-      V6 (`b7441826`) passes original 2/2, fails clearance repeat 1; three unrun.
-      `ef533ed3` fixes a measured 8.7 mm camera-to-grasp discrepancy and renders
-      RGB-D with acquisition poses from one snapshot. Exact failed-case retry
-      `20260913_195231_e4d996` physically picks and places; no new aperture or
-      tolerance tuning. Fresh v7 must establish repeatability on `ef533ed3`.
-      [Failure history and artifacts](docs/experiments/shared_grounding_pilot.md)
-      cover release tips, navigation, delayed slip and wrist proposal failures.
-- [ ] Validate tracked grasp/carry/release after `e47c0fe8` (observed-bound
-      proposals) and `2ef5d49f` (bounded servo reference). Cached checks recover
-      3/3 targets and reject 6/6 negatives; live approach now exposes fingertip
-      collision with the neighboring cube. Separate 4 cm aperture row `80ea85c3`
-      then reaches 0.91 mm observed alignment and physically picks, but the object
-      creeps in the fingers and drops during transport. Stationary controls
-      reproduce the drop; NoSlip=10 retains the same checkpoint with ~31 μm
-      drift and still releases when opened. Explicit solver-only live row
-      exposes fingertip/target contact before closure. `e8b4fbcc` makes lateral
-      insertion honor the same 5 mm grasp tolerance; retry exposes a low-speed
-      wheel-friction dead zone. `83d10c4e` derives compensation from the model;
-      serial default/NoSlip route checks `20260913_191358_296e9f` pass 28/28 moves.
-      Mirrored NoSlip retry `20260913_192032_dd8d83` physically picks and places;
-      this single development pass does not satisfy the frozen six-case gate.
-      Reconcile arm-base completion tolerance with the finer
-      server tracking contract. Do not pool different-physics results
-      or promote hardware retention from this simulator diagnostic.
+- [x] Complete the frozen basic physical gate: v7 `20260913_195911_6c9e7c`,
+      source `ef533ed3`, passes **6/6 pickup and placement**, all three fixtures
+      twice. Uses tracked-narrow and explicit NoSlip=10 physics; not a production
+      default or hardware claim. All final reconstructions manually inspected.
+      [Results, failed panels and calibration figures](docs/experiments/shared_grounding_pilot.md).
+- [x] Fix native rendered-camera/grasp geometry and RGB-D snapshot consistency.
+      The measured 8.7 mm camera-to-grasp mismatch exceeded the 5 mm servo gate.
+      Snapshot timing transport follows in `fd6c0041`; v7 itself remains frozen
+      on `ef533ed3`, without later evaluator/timing changes.
+- [ ] Reconcile arm-base completion tolerance with finer server tracking, and
+      align state-only FK/joint feedback with the acquisition geometry contract.
+- [ ] Before claiming a solver necessity or hardware grasp safety, repeat
+      matched default/NoSlip retention controls with the repaired calibration.
+      Existing checkpoint controls isolate solver creep in an earlier grasp;
+      the six-case numerical-physics panel is not a hardware force/contact test.
 - [ ] Add collision-aware approach selection before claiming clutter robustness.
       Narrowing an aperture is not a collision planner; an identity-positive
       partial surface is not proof of complete grasp geometry.

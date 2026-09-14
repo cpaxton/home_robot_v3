@@ -1,7 +1,9 @@
 # Bounded shared-agent acceptance
 
-This is the next acceptance battery for the review branch, not a report of
-passing results. The goal remains **one learned agent across EQA, OVMM and
+This defines the bounded acceptance battery for the review branch. Stage B
+passed 6/6 on frozen `ef533ed3` (v7, explicit NoSlip physics); room OVMM,
+learned TAMP and paired regression gates remain pending. The goal remains
+**one learned agent across EQA, OVMM and
 multistep manipulation**, with robot adapters rather than task-specific oracle
 policies. See [current evidence](shared_grounding_pilot.md) and the
 [environment progression](../environments/README.md).
@@ -112,7 +114,7 @@ the current development candidate uses the separate
 settings and opts into one bounded alternative proposal pass. Record that
 difference explicitly; do not pool its results with the contact/aperture control.
 
-The next **v6 numerical-physics panel** freezes
+The **v6/v7 numerical-physics panels** freeze
 `query_geometry_tracked_narrow_pilot.yaml` across all six cases and uses
 `default_table_stretch_noslip.yaml`, `default_table_stretch_clearance_noslip.yaml`
 and `default_table_stretch_right_neighbor_noslip.yaml`, in that order, twice
@@ -129,6 +131,8 @@ V6 stopped with original 2/2 and clearance repeat 1 failed (three unrun).
 V7 repeats this exact order/configuration on `ef533ed3` after fixing the
 rendered-camera versus published-grasp calibration mismatch. A separate
 clearance retry passed; it is excluded from the new six-case panel.
+V7 then completed **6/6 physical pickups and placements**, satisfying Stage B;
+see the [result table and retained failures](shared_grounding_pilot.md).
 
 For Stage D, submit the two-step request through the learned CHAT loop, not two
 externally scripted tool invocations. The shared loop permits three tool-bearing

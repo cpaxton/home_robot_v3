@@ -18,6 +18,14 @@ pick/place → multistep execution. Preserve position-hold and measured-motion
 checks alongside learned tests so perception failures are not confused with
 robot dynamics or camera calibration failures.
 
+Native Stretch images now use a single simulation snapshot for RGB-D and
+camera/grasp poses. A measured 8.7 mm camera-to-grasp discrepancy previously
+exceeded the 5 mm servo gate; see the [visual calibration audit](../experiments/shared_grounding_pilot.md#visual-audit-of-the-calibration-failure-and-repair).
+The repaired explicit NoSlip/observed-aperture row passes a frozen six-case
+tabletop panel, but this does not establish arbitrary clutter or hardware
+retention. Default solver settings remain unchanged, and different-physics
+trials must not be pooled. Room OVMM and learned multistep acceptance are next.
+
 Setup: [simulation configs](../sim_configs.md), [simulation](../simulation.md).
 Evidence: [segmented shared grounding](../experiments/segmented_shared_grounding.md)
 contains manually reviewed good finds and invalidated false-positive finds;

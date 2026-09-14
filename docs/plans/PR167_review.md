@@ -6,6 +6,12 @@ the [bounded acceptance gates](../experiments/manipulation_acceptance.md) pass.
 Current evidence and failed trials live in the
 [shared grounding report](../experiments/shared_grounding_pilot.md).
 
+Current evidence: Stage B passed **6/6** physical pick/place cases on frozen
+`ef533ed3` with tracked-narrow and explicit NoSlip=10 scenes. Room OVMM, learned
+TAMP and paired EQA/find gates still block promotion. Subsequent private sequence
+scoring, open-sink fixture and timestamp transport are separately tested changes,
+not part of the frozen panel. Keep production contact defaults unchanged.
+
 ## Review in dependency order
 
 | Review unit | Main code | Required evidence |

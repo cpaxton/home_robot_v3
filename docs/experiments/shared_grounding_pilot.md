@@ -1,19 +1,36 @@
 # Shared grounding: bounded cross-task pilot
 
-## September 13: separated-neighbor pickup and carry controls
+## September 13: basic manipulation gate passed, cross-task gates pending
 
-Latest: no full six-case panel is accepted yet. Observed-bound wrist tracking
-passes cached semantic/association controls and works live. The narrower-aperture
-row initially picks but loses the payload during transport. Stationary holds
-reproduce the loss; a matched NoSlip solver control suppresses creep while still
-releasing on open. With subsequent alignment and wheel-control repairs, the
-explicit NoSlip mirrored-scene row passes pickup and placement once. Frozen v6
-then passes the original fixture twice but fails the first separated-neighbor
-grasp. A camera-to-grasp calibration mismatch is now measured and repaired;
-the same failed case now physically picks and places. A fresh v7 panel is next.
-A complete matching-physics panel is still
-required; clutter robustness remains unproven.
-Single-room OVMM, learned TAMP and paired EQA acceptance remain pending.
+**V7 passes 6/6 independently scored physical pickups and placements.** Managed
+job `20260913_195911_6c9e7c` ran all six serially on frozen
+`ef533ed3fced418b191161a7e74835afed94de47`, with the same tracked-narrow agent,
+Qwen3-VL int4/SDPA, lazy graph, task budgets and NoSlip=10 wrappers throughout.
+All six final qpos reconstructions were manually inspected. Artifacts:
+`~/runs/emet/manipulation-panel-v7-20260913`; each case includes exact source,
+configs, command, process status, physical trace/score, wrist evidence and replay.
+
+| Fixture | Physical pickup | Physical placement | Wall seconds, repeats 1 / 2 |
+| --- | --- | --- | --- |
+| Original | 2/2 | 2/2 | 242 / 263 |
+| Separated neighbor | 2/2 | 2/2 | 258 / 259 |
+| Mirrored neighbor | 2/2 | 2/2 | 220 / 222 |
+
+This satisfies Stage B's predeclared gate. These are repeated executions at
+seed 0, not six independent environments, and all use explicit numerical-physics
+and aperture variants. No production contact-solver default is promoted.
+Earlier failures and development retries are not pooled. The key final repair
+corrects an 8.7 mm camera-to-grasp mismatch and publishes rendered poses from
+the same state as RGB-D, without changing object-specific offsets or tolerances.
+General clutter robustness, single-room OVMM, learned TAMP and paired EQA
+acceptance remain pending.
+
+Post-panel-source work is separate: `82eaa6f3` adds private ordered distinct-object
+scoring; `56ba1df7` adds an open-sink room fixture; `fd6c0041` retains native
+simulation capture stamps through the clients. These are not part of frozen v7.
+Latest offline checks: 440 passed / 4 skipped in the broad suite, 26 focused
+camera/timing/codec tests and 18 simulator-configuration tests. Ordered scoring
+controls are synthetic, not learned-TAMP successes.
 
 Panel history: v3 passes both original
 repeats but times out during clearance-scene navigation. Panel v4 repairs that
