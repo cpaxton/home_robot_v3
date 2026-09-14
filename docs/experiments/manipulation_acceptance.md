@@ -191,6 +191,12 @@ bottle** (seed 1), with `obj_main` as the private target body and
 `sink_main_group_main` as support. Artifacts, generated XML and exact script:
 `~/runs/emet/open-sink-room-preflight-20260913`. Both generated rooms use
 NoSlip=0; do not silently change that to the tabletop diagnostic's NoSlip=10.
+These archived rooms predate the source-inertia preservation fix: their mesh
+conversion inflated inferred object masses. NoSlip settings alone do not imply
+native RoboCasa dynamics. See the [mass audit and corrected fixture](shared_grounding_pilot.md)
+before reusing them; keep old and corrected dynamics separate. Also validate
+actual target identity: subsequent repeats showed that seed alone did not freeze
+the generated category or pose.
 
 `configs/benchmarks/robocasa_sink_physical_eval.json` additionally requires the
 object origin to lie inside a declared left/right basin box, using its native

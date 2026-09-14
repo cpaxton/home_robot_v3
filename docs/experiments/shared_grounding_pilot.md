@@ -209,12 +209,28 @@ and solver settings are checked against the old fixture; non-object kitchen
 inertias retain their archived values. Fresh production generation preserves
 all source bodies instead. The old scene and all failures remain intact.
 
-Learned corrected-dynamics retry `20260913_221528_c641e9` on `b7e030de` is
-running under `~/runs/emet/open-sink-pear-restored-dynamics`. It combines the
-bounded-lift fix with restored object dynamics, so it is not a one-factor
-ablation. The full offline suite passes **508 tests / 4 skip**; focused grasp
-and inertia tests pass **66**. Neither a corrected fixture nor a passing
-diagnostic would itself satisfy Stage C.
+Learned corrected-dynamics retry `20260913_221528_c641e9` on `b7e030de`, under
+`~/runs/emet/open-sink-pear-restored-dynamics`, completes **physical pickup T /
+placement F**. Pickup is verified at 61.834 simulated seconds (window starts
+60.834). Final reconstruction was manually inspected: the pear remains between
+the fingers, elevated and without other support contact. Maximum absolute
+base roll/pitch over the trace is 0.20/2.84 degrees, not the earlier large tip.
+The run combines the bounded-lift fix with restored object dynamics, so this
+is not a one-factor ablation.
+
+The agent stops before placement because carry retraction times out. The arm
+is still retracting at about 0.1 m per simulated second, from 0.417 m toward
+0.01 m; the final 14.94 simulated seconds took 39.48 wall seconds. Unlike
+head/navigation/posture waits, `arm_to()` omitted the existing simulation-speed
+deadline scaling. `b6ad49ce` applies that same bounded scale, retaining hardware
+budgets, positional/settling checks and the scale cap. It also enforces the
+deadline when feedback is missing, rather than looping indefinitely. Timing,
+carry and protocol tests: **22 pass**; expanded offline suite: **519 pass /
+4 skip** (also includes the exact extraction-clearance boundary regression).
+
+Same-fixture learned retry `20260913_222451_3512ce` on `b6ad49ce` is running
+under `~/runs/emet/open-sink-pear-carry-deadline`, with unchanged model, physics,
+geometry and motion tolerances. Room placement and Stage C remain unpassed.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same

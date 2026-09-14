@@ -57,8 +57,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       1.0 m ceiling and requires 10 cm available travel. Source-body mass/COM/
       inertia preservation, including zero-mass markers, is implemented; full
       generation retry `20260913_221317_3f6121` passes. 508 offline tests pass /
-      4 skip. Same-geometry corrected-dynamics learned run
-      `20260913_221528_c641e9` is running. Retain old fixtures and label corrected
+      4 skip. Corrected-dynamics run `20260913_221528_c641e9` passes physical
+      pickup (61.834 sim s) but stops before placement on carry retraction's
+      unscaled wall-time deadline; final held-pear replay inspected. `b6ad49ce`
+      reuses existing bounded sim-time scaling in arm_to, including a deadline
+      for missing feedback. 519 offline tests pass / 4 skip. Same-fixture retry
+      `20260913_222451_3512ce` running. Retain old fixtures and label corrected
       dynamics separately. Stage C is not passed.
       Neighboring original-tabletop control on `2e988c71` passes
       pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
