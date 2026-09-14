@@ -359,8 +359,6 @@ def preserve_body_inertias(xml_str: str, model: mujoco.MjModel) -> str:
         if not name:
             raise ValueError("Preserving compiled inertias requires named bodies")
         source = model.body(name)
-        if source.mass[0] <= 0:
-            continue
         inertial = body.find("inertial")
         if inertial is None:
             inertial = ET.SubElement(body, "inertial")

@@ -41,6 +41,20 @@ def test_preserving_inertials_is_idempotent_and_honors_source_not_stale_xml():
     assert len(ET.fromstring(once).findall(".//inertial")) == 1
 
 
+def test_massless_marker_does_not_gain_mass_from_visual_geometry():
+    xml = """<mujoco><worldbody><body name="marker" mocap="true">
+      <inertial mass="0" pos="0 0 0" diaginertia="0 0 0"/>
+      <geom type="box" size=".1 .1 .1"/>
+    </body></worldbody></mujoco>"""
+    source = mujoco.MjModel.from_xml_string(xml)
+    root = ET.fromstring(xml)
+    body = root.find(".//body")
+    body.remove(body.find("inertial"))
+    result = mujoco.MjModel.from_xml_string(preserve_body_inertias(ET.tostring(root, encoding="unicode"), source))
+    assert result.body("marker").mass[0] == 0
+    np.testing.assert_array_equal(result.body("marker").inertia, np.zeros(3))
+
+
 @pytest.mark.parametrize("name", [None, "missing"])
 def test_unmatched_bodies_fail_instead_of_silently_reinferring_mass(name):
     source = mujoco.MjModel.from_xml_string(SCENE)
