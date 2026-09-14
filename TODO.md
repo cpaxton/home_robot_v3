@@ -24,52 +24,22 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
 - [x] Keep verified manipulation references separate from unverified voxel search
       hypotheses (`ec9e14ba`). The first running open-sink diagnostic found the
       pear but rejected the handoff by counting both tiers as competing objects.
-      Fresh reacquisition and true ambiguity rejection remain required; **484
-      offline tests pass / 4 skip** with the added grounding/candidate coverage.
-- [ ] Complete the room retry after the handoff fix; first failed run and its
-      accepted pear mask remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
-      Record adapter autoplace versus benchmark start (2.034 m displacement in
-      seed 0); freeze explicit visible/search starts before the Stage C panel.
-      Retry `20260913_205646_cf97b0` was cancelled: seed 0 generated a can while
-      the instruction requested a pear. Generation-only repeats confirm seed
-      nondeterminism; use frozen scene/task metadata for paired comparisons.
-      Frozen visible control `20260913_211456_985f71` reaches grasp, then rejects
-      a 59 cm-separated high-counter target because aperture clearance checked
-      optical depth only. `2e988c71` uses 3D closing-segment distance with the
-      same 6 cm margin; 489 offline tests pass / 4 skip. Same-fixture physical
-      retry `20260913_212148_9413e0` passes aperture adjustment but fails wrist
-      visibility before closure. `98dbfee7` fixes signed target-height handling:
-      above-pivot targets no longer mirror downward. 491 offline tests pass /
-      4 skip; live signed-height retry `20260913_213256_6271da` sees the pear but
-      later loses its support behind the counter edge; association correctly
-      rejects Qwen's selection of a counter patch. `516b3619` constrains the
-      separated pregrasp at/above target height (492 offline pass / 4 skip).
-      Frozen retry `20260913_214307_f3afc3` exposes the full pear but ends F/F:
-      Qwen selects a baguette and association correctly rejects it. `5fddc33d`
-      filters whole tracked surfaces by the same association rule before Qwen
-      selection, retaining semantic verification and the final guard. 495 offline
-      tests pass / 4 skip. Real-model saved-frame replay accepts clear pear,
-      rejects absent banana, and abstains on occluded pear; two development frames
-      are not held-out acceptance. Physical retry `20260913_215902_119e0e`
-      reaches closure but tips/loses the object, F/F. It exposes an out-of-range
-      1.144 m lift command and a 4.57 kg pear caused by blanket shell-inertia
-      conversion (authored mode: 0.07874 kg). Extraction now respects the existing
-      1.0 m ceiling and requires 10 cm available travel. Source-body mass/COM/
-      inertia preservation, including zero-mass markers, is implemented; full
-      generation retry `20260913_221317_3f6121` passes. 508 offline tests pass /
-      4 skip. Corrected-dynamics run `20260913_221528_c641e9` passes physical
-      pickup (61.834 sim s) but stops before placement on carry retraction's
-      unscaled wall-time deadline; final held-pear replay inspected. `b6ad49ce`
-      reuses existing bounded sim-time scaling in arm_to, including a deadline
-      for missing feedback. 519 offline tests pass / 4 skip. Same-fixture retry
-      `20260913_222451_3512ce` fails before closure on lateral oscillation.
-      A regression proves 20 mm client base tolerance can accept an unexecuted
-      13 mm correction; `3dfcc5f4` sets 5 mm only for the geometry preset, matching
-      native translation control. 520 offline tests pass / 4 skip. Retry
-      `20260913_223356_cf593f` running. Retain old fixtures and label corrected
-      dynamics separately. Stage C is not passed.
-      Neighboring original-tabletop control on `2e988c71` passes
-      pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
+      Fresh reacquisition and true ambiguity rejection remain required.
+- [x] Preserve source RoboCasa body mass/COM/inertia during mesh adaptation,
+      including zero-mass markers; full generation/export comparison passes.
+      The blanket shell conversion inflated a pear from 0.07874 to 4.57 kg.
+      Keep archived/corrected dynamics separate; do not tune object densities.
+- [ ] Complete repeatable room pickup **and placement**, then freeze Stage C's
+      visible/search starts and actual task identities for both environments.
+      Current evidence: one corrected-dynamics pickup T / placement F, followed
+      by F/F repeats exposing base completion and false-stall checks. Current
+      candidate `096ab093` has bounded extraction, sim-scaled waits, 5 mm base
+      completion in the geometry preset, and a measured-progress stall window.
+      Simulator-only fine-motion control `20260913_224425_cd1725` is running.
+      **522 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
+      neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
+      All run IDs, retained failures, masks, interventions and numerical audits
+      remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across
       processes as well as repeated calls. Python hash-seed pinning alone did
       not stabilize object positions. Preserve generated geometry and validate

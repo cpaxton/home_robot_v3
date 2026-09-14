@@ -245,9 +245,21 @@ hardware unable to meet this precision must fail, not silently loosen the gate.
 This addresses a demonstrated contract mismatch, not a proven explanation of
 every mask/servo fluctuation. Focused motion/aperture tests: **29 pass**;
 expanded offline suite: **520 pass / 4 skip**. Same corrected fixture retry
-`20260913_223356_cf593f` is running under
-`~/runs/emet/open-sink-pear-precision-contract`. Room placement and Stage C
-remain unpassed.
+`20260913_223356_cf593f`, under `~/runs/emet/open-sink-pear-precision-contract`,
+fails **F/F before closure** on the first fine correction: the old client
+declares no motion at a measured base speed of **9.97 mm/s**, while the target
+is still being approached. Tightening completion exposed this separate
+instantaneous low-speed failure heuristic.
+
+`096ab093` tracks improvement in tolerance-normalized goal error over the
+existing bounded, simulation-scaled stall window instead. Slow convergence is
+not a stall; stationary nonconvergence and the overall deadline still fail.
+Position and stopped-motion acceptance are unchanged. Focused motion/carry/
+protocol tests: **25 pass**; expanded offline suite: **522 pass / 4 skip**.
+Simulator-only control `20260913_224425_cd1725`, under
+`~/runs/emet/arm-precision-contract-control`, tests small base corrections and
+full arm retraction with no VLM. It is not learned manipulation acceptance.
+Room placement and Stage C remain unpassed.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
