@@ -41,9 +41,13 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       on the corrected-inertia NoSlip=0 fixture. The trace shows slow slip even
       during stationary holds. Matched 50 s fixed-control continuation drops it
       under NoSlip=0 but retains it under NoSlip=10 (2.64 mm relative drift).
-      Learned solver-only retry `20260913_230112_fb9a85` is running on the same
-      code; keep numerical-physics rows separate and production defaults unchanged.
-      **522 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
+      Solver-only learned retry `20260913_230112_fb9a85` instead stopped before
+      pickup at a too-close, IK-infeasible viewing pose. `19691f45` adds a
+      kinematics-derived grasp workspace through the existing collision-checked
+      navigator; it leaves find/EQA sampling and the 20 cm pregrasp minimum intact.
+      Same NoSlip=10 fixture retry `20260913_231231_143de9` is running. Keep
+      numerical-physics rows separate and production defaults unchanged.
+      **537 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits
       remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).

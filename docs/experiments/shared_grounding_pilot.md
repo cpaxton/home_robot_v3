@@ -306,6 +306,28 @@ retry `20260913_230112_fb9a85` uses the same frozen `096ab093` policy under
 `~/runs/emet/open-sink-pear-progress-noslip`. Keep its explicit numerical-physics
 row separate from native NoSlip=0 results and from the earlier tabletop panel.
 
+The solver-only learned retry finishes **F/F before pickup** (106 wall seconds).
+It finds the pear from a closer base pose and correctly rejects all separated
+pregrasp IK candidates. This run therefore does not test live carry retention.
+Offline real-kinematics reproduction at the observed 0.58 m horizontal target
+distance and 0.966 m height requires **-29 mm arm extension** for a horizontal
+20 cm separated pregrasp. The issue is a viewing-pose/manipulation-workspace
+mismatch, not evidence against the saved-grasp contact control.
+
+`19691f45` derives the minimum grasp distance from the robot's retracted,
+horizontal-wrist FK plus the unchanged 20 cm pregrasp separation. A too-close
+grounded pickup asks the existing collision-checked voxel navigator for a base
+pose within hard radial bounds, preferring the configured 30 cm separation.
+It does not directly command a blind backup, lower the standoff, use simulator
+object coordinates, or change ordinary find/EQA sampling. Path/footprint and
+measured-position checks remain required; final arm-facing alignment reacquires
+the target before manipulation. This is workspace feasibility, not a full
+arm collision planner. Tests cover unreachable/blocked ranges, unchanged find
+behavior, navigation failure/no progress, and the actual kinematic failure;
+**537 offline tests pass / 4 skip** (including the frontier-sampling suite).
+Serial same-fixture retry `20260913_231231_143de9` runs frozen `19691f45` under
+`~/runs/emet/open-sink-pear-workspace-noslip` with explicit NoSlip=10.
+
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
 tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests
