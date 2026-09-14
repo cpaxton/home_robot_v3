@@ -1077,7 +1077,10 @@ class GraspObjectOperation(ManagedOperation):
             # dy = np.abs(head_pos[1] - relative_object_xyz[1])
             # dz = np.abs(head_pos[2] - relative_object_xyz[2])
             dy = np.abs(ee_pos[1] - relative_object_xyz[1])
-            dz = np.abs(ee_pos[2] - relative_object_xyz[2])
+            # Preserve whether the object is above or below the wrist pivot.
+            # abs(dz) aimed downward even at high-counter targets, leaving
+            # valid head-grounded objects outside the pregrasp wrist view.
+            dz = ee_pos[2] - relative_object_xyz[2]
             pitch_from_vertical = np.arctan2(dy, dz)
         else:
             pitch_from_vertical = 0.0

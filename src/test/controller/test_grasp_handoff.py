@@ -26,6 +26,29 @@ def operation():
     return op
 
 
+@pytest.mark.parametrize("target_z", [0.45, 0.85])
+def test_grasp_orientation_preserves_signed_target_height(target_z):
+    op = operation()
+    op.intro = op.reset = Mock()
+    op.show_object_to_grasp = op.servo_to_grasp = False
+    op.reset_observation = op.delete_object_after_grasp = op.talk = False
+    op._object_xyz = np.array([2.0, -1.7, target_z])
+    op.robot.get_base_pose_world.return_value = np.array([2.0, -1.0, 0.0])
+    joints = np.zeros(11)
+    op.robot.get_joint_positions.return_value = joints
+    op.robot.get_observation.return_value = SimpleNamespace(joint=joints)
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (
+        np.array([0.0, -0.3, 1.0]),
+        np.array([0.0, 0.0, 0.0, 1.0]),
+    )
+    op.run()
+    pitch = op.robot.arm_to.call_args.args[0][HelloStretchIdx.WRIST_PITCH]
+    # The existing virtual wrist pivot is 35 cm behind this grasp frame.
+    expected = op.offset_from_vertical + np.arctan2(0.4, 0.65 - target_z)
+    assert pitch == pytest.approx(expected)
+    assert (pitch > 0) == (target_z > 0.65)
+
+
 def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     op = operation()
     target = SimpleNamespace(xyz=np.array([0.09, -0.52, 0.52]))
