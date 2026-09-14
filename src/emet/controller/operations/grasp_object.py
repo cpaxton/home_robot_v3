@@ -1160,7 +1160,13 @@ class GraspObjectOperation(ManagedOperation):
         # configured larger separation when relocation is actually necessary.
         if np.linalg.norm(target[:2] - start[:2]) >= reach + self.minimum_pregrasp_standoff:
             return
-        bounds = (reach + self.pregrasp_distance_from_object, float(self.agent.manipulation_radius))
+        # The planner radius refers to the end-effector workspace. The object
+        # lies one pregrasp separation beyond it; do not compare the nominal
+        # 0.55 m radius directly against a roughly 0.71 m separated-object goal.
+        bounds = (
+            reach + self.pregrasp_distance_from_object,
+            float(self.agent.manipulation_radius) + self.pregrasp_distance_from_object,
+        )
         if not np.isfinite(bounds).all() or not 0 <= bounds[0] < bounds[1]:
             raise ValueError("No separated grasp workspace within the manipulation radius")
         self.info(f"Viewing pose is too close for pregrasp; planning within radial bounds {bounds}")

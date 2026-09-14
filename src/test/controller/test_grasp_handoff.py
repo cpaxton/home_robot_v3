@@ -78,13 +78,13 @@ def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distan
     joints = np.ones(11) * 0.1
     op.robot.get_joint_positions.return_value = joints
     op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, -0.41, 0.9]), None)
-    op.agent.manipulation_radius = 0.8
+    op.agent.manipulation_radius = 0.55
     op.agent.navigate_to_target_pose.return_value = True
     op.ensure_grounded_grasp_workspace()
     assert op.agent.navigate_to_target_pose.call_count == (1 if distance == 0.58 else 0)
     if distance == 0.58:
         call = op.agent.navigate_to_target_pose.call_args
-        assert call.kwargs["distance_range"] == pytest.approx((0.71, 0.8))
+        assert call.kwargs["distance_range"] == pytest.approx((0.71, 0.85))
         np.testing.assert_array_equal(call.args[0], op._object_xyz)
         np.testing.assert_array_equal(call.args[1], start)
     np.testing.assert_array_equal(joints, np.ones(11) * 0.1)
@@ -99,7 +99,7 @@ def test_grasp_workspace_does_not_bypass_failed_navigation_or_bad_geometry(failu
     op.robot.get_base_pose_world.return_value = np.zeros(3)
     op.robot.get_joint_positions.return_value = np.zeros(11)
     op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, -0.41, 0.9]), None)
-    op.agent.manipulation_radius = 0.8 if failure != "no_range" else 0.5
+    op.agent.manipulation_radius = 0.55 if failure != "no_range" else 0.3
     op.agent.navigate_to_target_pose.return_value = failure != "plan"
     if failure == "invalid_geometry":
         op._object_xyz[0] = np.nan
@@ -123,7 +123,10 @@ def test_close_high_target_becomes_pregrasp_reachable_after_workspace_relocation
     joints[HelloStretchIdx.WRIST_PITCH] = 0.487
     op.robot.get_joint_positions.return_value = joints
     op.robot.get_base_pose_world.return_value = np.zeros(3)
-    op.agent.manipulation_radius = 0.8
+    from emet.config.loader import load_config
+
+    params = load_config("configs/emet/query_geometry_tracked_narrow_pilot.yaml").mapping_dict
+    op.agent.manipulation_radius = params["motion_planner"]["goals"]["manipulation_radius"]
     assert not op.pregrasp_open_loop(op._object_xyz, distance_from_object=0.3)
     op.robot.arm_to.assert_not_called()
 
