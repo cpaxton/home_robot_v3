@@ -87,6 +87,39 @@ is unverified, not success. Retain negative cases and infrastructure failures.
 
 ## Stages and stop gates
 
+### Current repair boundary: end-effector clearance
+
+The September 14 sink diagnostic reaches a verified placement point but the
+gripper body contacts the front counter edge before the 5 mm release gate.
+Do not widen that gate, add downward force, or advance to the room/TAMP panel
+on pickup alone. The [trace/contact audit](shared_grounding_pilot.md) also records
+the neighboring tabletop regression and its actual-pregrasp repair.
+
+The next implementation/evidence sequence is:
+
+1. Select and archive the actual robot/tool model. Validate FK, pitch-pivot and
+   gripper-envelope geometry against the bridge on a bounded pose grid; the
+   current legacy RE1V0 client mesh is not the native SE3/SG3 gripper. A model
+   name or one corrected origin is insufficient. Do not silently switch hardware.
+2. Add a shared geometric placement check using calibrated robot/tool geometry,
+   freshly observed support/obstacle points and the held-object observation.
+   Check the approach and release pose, not only the object-center distance.
+   Keep simulator contacts/meshes of scene objects evaluator-only. An unobserved
+   region is not evidence of free space; missing geometry must remain unverified.
+3. If the intended point cannot clear the gripper, select and freshly verify a
+   feasible alternative within the same receptacle, then use the existing
+   navigation and bounded local-motion contracts. Do not introduce sink names,
+   coordinates, cached private collision outcomes, or a larger release gap as
+   policy shortcuts. Stop if no verified feasible approach exists.
+4. Test an unobstructed release, the saved edge-obstructed geometry and an
+   unknown/occluded-support negative offline. Then run the unchanged tabletop
+   control and corrected-inertia open-sink fixture serially, repeating a pass
+   before freezing Stage C. Geometry-unit success is not physical acceptance.
+
+The agent/task loop remains shared. Embodiment-specific geometry belongs in
+the robot adapter, not separate EQA/OVMM policies. Door/drawer articulation and
+the harder Habitat-OVMM sweep remain deferred as already recorded in TODO.
+
 | Stage | Bounded cases | Advance only when |
 | --- | --- | --- |
 | A: causal diagnostic | Original red-cylinder/blue-cube task; stationary and known-motion controls as needed | Accepted/rejected wrist sequence and measured commands explain the failure; independent pickup evidence is available |

@@ -436,6 +436,32 @@ pass **564 tests / 4 skip**. Learned tabletop retry `20260914_001546_f0b89d`
 runs frozen `787acb6f` under `~/runs/emet/tabletop-actual-pregrasp-control`.
 Sink gripper-clearance planning remains unresolved, not hidden by that retry.
 
+The `787acb6f` tabletop retry completes **physical pickup T / placement T**
+in 265 wall seconds (pick 73.010 s, final stable placement 172.188 s simulation
+time). It does not enter the unnecessary pregrasp relocation path. Final close
+and top-down reconstructions were manually inspected: the cylinder rests on
+the cube after gripper withdrawal. This is one restored neighboring control,
+not the full six-case panel, room acceptance or proof of general robustness.
+Unchanged repeat `20260914_002232_e419bd` also passes **T/T** under
+`~/runs/emet/tabletop-actual-pregrasp-repeat`, still frozen on `787acb6f`
+(pick 71.480 s, final stable placement 170.388 s simulation time). Its final
+close-up was manually inspected. Thus the repaired candidate has **2/2** on
+this neighboring fixture; earlier-source failures remain reported above.
+
+Before adding mesh-based clearance checks, inspect the actual model assets:
+the client-generated `config/urdf/stretch.urdf` uses RE1V0 dex-wrist geometry,
+whereas native simulation uses SE3/SG3. Private audit
+`~/runs/emet/stretch-embodiment-model-audit` compares six recorded pear states,
+without stepping physics, to the legacy and a separately generated SE3 URDF.
+At these near-horizontal wrist poses, legacy grasp-origin errors are
+5.61–5.63 mm; the SE3 URDF still differs by 4.77 mm. This is not a full pose-grid
+calibration and does not establish either model as a drop-in replacement.
+Both URDFs, trace/scene/source hashes and the audit script are archived. The
+observed counter contact remains real; neither that small FK error nor the
+model-name mismatch alone explains all failures. Collision-envelope support
+must first select and validate the embodiment's actual geometry rather than
+reusing legacy meshes or changing hardware defaults silently.
+
 Review also exposed missing head-camera calibration in the grounding cache.
 The review branch now saves camera intrinsics, pose and base pose from the
 original captured frame (detection backends can discard these fields). Missing

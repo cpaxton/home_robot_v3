@@ -55,7 +55,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Same-source tabletop control `20260914_000218_79fce1` also fails before
       pickup after unwanted workspace relocation. Candidate `787acb6f` checks
       actual pregrasp IK before moving and uses the real URDF wrist pivot;
-      tabletop retry `20260914_001546_f0b89d` is running.
+      tabletop retry `20260914_001546_f0b89d` passes T/T (final close/top-down
+      reconstructions inspected). Unchanged repeat `20260914_002232_e419bd`
+      also passes T/T, with its final close-up inspected: **2/2** on this
+      neighboring fixture and source, not room or full-panel acceptance.
       Motion fixes already have a 9/9 empty-gripper simulator control plus
       bounded extraction, sim-scaled waits and measured-progress stall tests.
       **564 offline tests pass / 4 skip** on the latest candidate; this does not establish room acceptance. The previous
@@ -88,6 +91,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       release. Account for the robot's full end-effector envelope and observed
       support/obstacle geometry when selecting a placement pose and approach;
       simulator body names and private collision checks must remain evaluator-only.
+- [ ] Audit and explicitly select the embodiment's kinematic/collision model
+      before integrating gripper-clearance planning. The current generated
+      client URDF is RE1V0 dex-wrist-based while native simulation uses SE3/SG3.
+      Hash/archive the actual generated model, not just the source commit, and
+      validate joint/frame geometry against the bridge. Do not treat the legacy
+      model's collision meshes as the SE3 gripper or silently change hardware.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.
       Keep capture evaluator-only and distinguish replay from live evidence.
