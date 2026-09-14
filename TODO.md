@@ -21,6 +21,15 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       The measured 8.7 mm camera-to-grasp mismatch exceeded the 5 mm servo gate.
       Snapshot timing transport follows in `fd6c0041`; v7 itself remains frozen
       on `ef533ed3`, without later evaluator/timing changes.
+- [x] Keep verified manipulation references separate from unverified voxel search
+      hypotheses (`ec9e14ba`). The first running open-sink diagnostic found the
+      pear but rejected the handoff by counting both tiers as competing objects.
+      Fresh reacquisition and true ambiguity rejection remain required; **484
+      offline tests pass / 4 skip** with the added grounding/candidate coverage.
+- [ ] Complete the room retry after the handoff fix; first failed run and its
+      accepted pear mask remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
+      Record adapter autoplace versus benchmark start (2.034 m displacement in
+      seed 0); freeze explicit visible/search starts before the Stage C panel.
 - [ ] Reconcile arm-base completion tolerance with finer server tracking, and
       align state-only FK/joint feedback with the acquisition geometry contract.
 - [ ] Before claiming a solver necessity or hardware grasp safety, repeat

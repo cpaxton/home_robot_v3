@@ -27,7 +27,7 @@ offset; its value is not a universal object-localization correction. Published
 RGB-D geometry and absolute manipulation targets use world coordinates, while
 `get_base_pose()` is episode-relative on ZMQ clients. Use `get_base_pose_world()`
 for those transforms and explicitly world-frame navigation goals. Robot tool
-offsets must use the published URDF grasp axes, not a visually inferred axis
+offsets must use the robot-published grasp axes, not a visually inferred axis
 from a simulator marker. Validate nonzero episode origins and wrist rotations.
 
 Native Stretch snapshot timing is transported as per-camera `image_timing`
@@ -202,7 +202,12 @@ The shared pilot driver accepts `SIM_COMMAND`, `SIM_EVAL_CONFIG` and optional
 **room integration diagnostic**, keep the tracked-narrow agent and 600-second
 case deadline, select the open-sink fixture and private evaluator above, and use
 `SIM_COMMAND='Use pick_place to put the pear in the sink. Report any failure; do not use oracle scene tasks or plans.'`.
-Seed 0 uses its native benchmark start. This is not the eight-case Stage C panel:
+Seed 0 uses unmodified adapter startup: the existing open-floor autoplace can
+move the base away from the benchmark's suggested pose. In the first running
+diagnostic it moved 2.034 m, so this is an adapter-start search case, not a
+visible-target control or the literal benchmark start. Record both poses; do
+not infer that every closer pose was unsafe from the selected open-floor pose.
+This is not the eight-case Stage C panel:
 visible/search start manifests and the Molmo counterpart still need to be frozen.
 The driver archives the exact command and evaluator config and preserves the
 old tabletop defaults when these overrides are absent.
