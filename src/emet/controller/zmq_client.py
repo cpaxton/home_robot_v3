@@ -712,6 +712,10 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         # Handle blocking
         steps = 0
         if blocking:
+            # Match the existing head/nav/posture wait contract. A full arm
+            # retraction still takes physical time when rendering slows the sim;
+            # hardware budgets and the bounded scale cap remain unchanged.
+            timeout = self._scaled_motion_timeout(timeout)
             t0 = timeit.default_timer()
             settled_since = None
             while not self._finish:
@@ -724,6 +728,10 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         print("Resending action", joint_angles)
 
                 joint_state, joint_velocities, _ = self.get_joint_state()
+                t1 = timeit.default_timer()
+                if t1 - t0 > timeout:
+                    logger.error("Timeout waiting for arm to move")
+                    break
                 if joint_state is None:
                     time.sleep(0.01)
                     continue
@@ -739,7 +747,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
                     )
 
-                t1 = timeit.default_timer()
                 if (
                     (arm_diff < self._arm_joint_tolerance)
                     and (lift_diff < self._lift_joint_tolerance)
@@ -781,9 +788,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         )
                 time.sleep(0.01)
 
-                if t1 - t0 > timeout:
-                    logger.error("Timeout waiting for arm to move")
-                    break
                 steps += 1
             # sleep to prevent ros2 streaming latency
             time.sleep(0.5)
