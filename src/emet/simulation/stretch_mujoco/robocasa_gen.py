@@ -32,6 +32,7 @@ from emet.simulation.stretch_mujoco.utils import (
     ensure_mesh_inertia,
     get_absolute_path_stretch_xml,
     insert_line_after_mujoco_tag,
+    preserve_body_inertias,
     replace_xml_tag_value,
     xml_modify_body_pos,
     xml_remove_all_tags,
@@ -263,7 +264,7 @@ def model_generation_wizard(
     print(colored("Spawning environment...\n", "yellow"))
 
     model = env.sim.model._model
-    xml = env.sim.model.get_xml()
+    xml = preserve_body_inertias(env.sim.model.get_xml(), model)
 
     click.secho(f"\nMaking Object Placements for task [{task}]...\n", fg="yellow")
     object_placements_info = {}
