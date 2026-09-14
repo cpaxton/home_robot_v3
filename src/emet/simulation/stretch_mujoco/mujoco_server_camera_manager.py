@@ -193,6 +193,12 @@ class MujocoServerCameraManagerSync:
         imagery = StatusStretchCameras.default()
         imagery.time = float(snapshot.time)
         imagery.fps = self.camera_fps_counter.fps
+        imagery.image_timing = {
+            "timestamp_ns": round(imagery.time * 1_000_000_000),
+            "clock_domain": "mujoco_sim",
+            "source": "render_state_snapshot",
+            "available": True,
+        }
 
         def camera_pose(name, image_rotation):
             camera = snapshot.camera(name)

@@ -28,6 +28,15 @@ for those transforms and explicitly world-frame navigation goals. Robot tool
 offsets must use the published URDF grasp axes, not a visually inferred axis
 from a simulator marker. Validate nonzero episode origins and wrist rotations.
 
+Native Stretch snapshot timing is transported as per-camera `image_timing`
+through full and servo observations. `timestamp_ns` is simulation time from
+the rendered state, with `clock_domain: mujoco_sim` and
+`source: render_state_snapshot`; it is **not Unix time or hardware exposure
+time**. Compare it only to the same simulator episode's physical trace, not
+directly to host clocks. Republishing a frame retains its stamp. Legacy peers
+without timing remain unknown. Separately sampled joint feedback and the
+state-only FK stream are not thereby acquisition-synchronized.
+
 Run heavy cases **serially**, through `emet jobs --cpu-safe --gpu-exclusive`.
 Use fresh artifact directories and bounded subprocess deadlines. After a timeout,
 check simulator/model cleanup before starting the next case. No real robot is

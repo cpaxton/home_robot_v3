@@ -41,6 +41,7 @@ class StatusStretchCameras:
     cam_d405_pose: np.ndarray | None = None
     cam_d435i_pose: np.ndarray | None = None
     ee_pose: np.ndarray | None = None
+    image_timing: dict | None = None
 
     def get_all(
         self, *, auto_rotate: bool = True, auto_correct_rgb=True, use_depth_color_map=False

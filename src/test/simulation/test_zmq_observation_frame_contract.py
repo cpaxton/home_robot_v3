@@ -86,6 +86,8 @@ def test_stretch_servo_head_cam_pose_is_world():
     server._camera_data.cam_d405_pose = ee_cam.copy()
     server._camera_data.cam_d435i_pose = _WORLD_CAM.copy()
     server._camera_data.ee_pose = np.eye(4)
+    timing = {"timestamp_ns": 123, "clock_domain": "mujoco_sim", "source": "render_state_snapshot", "available": True}
+    server._camera_data.image_timing = timing
     with (
         patch.object(server, "_stretch_sim_publish_ok", return_value=True),
         patch.object(server, "get_joint_state", return_value=(np.zeros(11), np.zeros(11), np.zeros(11))),
@@ -102,6 +104,7 @@ def test_stretch_servo_head_cam_pose_is_world():
     np.testing.assert_allclose(msg["ee_cam/pose"][:3, 3], ee_cam[:3, 3], atol=1e-6)
     server.robot_sim.get_link_pose.assert_not_called()
     server.robot_sim.get_ee_pose.assert_not_called()
+    assert msg["head_cam/image_timing"] == msg["ee_cam/image_timing"] == timing
 
 
 def test_stretch_missing_acquisition_pose_does_not_fall_back_to_later_fk():

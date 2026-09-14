@@ -36,6 +36,12 @@ def test_captured_robot_geometry_matches_rendered_model_and_is_immutable(yaw):
     manager.camera_fps_counter = SimpleNamespace(fps=15.0)
     snapshot, imagery = manager._capture_state()
     assert imagery.time == 12.5
+    assert imagery.image_timing == {
+        "timestamp_ns": 12_500_000_000,
+        "clock_domain": "mujoco_sim",
+        "source": "render_state_snapshot",
+        "available": True,
+    }
     for name, pose, image_rotation in (
         ("d405_rgb", imagery.cam_d405_pose, np.eye(3)),
         ("d435i_camera_rgb", imagery.cam_d435i_pose, np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])),
@@ -58,6 +64,7 @@ def test_captured_robot_geometry_matches_rendered_model_and_is_immutable(yaw):
     np.testing.assert_array_equal(snapshot.qpos, expected_qpos)
     np.testing.assert_array_equal(imagery.ee_pose, expected_pose)
     assert snapshot.time == 12.5
+    assert imagery.image_timing["timestamp_ns"] == 12_500_000_000
 
 
 @pytest.mark.parametrize("threaded", [False, True])
