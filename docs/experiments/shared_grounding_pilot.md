@@ -30,7 +30,56 @@ scoring; `56ba1df7` adds an open-sink room fixture; `fd6c0041` retains native
 simulation capture stamps through the clients. These are not part of frozen v7.
 Latest offline checks: 440 passed / 4 skipped in the broad suite, 26 focused
 camera/timing/codec tests and 18 simulator-configuration tests. Ordered scoring
-controls are synthetic, not learned-TAMP successes.
+controls are synthetic, not learned-TAMP successes. Follow-on containment and
+driver changes bring the broad suite to **442 passed, 4 skipped**; rescoring
+the six frozen v7 traces preserves all original physical results and times.
+
+### First open-room diagnostic (after the basic gate)
+
+Preflight `20260913_202959_f17d9b` on `fbb38412` successfully generates the
+declared RoboCasa `PickPlaceCounterToSink` layout/style 1 for seeds 0/1. Targets
+are pear / spray bottle. Both rooms use native NoSlip=0, unlike tabletop v7.
+Generated XML, metadata and exact preflight script are archived under
+`~/runs/emet/open-sink-room-preflight-20260913`.
+
+`dfa19572` adds evaluator-only oriented basin regions so rim contact alone does
+not satisfy an inside-sink task. `54097954` parameterizes the existing shared
+pilot's natural-language instruction, seed and physical evaluator, preserving
+tabletop defaults. Job `20260913_203846_45e788` runs the first **integration
+diagnostic**: pear into sink, seed-0 adapter startup, same Qwen int4/lazy
+tracked-narrow agent and 600-second cap. Private target/support bodies and basin
+regions are not policy inputs. Artifacts: `~/runs/emet/open-sink-pear-diagnostic`.
+That attempt failed **before simulator startup**: the runtime asset check looked
+at the evaluation worktree's empty submodule, while the wizard imported a complete
+editable RoboCasa installation from the original checkout. No robot action or
+physical trace was produced; this is an infrastructure exclusion, not a policy
+failure. `e3c48a9c` resolves runtime asset checks against the imported package and
+skips repair writes when it is already complete. Read-only checks pass all five
+asset predicates; 22 focused path/config/driver tests pass. Exact-case retry
+`20260913_204353_cface0` on `e3c48a9c` completed with **no physical pickup or
+placement**, artifacts `~/runs/emet/open-sink-pear-runtime-assets`.
+The adapter's existing open-floor spawn ranking moved the robot 2.034 m from
+RoboCasa's suggested base pose (hint XY 1.140/-0.751, actual 2.933/-1.712).
+Its ranking favors the walkable-region centroid before distance to the hint;
+this is not evidence that every closer pose was in collision. Accordingly this
+is an **adapter-start search diagnostic**, not a visible-target control or the
+literal RoboCasa suggested start. Spawn selection was not changed for this run.
+
+Search reached a visible pear after about 406 seconds of tool execution. The
+final head capture `grounding-a99600d886184050a1071a3eb0e39078.png` was manually
+inspected: the pear is at the right edge of the counter. Qwen selected its
+355-pixel measured surface from two proposals. Pickup nevertheless failed
+before motion with `Manipulation requires a unique query candidate`: the
+handoff counted remaining unverified voxel search hypotheses as competing
+objects. A focused regression reproduces that failure. The correction prefers
+non-invalidated grounded references over search-only hints, still reacquires a
+new image, and still rejects multiple grounded references. It does not delete
+unexplored hypotheses or relax semantic/depth checks. The focused grounding,
+handoff and manipulation suite passes **123 tests**, including absent/stale
+reacquisition and true ambiguity controls. A new frozen exact-case retry is
+required; this software fix is not yet a room manipulation success.
+This is not the eight-case Stage C panel; visible/search starts and the Molmo
+counterpart remain to be frozen.
 
 Panel history: v3 passes both original
 repeats but times out during clearance-scene navigation. Panel v4 repairs that
