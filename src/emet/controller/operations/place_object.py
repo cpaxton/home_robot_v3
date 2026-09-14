@@ -37,6 +37,8 @@ class PlaceObjectOperation(ManagedOperation):
     held_query: str | None = None
     release_clearance_m: float = 0.02
     release_z_tolerance_m: float = 0.015
+    _placement_reference: np.ndarray | None = None
+    _support_height_reference: float | None = None
 
     def __init__(self, name, agent: RobotAgent, require_object: bool = True, *args, **kwargs):
         super().__init__(name, agent, *args, **kwargs)
@@ -68,6 +70,9 @@ class PlaceObjectOperation(ManagedOperation):
         self.use_pitch_from_vertical = use_pitch_from_vertical
         self.require_object = require_object
         self.held_query = held_query
+        if held_query is None:
+            self._placement_reference = None
+            self._support_height_reference = None
         place = self.parameters.get("place", {}) or {}
         self.release_clearance_m = float(place.get("release_clearance_m", 0.02))
         self.release_z_tolerance_m = float(place.get("release_z_tolerance_m", 0.015))
@@ -84,6 +89,8 @@ class PlaceObjectOperation(ManagedOperation):
         """Find's camera-facing pose must become a fresh arm-facing place pose."""
         from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
 
+        self._placement_reference = None
+        self._support_height_reference = None
         target = self.agent.prepare_query_target(query)
         start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
         bounds = (float(self.agent.manipulation_radius), float(self.agent.manipulation_radius) + self.place_step_size)
@@ -107,15 +114,34 @@ class PlaceObjectOperation(ManagedOperation):
             ):
                 raise RuntimeError("Measured placement workspace is still too far away")
         orient_arm_toward_target(self.robot, target.xyz)
-        return self.agent.prepare_query_target(query)
+        fresh = self.agent.prepare_query_target(query)
+        # Reacquisition may show only a different part of a large support.
+        # Verify association using the existing whole-mask geometry gate, but
+        # do not silently replace the point we just navigated toward. This
+        # local plan assumes a static receptacle; it is not dynamic tracking.
+        shape = (len(fresh.points), 1)
+        target.select_mask(np.zeros(shape, dtype=int), np.ones(shape, dtype=bool), fresh.points.reshape(*shape, 3))
+        self._placement_reference = np.array(placement, copy=True)
+        self._support_height_reference = float(np.quantile(target.points[:, 2], 0.95))
+        return fresh
+
+    def support_top(self):
+        """Never lower clearance because a partial view omits a support's rim."""
+        observed = float(self.get_target().point_cloud[:, 2].quantile(0.95))
+        if self._support_height_reference is None:
+            return observed
+        return max(observed, self._support_height_reference)
 
     def sample_placement_position(self, xyt, *, points=None) -> np.ndarray:
         """Share the same measured placement point between approach and release."""
+        if points is None and self._placement_reference is not None:
+            return self._placement_reference.copy()
         if points is None:
             if self.get_target() is None:
                 raise RuntimeError("no target set")
             points = self.get_target().point_cloud
-        points = torch.as_tensor(points)
+        # GroundedTarget intentionally exposes read-only NumPy geometry.
+        points = torch.as_tensor(points.copy() if isinstance(points, np.ndarray) else points)
         center_xyz = (points.quantile(0.05, dim=0) + points.quantile(0.95, dim=0)) / 2
         if self.verbose:
             print(" - Placing object on receptacle at", center_xyz)
@@ -195,7 +221,7 @@ class PlaceObjectOperation(ManagedOperation):
         from emet.controller.operations.query_observation import observe_query_points
         from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
 
-        support_top = float(self.get_target().point_cloud[:, 2].quantile(0.95))
+        support_top = self.support_top()
         reference_pos = reference_rot = None
         for attempt in range(4):
             obs, points = observe_query_points(self.agent, self.robot, self.held_query, stage="place_alignment")
@@ -291,7 +317,7 @@ class PlaceObjectOperation(ManagedOperation):
 
         # Use the same robust support top as visual release alignment. A single
         # mixed-depth pixel must not send the held object far above its support.
-        support_top = float(self.get_target().point_cloud[:, 2].quantile(0.95))
+        support_top = self.support_top()
 
         # Placement is at xy = object_xyz[:2], z = max_xyz[2] + margin
         place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], support_top + self.place_height_margin])

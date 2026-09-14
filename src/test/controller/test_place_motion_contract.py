@@ -9,7 +9,12 @@ import pytest
 import torch
 
 from emet.controller.operations.place_object import PlaceObjectOperation
+from emet.memory.grounded_target import GroundedTarget
 from emet.motion import HelloStretchIdx
+
+
+def grounded(points):
+    return GroundedTarget(1, 1, 1, np.repeat(np.atleast_2d(points), 10, axis=0))
 
 
 def operation():
@@ -193,13 +198,15 @@ def test_reach_contract_is_shared_by_lazy_and_instance_controllers():
 
 def test_place_reacquires_after_arm_facing_rotation():
     op = operation()
-    old = SimpleNamespace(xyz=np.array([0.2, -0.5, 0.6]), points=np.array([[0.2, -0.5, 0.6]]))
+    old = grounded([0.2, -0.5, 0.6])
     op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
-    fresh = SimpleNamespace(xyz=np.array([0.21, -0.51, 0.6]))
+    fresh = grounded([0.21, -0.51, 0.6])
     op.agent.prepare_query_target.side_effect = [old, fresh]
     with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
         assert op.prepare_query_target("blue cube") is fresh
-    orient.assert_called_once_with(op.robot, old.xyz)
+    orient.assert_called_once()
+    assert orient.call_args.args[0] is op.robot
+    np.testing.assert_array_equal(orient.call_args.args[1], old.xyz)
     assert op.agent.prepare_query_target.call_count == 2
     op.agent.navigate_to_target_pose.assert_not_called()
 
@@ -207,16 +214,18 @@ def test_place_reacquires_after_arm_facing_rotation():
 @pytest.mark.parametrize("arrived", [True, False])
 def test_far_receptacle_requires_safe_navigation_before_arm_alignment(arrived):
     op = operation()
-    target = SimpleNamespace(xyz=np.array([1, 0, 0.9]), points=np.array([[1, 0, 0.9]]))
+    target = grounded([1, 0, 0.9])
     op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
-    fresh = SimpleNamespace(xyz=np.array([1.01, 0, 0.9]))
+    fresh = grounded([1.01, 0, 0.9])
     op.agent.prepare_query_target.side_effect = [target, fresh]
     op.agent.navigate_to_target_pose.return_value = arrived
     op.robot.get_base_pose_world.side_effect = [np.zeros(3), np.array([0.3, 0, 0])]
     with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
         if arrived:
             assert op.prepare_query_target("sink") is fresh
-            orient.assert_called_once_with(op.robot, target.xyz)
+            orient.assert_called_once()
+            assert orient.call_args.args[0] is op.robot
+            np.testing.assert_array_equal(orient.call_args.args[1], target.xyz)
         else:
             with pytest.raises(RuntimeError, match="placement workspace"):
                 op.prepare_query_target("sink")
@@ -231,9 +240,7 @@ def test_far_receptacle_requires_safe_navigation_before_arm_alignment(arrived):
 
 def test_placement_workspace_rejects_motion_success_without_measured_arrival():
     op = operation()
-    op.agent.prepare_query_target.return_value = SimpleNamespace(
-        xyz=np.array([1, 0, 0.9]), points=np.array([[1, 0, 0.9]])
-    )
+    op.agent.prepare_query_target.return_value = grounded([1, 0, 0.9])
     op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
     op.agent.navigate_to_target_pose.return_value = True
     with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
@@ -246,7 +253,7 @@ def test_placement_workspace_rejects_motion_success_without_measured_arrival():
 def test_large_receptacle_approach_targets_placement_surface_not_far_center():
     op = operation()
     points = np.array([[1.0, 0, 0.9], [2.0, 0, 0.9]])
-    target = SimpleNamespace(xyz=np.array([1.5, 0, 0.9]), points=points)
+    target = grounded(points)
     op.agent.prepare_query_target.return_value = target
     op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
     op.robot.get_base_pose_world.side_effect = [np.zeros(3), np.array([0.65, 0, 0])]
@@ -255,6 +262,52 @@ def test_large_receptacle_approach_targets_placement_surface_not_far_center():
         assert op.prepare_query_target("counter") is target
     np.testing.assert_allclose(op.agent.navigate_to_target_pose.call_args.args[0], [1.25, 0, 0.9])
     np.testing.assert_array_equal(points, [[1.0, 0, 0.9], [2.0, 0, 0.9]])
+
+
+def test_partial_reacquisition_preserves_the_planned_point_and_support_clearance():
+    op = operation()
+    target = grounded([[1, 0, 0.9], [2, 0, 0.9], [1, 0, 0.7], [2, 0, 0.7]])
+    fresh = grounded([[1.6, 0, 0.7], [1.8, 0, 0.7]])
+    op.agent.prepare_query_target.side_effect = [target, fresh]
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
+    op.robot.get_base_pose_world.side_effect = [np.zeros(3), np.array([0.65, 0, 0])]
+    op.agent.navigate_to_target_pose.return_value = True
+    with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target"):
+        assert op.prepare_query_target("counter") is fresh
+    op.get_target.return_value.point_cloud = torch.as_tensor(fresh.points.copy())
+    planned = op.agent.navigate_to_target_pose.call_args.args[0]
+    sampled = op.sample_placement_position(np.array([0.65, 0, 0]))
+    np.testing.assert_array_equal(sampled, planned)
+    assert op.support_top() == pytest.approx(0.9)
+    sampled[0] += 10
+    np.testing.assert_array_equal(op.sample_placement_position(np.zeros(3)), planned)
+
+
+def test_reacquisition_of_a_different_support_does_not_reuse_old_placement():
+    op = operation()
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
+    op.agent.prepare_query_target.side_effect = [grounded([0.5, 0, 0.7]), grounded([2, 0, 0.7])]
+    with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target"):
+        with pytest.raises(ValueError, match="absent or ambiguous"):
+            op.prepare_query_target("counter")
+    assert op._placement_reference is None
+    assert op._support_height_reference is None
+    op.robot.open_gripper.assert_not_called()
+
+
+@pytest.mark.parametrize("reset", ["new_query", "nonquery_configuration"])
+def test_new_request_cannot_reuse_a_previous_placement_reference(reset):
+    op = operation()
+    op._placement_reference = np.ones(3)
+    op._support_height_reference = 1.0
+    if reset == "new_query":
+        op.agent.prepare_query_target.side_effect = ValueError("abstained")
+        with pytest.raises(ValueError, match="abstained"):
+            op.prepare_query_target("counter")
+    else:
+        op.configure()
+    assert op._placement_reference is None
+    assert op._support_height_reference is None
 
 
 def test_missing_final_object_alignment_never_releases():
