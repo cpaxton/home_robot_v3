@@ -3,7 +3,7 @@
 # Run from a frozen checkout through emet jobs --cpu-safe --gpu-exclusive.
 # Required: OUT and executables for the selected phase. Optional SAM2_SOURCE for environments
 # without an installed SAM2 package. See docs/experiments/shared_grounding_pilot.md.
-# SIM_AGENT_CONFIG and SIM_CONFIG select explicit simulator ablations only;
+# SIM_AGENT_CONFIG, SIM_CONFIG, SIM_COMMAND and SIM_EVAL_CONFIG select explicit simulator cases only;
 # Habitat/EQA rows and the default simulator control remain unchanged.
 set -euo pipefail
 : "${OUT:?fresh output directory required}"
@@ -17,7 +17,9 @@ if [[ "$PHASE" == all || "$PHASE" == sim || "$PHASE" == manipulation ]]; then
     : "${AGENT_PY:?shared agent Python executable required}"
     SIM_AGENT_CONFIG="${SIM_AGENT_CONFIG:-$PWD/configs/emet/query_detector_segmented_pilot.yaml}"
     SIM_CONFIG="${SIM_CONFIG:-$PWD/configs/sim/default_table_stretch.yaml}"
-    for config in "$SIM_AGENT_CONFIG" "$SIM_CONFIG"; do
+    SIM_EVAL_CONFIG="${SIM_EVAL_CONFIG:-$PWD/configs/benchmarks/tabletop_physical_eval.json}"
+    SIM_COMMAND="${SIM_COMMAND:-Use pick_place to put the red cylinder on the blue cube. Report any failure; do not use oracle scene tasks or plans.}"
+    for config in "$SIM_AGENT_CONFIG" "$SIM_CONFIG" "$SIM_EVAL_CONFIG"; do
         if [[ ! -f "$config" ]]; then
             echo "Missing simulator configuration: $config" >&2
             exit 2
@@ -90,23 +92,24 @@ fi
 if [[ "$PHASE" == all || "$PHASE" == sim || "$PHASE" == manipulation ]]; then
     "$AGENT_PY" scripts/check_sam2_runtime.py > "$OUT/agent_preflight.log" 2>&1
     export EMET_CONFIG="$SIM_AGENT_CONFIG"
-    sha256sum "$EMET_CONFIG" "$SIM_CONFIG" > "$OUT/sim_config_sha256.txt"
+    sha256sum "$EMET_CONFIG" "$SIM_CONFIG" "$SIM_EVAL_CONFIG" > "$OUT/sim_config_sha256.txt"
     cp "$EMET_CONFIG" "$OUT/sim_agent_config.yaml"
     export EMET_FORCE_HEAD_SWEEP=1
     agent=("$AGENT_PY" -m emet.app.run_agent --config "$EMET_CONFIG"
         --memory-backend lazy_graph --robot stretch --start-sim
         --sim-config "$SIM_CONFIG" --headless --no-discord
     --sim-show-subprocess-output --llm qwen3-vl-eqa --eqa --debug-tools)
+    if [[ -n "${SIM_SEED:-}" ]]; then agent+=(--sim-seed "$SIM_SEED"); fi
     if [[ "$PHASE" != manipulation ]]; then
         run_case hybrid_absent_find 360s "${agent[@]}" \
             -c 'Use find_objects once to locate a yellow banana. Do not pick or place anything. Report failure if it cannot be located.'
     fi
-    export EMET_SIM_EVAL_CONFIG="$PWD/configs/benchmarks/tabletop_physical_eval.json"
+    export EMET_SIM_EVAL_CONFIG="$SIM_EVAL_CONFIG"
     export EMET_SIM_EVAL_TRACE="$OUT/hybrid_learned_pick_place/physical_trace.jsonl"
     cp "$EMET_SIM_EVAL_CONFIG" "$OUT/physical_eval_config.json"
     cp "$SIM_CONFIG" "$OUT/sim_config.yaml"
     run_case hybrid_learned_pick_place 600s "${agent[@]}" --visual-servo \
-        -c 'Use pick_place to put the red cylinder on the blue cube. Report any failure; do not use oracle scene tasks or plans.'
+        -c "$SIM_COMMAND"
     # Process completion is not task success. Private GT stays on disk and is
     # scored only after the agent exits; no evaluator labels enter observations.
     "$AGENT_PY" -m emet.eval.manipulation_trace "$EMET_SIM_EVAL_TRACE" \

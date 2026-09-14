@@ -25,6 +25,7 @@ def test_sim_preset_selection_and_independent_process_status(tmp_path, custom, a
         "configs/benchmarks/tabletop_physical_eval.json",
         "custom agent.yaml",
         "custom scene.yaml",
+        "custom evaluator.json",
     ):
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,21 +61,31 @@ def test_sim_preset_selection_and_independent_process_status(tmp_path, custom, a
         "AGENT_RC": str(agent_rc),
         "SCORE_RC": str(score_rc),
     }
-    for name in ("SIM_CONFIG", "SIM_AGENT_CONFIG"):
+    for name in ("SIM_CONFIG", "SIM_AGENT_CONFIG", "SIM_EVAL_CONFIG", "SIM_COMMAND", "SIM_SEED"):
         env.pop(name, None)
     config = repo / "configs/emet/query_detector_segmented_pilot.yaml"
     scene = repo / "configs/sim/default_table_stretch.yaml"
+    evaluator = repo / "configs/benchmarks/tabletop_physical_eval.json"
+    instruction = "Use pick_place to put the pear in the sink; report failure."
     if custom:
         config, scene = repo / "custom agent.yaml", repo / "custom scene.yaml"
         env.update(SIM_AGENT_CONFIG=str(config), SIM_CONFIG=str(scene))
+        evaluator = repo / "custom evaluator.json"
+        env.update(SIM_EVAL_CONFIG=str(evaluator), SIM_COMMAND=instruction, SIM_SEED="1")
     proc = subprocess.run(["bash", "driver.sh"], cwd=repo, env=env, capture_output=True, text=True)
     assert proc.returncode == bool(agent_rc or score_rc), proc.stdout + proc.stderr
     commands = [json.loads(line) for line in calls.read_text().splitlines()]
     agent = next(args for args in commands if "emet.app.run_agent" in args)
     assert agent[agent.index("--config") + 1] == str(config)
     assert agent[agent.index("--sim-config") + 1] == str(scene)
+    if custom:
+        assert agent[agent.index("-c") + 1] == instruction
+        assert agent[agent.index("--sim-seed") + 1] == "1"
+    else:
+        assert "red cylinder on the blue cube" in agent[agent.index("-c") + 1]
     assert commands[-1][1] == "emet.eval.manipulation_trace"
     assert f"hybrid_learned_pick_place\t{agent_rc}\t" in (out / "process_status.tsv").read_text()
     assert (out / "sim_agent_config.yaml").read_bytes() == config.read_bytes()
     assert (out / "sim_config.yaml").read_bytes() == scene.read_bytes()
     assert str(scene) in (out / "sim_config_sha256.txt").read_text()
+    assert (out / "physical_eval_config.json").read_bytes() == evaluator.read_bytes()

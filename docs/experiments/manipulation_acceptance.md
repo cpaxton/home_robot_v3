@@ -182,6 +182,31 @@ visible/search starts and effective contact solver settings before freezing the
 room manifest. Do not silently transfer the tabletop NoSlip ablation to a new
 environment or claim it used identical physics without checking.
 
+Open-sink asset preflight `20260913_202959_f17d9b` on `fbb38412` generated both
+declared seeds successfully. Targets are a **pear** (seed 0) and a **spray
+bottle** (seed 1), with `obj_main` as the private target body and
+`sink_main_group_main` as support. Artifacts, generated XML and exact script:
+`~/runs/emet/open-sink-room-preflight-20260913`. Both generated rooms use
+NoSlip=0; do not silently change that to the tabletop diagnostic's NoSlip=10.
+
+`configs/benchmarks/robocasa_sink_physical_eval.json` additionally requires the
+object origin to lie inside a declared left/right basin box, using its native
+rotation and no margin. This follows the task's partial inside-region criterion,
+plus our stricter physical pickup, released-support-contact and stability gates.
+It is not full-object containment or a claim to reproduce every official score.
+An object resting on the sink rim must not pass. Region names and geometry are
+private evaluator inputs, never agent grounding hints.
+
+The shared pilot driver accepts `SIM_COMMAND`, `SIM_EVAL_CONFIG` and optional
+`SIM_SEED` in addition to the existing scene/agent selections. For the first
+**room integration diagnostic**, keep the tracked-narrow agent and 600-second
+case deadline, select the open-sink fixture and private evaluator above, and use
+`SIM_COMMAND='Use pick_place to put the pear in the sink. Report any failure; do not use oracle scene tasks or plans.'`.
+Seed 0 uses its native benchmark start. This is not the eight-case Stage C panel:
+visible/search start manifests and the Molmo counterpart still need to be frozen.
+The driver archives the exact command and evaluator config and preserves the
+old tabletop defaults when these overrides are absent.
+
 Door/drawer opening and closing are **unsupported**, not successful no-ops.
 Use open or explicitly pre-opened receptacles for this PR's TAMP cases, and label
 that fixture intervention in results. `run_tamp_agent_tools_gate.sh` is an oracle
