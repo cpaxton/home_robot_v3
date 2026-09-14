@@ -56,6 +56,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
 - [ ] Execute the staged Stretch manipulation → single-room OVMM → learned TAMP
       → paired EQA/find battery. Freeze cases/settings first; stop on physical
       manipulation failures. Keep oracle TAMP controls separate from learned runs.
+      Ordered distinct-object recording/scoring is now implemented privately:
+      synchronized traces, ordered releases and retained earlier placements.
+      Room-task manifests and actual learned two-step execution remain pending;
+      synthetic evaluator controls are not TAMP acceptance.
 
 - [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
       invalid IK, and reacquire the target after camera/posture changes. Latest

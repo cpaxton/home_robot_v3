@@ -92,6 +92,50 @@ class ManipulationTrace:
         self.stream.close()
 
 
+class ManipulationSequenceTrace:
+    """Private, synchronized per-object traces for ordered distinct-object tasks.
+
+    Reuse the single-object recorder/scorer rather than inferring success from
+    agent tool calls. The manifest never enters the observation stream.
+    """
+
+    def __init__(self, model, config: dict, output: Path):
+        steps = config["steps"]
+        if not isinstance(steps, list) or len(steps) < 2:
+            raise ValueError("A sequence requires at least two declared steps")
+        objects = [step["object_body"] for step in steps]
+        if len(set(objects)) != len(objects):
+            raise ValueError("Sequence scoring currently requires distinct target objects")
+        common = {key: config[key] for key in ("ee_body", "gripper_bodies")}
+        self.traces = []
+        output.parent.mkdir(parents=True, exist_ok=True)
+        # Exclusive manifest creation prevents silently overwriting old evidence.
+        with output.open("x") as manifest:
+            try:
+                paths = []
+                for index, step in enumerate(steps):
+                    path = output.with_name(f"{output.stem}.step-{index}.jsonl")
+                    self.traces.append(ManipulationTrace(model, {**step, **common}, path))
+                    paths.append(path.name)
+                manifest.write(json.dumps({"schema": 2, "config": config, "traces": paths}) + "\n")
+            except Exception:
+                self.close()
+                raise
+
+    def record(self, model, data):
+        for trace in self.traces:
+            trace.record(model, data)
+
+    def close(self):
+        for trace in self.traces:
+            trace.close()
+
+
+def create_trace(model, config: dict, output: Path):
+    recorder = ManipulationSequenceTrace if "steps" in config else ManipulationTrace
+    return recorder(model, config, output)
+
+
 def score_trace(rows: list[dict]) -> dict:
     """Conservative single pick/place acceptance; incomplete evidence never passes.
 
@@ -153,6 +197,7 @@ def score_trace(rows: list[dict]) -> dict:
             if not picking:
                 result["physical_place_success"] = False
                 result.pop("place_time", None)
+                result.pop("first_place_time", None)
         if not valid:
             continue
         window.append(row)
@@ -162,18 +207,71 @@ def score_trace(rows: list[dict]) -> dict:
         if row["sim_time"] - window[0]["sim_time"] >= 1.0 and stable(window, picking):
             if picking:
                 pick_time = row["sim_time"]
-                result.update(physical_pick_success=True, pick_time=pick_time)
+                result.update(physical_pick_success=True, pick_time=pick_time, pick_start_time=window[0]["sim_time"])
                 window = []
             else:
                 result.update(physical_place_success=True, place_time=row["sim_time"])
+                result.setdefault("first_place_time", row["sim_time"])
         elif not picking:
             result["physical_place_success"] = False
             result.pop("place_time", None)
+            result.pop("first_place_time", None)
     result.update(
         verified=initial_z is not None,
         reason="scored physical trace" if initial_z is not None else "no settled baseline",
     )
     return result
+
+
+def score_sequence(traces: list[list[dict]]) -> dict:
+    """Require ordered verified releases and all earlier placements still intact.
+
+    All targets must be recorded on the same simulation timeline. Reusing a
+    target for another placement is deliberately unsupported, not implicitly
+    counted twice. Single-step physical thresholds remain unchanged.
+    """
+    failure = {"verified": False, "physical_pick_success": False, "physical_place_success": False, "ordered": False}
+    if len(traces) < 2 or not traces[0]:
+        return {**failure, "reason": "missing sequence traces"}
+    times = [row["sim_time"] for row in traces[0]]
+    if any([row["sim_time"] for row in rows] != times for rows in traces[1:]):
+        return {**failure, "reason": "sequence traces have different timelines"}
+    results = [score_trace(rows) for rows in traces]
+    placed = all(result["physical_place_success"] for result in results)
+    ordered = placed and all(
+        current["pick_start_time"] >= previous["first_place_time"]
+        for previous, current in zip(results[:-1], results[1:], strict=True)
+    )
+    return {
+        "verified": all(result["verified"] for result in results),
+        "physical_pick_success": all(result["physical_pick_success"] for result in results),
+        "physical_place_success": bool(placed and ordered),
+        "ordered": bool(ordered),
+        "steps": results,
+        "reason": "scored ordered physical traces" if ordered else "incomplete or out-of-order physical subgoals",
+    }
+
+
+def score_recording(path: Path) -> dict:
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    if records[0].get("schema") == 1:
+        return score_trace(records[1:])
+    if records[0].get("schema") != 2 or len(records) != 1:
+        raise ValueError("unsupported trace schema")
+    header = records[0]
+    steps = header["config"]["steps"]
+    if len(steps) != len(header["traces"]) or len({step["object_body"] for step in steps}) != len(steps):
+        raise ValueError("Sequence manifest requires distinct targets and one trace per step")
+    traces = []
+    for step, filename in zip(steps, header["traces"], strict=True):
+        if Path(filename).name != filename:
+            raise ValueError("Sequence traces must be sibling files")
+        rows = [json.loads(line) for line in (path.parent / filename).read_text().splitlines()]
+        expected_config = {**step, **{key: header["config"][key] for key in ("ee_body", "gripper_bodies")}}
+        if rows[0].get("schema") != 1 or rows[0]["config"] != expected_config:
+            raise ValueError("Trace does not match its declared physical subgoal")
+        traces.append(rows[1:])
+    return score_sequence(traces)
 
 
 def main():
@@ -182,10 +280,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        records = [json.loads(line) for line in args.trace.read_text().splitlines()]
-        if records[0].get("schema") != 1:
-            raise ValueError("unsupported trace schema")
-        result = score_trace(records[1:])
+        result = score_recording(args.trace)
     except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
         result = {
             "verified": False,

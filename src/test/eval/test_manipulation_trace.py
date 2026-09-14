@@ -8,14 +8,14 @@ import json
 import numpy as np
 import pytest
 
-from emet.eval.manipulation_trace import ManipulationTrace, score_trace
+from emet.eval.manipulation_trace import ManipulationTrace, create_trace, score_recording, score_sequence, score_trace
 
 
-def trace():
+def trace(pick_start=15, place_start=30, count=56):
     rows = []
-    for i in range(56):
-        holding = 15 <= i < 30
-        placed = i >= 30
+    for i in range(count):
+        holding = pick_start <= i < place_start
+        placed = i >= place_start
         rows.append(
             {
                 "sim_time": i / 10,
@@ -119,3 +119,74 @@ def test_mujoco_recorder_keeps_contact_and_pose_evidence_private(tmp_path):
     invalid["support_body"] = "object"
     with pytest.raises(ValueError):
         ManipulationTrace(model, invalid, tmp_path / "invalid.jsonl")
+
+
+def test_ordered_sequence_preserves_all_completed_subgoals():
+    result = score_sequence([trace(count=100), trace(pick_start=60, place_start=75, count=100)])
+    assert result["verified"] and result["ordered"] and result["physical_place_success"]
+    assert result["steps"][0]["first_place_time"] < result["steps"][0]["place_time"]
+    assert result["steps"][1]["pick_start_time"] < result["steps"][1]["pick_time"]
+
+
+@pytest.mark.parametrize("failure", ["reverse_order", "overlap", "lost_first", "failed_second", "different_clock"])
+def test_sequence_rejects_individually_plausible_but_incomplete_tasks(failure):
+    first = trace(count=100)
+    second = trace(pick_start=60, place_start=75, count=100)
+    if failure == "reverse_order":
+        first, second = second, first
+    elif failure == "overlap":
+        second = trace(pick_start=35, place_start=60, count=100)
+    elif failure == "lost_first":
+        first[-1].update(support_contact=False, other_contact=True)
+    elif failure == "failed_second":
+        for row in second:
+            row["gripper_contact"] = False
+    else:
+        second[-1]["sim_time"] += 0.1
+    result = score_sequence([first, second])
+    assert not result["ordered"] and not result["physical_place_success"]
+    if failure == "different_clock":
+        assert not result["verified"]
+
+
+def test_sequence_recorder_manifest_roundtrip_and_invalid_targets(tmp_path):
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+      <body name="support"><geom type="box" size="1 1 .1"/></body>
+      <body name="one" pos="-.2 0 .2"><freejoint/><geom type="sphere" size=".1"/></body>
+      <body name="two" pos=".2 0 .2"><freejoint/><geom type="sphere" size=".1"/></body>
+      <body name="ee" pos="0 0 1"><body name="finger"/></body>
+    </worldbody></mujoco>""")
+    config = {
+        "ee_body": "ee",
+        "gripper_bodies": ["finger"],
+        "steps": [{"object_body": name, "support_body": "support"} for name in ["one", "two"]],
+    }
+    path = tmp_path / "sequence.jsonl"
+    writer = create_trace(model, config, path)
+    data = mujoco.MjData(model)
+    for index in range(2):
+        data.time = index * 0.2
+        mujoco.mj_forward(model, data)
+        writer.record(model, data)
+    writer.close()
+    manifest = json.loads(path.read_text())
+    assert manifest["schema"] == 2 and len(manifest["traces"]) == 2
+    result = score_recording(path)
+    assert not result["physical_place_success"]
+    # Populate the same recorder-created files with synthetic ordered controls.
+    for filename, rows in zip(manifest["traces"], [trace(count=100), trace(60, 75, 100)], strict=True):
+        step_path = tmp_path / filename
+        header = step_path.read_text().splitlines()[0]
+        step_path.write_text(header + "\n" + "\n".join(json.dumps(row) for row in rows) + "\n")
+    assert score_recording(path)["physical_place_success"]
+    with pytest.raises(FileExistsError):
+        create_trace(model, config, path)
+    config["steps"][1]["object_body"] = "one"
+    with pytest.raises(ValueError, match="distinct"):
+        create_trace(model, config, tmp_path / "invalid.jsonl")
+    manifest["traces"][1] = manifest["traces"][0]
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="declared physical subgoal"):
+        score_recording(path)

@@ -128,6 +128,22 @@ Failure stops the remaining batch and turn; completed actions must not be
 replayed. Preserve model tool-call traces and score both ordered physical
 subgoals independently. Offline loop tests are not multistep physical evidence.
 
+The private recorder also accepts an ordered `steps` list for **distinct target
+objects**, with shared `ee_body` and `gripper_bodies`. Each step supplies
+`object_body` and `support_body`; these are evaluator-only simulator body names,
+not handles supplied to the agent. `EMET_SIM_EVAL_TRACE` then names a schema-2
+manifest and sibling `.step-N.jsonl` traces recorded on the same simulation
+timeline. The usual `python -m emet.eval.manipulation_trace MANIFEST --output
+RESULT` scores every step with the existing physical thresholds, checks that
+the next verified pickup starts after the previous verified release, and
+requires earlier placements to remain intact at episode end. Repeated use of
+the same target object is rejected rather than implicitly counted twice.
+Missing, mismatched, out-of-order or incomplete evidence does not pass. Render
+the individual schema-1 step traces, not the manifest, with the existing replay
+renderer. This connects evaluator plumbing, **not** room-task generation or a
+passing learned-TAMP experiment; room bodies/supports and instructions must
+still be frozen before execution.
+
 Physical pickup acceptance requires at least 5 cm lift, gripper contact and stable
 object-to-gripper pose for one simulated second, without support contact. Placement
 requires release onto the designated support and a stable pose for one simulated

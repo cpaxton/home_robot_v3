@@ -420,9 +420,9 @@ class MujocoServer:
         self._eval_trace = None
         trace_config = os.environ.get("EMET_SIM_EVAL_CONFIG")
         if trace_config:
-            from emet.eval.manipulation_trace import ManipulationTrace
+            from emet.eval.manipulation_trace import create_trace
 
-            self._eval_trace = ManipulationTrace(
+            self._eval_trace = create_trace(
                 self.mjmodel,
                 json.loads(Path(trace_config).read_text()),
                 Path(os.environ["EMET_SIM_EVAL_TRACE"]),
