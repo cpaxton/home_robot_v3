@@ -50,7 +50,7 @@ class GraspObjectOperation(ManagedOperation):
     verbose: bool = False
 
     offset_from_vertical = -np.pi / 2 - 0.1
-    node_for_grasp_pose = "link_gripper_s3_body"
+    node_for_grasp_pose = "link_wrist_pitch"
 
     # Task information
     match_method: str = "class"
@@ -1049,9 +1049,7 @@ class GraspObjectOperation(ManagedOperation):
 
         # Now we should be able to see the object if we orient gripper properly
         # Get the end effector pose
-        obs = self.robot.get_observation()
         joint_state = self.robot.get_joint_positions()
-        model = self.robot.get_robot_model()
 
         if joint_state[HelloStretchIdx.GRIPPER] < 0.0:
             self.robot.open_gripper(blocking=True)
@@ -1066,42 +1064,7 @@ class GraspObjectOperation(ManagedOperation):
         object_xyz = self.get_object_xyz()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
 
-        # Compute the angles necessary
-        if self.use_pitch_from_vertical:
-            # head_pos = obs.camera_pose[:3, 3]
-            obs = self.robot.get_observation()
-            joint_state = obs.joint
-            model = self.robot.get_robot_model()
-
-            # link_gripper_s3_body is the the joint connecting the gripper with arm end effector
-            ee_pos, ee_rot = model.manip_fk(joint_state, node=self.node_for_grasp_pose)
-
-            # Convert quaternion to pose
-            pose = np.eye(4)
-            pose[:3, :3] = R.from_quat(ee_rot).as_matrix()
-            pose[:3, 3] = ee_pos
-
-            # Move back 0.35m from grasp coordinate
-            delta = np.eye(4)
-            delta[2, 3] = -0.35
-            pose = np.dot(pose, delta)
-
-            # New ee pose = roughly the end of the arm
-            ee_pos = pose[:3, 3]
-
-            # dy = np.abs(head_pos[1] - relative_object_xyz[1])
-            # dz = np.abs(head_pos[2] - relative_object_xyz[2])
-            dy = np.abs(ee_pos[1] - relative_object_xyz[1])
-            # Preserve whether the object is above or below the wrist pivot.
-            # abs(dz) aimed downward even at high-counter targets, leaving
-            # valid head-grounded objects outside the pregrasp wrist view.
-            dz = ee_pos[2] - relative_object_xyz[2]
-            pitch_from_vertical = np.arctan2(dy, dz)
-        else:
-            pitch_from_vertical = 0.0
-
-        # Compute final pregrasp joint state goal and send the robot there
-        joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
+        joint_state = self.aim_grasp_joints(joint_state, relative_object_xyz)
         if not self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True):
             self.error("Grasp posture motion did not complete.")
             return
@@ -1138,6 +1101,28 @@ class GraspObjectOperation(ManagedOperation):
                 self._success = False
                 raise
 
+    def aim_grasp_joints(self, joint_state, relative_object_xyz):
+        """Predict the same wrist aim for reachability checks and execution."""
+        joint_state = np.array(joint_state, copy=True)
+        model = self.robot.get_robot_model()
+        if self.use_pitch_from_vertical:
+            # Use the actual pitch pivot. The old missing-link fallback plus
+            # a 35 cm local-Z offset invented a pivot below low targets, so
+            # signed-height aiming could point upward at a tabletop object.
+            ee_pos, _ = model.manip_fk(joint_state, node=self.node_for_grasp_pose)
+            dy = np.abs(ee_pos[1] - relative_object_xyz[1])
+            # Preserve whether the object is above or below the wrist pivot.
+            # abs(dz) aimed downward even at high-counter targets, leaving
+            # valid head-grounded objects outside the pregrasp wrist view.
+            dz = ee_pos[2] - relative_object_xyz[2]
+            pitch_from_vertical = np.arctan2(dy, dz)
+        else:
+            pitch_from_vertical = 0.0
+
+        # Preserve the existing angular bias; execution is a separate step.
+        joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
+        return joint_state
+
     def ensure_grounded_grasp_workspace(self):
         """A good viewing location may be too close for a separated grasp.
 
@@ -1148,6 +1133,7 @@ class GraspObjectOperation(ManagedOperation):
         target = np.asarray(self.get_object_xyz(), dtype=float)
         start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
         joints = np.array(self.robot.get_joint_positions(), dtype=float, copy=True)
+        original_joints = joints.copy()
         joints[HelloStretchIdx.ARM] = 0
         joints[HelloStretchIdx.WRIST_ROLL] = 0
         joints[HelloStretchIdx.WRIST_PITCH] = 0
@@ -1159,6 +1145,15 @@ class GraspObjectOperation(ManagedOperation):
         # Same minimum separation as the local pregrasp solver. Prefer the
         # configured larger separation when relocation is actually necessary.
         if np.linalg.norm(target[:2] - start[:2]) >= reach + self.minimum_pregrasp_standoff:
+            return
+        # Horizontal reach is only a quick sufficient-distance check. A low
+        # target can have a valid downward pregrasp closer to the base. Predict
+        # the arm-facing pose and use the actual separated IK solver before
+        # deciding to relocate; no command or cached observation is modified.
+        relative_target = np.array([0.0, -np.linalg.norm(target[:2] - start[:2]), target[2]])
+        original_joints[HelloStretchIdx.BASE_X] = 0
+        aimed = self.aim_grasp_joints(original_joints, relative_target)
+        if self.solve_pregrasp(relative_target, aimed, self.pregrasp_distance_from_object) is not None:
             return
         # The planner radius refers to the end-effector workspace. The object
         # lies one pregrasp separation beyond it; do not compare the nominal
@@ -1334,7 +1329,24 @@ class GraspObjectOperation(ManagedOperation):
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
 
         joint_state = self.robot.get_joint_positions()
+        target_joint_positions = self.solve_pregrasp(relative_object_xyz, joint_state, distance_from_object)
+        if target_joint_positions is None:
+            self.error("No feasible separated pregrasp IK solution.")
+            self._success = False
+            return False
 
+        # Zero out roll and yaw
+        target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
+        target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
+        print(f"{self.name}: Moving to pre-grasp position.")
+        if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
+            self._success = False
+            return False
+        print("... done.")
+        return True
+
+    def solve_pregrasp(self, relative_object_xyz, joint_state, distance_from_object):
+        """Return feasible separated IK without commanding the robot."""
         model = self.robot.get_robot_model()
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
@@ -1352,8 +1364,7 @@ class GraspObjectOperation(ManagedOperation):
         vector_to_object = relative_object_xyz - ee_pos
         distance = np.linalg.norm(vector_to_object)
         if not np.isfinite(distance) or distance < 1e-6:
-            self._success = False
-            return False
+            return None
         vector_to_object = vector_to_object / distance
 
         # Keep the separated pose at or above the target height. Looking up
@@ -1362,20 +1373,15 @@ class GraspObjectOperation(ManagedOperation):
         vector_to_object[2] = min(0.0, max(vector_to_object[2], vector_to_object[1]))
         direction_norm = np.linalg.norm(vector_to_object)
         if direction_norm < 1e-6:
-            self.error("No horizontal pregrasp approach direction.")
-            return False
+            return None
         vector_to_object /= direction_norm
 
-        print("Absolute object xyz was:", object_xyz)
-        print("Relative object xyz was:", relative_object_xyz)
         # A fixed standoff can put the requested arm behind its retracted
         # limit. Try bounded, still-separated poses along the same approach
         # ray, largest standoff first. Never clamp an infeasible IK solution.
         minimum_standoff = self.minimum_pregrasp_standoff
         if not np.isfinite(distance_from_object) or distance_from_object < minimum_standoff:
-            self.error("Pregrasp must remain at least 20 cm from the target.")
-            return False
-        target_joint_positions = None
+            return None
         for standoff in np.linspace(distance_from_object, minimum_standoff, 6):
             shifted_object_xyz = relative_object_xyz - standoff * vector_to_object
             candidate, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
@@ -1388,32 +1394,8 @@ class GraspObjectOperation(ManagedOperation):
                 and candidate[HelloStretchIdx.ARM] >= 0
                 and candidate[HelloStretchIdx.LIFT] >= 0
             ):
-                target_joint_positions = candidate.copy()
-                print("Pregrasp xyz:", shifted_object_xyz, "standoff:", standoff)
-                break
-
-        if target_joint_positions is None:
-            self.error("No feasible separated pregrasp IK solution.")
-            self._success = False
-            return False
-
-        print("Pregrasp joint positions: ")
-        print(" - arm: ", target_joint_positions[HelloStretchIdx.ARM])
-        print(" - lift: ", target_joint_positions[HelloStretchIdx.LIFT])
-        print(" - roll: ", target_joint_positions[HelloStretchIdx.WRIST_ROLL])
-        print(" - pitch: ", target_joint_positions[HelloStretchIdx.WRIST_PITCH])
-        print(" - yaw: ", target_joint_positions[HelloStretchIdx.WRIST_YAW])
-
-        # Zero out roll and yaw
-        target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
-        target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
-
-        print(f"{self.name}: Moving to pre-grasp position.")
-        if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
-            self._success = False
-            return False
-        print("... done.")
-        return True
+                return candidate.copy()
+        return None
 
     def grasp_open_loop(self, object_xyz: np.ndarray):
         """Grasp the object in an open loop manner. We will just move to object_xyz and close the gripper.

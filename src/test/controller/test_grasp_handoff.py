@@ -26,7 +26,7 @@ def operation():
     return op
 
 
-@pytest.mark.parametrize("target_z", [0.45, 0.85])
+@pytest.mark.parametrize("target_z", [0.45, 1.2])
 def test_grasp_orientation_preserves_signed_target_height(target_z):
     op = operation()
     op.intro = op.reset = Mock()
@@ -43,10 +43,11 @@ def test_grasp_orientation_preserves_signed_target_height(target_z):
     )
     op.run()
     pitch = op.robot.arm_to.call_args.args[0][HelloStretchIdx.WRIST_PITCH]
-    # The existing virtual wrist pivot is 35 cm behind this grasp frame.
-    expected = op.offset_from_vertical + np.arctan2(0.4, 0.65 - target_z)
+    # Aim from the pitch pivot, not an offset along the grasp frame's Z axis.
+    expected = op.offset_from_vertical + np.arctan2(0.4, 1.0 - target_z)
     assert pitch == pytest.approx(expected)
-    assert (pitch > 0) == (target_z > 0.65)
+    assert (pitch > 0) == (target_z > 1.0)
+    assert op.robot.get_robot_model.return_value.manip_fk.call_args.kwargs["node"] == "link_wrist_pitch"
 
 
 def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
@@ -72,6 +73,8 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
 @pytest.mark.parametrize("distance", [0.58, 0.75])
 def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distance):
     op = operation()
+    op.aim_grasp_joints = Mock(return_value=np.zeros(11))
+    op.solve_pregrasp = Mock(return_value=None)
     op._object_xyz = np.array([4, -2, 0.96])
     start = np.array([4, -2 - distance, 0])
     op.robot.get_base_pose_world.side_effect = [start, np.array([4, -2.75, 0])]
@@ -95,6 +98,8 @@ def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distan
 @pytest.mark.parametrize("failure", ["plan", "no_progress", "no_range", "invalid_geometry"])
 def test_grasp_workspace_does_not_bypass_failed_navigation_or_bad_geometry(failure):
     op = operation()
+    op.aim_grasp_joints = Mock(return_value=np.zeros(11))
+    op.solve_pregrasp = Mock(return_value=None)
     op._object_xyz = np.array([0, -0.58, 0.96])
     op.robot.get_base_pose_world.return_value = np.zeros(3)
     op.robot.get_joint_positions.return_value = np.zeros(11)
@@ -141,6 +146,29 @@ def test_close_high_target_becomes_pregrasp_reachable_after_workspace_relocation
     q = op.robot.arm_to.call_args.args[0]
     assert q[HelloStretchIdx.ARM] >= 0
     assert 0 < q[HelloStretchIdx.LIFT] < 1.0
+
+
+def test_low_target_does_not_relocate_when_actual_pregrasp_is_reachable():
+    from emet.motion.kinematics import HelloStretchKinematics
+
+    op = operation()
+    model = HelloStretchKinematics()
+    op.robot_model = model
+    op.robot.get_robot_model.return_value = model
+    op._object_xyz = np.array([0.0, -0.56, 0.534])
+    joints = np.zeros(11)
+    joints[HelloStretchIdx.LIFT] = 0.6
+    joints[HelloStretchIdx.ARM] = 0.01
+    joints[HelloStretchIdx.WRIST_PITCH] = -1.5
+    op.robot.get_joint_positions.return_value = joints
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
+    op.ensure_grounded_grasp_workspace()
+    op.agent.navigate_to_target_pose.assert_not_called()
+    op.robot.arm_to.assert_not_called()
+    np.testing.assert_array_equal(op.robot.get_joint_positions(), joints)
+    aimed = op.aim_grasp_joints(joints, op._object_xyz)
+    q = op.solve_pregrasp(op._object_xyz, aimed, 0.3)
+    assert q is not None and q[HelloStretchIdx.ARM] >= 0
 
 
 def test_failed_alignment_does_not_reacquire_or_move_arm():
