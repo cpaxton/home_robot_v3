@@ -228,9 +228,26 @@ deadline when feedback is missing, rather than looping indefinitely. Timing,
 carry and protocol tests: **22 pass**; expanded offline suite: **519 pass /
 4 skip** (also includes the exact extraction-clearance boundary regression).
 
-Same-fixture learned retry `20260913_222451_3512ce` on `b6ad49ce` is running
-under `~/runs/emet/open-sink-pear-carry-deadline`, with unchanged model, physics,
-geometry and motion tolerances. Room placement and Stage C remain unpassed.
+Same-fixture learned retry `20260913_222451_3512ce` on `b6ad49ce`, under
+`~/runs/emet/open-sink-pear-carry-deadline`, ends **F/F before closure**: lateral
+servo oscillation consumes the local deadline. This failed repeat is retained;
+the previous pickup is not evidence of robust room manipulation. Cached wrist
+geometry shows mostly stable object centers once the arm has inserted, while
+the base cycles between roughly 0.026 and 0.055 m and lateral errors alternate
+around ±13 mm. Frames have distinct acquisition timestamps, not repeated IDs.
+
+A client regression reproduces premature completion: the geometry preset's
+**20 mm** base tolerance reports a **13 mm** correction complete on stationary
+old feedback, before execution. `3dfcc5f4` changes only the experimental geometry
+preset's base tolerance to **5 mm**, matching native translation control and
+the existing servo closure precision. Coarse/default presets remain unchanged;
+hardware unable to meet this precision must fail, not silently loosen the gate.
+This addresses a demonstrated contract mismatch, not a proven explanation of
+every mask/servo fluctuation. Focused motion/aperture tests: **29 pass**;
+expanded offline suite: **520 pass / 4 skip**. Same corrected fixture retry
+`20260913_223356_cf593f` is running under
+`~/runs/emet/open-sink-pear-precision-contract`. Room placement and Stage C
+remain unpassed.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same

@@ -62,7 +62,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       unscaled wall-time deadline; final held-pear replay inspected. `b6ad49ce`
       reuses existing bounded sim-time scaling in arm_to, including a deadline
       for missing feedback. 519 offline tests pass / 4 skip. Same-fixture retry
-      `20260913_222451_3512ce` running. Retain old fixtures and label corrected
+      `20260913_222451_3512ce` fails before closure on lateral oscillation.
+      A regression proves 20 mm client base tolerance can accept an unexecuted
+      13 mm correction; `3dfcc5f4` sets 5 mm only for the geometry preset, matching
+      native translation control. 520 offline tests pass / 4 skip. Retry
+      `20260913_223356_cf593f` running. Retain old fixtures and label corrected
       dynamics separately. Stage C is not passed.
       Neighboring original-tabletop control on `2e988c71` passes
       pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
@@ -72,8 +76,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       task identity before agent startup; do not count mismatched fixtures as
       policy failures. Compiled XML export now expands mutable robot includes
       (`cfb8558a`); external assets still require the same installation.
-- [ ] Reconcile arm-base completion tolerance with finer server tracking, and
-      align state-only FK/joint feedback with the acquisition geometry contract.
+- [ ] Validate geometry-preset arm-base completion against finer server tracking
+      in physical repeats; the configured 5 mm contract is now aligned and an
+      old-feedback false-completion regression is covered. Still align state-only
+      FK/joint feedback with the acquisition geometry contract.
 - [ ] Before claiming a solver necessity or hardware grasp safety, repeat
       matched default/NoSlip retention controls with the repaired calibration.
       Existing checkpoint controls isolate solver creep in an earlier grasp;
