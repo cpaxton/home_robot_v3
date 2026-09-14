@@ -185,3 +185,23 @@ def test_robocasa_obj_main_placement_is_seed_deterministic():
     assert "obj_main" in p0 and "obj_main" in p1
     assert p0["obj_main"]["cat"] == p1["obj_main"]["cat"]
     np.testing.assert_allclose(p0["obj_main"]["pos"], p1["obj_main"]["pos"], rtol=0, atol=1e-6)
+
+
+def test_saved_robocasa_scene_does_not_reference_mutable_robot_include(tmp_path):
+    pytest.importorskip("robocasa")
+    import mujoco
+
+    from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
+    from emet.simulation.stretch_mujoco.utils import get_absolute_path_stretch_xml
+
+    path = tmp_path / "frozen.xml"
+    model, _, _ = model_generation_wizard(
+        task="PickPlaceCounterToSink", layout=1, style=1, robot="stretch", seed=0, write_to_file=str(path)
+    )
+    assert "<include" not in path.read_text()
+    # Overwrite the old shared include with a different robot pose.
+    get_absolute_path_stretch_xml({"pos": "9 8 0", "quat": "1 0 0 0"})
+    frozen = mujoco.MjModel.from_xml_path(str(path))
+    assert frozen.nq == model.nq
+    np.testing.assert_allclose(frozen.qpos0, model.qpos0, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(frozen.body_pos, model.body_pos, rtol=0, atol=1e-5)

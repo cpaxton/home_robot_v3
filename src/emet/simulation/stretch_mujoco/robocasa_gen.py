@@ -203,7 +203,7 @@ def model_generation_wizard(
         task: Robocasa task name.
         layout: Layout id (None = interactive choice).
         style: Style id (None = interactive choice).
-        write_to_file: Optional path to save the generated XML.
+        write_to_file: Optional path to save compiled XML with robot includes expanded.
         robot_spawn_pose: Override spawn pose ``{pos: "x y z", quat: "w x y z"}``.
         robot: Robot name. ``"stretch"``, ``"innate_mars"``, and Galaxea R1 family ids (``"rby1"``, etc.)
             use a PandaMobile placeholder in Robocasa, then strip-and-replace with the real MJCF.
@@ -343,8 +343,11 @@ def model_generation_wizard(
             object_placements_info["_emet_spawn_hint_xyt"] = [float(pos[0]), float(pos[1]), yaw]
 
     if write_to_file is not None:
-        with open(write_to_file, "w") as f:
-            f.write(xml)
+        # The source XML includes a mutable robot temp file, overwritten on
+        # the next generation. Expand it through MuJoCo before archiving so a
+        # later scene cannot silently change the recorded robot/start pose.
+        # External mesh/texture assets are still required from the same install.
+        mujoco.mj_saveLastXML(str(write_to_file), model)
         print(colored(f"Model saved to {write_to_file}", "green"))
 
     return model, xml, object_placements_info
