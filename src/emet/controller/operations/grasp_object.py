@@ -91,6 +91,9 @@ class GraspObjectOperation(ManagedOperation):
     median_distance_when_grasping: float = 0.17
     lift_min_height: float = 0.1
     lift_max_height: float = 1.0
+    # Prefer a 30 cm extraction, but require at least 10 cm of vertical travel
+    # within the existing conservative Stretch lift limit before closing.
+    lift_clearance_m: float = 0.1
 
     # How long is the gripper?
     # This is used to compute when we should not move the robot forward any farther
@@ -600,6 +603,13 @@ class GraspObjectOperation(ManagedOperation):
                 return False
             time.sleep(0.1)
 
+        joint_state = self.robot.get_joint_positions()
+        lift = float(joint_state[HelloStretchIdx.LIFT])
+        lift_goal = min(lift + 0.3, self.lift_max_height)
+        if not np.isfinite(lift) or lift_goal - lift < self.lift_clearance_m:
+            self.error("Insufficient vertical lift travel; gripper remains open.")
+            return False
+
         self.robot.close_gripper(loose=self.grasp_loose, blocking=True)
         time.sleep(0.1)
 
@@ -608,7 +618,10 @@ class GraspObjectOperation(ManagedOperation):
 
         # Lifted joint state
         lifted_joint_state = joint_state.copy()
-        lifted_joint_state[HelloStretchIdx.LIFT] += 0.3
+        if not np.isfinite(joint_state[HelloStretchIdx.LIFT]) or lift_goal <= joint_state[HelloStretchIdx.LIFT]:
+            self.error("Lift state changed during closure; stopping without a lowering command.")
+            return False
+        lifted_joint_state[HelloStretchIdx.LIFT] = lift_goal
         return bool(self.robot.arm_to(lifted_joint_state, head=constants.look_at_ee, blocking=True))
 
     def blue_highlight_mask(self, img):

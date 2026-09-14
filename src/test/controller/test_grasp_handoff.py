@@ -239,6 +239,49 @@ def test_center_depth_excludes_nonfinite_sensor_values():
     assert op._compute_center_depth(servo, mask, 1, 1) == pytest.approx(0.2)
 
 
+@pytest.mark.parametrize("lift, goal", [(0.4, 0.7), (0.845, 1.0)])
+def test_pickup_lift_respects_existing_stretch_height_limit(lift, goal):
+    op = operation()
+    op.cheer = op.error = Mock()
+    op.talk = False
+    op.use_geometry_servo = True
+    joints = np.zeros(11)
+    joints[HelloStretchIdx.LIFT] = lift
+    op.robot.get_joint_positions.return_value = joints
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        assert op._grasp()
+    assert op.robot.arm_to.call_args.args[0][HelloStretchIdx.LIFT] == pytest.approx(goal)
+    assert joints[HelloStretchIdx.LIFT] == lift
+
+
+@pytest.mark.parametrize("lift", [0.95, 1.0, 1.1, np.nan, np.inf])
+def test_insufficient_or_unknown_lift_travel_stops_before_closure(lift):
+    op = operation()
+    op.cheer = op.error = Mock()
+    op.talk = False
+    op.use_geometry_servo = True
+    joints = np.zeros(11)
+    joints[HelloStretchIdx.LIFT] = lift
+    op.robot.get_joint_positions.return_value = joints
+    assert op._grasp() is False
+    op.robot.close_gripper.assert_not_called()
+    op.robot.arm_to.assert_not_called()
+
+
+def test_changed_lift_feedback_after_closure_never_commands_lowering():
+    op = operation()
+    op.cheer = op.error = Mock()
+    op.talk = False
+    op.use_geometry_servo = True
+    before, after = np.zeros(11), np.zeros(11)
+    before[HelloStretchIdx.LIFT], after[HelloStretchIdx.LIFT] = 0.4, 0.8
+    op.robot.get_joint_positions.side_effect = [before, before, after]
+    with patch("emet.controller.operations.grasp_object.time.sleep"):
+        assert op._grasp() is False
+    op.robot.close_gripper.assert_called_once()
+    op.robot.arm_to.assert_not_called()
+
+
 @pytest.mark.parametrize("world_shape", [(8, 8, 3), (4, 4, 3)])
 def test_servo_validates_wrist_mask_without_head_semantics(world_shape):
     op = operation()
