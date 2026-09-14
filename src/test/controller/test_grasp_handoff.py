@@ -146,6 +146,27 @@ def test_pregrasp_angle_clipping_preserves_metric_standoff():
     assert np.linalg.norm(requested - target) == pytest.approx(0.3)
 
 
+def test_high_target_pregrasp_does_not_approach_from_below_its_support():
+    from scipy.spatial.transform import Rotation
+
+    op = operation()
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    # Looking up finds the object, but inserting upward from below its height
+    # occludes the wrist behind the counter and approaches the support face.
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (
+        np.array([0.0, -0.3, 0.6]),
+        Rotation.from_euler("y", -0.37).as_quat(),
+    )
+    op.robot_model.manip_ik_for_grasp_frame.return_value = (np.zeros(11), None, None, True, None)
+    target = np.array([0.0, -0.7, 1.0])
+    assert op.pregrasp_open_loop(target, distance_from_object=0.3)
+    position, quaternion = op.robot_model.manip_ik_for_grasp_frame.call_args.args
+    assert position[2] >= target[2]
+    assert np.linalg.norm(position - target) == pytest.approx(0.3)
+    assert Rotation.from_quat(quaternion).as_euler("xyz")[1] == pytest.approx(0.0)
+
+
 @pytest.mark.parametrize("center_depth", [0.0, 0.3])
 def test_servo_stops_on_failed_motion_without_grasping(center_depth):
     op = operation()

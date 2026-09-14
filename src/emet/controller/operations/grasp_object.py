@@ -1280,14 +1280,15 @@ class GraspObjectOperation(ManagedOperation):
         model = self.robot.get_robot_model()
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
-        # End effector should be at most 45 degrees inclined
+        # Insert horizontally or downward (at most 45 degrees), not upward
+        # from beneath a supported target. Upward aiming can acquire a high
+        # target, but is not a support-clearing manipulation approach.
         rotation = R.from_quat(ee_rot)
         rotation = rotation.as_euler("xyz")
 
         # Track if the angle to the target object is too large (i.e. it's on the floor)
         print("Rotation", rotation)
-        if rotation[1] > np.pi / 4:
-            rotation[1] = np.pi / 4
+        rotation[1] = np.clip(rotation[1], 0.0, np.pi / 4)
         ee_rot = R.from_euler("xyz", rotation).as_quat()
 
         vector_to_object = relative_object_xyz - ee_pos
@@ -1297,8 +1298,10 @@ class GraspObjectOperation(ManagedOperation):
             return False
         vector_to_object = vector_to_object / distance
 
-        # It should not be more than 45 degrees inclined
-        vector_to_object[2] = max(vector_to_object[2], vector_to_object[1])
+        # Keep the separated pose at or above the target height. Looking up
+        # from a lower wrist previously put the pregrasp below a countertop,
+        # losing object visibility behind its edge before insertion.
+        vector_to_object[2] = min(0.0, max(vector_to_object[2], vector_to_object[1]))
         direction_norm = np.linalg.norm(vector_to_object)
         if direction_norm < 1e-6:
             self.error("No horizontal pregrasp approach direction.")
