@@ -382,6 +382,17 @@ class LazyGraphController(DynagraphController):
         records = [
             r for r in self.query_candidates.records.values() if r.query == query and r.rejected_revision is None
         ]
+        # Search locations are not additional object identities. Once arrival
+        # has grounded an object, unrelated unverified hypotheses must not block
+        # its handoff. Multiple grounded references still require disambiguation;
+        # neither retrieval score nor recency authorizes choosing between them.
+        grounded = [
+            r
+            for r in records
+            if r.instance_id is not None and r.grounded_revision is not None and not r.invalidation_reason
+        ]
+        if grounded:
+            records = grounded
         if not records:
             before = len(self.voxel_map.observations)
             self.update(full_perception=True)

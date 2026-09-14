@@ -175,6 +175,47 @@ def test_manipulation_can_reacquire_visible_target_without_retrieval():
         agent.prepare_query_target("mug")
 
 
+@pytest.mark.parametrize("reacquisition", ["accepted", "absent", "stale"])
+def test_manipulation_uses_grounded_object_not_leftover_search_hypotheses(reacquisition):
+    agent = controller()
+    first = agent.propose_query_candidate("mug", [9, 9, 9], {"source_obs_id": 1})
+    agent.propose_query_candidate("mug", [8, 8, 8], {"source_obs_id": 1})
+    # Arrival verifies one object; the other search location is still unexplored.
+    assert agent.ground_query_candidate(first.handle, after_observation=1)["ok"]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(agent.voxel_map.observations[-1]))
+    if reacquisition == "absent":
+        agent.detection_model.predict.return_value = (None, -np.ones((8, 8), dtype=int), {})
+    elif reacquisition == "stale":
+        agent.update = Mock()
+    if reacquisition == "accepted":
+        target = agent.prepare_query_target("  MUG ")
+        assert target.candidate_id == first.handle
+        assert target.observation_revision == 3
+        assert first.require_grounding(3) == target.instance_id
+        assert len(agent.query_candidates.records) == 2  # No destructive pruning.
+    else:
+        with pytest.raises(ValueError, match="absent or ambiguous" if reacquisition == "absent" else "fresh"):
+            agent.prepare_query_target("mug")
+        assert agent._grounded_query_target is None
+
+
+@pytest.mark.parametrize("state", ["search_only", "two_grounded", "invalidated"])
+def test_manipulation_does_not_arbitrarily_choose_among_unresolved_candidates(state):
+    agent = controller()
+    first = agent.propose_query_candidate("mug", [9, 9, 9], {"source_obs_id": 1})
+    second = agent.propose_query_candidate("mug", [8, 8, 8], {"source_obs_id": 1})
+    if state != "search_only":
+        agent.query_candidates.ground(first.handle, instance_id=10, observation_revision=2)
+    if state == "two_grounded":
+        agent.query_candidates.ground(second.handle, instance_id=11, observation_revision=2)
+    elif state == "invalidated":
+        agent.query_candidates.invalidate_instance(10, "object moved")
+    agent.update = Mock()
+    with pytest.raises(ValueError, match="unique query candidate"):
+        agent.prepare_query_target("mug")
+    agent.update.assert_not_called()
+
+
 def test_confirmed_view_transition_keeps_geometry_separate_and_runs_once():
     from emet.memory.graph_eqa.agentic.views import CapturedView, ground_confirmed_view
 
