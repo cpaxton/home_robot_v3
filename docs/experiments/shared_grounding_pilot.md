@@ -355,6 +355,29 @@ are unchanged. The class's step-size default now matches `configure` (0.25 m).
 `~/runs/emet/open-sink-pear-place-workspace`; this remains a development diagnostic,
 not the frozen cross-room acceptance panel.
 
+That retry completes **pickup T / placement F** in 246 wall seconds (pickup
+at 60.134 s). It preserves the payload but the placement navigator finds no
+valid base pose within the requested 0.55–0.80 m range of the **sink center**.
+It stops without release or a collision-check bypass.
+
+CPU-only audit `20260913_233311_c8ea20` reconstructs the map from the last saved
+12 agent RGB-D observations (one observation before final reacquisition). This
+is **not the exact live grid cache**. The cached accepted sink mask/depth is
+matched to the saved observation before extracting world support. The nearest
+footprint-valid reachable pose is 0.814 m from the sink center, outside the
+unchanged range; the existing placement-point calculation yields a point with
+a valid base pose at `(0.90, -1.10)`, **0.701 m** away. Thus the reconstructed
+map reproduces center-target rejection but admits the actual placement surface
+without changing safety settings. Results, map figure, script and the 37 MB
+agent checkpoint are retained at `~/runs/emet/pear-placement-map-audit`.
+
+`b2c80dbc` shares the existing placement-point calculation between navigation
+and local placement, accepting a fresh grounded point cloud before creating the
+temporary receptacle instance. No sink-specific coordinates or broader reach
+threshold are introduced. Large-receptacle regression and the broad suite pass
+**541 tests / 4 skip**. Same-fixture learned retry `20260913_233727_19e44f`
+runs frozen `b2c80dbc` under `~/runs/emet/open-sink-pear-placement-surface`.
+
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
 tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests

@@ -37,13 +37,16 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       NoSlip=0 runs dropped the payload even while stationary. Matched 50 s
       fixed-control continuation drops it under NoSlip=0 but retains it under
       NoSlip=10 (2.64 mm drift); keep physics rows separate, defaults unchanged.
-      Candidate `67c4c90b` adds kinematics-derived pickup and distant-placement
+      Candidate `b2c80dbc` adds kinematics-derived pickup and distant-placement
       workspaces through the shared collision-checked navigator, with real-preset
       radius accounting (`9f0a895b`). Find/EQA sampling and release gates are
-      unchanged. Same NoSlip=10 fixture retry `20260913_232336_224534` is running.
+      unchanged. The next retry rejected the sink-center approach; cached-map
+      reconstruction shows the actual placement surface has a reachable pose.
+      Navigation now shares that point calculation with placement. Same NoSlip=10
+      fixture retry `20260913_233727_19e44f` is running.
       Motion fixes already have a 9/9 empty-gripper simulator control plus
       bounded extraction, sim-scaled waits and measured-progress stall tests.
-      **540 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
+      **541 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits
       remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
@@ -61,6 +64,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       matched default/NoSlip retention controls with the repaired calibration.
       Existing checkpoint controls isolate solver creep in an earlier grasp;
       the six-case numerical-physics panel is not a hardware force/contact test.
+- [ ] Add observation-based held-payload monitoring and bounded recovery during
+      long transport, not only final release verification. A completed closure
+      is not persistent possession; ambiguous/occluded views must remain unknown,
+      not authorize release or a second pickup. Use shared state semantics and
+      adapter-provided sensing, never the private simulator evaluator.
 - [ ] Add collision-aware approach selection before claiming clutter robustness.
       Narrowing an aperture is not a collision planner; an identity-positive
       partial surface is not proof of complete grasp geometry.
