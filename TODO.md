@@ -31,7 +31,7 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Keep archived/corrected dynamics separate; do not tune object densities.
 - [ ] Complete repeatable room pickup **and placement**, then freeze Stage C's
       visible/search starts and actual task identities for both environments.
-      Latest completed room retry `20260913_231231_143de9`: pickup T / place F;
+      Room retry `20260913_231231_143de9`: pickup T / place F;
       payload retained through all 408 post-64 s samples, but placement point
       was 1.017 m away and rejected before release. Earlier corrected-inertia
       NoSlip=0 runs dropped the payload even while stationary. Matched 50 s
@@ -43,10 +43,17 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       unchanged. The next retry rejected the sink-center approach; cached-map
       reconstruction shows the actual placement surface has a reachable pose.
       Navigation now shares that point calculation with placement. Same NoSlip=10
-      fixture retry `20260913_233727_19e44f` is running.
+      fixture retry `20260913_233727_19e44f` reaches the planned pose, then
+      rejects placement because partial reacquisition shifts the local goal.
+      `7627d755` retains the planned static-support reference only after fresh
+      identity and 3D association pass. First trial `20260913_235140_680b61`
+      stops earlier: Qwen falsely rejects a clear wrist pear mask as a potato
+      (pickup F / place F; placement code untested). Keep that failure in the
+      results. Unchanged repeat `20260913_235819_32930b` is running; no verifier
+      thresholds or prompts were relaxed.
       Motion fixes already have a 9/9 empty-gripper simulator control plus
       bounded extraction, sim-scaled waits and measured-progress stall tests.
-      **541 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
+      **545 offline tests pass / 4 skip** on the frozen candidate; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits
       remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).

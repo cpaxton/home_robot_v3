@@ -378,6 +378,38 @@ threshold are introduced. Large-receptacle regression and the broad suite pass
 **541 tests / 4 skip**. Same-fixture learned retry `20260913_233727_19e44f`
 runs frozen `b2c80dbc` under `~/runs/emet/open-sink-pear-placement-surface`.
 
+That run completes **pickup T / placement F** in 306 wall seconds. Navigation
+now reaches the planned pose `(0.901, -1.098)`, but fresh sink reacquisition
+sees only the far/bottom portion of the basin. Recomputing the local goal from
+that partial cloud moves it to 0.981 m away, beyond reach. No release occurs.
+The saved head image and selected mask were manually inspected: this is a
+partial view of the correct support, not proof that the support moved.
+
+`7627d755` retains the planned placement point and original support-clearance
+height **only after fresh semantic verification and the existing 80%/5 cm
+3D association pass**. Fresh points remain fresh; old geometry is not inserted
+into the reacquired instance. This assumes a static receptacle, not dynamic
+tracking or collision-free empty-space certification. A new query clears the
+reference, and absence/ambiguity/inconsistent association still aborts.
+**545 offline tests pass / 4 skip**.
+
+Its first live trial `20260913_235140_680b61`, under
+`~/runs/emet/open-sink-pear-placement-reference`, is **pickup F / placement F**
+in 145 wall seconds: it stops before pickup and does not exercise placement.
+Manual review of wrist record `grounding-b89882e7244d4b559b357e963d42bc6c`
+shows a clear pear and a good candidate mask, but Qwen rejects its appearance
+as a potato. This verifier false negative remains in the results; no identity
+threshold or prompt was changed. Unchanged repeat `20260913_235819_32930b`
+uses the same frozen source, model and NoSlip=10 fixture under
+`~/runs/emet/open-sink-pear-placement-reference-repeat`. A successful repeat
+would test placement, not erase the failed run or establish repeatability.
+
+Review also exposed missing head-camera calibration in the grounding cache.
+The review branch now saves camera intrinsics, pose and base pose from the
+original captured frame (detection backends can discard these fields). Missing
+values remain null, never invented calibration. This is diagnostic-only and
+is not included in the frozen `7627d755` runs.
+
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
 tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests
