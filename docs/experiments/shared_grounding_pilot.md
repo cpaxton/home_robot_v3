@@ -214,6 +214,30 @@ This development retry is not pooled with v6. Fresh v7 uses frozen `ef533ed3`
 and the identical six-case order/settings declared for v6; only the snapshot
 repair differs from v6 code. Stop on the first physical failure again.
 
+#### Visual audit of the calibration failure and repair
+
+These are unmodified saved images, not generated illustrations. The two wrist
+views come from different live executions and different approach depths; they
+illustrate the observed failure/recovery, not a pixel-matched causal comparison.
+
+| Failed v6 clearance grasp (`b7441826`) | Successful failed-case retry (`ef533ed3`) |
+| --- | --- |
+| ![Cylinder against the right pad before closure](stretch-wrist-calibration-before.png) | ![Cylinder between the fingers at the verified grasp](stretch-wrist-calibration-after.png) |
+
+The first image is agent wrist frame
+`grounding-a29ba1c4f88447e0833765635cc3b992`; the second is
+`grounding-a58a9e61adeb48519adee072345d647b`. Their SHA-256 hashes are
+recorded in the [figure provenance manifest](stretch-camera-snapshot-figures.json);
+original RGB-D, masks, prompts and poses
+remain in the artifact directories above.
+
+![Final cylinder resting on the designated cube after release](stretch-camera-snapshot-placement.png)
+
+The final view is an evaluator-only **qpos reconstruction** from
+`clearance-camera-snapshot/replay/final-object.png`, not an agent camera view or
+another execution. Its replay manifest and independent physical trace are in
+the same run directory. One successful development trial is not panel acceptance.
+
 ### Frozen panel v1 (stopped, not accepted)
 
 Job `20260913_120543_168dcb`, source `6e54ddd1`, uses the contact/aperture preset
