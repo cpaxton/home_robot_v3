@@ -239,7 +239,7 @@ def test_center_depth_excludes_nonfinite_sensor_values():
     assert op._compute_center_depth(servo, mask, 1, 1) == pytest.approx(0.2)
 
 
-@pytest.mark.parametrize("lift, goal", [(0.4, 0.7), (0.845, 1.0)])
+@pytest.mark.parametrize("lift, goal", [(0.4, 0.7), (0.845, 1.0), (0.9, 1.0)])
 def test_pickup_lift_respects_existing_stretch_height_limit(lift, goal):
     op = operation()
     op.cheer = op.error = Mock()

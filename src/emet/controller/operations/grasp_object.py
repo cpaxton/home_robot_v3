@@ -606,7 +606,7 @@ class GraspObjectOperation(ManagedOperation):
         joint_state = self.robot.get_joint_positions()
         lift = float(joint_state[HelloStretchIdx.LIFT])
         lift_goal = min(lift + 0.3, self.lift_max_height)
-        if not np.isfinite(lift) or lift_goal - lift < self.lift_clearance_m:
+        if not np.isfinite(lift) or lift + self.lift_clearance_m > lift_goal:
             self.error("Insufficient vertical lift travel; gripper remains open.")
             return False
 
