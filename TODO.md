@@ -33,6 +33,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       Retry `20260913_205646_cf97b0` was cancelled: seed 0 generated a can while
       the instruction requested a pear. Generation-only repeats confirm seed
       nondeterminism; use frozen scene/task metadata for paired comparisons.
+      Frozen visible control `20260913_211456_985f71` reaches grasp, then rejects
+      a 59 cm-separated high-counter target because aperture clearance checked
+      optical depth only. `2e988c71` uses 3D closing-segment distance with the
+      same 6 cm margin; 489 offline tests pass / 4 skip. Same-fixture physical
+      retry `20260913_212148_9413e0` pending; Stage C is not passed.
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across
       processes as well as repeated calls. Python hash-seed pinning alone did
       not stabilize object positions. Preserve generated geometry and validate

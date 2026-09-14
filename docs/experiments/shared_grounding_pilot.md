@@ -105,6 +105,28 @@ reloading the archived model. External mesh/texture assets remain required.
 The explicit visible-start control is prepared from the archived **pear** room,
 not a new random generation; record its start intervention separately from
 adapter-start search and retain native NoSlip=0.
+
+Frozen visible-control preflight `20260913_211328_f13863` creates
+`~/runs/emet/open-sink-frozen-visible-20260913`: expanded scene XML, sim config,
+manifest/hash, exact preparation script and four head renders. The explicit
+base start is XY **(1.0, -1.3)**, yaw **pi/2**, with native NoSlip=0. The pear
+and sink are visible in the preflight sweep. These are kinematic diagnostic
+renders (including rangefinder visualization), not agent observations or
+physical execution. The robot start is an intervention, not a search success.
+
+Learned run `20260913_211456_985f71` on `98b4c708` reaches fresh pear grounding
+and the grasp operation, then fails **before closure** on the aperture-standoff
+guard; independent physical result is **F/F**. Artifacts:
+`~/runs/emet/open-sink-pear-frozen-visible`. The last recorded pose and measured
+head target imply 0.594 m target-to-grasp separation, predominantly vertical in
+wrist coordinates, but only 0.0368 m optical-depth difference. The old guard
+treated optical-depth ordering as proximity, incorrectly rejecting the high
+counter geometry. `2e988c71` measures distance to the complete finger-marker
+closing segment in 3D, retaining the same 6 cm margin. Near-finger and between-
+jaw targets still reject; this remains target-local clearance, not full-scene
+collision planning. Focused tests: 68 pass; expanded offline suite: **489 pass,
+4 skip**. Exact frozen-fixture retry `20260913_212148_9413e0` is running under
+`~/runs/emet/open-sink-pear-aperture-3d`; no physical success claim yet.
 This is not the eight-case Stage C panel; visible/search starts and the Molmo
 counterpart remain to be frozen.
 
