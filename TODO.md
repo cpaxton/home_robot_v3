@@ -36,8 +36,13 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       candidate `096ab093` has bounded extraction, sim-scaled waits, 5 mm base
       completion in the geometry preset, and a measured-progress stall window.
       Empty-gripper simulator control `20260913_224425_cd1725` passes 9/9
-      motions (<5 mm base errors); learned room retry `20260913_224729_017788`
-      is running on the same corrected-inertia fixture, still NoSlip=0.
+      motions (<5 mm base errors). Learned room retry `20260913_224729_017788`
+      completes pickup and carry retraction, but drops the payload before place
+      on the corrected-inertia NoSlip=0 fixture. The trace shows slow slip even
+      during stationary holds. Matched 50 s fixed-control continuation drops it
+      under NoSlip=0 but retains it under NoSlip=10 (2.64 mm relative drift).
+      Learned solver-only retry `20260913_230112_fb9a85` is running on the same
+      code; keep numerical-physics rows separate and production defaults unchanged.
       **522 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits

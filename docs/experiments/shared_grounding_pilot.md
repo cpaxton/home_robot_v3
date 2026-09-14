@@ -265,10 +265,46 @@ tabletop NoSlip=10 fixture, using the real bridge/client and no VLM. It does not
 test payload retention or establish room manipulation acceptance. The script,
 source SHA, simulator log and measured commands/results are archived.
 
-Learned room retry `20260913_224729_017788` on `096ab093` is running under
+Learned room retry `20260913_224729_017788` on `096ab093` ran under
 `~/runs/emet/open-sink-pear-progress-contract`, using the same corrected-inertia
-visible room, NoSlip=0, Qwen int4 and 5 mm geometry preset. Room placement and
-Stage C remain unpassed.
+visible room, NoSlip=0, Qwen int4 and 5 mm geometry preset. **Physical pickup T /
+placement F** (pickup at 64.646 simulation seconds). Fine alignment and carry
+retraction complete; the agent searches for the sink and attempts placement,
+then correctly abstains when the payload is absent from its verification view.
+Final and last-contact qpos reconstructions were manually inspected: the pear
+has fallen onto the floor, not into the sink. This is not a pure recognition
+failure and tool/process exit zero is not physical success.
+
+The retained trace shows downward object-to-gripper drift during stationary
+periods, not just turns: relative Z is about -12 mm at 72 s, -20 mm at 80 s,
+and -41 mm at 105 s. Last gripper contact is at 105.038 s; by 106.87 s the pear
+contacts the floor. No release was commanded. The active numerical-physics
+hypothesis is steady contact creep under NoSlip=0, to be checked rather than
+assumed. Private continuation `20260913_225816_7f7310` holds the recorded 72 s
+actuator controls for 50 simulated seconds under NoSlip=0 and 10, serially,
+with the same corrected scene and initial state. Its output/script are under
+`~/runs/emet/pear-stationary-hold-control`. This is an evaluator-side causal
+diagnostic, not another learned episode. Room placement and Stage C remain
+unpassed; no production contact defaults have changed.
+
+That fixed-control continuation completed both rows. **NoSlip=0 drops the pear**
+(maximum object-to-gripper displacement 1.063 m; final object Z 0.026 m), while
+**NoSlip=10 retains it** (maximum relative displacement 2.644 mm over 50 s;
+final object Z 1.081 m). Maximum base translation is 0.236 mm and 0.0021 mm,
+respectively. Thus navigation is not necessary to reproduce this particular
+drop, and solver choice changes retention for the same saved grasp. This does
+not establish that every failed grasp is numerical or that hardware retention
+is safe. The replay freezes actuator controls instead of rerunning perception
+or the complete live controller; it is not an independent task result.
+
+Fresh variant `~/runs/emet/open-sink-frozen-dynamics-noslip-20260913` changes
+only `noslip_iterations` from 0 to 10. Its archived construction script checks
+**454 compiled model arrays** for exact equality and all other solver options
+for equality; hashes preserve both scenes. No friction, actuator gain, object
+density, robot geometry, initial pose or success threshold changes. Learned
+retry `20260913_230112_fb9a85` uses the same frozen `096ab093` policy under
+`~/runs/emet/open-sink-pear-progress-noslip`. Keep its explicit numerical-physics
+row separate from native NoSlip=0 results and from the earlier tabletop panel.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
