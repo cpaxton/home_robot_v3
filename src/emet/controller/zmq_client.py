@@ -716,8 +716,21 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             # retraction still takes physical time when rendering slows the sim;
             # hardware budgets and the bounded scale cap remain unchanged.
             timeout = self._scaled_motion_timeout(timeout)
+            stall_timeout = self._scaled_motion_timeout(min_time)
             t0 = timeit.default_timer()
             settled_since = None
+            last_progress = t0
+            best_residual = float("inf")
+            tolerances = np.array(
+                [
+                    self._arm_joint_tolerance,
+                    self._lift_joint_tolerance,
+                    self._base_x_joint_tolerance,
+                    self._wrist_roll_joint_tolerance,
+                    self._wrist_pitch_joint_tolerance,
+                    self._wrist_yaw_joint_tolerance,
+                ]
+            )
             while not self._finish:
                 if steps % 40 == 39:
                     # Resend the action until we get there
@@ -747,14 +760,12 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
                     )
 
-                if (
-                    (arm_diff < self._arm_joint_tolerance)
-                    and (lift_diff < self._lift_joint_tolerance)
-                    and (base_x_diff < self._base_x_joint_tolerance)
-                    and (wrist_roll_diff < self._wrist_roll_joint_tolerance)
-                    and (wrist_pitch_diff < self._wrist_pitch_joint_tolerance)
-                    and (wrist_yaw_diff < self._wrist_yaw_joint_tolerance)
-                ):
+                errors = np.array([arm_diff, lift_diff, base_x_diff, wrist_roll_diff, wrist_pitch_diff, wrist_yaw_diff])
+                residual = float(np.max(errors / tolerances))
+                if residual < best_residual:
+                    best_residual = residual
+                    last_progress = t1
+                if np.all(errors < tolerances):
                     controlled = [
                         HelloStretchIdx.BASE_X,
                         HelloStretchIdx.BASE_THETA,
@@ -772,12 +783,14 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         settled_since = t1
                     elif t1 - settled_since >= 0.1:
                         return True
-                elif t1 - t0 > min_time and np.linalg.norm(joint_velocities) < 0.01:
-                    logger.info("Arm not moving, we are done")
-                    logger.info("Arm joint velocities", joint_velocities)
-                    logger.info(t1 - t0)
-                    # Arm stopped moving but did not reach goal
-                    # sleep to prevent ros2 streaming latency
+                elif t1 - last_progress > stall_timeout:
+                    # A fine correction legitimately slows below 1 cm/s before
+                    # reaching its gate. Fail on lack of measured convergence,
+                    # not an instantaneous low-speed sample. The overall
+                    # deadline still bounds noisy or asymptotic feedback.
+                    logger.warning(
+                        f"Arm made no goal progress for {stall_timeout:.1f}s; normalized error={residual:.3f}"
+                    )
                     time.sleep(0.5)
                     return False
                 else:

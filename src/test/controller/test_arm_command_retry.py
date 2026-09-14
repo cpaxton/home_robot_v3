@@ -66,7 +66,7 @@ def test_arm_wait_uses_existing_sim_time_scale_without_changing_hardware_budget(
 
     def feedback():
         clock[0] += 1.0
-        q = np.ones(11) if clock[0] < 13 else np.zeros(11)
+        q = np.ones(11) * max(0.0, (13 - clock[0]) / 13)
         return q, q.copy(), None
 
     client.get_joint_state = Mock(side_effect=feedback)
@@ -89,7 +89,7 @@ def test_arm_deadline_remains_bounded_without_progress_or_feedback(missing, monk
     clock = count(0, 1)
     monkeypatch.setattr("emet.controller.zmq_client.timeit.default_timer", lambda: next(clock))
     monkeypatch.setattr("emet.controller.zmq_client.time.sleep", lambda _: None)
-    assert client.arm_to([0] * 6, timeout=1) is False
+    assert client.arm_to([0] * 6, timeout=1, min_time=20) is False
     assert client.get_joint_state.call_count == 11
 
 
@@ -114,3 +114,28 @@ def test_geometry_preset_waits_for_small_base_correction_to_execute(monkeypatch)
     monkeypatch.setattr("emet.controller.zmq_client.time.sleep", lambda _: None)
     assert client.arm_to([0.013, 0, 0, 0, 0, 0])
     assert client.get_joint_state.call_count > 8
+
+
+@pytest.mark.parametrize("progressing", [True, False])
+def test_slow_fine_base_motion_is_not_confused_with_a_stall(progressing, monkeypatch):
+    client = make_zmq_test_client(StretchZmqClient)
+    client.in_manipulation_mode = Mock(return_value=True)
+    for joint in ("arm", "lift", "base_x", "wrist_roll", "wrist_pitch", "wrist_yaw"):
+        setattr(client, f"_{joint}_joint_tolerance", 0.005)
+    client.send_action = Mock(return_value={"joint": [0.04, 0, 0, 0, 0, 0]})
+    client.send_message = Mock()
+    clock = [0.0]
+
+    def feedback():
+        clock[0] += 1.0
+        q, velocity = np.zeros(11), np.zeros(11)
+        if progressing:
+            q[HelloStretchIdx.BASE_X] = min(0.04, clock[0] * 0.001)
+            velocity[HelloStretchIdx.BASE_X] = 0.001 if clock[0] < 40 else 0
+        return q, velocity, None
+
+    client.get_joint_state = Mock(side_effect=feedback)
+    monkeypatch.setattr("emet.controller.zmq_client.timeit.default_timer", lambda: clock[0])
+    monkeypatch.setattr("emet.controller.zmq_client.time.sleep", lambda _: None)
+    assert client.arm_to([0.04, 0, 0, 0, 0, 0], timeout=60) is progressing
+    assert clock[0] > 30 if progressing else clock[0] <= 5
