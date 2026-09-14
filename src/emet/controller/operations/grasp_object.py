@@ -84,6 +84,7 @@ class GraspObjectOperation(ManagedOperation):
     # This is the distance before we start servoing to the object
     # Standoff distance from actual grasp pose
     pregrasp_distance_from_object: float = 0.3
+    minimum_pregrasp_standoff: float = 0.20
 
     # ------------------------
     # Grasping motion planning parameters and offsets
@@ -1040,6 +1041,7 @@ class GraspObjectOperation(ManagedOperation):
         assert self.target_object is not None, "Target object must be set before running."
 
         if getattr(self, "grounded_target", None) is not None:
+            self.ensure_grounded_grasp_workspace()
             self.align_grounded_target_for_grasp()
 
         # open gripper
@@ -1135,6 +1137,43 @@ class GraspObjectOperation(ManagedOperation):
             except RuntimeError:
                 self._success = False
                 raise
+
+    def ensure_grounded_grasp_workspace(self):
+        """A good viewing location may be too close for a separated grasp.
+
+        Derive the horizontal retracted reach from this robot's kinematics.
+        Move only through the ordinary collision-checked navigation planner,
+        before extending the arm. Final alignment reacquires the visual target.
+        """
+        target = np.asarray(self.get_object_xyz(), dtype=float)
+        start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        joints = np.array(self.robot.get_joint_positions(), dtype=float, copy=True)
+        joints[HelloStretchIdx.ARM] = 0
+        joints[HelloStretchIdx.WRIST_ROLL] = 0
+        joints[HelloStretchIdx.WRIST_PITCH] = 0
+        joints[HelloStretchIdx.WRIST_YAW] = 0
+        retracted, _ = self.robot.get_robot_model().manip_fk(joints)
+        reach = abs(float(retracted[1]))
+        if not np.isfinite(target).all() or not np.isfinite(start).all() or not np.isfinite(reach):
+            raise ValueError("Finite geometry is required for the grasp workspace")
+        # Same minimum separation as the local pregrasp solver. Prefer the
+        # configured larger separation when relocation is actually necessary.
+        if np.linalg.norm(target[:2] - start[:2]) >= reach + self.minimum_pregrasp_standoff:
+            return
+        bounds = (reach + self.pregrasp_distance_from_object, float(self.agent.manipulation_radius))
+        if not np.isfinite(bounds).all() or not 0 <= bounds[0] < bounds[1]:
+            raise ValueError("No separated grasp workspace within the manipulation radius")
+        self.info(f"Viewing pose is too close for pregrasp; planning within radial bounds {bounds}")
+        self.robot.move_to_nav_posture()
+        self.robot.switch_to_navigation_mode()
+        if not self.agent.navigate_to_target_pose(target, start, look_at_xy=tuple(target[:2]), distance_range=bounds):
+            raise RuntimeError("Could not reach a collision-checked grasp workspace")
+        measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        if (
+            not np.isfinite(measured).all()
+            or np.linalg.norm(target[:2] - measured[:2]) < reach + self.minimum_pregrasp_standoff
+        ):
+            raise RuntimeError("Measured grasp workspace is still too close")
 
     def align_grounded_target_for_grasp(self):
         """Stretch's arm points along -Y; find's camera-facing pose is not a grasp pose.
@@ -1326,7 +1365,7 @@ class GraspObjectOperation(ManagedOperation):
         # A fixed standoff can put the requested arm behind its retracted
         # limit. Try bounded, still-separated poses along the same approach
         # ray, largest standoff first. Never clamp an infeasible IK solution.
-        minimum_standoff = 0.20
+        minimum_standoff = self.minimum_pregrasp_standoff
         if not np.isfinite(distance_from_object) or distance_from_object < minimum_standoff:
             self.error("Pregrasp must remain at least 20 cm from the target.")
             return False

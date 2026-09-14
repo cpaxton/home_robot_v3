@@ -63,6 +63,16 @@ def test_navigate_to_target_pose_returns_false_on_planner_failure(nav_agent):
     nav_agent.robot.execute_trajectory.assert_not_called()
 
 
+def test_manipulation_approach_bounds_reach_sampler_without_bypassing_plan_failure(nav_agent):
+    assert not nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0], distance_range=(0.7, 0.8))
+    assert nav_agent.space.sample_navigation.call_args.kwargs == {
+        "mode": "navigation",
+        "distance_range": (0.7, 0.8),
+        "require_planar_visibility": False,
+    }
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
 def test_navigate_to_target_pose_uses_navmesh_when_enabled(monkeypatch):
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)

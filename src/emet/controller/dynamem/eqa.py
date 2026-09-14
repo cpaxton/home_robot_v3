@@ -312,6 +312,7 @@ def navigate_to_target_pose(
     _hop: int = 0,
     explore_goal: bool = False,
     look_at_xy: tuple[float, float] | None = None,
+    distance_range: tuple[float, float] | None = None,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -332,6 +333,8 @@ def navigate_to_target_pose(
     goal_xy = np.array([float(tp_arr[0]), float(tp_arr[1])], dtype=np.float64)
 
     if habitat_perfect_nav_enabled(self.parameters) and is_habitat_robot_client(self.robot):
+        if distance_range is not None:
+            raise ValueError("Manipulation approach bounds require the voxel navigation planner")
         nav_res = habitat_navmesh_navigate(
             self.robot,
             goal_xy,
@@ -366,8 +369,17 @@ def navigate_to_target_pose(
             return NavOutcome.PROGRESS
         return NavOutcome.STUCK
 
+    approach_options = {}
+    if distance_range is not None:
+        # Raised targets use fresh visual reacquisition, not 2D line-of-sight
+        # through the supporting counter. Footprint/path checks still apply.
+        approach_options = {"distance_range": distance_range, "require_planar_visibility": False}
     target_pose = self.space.sample_navigation(
-        start_pose, self.planner, original_target_pose, mode="exploration" if explore_goal else "navigation"
+        start_pose,
+        self.planner,
+        original_target_pose,
+        mode="exploration" if explore_goal else "navigation",
+        **approach_options,
     )
     # A projected base goal can differ substantially from the requested approach.
     # Recompute bearing there, not at the original waypoint.
@@ -595,6 +607,7 @@ def navigate_to_target_pose(
             _hop=_hop + 1,
             explore_goal=explore_goal,
             look_at_xy=look_at_xy,
+            distance_range=distance_range,
         )
     if progressed:
         return NavOutcome.PROGRESS

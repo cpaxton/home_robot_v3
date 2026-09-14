@@ -69,6 +69,77 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     assert events == ["head", "fresh", "ground"]
 
 
+@pytest.mark.parametrize("distance", [0.58, 0.75])
+def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distance):
+    op = operation()
+    op._object_xyz = np.array([4, -2, 0.96])
+    start = np.array([4, -2 - distance, 0])
+    op.robot.get_base_pose_world.side_effect = [start, np.array([4, -2.75, 0])]
+    joints = np.ones(11) * 0.1
+    op.robot.get_joint_positions.return_value = joints
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, -0.41, 0.9]), None)
+    op.agent.manipulation_radius = 0.8
+    op.agent.navigate_to_target_pose.return_value = True
+    op.ensure_grounded_grasp_workspace()
+    assert op.agent.navigate_to_target_pose.call_count == (1 if distance == 0.58 else 0)
+    if distance == 0.58:
+        call = op.agent.navigate_to_target_pose.call_args
+        assert call.kwargs["distance_range"] == pytest.approx((0.71, 0.8))
+        np.testing.assert_array_equal(call.args[0], op._object_xyz)
+        np.testing.assert_array_equal(call.args[1], start)
+    np.testing.assert_array_equal(joints, np.ones(11) * 0.1)
+    op.robot.arm_to.assert_not_called()
+    op.robot.move_base_to.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["plan", "no_progress", "no_range", "invalid_geometry"])
+def test_grasp_workspace_does_not_bypass_failed_navigation_or_bad_geometry(failure):
+    op = operation()
+    op._object_xyz = np.array([0, -0.58, 0.96])
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
+    op.robot.get_joint_positions.return_value = np.zeros(11)
+    op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, -0.41, 0.9]), None)
+    op.agent.manipulation_radius = 0.8 if failure != "no_range" else 0.5
+    op.agent.navigate_to_target_pose.return_value = failure != "plan"
+    if failure == "invalid_geometry":
+        op._object_xyz[0] = np.nan
+    with pytest.raises((ValueError, RuntimeError), match="geometry|workspace"):
+        op.ensure_grounded_grasp_workspace()
+    op.robot.arm_to.assert_not_called()
+    op.robot.move_base_to.assert_not_called()
+
+
+def test_close_high_target_becomes_pregrasp_reachable_after_workspace_relocation():
+    from emet.motion.kinematics import HelloStretchKinematics
+
+    op = operation()
+    model = HelloStretchKinematics()
+    op.robot_model = model
+    op.robot.get_robot_model.return_value = model
+    op._object_xyz = np.array([0.0144, -0.58, 0.9662])
+    joints = np.zeros(11)
+    joints[HelloStretchIdx.LIFT] = 0.597
+    joints[HelloStretchIdx.ARM] = 0.0113
+    joints[HelloStretchIdx.WRIST_PITCH] = 0.487
+    op.robot.get_joint_positions.return_value = joints
+    op.robot.get_base_pose_world.return_value = np.zeros(3)
+    op.agent.manipulation_radius = 0.8
+    assert not op.pregrasp_open_loop(op._object_xyz, distance_from_object=0.3)
+    op.robot.arm_to.assert_not_called()
+
+    def navigate(target, start, **kwargs):
+        assert kwargs["distance_range"][0] > 0.7
+        op.robot.get_base_pose_world.return_value = np.array([0, 0.16, 0])
+        return True
+
+    op.agent.navigate_to_target_pose.side_effect = navigate
+    op.ensure_grounded_grasp_workspace()
+    assert op.pregrasp_open_loop(op._object_xyz, distance_from_object=0.3)
+    q = op.robot.arm_to.call_args.args[0]
+    assert q[HelloStretchIdx.ARM] >= 0
+    assert 0 < q[HelloStretchIdx.LIFT] < 1.0
+
+
 def test_failed_alignment_does_not_reacquire_or_move_arm():
     op = operation()
     op.robot.move_base_to.return_value = False
