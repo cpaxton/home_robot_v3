@@ -133,9 +133,16 @@ def measure_observed_aperture(servo, target_points, detector):
     if points.ndim != 2 or points.shape[1] != 3 or len(points) < 2 or not np.isfinite(points).all():
         raise ValueError("Finite object geometry required for aperture")
     camera_points = (points - pose[:3, 3]) @ pose[:3, :3]
-    if camera_points[:, 2].min() - fingers[:, 2].max() < 0.06:
-        raise ValueError("Object is too close to adjust aperture safely")
     axis = (fingers[1] - fingers[0]) / span
+    # Narrowing sweeps the segment between the observed finger markers. Use
+    # distance to that whole segment, not optical-depth ordering: a target far
+    # above the wrist can have the same camera Z as the fingers. Keep the 6 cm
+    # clearance for marker-to-finger offsets and unseen geometry. This is a
+    # local target-clearance check, not a full-scene collision planner.
+    along = np.clip((camera_points - fingers[0]) @ axis, 0, span)
+    nearest = fingers[0] + along[:, None] * axis
+    if np.linalg.norm(camera_points - nearest, axis=1).min() < 0.06:
+        raise ValueError("Object is too close to adjust aperture safely")
     extent = float(np.ptp(camera_points @ axis))
     if extent <= 0:
         raise ValueError("Object has no measured extent along the finger axis")

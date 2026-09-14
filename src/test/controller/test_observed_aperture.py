@@ -39,6 +39,28 @@ def test_width_uses_finger_axis_and_world_camera_transform():
     assert measure_observed_aperture(servo, points, detector) == pytest.approx((0.12, 0.04))
 
 
+@pytest.mark.parametrize("rotation", [np.eye(3), np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])])
+def test_aperture_clearance_uses_full_geometry_for_a_high_counter(rotation):
+    servo, detector, points = observation()
+    # Observed room failure: target 59 cm above the grasp in camera coordinates
+    # but only 3.7 cm farther in optical depth. It is not inside the closing jaws.
+    points[:, 1] -= 0.59
+    points[:, 2] = 0.187
+    servo.ee_camera_pose[:3, :3] = rotation
+    servo.ee_camera_pose[:3, 3] = [1, 2, 3]
+    points = points @ rotation.T + [1, 2, 3]
+    assert measure_observed_aperture(servo, points, detector) == pytest.approx((0.12, 0.04))
+
+
+@pytest.mark.parametrize("x", [0.0, 0.06, 0.075])
+def test_aperture_rejects_geometry_near_any_part_of_the_closing_segment(x):
+    servo, detector, points = observation()
+    points[:, 0] += x
+    points[:, 2] = 0.17
+    with pytest.raises(ValueError, match="too close"):
+        measure_observed_aperture(servo, points, detector)
+
+
 @pytest.mark.parametrize("invalid", ["missing", "wrong_ids", "duplicate", "zero_depth", "nan_depth", "near_target"])
 def test_uncertain_finger_or_target_geometry_cannot_authorize_narrowing(invalid):
     servo, detector, points = observation()
