@@ -160,6 +160,15 @@ while the simple physical manipulation gate fails.
 
 ## Articulation is deferred
 
+The separate `configs/sim/robocasa_counter_to_sink_stretch.yaml` selects the
+installed `PickPlaceCounterToSink` task with Stretch, layout/style 1 and seed 0;
+`--sim-seed 1` supplies the second predeclared seed through the existing CLI.
+The original closed-cabinet fixture is unchanged. This is a **fixture candidate**,
+not room acceptance: preflight generated assets, task-object/support bodies,
+visible/search starts and effective contact solver settings before freezing the
+room manifest. Do not silently transfer the tabletop NoSlip ablation to a new
+environment or claim it used identical physics without checking.
+
 Door/drawer opening and closing are **unsupported**, not successful no-ops.
 Use open or explicitly pre-opened receptacles for this PR's TAMP cases, and label
 that fixture intervention in results. `run_tamp_agent_tools_gate.sh` is an oracle
