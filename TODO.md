@@ -37,7 +37,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       a 59 cm-separated high-counter target because aperture clearance checked
       optical depth only. `2e988c71` uses 3D closing-segment distance with the
       same 6 cm margin; 489 offline tests pass / 4 skip. Same-fixture physical
-      retry `20260913_212148_9413e0` pending; Stage C is not passed.
+      retry `20260913_212148_9413e0` passes aperture adjustment but fails wrist
+      visibility before closure. `98dbfee7` fixes signed target-height handling:
+      above-pivot targets no longer mirror downward. 491 offline tests pass /
+      4 skip; live signed-height retry pending. Stage C is not passed.
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across
       processes as well as repeated calls. Python hash-seed pinning alone did
       not stabilize object positions. Preserve generated geometry and validate

@@ -125,8 +125,24 @@ counter geometry. `2e988c71` measures distance to the complete finger-marker
 closing segment in 3D, retaining the same 6 cm margin. Near-finger and between-
 jaw targets still reject; this remains target-local clearance, not full-scene
 collision planning. Focused tests: 68 pass; expanded offline suite: **489 pass,
-4 skip**. Exact frozen-fixture retry `20260913_212148_9413e0` is running under
-`~/runs/emet/open-sink-pear-aperture-3d`; no physical success claim yet.
+4 skip**. Exact frozen-fixture retry `20260913_212148_9413e0` under
+`~/runs/emet/open-sink-pear-aperture-3d` passes aperture adjustment (marker span
+0.164 to 0.141 m, observed target extent about 0.097 m), then fails pregrasp
+wrist visibility: **F/F**, no closure. The cached wrist image
+`grounding-22788d7f82ca42689b9a05ac80cf92f9.png` shows cabinet fronts; the pear
+lies above the frame. `run()` used the absolute vertical target offset when
+choosing wrist pitch, mirroring above-pivot targets downward. `98dbfee7` keeps
+the vertical sign; the existing below-pivot calculation is unchanged. A
+run-level regression fails before the fix for an above-pivot target and passes
+afterward, with a lower-target control. Focused suite: **70 pass**; expanded
+offline suite: **491 pass / 4 skip**. The signed-height fix still needs live
+verification on this same frozen room.
+
+Neighboring tabletop regression `20260913_212612_8011e4` runs the original
+NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
+tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests
+the grounded-reference and 3D-aperture fixes against the earlier accepted task;
+it is not a rerun of all six Stage B cases and is not yet a final result.
 This is not the eight-case Stage C panel; visible/search starts and the Molmo
 counterpart remain to be frozen.
 
