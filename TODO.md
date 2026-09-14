@@ -40,8 +40,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       retry `20260913_212148_9413e0` passes aperture adjustment but fails wrist
       visibility before closure. `98dbfee7` fixes signed target-height handling:
       above-pivot targets no longer mirror downward. 491 offline tests pass /
-      4 skip; live signed-height retry `20260913_213256_6271da` running. Stage C
-      is not passed. Neighboring original-tabletop control on `2e988c71` passes
+      4 skip; live signed-height retry `20260913_213256_6271da` sees the pear but
+      later loses its support behind the counter edge; association correctly
+      rejects Qwen's selection of a counter patch. `516b3619` constrains the
+      separated pregrasp at/above target height (492 offline pass / 4 skip).
+      Frozen retry `20260913_214307_f3afc3` running. Stage C is not passed.
+      Neighboring original-tabletop control on `2e988c71` passes
       pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across
       processes as well as repeated calls. Python hash-seed pinning alone did

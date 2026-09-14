@@ -136,8 +136,22 @@ the vertical sign; the existing below-pivot calculation is unchanged. A
 run-level regression fails before the fix for an above-pivot target and passes
 afterward, with a lower-target control. Focused suite: **70 pass**; expanded
 offline suite: **491 pass / 4 skip**. Live signed-height retry
-`20260913_213256_6271da` on `24c59668` is running on the same frozen room, under
-`~/runs/emet/open-sink-pear-signed-height`.
+`20260913_213256_6271da` on `24c59668`, under
+`~/runs/emet/open-sink-pear-signed-height`, exposes the pear and passes four
+wrist semantic/geometry checks, but still ends **F/F before closure**. The
+pregrasp remains below the counter surface; only the top of the pear is visible.
+On the fifth frame SAM's proposed measured surfaces miss the pear and Qwen
+selects a counter-edge patch. The 3D association gate correctly rejects it.
+The actual RGB and all three final candidate images were manually inspected;
+do not describe this as a valid target rejected by an overstrict threshold.
+
+`516b3619` constrains the separated pregrasp to target height or above and
+horizontal/downward insertion, retaining the same standoff normalization and
+IK guards. This addresses below-support viewing, not full-scene collision
+planning. Focused tests: **71 pass**; expanded suite: **492 pass / 4 skip**.
+Same-fixture retry `20260913_214307_f3afc3` is running under
+`~/runs/emet/open-sink-pear-level-pregrasp`. It still needs independent physical
+scoring, and a passing diagnostic would not by itself satisfy Stage C.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
