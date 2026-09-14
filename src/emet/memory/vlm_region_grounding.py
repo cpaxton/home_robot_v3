@@ -130,6 +130,7 @@ def select_supported_region(
     presentation="isolated",
     whole_object=False,
     proposal_masks=None,
+    candidate_filter=None,
 ):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
@@ -145,7 +146,10 @@ def select_supported_region(
             presentation=presentation,
             whole_object=whole_object,
             proposal_masks=proposal_masks,
+            candidate_filter=candidate_filter,
         )
+    if candidate_filter is not None:
+        raise ValueError("Candidate filtering requires depth_candidates strategy")
     if segmenter is not None or proposal_masks is not None or presentation != "isolated" or whole_object:
         raise ValueError("Segmentation/presentation options require depth_candidates strategy")
     if strategy != "point":
@@ -190,6 +194,7 @@ def select_candidate_surface(
     segmenter=None,
     presentation="isolated",
     whole_object=False,
+    candidate_filter=None,
 ):
     from emet.memory.surface_candidates import (
         SurfaceCandidateOverflow,
@@ -250,6 +255,19 @@ def select_candidate_surface(
             "candidate_overflow" if isinstance(exc, SurfaceCandidateOverflow) else "invalid_geometry"
         )
         return parsed, mask, audit
+    if candidate_filter is not None:
+        # Tracking may rule out geometry before semantics, never authorize it.
+        # Preserve whole masks and rejected provenance; do not trim an unrelated
+        # or mixed surface into an apparently valid target. The proposal budget
+        # above and the final semantic/association checks remain unchanged.
+        accepted, rejected = [], []
+        for region in regions:
+            (accepted if candidate_filter(candidate_mask(region, depth.shape)) else rejected).append(region)
+        audit["candidate_filter"] = {
+            "accepted_source_ids": [r["id"] for r in accepted],
+            "rejected_candidates": rejected,
+        }
+        regions = [{**r, "source_id": r["id"], "id": i} for i, r in enumerate(accepted)]
     audit["surface_candidates"] = regions
     if not regions:
         audit["reason"] = "no supported surfaces; another view is needed"
@@ -339,6 +357,7 @@ def ground_vlm_region(
     presentation="isolated",
     whole_object=False,
     proposal_masks=None,
+    candidate_filter=None,
 ):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
@@ -363,6 +382,7 @@ def ground_vlm_region(
         presentation=presentation,
         whole_object=whole_object,
         proposal_masks=proposal_masks,
+        candidate_filter=candidate_filter,
     )
     if not verification["valid"]:
         return detected, [], [], verification

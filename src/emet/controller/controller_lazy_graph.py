@@ -331,11 +331,27 @@ class LazyGraphController(DynagraphController):
             rgb = frame_rgb_hwc_uint8(frame)
             box = tracking_target.project_box(frame.camera_K, frame.camera_pose, rgb.shape[:2])
             options["proposal_masks"] = options.pop("segmenter").segment(rgb, box[None])
+
+            def associated_surface(mask):
+                from emet.memory.graph_eqa.ingest.instance_observations import frame_world_xyz_hw3
+
+                world = frame_world_xyz_hw3(frame)
+                if world is None:
+                    raise ValueError("Target tracking requires world-aligned depth")
+                world = world.detach().cpu().numpy()
+                try:
+                    tracking_target.select_mask(np.where(mask, 0, -1), mask, world)
+                except ValueError:
+                    return False
+                return True
+
+            options["candidate_filter"] = associated_surface
             tracking_proposal = {
                 "source": "projected_observed_bounds",
                 "candidate_id": tracking_target.candidate_id,
                 "observation_revision": tracking_target.observation_revision,
                 "prompt_box_xyxy": box.tolist(),
+                "association_before_selection": True,
             }
         elif backend == "yoloe_sam2":
             from emet.perception.detection.query_mask_proposals import refine_instance_proposals

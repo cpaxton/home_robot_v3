@@ -43,7 +43,10 @@ def test_projected_bounds_are_only_proposals_and_do_not_retry_rejection(monkeypa
     segmenter = Mock()
     segmenter.segment.return_value = np.ones((1, 10, 10), dtype=bool)
     target = SimpleNamespace(
-        candidate_id=8, observation_revision=9, project_box=Mock(return_value=np.array([1.0, 2.0, 8.0, 9.0]))
+        candidate_id=8,
+        observation_revision=9,
+        project_box=Mock(return_value=np.array([1.0, 2.0, 8.0, 9.0])),
+        select_mask=Mock(),
     )
     audit = {"valid": valid, "failure_kind": kind}
     ground = Mock(return_value=(None, [], [], audit))
@@ -61,7 +64,13 @@ def test_projected_bounds_are_only_proposals_and_do_not_retry_rejection(monkeypa
         device="cpu",
         _query_segmenter=segmenter,
     )
-    frame = SimpleNamespace(rgb=np.zeros((10, 10, 3), dtype=np.uint8), camera_K=np.eye(3), camera_pose=np.eye(4))
+    frame = SimpleNamespace(
+        rgb=np.zeros((10, 10, 3), dtype=np.uint8),
+        depth=np.ones((10, 10)),
+        camera_K=np.eye(3),
+        camera_pose=np.eye(4),
+        full_world_xyz=np.ones((10, 10, 3)),
+    )
     result = LazyGraphController.ground_vlm_frame(controller, frame, "cup", "cup", tracking_target=target)
     ground.assert_called_once()
     assert ground.call_args.kwargs["proposal_masks"] is segmenter.segment.return_value
@@ -70,6 +79,19 @@ def test_projected_bounds_are_only_proposals_and_do_not_retry_rejection(monkeypa
     assert result[3]["valid"] is valid
     assert result[3]["tracking_proposal"]["observation_revision"] == 9
     assert "proposal_recovery" not in result[3]
+    # The pre-selection predicate uses the same whole-mask association as the
+    # post-selection guard, without deleting pixels to manufacture a match.
+    mask = np.ones((10, 10), dtype=bool)
+    predicate = ground.call_args.kwargs["candidate_filter"]
+    assert predicate(mask) is True
+    target.select_mask.assert_called_once()
+    np.testing.assert_array_equal(target.select_mask.call_args.args[1], mask)
+    np.testing.assert_array_equal(target.select_mask.call_args.args[2], frame.full_world_xyz)
+    target.select_mask.side_effect = ValueError("wrong object")
+    assert predicate(mask) is False
+    frame.full_world_xyz = None
+    with pytest.raises(ValueError, match="world-aligned depth"):
+        predicate(mask)
 
 
 @pytest.mark.parametrize(

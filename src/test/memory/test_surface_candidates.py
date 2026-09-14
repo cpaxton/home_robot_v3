@@ -101,6 +101,55 @@ def test_external_union_mask_cannot_join_depth_separated_objects():
     assert np.array_equal(masks[0] | masks[1], proposal)
 
 
+@pytest.mark.parametrize("accepted", [True, False])
+def test_tracking_filters_whole_surfaces_before_semantics_but_still_requires_verification(accepted):
+    depth = np.ones((20, 20))
+    depth[:, 10:] = 0.6
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    client = Mock(return_value='{"selected_id":0,"target_unambiguous":' + str(accepted).lower() + "}")
+    _, mask, audit = select_supported_region(
+        rgb,
+        depth,
+        "pear",
+        "pear",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        strategy="depth_candidates",
+        presentation="support_only",
+        proposal_masks=[np.ones_like(depth, dtype=bool)],
+        candidate_filter=lambda candidate: not candidate[:, 10:].any(),
+    )
+    assert len(audit["candidate_filter"]["rejected_candidates"]) == 1
+    assert len(audit["surface_candidates"]) == 1
+    assert len(audit["surface_selection"]["image_order"]) == 1
+    client.assert_called_once()
+    assert audit["valid"] is accepted
+    assert np.all(mask[:, 10:] == -1)
+    if accepted:
+        assert np.all(mask[:, :10] == 0)
+
+
+def test_tracking_with_no_associated_surface_does_not_ask_vlm_to_choose():
+    client = Mock()
+    _, mask, audit = select_supported_region(
+        np.zeros((20, 20, 3), dtype=np.uint8),
+        np.ones((20, 20)),
+        "pear",
+        "pear",
+        client=client,
+        min_depth=0.25,
+        max_depth=4,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones((20, 20), dtype=bool)],
+        candidate_filter=lambda candidate: False,
+    )
+    assert not audit["valid"]
+    assert np.all(mask == -1)
+    client.assert_not_called()
+    assert len(audit["candidate_filter"]["rejected_candidates"]) == 1
+
+
 def test_external_mask_keeps_smooth_sloped_geometry_and_ignores_color_texture():
     depth = np.tile(np.linspace(0.5, 1.0, 20), (20, 1))
     rgb = np.zeros((20, 20, 3), dtype=np.uint8)
