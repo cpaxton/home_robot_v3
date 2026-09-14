@@ -37,6 +37,20 @@ class ManipulationTrace:
         self.gripper_ids = subtree(grippers)
         if self.target_ids & (self.support_ids | self.gripper_ids):
             raise ValueError("Evaluator object, support and gripper subtrees must not overlap")
+        self.placement_regions = []
+        if "placement_regions" in config:
+            import mujoco
+
+            if not config["placement_regions"]:
+                raise ValueError("Declared placement regions must not be empty")
+            for name in config["placement_regions"]:
+                region = model.geom(name)
+                if (
+                    int(region.type[0]) != int(mujoco.mjtGeom.mjGEOM_BOX)
+                    or int(region.bodyid[0]) not in self.support_ids
+                ):
+                    raise ValueError("Placement regions must be box geoms belonging to the designated support")
+                self.placement_regions.append(int(region.id))
         output.parent.mkdir(parents=True, exist_ok=True)
         self.stream = output.open("x")
         self.stream.write(json.dumps({"schema": 1, "config": config, "sample_period_s": 0.1}) + "\n")
@@ -85,6 +99,19 @@ class ManipulationTrace:
             "qacc_warmstart": data.qacc_warmstart.tolist(),
             "ctrl": data.ctrl.tolist(),
         }
+        if self.placement_regions:
+            # Benchmark-defined interior regions remain evaluator-only. This
+            # checks the object origin (RoboCasa's partial inside criterion),
+            # not a learned target or an assertion of full-object containment.
+            row["placement_region_valid"] = any(
+                bool(
+                    np.all(
+                        np.abs(data.geom(index).xmat.reshape(3, 3).T @ (obj.xpos - data.geom(index).xpos))
+                        <= model.geom_size[index]
+                    )
+                )
+                for index in self.placement_regions
+            )
         self.stream.write(json.dumps(row, allow_nan=False) + "\n")
         self.stream.flush()
 
@@ -190,7 +217,10 @@ def score_trace(rows: list[dict]) -> dict:
             and not row["other_contact"]
             and row["object_pos"][2] >= initial_z + 0.05
             if picking
-            else row["support_contact"] and not row["gripper_contact"] and not row["other_contact"]
+            else row["support_contact"]
+            and not row["gripper_contact"]
+            and not row["other_contact"]
+            and row.get("placement_region_valid", True)
         )
         if not valid or (window and row["sim_time"] - window[-1]["sim_time"] > 0.25):
             window = []
@@ -255,6 +285,10 @@ def score_sequence(traces: list[list[dict]]) -> dict:
 def score_recording(path: Path) -> dict:
     records = [json.loads(line) for line in path.read_text().splitlines()]
     if records[0].get("schema") == 1:
+        if records[0]["config"].get("placement_regions") and any(
+            "placement_region_valid" not in row for row in records[1:]
+        ):
+            raise ValueError("Declared placement-region evidence is missing")
         return score_trace(records[1:])
     if records[0].get("schema") != 2 or len(records) != 1:
         raise ValueError("unsupported trace schema")
@@ -270,6 +304,8 @@ def score_recording(path: Path) -> dict:
         expected_config = {**step, **{key: header["config"][key] for key in ("ee_body", "gripper_bodies")}}
         if rows[0].get("schema") != 1 or rows[0]["config"] != expected_config:
             raise ValueError("Trace does not match its declared physical subgoal")
+        if expected_config.get("placement_regions") and any("placement_region_valid" not in row for row in rows[1:]):
+            raise ValueError("Declared placement-region evidence is missing")
         traces.append(rows[1:])
     return score_sequence(traces)
 

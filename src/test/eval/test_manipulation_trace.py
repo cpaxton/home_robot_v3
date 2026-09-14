@@ -60,7 +60,7 @@ def test_false_pick_controls(failure):
     assert not result["physical_place_success"]
 
 
-@pytest.mark.parametrize("failure", ["wrong_support", "still_held", "dropped_later", "sliding"])
+@pytest.mark.parametrize("failure", ["wrong_support", "still_held", "dropped_later", "sliding", "outside_region"])
 def test_false_place_controls(failure):
     rows = trace()
     for i, row in enumerate(rows[30:]):
@@ -70,6 +70,8 @@ def test_false_place_controls(failure):
             row["gripper_contact"] = True
         elif failure == "sliding":
             row["object_pos"][0] = i / 100
+        elif failure == "outside_region":
+            row["placement_region_valid"] = False
     if failure == "dropped_later":
         rows[-1].update(support_contact=False, other_contact=True)
     result = score_trace(rows)
@@ -190,3 +192,40 @@ def test_sequence_recorder_manifest_roundtrip_and_invalid_targets(tmp_path):
     path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="declared physical subgoal"):
         score_recording(path)
+
+
+def test_rotated_support_region_and_missing_region_evidence(tmp_path):
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+      <body name="support"><geom name="region" type="box" size=".4 .05 .05"
+        pos="0 0 .2" quat=".70710678 0 0 .70710678" contype="0" conaffinity="0"/></body>
+      <body name="object" pos="0 .2 .2"><freejoint/><geom size=".02"/></body>
+      <body name="ee"><body name="finger"/></body>
+    </worldbody></mujoco>""")
+    config = {
+        "object_body": "object",
+        "support_body": "support",
+        "ee_body": "ee",
+        "gripper_bodies": ["finger"],
+        "placement_regions": ["region"],
+    }
+    path = tmp_path / "region.jsonl"
+    writer = create_trace(model, config, path)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    writer.record(model, data)
+    data.qpos[:2] = [0.2, 0]
+    data.time = 0.2
+    mujoco.mj_forward(model, data)
+    writer.record(model, data)
+    writer.close()
+    header, inside, outside = [json.loads(line) for line in path.read_text().splitlines()]
+    assert inside["placement_region_valid"]
+    assert not outside["placement_region_valid"]
+    path.write_text(json.dumps(header) + "\n" + "\n".join(json.dumps(row) for row in trace()) + "\n")
+    with pytest.raises(ValueError, match="region evidence is missing"):
+        score_recording(path)
+    config["placement_regions"] = []
+    with pytest.raises(ValueError, match="must not be empty"):
+        create_trace(model, config, tmp_path / "empty.jsonl")

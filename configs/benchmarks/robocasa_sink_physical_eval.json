@@ -1,0 +1,7 @@
+{
+  "object_body": "obj_main",
+  "support_body": "sink_main_group_main",
+  "ee_body": "link_grasp_center",
+  "gripper_bodies": ["link_gripper_finger_left", "link_gripper_finger_right"],
+  "placement_regions": ["sink_main_group_reg_basin_left", "sink_main_group_reg_basin_right"]
+}
