@@ -51,7 +51,15 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       tests pass / 4 skip. Real-model saved-frame replay accepts clear pear,
       rejects absent banana, and abstains on occluded pear; two development frames
       are not held-out acceptance. Physical retry `20260913_215902_119e0e`
-      running. Stage C is not passed.
+      reaches closure but tips/loses the object, F/F. It exposes an out-of-range
+      1.144 m lift command and a 4.57 kg pear caused by blanket shell-inertia
+      conversion (authored mode: 0.07874 kg). Extraction now respects the existing
+      1.0 m ceiling and requires 10 cm available travel. Source-body mass/COM/
+      inertia preservation, including zero-mass markers, is implemented; full
+      generation retry `20260913_221317_3f6121` passes. 508 offline tests pass /
+      4 skip. Same-geometry corrected-dynamics learned run
+      `20260913_221528_c641e9` is running. Retain old fixtures and label corrected
+      dynamics separately. Stage C is not passed.
       Neighboring original-tabletop control on `2e988c71` passes
       pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across

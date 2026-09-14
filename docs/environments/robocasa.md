@@ -30,6 +30,17 @@ the matching external mesh/texture assets. Also record the actual adapter
 spawn: open-floor autoplace can move it metres from RoboCasa's suggested hint.
 See the [retained failures and reproducibility probe](../experiments/shared_grounding_pilot.md).
 
+Verify **compiled body dynamics**, not just renderings, after scene conversion.
+A blanket mesh `inertia="shell"` compatibility rewrite inflated one generated
+pear from 0.07874 kg to 4.570 kg and coincided with robot tipping during pickup.
+The adapter now pins source RoboCasa masses, centers of mass and inertias before
+mesh adaptation; it does not tune densities to make an episode pass. Generation
+tests compare surviving source bodies against the adapted and saved model,
+including zero-mass markers. Frozen scenes from before this fix retain their
+old dynamics: keep corrected-dynamics fixtures separate and record the change.
+Robot insertion, contact-solver settings and native robot mass calibration are
+separate concerns; this fix does not validate all robot payload limits.
+
 Setup: [simulation configs](../sim_configs.md).
 Protocols: [OVMM find](../ovmm_find_phase_benchmark.md),
 [full OVMM](../ovmm_full_benchmark.md),

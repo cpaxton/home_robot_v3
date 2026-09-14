@@ -172,9 +172,49 @@ both queries. The retained clear-pear panel was manually inspected. This is
 four diagnostic queries on two development frames, not held-out acceptance or
 proof that association alone excludes every background fragment.
 
-Frozen physical retry `20260913_215902_119e0e` on `5fddc33d` is running under
-`~/runs/emet/open-sink-pear-associated-selection`, with unchanged native physics,
-agent settings and scorer. A passing diagnostic would not itself satisfy Stage C.
+Frozen physical retry `20260913_215902_119e0e` on `5fddc33d`, under
+`~/runs/emet/open-sink-pear-associated-selection`, reaches closure after tracked
+approach, but finishes **physical F/F**. The robot lifts the pear briefly, then
+tips and loses it. Sampled base roll reaches about 10 degrees, the object rises
+at most 6.7 cm without a stable accepted pickup, and its final reconstruction
+shows it on the counter. Sampled contact reconstructions during the lift show
+gripper/object and base/floor contacts, not an arm/counter collision.
+
+Two independently actionable bugs are exposed:
+
+- The extraction requests lift **1.144 m**, beyond the actuator's **1.1 m**
+  limit, and times out. `b7e030de` uses the existing conservative 1.0 m operation
+  ceiling, prefers 30 cm extraction when feasible and requires at least 10 cm
+  available lift travel before closing. Changed post-closure feedback cannot
+  cause a lowering command. This remains an adapter motion limit, not a proof
+  of collision-free extraction or successful retention.
+- The generated pear weighs **4.570 kg**. The compatibility helper adds shell
+  inertia to unspecified meshes, changing density from volumetric to surface
+  interpretation ([MuJoCo reference](https://mujoco.readthedocs.io/en/3.3.1/XMLreference.html#body-geom-shellinertia)).
+  Restoring the authored mesh modes with the same generated geometry/densities
+  yields **0.07874 kg**. `926225b1` pins RoboCasa's original compiled body masses,
+  COMs and inertias before adapting mesh XML, rather than assigning lighter
+  object-specific densities. Full generation test `20260913_220929_746dde`
+  exposed zero-mass markers gaining inferred mass; `3492cdeb` preserves those
+  too. The test compares all surviving source bodies, not only the task target.
+
+Generation/export retry `20260913_221317_3f6121` **passes**, comparing all
+surviving source-body dynamics through adaptation and saved XML reload. It
+also creates `~/runs/emet/open-sink-frozen-dynamics-20260913`, a separately
+labelled same-geometry fixture with the three movable objects' authored inertia
+modes restored and pinned: pear 0.07874 kg (was 4.570), baguette 0.07957 kg
+(was 6.342), squash 0.06709 kg (was 7.119). Its manifest records source-asset
+hashes and each changed mesh mode. Geometry, densities, robot dynamics, friction
+and solver settings are checked against the old fixture; non-object kitchen
+inertias retain their archived values. Fresh production generation preserves
+all source bodies instead. The old scene and all failures remain intact.
+
+Learned corrected-dynamics retry `20260913_221528_c641e9` on `b7e030de` is
+running under `~/runs/emet/open-sink-pear-restored-dynamics`. It combines the
+bounded-lift fix with restored object dynamics, so it is not a one-factor
+ablation. The full offline suite passes **508 tests / 4 skip**; focused grasp
+and inertia tests pass **66**. Neither a corrected fixture nor a passing
+diagnostic would itself satisfy Stage C.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same

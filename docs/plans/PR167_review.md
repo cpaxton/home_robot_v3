@@ -17,6 +17,7 @@ not part of the frozen panel. Keep production contact defaults unchanged.
 | Review unit | Main code | Required evidence |
 | --- | --- | --- |
 | Command and motion contracts | `core/command_*`, lightweight `emet_core` copies, ZMQ client, native simulator, velocity control, IK | Command identity/writeback tests; wheel gearing, braking, grasp frame and RGB-D registration checks; physical carry controls; measured route completion |
+| Scene conversion and reproducibility | RoboCasa generation and XML adaptation | Source-to-adapted mass/COM/inertia equality (including massless markers), frozen expanded XML, task-identity and actual-start checks; corrected dynamics reported separately |
 | Grounded visual evidence | `memory/{query_grounding,vlm_region_grounding,surface_candidates,grounded_target}`, SAM2 proposal support | Cached positive/absent/wrong-surface controls; raw VLM responses and masks; no spatial promotion from unlocalized labels |
 | Shared task loop | `agent/{loop,prompt,tools}`, query manipulation task, grasp/place and navigation operations | Observation→action→action tests, stop on tool failure, bounded recovery, fresh post-motion views; independently scored learned manipulation |
 | Evaluation and diagnostics | `eval/manipulation_trace.py`, dataset/ablation tools, pilot driver and replay renderer | Private GT only; physical versus process/tool results separated; failed and unrun cases retained; frozen settings and artifact hashes |
@@ -48,6 +49,9 @@ or squash away failed-trial provenance. Push review branches only, never main.
    development passes and different-source panels are not pooled.
 2. Freeze actual room task instructions, simulator bodies/supports, seeds and
    starts before the bounded RoboCasa/Molmo OVMM and learned TAMP runs. The
+   RoboCasa adapter must preserve source body dynamics; earlier shell-inertia
+   conversion produced overweight objects and invalidated payload assumptions.
+   A rendering-only check does not establish a physically equivalent scene. The
    current tabletop driver and oracle TAMP script are **not** those room gates.
    Ordered multistep physical scoring must be connected before claiming TAMP.
 3. Run the paired EQA/find regression rows with model and budgets held fixed.
