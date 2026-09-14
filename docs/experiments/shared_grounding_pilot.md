@@ -135,14 +135,19 @@ choosing wrist pitch, mirroring above-pivot targets downward. `98dbfee7` keeps
 the vertical sign; the existing below-pivot calculation is unchanged. A
 run-level regression fails before the fix for an above-pivot target and passes
 afterward, with a lower-target control. Focused suite: **70 pass**; expanded
-offline suite: **491 pass / 4 skip**. The signed-height fix still needs live
-verification on this same frozen room.
+offline suite: **491 pass / 4 skip**. Live signed-height retry
+`20260913_213256_6271da` on `24c59668` is running on the same frozen room, under
+`~/runs/emet/open-sink-pear-signed-height`.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
 tracked-narrow agent, under `~/runs/emet/tabletop-after-room-fixes`. It tests
 the grounded-reference and 3D-aperture fixes against the earlier accepted task;
-it is not a rerun of all six Stage B cases and is not yet a final result.
+it is not a rerun of all six Stage B cases. It completes **physical pickup and
+placement T/T** (pick 78.620 s, final stable place 166.088 s simulation time).
+The final object reconstruction was manually inspected: the cylinder rests
+on the cube after release. This is one neighboring regression control, not
+general clutter acceptance or room/TAMP success.
 This is not the eight-case Stage C panel; visible/search starts and the Molmo
 counterpart remain to be frozen.
 
