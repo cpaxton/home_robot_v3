@@ -193,7 +193,8 @@ def test_reach_contract_is_shared_by_lazy_and_instance_controllers():
 
 def test_place_reacquires_after_arm_facing_rotation():
     op = operation()
-    old = SimpleNamespace(xyz=np.array([0.2, -0.5, 0.6]))
+    old = SimpleNamespace(xyz=np.array([0.2, -0.5, 0.6]), points=np.array([[0.2, -0.5, 0.6]]))
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
     fresh = SimpleNamespace(xyz=np.array([0.21, -0.51, 0.6]))
     op.agent.prepare_query_target.side_effect = [old, fresh]
     with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
@@ -206,7 +207,8 @@ def test_place_reacquires_after_arm_facing_rotation():
 @pytest.mark.parametrize("arrived", [True, False])
 def test_far_receptacle_requires_safe_navigation_before_arm_alignment(arrived):
     op = operation()
-    target = SimpleNamespace(xyz=np.array([1, 0, 0.9]))
+    target = SimpleNamespace(xyz=np.array([1, 0, 0.9]), points=np.array([[1, 0, 0.9]]))
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
     fresh = SimpleNamespace(xyz=np.array([1.01, 0, 0.9]))
     op.agent.prepare_query_target.side_effect = [target, fresh]
     op.agent.navigate_to_target_pose.return_value = arrived
@@ -229,13 +231,30 @@ def test_far_receptacle_requires_safe_navigation_before_arm_alignment(arrived):
 
 def test_placement_workspace_rejects_motion_success_without_measured_arrival():
     op = operation()
-    op.agent.prepare_query_target.return_value = SimpleNamespace(xyz=np.array([1, 0, 0.9]))
+    op.agent.prepare_query_target.return_value = SimpleNamespace(
+        xyz=np.array([1, 0, 0.9]), points=np.array([[1, 0, 0.9]])
+    )
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
     op.agent.navigate_to_target_pose.return_value = True
     with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target") as orient:
         with pytest.raises(RuntimeError, match="still too far"):
             op.prepare_query_target("sink")
         orient.assert_not_called()
     op.robot.open_gripper.assert_not_called()
+
+
+def test_large_receptacle_approach_targets_placement_surface_not_far_center():
+    op = operation()
+    points = np.array([[1.0, 0, 0.9], [2.0, 0, 0.9]])
+    target = SimpleNamespace(xyz=np.array([1.5, 0, 0.9]), points=points)
+    op.agent.prepare_query_target.return_value = target
+    op.sample_placement_position = PlaceObjectOperation.sample_placement_position.__get__(op)
+    op.robot.get_base_pose_world.side_effect = [np.zeros(3), np.array([0.65, 0, 0])]
+    op.agent.navigate_to_target_pose.return_value = True
+    with patch("emet.controller.operations.stretch_manipulation.orient_arm_toward_target"):
+        assert op.prepare_query_target("counter") is target
+    np.testing.assert_allclose(op.agent.navigate_to_target_pose.call_args.args[0], [1.25, 0, 0.9])
+    np.testing.assert_array_equal(points, [[1.0, 0, 0.9], [2.0, 0, 0.9]])
 
 
 def test_missing_final_object_alignment_never_releases():

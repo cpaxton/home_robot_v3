@@ -11,6 +11,7 @@
 import time
 
 import numpy as np
+import torch
 
 from emet.controller.base import ManagedOperation
 from emet.controller.controller_instance_memory import RobotAgent
@@ -88,45 +89,43 @@ class PlaceObjectOperation(ManagedOperation):
         bounds = (float(self.agent.manipulation_radius), float(self.agent.manipulation_radius) + self.place_step_size)
         if not np.isfinite(target.xyz).all() or not np.isfinite(start).all():
             raise ValueError("Finite geometry is required for the placement workspace")
-        if np.linalg.norm(target.xyz[:2] - start[:2]) > bounds[1]:
+        placement = self.sample_placement_position(start, points=target.points)
+        if np.linalg.norm(placement[:2] - start[:2]) > bounds[1]:
             # Seeing a receptacle does not establish that its placement surface
             # is reachable. Carry posture preserves the payload while the same
             # footprint/path-checked planner approaches it; no blind base step.
             self.robot.move_to_nav_posture()
             self.robot.switch_to_navigation_mode()
             if not self.agent.navigate_to_target_pose(
-                target.xyz, start, look_at_xy=tuple(target.xyz[:2]), distance_range=bounds
+                placement, start, look_at_xy=tuple(target.xyz[:2]), distance_range=bounds
             ):
                 raise RuntimeError("Could not reach a collision-checked placement workspace")
             measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
             if (
                 not np.isfinite(measured).all()
-                or np.linalg.norm(target.xyz[:2] - measured[:2]) > bounds[1] + self.agent.voxel_size
+                or np.linalg.norm(placement[:2] - measured[:2]) > bounds[1] + self.agent.voxel_size
             ):
                 raise RuntimeError("Measured placement workspace is still too far away")
         orient_arm_toward_target(self.robot, target.xyz)
         return self.agent.prepare_query_target(query)
 
-    def get_target_center(self):
-        points = self.get_target().point_cloud
-        return (points.quantile(0.05, dim=0) + points.quantile(0.95, dim=0)) / 2
-
-    def sample_placement_position(self, xyt) -> np.ndarray:
-        """Sample a placement position for the object on the receptacle."""
-        if self.get_target() is None:
-            raise RuntimeError("no target set")
-
-        target = self.get_target()
-        center_xyz = self.get_target_center()
+    def sample_placement_position(self, xyt, *, points=None) -> np.ndarray:
+        """Share the same measured placement point between approach and release."""
+        if points is None:
+            if self.get_target() is None:
+                raise RuntimeError("no target set")
+            points = self.get_target().point_cloud
+        points = torch.as_tensor(points)
+        center_xyz = (points.quantile(0.05, dim=0) + points.quantile(0.95, dim=0)) / 2
         if self.verbose:
             print(" - Placing object on receptacle at", center_xyz)
 
         # Get the point cloud of the object and find distances to robot
-        distances = (target.point_cloud[:, :2] - xyt[:2]).norm(dim=1)
+        distances = (points[:, :2] - xyt[:2]).norm(dim=1)
         # Choose closest point to xyt
         idx = distances.argmin()
         # Get the point
-        point = target.point_cloud[idx].cpu().numpy().copy()
+        point = points[idx].cpu().numpy().copy()
         if self.verbose:
             print(" - Closest point to robot is", point)
             print(" - Distance to robot is", distances[idx])
