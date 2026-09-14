@@ -44,7 +44,14 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       later loses its support behind the counter edge; association correctly
       rejects Qwen's selection of a counter patch. `516b3619` constrains the
       separated pregrasp at/above target height (492 offline pass / 4 skip).
-      Frozen retry `20260913_214307_f3afc3` running. Stage C is not passed.
+      Frozen retry `20260913_214307_f3afc3` exposes the full pear but ends F/F:
+      Qwen selects a baguette and association correctly rejects it. `5fddc33d`
+      filters whole tracked surfaces by the same association rule before Qwen
+      selection, retaining semantic verification and the final guard. 495 offline
+      tests pass / 4 skip. Real-model saved-frame replay accepts clear pear,
+      rejects absent banana, and abstains on occluded pear; two development frames
+      are not held-out acceptance. Physical retry `20260913_215902_119e0e`
+      running. Stage C is not passed.
       Neighboring original-tabletop control on `2e988c71` passes
       pickup/placement T/T (`20260913_212612_8011e4`), final replay inspected.
 - [ ] Fix upstream RoboCasa generation ordering and test determinism across

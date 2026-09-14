@@ -149,9 +149,32 @@ do not describe this as a valid target rejected by an overstrict threshold.
 horizontal/downward insertion, retaining the same standoff normalization and
 IK guards. This addresses below-support viewing, not full-scene collision
 planning. Focused tests: **71 pass**; expanded suite: **492 pass / 4 skip**.
-Same-fixture retry `20260913_214307_f3afc3` is running under
-`~/runs/emet/open-sink-pear-level-pregrasp`. It still needs independent physical
-scoring, and a passing diagnostic would not by itself satisfy Stage C.
+Same-fixture retry `20260913_214307_f3afc3`, under
+`~/runs/emet/open-sink-pear-level-pregrasp`, finishes **F/F before closure**.
+The full pear is now visible above the counter. In the final wrist frame
+(`grounding-cff79259592347bcbb3ff81b2adcd42e`), SAM proposes both pear and baguette,
+but Qwen selects the baguette; the final association guard correctly rejects it.
+The RGB and both candidate panels were manually inspected.
+
+`5fddc33d` applies the existing whole-surface 3D association check **before**
+Qwen selects among tracked-object proposals. It neither changes the association
+threshold nor trims proposals to manufacture a passing mask. Qwen must still
+verify the retained surface, and the final association guard remains. Ordinary
+search proposals are unchanged. Focused tests: **78 pass**; expanded offline
+suite: **495 pass / 4 skip**.
+
+Offline real-model replay `20260913_215320_069caf`, under
+`~/runs/emet/pear-tracking-filter-replay`, tests the clear and occluded saved
+frames with pear and absent-yellow-banana queries. The clear frame retains the
+pear and rejects the baguette; Qwen accepts pear and abstains on banana. The
+occluded frame retains one fragment and rejects two patches; Qwen abstains on
+both queries. The retained clear-pear panel was manually inspected. This is
+four diagnostic queries on two development frames, not held-out acceptance or
+proof that association alone excludes every background fragment.
+
+Frozen physical retry `20260913_215902_119e0e` on `5fddc33d` is running under
+`~/runs/emet/open-sink-pear-associated-selection`, with unchanged native physics,
+agent settings and scorer. A passing diagnostic would not itself satisfy Stage C.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
