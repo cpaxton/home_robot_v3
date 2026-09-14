@@ -49,11 +49,16 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       identity and 3D association pass. First trial `20260913_235140_680b61`
       stops earlier: Qwen falsely rejects a clear wrist pear mask as a potato
       (pickup F / place F; placement code untested). Keep that failure in the
-      results. Unchanged repeat `20260913_235819_32930b` is running; no verifier
-      thresholds or prompts were relaxed.
+      results. Unchanged repeat `20260913_235819_32930b` gets through pickup
+      and navigation but fails final alignment: the gripper body contacts the
+      front counter edge. Do not relax release gates or push through contact.
+      Same-source tabletop control `20260914_000218_79fce1` also fails before
+      pickup after unwanted workspace relocation. Candidate `787acb6f` checks
+      actual pregrasp IK before moving and uses the real URDF wrist pivot;
+      tabletop retry `20260914_001546_f0b89d` is running.
       Motion fixes already have a 9/9 empty-gripper simulator control plus
       bounded extraction, sim-scaled waits and measured-progress stall tests.
-      **545 offline tests pass / 4 skip** on the frozen candidate; this does not establish room acceptance. The previous
+      **564 offline tests pass / 4 skip** on the latest candidate; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits
       remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
@@ -79,6 +84,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
 - [ ] Add collision-aware approach selection before claiming clutter robustness.
       Narrowing an aperture is not a collision planner; an identity-positive
       partial surface is not proof of complete grasp geometry.
+      The sink repeat now demonstrates gripper-body/counter contact before
+      release. Account for the robot's full end-effector envelope and observed
+      support/obstacle geometry when selecting a placement pose and approach;
+      simulator body names and private collision checks must remain evaluator-only.
 - [ ] Improve private high-rate manipulation replay capture if contact failures
       recur: 10 Hz sampled controls do not reproduce the latest release ejection.
       Keep capture evaluator-only and distinguish replay from live evidence.

@@ -404,6 +404,38 @@ uses the same frozen source, model and NoSlip=10 fixture under
 `~/runs/emet/open-sink-pear-placement-reference-repeat`. A successful repeat
 would test placement, not erase the failed run or establish repeatability.
 
+The unchanged repeat completes **pickup T / placement F** (pickup 64.136 s).
+The static reference survives navigation and fresh support association, and
+placement starts 0.705 m from the base. Four observed vertical corrections are
+−70.1, −18.9, −7.9 and −8.9 mm; the last misses the unchanged 5 mm release gate.
+The robot retains the pear and does not release. Manual final reconstruction
+shows it still held above the basin. A private, non-integrating reconstruction
+of the recorded final state identifies **counter ↔ gripper-body contact** at
+the front edge, approximately `(0.930, −0.570, 0.920)` m. This is not a reason
+to loosen tolerances or command more downward force: the selected release pose
+does not clear the full gripper. Trace/scene hashes and reconstructed contact
+pairs are archived under `~/runs/emet/pear-placement-clearance-audit`.
+
+Same-source neighboring tabletop control `20260914_000218_79fce1`, under
+`~/runs/emet/tabletop-placement-reference-control`, also fails **F/F** before
+pickup. The new horizontal-only workspace check relocates the robot to a
+different side of the low target; later wrist tracking overflows its candidate
+budget. This does not isolate the overflow's cause, but it exposes an unwanted
+change to a previously accepted approach. The old `2e988c71` T/T control cannot
+be cited as no-regression evidence for `7627d755`.
+
+Candidate `787acb6f` shares a non-commanding pregrasp IK calculation between
+the workspace check and execution. A reachable angled pregrasp no longer
+triggers relocation solely because the target is inside the horizontal bound.
+It also replaces the missing `link_gripper_s3_body` fallback and virtual 35 cm
+local-Z offset with the active URDF's actual `link_wrist_pitch` pivot. The
+invented pivot could point signed-height aiming upward at a low target.
+The existing angular bias, 20 cm minimum standoff, navigation and release gates
+remain unchanged. Real-kinematics low/high-target controls and the broad suite
+pass **564 tests / 4 skip**. Learned tabletop retry `20260914_001546_f0b89d`
+runs frozen `787acb6f` under `~/runs/emet/tabletop-actual-pregrasp-control`.
+Sink gripper-clearance planning remains unresolved, not hidden by that retry.
+
 Review also exposed missing head-camera calibration in the grounding cache.
 The review branch now saves camera intrinsics, pose and base pose from the
 original captured frame (detection backends can discard these fields). Missing
