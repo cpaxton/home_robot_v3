@@ -35,7 +35,9 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       by F/F repeats exposing base completion and false-stall checks. Current
       candidate `096ab093` has bounded extraction, sim-scaled waits, 5 mm base
       completion in the geometry preset, and a measured-progress stall window.
-      Simulator-only fine-motion control `20260913_224425_cd1725` is running.
+      Empty-gripper simulator control `20260913_224425_cd1725` passes 9/9
+      motions (<5 mm base errors); learned room retry `20260913_224729_017788`
+      is running on the same corrected-inertia fixture, still NoSlip=0.
       **522 offline tests pass / 4 skip**; this does not establish room acceptance. The previous
       neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
       All run IDs, retained failures, masks, interventions and numerical audits

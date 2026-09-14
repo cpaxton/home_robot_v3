@@ -257,9 +257,18 @@ not a stall; stationary nonconvergence and the overall deadline still fail.
 Position and stopped-motion acceptance are unchanged. Focused motion/carry/
 protocol tests: **25 pass**; expanded offline suite: **522 pass / 4 skip**.
 Simulator-only control `20260913_224425_cd1725`, under
-`~/runs/emet/arm-precision-contract-control`, tests small base corrections and
-full arm retraction with no VLM. It is not learned manipulation acceptance.
-Room placement and Stage C remain unpassed.
+`~/runs/emet/arm-precision-contract-control`, passes **9/9 motions**: initialization,
+six small base corrections (including ±13 mm changes), extension and retraction.
+All reported base errors are below 5 mm (maximum 4.88 mm); full retraction takes
+7.05 wall seconds. This is an **empty-gripper** control on the separated-neighbor
+tabletop NoSlip=10 fixture, using the real bridge/client and no VLM. It does not
+test payload retention or establish room manipulation acceptance. The script,
+source SHA, simulator log and measured commands/results are archived.
+
+Learned room retry `20260913_224729_017788` on `096ab093` is running under
+`~/runs/emet/open-sink-pear-progress-contract`, using the same corrected-inertia
+visible room, NoSlip=0, Qwen int4 and 5 mm geometry preset. Room placement and
+Stage C remain unpassed.
 
 Neighboring tabletop regression `20260913_212612_8011e4` runs the original
 NoSlip=10 fixture on `2e988c71` (before the signed-height change) with the same
