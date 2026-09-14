@@ -42,6 +42,8 @@ def test_sim_preset_selection_and_independent_process_status(tmp_path, custom, a
     fake.write_text(
         f"#!{sys.executable}\n"
         "import json, os, sys\n"
+        "assert 'EMET_SIM_NAV_TELEPORT' not in os.environ\n"
+        "assert os.environ['EMET_MOLMOSPACES_NAV_TELEPORT'] == '0'\n"
         "with open(os.environ['CALLS'], 'a') as stream:\n"
         "    stream.write(json.dumps(sys.argv[1:]) + '\\n')\n"
         "if 'emet.app.run_agent' in sys.argv:\n"
@@ -60,6 +62,8 @@ def test_sim_preset_selection_and_independent_process_status(tmp_path, custom, a
         "CALLS": str(calls),
         "AGENT_RC": str(agent_rc),
         "SCORE_RC": str(score_rc),
+        "EMET_SIM_NAV_TELEPORT": "1",
+        "EMET_MOLMOSPACES_NAV_TELEPORT": "1",
     }
     for name in ("SIM_CONFIG", "SIM_AGENT_CONFIG", "SIM_EVAL_CONFIG", "SIM_COMMAND", "SIM_SEED"):
         env.pop(name, None)

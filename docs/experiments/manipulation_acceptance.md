@@ -43,6 +43,9 @@ Run heavy cases **serially**, through `emet jobs --cpu-safe --gpu-exclusive`.
 Use fresh artifact directories and bounded subprocess deadlines. After a timeout,
 check simulator/model cleanup before starting the next case. No real robot is
 needed for this battery. Never push to main or merge on a diagnostic smoke.
+The driver disables both explicit simulator teleport and MolmoSpaces' separate
+legacy teleport default (`EMET_MOLMOSPACES_NAV_TELEPORT=0`). A physical room run
+must use wheel drive; a server-default teleport run is not navigation acceptance.
 
 The original tabletop diagnostic is runnable through the existing driver:
 

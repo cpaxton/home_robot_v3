@@ -35,6 +35,9 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export EMET_ALLOW_SDPA_ATTN=1 MUJOCO_GL=egl
 export PYTHONPATH="$PWD/src:$PWD/packages/emet_habitat${SAM2_SOURCE:+:$SAM2_SOURCE}"
 unset EMET_VL_ENDPOINT EMET_SIM_NAV_TELEPORT
+# The MolmoSpaces server has a separate legacy teleport default. Physical
+# acceptance must use wheel drive even when the caller enables that shortcut.
+export EMET_MOLMOSPACES_NAV_TELEPORT=0
 git rev-parse HEAD > "$OUT/source.txt"
 git diff --exit-code
 git diff --cached --exit-code
