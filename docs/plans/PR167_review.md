@@ -6,6 +6,16 @@ the [bounded acceptance gates](../experiments/manipulation_acceptance.md) pass.
 Current evidence and failed trials live in the
 [shared grounding report](../experiments/shared_grounding_pilot.md).
 
+Late September 14 follow-up: RoboCasa inertia fix is isolated in
+[dependency PR #1](https://github.com/cpaxton/robocasa/pull/1). The first native
+room case loses its payload; `1d257800` now detects missing post-lift evidence
+and stops placement, while its original-tabletop control passes T/T. Molmo
+stops at its first turn; `65574600` separately fixes contact-margin evidence
+recording. Broad tests: 589 passed / 4 skipped. A fixed-turn diagnostic supports
+correcting wheel contact-profile mixing, but that production change and exact
+room retry are pending. These fixes do not establish room acceptance or replace
+the earlier frozen six-case panel.
+
 Current evidence: Stage B passes **6/6** physical pick/place cases on frozen
 `4f78ae62` with tracked-narrow and explicit NoSlip=10 scenes, all final views
 inspected. This separately repeats the older `ef533ed3` success after fixing the

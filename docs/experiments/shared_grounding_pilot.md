@@ -1,5 +1,17 @@
 # Shared grounding: bounded cross-task pilot
 
+## Room follow-up: retention handoff repaired; room acceptance still pending
+
+The native-physics RoboCasa can case fails physical pickup and times out on
+`b5fd55ef`. On `1d257800`, fresh payload verification correctly stops the same
+failed pickup in 178 seconds; the known-good original tabletop neighbor passes
+pickup/place in 251 seconds, with its final reconstruction manually inspected.
+This is one positive control, not a new six-case panel. Molmo's lower-table
+case stops at its first turn, with a separate positive-contact-margin recorder
+bug fixed in `65574600`. Latest broad tests: **589 passed / 4 skipped**.
+See the retained room traces and diagnostics below. No room OVMM or learned
+TAMP acceptance is claimed; the earlier frozen six-case result remains separate.
+
 ## Latest checkpoint: repaired-source basic gate passes 6/6
 
 Frozen **`4f78ae62` passes all six physical pickups and placements**: two
@@ -183,6 +195,96 @@ interior views and whole-object **subtree** masses in
 individual mass but positive descendant mass; they are not massless objects.
 Movable tomatoes, apples and open bowls are visible. Exact tasks/starts are
 still pending; these camera orbits are not agent observations or policy passes.
+
+### First derived room rollout: can retention fails
+
+Job `20260914_230140_40e8a7` runs frozen seed-0 visible-start can → counter to
+the right of the stove on `b5fd55ef`, Qwen int4, tracked-narrow, lazy graph,
+native NoSlip=0 and wheel drive. It **times out at 600 seconds** (601 measured
+wall seconds, exit 124); independent score is **pickup F / placement F** with
+a valid physical trace. Artifacts:
+`~/runs/emet/accessible-robocasa-policy-20260914/seed_0_visible`. The other
+three RoboCasa cases are unrun, not failures or passes.
+
+Manual inspection confirms correct initial can grounding, and approach motions
+complete. During closure/lift around simulation seconds 63–66, the can contacts
+the fingers, briefly rises, loses contact, and lands on its original counter.
+The final reconstruction shows it on its side behind the paper-towel holder.
+This is not a retained pickup. `_grasp()` returns lift-motion completion; the
+task consequently continues to destination search without freshly verifying
+possession and never places before timeout. Fix that handoff using observed
+RGB-D, not evaluator contacts. The shutdown log contains a manager BrokenPipe
+traceback; afterward no matching agent process or GPU compute client remains.
+The timeout bypasses the driver's final scoring command, so the saved trace
+was explicitly scored afterward (the replay manifest independently agrees).
+
+Private solver-control job `20260914_230920_5ac3db` completes a replay of the
+recorded closure/lift controls with NoSlip=0/10. It is an approximate 10 Hz
+control replay, not an exact thread/state replay or learned acceptance. Require
+qualitative reproduction of the native failure before attributing solver effects.
+The native replay reproduces can loss (final z=0.950 m); NoSlip=10 keeps it
+elevated through the same controls (final z=1.096 m). Artifacts:
+`~/runs/emet/room-grip-solver-control-20260914`. This supports a solver-retention
+hypothesis but is not permission to silently change the native room row.
+
+`1d257800` adds fresh observed lift/retention checks before and after the carry
+transition, reusing Qwen-verified RGB-D without creating memory instances.
+Unknown possession still blocks a duplicate pickup. Exact native-room retry
+`20260914_232230_b2bac0` finishes in **178 wall seconds**: physical F/F remains,
+but absent/ambiguous post-lift evidence now stops the task and skips placement
+instead of searching until timeout. This is a corrected failure handoff, not
+a repaired physical grasp. Artifacts:
+`~/runs/emet/room-can-retention-guard-20260914/seed_0_visible`. Same-source
+original-tabletop control `20260914_232231_d88be1` passes **T/T in 251 wall
+seconds**, with both fresh payload checks and the final reconstruction inspected.
+It is not a replacement six-case panel. Artifacts:
+`~/runs/emet/tabletop-retention-guard-control-20260914`. Broad checks for this
+handoff source: 587 passed / 4 skipped.
+
+### Molmo: initial turn failure and contact-margin scoring bug
+
+Tomato-to-bowl preparation `20260914_230526_03cdc9` stops because its private
+floor check relies on mesh names. The floor mesh has a generic hash name.
+`20260914_231450_d5e322` repeats the **same starts**, checking static ancestry
+and the archived rooms' zero floor elevation, and completes all four scene/start
+archives under `~/runs/emet/accessible-molmo-frozen-v2-20260914`. Head views were
+inspected. The higher-table index-0 task still needs a reachability check; do
+not admit it solely because the object is visible.
+
+Lower-table index-1 visible run `20260914_231706_1626e6` on `b5fd55ef` correctly
+grounds the tomato but stops at the first turn: yaw error remains 0.646 rad
+and the server reports a stopped, stalled navigation command. The robot remains
+upright; this is not a grasp failure or evidence that it fell over. The tool
+reports failure and skips placement. Original physical score is **unverified:
+no settled baseline**, not a verified successful or failed physical pickup.
+Artifacts: `~/runs/emet/accessible-molmo-policy-20260914/index_1_visible`.
+
+Private no-integration audit `~/runs/emet/molmo-contact-audit-20260914` finds
+force-bearing target/support contacts at positive separation (about 1 mm within
+the active margin). The old recorder discards them because distance is positive.
+`65574600` records active positive-normal-force contacts, with force/distance and
+contact-rule provenance; inactive proximity does not count. Physical lift and
+stability thresholds are unchanged. New margin/gap tests pass; broad checks
+are **589 passed / 4 skipped**. Applying the recorder to frozen states with
+recomputed forces establishes a baseline and still scores F/F, under
+`~/runs/emet/molmo-contact-recorder-control-20260914`. This is an explicitly
+reconstructed diagnostic, not a relabeled original rollout. Original artifacts
+and scores remain unchanged; the two live handoff checks use `1d257800`, not
+this later evaluator commit.
+
+The turn failure remains separate. The scene has overlapping floor contacts
+and high native torsional friction; neither is yet established as the cause.
+Fixed-turn diagnostic `20260914_233017_b37556` completes a comparison of native
+contact mixing with authored wheel-material priority, holding the recorded
+initial state, controls and solver fixed. In six simulation seconds, native
+mixing turns only **0.122 rad**, versus **2.111 rad** with wheel priority 1;
+both stay upright (minimum base up-axis z > 0.9999). No floor geometry is
+removed. Artifacts: `~/runs/emet/molmo-turn-control-20260914`. Priority changes
+contact parameter mixing, not just torsional friction, so this does not isolate
+a single friction coefficient. It supports a robot contact-profile correction
+followed by an exact-case and tabletop regression; production floor/material
+settings remain unchanged at this checkpoint. Shutdown manager BrokenPipe
+errors are also retained, not suppressed as part of this physics investigation.
 
 ## September 13: basic manipulation gate passed, cross-task gates pending
 

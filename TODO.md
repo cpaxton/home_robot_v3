@@ -12,6 +12,33 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+- [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
+      and drives to it, but the native-NoSlip=0 trace loses the can during lift.
+      `_grasp()` currently returns lift-motion completion, so the task proceeds
+      to destination search without fresh held-object verification. Reuse fresh
+      Qwen-verified RGB-D to verify object motion with the gripper after lift and
+      the carry transition; absent/ambiguous evidence must stop placement, while
+      uncertain possession must still block an unsafe second pickup. Do not read
+      private simulator contacts or widen physical-success thresholds. Guard
+      `1d257800` passes offline tests; exact native retry stops correctly in
+      178 s (physical F/F), with a known-good tabletop control passing T/T in
+      251 s (one control, not a full new panel). Matched
+      solver replay `20260914_230920_5ac3db` reproduces native loss and retains
+      the payload under NoSlip=10, but is not learned acceptance. Retain both.
+- [ ] Resolve Molmo first-turn stall before more room policy cases. Failed
+      `20260914_231706_1626e6` remains upright but cannot finish its first yaw
+      goal. Check material mixing, overlapping floor contacts and simulated
+      versus wall-time progress; fixed-turn control `20260914_233017_b37556`
+      completes: native mixing turns 0.122 rad versus 2.111 rad with wheel
+      priority 1 over six sim seconds; both stay upright. Test a robot-authored
+      contact-profile correction on the exact room case and tabletop neighbor
+      before promotion; no production material change yet. Also inspect shutdown
+      manager/thread ordering (BrokenPipe).
+- [x] Fix evaluator contact margins (`65574600`): count active force-bearing
+      contacts, not only penetration. Add margin/gap controls and provenance;
+      broad suite 589 passed / 4 skipped. Original Molmo trace remains unverified;
+      the separately reconstructed contact diagnostic is F/F with a valid baseline.
+
 - [ ] Fix `emet jobs run` prerequisite ordering: wait for explicit PIDs before
       acquiring the exclusive GPU lock. Currently a dependent can hold the lock
       while waiting for a prerequisite that needs it. Until fixed/tested, submit
