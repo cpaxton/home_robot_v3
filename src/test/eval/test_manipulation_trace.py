@@ -89,6 +89,36 @@ def test_missing_or_invalid_trace_is_unverified():
     assert not score_trace(rows)["verified"]
 
 
+@pytest.mark.parametrize("margin,gap,object_z,supported", [(0.01, 0, 0.205, True), (0.03, 0.025, 0.21, False)])
+def test_recorder_distinguishes_active_margin_contact_from_inactive_proximity(
+    tmp_path, margin, gap, object_z, supported
+):
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(f"""<mujoco><worldbody>
+      <body name="support"><geom type="box" size="1 1 .1"/></body>
+      <body name="object" pos="0 0 {object_z}"><freejoint/>
+        <geom type="sphere" size=".1" margin="{margin}" gap="{gap}"/></body>
+      <body name="ee" pos="0 0 1"><body name="finger"/></body>
+    </worldbody></mujoco>""")
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    assert data.ncon > 0
+    assert all(c.dist > 0 for c in data.contact[: data.ncon])
+    path = tmp_path / "margin.jsonl"
+    config = {"object_body": "object", "support_body": "support", "ee_body": "ee", "gripper_bodies": ["finger"]}
+    writer = ManipulationTrace(model, config, path)
+    writer.record(model, data)
+    writer.close()
+    header, row = [json.loads(line) for line in path.read_text().splitlines()]
+    assert header["contact_rule"] == "positive_normal_force"
+    assert row["support_contact"] is supported
+    assert bool(row["contact_evidence"]) is supported
+    if supported:
+        assert row["contact_evidence"][0]["normal_force_n"] > 0
+        assert row["contact_evidence"][0]["distance_m"] > 0
+
+
 def test_mujoco_recorder_keeps_contact_and_pose_evidence_private(tmp_path):
     import mujoco
 
@@ -98,7 +128,10 @@ def test_mujoco_recorder_keeps_contact_and_pose_evidence_private(tmp_path):
       <body name="ee" pos="0 0 1"><body name="finger"/></body>
     </worldbody></mujoco>""")
     data = mujoco.MjData(model)
-    mujoco.mj_forward(model, data)
+    # Exact tangency at reset has no active constraint yet. Establish physical
+    # support before testing that the recorder itself leaves state untouched.
+    for _ in range(10):
+        mujoco.mj_step(model, data)
     config = {"object_body": "object", "support_body": "support", "ee_body": "ee", "gripper_bodies": ["finger"]}
     original_qpos = data.qpos.copy()
     data.qvel[:] = np.arange(model.nv) * 0.1

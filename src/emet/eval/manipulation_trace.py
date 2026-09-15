@@ -53,7 +53,10 @@ class ManipulationTrace:
                 self.placement_regions.append(int(region.id))
         output.parent.mkdir(parents=True, exist_ok=True)
         self.stream = output.open("x")
-        self.stream.write(json.dumps({"schema": 1, "config": config, "sample_period_s": 0.1}) + "\n")
+        self.stream.write(
+            json.dumps({"schema": 1, "config": config, "sample_period_s": 0.1, "contact_rule": "positive_normal_force"})
+            + "\n"
+        )
         self.stream.flush()
         self.next_time = 0.0
 
@@ -61,19 +64,33 @@ class ManipulationTrace:
         if data.time < self.next_time:
             return
         self.next_time = float(data.time) + 0.1
+        import mujoco
+
         contacts = []
+        contact_evidence = []
         touched = set()
-        for contact in data.contact[: data.ncon]:
-            if contact.dist > 0:
-                continue
+        force = np.zeros(6)
+        for index, contact in enumerate(data.contact[: data.ncon]):
             a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
             if a in self.target_ids and b not in self.target_ids:
-                touched.add(b)
+                other = b
             elif b in self.target_ids and a not in self.target_ids:
-                touched.add(a)
+                other = a
             else:
                 continue
+            # MuJoCo's active contact margin can support an object with positive
+            # surface distance. Penetration alone misses those valid contacts;
+            # conversely, a proximity-only contact is not physical support.
+            if contact.efc_address < 0:
+                continue
+            mujoco.mj_contactForce(model, data, index, force)
+            if not np.isfinite(force[0]) or force[0] <= 0:
+                continue
+            touched.add(other)
             contacts.append([model.body(a).name, model.body(b).name])
+            contact_evidence.append(
+                {"bodies": contacts[-1], "distance_m": float(contact.dist), "normal_force_n": float(force[0])}
+            )
         obj = data.body(self.target)
         ee = data.body(self.ee)
         ee_rot = ee.xmat.reshape(3, 3)
@@ -90,6 +107,7 @@ class ManipulationTrace:
             "support_contact": bool(touched & self.support_ids),
             "other_contact": bool(touched - self.gripper_ids - self.support_ids),
             "contacts": contacts,
+            "contact_evidence": contact_evidence,
             "qpos": data.qpos.tolist(),
             # Preserve measured dynamics for local checkpoint diagnostics;
             # differencing 10 Hz positions is not a reliable initial velocity.
