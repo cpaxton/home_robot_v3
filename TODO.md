@@ -14,10 +14,10 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
 
 - [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
       and drives to it, but the native-NoSlip=0 trace loses the can during lift.
-      `_grasp()` currently returns lift-motion completion, so the task proceeds
-      to destination search without fresh held-object verification. Reuse fresh
-      Qwen-verified RGB-D to verify object motion with the gripper after lift and
-      the carry transition; absent/ambiguous evidence must stop placement, while
+      Previously lift-motion completion let the task proceed to destination
+      search without held-object verification. Fresh Qwen-verified RGB-D now
+      checks object motion with the gripper after lift and the carry transition;
+      absent/ambiguous evidence stops placement, while
       uncertain possession must still block an unsafe second pickup. Do not read
       private simulator contacts or widen physical-success thresholds. Guard
       `1d257800` passes offline tests; exact native retry stops correctly in
@@ -32,7 +32,15 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       completes: native mixing turns 0.122 rad versus 2.111 rad with wheel
       priority 1 over six sim seconds; both stay upright. Test a robot-authored
       contact-profile correction on the exact room case and tabletop neighbor
-      before promotion; no production material change yet. Also inspect shutdown
+      before promotion. Candidate `52bebc6d` adds wheel-only material priority
+      and compiled contact tests (broad suite 593 passed / 4 skipped). Exact
+      room retry `20260914_235619_0e73b1` clears the first turn but fails at
+      waypoint 2: translation inside the outer acceptance radius is incorrectly
+      ignored by the progress monitor. `4c08782d` fixes this without relaxing
+      tolerances/timeouts (595 tests / 4 skipped); exact retry
+      `20260915_000525_17f117` running. Tabletop control
+      `20260914_235634_4df8bf` passes physical T/T on frozen wheel-only `52bebc6d`.
+      Also inspect shutdown
       manager/thread ordering (BrokenPipe).
 - [x] Fix evaluator contact margins (`65574600`): count active force-bearing
       contacts, not only penetration. Add margin/gap controls and provenance;

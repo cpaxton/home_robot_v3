@@ -1,5 +1,41 @@
 # Shared grounding: bounded cross-task pilot
 
+## Wheel-contact candidate: first turn repaired; approach-monitor bug exposed
+
+`52bebc6d` on `fix/room-wheel-contact-profile` gives only Stretch's drive-wheel
+collision shapes material priority 1, consistent with the existing caster and
+pad profiles. Four compiled contact tests cover both wheels on tabletop and
+high-torsion room floors; broad checks pass **593 / 4 skipped**. This changes
+contact parameter mixing, not just one friction coefficient. No floor geometry,
+solver setting, policy parameter, or success threshold changes.
+
+Exact Molmo retry `20260914_235619_0e73b1` uses a separately archived fixture
+under `~/runs/emet/molmo-wheel-contact-20260915/fixture`; its manifest and freezer
+verify two changed wheel priorities and unchanged masses, inertias, poses,
+friction arrays, and NoSlip=4. Original artifacts remain intact. Tabletop control
+`20260914_235634_4df8bf` queues on the same exclusive GPU lock and retains its
+explicit NoSlip=10. Both run frozen source `52bebc6d`, Qwen int4, tracked-narrow,
+and lazy graph. The room retry fails physical pickup/place (verified): it passes
+the formerly blocked first turn, then stops at waypoint 2 with XY error 0.024 m
+and yaw error 0.730 rad. The trace shows continued translation into the inner
+approach radius, not an immobile robot. The monitor ignores XY improvement
+once the previous error is within its outer 0.07 m tolerance. `4c08782d` removes
+that progress gate without changing arrival tolerances, stall windows, or
+deadlines; valid inner-approach and stationary wrong-heading tests pass, with
+**595 broad tests passed / 4 skipped**. A same-fixture retry is still required.
+The wheel-only tabletop control **passes verified physical pickup/place**; its
+final reconstruction shows the cylinder upright on the block with the gripper
+withdrawn. This is one positive control, not a new six-case panel. Same-fixture
+room retry `20260915_000525_17f117` runs `4c08782d` under
+`~/runs/emet/molmo-wheel-contact-20260915/progress-fix-policy`.
+
+Explicit RoboCasa solver control `20260915_000550_b5b250` queues behind it on
+the same exclusive lock, using `4c08782d` and an archived fixture under
+`~/runs/emet/room-can-noslip-control-20260915`. Only NoSlip iterations change
+from 0 to 10; the native frozen wheel priorities and all object parameters are
+retained. This tests the recorded-control retention hypothesis with the learned
+agent; it is **not native-physics room acceptance**. Both results remain pending.
+
 ## Room follow-up: retention handoff repaired; room acceptance still pending
 
 The native-physics RoboCasa can case fails physical pickup and times out on
