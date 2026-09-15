@@ -12,13 +12,18 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
-- [ ] Merge-priority EQA restoration: `5d299c9d` fixes AStar's eager MuJoCo GL
+- [x] Restore EQA startup: `5d299c9d` fixes AStar's eager MuJoCo GL
       import; `fdb441a9` preflights full EQA imports plus real rendering before
       episodes. Reproduced cause and repaired rendering; 607 tests / 4 skips.
-      Frozen six-case retry `20260915_153507_23eb03` is running under
-      `~/runs/emet/eqa-restored-20260915`. Inspect answers and evidence before
-      claiming EQA acceptance. The prior six exit-134 cases are infrastructure
+      Frozen six-case retry `20260915_153507_23eb03` completes without errors
+      under `~/runs/emet/eqa-restored-20260915`: both presets 2/3 (q15/16 right,
+      q25 wrong). The prior six exit-134 cases are infrastructure
       failures, not an accuracy result. Keep manipulation work separate.
+- [ ] EQA evidence/no-regression gate: Qwen-box retains its earlier 2/3 total
+      but gains q15 and loses q25; hybrid matches its earlier pattern. Do not
+      infer equivalence from this small unseeded slice. Both current q25 answers
+      lack confirmed bathroom evidence; q15's correct negative answer is also
+      weakly supported. Audit/repeat discordant evidence before broader promotion.
 
 - [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
       Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native

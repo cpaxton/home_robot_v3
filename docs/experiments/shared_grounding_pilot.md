@@ -21,8 +21,22 @@ model, or renderer-configuration changes.
 EQA retry `20260915_153507_23eb03` freezes `fdb441a9` in `/tmp/emet-reach-eval`,
 writing `~/runs/emet/eqa-restored-20260915`. Same q15/16/25, hybrid/Qwen-box
 presets, Qwen int4, 20 planning/10 movement steps, no semantic/enriched hints,
-and map/video exports. Answer results are pending; restored rendering alone
-does not establish EQA accuracy or no regression. The two commits are separate
+and map/video exports. All six processes finish with exit zero:
+
+| Preset | q15 / q16 / q25 | Correct | Wall seconds |
+| --- | --- | --- | --- |
+| Hybrid | correct / correct / wrong | 2/3 | 70 / 39 / 94 |
+| Qwen-box | correct / correct / wrong | 2/3 | 34 / 45 / 39 |
+
+Both match the September 11 aggregate 2/3, but Qwen-box changes which answers
+are correct (q15 improves, q25 worsens). These are matched questions/settings,
+not seeded causal pairs; do not claim per-question no regression. Runtime
+restoration is established, not a complete answer-quality gate. Manual inspection
+of hybrid q16's cited `eqa_decisions/iter_001/image_4.png` shows the blue item on
+the sofa beside the painting. Both q15 answers score correctly but infer "No"
+from not seeing the requested objects. Both current q25 outputs lack confirmed
+bathroom evidence and still submit an answer; preserve this exploration/evidence
+limitation separately from the repaired native startup crash. The two commits are separate
 from manipulation changes so the merge-critical startup repair can be reviewed
 independently.
 
