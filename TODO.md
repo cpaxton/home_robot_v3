@@ -12,19 +12,52 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+Current resume point: [September 15 EQA handoff](docs/experiments/eqa_restoration_handoff_20260915.md)
+(startup repaired; answer-quality diagnosis and grounding prompt fix outstanding).
+
+- [x] Restore EQA startup: `5d299c9d` fixes AStar's eager MuJoCo GL
+      import; `fdb441a9` preflights full EQA imports plus real rendering before
+      episodes. Reproduced cause and repaired rendering; 607 tests / 4 skips.
+      Frozen six-case retry `20260915_153507_23eb03` completes without errors
+      under `~/runs/emet/eqa-restored-20260915`: both presets 2/3 (q15/16 right,
+      q25 wrong). The prior six exit-134 cases are infrastructure
+      failures, not an accuracy result. Keep manipulation work separate.
+- [ ] EQA evidence/no-regression gate: Qwen-box retains its earlier 2/3 total
+      but gains q15 and loses q25; hybrid matches its earlier pattern. Do not
+      infer equivalence from this small unseeded slice. Both current q25 answers
+      lack confirmed bathroom evidence; q15's correct negative answer is also
+      weakly supported. Audit/repeat discordant evidence before broader promotion.
+
+- [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
+      Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native
+      can `20260915_084626_fc3604`, explicit NoSlip can `20260915_084630_7e774e`,
+      and EQA `20260915_084704_ce9c77`. Broad tests 598 passed / 4 skipped;
+      live results pending. Keep native/solver rows and historical EQA results
+      separate. Proceed to learned TAMP only after checking room manipulation.
+      Molmo result: staged pregrasp clears the counter, but the far viewing pose
+      leaves the arm about 0.28 m short (356 s, verified F/F). `6a1579e4` adds
+      the missing upper-workspace check with collision-checked relocation;
+      600 tests pass / 4 skip. Independent frozen retries
+      `20260915_085532_ac9ef2` (Molmo) and `20260915_085536_b4353a` (tabletop)
+      are queued; previous jobs keep their original `0ecc0aa9` source.
+
 - [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
       and drives to it, but the native-NoSlip=0 trace loses the can during lift.
-      `_grasp()` currently returns lift-motion completion, so the task proceeds
-      to destination search without fresh held-object verification. Reuse fresh
-      Qwen-verified RGB-D to verify object motion with the gripper after lift and
-      the carry transition; absent/ambiguous evidence must stop placement, while
+      Previously lift-motion completion let the task proceed to destination
+      search without held-object verification. Fresh Qwen-verified RGB-D now
+      checks object motion with the gripper after lift and the carry transition;
+      absent/ambiguous evidence stops placement, while
       uncertain possession must still block an unsafe second pickup. Do not read
       private simulator contacts or widen physical-success thresholds. Guard
       `1d257800` passes offline tests; exact native retry stops correctly in
       178 s (physical F/F), with a known-good tabletop control passing T/T in
       251 s (one control, not a full new panel). Matched
       solver replay `20260914_230920_5ac3db` reproduces native loss and retains
-      the payload under NoSlip=10, but is not learned acceptance. Retain both.
+      the payload under NoSlip=10, but is not learned acceptance. Explicit
+      learned solver control `20260915_000550_b5b250` fails before grasping:
+      reacquisition looks at the other can in the sink, then rejects ambiguous
+      identity (77 s, verified F/F). Retention is inconclusive. Audit directed
+      reacquisition and the underspecified multi-can task before more repeats.
 - [ ] Resolve Molmo first-turn stall before more room policy cases. Failed
       `20260914_231706_1626e6` remains upright but cannot finish its first yaw
       goal. Check material mixing, overlapping floor contacts and simulated
@@ -32,7 +65,20 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       completes: native mixing turns 0.122 rad versus 2.111 rad with wheel
       priority 1 over six sim seconds; both stay upright. Test a robot-authored
       contact-profile correction on the exact room case and tabletop neighbor
-      before promotion; no production material change yet. Also inspect shutdown
+      before promotion. Candidate `52bebc6d` adds wheel-only material priority
+      and compiled contact tests (broad suite 593 passed / 4 skipped). Exact
+      room retry `20260914_235619_0e73b1` clears the first turn but fails at
+      waypoint 2: translation inside the outer acceptance radius is incorrectly
+      ignored by the progress monitor. `4c08782d` fixes this without relaxing
+      tolerances/timeouts (595 tests / 4 skipped); exact retry
+      `20260915_000525_17f117` completes navigation and arm-facing alignment,
+      then fails pregrasp (237 s, verified F/F). Frozen-state contact audit
+      shows the pads pressing against the island front during simultaneous
+      raise/extend. Test staged pregrasp motion; do not widen tolerances, extend
+      timeouts, or push through contact. General clearance planning remains
+      separate. Tabletop control
+      `20260914_235634_4df8bf` passes physical T/T on frozen wheel-only `52bebc6d`.
+      Also inspect shutdown
       manager/thread ordering (BrokenPipe).
 - [x] Fix evaluator contact margins (`65574600`): count active force-bearing
       contacts, not only penetration. Add margin/gap controls and provenance;
