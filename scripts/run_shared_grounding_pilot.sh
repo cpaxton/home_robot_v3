@@ -66,6 +66,8 @@ run_case() {
 if [[ "$PHASE" == all || "$PHASE" == habitat || "$PHASE" == eqa ]]; then
     habitat_env="$(dirname "$(dirname "$HABITAT_BIN")")"
     LD_LIBRARY_PATH="$habitat_env/lib:${LD_LIBRARY_PATH:-}" \
+        "$habitat_env/bin/python" scripts/check_habitat_runtime.py > "$OUT/habitat_render_preflight.log" 2>&1
+    LD_LIBRARY_PATH="$habitat_env/lib:${LD_LIBRARY_PATH:-}" \
         "$habitat_env/bin/python" scripts/check_sam2_runtime.py > "$OUT/habitat_preflight.log" 2>&1
     for variant in hybrid qwen_box; do
         if [[ "$variant" == hybrid ]]; then
