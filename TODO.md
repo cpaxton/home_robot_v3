@@ -12,6 +12,9 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+Current resume point: [September 15 EQA handoff](docs/experiments/eqa_restoration_handoff_20260915.md)
+(startup repaired; answer-quality diagnosis and grounding prompt fix outstanding).
+
 - [x] Restore EQA startup: `5d299c9d` fixes AStar's eager MuJoCo GL
       import; `fdb441a9` preflights full EQA imports plus real rendering before
       episodes. Reproduced cause and repaired rendering; 607 tests / 4 skips.
