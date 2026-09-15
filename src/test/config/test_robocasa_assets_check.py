@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from types import ModuleType
 
 from emet.simulation.robocasa_assets_check import (
     fixture_registry_layout_ok,
     format_robocasa_assets_incomplete_message,
+    imported_robocasa_package_dir,
     lightwheel_registry_ok,
     robocasa_kitchen_assets_complete,
     robocasa_package_dir,
@@ -28,6 +31,17 @@ from emet.simulation.robocasa_registry_sync import (
     REQUIRED_REGISTRY_STEMS,
     missing_required_registry_stems,
 )
+
+
+def test_runtime_assets_follow_imported_package_not_current_worktree(tmp_path, monkeypatch):
+    installed = tmp_path / "installed_checkout/third_party/robocasa/robocasa"
+    module = ModuleType("robocasa")
+    module.__file__ = str(installed / "__init__.py")
+    monkeypatch.setitem(sys.modules, "robocasa", module)
+    assert imported_robocasa_package_dir() == installed
+    worktree = tmp_path / "other_worktree"
+    assert robocasa_package_dir(worktree) == worktree / "third_party/robocasa/robocasa"
+    assert robocasa_package_dir(worktree) != imported_robocasa_package_dir()
 
 
 def test_format_robocasa_assets_incomplete_mentions_registry_restore():

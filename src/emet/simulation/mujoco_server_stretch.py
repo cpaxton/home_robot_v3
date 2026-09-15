@@ -206,7 +206,7 @@ class MujocoZmqServer(BaseZmqServer):
         scene_model: str | None = None,
         simulation_rate: int = 80,
         camera_hz: int = 15,
-        config_name: str = "noplan_velocity_sim",
+        config_name: str = "noplan_velocity_stretch_sim",
         objects_info: dict[str, Any] | None = None,
         no_cameras: bool = False,
         environment: dict[str, Any] | None = None,
@@ -425,12 +425,14 @@ class MujocoZmqServer(BaseZmqServer):
     def start_navigation_command(self, action):
         self._contract_navigation_context = None
         self.handle_action(action)
-        if action.get("nav_policy"):
-            from emet.core.navigation_result import NAVIGATION_POLICIES
+        from emet.core.navigation_result import NAVIGATION_POLICIES
 
-            policy = NAVIGATION_POLICIES[action["nav_policy"]]
-            self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
-            self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
+        # Unnamed legacy commands still use the measured exploration contract.
+        # Do not stop the motor controller at its looser default (10 cm), then
+        # reject that stop against the server's unchanged 7 cm arrival check.
+        policy = NAVIGATION_POLICIES[action.get("nav_policy") or "exploration"]
+        self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
+        self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")
         return self._contract_navigation_context
@@ -449,11 +451,14 @@ class MujocoZmqServer(BaseZmqServer):
         }
 
     def navigation_command_result(self, context):
-        from emet.core.navigation_result import measured_arrival
+        from emet.core.navigation_result import NAVIGATION_POLICIES, measured_arrival
 
         if not self.base_controller_at_goal():
             return None
-        return measured_arrival(context, self.get_base_pose(), xy_tolerance=0.07, yaw_tolerance=0.15)
+        policy = NAVIGATION_POLICIES["exploration"]
+        return measured_arrival(
+            context, self.get_base_pose(), xy_tolerance=policy.xy_tolerance, yaw_tolerance=policy.yaw_tolerance
+        )
 
     def cancel_navigation_command(self):
         self.active = False
@@ -590,9 +595,9 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Set the posture
         if posture == "navigation":
-            self.manip_to(constants.STRETCH_NAVIGATION_Q, all_joints=True)
+            self.manip_to(constants.STRETCH_NAVIGATION_Q, all_joints=True, skip_gripper=True)
         elif posture == "manipulation":
-            self.manip_to(constants.STRETCH_PREGRASP_Q, all_joints=True)
+            self.manip_to(constants.STRETCH_PREGRASP_Q, all_joints=True, skip_gripper=True)
         else:
             logger.error(f"Posture {posture} not supported")
             return False
@@ -634,6 +639,15 @@ class MujocoZmqServer(BaseZmqServer):
                     print("Setting base to", xyt_goal)
                     print("Current base is", self.get_base_pose())
                     self.set_goal_pose(xyt_goal, relative=False)
+                    # An arm's base component must execute fine visual-servo
+                    # corrections, not discard them inside a nav deadband.
+                    from emet.core.navigation_result import NAVIGATION_POLICIES
+                    from emet.simulation.stretch_mujoco.config import manipulation_base_xy_tolerance
+
+                    policy = NAVIGATION_POLICIES["precision"]
+                    self.controller.control.set_linear_error_tolerance(manipulation_base_xy_tolerance)
+                    self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
+                    self.controller.translation_only = True
                 else:
                     self.robot_sim.move_to(mujoco_actuators[idx], q[i])
 
@@ -899,36 +913,9 @@ class MujocoZmqServer(BaseZmqServer):
         if "posture" in action:
             self.set_posture(action["posture"])
         if "gripper" in action:
-            # Get current gripper pose
-            positions, _, _ = self.get_joint_state()
-            current_gripper_pos = positions[HelloStretchIdx.GRIPPER]
-            target_gripper_pos = action["gripper"]
-            step = 0.01
-            t0 = timeit.default_timer()
-            if current_gripper_pos < target_gripper_pos:
-                while current_gripper_pos < target_gripper_pos:
-                    current_gripper_pos += step
-                    positions, _, _ = self.get_joint_state()
-                    # TODO: remove debug print
-                    # print(current_gripper_pos, positions[HelloStretchIdx.GRIPPER])
-                    self.robot_sim.move_to("gripper", current_gripper_pos)
-                    time.sleep(0.01)
-                    dt = timeit.default_timer() - t0
-                    if dt > 5:
-                        logger.error("Gripper move took too long")
-                        break
-            else:
-                while current_gripper_pos > target_gripper_pos:
-                    current_gripper_pos -= step
-                    positions, _, _ = self.get_joint_state()
-                    # TODO: remove debug print
-                    # print(current_gripper_pos, positions[HelloStretchIdx.GRIPPER])
-                    self.robot_sim.move_to("gripper", current_gripper_pos)
-                    time.sleep(0.02)
-                    dt = timeit.default_timer() - t0
-                    if dt > 5:
-                        logger.error("Gripper move took too long")
-                        break
+            # Physics-time profiling owns speed and limits. Do not block action
+            # dispatch with load-dependent wall-clock aperture increments.
+            self.robot_sim.move_to("gripper", action["gripper"])
         elif "say" in action:
             pass
         if "joint" in action:
@@ -1013,12 +1000,11 @@ class MujocoZmqServer(BaseZmqServer):
         xyt = self.get_base_pose()
         if xyt is None:
             return None
-        try:
-            # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
-            # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
-            head_cam_world = self._head_camera_opencv_world()
-            ee_world = self.robot_sim.get_ee_pose()
-        except (ConnectionError, ConnectionResetError, OSError):
+        # Use acquisition geometry, not later joint feedback or a different URDF.
+        # Only robot/sensor poses are published; scene-object state stays private.
+        head_cam_world = cam_data.cam_d435i_pose
+        ee_world = cam_data.ee_pose
+        if head_cam_world is None or ee_world is None:
             return None
 
         # Get the other fields from an observation
@@ -1027,6 +1013,7 @@ class MujocoZmqServer(BaseZmqServer):
             "depth": depth,
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
+            "head_cam/image_timing": cam_data.image_timing,
             "ee_pose": ee_world,
             "joint": positions,
             "gps": xyt[:2],
@@ -1127,11 +1114,10 @@ class MujocoZmqServer(BaseZmqServer):
         positions, _, _ = self.get_joint_state()
         if self._initial_xyt is None:
             return None
-        try:
-            ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
-            head_pose_cam = self._head_camera_opencv_world()
-            ee_pose_mat = self.robot_sim.get_ee_pose()
-        except (ConnectionError, ConnectionResetError, OSError):
+        ee_pose_cam = cam_data.cam_d405_pose
+        head_pose_cam = cam_data.cam_d435i_pose
+        ee_pose_mat = cam_data.ee_pose
+        if ee_pose_cam is None or head_pose_cam is None or ee_pose_mat is None:
             return None
 
         message = {
@@ -1144,6 +1130,7 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/image_scaling": self.ee_image_scaling,
             "ee_cam/depth_scaling": self.ee_depth_scaling,
             "ee_cam/pose": ee_pose_cam,
+            "ee_cam/image_timing": cam_data.image_timing,
             "ee/pose": ee_pose_mat,
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
@@ -1154,6 +1141,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/image_scaling": self.image_scaling,
             "head_cam/depth_scaling": self.depth_scaling,
             "head_cam/pose": head_pose_cam,
+            "head_cam/image_timing": cam_data.image_timing,
             "robot/config": positions,
             "is_simulation": True,
             "step": self._last_step,

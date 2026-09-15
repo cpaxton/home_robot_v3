@@ -77,6 +77,20 @@ def test_help_lists_memory_backend():
     assert "open_vocab" in r.output
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_visual_servo_reaches_shared_executor(monkeypatch, enabled):
+    from emet.app import run_agent as ra
+
+    captured = []
+    monkeypatch.setattr(ra, "run_agent_with_robot", lambda **kw: captured.append(kw))
+    options = ["--robot", "stretch", "--no-llm", "--no-discord", "-c", "Q"]
+    if enabled:
+        options.append("--visual-servo")
+    result = CliRunner().invoke(ra.main, options)
+    assert result.exit_code == 0, result.output
+    assert captured[0]["visual_servo"] is enabled
+
+
 def test_help_lists_lifelong_input_and_refine():
     from emet.app.run_agent import main
 

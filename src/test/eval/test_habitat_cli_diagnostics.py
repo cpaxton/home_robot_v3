@@ -75,7 +75,7 @@ def test_habitat_run_ovmm_find_episode_help_lists_device_and_agentic_flags():
         check=False,
     )
     assert r.returncode == 0, r.stderr
-    for flag in ("--device", "--cpu-only", "--agentic-find", "--no-agentic-find"):
+    for flag in ("--device", "--cpu-only", "--agentic-find", "--no-agentic-find", "--seed"):
         assert flag in r.stdout, f"missing {flag}"
     out = r.stdout.lower()
     assert "--device" in r.stdout

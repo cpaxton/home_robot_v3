@@ -11,6 +11,7 @@
 import time
 
 import numpy as np
+import torch
 
 from emet.controller.base import ManagedOperation
 from emet.controller.controller_instance_memory import RobotAgent
@@ -25,13 +26,19 @@ class PlaceObjectOperation(ManagedOperation):
     lift_distance: float = 0.2
     place_height_margin: float = 0.1
     show_place_in_voxel_grid: bool = False
-    place_step_size: float = 0.35
+    place_step_size: float = 0.25
     use_pitch_from_vertical: bool = True
     verbose: bool = True
     talk: bool = True
 
     # Do we require an object to be present?
     require_object: bool = True
+    released: bool = False
+    held_query: str | None = None
+    release_clearance_m: float = 0.02
+    release_z_tolerance_m: float = 0.015
+    _placement_reference: np.ndarray | None = None
+    _support_height_reference: float | None = None
 
     def __init__(self, name, agent: RobotAgent, require_object: bool = True, *args, **kwargs):
         super().__init__(name, agent, *args, **kwargs)
@@ -45,6 +52,7 @@ class PlaceObjectOperation(ManagedOperation):
         place_step_size: float = 0.25,
         use_pitch_from_vertical: bool = True,
         require_object: bool = True,
+        held_query: str | None = None,
     ):
         """Configure the place operation.
 
@@ -61,30 +69,89 @@ class PlaceObjectOperation(ManagedOperation):
         self.place_step_size = place_step_size
         self.use_pitch_from_vertical = use_pitch_from_vertical
         self.require_object = require_object
+        self.held_query = held_query
+        if held_query is None:
+            self._placement_reference = None
+            self._support_height_reference = None
+        place = self.parameters.get("place", {}) or {}
+        self.release_clearance_m = float(place.get("release_clearance_m", 0.02))
+        self.release_z_tolerance_m = float(place.get("release_z_tolerance_m", 0.015))
+        if not np.isfinite(self.release_clearance_m) or not 0 <= self.release_clearance_m <= 0.02:
+            raise ValueError("Observed release clearance must be between 0 and 2 cm")
+        if not np.isfinite(self.release_z_tolerance_m) or not 0 < self.release_z_tolerance_m <= 0.015:
+            raise ValueError("Observed release height tolerance must be positive and at most 1.5 cm")
 
     def get_target(self) -> Instance:
         """Get the target object to place."""
         return self.agent.current_receptacle
 
-    def get_target_center(self):
-        return self.get_target().point_cloud.mean(axis=0)
+    def prepare_query_target(self, query):
+        """Find's camera-facing pose must become a fresh arm-facing place pose."""
+        from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
 
-    def sample_placement_position(self, xyt) -> np.ndarray:
-        """Sample a placement position for the object on the receptacle."""
-        if self.get_target() is None:
-            raise RuntimeError("no target set")
+        self._placement_reference = None
+        self._support_height_reference = None
+        target = self.agent.prepare_query_target(query)
+        start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        bounds = (float(self.agent.manipulation_radius), float(self.agent.manipulation_radius) + self.place_step_size)
+        if not np.isfinite(target.xyz).all() or not np.isfinite(start).all():
+            raise ValueError("Finite geometry is required for the placement workspace")
+        placement = self.sample_placement_position(start, points=target.points)
+        if np.linalg.norm(placement[:2] - start[:2]) > bounds[1]:
+            # Seeing a receptacle does not establish that its placement surface
+            # is reachable. Carry posture preserves the payload while the same
+            # footprint/path-checked planner approaches it; no blind base step.
+            self.robot.move_to_nav_posture()
+            self.robot.switch_to_navigation_mode()
+            if not self.agent.navigate_to_target_pose(
+                placement, start, look_at_xy=tuple(target.xyz[:2]), distance_range=bounds
+            ):
+                raise RuntimeError("Could not reach a collision-checked placement workspace")
+            measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+            if (
+                not np.isfinite(measured).all()
+                or np.linalg.norm(placement[:2] - measured[:2]) > bounds[1] + self.agent.voxel_size
+            ):
+                raise RuntimeError("Measured placement workspace is still too far away")
+        orient_arm_toward_target(self.robot, target.xyz)
+        fresh = self.agent.prepare_query_target(query)
+        # Reacquisition may show only a different part of a large support.
+        # Verify association using the existing whole-mask geometry gate, but
+        # do not silently replace the point we just navigated toward. This
+        # local plan assumes a static receptacle; it is not dynamic tracking.
+        shape = (len(fresh.points), 1)
+        target.select_mask(np.zeros(shape, dtype=int), np.ones(shape, dtype=bool), fresh.points.reshape(*shape, 3))
+        self._placement_reference = np.array(placement, copy=True)
+        self._support_height_reference = float(np.quantile(target.points[:, 2], 0.95))
+        return fresh
 
-        target = self.get_target()
-        center_xyz = self.get_target_center()
+    def support_top(self):
+        """Never lower clearance because a partial view omits a support's rim."""
+        observed = float(self.get_target().point_cloud[:, 2].quantile(0.95))
+        if self._support_height_reference is None:
+            return observed
+        return max(observed, self._support_height_reference)
+
+    def sample_placement_position(self, xyt, *, points=None) -> np.ndarray:
+        """Share the same measured placement point between approach and release."""
+        if points is None and self._placement_reference is not None:
+            return self._placement_reference.copy()
+        if points is None:
+            if self.get_target() is None:
+                raise RuntimeError("no target set")
+            points = self.get_target().point_cloud
+        # GroundedTarget intentionally exposes read-only NumPy geometry.
+        points = torch.as_tensor(points.copy() if isinstance(points, np.ndarray) else points)
+        center_xyz = (points.quantile(0.05, dim=0) + points.quantile(0.95, dim=0)) / 2
         if self.verbose:
             print(" - Placing object on receptacle at", center_xyz)
 
         # Get the point cloud of the object and find distances to robot
-        distances = (target.point_cloud[:, :2] - xyt[:2]).norm(dim=1)
+        distances = (points[:, :2] - xyt[:2]).norm(dim=1)
         # Choose closest point to xyt
         idx = distances.argmin()
         # Get the point
-        point = target.point_cloud[idx].cpu().numpy()
+        point = points[idx].cpu().numpy().copy()
         if self.verbose:
             print(" - Closest point to robot is", point)
             print(" - Distance to robot is", distances[idx])
@@ -113,8 +180,8 @@ class PlaceObjectOperation(ManagedOperation):
             return False
         # TODO: this should be deteriministic
         # It currently is, but if you change this to something sampling-base dwe must update the test
-        object_xyz = self.sample_placement_position(self.robot.get_base_pose())
-        start = self.robot.get_base_pose()
+        start = self.robot.get_base_pose_world()
+        object_xyz = self.sample_placement_position(start)
         dist = np.linalg.norm(object_xyz[:2] - start[:2])
         # Check if the object is close enough to place upon
         # We need to be within the manipulation radius + place_step_size + voxel_size
@@ -144,22 +211,92 @@ class PlaceObjectOperation(ManagedOperation):
 
         return target_joint_positions, success
 
+    def align_held_object_for_release(self, placement_xyz):
+        """Center observed payload geometry, not the nominal empty-gripper origin.
+
+        The freshly grounded support is assumed static during this local motion.
+        Keep the wrist orientation fixed; use bounded visual corrections and
+        stop on missing identity, geometry, reachability or motion completion.
+        """
+        from emet.controller.operations.query_observation import observe_query_points
+        from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
+
+        support_top = self.support_top()
+        reference_pos = reference_rot = None
+        for attempt in range(4):
+            obs, points = observe_query_points(self.agent, self.robot, self.held_query, stage="place_alignment")
+            if obs.ee_pose is None or np.min(np.linalg.norm(points - obs.ee_pose[:3, 3], axis=1)) > 0.12:
+                self.error("Observed object is not near the gripper; retaining it without release.")
+                return False
+            bounds = np.quantile(points, [0.05, 0.95], axis=0)
+            center = bounds.mean(axis=0)
+            delta = np.array(
+                [
+                    placement_xyz[0] - center[0],
+                    placement_xyz[1] - center[1],
+                    support_top + self.release_clearance_m - bounds[0, 2],
+                ]
+            )
+            self.info(f"Observed placement correction (world m): {delta}")
+            if np.linalg.norm(delta[:2]) <= 0.015 and abs(delta[2]) <= self.release_z_tolerance_m:
+                return True
+            if attempt == 3:
+                break
+            if np.linalg.norm(delta) > 0.15:
+                self.error("Observed placement correction exceeds the local motion budget.")
+                return False
+            if np.linalg.norm(delta[:2]) > 0.015:
+                # Center the held object before descending. A coupled XYZ
+                # correction can land it on the support before lateral servo
+                # convergence, then command a sideways drag while still held.
+                # This is local sequencing, not an obstacle-clearance planner.
+                if delta[2] >= -self.release_z_tolerance_m:
+                    self.error("Object too close to support for lateral alignment; retaining it without release.")
+                    return False
+                delta[2] = 0.0
+            # Limit any one visual correction to 5 cm; never blindly traverse
+            # a large discrepancy between the object and its support.
+            delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
+            joint_state = self.robot.get_joint_positions().copy()
+            ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
+            if reference_pos is None:
+                reference_pos = np.array(ee_pos, copy=True)
+                reference_rot = np.array(ee_rot, copy=True)
+            delta_base = world_delta_to_model_base(delta, obs.ee_pose, ee_rot)
+            # Correct the command reference, not each newly sagged measured
+            # pose. Re-seeding from measurement repeats the same setpoint
+            # under steady tracking bias and compounds wrist sag. The latest
+            # observation still decides both the correction and release.
+            reference_pos += delta_base
+            if np.linalg.norm(reference_pos - ee_pos) > 0.05 + 1e-8:
+                self.error("Placement reference exceeds the measured tracking budget.")
+                return False
+            q, success = self._get_place_joint_state(reference_pos.copy(), reference_rot, joint_state)
+            if not success or q is None or not np.isfinite(q).all():
+                self.error("No feasible visual placement correction.")
+                return False
+            if not self.robot.arm_to(q, blocking=True):
+                self.error("Visual placement correction did not complete.")
+                return False
+        self.error("Visual placement alignment did not converge; retaining the object.")
+        return False
+
     def run(self) -> None:
         self.intro("Placing the object on the receptacle.")
         self._successful = False
+        self.released = False
 
-        # Get initial (carry) joint posture
-        obs = self.robot.get_observation()
-        joint_state = obs.joint
         model = self.robot.get_robot_model()
 
         # Switch to place position
         print(" - Move to manip posture")
         self.robot.move_to_manip_posture()
         self.robot.switch_to_manipulation_mode()
+        # Read after the posture change; never mutate the cached observation.
+        joint_state = np.array(self.robot.get_observation().joint, copy=True)
 
         # Get object xyz coords
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         placement_xyz = self.sample_placement_position(xyt)
         print(" - Place object at", placement_xyz)
 
@@ -178,15 +315,21 @@ class PlaceObjectOperation(ManagedOperation):
             pitch_from_vertical = 0.0
 
         # Joint compute a joitn state goal and associated ee pos/rot
-        joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
-        self.robot.arm_to(joint_state)
+        # Keep a query-grounded payload's carry orientation. Rotating an
+        # unmodeled held object can roll it out of the fingers (or spill it).
+        if self.held_query is None:
+            joint_state[HelloStretchIdx.WRIST_PITCH] = -np.pi / 2 + pitch_from_vertical
+        if not self.robot.arm_to(joint_state, blocking=True):
+            self.error("Placement orientation did not complete; retaining the object.")
+            return
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
-        # Get max xyz
-        max_xyz = self.get_target().point_cloud.max(axis=0)[0]
+        # Use the same robust support top as visual release alignment. A single
+        # mixed-depth pixel must not send the held object far above its support.
+        support_top = self.support_top()
 
         # Placement is at xy = object_xyz[:2], z = max_xyz[2] + margin
-        place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], max_xyz[2] + self.place_height_margin])
+        place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], support_top + self.place_height_margin])
 
         if self.show_place_in_voxel_grid:
             self.agent.get_voxel_map().show(orig=place_xyz, xyt=xyt, footprint=self.robot_model.get_footprint())
@@ -197,23 +340,35 @@ class PlaceObjectOperation(ManagedOperation):
         self.attempt(f"Trying to place the object on the receptacle at {place_xyz}.")
         if self.talk:
             self.agent.robot_say("Trying to place the object on the receptacle.")
-        if not success:
+        if not success or target_joint_positions is None or not np.isfinite(target_joint_positions).all():
             self.error("Could not place object!")
             return
 
         # Move to the target joint state
         self.robot.switch_to_manipulation_mode()
-        self.robot.arm_to(target_joint_positions, blocking=True)
+        if not self.robot.arm_to(target_joint_positions, blocking=True):
+            self.error("Placement approach did not complete; retaining the object.")
+            return
         time.sleep(0.5)
 
+        if self.held_query is not None:
+            if not self.align_held_object_for_release(placement_xyz):
+                return
+            target_joint_positions = self.robot.get_joint_positions().copy()
+
         # Open the gripper
-        self.robot.open_gripper(blocking=True)
+        if not self.robot.open_gripper(blocking=True):
+            self.error("Gripper release did not complete; stopping without retreat.")
+            return
+        self.released = True
         time.sleep(0.5)
 
         # Move directly up
         target_joint_positions_lifted = target_joint_positions.copy()
         target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
-        self.robot.arm_to(target_joint_positions_lifted, blocking=True)
+        if not self.robot.arm_to(target_joint_positions_lifted, blocking=True):
+            self.error("Post-release retreat did not complete.")
+            return
 
         # Return arm to initial configuration and switch to nav posture
         self.robot.move_to_nav_posture()
@@ -223,5 +378,5 @@ class PlaceObjectOperation(ManagedOperation):
         self.cheer("We believe we successfully placed the object.")
 
     def was_successful(self):
-        self.error("Success detection not implemented.")
+        # Execution completion only; independent physical scoring is separate.
         return self._successful

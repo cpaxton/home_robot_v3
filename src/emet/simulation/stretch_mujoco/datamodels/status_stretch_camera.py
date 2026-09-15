@@ -36,6 +36,13 @@ class StatusStretchCameras:
 
     cam_nav_rgb: np.ndarray | None = None
 
+    # Robot/sensor poses from the same state used to render this image batch.
+    # OpenCV camera axes; the head pose includes the published clockwise rotation.
+    cam_d405_pose: np.ndarray | None = None
+    cam_d435i_pose: np.ndarray | None = None
+    ee_pose: np.ndarray | None = None
+    image_timing: dict | None = None
+
     def get_all(
         self, *, auto_rotate: bool = True, auto_correct_rgb=True, use_depth_color_map=False
     ) -> dict[StretchCameras, np.ndarray]:

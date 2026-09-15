@@ -19,20 +19,18 @@
 #   That file is static and Stretch is included or the scene has no mesh-inertia issue.
 # - With --use-robocasa we build one XML string: kitchen from env.sim.model.get_xml()
 #   (which serializes the compiled model and can omit mesh inertia) + <include stretch>.
-#   MuJoCo 2.x requires every mesh asset to have inertia (e.g. inertia="shell"). So we
-#   run ensure_mesh_inertia() on the kitchen XML and on the generated Stretch XML.
+#   Thin visual meshes can need shell inertia to reload. Preserve the source
+#   body's compiled dynamics first: shell is not a mass-preserving default.
 
 import numpy as np
 import pytest
 
 
 def test_stretch_model_loads():
-    """Stretch MuJoCo model loads (generated XML has inertia on meshes for MuJoCo 2.x).
+    """Stretch MuJoCo model loads with its authored mesh-inertia settings.
 
     Uses the same generation path as emet serve mujoco --use-robocasa: get_absolute_path_stretch_xml
-    writes stretch_temp_abs.xml with ensure_mesh_inertia() so mesh assets have inertia="shell".
-    Without that, MjModel.from_xml_path would raise "mesh volume is too small" or
-    "inertia should be specified in the mesh asset".
+    writes stretch_temp_abs.xml with absolute asset paths and mesh compatibility.
     """
     pytest.importorskip("mujoco")
     try:
@@ -185,3 +183,43 @@ def test_robocasa_obj_main_placement_is_seed_deterministic():
     assert "obj_main" in p0 and "obj_main" in p1
     assert p0["obj_main"]["cat"] == p1["obj_main"]["cat"]
     np.testing.assert_allclose(p0["obj_main"]["pos"], p1["obj_main"]["pos"], rtol=0, atol=1e-6)
+
+
+def test_saved_robocasa_scene_does_not_reference_mutable_robot_include(tmp_path, monkeypatch):
+    pytest.importorskip("robocasa")
+    import mujoco
+
+    from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
+    from emet.simulation.stretch_mujoco.utils import get_absolute_path_stretch_xml, preserve_body_inertias
+
+    source_bodies = {}
+
+    def capture_source(xml, model):
+        for index in range(1, model.nbody):
+            body = model.body(index)
+            source_bodies[body.name] = {key: getattr(body, key).copy() for key in ("mass", "ipos", "iquat", "inertia")}
+        return preserve_body_inertias(xml, model)
+
+    monkeypatch.setattr("emet.simulation.stretch_mujoco.robocasa_gen.preserve_body_inertias", capture_source)
+
+    path = tmp_path / "frozen.xml"
+    model, _, _ = model_generation_wizard(
+        task="PickPlaceCounterToSink", layout=1, style=1, robot="stretch", seed=0, write_to_file=str(path)
+    )
+    assert "<include" not in path.read_text()
+    # Overwrite the old shared include with a different robot pose.
+    get_absolute_path_stretch_xml({"pos": "9 8 0", "quat": "1 0 0 0"})
+    frozen = mujoco.MjModel.from_xml_path(str(path))
+    assert frozen.nq == model.nq
+    np.testing.assert_allclose(frozen.qpos0, model.qpos0, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(frozen.body_pos, model.body_pos, rtol=0, atol=1e-5)
+    assert "obj_main" in source_bodies
+    compared = set()
+    for index in range(1, frozen.nbody):
+        body = frozen.body(index)
+        if body.name not in source_bodies:  # Replacement robot has its own dynamics.
+            continue
+        compared.add(body.name)
+        for key, expected in source_bodies[body.name].items():
+            np.testing.assert_allclose(getattr(body, key), expected, rtol=1e-5, atol=1e-10, err_msg=body.name)
+    assert "obj_main" in compared

@@ -55,6 +55,41 @@ def test_policy_rejected_before_client_sends_motion():
     assert robot.starts == 0
 
 
+@pytest.mark.parametrize("recovered", [True, False])
+def test_cancel_after_failed_stop_preserves_outcome_and_only_releases_when_safe(recovered):
+    robot = Robot()
+    client = connection(robot)
+    action = send_command(client, {"xyt": [1, 0, 0]})
+    robot.stopped = False
+    robot.outcome = ("failed", {"position_error": 0.2})
+    robot.poll_navigation_command()
+    failed = robot.command_tracker.snapshot()[0]
+    assert failed["status"] == "failed"
+    assert failed["result"]["stop_confirmed"] is False
+
+    robot.stopped = recovered
+    if recovered:
+        assert cancel_navigation(client, action)
+    else:
+        with pytest.raises(RuntimeError, match="stop could not be confirmed"):
+            cancel_navigation(client, action)
+    receipt = command_receipt(client, action)
+    assert receipt["status"] == "failed"
+    assert receipt["reason"] == failed["reason"]
+    assert receipt["result"]["position_error"] == 0.2
+    assert receipt["result"]["stop_confirmed"] is recovered
+    assert robot._navigation_fault is not recovered
+    assert (robot._navigation_command is None) is recovered
+    if recovered:
+        assert cancel_navigation(client, action)  # repeated cancel is idempotent
+        send_command(client, {"xyt": [2, 0, 0]})
+        assert robot.starts == 2
+    else:
+        with pytest.raises(RuntimeError):
+            send_command(client, {"xyt": [2, 0, 0]})
+        assert robot.starts == 1
+
+
 def test_corrections_preserve_episode_frame():
     action = Robot().navigation_correction_action(
         {"resolved_goal": [1, 2, 3], "frame": "episode"}, remaining=4, policy="precision"

@@ -63,8 +63,6 @@ class SAM2Perception(PerceptionModule):
         if not os.path.exists(checkpoint):
             wget.download(url, out=checkpoint)
 
-        self.sam_predictor = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
-
         if not torch.cuda.is_available():
             if gpu_device_id is not None:
                 print("Warning: CUDA is not available. Falling back to CPU.")
@@ -78,6 +76,9 @@ class SAM2Perception(PerceptionModule):
             device = torch.device(f"cuda:{gpu_device_id}")
 
         self.sam2_predictor = build_sam2(model_cfg, checkpoint, device=device, apply_postprocessing=False)
+        # Share one model between box prompting and automatic generation. Loading
+        # a second model wastes memory and previously ignored the chosen device.
+        self.sam_predictor = SAM2ImagePredictor(self.sam2_predictor)
         self._verbose = verbose
 
         self.mask_generator = SAM2AutomaticMaskGenerator(self.sam2_predictor)
@@ -101,6 +102,7 @@ class SAM2Perception(PerceptionModule):
         return returned_masks
 
     # Prompting SAM with detected boxes
+    @torch.inference_mode()
     def segment(self, image: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
         """
         Get masks for all detected bounding boxes using SAM
@@ -108,15 +110,27 @@ class SAM2Perception(PerceptionModule):
             image: image of shape (H, W, 3)
             xyxy: bounding boxes of shape (N, 4) in (x1, y1, x2, y2) format
         Returns:
-            masks: masks of shape (N, H, W)
+            masks: boolean masks of shape (N, H, W)
         """
+        xyxy = np.asarray(xyxy)
+        if xyxy.size == 0:
+            return np.empty((0, *image.shape[:2]), dtype=bool)
+        if xyxy.ndim != 2 or xyxy.shape[1] != 4 or not np.isfinite(xyxy).all():
+            raise ValueError("SAM2 boxes must be finite Nx4 pixel coordinates")
+        if np.any(xyxy[:, 2:] <= xyxy[:, :2]):
+            raise ValueError("SAM2 boxes must have positive extent")
         self.sam_predictor.set_image(image)
         result_masks = []
         for box in xyxy:
-            masks, scores, logits = self.sam_predictor.predict(box=box, multimask_output=True)
+            masks, scores, logits = self.sam_predictor.predict(box=box, multimask_output=True, return_logits=False)
             index = np.argmax(scores)
             result_masks.append(masks[index])
-        return np.array(result_masks)
+        masks = np.asarray(result_masks)
+        # SAM2's public numpy API casts thresholded masks to float32, even
+        # with return_logits=False. Keep one boolean contract for live and cache.
+        if masks.shape != (len(xyxy), *image.shape[:2]) or not np.isin(masks, [0, 1]).all():
+            raise ValueError("SAM2 must return aligned binary masks, not logits")
+        return masks.astype(bool)
 
     def predict(
         self,

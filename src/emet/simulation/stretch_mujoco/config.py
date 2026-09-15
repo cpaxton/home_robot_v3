@@ -16,7 +16,31 @@ robot_settings = {
 
 depth_limits = {"d405": 1, "d435i": 10}
 
+# Conservative manipulation setpoint speeds (m/s for arm/lift, rad/s for
+# wrist; gripper rate is slide-joint m/s, not fingertip aperture). Both wrist folding and a full-extension position step can eject a
+# payload. These are simulator settings, not calibrated real-robot limits.
+joint_position_rates = {
+    "arm": 0.1,
+    "lift": 0.15,
+    "wrist_yaw": 0.8,
+    "wrist_pitch": 0.8,
+    "wrist_roll": 0.8,
+    "gripper": 0.02,
+}
+
+# The base is also a manipulation joint. Its 2 cm navigation deadband used to
+# discard small visual-servo corrections entirely. Keep ordinary navigation
+# policies unchanged and target 5 mm when executing an arm's base component.
+manipulation_base_xy_tolerance = 0.005
+
 
 base_motion = {"timeout": 15, "default_x_vel": 0.3, "default_r_vel": 1.0}
+
+# Wheel-joint reference acceleration (rad/s²), independent of transmission
+# gearing. Abrupt arc-to-turn commands can eject a held object even when each
+# velocity is within the actuator limits. Explicit cancellation bypasses this
+# profile; ordinary velocity commands, including zero, use it. Simulator-only,
+# not a calibrated real-robot acceleration limit.
+wheel_reference_acceleration = 8.0 / 3.0
 
 # TODO: Add params to tune joints response motion profiles

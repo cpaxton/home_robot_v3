@@ -109,6 +109,7 @@ def run(config, output, learned=False):
         report["targets"].append(
             {
                 "query": target["query"],
+                "geometry_id": gid,
                 "visible_pixels": int(mask.sum()),
                 "pixel_xy": (uv[:2] / uv[2]).tolist(),
                 "camera_z_m": float(cam_xyz[2]),

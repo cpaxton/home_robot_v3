@@ -79,6 +79,11 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         """Reset error tolerances to default values"""
         self.lin_error_tol = self.cfg.lin_error_tol
         self.ang_error_tol = self.cfg.ang_error_tol
+        self.reset_goal()
+
+    def reset_goal(self):
+        """Forget the approach/heading phase when a new target is installed."""
+        self._at_goal_xy = False
 
     @staticmethod
     def _velocity_feedback_control(x_err, a, v_max):
@@ -109,6 +114,23 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         else:
             return w_max * lin_err / (np.sin(heading_diff) + heading_diff * np.cos(heading_diff) + 1e-5)
 
+    def translation_control(self, xyt_err: np.ndarray) -> tuple[float, float, bool]:
+        """Execute a base translation joint, holding its reference heading.
+
+        Unlike an SE(2) navigation goal, millimeters of lateral drift must not
+        cause a turn toward the residual position while the arm is extended.
+        Lateral displacement is not a commanded degree of freedom here.
+        Conservative proportional approach also bounds near-goal braking.
+        """
+        longitudinal, _, yaw = xyt_err
+        if abs(longitudinal) <= self.lin_error_tol and abs(yaw) <= self.ang_error_tol:
+            return 0.0, 0.0, True
+        v = np.clip(longitudinal, -min(self.v_max, 0.08), min(self.v_max, 0.08))
+        w = np.clip(2 * yaw, -min(self.w_max, 0.15), min(self.w_max, 0.15))
+        if abs(longitudinal) <= self.lin_error_tol or abs(yaw) > 0.15:
+            v = 0.0
+        return float(v), float(w), False
+
     def __call__(self, xyt_err: np.ndarray, allow_reverse: bool = False) -> tuple[float, float, bool]:
         v_cmd = w_cmd = 0
         in_reverse = False
@@ -125,8 +147,20 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
             in_reverse = True
             heading_err = normalize_ang_error(heading_err + np.pi)
 
-        # Go to goal XY position if not there yet
+        # Acquire XY inside half the acceptance radius before turning. Keep
+        # that phase until drift exceeds the *unchanged* acceptance radius.
+        # A single boundary otherwise alternates approach and final-yaw turns
+        # as braking/rotation moves the base a few millimeters across it.
         if lin_err_abs > self.lin_error_tol:
+            self._at_goal_xy = False
+        elif lin_err_abs <= self.lin_error_tol / 2:
+            self._at_goal_xy = True
+
+        if lin_err_abs <= self.lin_error_tol and abs(ang_err) <= self.ang_error_tol:
+            return 0.0, 0.0, True
+
+        # Go to goal XY position if not acquired yet.
+        if not self._at_goal_xy:
             # Compute linear velocity -- move towards goal XY
             v_raw = self._velocity_feedback_control(lin_err_abs, self.acc_lin, self.v_max)
             v_limit = self._turn_rate_limit(

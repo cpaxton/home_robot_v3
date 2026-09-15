@@ -131,12 +131,10 @@ class MujocoServerCameraManagerSync:
         """
         Render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
-        new_imagery = StatusStretchCameras.default()
-        new_imagery.time = self.mujoco_server.mjdata.time
-        new_imagery.fps = self.camera_fps_counter.fps
+        snapshot, new_imagery = self._capture_state()
 
         for camera, renderer in self.camera_renderers.items():
-            (_, data) = self._render_camera(renderer, camera)
+            (_, data) = self._render_camera(renderer, camera, snapshot)
             new_imagery.set_camera_data(camera, data)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
@@ -186,7 +184,38 @@ class MujocoServerCameraManagerSync:
 
         return renderer
 
-    def _render_camera(self, renderer: mujoco.Renderer, camera: StretchCameras):
+    def _capture_state(self):
+        """Freeze one RGB-D batch and its robot geometry under the physics lock."""
+        model = self.mujoco_server.mjmodel
+        snapshot = mujoco.MjData(model)
+        with self.camera_lock:
+            mujoco.mj_copyData(snapshot, model, self.mujoco_server.mjdata)
+        imagery = StatusStretchCameras.default()
+        imagery.time = float(snapshot.time)
+        imagery.fps = self.camera_fps_counter.fps
+        imagery.image_timing = {
+            "timestamp_ns": round(imagery.time * 1_000_000_000),
+            "clock_domain": "mujoco_sim",
+            "source": "render_state_snapshot",
+            "available": True,
+        }
+
+        def camera_pose(name, image_rotation):
+            camera = snapshot.camera(name)
+            pose = np.eye(4)
+            pose[:3, :3] = camera.xmat.reshape(3, 3) @ np.diag([1, -1, -1]) @ image_rotation
+            pose[:3, 3] = camera.xpos
+            return pose
+
+        imagery.cam_d405_pose = camera_pose("d405_rgb", np.eye(3))
+        imagery.cam_d435i_pose = camera_pose("d435i_camera_rgb", np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]]))
+        grasp = snapshot.body("link_grasp_center")
+        imagery.ee_pose = np.eye(4)
+        imagery.ee_pose[:3, :3] = grasp.xmat.reshape(3, 3)
+        imagery.ee_pose[:3, 3] = grasp.xpos
+        return snapshot, imagery
+
+    def _render_camera(self, renderer: mujoco.Renderer, camera: StretchCameras, snapshot):
         """
         This calls update_scene and render() for an offscreen camera buffer.
 
@@ -194,7 +223,7 @@ class MujocoServerCameraManagerSync:
         """
 
         with self.camera_lock:
-            renderer.update_scene(data=self.mujoco_server.mjdata, camera=camera.camera_name_in_mjcf)
+            renderer.update_scene(data=snapshot, camera=camera.camera_name_in_mjcf)
 
             render = renderer.render()
 
@@ -368,16 +397,14 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         """
         Uses a ThreadPoolExecutor to render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
-        new_imagery = StatusStretchCameras.default()
-        new_imagery.time = self.mujoco_server.mjdata.time
-        new_imagery.fps = self.camera_fps_counter.fps
+        snapshot, new_imagery = self._capture_state()
 
         # This is a bit hard to read, so here's an explanation,
         # we're using self.imagery_thread_pool, which is a ThreadPoolExecutor to handle calling self._render_camera off the UI thread.
         # the parameters for self._render_camera are being fetched from self.camera_renderers and passed along the call:
         futures = as_completed(
             [
-                self.cameras_rendering_thread_pool.submit(self._render_camera, renderer, camera)
+                self.cameras_rendering_thread_pool.submit(self._render_camera, renderer, camera, snapshot)
                 for (camera, renderer) in self.camera_renderers.items()
             ]
         )

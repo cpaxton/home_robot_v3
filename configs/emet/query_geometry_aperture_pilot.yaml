@@ -1,0 +1,7 @@
+# Clearance ablation: same learned geometry-servo harness, observed finger
+# span adjustment at standoff. Marker margin includes thickness/uncertainty;
+# it is not a calibrated inner-jaw opening or a collision-free guarantee.
+extends: configs/emet/query_geometry_manipulation_pilot.yaml
+mapping:
+  grasp:
+    observed_aperture_margin_m: 0.06

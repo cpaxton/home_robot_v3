@@ -45,11 +45,12 @@ class GraspObjectOperation(ManagedOperation):
     lift_distance: float = 0.2
     servo_to_grasp: bool = False
     _success: bool = False
+    pickup_executed: bool = False
     talk: bool = True
     verbose: bool = False
 
     offset_from_vertical = -np.pi / 2 - 0.1
-    node_for_grasp_pose = "link_gripper_s3_body"
+    node_for_grasp_pose = "link_wrist_pitch"
 
     # Task information
     match_method: str = "class"
@@ -83,6 +84,7 @@ class GraspObjectOperation(ManagedOperation):
     # This is the distance before we start servoing to the object
     # Standoff distance from actual grasp pose
     pregrasp_distance_from_object: float = 0.3
+    minimum_pregrasp_standoff: float = 0.20
 
     # ------------------------
     # Grasping motion planning parameters and offsets
@@ -90,6 +92,9 @@ class GraspObjectOperation(ManagedOperation):
     median_distance_when_grasping: float = 0.17
     lift_min_height: float = 0.1
     lift_max_height: float = 1.0
+    # Prefer a 30 cm extraction, but require at least 10 cm of vertical travel
+    # within the existing conservative Stretch lift limit before closing.
+    lift_clearance_m: float = 0.1
 
     # How long is the gripper?
     # This is used to compute when we should not move the robot forward any farther
@@ -117,6 +122,14 @@ class GraspObjectOperation(ManagedOperation):
     track_image_center: bool = True  # Set to False if you want to use aruco marker, but since the position between gripper center and the image is fixed, this is not needed.
     gripper_aruco_detector: GripperArucoDetector = None
     min_points_to_approach: int = 100
+    use_geometry_servo: bool = False
+    geometry_servo_tolerance_m: float = 0.012
+    contact_offset_m = (0.0, 0.0, 0.0)
+    _geometry_previous_pose = None
+    _geometry_reference_pos = None
+    _geometry_reference_rot = None
+    _geometry_stalled_steps: int = 0
+    observed_aperture_margin_m: float | None = None
     detected_center_offset_x: int = 0  # -10
     detected_center_offset_y: int = 0  # -40
     percentage_of_image_when_grasping: float = 0.2
@@ -178,6 +191,32 @@ class GraspObjectOperation(ManagedOperation):
         self.match_method = match_method
         self._try_open_loop = try_open_loop
         self.grounded_target = grounded_target
+        self.use_geometry_servo = bool((self.parameters.get("grasp", {}) or {}).get("geometry_servo", False))
+        self.geometry_servo_tolerance_m = float(
+            (self.parameters.get("grasp", {}) or {}).get("geometry_servo_tolerance_m", 0.012)
+        )
+        if not np.isfinite(self.geometry_servo_tolerance_m) or not 0 < self.geometry_servo_tolerance_m <= 0.012:
+            raise ValueError("Geometry-servo tolerance must be positive and at most 12 mm")
+        self.contact_offset_m = np.asarray(
+            (self.parameters.get("grasp", {}) or {}).get("contact_offset_m", [0.0, 0.0, 0.0]), dtype=float
+        )
+        if (
+            self.contact_offset_m.shape != (3,)
+            or not np.isfinite(self.contact_offset_m).all()
+            or np.linalg.norm(self.contact_offset_m) > 0.05
+        ):
+            raise ValueError("Grasp contact offset must be a finite grasp-frame vector within 5 cm")
+        if np.any(self.contact_offset_m) and not self.use_geometry_servo:
+            raise ValueError("Grasp contact offset requires geometry servo")
+        self.observed_aperture_margin_m = (self.parameters.get("grasp", {}) or {}).get("observed_aperture_margin_m")
+        self._aperture_trace = []
+        if self.observed_aperture_margin_m is not None:
+            if not np.isfinite(self.observed_aperture_margin_m) or self.observed_aperture_margin_m < 0.04:
+                raise ValueError("Observed aperture requires at least 4 cm marker/geometry margin")
+            if grounded_target is None:
+                raise ValueError("Observed aperture requires an observation-grounded target")
+        if self.use_geometry_servo and grounded_target is None:
+            raise ValueError("Geometry servo requires an observation-grounded target")
         if grounded_target is not None and (try_open_loop or not servo_to_grasp):
             raise ValueError("Grounded targets require closed-loop visual tracking")
         if self.match_method not in ["class", "feature"]:
@@ -240,7 +279,7 @@ class GraspObjectOperation(ManagedOperation):
         ] = 1
 
         # Ignore depth of 0 (bad value)
-        depth_mask = np.bitwise_and(servo.ee_depth > 1e-8, mask)
+        depth_mask = np.isfinite(servo.ee_depth) & (servo.ee_depth > 1e-8) & mask
 
         depth = servo.ee_depth[target_mask & depth_mask]
         if len(depth) == 0:
@@ -363,6 +402,11 @@ class GraspObjectOperation(ManagedOperation):
     def reset(self):
         """Reset the operation. This clears the history and sets the success flag to False. It also clears the tracked object features."""
         self._success = False
+        self.pickup_executed = False
+        self._geometry_previous_pose = None
+        self._geometry_reference_pos = None
+        self._geometry_reference_rot = None
+        self._geometry_stalled_steps = 0
         self.tracked_object_features = None
         self.observations.clear_history()
 
@@ -380,6 +424,79 @@ class GraspObjectOperation(ManagedOperation):
         Returns:
             Optional[np.ndarray]: Target mask to move to
         """
+        target = getattr(self, "grounded_target", None)
+        if target is not None and target.geometry_source == "vlm_selected_depth_surface":
+            from types import SimpleNamespace
+
+            verification = {}
+            detected = None
+            matching = []
+            associated_mask = None
+            failure = None
+            try:
+                world_xyz = servo.get_ee_xyz_in_world_frame()
+                if world_xyz is None:
+                    raise ValueError("Target tracking requires world-aligned depth")
+                frame = SimpleNamespace(
+                    rgb=servo.ee_rgb,
+                    depth=servo.ee_depth,
+                    full_world_xyz=world_xyz,
+                    camera_K=getattr(servo, "ee_camera_K", None),
+                    camera_pose=getattr(servo, "ee_camera_pose", None),
+                )
+                # The wrist can be much closer than the navigation map's depth
+                # cutoff. Use finite positive sensor depth, with the same mask
+                # provider and semantic verifier as head-camera grounding.
+                detected, _, matching, verification = self.agent.ground_vlm_frame(
+                    frame, self.target_object, self.target_object, min_depth=0.0, tracking_target=target
+                )
+                if not verification.get("valid") or len(matching) != 1:
+                    detail = verification.get("reason") or "no unique verified surface"
+                    raise ValueError(f"Wrist target identity absent or ambiguous: {detail}")
+                associated_mask = target.select_mask(detected.instance, detected.instance == matching[0], world_xyz)
+                return associated_mask
+            except ValueError as exc:
+                failure = str(exc)
+                raise
+            finally:
+                # Preserve accepted steps as well as failures so object/mask
+                # drift can be reconstructed without another model run.
+                if os.environ.get("EMET_EQA_EPISODE_DIR"):
+                    from pathlib import Path
+
+                    from emet.memory.query_grounding import cache_grounding_record
+
+                    cache_grounding_record(
+                        Path(os.environ["EMET_EQA_EPISODE_DIR"]) / "wrist_tracking",
+                        query=self.target_object,
+                        revision=target.observation_revision,
+                        source_obs_id=None,
+                        detections=[],
+                        matching_ids=matching,
+                        verification={
+                            **verification,
+                            "semantic_valid": verification.get("valid", False),
+                            "association_valid": associated_mask is not None,
+                            "valid": associated_mask is not None,
+                            "reason": failure,
+                            "stage": "wrist_tracking",
+                        },
+                        rgb=servo.ee_rgb,
+                        depth=servo.ee_depth,
+                        masks=None if detected is None else detected.instance,
+                        metadata={
+                            "target_points": target.points.tolist(),
+                            "camera_K": None if servo.ee_camera_K is None else servo.ee_camera_K.tolist(),
+                            "camera_pose": None if servo.ee_camera_pose is None else servo.ee_camera_pose.tolist(),
+                            "recorded_at": time.time(),
+                            "image_timing": getattr(servo, "image_timing", None),
+                            "joint": None if getattr(servo, "joint", None) is None else servo.joint.tolist(),
+                            "ee_pose": None if getattr(servo, "ee_pose", None) is None else servo.ee_pose.tolist(),
+                            "geometry_servo": self.use_geometry_servo,
+                            "contact_offset_m": np.asarray(self.contact_offset_m).tolist(),
+                            "aperture": getattr(self, "_aperture_trace", []),
+                        },
+                    )
         # Find the best masks
         class_mask = self.get_class_mask(servo)
         instance_mask = servo.instance
@@ -441,7 +558,10 @@ class GraspObjectOperation(ManagedOperation):
 
         print("Distance:", distance)
         joint_state = self.robot.get_joint_positions()
-        if not self.open_loop or distance is not None:
+        # Geometry servo has already verified the contact pose. Reissuing a
+        # nominally zero approach from measured joints replaces its setpoint
+        # with tracking error and resets wrist roll/yaw before closure.
+        if not self.use_geometry_servo and (not self.open_loop or distance is not None):
             # Now compute what to do
             base_x = joint_state[HelloStretchIdx.BASE_X]
             wrist_pitch = joint_state[HelloStretchIdx.WRIST_PITCH]
@@ -463,7 +583,7 @@ class GraspObjectOperation(ManagedOperation):
                 lift_component = 0
 
             # Move the arm in closer
-            self.robot.arm_to(
+            moved = self.robot.arm_to(
                 [
                     base_x,
                     np.clip(
@@ -479,7 +599,17 @@ class GraspObjectOperation(ManagedOperation):
                 head=constants.look_at_ee,
                 blocking=True,
             )
+            if not moved:
+                self.error("Final grasp approach did not complete; gripper remains open.")
+                return False
             time.sleep(0.1)
+
+        joint_state = self.robot.get_joint_positions()
+        lift = float(joint_state[HelloStretchIdx.LIFT])
+        lift_goal = min(lift + 0.3, self.lift_max_height)
+        if not np.isfinite(lift) or lift + self.lift_clearance_m > lift_goal:
+            self.error("Insufficient vertical lift travel; gripper remains open.")
+            return False
 
         self.robot.close_gripper(loose=self.grasp_loose, blocking=True)
         time.sleep(0.1)
@@ -489,9 +619,11 @@ class GraspObjectOperation(ManagedOperation):
 
         # Lifted joint state
         lifted_joint_state = joint_state.copy()
-        lifted_joint_state[HelloStretchIdx.LIFT] += 0.3
-        self.robot.arm_to(lifted_joint_state, head=constants.look_at_ee, blocking=True)
-        return True
+        if not np.isfinite(joint_state[HelloStretchIdx.LIFT]) or lift_goal <= joint_state[HelloStretchIdx.LIFT]:
+            self.error("Lift state changed during closure; stopping without a lowering command.")
+            return False
+        lifted_joint_state[HelloStretchIdx.LIFT] = lift_goal
+        return bool(self.robot.arm_to(lifted_joint_state, head=constants.look_at_ee, blocking=True))
 
     def blue_highlight_mask(self, img):
         """Get a binary mask for the blue highlights in the image."""
@@ -540,7 +672,10 @@ class GraspObjectOperation(ManagedOperation):
         prev_center_depth = None
 
         # Move to pregrasp position
-        self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object)
+        if self.observed_aperture_margin_m is not None and not self.prepare_observed_aperture():
+            return False
+        if not self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object):
+            return False
 
         # Give a short pause here to make sure ee image is up to date
         time.sleep(0.25)
@@ -585,12 +720,23 @@ class GraspObjectOperation(ManagedOperation):
             center_x += self.detected_center_offset_x  # move closer to top
 
             # Run semantic segmentation on it
-            if self.match_method == "class":
+            detector_free = (
+                getattr(self, "grounded_target", None) is not None
+                and self.grounded_target.geometry_source == "vlm_selected_depth_surface"
+            )
+            if not detector_free and self.match_method == "class":
                 # This means that we are just using an open-vocabulary object detector to find the object so we need to update the vocabulary.
                 self.agent.semantic_sensor.update_vocabulary_list([self.target_object], 1)
                 self.agent.semantic_sensor.set_vocabulary(1)
-            servo = self.agent.semantic_sensor.predict(servo, ee=True)
+            if not detector_free:
+                servo = self.agent.semantic_sensor.predict(servo, ee=True)
             latest_mask = self.get_target_mask(servo, center=(center_x, center_y))
+
+            if self.use_geometry_servo:
+                result = self.geometry_servo_step(servo, latest_mask)
+                if result is not None:
+                    return result
+                continue
 
             # dilate mask
             kernel = np.ones((3, 3), np.uint8)
@@ -657,9 +803,10 @@ class GraspObjectOperation(ManagedOperation):
             else:
                 failed_counter = 0
                 mask_center = mask_center.astype(int)
-                assert (
-                    world_xyz.shape[0] == servo.semantic.shape[0] and world_xyz.shape[1] == servo.semantic.shape[1]
-                ), "World xyz shape does not match semantic shape."
+                # This is wrist geometry; head semantic labels may be absent
+                # (or have a different resolution) for query-grounded grasps.
+                if world_xyz.shape[:2] != target_mask.shape:
+                    raise ValueError("Wrist world xyz shape does not match target mask shape")
                 current_xyz = world_xyz[int(mask_center[0]), int(mask_center[1])]
                 if self.show_point_cloud:
                     self._debug_show_point_cloud(servo, current_xyz)
@@ -702,9 +849,8 @@ class GraspObjectOperation(ManagedOperation):
 
             # check not moving threshold
             if not_moving_count > max_not_moving_count:
-                self.info("Not moving; try to grasp.")
-                success = self._grasp()
-                break
+                self.error("Visual servo stalled; refusing an unverified grasp.")
+                return False
 
             # If we have a target mask, compute the median depth of the object
             # Otherwise we will just try to grasp if we are close enough - assume we lost track!
@@ -754,7 +900,7 @@ class GraspObjectOperation(ManagedOperation):
             lift = min(lift, prev_lift)
 
             # If we are aligned, try to grasp
-            if aligned or center_in_mask:
+            if (aligned or center_in_mask) and np.isfinite(center_depth) and center_depth > 1e-8:
                 # First, check to see if we are close enough to grasp
                 if center_depth < self.median_distance_when_grasping and center_depth > 1e-8:
                     print(
@@ -840,11 +986,14 @@ class GraspObjectOperation(ManagedOperation):
             print("  arm =", arm)
             print("pitch =", wrist_pitch)
 
-            self.robot.arm_to(
+            moved = self.robot.arm_to(
                 [base_x, lift, arm, 0, wrist_pitch, 0],
                 head=constants.look_at_ee,
                 blocking=True,
             )
+            if not moved:
+                self.error("Visual servo motion did not complete; stopping approach.")
+                return False
             prev_lift = lift
             time.sleep(self.expected_network_delay)
 
@@ -891,20 +1040,22 @@ class GraspObjectOperation(ManagedOperation):
 
         assert self.target_object is not None, "Target object must be set before running."
 
+        if getattr(self, "grounded_target", None) is not None:
+            self.ensure_grounded_grasp_workspace()
+            self.align_grounded_target_for_grasp()
+
         # open gripper
         self.robot.open_gripper(blocking=True)
 
         # Now we should be able to see the object if we orient gripper properly
         # Get the end effector pose
-        obs = self.robot.get_observation()
         joint_state = self.robot.get_joint_positions()
-        model = self.robot.get_robot_model()
 
         if joint_state[HelloStretchIdx.GRIPPER] < 0.0:
             self.robot.open_gripper(blocking=True)
 
         # Get the current base pose of the robot
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
 
         # Note that these are in the robot's current coordinate frame;
         # they're not global coordinates, so this is ok to use to compute motions.
@@ -913,40 +1064,10 @@ class GraspObjectOperation(ManagedOperation):
         object_xyz = self.get_object_xyz()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
 
-        # Compute the angles necessary
-        if self.use_pitch_from_vertical:
-            # head_pos = obs.camera_pose[:3, 3]
-            obs = self.robot.get_observation()
-            joint_state = obs.joint
-            model = self.robot.get_robot_model()
-
-            # link_gripper_s3_body is the the joint connecting the gripper with arm end effector
-            ee_pos, ee_rot = model.manip_fk(joint_state, node=self.node_for_grasp_pose)
-
-            # Convert quaternion to pose
-            pose = np.eye(4)
-            pose[:3, :3] = R.from_quat(ee_rot).as_matrix()
-            pose[:3, 3] = ee_pos
-
-            # Move back 0.35m from grasp coordinate
-            delta = np.eye(4)
-            delta[2, 3] = -0.35
-            pose = np.dot(pose, delta)
-
-            # New ee pose = roughly the end of the arm
-            ee_pos = pose[:3, 3]
-
-            # dy = np.abs(head_pos[1] - relative_object_xyz[1])
-            # dz = np.abs(head_pos[2] - relative_object_xyz[2])
-            dy = np.abs(ee_pos[1] - relative_object_xyz[1])
-            dz = np.abs(ee_pos[2] - relative_object_xyz[2])
-            pitch_from_vertical = np.arctan2(dy, dz)
-        else:
-            pitch_from_vertical = 0.0
-
-        # Compute final pregrasp joint state goal and send the robot there
-        joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
-        self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True)
+        joint_state = self.aim_grasp_joints(joint_state, relative_object_xyz)
+        if not self.robot.arm_to(joint_state, head=constants.look_at_ee, blocking=True):
+            self.error("Grasp posture motion did not complete.")
+            return
 
         if self.servo_to_grasp:
             # If we try to servo, then do this
@@ -969,90 +1090,334 @@ class GraspObjectOperation(ManagedOperation):
         if self.talk and self._success:
             self.agent.robot_say(f"I think I grasped the {self.sayable_target_object()}.")
 
-        # Go back to manipulation posture
-        # Shrink arm first
-        current_state = self.robot.get_joint_positions()
-        current_state[HelloStretchIdx.ARM] = 0
-        self.robot.arm_to(current_state)
-        self.robot.move_to_manip_posture()
+        # A payload must not be folded or lowered as if the gripper were empty.
+        # On failure, do not add unverified retraction/posture motions.
+        if self._success:
+            self.pickup_executed = True
+            try:
+                relative = None
+                if getattr(self, "grounded_target", None) is not None:
+                    from emet.controller.operations.query_observation import observe_lifted_query
 
-    def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35):
+                    relative = observe_lifted_query(
+                        self.agent,
+                        self.robot,
+                        self.target_object,
+                        initial_xyz=object_xyz,
+                        minimum_lift_m=self.lift_clearance_m / 2,
+                        stage="grasp_lift_verification",
+                    )
+                self.robot.set_carry_configuration(self.robot.get_joint_positions())
+                self.robot.move_to_manip_posture()
+                if relative is not None:
+                    observe_lifted_query(
+                        self.agent,
+                        self.robot,
+                        self.target_object,
+                        initial_xyz=object_xyz,
+                        minimum_lift_m=self.lift_clearance_m / 2,
+                        relative_reference=relative,
+                        stage="grasp_carry_verification",
+                    )
+            except (ValueError, RuntimeError):
+                self._success = False
+                raise
+
+    def aim_grasp_joints(self, joint_state, relative_object_xyz):
+        """Predict the same wrist aim for reachability checks and execution."""
+        joint_state = np.array(joint_state, copy=True)
+        model = self.robot.get_robot_model()
+        if self.use_pitch_from_vertical:
+            # Use the actual pitch pivot. The old missing-link fallback plus
+            # a 35 cm local-Z offset invented a pivot below low targets, so
+            # signed-height aiming could point upward at a tabletop object.
+            ee_pos, _ = model.manip_fk(joint_state, node=self.node_for_grasp_pose)
+            dy = np.abs(ee_pos[1] - relative_object_xyz[1])
+            # Preserve whether the object is above or below the wrist pivot.
+            # abs(dz) aimed downward even at high-counter targets, leaving
+            # valid head-grounded objects outside the pregrasp wrist view.
+            dz = ee_pos[2] - relative_object_xyz[2]
+            pitch_from_vertical = np.arctan2(dy, dz)
+        else:
+            pitch_from_vertical = 0.0
+
+        # Preserve the existing angular bias; execution is a separate step.
+        joint_state[HelloStretchIdx.WRIST_PITCH] = self.offset_from_vertical + pitch_from_vertical
+        return joint_state
+
+    def ensure_grounded_grasp_workspace(self):
+        """A good viewing location may be too close for a separated grasp.
+
+        Derive the horizontal retracted reach from this robot's kinematics.
+        Move only through the ordinary collision-checked navigation planner,
+        before extending the arm. Final alignment reacquires the visual target.
+        """
+        target = np.asarray(self.get_object_xyz(), dtype=float)
+        start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        joints = np.array(self.robot.get_joint_positions(), dtype=float, copy=True)
+        original_joints = joints.copy()
+        joints[HelloStretchIdx.ARM] = 0
+        joints[HelloStretchIdx.WRIST_ROLL] = 0
+        joints[HelloStretchIdx.WRIST_PITCH] = 0
+        joints[HelloStretchIdx.WRIST_YAW] = 0
+        retracted, _ = self.robot.get_robot_model().manip_fk(joints)
+        reach = abs(float(retracted[1]))
+        if not np.isfinite(target).all() or not np.isfinite(start).all() or not np.isfinite(reach):
+            raise ValueError("Finite geometry is required for the grasp workspace")
+        # Same minimum separation as the local pregrasp solver. Prefer the
+        # configured larger separation when relocation is actually necessary.
+        if np.linalg.norm(target[:2] - start[:2]) >= reach + self.minimum_pregrasp_standoff:
+            return
+        # Horizontal reach is only a quick sufficient-distance check. A low
+        # target can have a valid downward pregrasp closer to the base. Predict
+        # the arm-facing pose and use the actual separated IK solver before
+        # deciding to relocate; no command or cached observation is modified.
+        relative_target = np.array([0.0, -np.linalg.norm(target[:2] - start[:2]), target[2]])
+        original_joints[HelloStretchIdx.BASE_X] = 0
+        aimed = self.aim_grasp_joints(original_joints, relative_target)
+        if self.solve_pregrasp(relative_target, aimed, self.pregrasp_distance_from_object) is not None:
+            return
+        # The planner radius refers to the end-effector workspace. The object
+        # lies one pregrasp separation beyond it; do not compare the nominal
+        # 0.55 m radius directly against a roughly 0.71 m separated-object goal.
+        bounds = (
+            reach + self.pregrasp_distance_from_object,
+            float(self.agent.manipulation_radius) + self.pregrasp_distance_from_object,
+        )
+        if not np.isfinite(bounds).all() or not 0 <= bounds[0] < bounds[1]:
+            raise ValueError("No separated grasp workspace within the manipulation radius")
+        self.info(f"Viewing pose is too close for pregrasp; planning within radial bounds {bounds}")
+        self.robot.move_to_nav_posture()
+        self.robot.switch_to_navigation_mode()
+        if not self.agent.navigate_to_target_pose(target, start, look_at_xy=tuple(target[:2]), distance_range=bounds):
+            raise RuntimeError("Could not reach a collision-checked grasp workspace")
+        measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
+        if (
+            not np.isfinite(measured).all()
+            or np.linalg.norm(target[:2] - measured[:2]) < reach + self.minimum_pregrasp_standoff
+        ):
+            raise RuntimeError("Measured grasp workspace is still too close")
+
+    def align_grounded_target_for_grasp(self):
+        """Stretch's arm points along -Y; find's camera-facing pose is not a grasp pose.
+
+        Keep this in the existing Stretch grasp adapter, not the shared find
+        policy. Any base/head motion invalidates the old grounding observation.
+        """
+        from emet.controller.operations.stretch_manipulation import orient_arm_toward_target
+
+        orient_arm_toward_target(self.robot, self.get_object_xyz())
+        target = self.agent.prepare_query_target(self.target_object)
+        self.grounded_target = target
+        self._object_xyz = np.array(target.xyz, copy=True)
+
+    def geometry_servo_step(self, servo, mask):
+        """Place the measured grasp center at robust observed object bounds.
+
+        Unlike the legacy fixed-pixel/depth gate, this uses the calibrated
+        end-effector pose. Return None after a completed correction, or the
+        final grasp/failure result. World geometry remains Qwen-verified and
+        associated with the original target before reaching this method.
+        """
+        from emet.controller.operations.stretch_manipulation import world_delta_to_model_base
+
+        world = servo.get_ee_xyz_in_world_frame()
+        if world is None or servo.ee_pose is None or np.asarray(servo.ee_pose).shape != (4, 4):
+            self.error("Geometry servo requires calibrated wrist and end-effector poses.")
+            return False
+        points = world[np.asarray(mask, dtype=bool) & np.isfinite(world).all(axis=-1)]
+        if len(points) < 10 or not np.isfinite(servo.ee_pose).all():
+            return False
+        # Edge pixels can mix object/background depth. Trim each axis before
+        # estimating a center; a surface median is biased toward visible faces.
+        center = np.quantile(points, [0.05, 0.95], axis=0).mean(axis=0)
+        # Tool-center calibration belongs to the gripper, not an object label.
+        # A nominal grasp link need not coincide with the useful pad center.
+        contact_center = servo.ee_pose[:3, 3] + servo.ee_pose[:3, :3] @ self.contact_offset_m
+        delta = center - contact_center
+        distance = float(np.linalg.norm(delta))
+        self.info(f"Observed grasp-center error (world m): {delta}")
+        if distance <= self.geometry_servo_tolerance_m:
+            return self._grasp()
+        if distance > 0.5:
+            self.error("Grounded object is outside the local grasp approach budget.")
+            return False
+        measured = servo.ee_pose[:3, 3]
+        if self._geometry_previous_pose is not None and np.linalg.norm(measured - self._geometry_previous_pose) < 0.002:
+            self._geometry_stalled_steps += 1
+        else:
+            self._geometry_stalled_steps = 0
+        self._geometry_previous_pose = measured.copy()
+        if self._geometry_stalled_steps >= 3:
+            self.error("Repeated geometry corrections produced no measured progress.")
+            return False
+        # Grasp-frame Y spans the finger opening. Align along that axis
+        # while still separated, before inserting the fingers. A diagonal
+        # approach can sweep a finger into neighboring clutter even when the
+        # final centered aperture would clear it. This is not a collision
+        # planner: stop on any failed motion and retain the existing gates.
+        # Do not force the full plane perpendicular to tilted grasp X:
+        # lowering in that plane also retracts the arm, which can already
+        # be at its limit. Height/depth change together after lateral alignment.
+        opening_axis = servo.ee_pose[:3, 1]
+        lateral = np.dot(delta, opening_axis) * opening_axis
+        if np.linalg.norm(lateral) > self.geometry_servo_tolerance_m:
+            delta = lateral
+        delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
+        joint_state = self.robot.get_joint_positions().copy()
+        ee_pos, ee_rot = self.robot_model.manip_fk(joint_state)
+        delta_base = world_delta_to_model_base(delta, servo.ee_pose, ee_rot)
+        if self._geometry_reference_pos is None:
+            self._geometry_reference_pos = np.array(ee_pos, copy=True)
+            self._geometry_reference_rot = np.array(ee_rot, copy=True)
+        # Integrate measured visual error into the command reference. Rebuilding
+        # from each lagging measurement repeats a biased setpoint and compounds
+        # wrist sag. Saturation prevents windup beyond the existing 5 cm local
+        # step budget; fresh evidence and the no-progress guard still gate closure.
+        offset = self._geometry_reference_pos + delta_base - ee_pos
+        offset *= min(1.0, 0.05 / max(np.linalg.norm(offset), 1e-8))
+        self._geometry_reference_pos = ee_pos + offset
+        q, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
+            self._geometry_reference_pos.copy(), self._geometry_reference_rot, q0=joint_state
+        )
+        if (
+            not success
+            or q is None
+            or not np.isfinite(q).all()
+            or q[HelloStretchIdx.ARM] < 0
+            or q[HelloStretchIdx.LIFT] < 0
+        ):
+            self.error("No feasible geometry-servo correction.")
+            return False
+        if not self.robot.arm_to(q, head=constants.look_at_ee, blocking=True):
+            self.error("Geometry-servo correction did not complete.")
+            return False
+        return None
+
+    def prepare_observed_aperture(self):
+        """Narrow while still separated, using measured fingers and target extent.
+
+        This is opt-in on the experimental preset. Missing markers, depth or
+        standoff stop the grasp; no guessed command-to-width calibration or
+        object-category lookup is used.
+        """
+        from emet.utils.gripper import measure_observed_aperture
+
+        previous = None
+        deadline = time.monotonic() + 20.0
+        for _ in range(20):
+            frame_deadline = min(deadline, time.monotonic() + 2.0)
+            servo = self.robot.get_servo_observation()
+            while servo is previous and time.monotonic() < frame_deadline:
+                time.sleep(0.05)
+                servo = self.robot.get_servo_observation()
+            if servo is None or servo is previous or time.monotonic() >= deadline:
+                self.error("Fresh aperture observation unavailable.")
+                return False
+            try:
+                span, width = measure_observed_aperture(servo, self.grounded_target.points, self.gripper_aruco_detector)
+            except ValueError as exc:
+                self.error(str(exc))
+                return False
+            current = float(self.robot.get_joint_positions()[HelloStretchIdx.GRIPPER])
+            if not np.isfinite(current):
+                self.error("Finite gripper feedback required for aperture adjustment.")
+                return False
+            self._aperture_trace.append({"span_m": span, "object_extent_m": width, "gripper": current})
+            self.info(f"Observed marker span {span:.3f} m; target extent {width:.3f} m")
+            if span < width + self.observed_aperture_margin_m / 2:
+                self.error("Insufficient observed aperture margin.")
+                return False
+            if span <= width + self.observed_aperture_margin_m + 0.005:
+                return True
+            target = max(float(self.robot_model.GRIPPER_CLOSED), current - 0.025)
+            if target >= current:
+                return False
+            self.robot.gripper_to(target, blocking=True)
+            # Require a delivered frame after the blocking command, not the
+            # cached pre-command geometry. The arm/base remain stationary.
+            previous = self.robot.get_servo_observation()
+        self.error("Observed aperture adjustment did not converge.")
+        return False
+
+    def pregrasp_open_loop(self, object_xyz: np.ndarray, distance_from_object: float = 0.35) -> bool:
         """Move to a pregrasp position in an open loop manner.
 
         Args:
             object_xyz (np.ndarray): Location to grasp
             distance_from_object (float, optional): Distance from object. Defaults to 0.2.
         """
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
 
         joint_state = self.robot.get_joint_positions()
+        target_joint_positions = self.solve_pregrasp(relative_object_xyz, joint_state, distance_from_object)
+        if target_joint_positions is None:
+            self.error("No feasible separated pregrasp IK solution.")
+            self._success = False
+            return False
 
+        # Zero out roll and yaw
+        target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
+        target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
+        print(f"{self.name}: Moving to pre-grasp position.")
+        if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
+            self._success = False
+            return False
+        print("... done.")
+        return True
+
+    def solve_pregrasp(self, relative_object_xyz, joint_state, distance_from_object):
+        """Return feasible separated IK without commanding the robot."""
         model = self.robot.get_robot_model()
         ee_pos, ee_rot = model.manip_fk(joint_state)
 
-        # End effector should be at most 45 degrees inclined
+        # Insert horizontally or downward (at most 45 degrees), not upward
+        # from beneath a supported target. Upward aiming can acquire a high
+        # target, but is not a support-clearing manipulation approach.
         rotation = R.from_quat(ee_rot)
         rotation = rotation.as_euler("xyz")
 
         # Track if the angle to the target object is too large (i.e. it's on the floor)
         print("Rotation", rotation)
-        if rotation[1] > np.pi / 4:
-            rotation[1] = np.pi / 4
+        rotation[1] = np.clip(rotation[1], 0.0, np.pi / 4)
         ee_rot = R.from_euler("xyz", rotation).as_quat()
 
         vector_to_object = relative_object_xyz - ee_pos
-        vector_to_object = vector_to_object / np.linalg.norm(vector_to_object)
+        distance = np.linalg.norm(vector_to_object)
+        if not np.isfinite(distance) or distance < 1e-6:
+            return None
+        vector_to_object = vector_to_object / distance
 
-        # It should not be more than 45 degrees inclined
-        vector_to_object[2] = max(vector_to_object[2], vector_to_object[1])
+        # Keep the separated pose at or above the target height. Looking up
+        # from a lower wrist previously put the pregrasp below a countertop,
+        # losing object visibility behind its edge before insertion.
+        vector_to_object[2] = min(0.0, max(vector_to_object[2], vector_to_object[1]))
+        direction_norm = np.linalg.norm(vector_to_object)
+        if direction_norm < 1e-6:
+            return None
+        vector_to_object /= direction_norm
 
-        print("Absolute object xyz was:", object_xyz)
-        print("Relative object xyz was:", relative_object_xyz)
-        shifted_object_xyz = relative_object_xyz - (distance_from_object * vector_to_object)
-        print("Pregrasp xyz:", shifted_object_xyz)
-
-        # IK
-        target_joint_positions, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
-            shifted_object_xyz, ee_rot, q0=joint_state
-        )
-
-        print("Pregrasp joint positions: ")
-        print(" - arm: ", target_joint_positions[HelloStretchIdx.ARM])
-        print(" - lift: ", target_joint_positions[HelloStretchIdx.LIFT])
-        print(" - roll: ", target_joint_positions[HelloStretchIdx.WRIST_ROLL])
-        print(" - pitch: ", target_joint_positions[HelloStretchIdx.WRIST_PITCH])
-        print(" - yaw: ", target_joint_positions[HelloStretchIdx.WRIST_YAW])
-
-        # get point 10cm from object
-        if not success:
-            print("Failed to find a valid IK solution.")
-            self._success = False
-            return
-        elif (
-            target_joint_positions[HelloStretchIdx.ARM] < -0.05 or target_joint_positions[HelloStretchIdx.LIFT] < -0.05
-        ):
-            print(
-                f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
+        # A fixed standoff can put the requested arm behind its retracted
+        # limit. Try bounded, still-separated poses along the same approach
+        # ray, largest standoff first. Never clamp an infeasible IK solution.
+        minimum_standoff = self.minimum_pregrasp_standoff
+        if not np.isfinite(distance_from_object) or distance_from_object < minimum_standoff:
+            return None
+        for standoff in np.linspace(distance_from_object, minimum_standoff, 6):
+            shifted_object_xyz = relative_object_xyz - standoff * vector_to_object
+            candidate, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
+                shifted_object_xyz, ee_rot, q0=joint_state
             )
-            self._success = False
-            return
-
-        # Make sure arm and lift are positive
-        target_joint_positions[HelloStretchIdx.ARM] = max(target_joint_positions[HelloStretchIdx.ARM], 0)
-        target_joint_positions[HelloStretchIdx.LIFT] = max(target_joint_positions[HelloStretchIdx.LIFT], 0)
-
-        # Zero out roll and yaw
-        target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
-        target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
-
-        # Lift the arm up a bit
-        target_joint_positions_lifted = target_joint_positions.copy()
-        target_joint_positions_lifted[HelloStretchIdx.LIFT] += self.lift_distance
-
-        print(f"{self.name}: Moving to pre-grasp position.")
-        self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True)
-        print("... done.")
+            if (
+                success
+                and candidate is not None
+                and np.isfinite(candidate).all()
+                and candidate[HelloStretchIdx.ARM] >= 0
+                and candidate[HelloStretchIdx.LIFT] >= 0
+            ):
+                return candidate.copy()
+        return None
 
     def grasp_open_loop(self, object_xyz: np.ndarray):
         """Grasp the object in an open loop manner. We will just move to object_xyz and close the gripper.
@@ -1065,7 +1430,7 @@ class GraspObjectOperation(ManagedOperation):
         """
 
         model = self.robot.get_robot_model()
-        xyt = self.robot.get_base_pose()
+        xyt = self.robot.get_base_pose_world()
         relative_object_xyz = point_global_to_base(object_xyz, xyt)
         joint_state = self.robot.get_joint_positions()
 

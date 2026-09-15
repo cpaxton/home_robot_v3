@@ -56,6 +56,31 @@ def test_default_min_clearance_stretch_footprint():
     assert default_min_clearance_m(0.34) == pytest.approx(0.22)
 
 
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_does_not_connect_free_cells_through_blocked_diagonal(multi):
+    obs = np.array([[False, True], [True, False]])
+    space = _FakeSpace(_FakeVoxelMap(obs, np.ones_like(obs)))
+    planner = AStar(space, min_clearance_m=0, clearance_cost_weight=0)
+    start, goal = (0.05, 0.05, 0), (0.15, 0.15, 0)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert not result.success
+    assert planner.get_reachable_points((0, 0)) == {(0, 0)}
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_routes_around_corner_with_executable_adjacent_edges(multi):
+    obs = np.zeros((5, 5), dtype=bool)
+    obs[2, 2] = True
+    space = _FakeSpace(_FakeVoxelMap(obs, np.ones_like(obs)))
+    planner = AStar(space, min_clearance_m=0, clearance_cost_weight=0)
+    start, goal = (0.15, 0.25, 0), (0.25, 0.35, 0)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert result.success
+    cells = [planner.to_pt(node.state) for node in result.trajectory]
+    assert len(cells) > 2
+    assert all(planner.is_in_line_of_sight(a, b) for a, b in zip(cells, cells[1:], strict=False))
+
+
 def test_unwrap_yaw_shortest_turn():
     assert abs(unwrap_yaw(0.0, math.pi / 2) - math.pi / 2) < 1e-6
     # 5.50 wraps near -0.78; from -1.89 the short delta is not a +2π jump.

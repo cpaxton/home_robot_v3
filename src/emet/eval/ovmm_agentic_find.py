@@ -29,11 +29,15 @@ def _ovmm_agentic_trace_path(trace_meta: dict[str, Any] | None) -> Path | None:
     return Path(ep).expanduser() / f"{safe}_agentic_trace.jsonl"
 
 
-def ovmm_find_object_question(object_name: str, start_recep: str | None = None) -> str:
+def ovmm_find_object_question(object_name: str, start_recep: str | None = None, *, relation: str = "on") -> str:
     """Phrase FindObj as an open question for the agentic loop."""
+    if relation not in {"on", "nearest"}:
+        raise ValueError(f"Unsupported FindObj relation: {relation}")
     obj = str(object_name or "").strip() or "object"
     recep = str(start_recep or "").strip()
     if recep:
+        if relation == "nearest":
+            return f"Where is the {obj} nearest to a {recep}?"
         return f"Where is the {obj} on the {recep}?"
     return f"Where is the {obj}?"
 
@@ -69,9 +73,10 @@ def _localize_phrases(question: str, trace_meta: dict[str, Any] | None) -> list[
         inner = q[13:-1].strip()
         if inner.lower().startswith("the "):
             inner = inner[4:].strip()
-        on_idx = inner.lower().rfind(" on the ")
-        if on_idx > 0:
-            inner = inner[:on_idx].strip()
+        for separator in (" on the ", " nearest to a "):
+            index = inner.lower().rfind(separator)
+            if index > 0:
+                inner = inner[:index].strip()
         if inner and inner not in out:
             out.append(inner)
     return out
@@ -289,8 +294,13 @@ def run_ovmm_agentic_localize(
     xyz_source = None
     extra_q = None
     extra_stats: dict[str, Any] = {}
+    grounded_oid = getattr(result, "grounded_obs_id", None)
+    if result.verified and grounded_oid is not None:
+        xyz = xyz_from_verified_obs(agent, grounded_oid, phrases=localize_phrases)
+        if xyz is not None:
+            xyz_source = "grounded_object"
     loop_xyz, loop_phrase, loop_from_pin = _xyz_from_loop_voxel(result, localize_phrases)
-    if loop_xyz is not None:
+    if xyz is None and loop_xyz is not None:
         xyz = loop_xyz
         xyz_source = "voxel"
         extra_q = loop_phrase
@@ -317,6 +327,7 @@ def run_ovmm_agentic_localize(
         "budget_hit": bool(result.budget_hit),
         "answer_provenance": str(result.answer_provenance or ""),
         "xyz_source": xyz_source,
+        "grounded_obs_id": grounded_oid,
     }
     if extra_q:
         extra["voxel_query_used"] = extra_q
@@ -426,10 +437,11 @@ def run_ovmm_agentic_find_pair(
     max_rounds: int | None = None,
     max_nav_steps: int | None = None,
     extra_trace_meta: dict[str, Any] | None = None,
+    object_relation: str = "on",
 ) -> OvmmFindQueryOutcome:
     """FindObj then FindRec through the shared AgenticEQA loop (Habitat and sim)."""
     meta = empty_ovmm_agentic_meta(use_agentic=True)
-    obj_q = ovmm_find_object_question(object_query, start_recep)
+    obj_q = ovmm_find_object_question(object_query, start_recep, relation=object_relation)
     recep_q = ovmm_find_recep_question(goal_recep)
     meta["obj_agentic_question"] = obj_q
     meta["recep_agentic_question"] = recep_q
@@ -506,6 +518,7 @@ def run_ovmm_find_queries(
     planar_frame: Literal["mujoco_xy", "habitat_xz"] = "mujoco_xy",
     phrase_only: bool = False,
     capture_voxel_stats: bool | None = None,
+    object_relation: str = "on",
 ) -> OvmmFindQueryOutcome:
     """Dispatch FindObj/FindRec: agentic loop or one-shot memory localize.
 
@@ -525,6 +538,7 @@ def run_ovmm_find_queries(
             max_rounds=max_rounds,
             max_nav_steps=max_nav_steps,
             extra_trace_meta=extra_trace_meta,
+            object_relation=object_relation,
         )
     # Lazy: oneshot lives next to query_find_phase_localization.
     from emet.eval.ovmm_find_phase import run_ovmm_oneshot_find_pair

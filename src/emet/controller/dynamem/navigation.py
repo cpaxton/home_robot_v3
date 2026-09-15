@@ -141,8 +141,9 @@ def _filter_unsafe_nav_traj(
     min_along = float(min(clearances)) if clearances else None
     if not kept:
         return [], reject or "rejected_low_clearance", min_along
-    if reject is not None and len(kept) <= 1 and start_xy is not None:
-        # Only start survived → nothing useful to execute.
+    if reject is not None:
+        # Do not label a truncated prefix as a complete route or attach its
+        # original arrival marker. Replan instead of repeating the same prefix.
         return [], reject, min_along
     if object_tail:
         kept.extend(object_tail)
@@ -215,7 +216,12 @@ def execute_action(
     """
     if not self._realtime_updates:
         self.robot.look_front()
-        self.look_around()
+        if text and getattr(self, "query_driven_memory", False):
+            # Search visible views before trusting a weak voxel anchor. This
+            # grounds an approach target, not arrival or manipulation success.
+            self.verify_query_arrival(text)
+        else:
+            self.look_around()
         self.robot.look_front()
         self.robot.switch_to_navigation_mode()
 
@@ -292,8 +298,25 @@ def execute_action(
                     logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
                     return None, None
 
+            if text and getattr(self, "query_driven_memory", False):
+                point = self.verify_query_arrival(text, candidate_handle=plan_meta.get("query_candidate_handle"))
+                if point is None:
+                    handle = plan_meta.get("query_candidate_handle")
+                    if handle is not None:
+                        self.query_candidates.reject(
+                            handle,
+                            observation_revision=len(self.voxel_map.observations),
+                            reason="arrival views did not verify target",
+                        )
+                    self._record_nav_plan_fields(outcome="target_not_verified")
+                    return False, None
+                self._record_nav_plan_fields(outcome="ok", localize_source="query_verified")
+                return True, point
             self.robot.look_front()
             self.update()
+            if text and plan_meta.get("mode") == "exploration":
+                self._record_nav_plan_fields(outcome="ok_chunk")
+                return False, None
             self._record_nav_plan_fields(outcome="ok")
             return True, res[-1]
         # Chunk: execute, grow the voxel/graph at this pose, resume leftover.
@@ -313,8 +336,13 @@ def execute_action(
             return None, None
         self.robot.look_front()
         self.update()
+        next_start = self._current_planning_xyt()
+        if np.linalg.norm(np.asarray(next_start)[:2] - np.asarray(start)[:2]) < 0.01:
+            self._mark_nav_goal_blocked(reason="navigation_no_progress")
+            logger.warning("Navigation chunk completed without measured translation; stopping continuation")
+            return None, None
         self._record_nav_plan_fields(outcome="ok_chunk")
-        start = self._current_planning_xyt()
+        start = next_start
     logger.info("execute_action: still chunked after %d hops", DYNAMEM_NAV_MAX_HOPS)
     return False, None
 
@@ -377,7 +405,30 @@ def process_text(self, text, start_pose):
     localized_point = None
     waypoints = None
 
-    if text is not None and text != "" and self.space.traj is not None:
+    query_mode = bool(getattr(self, "query_driven_memory", False)) and bool(text)
+    query_candidate_handle = None
+    if query_mode:
+        # Retrieval provides approach candidates only. Never invoke the legacy
+        # detector/localize_text acceptance path for query-driven memory.
+        target = getattr(self, "_grounded_query_target", None)
+        record = self.query_candidates.records.get(target.candidate_id) if target is not None else None
+        if record is not None and record.query == " ".join(text.lower().split()) and record.rejected_revision is None:
+            localized_point = target.xyz
+            query_candidate_handle = record.handle
+            localize_source = "query_grounded_approach"
+        else:
+            localized_point, stats = self.retrieve_query_candidate(text)
+        if localized_point is not None and query_candidate_handle is None:
+            record = self.propose_query_candidate(text, localized_point, stats)
+            if record is None:
+                localized_point = None
+            else:
+                record.target_description = text
+                query_candidate_handle = record.handle
+                localize_source = "query_candidate"
+                debug_text += "## Approaching unverified query candidate; fresh arrival grounding required.\n"
+
+    if not query_mode and text is not None and text != "" and self.space.traj is not None:
         logger.debug("Reusing saved trajectory target: %s", self.space.traj)
         traj_target_point = self.space.traj[-1]
         if hasattr(self.encoder, "feature_matching_threshold") and self.voxel_map.verify_point(
@@ -408,7 +459,7 @@ def process_text(self, text, start_pose):
 
     logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
-    if text is not None and text != "" and localized_point is None:
+    if not query_mode and text is not None and text != "" and localized_point is None:
         graph_point = self._localize_point_from_graph_memory(text)
         if graph_point is not None:
             localized_point = graph_point
@@ -417,7 +468,7 @@ def process_text(self, text, start_pose):
             mode = "navigation"
             logger.info("Localized %r from graph memory at %s", text, np.asarray(graph_point).reshape(-1)[:3])
 
-    if text is not None and text != "" and localized_point is None:
+    if not query_mode and text is not None and text != "" and localized_point is None:
         det = getattr(self.voxel_map, "detection_model", None)
         if det is not None or self.encoder is not None:
             try:
@@ -558,12 +609,16 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
+        # Query arrival has an actual RGB-D visibility gate; legacy callers keep
+        # their existing planar heuristic until they adopt that contract.
+        visibility = {"require_planar_visibility": False} if query_mode and mode == "navigation" else {}
         point = self.space.sample_navigation(
             start_pose,
             self.planner,
             localized_point,
             mode=mode,
             blocked=getattr(self, "_habitat_blocked_goals", None) if mode == "exploration" else None,
+            **visibility,
         )
 
     logger.info(
@@ -616,6 +671,7 @@ def process_text(self, text, start_pose):
             explore_goal=(mode == "exploration"),
         )
         if reject_reason is not None or not traj:
+            self.space.traj = None
             logger.warning(
                 "Nav plan rejected after safety filter: %s (min_clearance=%s)",
                 reject_reason,
@@ -727,6 +783,7 @@ def process_text(self, text, start_pose):
             localize_source=localize_source,
             goal_xyt=list(point),
             object_xyz=[ox, oy, oz],
+            query_candidate_handle=query_candidate_handle,
             traj=list(traj),
         )
     return traj
@@ -748,4 +805,6 @@ def navigate(self, text, max_step=10):
         if finished is None:
             logger.warning("Navigation failed (blocked or no progress).")
             return None
-    return end_point
+    # An intermediate exploration endpoint is not a localized target. Budget
+    # exhaustion must not let callers proceed to manipulation with that point.
+    return end_point if finished is True else None

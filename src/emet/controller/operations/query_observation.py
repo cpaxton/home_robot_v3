@@ -1,0 +1,121 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+"""Ephemeral visual geometry for manipulation; does not create memory instances."""
+
+import os
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+
+from emet.controller.dynamem.look import wait_post_motion_obs
+from emet.memory.query_grounding import cache_grounding_record
+
+
+def trim_depth_outliers(depth, mask):
+    """Trim minority mixed-depth pixels from an already verified object mask.
+
+    The median/MAD estimate assumes dominant object support, not a perfect
+    silhouette. Preserve at least 80% of valid support or abstain. The 2 cm
+    floor avoids a zero-width band on planar or quantized depth surfaces.
+    """
+    values = depth[mask]
+    if len(values) < 10:
+        raise ValueError("Insufficient observed manipulation geometry")
+    median = float(np.median(values))
+    mad = float(np.median(np.abs(values - median)))
+    band = max(0.02, 3 * mad)
+    supported = mask & (np.abs(depth - median) <= band)
+    if supported.sum() < max(10, 0.8 * len(values)):
+        raise ValueError("Manipulation mask has insufficient coherent depth support")
+    return supported, {
+        "median_m": median,
+        "mad_m": mad,
+        "band_m": band,
+        "input_pixels": len(values),
+        "retained_pixels": int(supported.sum()),
+    }
+
+
+def observe_query_points(agent, robot, query, *, stage):
+    before = getattr(robot, "_seq_id", None)
+    wait_post_motion_obs(robot, timeout=2.0)
+    if not isinstance(before, int) or getattr(robot, "_seq_id", before) <= before:
+        raise ValueError("Fresh manipulation image required")
+    obs = robot.get_observation()
+    world = obs.get_xyz_in_world_frame()
+    if world is None or obs.rgb is None or obs.depth is None:
+        raise ValueError("Calibrated manipulation RGB-D required")
+    frame = SimpleNamespace(rgb=obs.rgb, depth=obs.depth, full_world_xyz=world)
+    detected, matching, verification = None, [], {}
+    error = None
+    try:
+        detected, _, matching, verification = agent.ground_vlm_frame(frame, query, query, min_depth=0.0)
+        if not verification.get("valid") or len(matching) != 1:
+            detail = verification.get("reason") or "no unique verified surface"
+            raise ValueError(f"Manipulation target identity absent or ambiguous: {detail}")
+        mask = (detected.instance == matching[0]) & np.isfinite(world).all(axis=-1)
+        mask &= np.isfinite(obs.depth) & (obs.depth > 0)
+        mask, depth_support = trim_depth_outliers(obs.depth, mask)
+        verification = {**verification, "depth_support": depth_support}
+        points = world[mask]
+        if len(points) < 10:
+            raise ValueError("Insufficient observed manipulation geometry")
+        return obs, points
+    except ValueError as exc:
+        error = str(exc)
+        raise
+    finally:
+        output = os.environ.get("EMET_EQA_EPISODE_DIR")
+        if output:
+            cache_grounding_record(
+                Path(output) / stage,
+                query=query,
+                revision=len(agent.voxel_map.observations),
+                source_obs_id=None,
+                detections=[],
+                matching_ids=matching,
+                verification={
+                    **verification,
+                    "valid": error is None and bool(verification.get("valid")),
+                    "stage": stage,
+                    "reason": error,
+                },
+                rgb=obs.rgb,
+                depth=obs.depth,
+                masks=None if detected is None else detected.instance,
+                metadata={
+                    "camera_K": obs.camera_K.tolist(),
+                    "camera_pose": obs.camera_pose.tolist(),
+                    "recorded_at": time.time(),
+                    "joint": obs.joint.tolist(),
+                    "ee_pose": None if obs.ee_pose is None else obs.ee_pose.tolist(),
+                },
+            )
+
+
+def observe_lifted_query(agent, robot, query, *, initial_xyz, minimum_lift_m, stage, relative_reference=None):
+    """Confirm observed lift/retention, not independent physical grasp success.
+
+    Reuse the placement path's fresh semantic RGB-D and 12 cm gripper proximity
+    gate. Require visible object rise, then consistency in the gripper frame
+    across the carry transition. Missing evidence leaves possession uncertain.
+    """
+    obs, points = observe_query_points(agent, robot, query, stage=stage)
+    pose = None if obs.ee_pose is None else np.asarray(obs.ee_pose)
+    initial = np.asarray(initial_xyz)
+    if pose is None or pose.shape != (4, 4) or not np.isfinite(pose).all():
+        raise ValueError("Calibrated gripper pose required to verify lifted object")
+    if initial.shape != (3,) or not np.isfinite(initial).all():
+        raise ValueError("Initial object geometry required to verify lift")
+    center = np.quantile(points, [0.05, 0.95], axis=0).mean(axis=0)
+    if np.min(np.linalg.norm(points - pose[:3, 3], axis=1)) > 0.12:
+        raise ValueError("Observed object is not near the gripper after lift")
+    if center[2] - initial[2] < minimum_lift_m:
+        raise ValueError("Object rise is insufficient to verify pickup")
+    relative = pose[:3, :3].T @ (center - pose[:3, 3])
+    if relative_reference is not None and np.linalg.norm(relative - relative_reference) > 0.05:
+        raise ValueError("Object moved relative to the gripper during carry transition")
+    return relative

@@ -109,13 +109,27 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         return True
 
     def sample_target_point(
-        self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False, blocked=None
+        self,
+        start: torch.Tensor,
+        point: torch.Tensor,
+        planner,
+        exploration: bool = False,
+        blocked=None,
+        *,
+        require_planar_visibility: bool = True,
+        distance_range: tuple[float, float] | None = None,
     ) -> np.ndarray | None:
         """Sample a position near the mask and return.
 
         Args:
             look_at_any_point(bool): robot should look at the closest point on target mask instead of average pt
         """
+
+        if distance_range is not None:
+            if exploration or len(distance_range) != 2 or not np.isfinite(distance_range).all():
+                raise ValueError("A finite object-approach distance range is required")
+            if not 0 <= distance_range[0] < distance_range[1]:
+                raise ValueError("Object-approach distance range must be ordered and nonnegative")
 
         obstacles, explored = self.voxel_map.get_2d_map()
 
@@ -152,6 +166,10 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         # Frontiers are coverage goals, not objects to stand away from. Pick the
         # nearest valid reachable cell; retain footprint and visibility checks.
         standoffs = [0.0] if exploration else [0.35, 0.24, 0.14, 0.08]
+        if distance_range is not None:
+            # A manipulation workspace is a hard constraint, not a preference
+            # that may fall back to successively closer viewing locations.
+            standoffs = [distance_range[0]]
         obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
 
         for min_standoff in standoffs:
@@ -168,6 +186,8 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 dist_xy = float(np.hypot(selected_x - px, selected_y - py))
                 if not exploration and dist_xy <= min_standoff:
                     continue
+                if distance_range is not None and dist_xy > distance_range[1]:
+                    continue
 
                 ok = True
                 if dist_xy <= 0.5:
@@ -177,9 +197,16 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     if 0 <= ni < obs_h and 0 <= nj < obs_w and bool(obstacles[ni, nj]):
                         ok = False
 
-                # The goal theta already faces the predicted position; make sure the
-                # predicted position is actually visible from the reachable pose.
-                if ok and not self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y):
+                # A 2D collision map cannot establish camera visibility of a
+                # raised object: its supporting table projects into the same
+                # cells. Object approaches retain footprint/path safety, while
+                # the caller must verify the target from the resulting view.
+                # Keep this planar visibility heuristic for free-space frontiers.
+                if (
+                    (exploration or require_planar_visibility)
+                    and ok
+                    and not self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y)
+                ):
                     ok = False
 
                 if ok:
@@ -412,12 +439,30 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         xy = self.voxel_map.grid_coords_to_xy(pt)  # type: ignore
         return float(xy[0]), float(xy[1])
 
-    def sample_navigation(self, start, planner, point, mode="navigation", *, blocked=None):
+    def sample_navigation(
+        self,
+        start,
+        planner,
+        point,
+        mode="navigation",
+        *,
+        blocked=None,
+        require_planar_visibility=True,
+        distance_range=None,
+    ):
         plt.clf()
         if point is None:
             start_pt = self.to_pt(start)
             return None
-        goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation", blocked=blocked)
+        goal = self.sample_target_point(
+            start,
+            point,
+            planner,
+            exploration=mode != "navigation",
+            blocked=blocked,
+            require_planar_visibility=require_planar_visibility,
+            distance_range=distance_range,
+        )
         logger.debug("sample_navigation point=%s goal=%s", point, goal)
         obstacles, explored = self.voxel_map.get_2d_map()
         plt.imshow(obstacles)

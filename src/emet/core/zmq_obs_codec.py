@@ -125,7 +125,7 @@ def read_image_timing(message: dict[str, Any]) -> dict[str, Any]:
     """Keep per-camera timing without inventing timestamps for legacy peers."""
     return {
         camera: message[camera + "/image_timing"]
-        for camera in ("head_cam_left", "head_cam_right", "ee_cam")
+        for camera in ("head_cam", "head_cam_left", "head_cam_right", "ee_cam")
         if message.get(camera + "/image_timing") is not None
     }
 
