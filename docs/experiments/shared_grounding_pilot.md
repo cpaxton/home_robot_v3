@@ -22,7 +22,7 @@ approach radius, not an immobile robot. The monitor ignores XY improvement
 once the previous error is within its outer 0.07 m tolerance. `4c08782d` removes
 that progress gate without changing arrival tolerances, stall windows, or
 deadlines; valid inner-approach and stationary wrong-heading tests pass, with
-**595 broad tests passed / 4 skipped**. A same-fixture retry is still required.
+**595 broad tests passed / 4 skipped**.
 The wheel-only tabletop control **passes verified physical pickup/place**; its
 final reconstruction shows the cylinder upright on the block with the gripper
 withdrawn. This is one positive control, not a new six-case panel. Same-fixture
@@ -34,7 +34,29 @@ the same exclusive lock, using `4c08782d` and an archived fixture under
 `~/runs/emet/room-can-noslip-control-20260915`. Only NoSlip iterations change
 from 0 to 10; the native frozen wheel priorities and all object parameters are
 retained. This tests the recorded-control retention hypothesis with the learned
-agent; it is **not native-physics room acceptance**. Both results remain pending.
+agent; it is **not native-physics room acceptance**.
+
+The progress-fix room retry completes navigation and arm-facing alignment,
+then fails the separated pregrasp approach (237 wall seconds, verified F/F).
+The arm's commanded lift/extension are 0.885/0.333 m; the final measured values
+are about 0.786/0.099 m. A non-integrating frozen-state contact audit finds both
+finger pads pressing against the island front (individual recomputed normal
+forces up to about 35 N). This is a real obstructed simultaneous raise/extend
+motion, not grounds for increasing timeouts or force limits. The audit script
+and output are retained in `progress-fix-policy/replay/arm_contact_audit.*`;
+forces are recomputed diagnostics, not recorded force telemetry. Next test is
+staged pregrasp motion before considering general clearance planning. Navigation
+completion is not room-task acceptance; no pickup occurred.
+
+The explicit RoboCasa solver control stops before grasping (77 wall seconds,
+verified F/F): after navigation, head-sweep reacquisition selects the other can
+in the sink, then the target-ambiguity gate rejects pickup. Saved images confirm
+that the sink view is not the originally selected counter can. The generic
+instruction "can" is also underspecified in this multi-can fixture. Thus this
+rollout is **inconclusive about retention**, not evidence that NoSlip=10 repairs
+or fails physical grasp. Preserve it and audit target-directed reacquisition
+and task identity before another learned retention comparison. Shutdown EGL
+and manager errors remain visible in the log and are not task-success evidence.
 
 ## Room follow-up: retention handoff repaired; room acceptance still pending
 

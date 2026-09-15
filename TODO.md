@@ -24,7 +24,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       178 s (physical F/F), with a known-good tabletop control passing T/T in
       251 s (one control, not a full new panel). Matched
       solver replay `20260914_230920_5ac3db` reproduces native loss and retains
-      the payload under NoSlip=10, but is not learned acceptance. Retain both.
+      the payload under NoSlip=10, but is not learned acceptance. Explicit
+      learned solver control `20260915_000550_b5b250` fails before grasping:
+      reacquisition looks at the other can in the sink, then rejects ambiguous
+      identity (77 s, verified F/F). Retention is inconclusive. Audit directed
+      reacquisition and the underspecified multi-can task before more repeats.
 - [ ] Resolve Molmo first-turn stall before more room policy cases. Failed
       `20260914_231706_1626e6` remains upright but cannot finish its first yaw
       goal. Check material mixing, overlapping floor contacts and simulated
@@ -38,7 +42,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       waypoint 2: translation inside the outer acceptance radius is incorrectly
       ignored by the progress monitor. `4c08782d` fixes this without relaxing
       tolerances/timeouts (595 tests / 4 skipped); exact retry
-      `20260915_000525_17f117` running. Tabletop control
+      `20260915_000525_17f117` completes navigation and arm-facing alignment,
+      then fails pregrasp (237 s, verified F/F). Frozen-state contact audit
+      shows the pads pressing against the island front during simultaneous
+      raise/extend. Test staged pregrasp motion; do not widen tolerances, extend
+      timeouts, or push through contact. General clearance planning remains
+      separate. Tabletop control
       `20260914_235634_4df8bf` passes physical T/T on frozen wheel-only `52bebc6d`.
       Also inspect shutdown
       manager/thread ordering (BrokenPipe).
