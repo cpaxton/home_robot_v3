@@ -12,9 +12,12 @@ TAMP and paired EQA/find gates still block promotion. Subsequent private sequenc
 scoring, open-sink fixture and timestamp transport are separately tested changes,
 not part of the frozen panel. Keep production contact defaults unchanged.
 
-The latest code candidate is `787acb6f`: the repaired separated-tabletop control
-passes 2/2, and `20260914_214506_a2a467` runs the remaining original/mirrored
-four cases serially. Do not claim the old panel covers this source. The failed
+Candidate `787acb6f` passed original and separated tabletop 2/2 each, but
+`20260914_214506_a2a467` stopped at mirrored repeat 1 (pickup T / place F),
+leaving repeat 2 unrun. Candidate `4f78ae62` sequences horizontal alignment
+before descent; 567 offline tests pass / 4 skip. Job `20260914_220543_2c4d00`
+tests that exact failure and an original-clutter neighbor. Do not claim the
+old six-case panel covers either source. The failed
 sink remains documented. General end-effector clearance planning is deferred;
 this PR still needs the unchanged bounded gates on predeclared accessible
 open-support room tasks, learned two-step TAMP and paired EQA/find.

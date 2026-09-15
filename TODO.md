@@ -20,6 +20,11 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       stopping on failure. Then predeclare accessible room fixtures for OVMM
       and learned two-step TAMP, and run paired EQA/find. Do not lower the
       documented acceptance thresholds or select fixtures by rollout success.
+      Result: original 2/2, mirrored repeat 1 pickup T / place F; repeat 2
+      unrun. Including separated 2/2 gives 4/5 completed, not acceptance.
+      The held cylinder touched the cube before lateral convergence; extension
+      stalled 24.7 mm short. Test horizontal-before-descent sequencing with the
+      same release/motion gates, then rerun the failed case and a neighbor.
 
 - [x] Complete the frozen basic physical gate: v7 `20260913_195911_6c9e7c`,
       source `ef533ed3`, passes **6/6 pickup and placement**, all three fixtures

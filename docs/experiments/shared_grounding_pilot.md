@@ -1,5 +1,53 @@
 # Shared grounding: bounded cross-task pilot
 
+## September 14 closeout: mirrored placement stops the repaired-source panel
+
+Job `20260914_214506_a2a467` freezes `787acb6f`, Qwen3-VL int4/SDPA,
+tracked-narrow, lazy graph and the same NoSlip=10 wrappers. Original clutter
+passes pickup/place **2/2** (244 / 253 wall seconds); both final close-up
+reconstructions were manually inspected. Mirrored repeat 1 passes pickup but
+fails placement (233 seconds), so repeat 2 is **unrun**. Together with the
+same-source separated fixture's earlier 2/2, this is **4/5 completed placements,
+one unrun**, not Stage B acceptance. The older `ef533ed3` 6/6 is not pooled.
+Artifacts: `~/runs/emet/manipulation-closeout-20260914`.
+
+The failed mirrored run correctly reports failure and does not open its gripper.
+It first commands a combined lateral/downward correction with observed error
+(-5.0, -24.3, -57.9) mm. The next error is (-2.1, -16.2, -1.9) mm: height is
+near release, but lateral alignment has not converged. That correction times
+out. Private no-integration reconstruction under
+`~/runs/emet/mirrored-motion-audit-20260914` shows simultaneous object/gripper
+and object/cube contact. Final measured arm extension is 0.34503 m against a
+0.36973 m command, outside the unchanged 0.02 m completion tolerance. Sampled
+contacts show no gripper-body/counter obstruction like the earlier sink case.
+This supports a local ordering hypothesis: lowering before centering makes the
+remaining correction drag a held object across its support. It is not evidence
+that the printed navigation-tolerance warning caused the timeout.
+
+Candidate `4f78ae62` centers horizontally before descending. If a fresh view
+already puts a laterally misaligned object near the release surface, it aborts
+instead of dragging or releasing it. Keep the existing four-observation limit,
+5 cm step/reference bounds, identity/geometry checks and release thresholds.
+This is a shared local sequencing change, not general clearance planning. It
+requires an exact mirrored retry and neighboring control before a new panel.
+Offline checks pass **567 tests / 4 skip**, including near-support no-drag
+negatives. Job `20260914_220543_2c4d00` runs mirrored then original serially,
+stopping on physical failure; artifacts
+`~/runs/emet/placement-sequencing-control-20260914`. This is diagnostic
+verification, not a replacement six-case panel or room acceptance.
+
+General end-effector clearance planning is explicitly deferred from this PR;
+the failed sink remains in the report. Accessible room OVMM, learned two-step
+TAMP and paired EQA/find still gate promotion. Geometry preflight
+`20260914_215413_ed37f8` generated and archived a native RoboCasa seed-0 room,
+but its diagnostic renderer requested 960 pixels from a 640-pixel framebuffer.
+No policy ran. Preserve that scene/metadata and render within its framebuffer;
+do not regenerate until a preferred object appears. Other room fixtures remain
+unprepared, not implicit successes. The actual generated client URDF used by
+the tabletop candidate has SHA256
+`1594765a3119bc03fa0140799ef77e5796703a7f30fa93685988e24231815fe4`,
+matching the archived legacy model in the embodiment audit below.
+
 ## September 13: basic manipulation gate passed, cross-task gates pending
 
 **V7 passes 6/6 independently scored physical pickups and placements.** Managed
