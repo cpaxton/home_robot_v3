@@ -28,6 +28,25 @@ not a same-seed causal test or the complete four-row acceptance matrix. Maps,
 videos and grounding evidence are enabled. Learned TAMP remains gated on the
 room manipulation checks; no oracle battery result substitutes for that gate.
 
+First result: Molmo on `0ecc0aa9` completes the staged pregrasp and reaches
+visual servoing, clearing the earlier counter-front obstruction. It still
+fails pickup/place (verified F/F, 356 wall seconds): the end effector remains
+about 0.28 m short of the tomato while the arm approaches its extension limit.
+The last-state audit finds no fingertip contacts; arm joints are about
+0.123 m each against 0.13 m limits. The viewing pose is beyond the existing
+grasp workspace's upper radial bound, but the handoff previously checked only
+minimum distance. This is not permission to enlarge arm limits or skip motion
+confirmation.
+
+Follow-up `6a1579e4` checks both workspace bounds and uses the existing
+collision-checked relocation planner, retaining the low-target feasible-IK
+exception and rejecting measured arrivals still outside the workspace. Broad
+checks: **600 passed / 4 skipped**. Frozen independently in
+`/tmp/emet-reach-eval`; queued exact Molmo `20260915_085532_ac9ef2` and tabletop
+`20260915_085536_b4353a` write under `~/runs/emet/workspace-handoff-20260915`.
+Their live results are pending. The earlier queue, including EQA, remains on
+`0ecc0aa9` without this manipulation-only follow-up; no running source changes.
+
 ## Wheel-contact candidate: first turn repaired; approach-monitor bug exposed
 
 `52bebc6d` on `fix/room-wheel-contact-profile` gives only Stretch's drive-wheel

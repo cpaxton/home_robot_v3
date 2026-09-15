@@ -18,6 +18,12 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       and EQA `20260915_084704_ce9c77`. Broad tests 598 passed / 4 skipped;
       live results pending. Keep native/solver rows and historical EQA results
       separate. Proceed to learned TAMP only after checking room manipulation.
+      Molmo result: staged pregrasp clears the counter, but the far viewing pose
+      leaves the arm about 0.28 m short (356 s, verified F/F). `6a1579e4` adds
+      the missing upper-workspace check with collision-checked relocation;
+      600 tests pass / 4 skip. Independent frozen retries
+      `20260915_085532_ac9ef2` (Molmo) and `20260915_085536_b4353a` (tabletop)
+      are queued; previous jobs keep their original `0ecc0aa9` source.
 
 - [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
       and drives to it, but the native-NoSlip=0 trace loses the can during lift.
