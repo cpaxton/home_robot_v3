@@ -12,6 +12,13 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+- [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
+      Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native
+      can `20260915_084626_fc3604`, explicit NoSlip can `20260915_084630_7e774e`,
+      and EQA `20260915_084704_ce9c77`. Broad tests 598 passed / 4 skipped;
+      live results pending. Keep native/solver rows and historical EQA results
+      separate. Proceed to learned TAMP only after checking room manipulation.
+
 - [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
       and drives to it, but the native-NoSlip=0 trace loses the can during lift.
       Previously lift-motion completion let the task proceed to destination

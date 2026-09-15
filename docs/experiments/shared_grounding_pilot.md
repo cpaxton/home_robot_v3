@@ -1,5 +1,33 @@
 # Shared grounding: bounded cross-task pilot
 
+## September 15 staged pregrasp and forward reacquisition pilot (running)
+
+Frozen `0ecc0aa9` combines `31d1002b` (complete an upward pregrasp lift before
+extension; hold base/wrist/extension during that stage and stop if it fails)
+with forward-view arrival verification before the existing fallback sweep.
+Candidate identity and fresh visual acceptance remain required. Neither change
+introduces a scene-specific clearance, weaker success threshold, or larger
+timeout. Broad checks: **598 passed / 4 skipped**. Review: PR #169, stacked on
+#167. This is not general collision planning or completed cross-task acceptance.
+
+All jobs share the exclusive GPU lock and safe CPU affinity, with a frozen
+evaluation checkout and new output directories:
+
+| Case | Job | Artifacts under `~/runs/emet/` |
+| --- | --- | --- |
+| Molmo same wheel-priority fixture | `20260915_084618_0fc1f5` | `staged-pregrasp-20260915/molmo` |
+| Original tabletop control | `20260915_084622_88d93c` | `staged-pregrasp-20260915/tabletop` |
+| Native RoboCasa can | `20260915_084626_fc3604` | `staged-pregrasp-20260915/can-native` |
+| Explicit RoboCasa NoSlip=10 control | `20260915_084630_7e774e` | `staged-pregrasp-20260915/can-noslip` |
+| EQA q15/16/25, hybrid and Qwen-box presets | `20260915_084704_ce9c77` | `staged-pregrasp-eqa-20260915` |
+
+Results are pending. Simulator cases use the existing tracked-narrow preset;
+the EQA rerun retains the earlier comparison's two presets, int4 Qwen, budgets,
+and semantic-label exclusions. It is a matched-question historical comparison,
+not a same-seed causal test or the complete four-row acceptance matrix. Maps,
+videos and grounding evidence are enabled. Learned TAMP remains gated on the
+room manipulation checks; no oracle battery result substitutes for that gate.
+
 ## Wheel-contact candidate: first turn repaired; approach-monitor bug exposed
 
 `52bebc6d` on `fix/room-wheel-contact-profile` gives only Stretch's drive-wheel
