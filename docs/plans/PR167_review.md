@@ -12,6 +12,13 @@ TAMP and paired EQA/find gates still block promotion. Subsequent private sequenc
 scoring, open-sink fixture and timestamp transport are separately tested changes,
 not part of the frozen panel. Keep production contact defaults unchanged.
 
+The latest code candidate is `787acb6f`: the repaired separated-tabletop control
+passes 2/2, and `20260914_214506_a2a467` runs the remaining original/mirrored
+four cases serially. Do not claim the old panel covers this source. The failed
+sink remains documented. General end-effector clearance planning is deferred;
+this PR still needs the unchanged bounded gates on predeclared accessible
+open-support room tasks, learned two-step TAMP and paired EQA/find.
+
 ## Review in dependency order
 
 | Review unit | Main code | Required evidence |

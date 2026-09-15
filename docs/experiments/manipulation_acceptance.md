@@ -87,34 +87,45 @@ is unverified, not success. Retain negative cases and infrastructure failures.
 
 ## Stages and stop gates
 
-### Current repair boundary: end-effector clearance
+### Closeout scope: accessible manipulation, not general clearance planning
 
 The September 14 sink diagnostic reaches a verified placement point but the
 gripper body contacts the front counter edge before the 5 mm release gate.
-Do not widen that gate, add downward force, or advance to the room/TAMP panel
-on pickup alone. The [trace/contact audit](shared_grounding_pilot.md) also records
+Do not widen that gate or add downward force. The [trace/contact audit](shared_grounding_pilot.md) also records
 the neighboring tabletop regression and its actual-pregrasp repair.
 
-The next implementation/evidence sequence is:
+On September 14 we explicitly deferred **general gripper-clearance planning**
+from this PR. The sink remains a failed development diagnostic, not a passing
+room case or a required general-planning implementation. The counter contact
+occurred before the abort: this is not evidence of contact-free execution.
+The closeout claim is restricted to predeclared accessible, open-support tasks.
+Keep all numerical gates below unchanged; do not select fixtures by policy
+success or silently discard failures after freezing them.
 
-1. Select and archive the actual robot/tool model. Validate FK, pitch-pivot and
-   gripper-envelope geometry against the bridge on a bounded pose grid; the
-   current legacy RE1V0 client mesh is not the native SE3/SG3 gripper. A model
-   name or one corrected origin is insufficient. Do not silently switch hardware.
-2. Add a shared geometric placement check using calibrated robot/tool geometry,
-   freshly observed support/obstacle points and the held-object observation.
-   Check the approach and release pose, not only the object-center distance.
-   Keep simulator contacts/meshes of scene objects evaluator-only. An unobserved
-   region is not evidence of free space; missing geometry must remain unverified.
-3. If the intended point cannot clear the gripper, select and freshly verify a
-   feasible alternative within the same receptacle, then use the existing
-   navigation and bounded local-motion contracts. Do not introduce sink names,
-   coordinates, cached private collision outcomes, or a larger release gap as
-   policy shortcuts. Stop if no verified feasible approach exists.
-4. Test an unobstructed release, the saved edge-obstructed geometry and an
-   unknown/occluded-support negative offline. Then run the unchanged tabletop
-   control and corrected-inertia open-sink fixture serially, repeating a pass
-   before freezing Stage C. Geometry-unit success is not physical acceptance.
+The remaining sequence is:
+
+1. Freeze candidate `787acb6f`, Qwen int4/SDPA, tracked-narrow and the explicit
+   NoSlip=10 tabletop row. Complete original and mirrored fixtures twice each.
+   Job `20260914_214506_a2a467` runs these four serially and stops on failure.
+   The same-source separated fixture already passed twice in jobs
+   `20260914_001546_f0b89d` and `20260914_002232_e419bd`. Report that split
+   execution order; do not pool the earlier `ef533ed3` panel into this result.
+2. Before policy execution, freeze room task identities, visible/search starts,
+   geometry/dynamics, agent configuration and budgets. Select accessible open
+   supports by geometric preflight, not successful learned rollouts. Run Stage C
+   and learned Stage D serially, preserving failed and unrun cases separately.
+3. Run Stage E on frozen paired rows. Fix demonstrated contract, handoff,
+   sequencing or reporting regressions, with exact-case and neighboring tests.
+   Any code/config change defines a new candidate; retain preceding failures.
+4. Finish review and paper evidence with explicit supported-task boundaries.
+   Archive the actual generated robot model as well as source/configuration:
+   the current RE1V0-based client URDF is not the native SE3/SG3 collision model.
+
+Deferred clearance work must validate the embodiment's tool envelope, check
+observed approach/release geometry, handle unknown space conservatively and
+freshly verify alternative poses. Simulator object meshes/contacts stay private.
+The saved sink obstruction and unobstructed/occluded controls belong in that
+follow-up; neither task-specific coordinates nor a wider release gap are fixes.
 
 The agent/task loop remains shared. Embodiment-specific geometry belongs in
 the robot adapter, not separate EQA/OVMM policies. Door/drawer articulation and

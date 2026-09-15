@@ -12,6 +12,15 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+- [ ] Close out the bounded accessible-task battery; general gripper-clearance
+      planning is explicitly deferred (September 14 scope decision), not a new
+      prerequisite. Keep the sink failure and contact audit in the report.
+      Frozen `787acb6f` has separated-tabletop 2/2; job
+      `20260914_214506_a2a467` runs original/mirrored twice each, serially and
+      stopping on failure. Then predeclare accessible room fixtures for OVMM
+      and learned two-step TAMP, and run paired EQA/find. Do not lower the
+      documented acceptance thresholds or select fixtures by rollout success.
+
 - [x] Complete the frozen basic physical gate: v7 `20260913_195911_6c9e7c`,
       source `ef533ed3`, passes **6/6 pickup and placement**, all three fixtures
       twice. Uses tracked-narrow and explicit NoSlip=10 physics; not a production
@@ -84,7 +93,8 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       is not persistent possession; ambiguous/occluded views must remain unknown,
       not authorize release or a second pickup. Use shared state semantics and
       adapter-provided sensing, never the private simulator evaluator.
-- [ ] Add collision-aware approach selection before claiming clutter robustness.
+- [ ] Follow-up, not this PR's accessible-task gate: add collision-aware approach
+      selection before claiming general clutter robustness.
       Narrowing an aperture is not a collision planner; an identity-positive
       partial surface is not proof of complete grasp geometry.
       The sink repeat now demonstrates gripper-body/counter contact before
