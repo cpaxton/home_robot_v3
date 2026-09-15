@@ -1,5 +1,31 @@
 # Shared grounding: bounded cross-task pilot
 
+## EQA startup restoration (September 15)
+
+All six `staged-pregrasp-eqa-20260915` cases abort with exit 134 before answering:
+`GL::Context: cannot retrieve OpenGL version`. These are infrastructure failures,
+not 0/6 accuracy. A bare Habitat probe passes, while importing MuJoCo first or
+importing the full EQA runner reproduces the native abort. OpenCV, Torch and
+Open3D individually do not reproduce it (serial import-isolation job
+`20260915_153108_5a8419`). The September 13 A* change `89581c70` imports shared
+grid helpers through `base_goal_rank` → `voxel_arm_collision`, unintentionally
+initializing MuJoCo's GL backend inside Habitat.
+
+`5d299c9d` defers MuJoCo to the actual FK call; grid/navigation imports no longer
+initialize it. `fdb441a9` adds a full-runner-import plus real-scene rendering
+preflight before the batch's model checks and episodes. Import-boundary and
+on-demand MuJoCo FK regressions pass; broad suite **607 passed / 4 skipped**.
+Full-stack rendering passes in `20260915_153330_611847` without package, driver,
+model, or renderer-configuration changes.
+
+EQA retry `20260915_153507_23eb03` freezes `fdb441a9` in `/tmp/emet-reach-eval`,
+writing `~/runs/emet/eqa-restored-20260915`. Same q15/16/25, hybrid/Qwen-box
+presets, Qwen int4, 20 planning/10 movement steps, no semantic/enriched hints,
+and map/video exports. Answer results are pending; restored rendering alone
+does not establish EQA accuracy or no regression. The two commits are separate
+from manipulation changes so the merge-critical startup repair can be reviewed
+independently.
+
 ## September 15 staged pregrasp and forward reacquisition pilot (running)
 
 Frozen `0ecc0aa9` combines `31d1002b` (complete an upward pregrasp lift before

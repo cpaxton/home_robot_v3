@@ -12,6 +12,14 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+- [ ] Merge-priority EQA restoration: `5d299c9d` fixes AStar's eager MuJoCo GL
+      import; `fdb441a9` preflights full EQA imports plus real rendering before
+      episodes. Reproduced cause and repaired rendering; 607 tests / 4 skips.
+      Frozen six-case retry `20260915_153507_23eb03` is running under
+      `~/runs/emet/eqa-restored-20260915`. Inspect answers and evidence before
+      claiming EQA acceptance. The prior six exit-134 cases are infrastructure
+      failures, not an accuracy result. Keep manipulation work separate.
+
 - [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
       Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native
       can `20260915_084626_fc3604`, explicit NoSlip can `20260915_084630_7e774e`,
