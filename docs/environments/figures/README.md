@@ -27,3 +27,22 @@ Keep large RGB-D caches/videos in artifact storage. Commit selected small figure
 with stable relative links only after checking dataset redistribution terms and
 privacy. Machine-local run paths in experiment notes are provenance, not public
 download links. Follow [evaluation exports](../../evaluation.md) for capture tools.
+
+## Mirrored tabletop sequencing
+
+`tabletop-mirrored-held-failure.png` and `tabletop-mirrored-released.png` are
+unaltered final-object renders from `scripts/render_manipulation_trace.py` using
+the repository's native Stretch/primitives scene, not RoboCasa dataset images
+or real-robot captures. They reconstruct recorded qpos without stepping physics;
+the viewpoint is evaluator-only. Their caption and outcomes are in the
+[pilot report](../../experiments/shared_grounding_pilot.md).
+
+- Failure: source `787acb6f`, job `20260914_214506_a2a467`, artifact directory
+  `~/runs/emet/manipulation-closeout-20260914/default_table_stretch_right_neighbor_noslip/repeat_1/replay`.
+- Retry: source `4f78ae62`, job `20260914_220543_2c4d00`, artifact directory
+  `~/runs/emet/placement-sequencing-control-20260914/default_table_stretch_right_neighbor_noslip/replay`.
+
+Each directory's `manifest.json` records the exact trace/scene hashes, final
+frame time and physical score. Local artifact paths are not public downloads.
+These failure-selected qualitative examples do not establish clutter robustness,
+room OVMM or learned multistep TAMP performance.

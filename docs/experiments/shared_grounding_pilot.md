@@ -1,5 +1,31 @@
 # Shared grounding: bounded cross-task pilot
 
+## Latest checkpoint: repaired-source basic gate passes 6/6
+
+Frozen **`4f78ae62` passes all six physical pickups and placements**: two
+executions each of original, mirrored and separated tabletop clutter. Jobs
+`20260914_220543_2c4d00` and `20260914_221712_59ba4e` ran serially, in the
+declared split order (mirrored 1, original 1, mirrored 2, original 2, separated
+1/2). All six final reconstructions were manually inspected. Same seed 0,
+Qwen3-VL-8B int4/SDPA, tracked-narrow, lazy graph and explicit NoSlip=10
+throughout; these are execution repeats, not six independent environments.
+
+| Fixture | Physical pickup/place | Wall seconds, repeats 1 / 2 |
+| --- | --- | --- |
+| Original | 2/2 | 242 / 246 |
+| Mirrored neighbor | 2/2 | 251 / 237 |
+| Separated neighbor | 2/2 | 264 / 263 |
+
+This satisfies Stage B on the repaired manipulation source. It is not room
+OVMM, learned TAMP, paired EQA/find acceptance or a hardware guarantee. Previous
+failed panels below are retained and not pooled. The later **launch-only**
+Molmo discovery fix `b5fd55ef` is not part of this frozen physical panel.
+Latest broad checks including its symlink regression: **570 passed / 4 skipped**;
+separate Molmo config/CLI checks: **35 passed / 1 skipped**. The first CLI test
+invocation rejected a mismatched worktree-local virtualenv; rerunning with the
+review source on `PYTHONPATH` from the owning environment's checkout passes.
+No CLI environment guard was weakened.
+
 ## September 14 closeout: mirrored placement stops the repaired-source panel
 
 Job `20260914_214506_a2a467` freezes `787acb6f`, Qwen3-VL int4/SDPA,
@@ -10,6 +36,18 @@ fails placement (233 seconds), so repeat 2 is **unrun**. Together with the
 same-source separated fixture's earlier 2/2, this is **4/5 completed placements,
 one unrun**, not Stage B acceptance. The older `ef533ed3` 6/6 is not pooled.
 Artifacts: `~/runs/emet/manipulation-closeout-20260914`.
+
+| Failed local alignment (`787acb6f`) | Sequenced alignment retry (`4f78ae62`) |
+| --- | --- |
+| ![Cylinder still held against the cube after failed alignment](../environments/figures/tabletop-mirrored-held-failure.png) | ![Cylinder on cube after release and gripper withdrawal](../environments/figures/tabletop-mirrored-released.png) |
+
+These are **private-qpos reconstructions, not agent camera views**. Both use
+native Stretch `scene_right_neighbor_noslip.xml`, seed 0, tracked-narrow,
+Qwen3-VL-8B int4/SDPA, lazy graph, wheel-drive navigation and a 600-second
+episode cap. The left trial has pickup T / place F; the right has T/T under the
+independent scorer. Selected to illustrate the diagnosed failure and exact-case
+retry, not to replace the full-panel scores. See the
+[figure provenance](../environments/figures/README.md#mirrored-tabletop-sequencing).
 
 The failed mirrored run correctly reports failure and does not open its gripper.
 It first commands a combined lateral/downward correction with observed error
@@ -35,6 +73,18 @@ negatives. Job `20260914_220543_2c4d00` runs mirrored then original serially,
 stopping on physical failure; artifacts
 `~/runs/emet/placement-sequencing-control-20260914`. This is diagnostic
 verification, not a replacement six-case panel or room acceptance.
+The mirrored retry completes **pickup T / placement T** in 251 wall seconds
+(pick 73.316 s, final stable placement 162.788 s simulation time). Its observed
+corrections are (-3.8, -20.1, -55.7), (-0.3, -8.0, -44.4), then
+(2.8, 0.2, -1.5) mm: horizontal convergence precedes final descent. The final
+close-up reconstruction was manually inspected, with the cylinder upright on
+the cube after gripper withdrawal. The original-clutter neighbor also passes
+T/T (pick 71.378 s, final stable placement 161.288 s simulation time), with its
+final close-up inspected. Job `20260914_221712_59ba4e` runs the remaining four
+same-source repeats serially. All four subsequently pass, as summarized above.
+The earlier queued
+`20260914_221205_43bdac` was cancelled before execution to avoid a launcher
+lock/prerequisite dependency; it contributes no experimental outcome.
 
 General end-effector clearance planning is explicitly deferred from this PR;
 the failed sink remains in the report. Accessible room OVMM, learned two-step
@@ -47,6 +97,59 @@ unprepared, not implicit successes. The actual generated client URDF used by
 the tabletop candidate has SHA256
 `1594765a3119bc03fa0140799ef77e5796703a7f30fa93685988e24231815fe4`,
 matching the archived legacy model in the embodiment audit below.
+
+### Room preflight: dependency dynamics, not another learned failure
+
+Preflight v2 `20260914_220622_2cb1d3` successfully renders archived RoboCasa
+seed 0 and newly generated seed 1. It stops before Molmo generation because
+the evaluation worktree cannot discover the installed Molmo interpreter.
+The installed interpreter itself imports successfully, but the existing
+`MOLMOSPACES_PYTHON` override resolves its Python symlink to the bare interpreter
+and loses the virtualenv's packages. `b5fd55ef` preserves the absolute invocation
+path and the existing import-validity check. The pending retry
+`20260914_222412_116148` was cancelled before execution; the corrected preflight
+uses the same installed environment, not a reinstall or different agent.
+Neither preflight is a room-policy result.
+
+Corrected-launch job `20260914_223654_1d5575` then merges and compiles Molmo
+index 0 but fails to reload its archived XML because relative robot asset
+directories no longer resolve from the artifact directory. The private preflight
+script now rebases those directories without changing geometry or dynamics.
+Job `20260914_224024_b8970e` completes both indices 0 and 1 on `b5fd55ef`;
+artifacts: `~/runs/emet/accessible-molmo-preflight-v2-20260914`. Archived model
+mass, inertia, inertial positions and initial qpos match the initial compilation
+within the script's recorded tolerances. Native NoSlip=4 is retained, distinct
+from the tabletop NoSlip=10 row. No physics integration or policy was run.
+Manual inspection shows the exterior overview/top-down cameras see the ceilings;
+these are not useful interior task views. Interior viewpoints, robot starts,
+target identities and supports still require predeclaration before acceptance.
+
+The new RoboCasa scenes are **not yet admitted for manipulation**. Seed 0's
+can/fish/canned-food masses are 2.941/2.063/4.418 kg; seed 1's
+spray/baguette/cream-cheese masses are 6.304/5.860/3.383 kg. Source audit
+`~/runs/emet/room-source-mass-audit-20260914` confirms EMET preserves the
+in-memory native masses/inertias exactly. However, the installed
+`cpaxton/robocasa` fork at `3d0bd42` already rewrites **every unspecified mesh
+mode to shell** in `Kitchen.edit_model_xml`, before that source model exists.
+Thus source-to-adapted equality alone does not validate authored dynamics.
+The installed checkout also has unrelated local changes; do not overwrite them.
+
+A compile-only process with that blanket rewrite removed successfully generates
+a room, with authored modes and densities untouched; artifacts
+`~/runs/emet/room-source-mass-authored-20260914`. It samples different objects,
+so its masses are **not a paired quantitative comparison**. The separate
+matched control `~/runs/emet/can-inertia-control-v2-20260914` restores only the
+same can's five unspecified mesh modes in cached native XML: recompiled mass
+changes from 5.467 to 0.0986 kg, with world-space mesh vertices, collision flags,
+qpos and non-target masses unchanged. The 5.467 kg value is a cached-XML reload,
+not the earlier 2.941 kg in-memory source; keep those serialization stages
+distinct. The first control's raw mesh-frame equality check was invalid because
+MuJoCo changes principal-axis storage frames with inertia mode; its failed
+artifacts remain, and v2 compares transformed vertices instead.
+
+Keep the installed dependency unchanged pending a separate fork review-branch
+fix. Do not tune densities, resample until a policy passes, or label these rooms
+honest full-OVMM evidence. General sink clearance remains separately deferred.
 
 ## September 13: basic manipulation gate passed, cross-task gates pending
 

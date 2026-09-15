@@ -12,24 +12,41 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
+- [ ] Fix `emet jobs run` prerequisite ordering: wait for explicit PIDs before
+      acquiring the exclusive GPU lock. Currently a dependent can hold the lock
+      while waiting for a prerequisite that needs it. Until fixed/tested, submit
+      dependent jobs after prerequisites finish; do not build lock dependencies.
+
 - [ ] Close out the bounded accessible-task battery; general gripper-clearance
       planning is explicitly deferred (September 14 scope decision), not a new
       prerequisite. Keep the sink failure and contact audit in the report.
-      Frozen `787acb6f` has separated-tabletop 2/2; job
-      `20260914_214506_a2a467` runs original/mirrored twice each, serially and
-      stopping on failure. Then predeclare accessible room fixtures for OVMM
-      and learned two-step TAMP, and run paired EQA/find. Do not lower the
-      documented acceptance thresholds or select fixtures by rollout success.
-      Result: original 2/2, mirrored repeat 1 pickup T / place F; repeat 2
-      unrun. Including separated 2/2 gives 4/5 completed, not acceptance.
-      The held cylinder touched the cube before lateral convergence; extension
-      stalled 24.7 mm short. Test horizontal-before-descent sequencing with the
-      same release/motion gates, then rerun the failed case and a neighbor.
+      Basic gate is now 6/6 on `4f78ae62`. Next predeclare accessible room
+      fixtures for OVMM and learned two-step TAMP, then run paired EQA/find.
+      Do not lower acceptance thresholds or select fixtures by rollout success.
+      Keep failed `787acb6f` (4/5 completed, one unrun) separate from the repaired
+      panel. Detailed jobs, diagnostics and figures are in the experiment report.
+- [x] Preserve Molmo virtualenv interpreter paths (`b5fd55ef`): resolving the
+      Python symlink selected the bare interpreter and lost installed packages.
+      Import validity checks remain required. Broad tests: 570 passed / 4 skip;
+      focused config/CLI checks: 35 passed / 1 skip. Geometry-only job
+      `20260914_224024_b8970e` compiles/archives both Molmo scenes after fixing
+      private archive asset paths; no reinstall or policy change. This launch-only
+      source change is not in the physical panel SHA. Interior views and explicit
+      robot starts/tasks remain to be checked; exterior renders see the ceilings.
+- [ ] Repair/review the RoboCasa fork's blanket shell-inertia rewrite before
+      admitting new room manipulation fixtures. `Kitchen.edit_model_xml` in
+      installed fork `3d0bd42` inflates masses before EMET's preservation step;
+      source equality alone is insufficient. Matched cached-can control restores
+      authored mesh modes without density/geometry changes (see report). Keep
+      unrelated dirty dependency edits intact; separate review branch, never
+      main. No installed dependency changes made during this audit.
 
-- [x] Complete the frozen basic physical gate: v7 `20260913_195911_6c9e7c`,
-      source `ef533ed3`, passes **6/6 pickup and placement**, all three fixtures
-      twice. Uses tracked-narrow and explicit NoSlip=10 physics; not a production
-      default or hardware claim. All final reconstructions manually inspected.
+- [x] Complete the repaired-source basic physical gate: `4f78ae62` passes
+      **6/6 pickup and placement**, all three fixtures twice, in jobs
+      `20260914_220543_2c4d00` and `20260914_221712_59ba4e`. Uses tracked-narrow
+      and explicit NoSlip=10 physics; not a production default or hardware claim.
+      All final reconstructions manually inspected. Earlier v7 `ef533ed3` also
+      passed 6/6 but is not pooled into the repaired-source result.
       [Results, failed panels and calibration figures](docs/experiments/shared_grounding_pilot.md).
 - [x] Fix native rendered-camera/grasp geometry and RGB-D snapshot consistency.
       The measured 8.7 mm camera-to-grasp mismatch exceeded the 5 mm servo gate.

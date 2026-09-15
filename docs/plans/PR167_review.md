@@ -6,21 +6,24 @@ the [bounded acceptance gates](../experiments/manipulation_acceptance.md) pass.
 Current evidence and failed trials live in the
 [shared grounding report](../experiments/shared_grounding_pilot.md).
 
-Current evidence: Stage B passed **6/6** physical pick/place cases on frozen
-`ef533ed3` with tracked-narrow and explicit NoSlip=10 scenes. Room OVMM, learned
-TAMP and paired EQA/find gates still block promotion. Subsequent private sequence
-scoring, open-sink fixture and timestamp transport are separately tested changes,
-not part of the frozen panel. Keep production contact defaults unchanged.
+Current evidence: Stage B passes **6/6** physical pick/place cases on frozen
+`4f78ae62` with tracked-narrow and explicit NoSlip=10 scenes, all final views
+inspected. This separately repeats the older `ef533ed3` success after fixing the
+failed `787acb6f` mirrored placement; no earlier runs are pooled. Keep production
+contact defaults unchanged. The later launch-only Molmo interpreter-discovery
+fix `b5fd55ef` passes its symlink and real-environment checks; broad tests now
+pass 570 / 4 skip, and focused Molmo config/CLI checks pass 35 / 1 skip.
+Both Molmo geometry archives compile and render in `20260914_224024_b8970e`;
+the exterior views are ceiling-occluded, so interior task/start inspection is
+still pending. This is launch preflight, not a room-policy success.
 
-Candidate `787acb6f` passed original and separated tabletop 2/2 each, but
-`20260914_214506_a2a467` stopped at mirrored repeat 1 (pickup T / place F),
-leaving repeat 2 unrun. Candidate `4f78ae62` sequences horizontal alignment
-before descent; 567 offline tests pass / 4 skip. Job `20260914_220543_2c4d00`
-tests that exact failure and an original-clutter neighbor. Do not claim the
-old six-case panel covers either source. The failed
-sink remains documented. General end-effector clearance planning is deferred;
-this PR still needs the unchanged bounded gates on predeclared accessible
-open-support room tasks, learned two-step TAMP and paired EQA/find.
+Room OVMM, learned TAMP and paired EQA/find still block promotion. The failed
+sink remains documented; general end-effector clearance planning is deferred.
+New RoboCasa fixtures additionally require a dependency review: the installed
+fork `3d0bd42` rewrites unspecified mesh inertia to shell before native model
+creation. EMET preserves those masses, but that equality does not establish
+authored physics. Do not admit these fixtures by tuning density or hiding the
+dependency issue. Keep the unchanged gates on predeclared accessible tasks.
 
 ## Review in dependency order
 

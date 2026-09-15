@@ -1,7 +1,7 @@
 # Bounded shared-agent acceptance
 
 This defines the bounded acceptance battery for the review branch. Stage B
-passed 6/6 on frozen `ef533ed3` (v7, explicit NoSlip physics); room OVMM,
+now passes 6/6 on repaired `4f78ae62` (explicit NoSlip physics); room OVMM,
 learned TAMP and paired regression gates remain pending. The goal remains
 **one learned agent across EQA, OVMM and
 multistep manipulation**, with robot adapters rather than task-specific oracle
@@ -104,12 +104,20 @@ success or silently discard failures after freezing them.
 
 The remaining sequence is:
 
-1. Freeze candidate `787acb6f`, Qwen int4/SDPA, tracked-narrow and the explicit
-   NoSlip=10 tabletop row. Complete original and mirrored fixtures twice each.
-   Job `20260914_214506_a2a467` runs these four serially and stops on failure.
-   The same-source separated fixture already passed twice in jobs
-   `20260914_001546_f0b89d` and `20260914_002232_e419bd`. Report that split
-   execution order; do not pool the earlier `ef533ed3` panel into this result.
+1. Freeze candidate `4f78ae62`, Qwen int4/SDPA, tracked-narrow and the explicit
+   NoSlip=10 tabletop row. The preceding `787acb6f` stopped at mirrored
+   placement (4/5 completed, one unrun); retain that failure. Job
+   `20260914_220543_2c4d00` tests mirrored then original after the shared
+   horizontal-before-descent repair. Require both physical passes before
+   mirrored repeat 2, original repeat 2 and separated repeats 1/2, stopping
+   on failure. The initially queued job `20260914_221205_43bdac` was cancelled
+   before execution because the launcher acquires its GPU lock before waiting
+   for prerequisite jobs; resubmit after preflight to avoid a lock dependency.
+   Replacement job `20260914_221712_59ba4e` completes all four after the two
+   passing controls: **6/6 on `4f78ae62`**. Report the split execution order;
+   do not pool earlier `787acb6f` or `ef533ed3` results into this panel. The
+   separately tested `b5fd55ef` only changes Molmo interpreter discovery and
+   is not included in that physical-source claim.
 2. Before policy execution, freeze room task identities, visible/search starts,
    geometry/dynamics, agent configuration and budgets. Select accessible open
    supports by geometric preflight, not successful learned rollouts. Run Stage C

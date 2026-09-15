@@ -41,6 +41,18 @@ old dynamics: keep corrected-dynamics fixtures separate and record the change.
 Robot insertion, contact-solver settings and native robot mass calibration are
 separate concerns; this fix does not validate all robot payload limits.
 
+Also audit transformations **before** the native model is compiled. September
+14 preflight found that installed fork `3d0bd42` unconditionally adds shell
+inertia to unspecified meshes in `Kitchen.edit_model_xml`. Small objects then
+have kilogram-scale masses before EMET sees them. Preserving those values is
+source equality, not validation of authored dynamics. A separate dependency
+review is needed; do not tune densities or use these fresh scenes for policy
+acceptance meanwhile. See the source/export and matched-mode controls in the
+[pilot report](../experiments/shared_grounding_pilot.md). Previously archived
+corrected fixtures remain distinct interventions, not evidence that the current
+installation's generator is fixed. Record dependency revisions and local
+modifications along with the EMET source/configuration for future frozen rooms.
+
 Setup: [simulation configs](../sim_configs.md).
 Protocols: [OVMM find](../ovmm_find_phase_benchmark.md),
 [full OVMM](../ovmm_full_benchmark.md),
