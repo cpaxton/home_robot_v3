@@ -1094,10 +1094,32 @@ class GraspObjectOperation(ManagedOperation):
         # On failure, do not add unverified retraction/posture motions.
         if self._success:
             self.pickup_executed = True
-            self.robot.set_carry_configuration(self.robot.get_joint_positions())
             try:
+                relative = None
+                if getattr(self, "grounded_target", None) is not None:
+                    from emet.controller.operations.query_observation import observe_lifted_query
+
+                    relative = observe_lifted_query(
+                        self.agent,
+                        self.robot,
+                        self.target_object,
+                        initial_xyz=object_xyz,
+                        minimum_lift_m=self.lift_clearance_m / 2,
+                        stage="grasp_lift_verification",
+                    )
+                self.robot.set_carry_configuration(self.robot.get_joint_positions())
                 self.robot.move_to_manip_posture()
-            except RuntimeError:
+                if relative is not None:
+                    observe_lifted_query(
+                        self.agent,
+                        self.robot,
+                        self.target_object,
+                        initial_xyz=object_xyz,
+                        minimum_lift_m=self.lift_clearance_m / 2,
+                        relative_reference=relative,
+                        stage="grasp_carry_verification",
+                    )
+            except (ValueError, RuntimeError):
                 self._success = False
                 raise
 

@@ -26,6 +26,45 @@ def operation():
     return op
 
 
+@pytest.mark.parametrize("failure_stage", [None, "lift", "carry"])
+def test_query_grasp_verifies_before_and_after_carry_without_forgetting_possible_payload(failure_stage):
+    op = operation()
+    op.intro = op.reset = Mock()
+    op.show_object_to_grasp = op.reset_observation = op.delete_object_after_grasp = op.talk = False
+    op.servo_to_grasp = True
+    op.grounded_target = SimpleNamespace(xyz=op._object_xyz)
+    op.ensure_grounded_grasp_workspace = op.align_grounded_target_for_grasp = Mock()
+    joints = np.zeros(11)
+    op.robot.get_joint_positions.return_value = joints
+    op.aim_grasp_joints = Mock(return_value=joints)
+    op.visual_servo_to_object = Mock(return_value=True)
+    events = []
+    op.robot.move_to_manip_posture.side_effect = lambda: events.append("carry")
+
+    def verify(*args, **kwargs):
+        stage = kwargs["stage"]
+        events.append(stage)
+        if stage == f"grasp_{failure_stage}_verification":
+            raise ValueError("payload not observed")
+        return np.array([0.02, 0, 0])
+
+    with patch("emet.controller.operations.query_observation.observe_lifted_query", side_effect=verify):
+        if failure_stage is None:
+            op.run()
+            assert op.was_successful()
+        else:
+            with pytest.raises(ValueError, match="payload not observed"):
+                op.run()
+            assert not op.was_successful()
+    assert op.pickup_executed is True  # Do not authorize a second grasp from uncertain possession.
+    assert events == (
+        ["grasp_lift_verification"]
+        if failure_stage == "lift"
+        else ["grasp_lift_verification", "carry", "grasp_carry_verification"]
+    )
+    assert op.robot.open_gripper.call_count == 1  # Initial opening only, never release on verification failure.
+
+
 @pytest.mark.parametrize("target_z", [0.45, 1.2])
 def test_grasp_orientation_preserves_signed_target_height(target_z):
     op = operation()

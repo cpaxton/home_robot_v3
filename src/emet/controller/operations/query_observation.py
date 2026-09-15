@@ -94,3 +94,28 @@ def observe_query_points(agent, robot, query, *, stage):
                     "ee_pose": None if obs.ee_pose is None else obs.ee_pose.tolist(),
                 },
             )
+
+
+def observe_lifted_query(agent, robot, query, *, initial_xyz, minimum_lift_m, stage, relative_reference=None):
+    """Confirm observed lift/retention, not independent physical grasp success.
+
+    Reuse the placement path's fresh semantic RGB-D and 12 cm gripper proximity
+    gate. Require visible object rise, then consistency in the gripper frame
+    across the carry transition. Missing evidence leaves possession uncertain.
+    """
+    obs, points = observe_query_points(agent, robot, query, stage=stage)
+    pose = None if obs.ee_pose is None else np.asarray(obs.ee_pose)
+    initial = np.asarray(initial_xyz)
+    if pose is None or pose.shape != (4, 4) or not np.isfinite(pose).all():
+        raise ValueError("Calibrated gripper pose required to verify lifted object")
+    if initial.shape != (3,) or not np.isfinite(initial).all():
+        raise ValueError("Initial object geometry required to verify lift")
+    center = np.quantile(points, [0.05, 0.95], axis=0).mean(axis=0)
+    if np.min(np.linalg.norm(points - pose[:3, 3], axis=1)) > 0.12:
+        raise ValueError("Observed object is not near the gripper after lift")
+    if center[2] - initial[2] < minimum_lift_m:
+        raise ValueError("Object rise is insufficient to verify pickup")
+    relative = pose[:3, :3].T @ (center - pose[:3, 3])
+    if relative_reference is not None and np.linalg.norm(relative - relative_reference) > 0.05:
+        raise ValueError("Object moved relative to the gripper during carry transition")
+    return relative

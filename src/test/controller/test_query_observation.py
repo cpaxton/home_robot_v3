@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from emet.controller.operations.query_observation import observe_query_points, trim_depth_outliers
+from emet.controller.operations.query_observation import observe_lifted_query, observe_query_points, trim_depth_outliers
 
 
 @pytest.mark.parametrize("fresh", [False, True])
@@ -65,3 +65,41 @@ def test_planar_depth_and_small_sensor_noise_keep_supported_pixels():
     mask, audit = trim_depth_outliers(depth, np.ones((10, 10), dtype=bool))
     assert mask.all()
     assert audit["band_m"] == 0.02
+
+
+@pytest.mark.parametrize("offset", [np.zeros(3), np.array([3.0, -2.0, 1.0])])
+@pytest.mark.parametrize("case", ["held", "not_lifted", "far", "slipped", "missing_pose", "nan_pose", "absent"])
+def test_lift_confirmation_requires_observed_rise_proximity_and_retention(offset, case):
+    pose = np.eye(4)
+    pose[:3, 3] = offset + [0, 0, 1.1]
+    center = pose[:3, 3] + [0.02, 0, 0]
+    if case == "not_lifted":
+        center[2] -= 0.09
+    if case == "far":
+        center[0] += 0.3
+    if case == "slipped":
+        center[0] += 0.07
+    if case == "nan_pose":
+        pose[0, 0] = np.nan
+    obs = SimpleNamespace(ee_pose=None if case == "missing_pose" else pose)
+    points = np.tile(center, (20, 1))
+    agent, robot = Mock(), Mock()
+    with patch("emet.controller.operations.query_observation.observe_query_points") as observe:
+        observe.return_value = obs, points
+        if case == "absent":
+            observe.side_effect = ValueError("no unique verified surface")
+        kwargs = {
+            "initial_xyz": offset + [0, 0, 1],
+            "minimum_lift_m": 0.05,
+            "relative_reference": np.array([0.02, 0, 0]),
+            "stage": "grasp_carry_verification",
+        }
+        if case == "held":
+            relative = observe_lifted_query(agent, robot, "can", **kwargs)
+            np.testing.assert_allclose(relative, [0.02, 0, 0], atol=1e-10)
+        else:
+            with pytest.raises(ValueError):
+                observe_lifted_query(agent, robot, "can", **kwargs)
+        observe.assert_called_once_with(agent, robot, "can", stage="grasp_carry_verification")
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
