@@ -257,6 +257,33 @@ def test_servo_stops_after_failed_pregrasp():
     op.robot.get_servo_observation.assert_not_called()
 
 
+@pytest.mark.parametrize("lift_arrived", [True, False])
+def test_pregrasp_raises_before_extending_and_stops_on_failed_lift(lift_arrived):
+    op = operation()
+    op.error = Mock()
+    initial = np.zeros(11)
+    initial[HelloStretchIdx.LIFT] = 0.6
+    initial[HelloStretchIdx.ARM] = 0.01
+    initial[HelloStretchIdx.WRIST_PITCH] = 0.19
+    target = initial.copy()
+    target[HelloStretchIdx.LIFT] = 0.885
+    target[HelloStretchIdx.ARM] = 0.333
+    target[HelloStretchIdx.BASE_X] = 0.02
+    target[HelloStretchIdx.WRIST_PITCH] = 0
+    op.robot.get_joint_positions.return_value = initial
+    op.solve_pregrasp = Mock(return_value=target.copy())
+    op.robot.arm_to.side_effect = [lift_arrived, True]
+    assert op.pregrasp_open_loop(op.get_object_xyz()) is lift_arrived
+    calls = op.robot.arm_to.call_args_list
+    assert len(calls) == (2 if lift_arrived else 1)
+    raised = initial.copy()
+    raised[HelloStretchIdx.LIFT] = target[HelloStretchIdx.LIFT]
+    np.testing.assert_array_equal(calls[0].args[0], raised)
+    assert initial[HelloStretchIdx.LIFT] == 0.6
+    if lift_arrived:
+        np.testing.assert_array_equal(calls[1].args[0], target)
+
+
 def test_pregrasp_selects_reachable_standoff_without_clamping_invalid_ik():
     op = operation()
     op.robot.get_joint_positions.return_value = np.zeros(11)

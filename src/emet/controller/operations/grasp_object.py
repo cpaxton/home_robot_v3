@@ -1361,6 +1361,21 @@ class GraspObjectOperation(ManagedOperation):
         target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
         target_joint_positions[HelloStretchIdx.WRIST_ROLL] = 0
         print(f"{self.name}: Moving to pre-grasp position.")
+        # A feasible endpoint does not make a diagonal raise/extend safe:
+        # the fingers can enter a support's front before reaching its height.
+        # When extending upward from a lower posture, finish the lift first,
+        # keeping the base, extension and wrist at their measured positions.
+        # This is sequencing, not a general collision-clearance planner.
+        if (
+            target_joint_positions[HelloStretchIdx.LIFT] > joint_state[HelloStretchIdx.LIFT]
+            and target_joint_positions[HelloStretchIdx.ARM] > joint_state[HelloStretchIdx.ARM]
+        ):
+            raised = np.array(joint_state, copy=True)
+            raised[HelloStretchIdx.LIFT] = target_joint_positions[HelloStretchIdx.LIFT]
+            if not self.robot.arm_to(raised, head=constants.look_at_ee, blocking=True):
+                self.error("Pregrasp lift did not complete; extension remains uncommanded.")
+                self._success = False
+                return False
         if not self.robot.arm_to(target_joint_positions, head=constants.look_at_ee, blocking=True):
             self._success = False
             return False
