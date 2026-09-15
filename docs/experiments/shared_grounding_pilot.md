@@ -147,9 +147,42 @@ distinct. The first control's raw mesh-frame equality check was invalid because
 MuJoCo changes principal-axis storage frames with inertia mode; its failed
 artifacts remain, and v2 compares transformed vertices instead.
 
-Keep the installed dependency unchanged pending a separate fork review-branch
-fix. Do not tune densities, resample until a policy passes, or label these rooms
-honest full-OVMM evidence. General sink clearance remains separately deferred.
+The subsequent approved fix is isolated in
+[RoboCasa PR #1](https://github.com/cpaxton/robocasa/pull/1), commit `f106e07`
+against `feature/v1.24`. It removes only the blanket rewrite, preserving explicit
+shell modes. Its regression checks both XML modes and compiled body dynamics:
+**1 passed**. The same hunk is applied to the installed dirty checkout without
+overwriting its other edits; this is not a clean dependency checkout or merged
+release. Fresh seed-0/1 preflight `20260914_225528_1fa35e` completes under
+`~/runs/emet/authored-room-preflight-20260914`: can 0.02976 kg and spray
+0.06098 kg, with native NoSlip=0 retained. Both expanded archives reload with
+the preflight's mass/inertia/initial-state equality checks. These fresh adapted
+masses are not the separate cached-XML can control's 0.0986 kg measurement.
+The regression also passes against the installed dependency. An initial test
+invocation collected unrelated dataset tests through ROS pytest plugins;
+the isolated rerun disables plugin autoload and passes (no product change).
+Do not tune densities, resample
+until a policy passes, or label these rooms full-OVMM evidence. General sink
+clearance remains separately deferred.
+
+Room-case preparation `20260914_225935_008662` predeclares can/spray placement
+onto `counter_right_main_group_main` (the open counter to the right of the
+stove), each with explicit visible/search starts. This changes the task from
+the generator's counter-to-sink instruction; report it as **derived accessible
+room OVMM**, not canonical RoboCasa success. Native object geometry/dynamics
+and NoSlip=0 stay fixed. Fixture manifests and the installed dependency diff
+are archived under `~/runs/emet/accessible-robocasa-frozen-20260914`.
+The candidate remains `b5fd55ef`, Qwen3-VL-8B int4/SDPA, tracked-narrow,
+lazy graph and 600-second case limits; neither coordinates nor evaluator body
+names are supplied to the agent. All four cases must retain failures and unrun
+cases. Head-view/start preflight precedes any policy execution.
+
+Molmo geometry inspection `20260914_225657_5bb03e` also completes, with private
+interior views and whole-object **subtree** masses in
+`~/runs/emet/room-interior-audit-20260914`. Several object root bodies have zero
+individual mass but positive descendant mass; they are not massless objects.
+Movable tomatoes, apples and open bowls are visible. Exact tasks/starts are
+still pending; these camera orbits are not agent observations or policy passes.
 
 ## September 13: basic manipulation gate passed, cross-task gates pending
 

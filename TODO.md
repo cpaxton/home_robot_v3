@@ -39,7 +39,13 @@ Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_
       source equality alone is insufficient. Matched cached-can control restores
       authored mesh modes without density/geometry changes (see report). Keep
       unrelated dirty dependency edits intact; separate review branch, never
-      main. No installed dependency changes made during this audit.
+      main. Follow-up approved: separate [RoboCasa PR #1](https://github.com/cpaxton/robocasa/pull/1),
+      commit `f106e07`, removes only the blanket rewrite and adds a compiled
+      dynamics regression (1 passed). That exact source hunk is applied locally
+      while preserving unrelated dependency edits; fresh room preflight
+      `20260914_225528_1fa35e` passes generation/reload for both seeds with native
+      NoSlip=0 and gram-scale target masses. Four derived open-counter room
+      cases are being frozen before policy execution. The dependency PR is not merged.
 
 - [x] Complete the repaired-source basic physical gate: `4f78ae62` passes
       **6/6 pickup and placement**, all three fixtures twice, in jobs
