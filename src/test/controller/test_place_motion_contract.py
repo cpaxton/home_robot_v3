@@ -330,7 +330,7 @@ def test_query_place_keeps_existing_payload_orientation():
     assert op.robot.arm_to.call_args_list[0].args[0][HelloStretchIdx.WRIST_PITCH] == -0.25
 
 
-def test_visual_placement_corrects_observed_object_offset_and_drop_height():
+def test_visual_placement_centers_before_lowering_to_release_height():
     op = operation()
     op.held_query = "red cylinder"
     op.robot.get_joint_positions.return_value = np.zeros(11)
@@ -338,16 +338,38 @@ def test_visual_placement_corrects_observed_object_offset_and_drop_height():
     pose[:3, 3] = [0, -0.5, 0.68]
     obs = SimpleNamespace(ee_pose=pose)
     offset = np.array([[0, -0.53, 0.67], [0.02, -0.51, 0.71]])
+    centered = offset + [-0.01, 0.02, 0]
     aligned = np.array([[-0.01, -0.51, 0.62], [0.01, -0.49, 0.66]])
+    op.robot_model.manip_fk.side_effect = [
+        (np.array([0, -0.2, 0.8]), np.array([0, 0, 0, 1])),
+        (np.array([-0.01, -0.18, 0.8]), np.array([0, 0, 0, 1])),
+    ]
     with patch(
-        "emet.controller.operations.query_observation.observe_query_points", side_effect=[(obs, offset), (obs, aligned)]
+        "emet.controller.operations.query_observation.observe_query_points",
+        side_effect=[(obs, offset), (obs, centered), (obs, aligned)],
     ):
         assert op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
-    assert op.robot.arm_to.call_count == 1
-    requested = op._get_place_joint_state.call_args.args[0]
-    delta = requested - np.array([0, -0.2, 0.8])
-    assert delta[0] < 0 and delta[1] > 0 and delta[2] < 0
-    assert np.linalg.norm(delta) == pytest.approx(0.05)
+    assert op.robot.arm_to.call_count == 2
+    first, second = [call.args[0] for call in op._get_place_joint_state.call_args_list]
+    np.testing.assert_allclose(first - [0, -0.2, 0.8], [-0.01, 0.02, 0])
+    np.testing.assert_allclose(second - first, [0, 0, -0.05])
+
+
+@pytest.mark.parametrize("bottom", [0.600, 0.605, 0.609])
+def test_lateral_alignment_near_support_does_not_drag_or_release(bottom):
+    op = operation()
+    op.held_query = "red cylinder"
+    op.release_clearance_m = op.release_z_tolerance_m = 0.005
+    pose = np.eye(4)
+    pose[:3, 3] = [0, -0.5, bottom + 0.03]
+    points = np.array([[0.03, -0.5, bottom], [0.03, -0.5, bottom], [0.03, -0.5, bottom + 0.04]])
+    with patch(
+        "emet.controller.operations.query_observation.observe_query_points",
+        return_value=(SimpleNamespace(ee_pose=pose), points),
+    ):
+        assert not op.align_held_object_for_release(np.array([0, -0.5, 0.6]))
+    op.robot.arm_to.assert_not_called()
+    op.robot.open_gripper.assert_not_called()
 
 
 @pytest.mark.parametrize("failure", ["far_object", "far_goal", "motion", "invalid_ik"])

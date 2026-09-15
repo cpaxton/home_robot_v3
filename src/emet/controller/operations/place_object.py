@@ -245,6 +245,15 @@ class PlaceObjectOperation(ManagedOperation):
             if np.linalg.norm(delta) > 0.15:
                 self.error("Observed placement correction exceeds the local motion budget.")
                 return False
+            if np.linalg.norm(delta[:2]) > 0.015:
+                # Center the held object before descending. A coupled XYZ
+                # correction can land it on the support before lateral servo
+                # convergence, then command a sideways drag while still held.
+                # This is local sequencing, not an obstacle-clearance planner.
+                if delta[2] >= -self.release_z_tolerance_m:
+                    self.error("Object too close to support for lateral alignment; retaining it without release.")
+                    return False
+                delta[2] = 0.0
             # Limit any one visual correction to 5 cm; never blindly traverse
             # a large discrepancy between the object and its support.
             delta *= min(1.0, 0.05 / max(np.linalg.norm(delta), 1e-8))
