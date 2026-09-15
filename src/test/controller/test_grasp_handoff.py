@@ -15,6 +15,7 @@ from emet.motion import HelloStretchIdx
 def operation():
     op = object.__new__(GraspObjectOperation)
     op.agent = Mock()
+    op.agent.manipulation_radius = 0.55
     op.robot = op.agent.robot
     op.robot_model = Mock()
     op._name = "test"
@@ -109,8 +110,8 @@ def test_grounded_grasp_turns_arm_toward_target_then_reacquires(monkeypatch):
     assert events == ["head", "fresh", "ground"]
 
 
-@pytest.mark.parametrize("distance", [0.58, 0.75])
-def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distance):
+@pytest.mark.parametrize("distance", [0.58, 0.75, 1.2])
+def test_grounded_grasp_plans_only_when_view_is_outside_pregrasp_workspace(distance):
     op = operation()
     op.aim_grasp_joints = Mock(return_value=np.zeros(11))
     op.solve_pregrasp = Mock(return_value=None)
@@ -123,8 +124,8 @@ def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distan
     op.agent.manipulation_radius = 0.55
     op.agent.navigate_to_target_pose.return_value = True
     op.ensure_grounded_grasp_workspace()
-    assert op.agent.navigate_to_target_pose.call_count == (1 if distance == 0.58 else 0)
-    if distance == 0.58:
+    assert op.agent.navigate_to_target_pose.call_count == (0 if distance == 0.75 else 1)
+    if distance != 0.75:
         call = op.agent.navigate_to_target_pose.call_args
         assert call.kwargs["distance_range"] == pytest.approx((0.71, 0.85))
         np.testing.assert_array_equal(call.args[0], op._object_xyz)
@@ -134,12 +135,14 @@ def test_grounded_grasp_plans_only_when_view_is_inside_pregrasp_workspace(distan
     op.robot.move_base_to.assert_not_called()
 
 
-@pytest.mark.parametrize("failure", ["plan", "no_progress", "no_range", "invalid_geometry"])
+@pytest.mark.parametrize("failure", ["plan", "no_progress", "too_far", "no_range", "invalid_geometry"])
 def test_grasp_workspace_does_not_bypass_failed_navigation_or_bad_geometry(failure):
     op = operation()
     op.aim_grasp_joints = Mock(return_value=np.zeros(11))
     op.solve_pregrasp = Mock(return_value=None)
     op._object_xyz = np.array([0, -0.58, 0.96])
+    if failure == "too_far":
+        op._object_xyz[1] = -1.2
     op.robot.get_base_pose_world.return_value = np.zeros(3)
     op.robot.get_joint_positions.return_value = np.zeros(11)
     op.robot.get_robot_model.return_value.manip_fk.return_value = (np.array([0, -0.41, 0.9]), None)

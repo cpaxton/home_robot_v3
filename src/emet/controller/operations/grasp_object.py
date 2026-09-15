@@ -1146,7 +1146,7 @@ class GraspObjectOperation(ManagedOperation):
         return joint_state
 
     def ensure_grounded_grasp_workspace(self):
-        """A good viewing location may be too close for a separated grasp.
+        """A good viewing location may be outside the separated grasp workspace.
 
         Derive the horizontal retracted reach from this robot's kinematics.
         Move only through the ordinary collision-checked navigation planner,
@@ -1166,7 +1166,11 @@ class GraspObjectOperation(ManagedOperation):
             raise ValueError("Finite geometry is required for the grasp workspace")
         # Same minimum separation as the local pregrasp solver. Prefer the
         # configured larger separation when relocation is actually necessary.
-        if np.linalg.norm(target[:2] - start[:2]) >= reach + self.minimum_pregrasp_standoff:
+        distance = np.linalg.norm(target[:2] - start[:2])
+        maximum_distance = float(self.agent.manipulation_radius) + self.pregrasp_distance_from_object
+        if not np.isfinite(maximum_distance):
+            raise ValueError("Finite geometry is required for the grasp workspace")
+        if reach + self.minimum_pregrasp_standoff <= distance <= maximum_distance:
             return
         # Horizontal reach is only a quick sufficient-distance check. A low
         # target can have a valid downward pregrasp closer to the base. Predict
@@ -1175,18 +1179,21 @@ class GraspObjectOperation(ManagedOperation):
         relative_target = np.array([0.0, -np.linalg.norm(target[:2] - start[:2]), target[2]])
         original_joints[HelloStretchIdx.BASE_X] = 0
         aimed = self.aim_grasp_joints(original_joints, relative_target)
-        if self.solve_pregrasp(relative_target, aimed, self.pregrasp_distance_from_object) is not None:
+        if (
+            distance <= maximum_distance
+            and self.solve_pregrasp(relative_target, aimed, self.pregrasp_distance_from_object) is not None
+        ):
             return
         # The planner radius refers to the end-effector workspace. The object
         # lies one pregrasp separation beyond it; do not compare the nominal
         # 0.55 m radius directly against a roughly 0.71 m separated-object goal.
         bounds = (
             reach + self.pregrasp_distance_from_object,
-            float(self.agent.manipulation_radius) + self.pregrasp_distance_from_object,
+            maximum_distance,
         )
         if not np.isfinite(bounds).all() or not 0 <= bounds[0] < bounds[1]:
             raise ValueError("No separated grasp workspace within the manipulation radius")
-        self.info(f"Viewing pose is too close for pregrasp; planning within radial bounds {bounds}")
+        self.info(f"Viewing pose is outside the grasp workspace; planning within radial bounds {bounds}")
         self.robot.move_to_nav_posture()
         self.robot.switch_to_navigation_mode()
         if not self.agent.navigate_to_target_pose(target, start, look_at_xy=tuple(target[:2]), distance_range=bounds):
@@ -1195,8 +1202,9 @@ class GraspObjectOperation(ManagedOperation):
         if (
             not np.isfinite(measured).all()
             or np.linalg.norm(target[:2] - measured[:2]) < reach + self.minimum_pregrasp_standoff
+            or np.linalg.norm(target[:2] - measured[:2]) > maximum_distance
         ):
-            raise RuntimeError("Measured grasp workspace is still too close")
+            raise RuntimeError("Measured pose is still outside the grasp workspace")
 
     def align_grounded_target_for_grasp(self):
         """Stretch's arm points along -Y; find's camera-facing pose is not a grasp pose.
