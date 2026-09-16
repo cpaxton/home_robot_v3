@@ -29,11 +29,15 @@ def _ovmm_agentic_trace_path(trace_meta: dict[str, Any] | None) -> Path | None:
     return Path(ep).expanduser() / f"{safe}_agentic_trace.jsonl"
 
 
-def ovmm_find_object_question(object_name: str, start_recep: str | None = None) -> str:
+def ovmm_find_object_question(object_name: str, start_recep: str | None = None, *, relation: str = "on") -> str:
     """Phrase FindObj as an open question for the agentic loop."""
+    if relation not in {"on", "nearest"}:
+        raise ValueError(f"Unsupported FindObj relation: {relation}")
     obj = str(object_name or "").strip() or "object"
     recep = str(start_recep or "").strip()
     if recep:
+        if relation == "nearest":
+            return f"Where is the {obj} nearest to a {recep}?"
         return f"Where is the {obj} on the {recep}?"
     return f"Where is the {obj}?"
 
@@ -69,9 +73,10 @@ def _localize_phrases(question: str, trace_meta: dict[str, Any] | None) -> list[
         inner = q[13:-1].strip()
         if inner.lower().startswith("the "):
             inner = inner[4:].strip()
-        on_idx = inner.lower().rfind(" on the ")
-        if on_idx > 0:
-            inner = inner[:on_idx].strip()
+        for separator in (" on the ", " nearest to a "):
+            index = inner.lower().rfind(separator)
+            if index > 0:
+                inner = inner[:index].strip()
         if inner and inner not in out:
             out.append(inner)
     return out
@@ -426,10 +431,11 @@ def run_ovmm_agentic_find_pair(
     max_rounds: int | None = None,
     max_nav_steps: int | None = None,
     extra_trace_meta: dict[str, Any] | None = None,
+    object_relation: str = "on",
 ) -> OvmmFindQueryOutcome:
     """FindObj then FindRec through the shared AgenticEQA loop (Habitat and sim)."""
     meta = empty_ovmm_agentic_meta(use_agentic=True)
-    obj_q = ovmm_find_object_question(object_query, start_recep)
+    obj_q = ovmm_find_object_question(object_query, start_recep, relation=object_relation)
     recep_q = ovmm_find_recep_question(goal_recep)
     meta["obj_agentic_question"] = obj_q
     meta["recep_agentic_question"] = recep_q
@@ -506,6 +512,7 @@ def run_ovmm_find_queries(
     planar_frame: Literal["mujoco_xy", "habitat_xz"] = "mujoco_xy",
     phrase_only: bool = False,
     capture_voxel_stats: bool | None = None,
+    object_relation: str = "on",
 ) -> OvmmFindQueryOutcome:
     """Dispatch FindObj/FindRec: agentic loop or one-shot memory localize.
 
@@ -525,6 +532,7 @@ def run_ovmm_find_queries(
             max_rounds=max_rounds,
             max_nav_steps=max_nav_steps,
             extra_trace_meta=extra_trace_meta,
+            object_relation=object_relation,
         )
     # Lazy: oneshot lives next to query_find_phase_localization.
     from emet.eval.ovmm_find_phase import run_ovmm_oneshot_find_pair
