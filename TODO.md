@@ -13,7 +13,8 @@ and EQA regression checks. Follow the [environment progression](docs/environment
 Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
 
 Current resume point: [September 15 EQA handoff](docs/experiments/eqa_restoration_handoff_20260915.md)
-(startup repaired; answer-quality diagnosis and grounding prompt fix outstanding).
+(startup repaired; grounding prompt + retrieval-phrase fixes landed; frozen
+answer-quality comparison queued as `20260915_231831_28e990`).
 
 - [x] Restore EQA startup: `5d299c9d` fixes AStar's eager MuJoCo GL
       import; `fdb441a9` preflights full EQA imports plus real rendering before
@@ -22,11 +23,29 @@ Current resume point: [September 15 EQA handoff](docs/experiments/eqa_restoratio
       under `~/runs/emet/eqa-restored-20260915`: both presets 2/3 (q15/16 right,
       q25 wrong). The prior six exit-134 cases are infrastructure
       failures, not an accuracy result. Keep manipulation work separate.
+- [x] Ground the object query, not the full question, in VLM region prompts
+      (`963d9e32`): EQA passed the whole MCQ (all options) as the grounding
+      description, so `select_vlm_region` told the VLM to locate the question
+      string. Split the object phrase from task/question context; distinct
+      descriptions are now verification context only, applied to box-only,
+      box-plus-point, and surface-selection prompts. Prompt-contract tests
+      added. Unit suites pass; this may help localization but does not by
+      itself establish a q25 answer or coverage change.
+- [x] Drop narrative n-grams from target-boost retrieval (`75bf27b5`): with a
+      clean VLM target ("towels"), heuristic n-grams sharing no content token
+      with it ("going shower now", "now need grab") were still emitted as voxel
+      proposals, wasting q25 investigation rounds. Keep only alternate
+      phrasings of the same object; the no-target fallback path is unchanged.
+      Regression test added.
 - [ ] EQA evidence/no-regression gate: Qwen-box retains its earlier 2/3 total
       but gains q15 and loses q25; hybrid matches its earlier pattern. Do not
       infer equivalence from this small unseeded slice. Both current q25 answers
       lack confirmed bathroom evidence; q15's correct negative answer is also
-      weakly supported. Audit/repeat discordant evidence before broader promotion.
+      weakly supported. Frozen comparison at `75bf27b5`
+      (`20260915_231831_28e990`, `~/runs/emet/eqa-fix-20260915`) is running the
+      same hybrid/qwen-box q15/16/25 battery with unchanged model/settings/
+      budgets. 2/3 is not "all passing"; keep prompt-only vs policy changes
+      separable when attributing any change.
 
 - [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
       Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native

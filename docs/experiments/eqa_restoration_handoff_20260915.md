@@ -159,6 +159,33 @@ Both presets use Qwen3-VL-8B int4/SDPA, lazy graph/query memory, 20 planning /
 10 movement settings, and no HM3D semantic/enriched labels. The agentic trace
 shows an internal eight-round/eight-nav budget; do not silently change either.
 
+## Follow-up (this turn)
+
+- `963d9e32` implements the concrete grounding-prompt bug above: `select_vlm_region`
+  now always locates the object `query`; a distinct `description` (EQA MCQ) is
+  injected only as verification context whose options are hypothetical. Applied
+  to box-only, box-plus-point, and `depth_candidates` surface-selection prompts.
+  Prompt-contract tests in `test_vlm_region_grounding.py`.
+- `75bf27b5` addresses the hybrid wasted-round audit: the VLM extracted `towels`,
+  but `heuristic_relevant_phrases(self.query_text)` still emitted narrative
+  n-grams (`going shower now`, `now need grab`) that `_voxel_localize_hypotheses`
+  turned into voxel proposals. `_target_boost_phrases` now drops heuristic phrases
+  that share no content token with the extracted target; the no-target fallback is
+  unchanged. Regression test in `test_ovmm_rby1_find_episodes.py`.
+- Single-view corroboration (item 3): assessed, no code change. The
+  `single_view_present` unlock is a deliberately validated path (comment cites
+  ~86% verified vs ~35% forced guesses; fixes q28/q39 absence). q25 Qwen-box is an
+  assess-VLM false `present=true` on ambiguous crib drape, not a gate bug, and
+  grounding abstained while EQA is intentionally allowed to answer from RGB.
+  Disabling single-view or gating it on geometry would regress the validated
+  path; the correct next lever is assess-prompt calibration, left for a frozen
+  A/B, not changed blindly here.
+- Frozen comparison queued as `20260915_231831_28e990`
+  (`~/runs/emet/eqa-fix-20260915`) from a clean worktree at `75bf27b5`, same
+  hybrid/qwen-box q15/16/25 battery, unchanged model/settings/budgets. Not 2/3
+  "all passing" until re-scored; prompt-only vs policy changes kept in separate
+  commits for attribution.
+
 ## Other gates remain open (not this turn's scope)
 
 Room OVMM/manipulation is not accepted and learned TAMP remains gated.
