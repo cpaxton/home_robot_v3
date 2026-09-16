@@ -37,15 +37,18 @@ answer-quality comparison queued as `20260915_231831_28e990`).
       proposals, wasting q25 investigation rounds. Keep only alternate
       phrasings of the same object; the no-target fallback path is unchanged.
       Regression test added.
-- [ ] EQA evidence/no-regression gate: Qwen-box retains its earlier 2/3 total
-      but gains q15 and loses q25; hybrid matches its earlier pattern. Do not
-      infer equivalence from this small unseeded slice. Both current q25 answers
-      lack confirmed bathroom evidence; q15's correct negative answer is also
-      weakly supported. Frozen comparison at `75bf27b5`
-      (`20260915_231831_28e990`, `~/runs/emet/eqa-fix-20260915`) is running the
-      same hybrid/qwen-box q15/16/25 battery with unchanged model/settings/
-      budgets. 2/3 is not "all passing"; keep prompt-only vs policy changes
-      separable when attributing any change.
+- [ ] EQA evidence/no-regression gate: frozen comparison at `75bf27b5`
+      (`20260915_231831_28e990`, `~/runs/emet/eqa-fix-20260915`) — hybrid 3/3
+      (q15/16/25, q25 now grounds "towels"/"some towels" and answers C via
+      VLM suggestion instead of forcing B) and qwen_box 2/3 (q15/q25; q16 now
+      wrong). Baseline `fdb441a9` was 2/3 + 2/3. This is a single unseeded
+      slice — do NOT read it as a stable gate or per-question equivalence.
+      qwen_box q16 is a single-view spatial-relation false positive: assess
+      claimed "closer to the clock" (present=True) while geometry grounding
+      abstained and the multi-image EQA answered "closer to the painting".
+      The item-3 single-view corroboration question is now reproduced; do not
+      disable single-view blindly, but audit whether a disagreeing multi-image
+      EQA should block a lone single-view letter.
 
 - [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
       Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native

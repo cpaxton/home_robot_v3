@@ -180,11 +180,14 @@ shows an internal eight-round/eight-nav budget; do not silently change either.
   Disabling single-view or gating it on geometry would regress the validated
   path; the correct next lever is assess-prompt calibration, left for a frozen
   A/B, not changed blindly here.
-- Frozen comparison queued as `20260915_231831_28e990`
-  (`~/runs/emet/eqa-fix-20260915`) from a clean worktree at `75bf27b5`, same
-  hybrid/qwen-box q15/16/25 battery, unchanged model/settings/budgets. Not 2/3
-  "all passing" until re-scored; prompt-only vs policy changes kept in separate
-  commits for attribution.
+- Frozen comparison `20260915_231831_28e990` (`~/runs/emet/eqa-fix-20260915`)
+  from a clean worktree at `75bf27b5`, same hybrid/qwen-box q15/16/25 battery,
+  unchanged model/settings/budgets. Result: hybrid 3/3 (q25 fixed — now grounds
+  towels and answers C via `vlm_suggested`, not a forced B), qwen_box 2/3
+  (q15/q25; q16 regressed). Baseline `fdb441a9` was 2/3 + 2/3. Single unseeded
+  slice, not a stable gate. qwen_box q16 is a fresh single-view spatial false
+  positive (assess `present=true` "closer to the clock" beat the multi-image EQA
+  "closer to the painting" while geometry abstained) — see the item-3 note.
 
 ## Other gates remain open (not this turn's scope)
 
