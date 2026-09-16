@@ -49,6 +49,11 @@ answer-quality comparison queued as `20260915_231831_28e990`).
       The item-3 single-view corroboration question is now reproduced; do not
       disable single-view blindly, but audit whether a disagreeing multi-image
       EQA should block a lone single-view letter.
+      Larger sweep `20260916_004119_6fc05f` (`~/runs/emet/eqa-sweep-20260916`,
+      `EQA_QIDS` = holdout-8 + balanced-32, hybrid + qwen_box) is running via
+      the widened pilot driver (`afd4d112`). Use it for a real holdout/bal-32
+      number before claiming a win; a 5/6 vs 4/6 on six unseeded questions is
+      noise, not a gate.
 
 - [ ] Finish frozen `0ecc0aa9` staged-pregrasp/forward-reacquisition pilot:
       Molmo `20260915_084618_0fc1f5`, tabletop `20260915_084622_88d93c`, native
