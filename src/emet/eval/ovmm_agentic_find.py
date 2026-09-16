@@ -37,7 +37,7 @@ def ovmm_find_object_question(object_name: str, start_recep: str | None = None, 
     recep = str(start_recep or "").strip()
     if recep:
         if relation == "nearest":
-            return f"Where is the {obj} nearest to a {recep}?"
+            return f"Where is the {obj} nearest to the {recep}?"
         return f"Where is the {obj} on the {recep}?"
     return f"Where is the {obj}?"
 
@@ -73,7 +73,7 @@ def _localize_phrases(question: str, trace_meta: dict[str, Any] | None) -> list[
         inner = q[13:-1].strip()
         if inner.lower().startswith("the "):
             inner = inner[4:].strip()
-        for separator in (" on the ", " nearest to a "):
+        for separator in (" on the ", " nearest to the "):
             index = inner.lower().rfind(separator)
             if index > 0:
                 inner = inner[:index].strip()

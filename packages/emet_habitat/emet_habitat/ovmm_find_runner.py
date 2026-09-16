@@ -179,6 +179,8 @@ def run_habitat_find_phase_episode(
                 if not bodies_matching_category(placements, category):
                     raise ValueError(f"Invalid nearest episode {episode.id}: missing category {category}")
             selected = pick_find_object_gt_body(placements, episode.object, episode.start_recep)
+            if selected is None:
+                raise ValueError(f"Invalid nearest episode {episode.id}: no nearest GT body for {episode.object!r}")
             if episode.object_gt_body and episode.object_gt_body != selected:
                 raise ValueError(f"Invalid nearest episode {episode.id}: GT override contradicts nearest selector")
         sim.set_init_pose(init_pose)
