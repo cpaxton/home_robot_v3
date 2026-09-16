@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -126,9 +127,16 @@ def _target_boost_phrases(self) -> list[str]:
         ordered.append(phrase)
     from emet.memory.graph_eqa.labels import heuristic_relevant_phrases
 
+    # The VLM-extracted target is authoritative. Heuristic n-grams are only
+    # alternate phrasings of the same object; drop narrative n-grams that share
+    # no content token with it (e.g. "going shower now" / "now need grab" next
+    # to a "towels" target). Without a target phrase, keep the heuristic as-is.
+    target_tokens = {t for t in re.findall(r"[a-z0-9]+", phrase.lower()) if len(t) >= 3}
     for raw in heuristic_relevant_phrases(self.query_text):
         val = str(raw or "").strip()
         if val and val not in ordered:
+            if target_tokens and not target_tokens.intersection(re.findall(r"[a-z0-9]+", val.lower())):
+                continue
             ordered.append(val)
 
     # Expand terse fixture queries ("cab") with matched graph-node labels
