@@ -1,0 +1,10 @@
+# Shared-harness integration candidate, not a production default or accepted grasp policy.
+# Use --memory-backend lazy_graph; robot/task remain CLI choices.
+extends: configs/emet/query_surface_pilot.yaml
+mapping:
+  query_memory:
+    grounding_backend: vlm
+    region_strategy: depth_candidates
+    mask_backend: sam2
+    surface_presentation: context
+    whole_object_box: true

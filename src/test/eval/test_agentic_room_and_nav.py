@@ -211,6 +211,13 @@ def test_voxel_sim_upgrades_full_frame_absent_to_present():
 
     ex = AgenticEQAExecutor(agent, "Where is the large bookshelf?", router=False, collect_trace=True)
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    # A graph observation ID must not implicitly select a voxel frame. Bind
+    # this test's frame explicitly, as production capture does.
+    from emet.memory.graph_eqa.agentic.views import CapturedView
+
+    assert ex._voxel_max_sim_for_obs("large bookshelf", 7) is None
+    ex._captured_views = {7: CapturedView(7, 7, np.zeros((8, 8, 3), dtype=np.uint8), None)}
+    ex._run_vlm_view_assess = lambda **_kw: {}  # cheap proposal test, not model verification
     out = ex._tool_verify_siglip("large bookshelf", 7)
     assert out["status"] == "PRESENT"
     # Voxel PRESENT is a cheap proposal; submit unlock requires VLM assess.

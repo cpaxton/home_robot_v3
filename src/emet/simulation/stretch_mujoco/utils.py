@@ -345,8 +345,43 @@ def insert_line_after_mujoco_tag(xml_string: str, line_to_insert: str) -> str:
     return modified_xml
 
 
+def preserve_body_inertias(xml_str: str, model: mujoco.MjModel) -> str:
+    """Keep compiled body dynamics when adapting serialized, unscaled geometry.
+
+    Compiled XML can omit inferred inertials. Adding shell inertia to make thin
+    mesh assets reloadable would then reinterpret volumetric density as surface
+    density. Pin the source model's mass, COM and inertia before that adaptation;
+    do not guess new densities or change the benchmark's object masses.
+    """
+    root = ET.fromstring(xml_str)
+    for body in root.findall(".//worldbody//body"):
+        name = body.get("name")
+        if not name:
+            raise ValueError("Preserving compiled inertias requires named bodies")
+        source = model.body(name)
+        inertial = body.find("inertial")
+        if inertial is None:
+            inertial = ET.SubElement(body, "inertial")
+        inertial.attrib.clear()
+        for key, values in (
+            ("mass", source.mass),
+            ("pos", source.ipos),
+            ("quat", source.iquat),
+            ("diaginertia", source.inertia),
+        ):
+            inertial.set(key, " ".join(format(float(v), ".17g") for v in values))
+    compiler = root.find("compiler")
+    if compiler is not None:
+        compiler.set("inertiafromgeom", "auto")
+    return ET.tostring(root, encoding="unicode")
+
+
 def ensure_mesh_inertia(xml_str: str) -> str:
-    """Add inertia=\"shell\" to every <mesh> tag that lacks it (MuJoCo 2.x/3.x requirement for thin meshes)."""
+    """Make thin meshes reloadable; preserve inferred body inertias beforehand.
+
+    Shell inertia is not a general MuJoCo requirement or a mass-preserving
+    default. Authored mesh modes remain intact.
+    """
     return re.sub(
         r"<mesh\s+([^>]*?)>",
         lambda m: m.group(0) if "inertia=" in m.group(0) else '<mesh inertia="shell" ' + m.group(1) + ">",

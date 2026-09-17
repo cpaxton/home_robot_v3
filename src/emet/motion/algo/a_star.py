@@ -22,13 +22,10 @@ import numpy as np
 from emet.motion import ConfigurationSpace, Planner, PlanResult
 from emet.motion import Node as BaseNode
 from emet.motion.algo.node import TreeNode as Node
+from emet.motion.base_goal_rank import navigable_neighbors
 
 # Soft fallback when skfmm has no zero contour (empty obstacle set in explored).
 _DEFAULT_CLEARANCE_M = 10.0
-
-
-def neighbors(pt: tuple[int, int]) -> list[tuple[int, int]]:
-    return [(pt[0] + dx, pt[1] + dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)]
 
 
 def unwrap_yaw(prev: float, target: float) -> float:
@@ -454,10 +451,8 @@ class AStar(Planner):
             if pt in reachable_points:
                 continue
             reachable_points.add(pt)
-            for new_pt in neighbors(pt):
+            for new_pt in navigable_neighbors(pt, lambda p: not self.point_is_occupied(*p)):
                 if new_pt in reachable_points:
-                    continue
-                if self.point_is_occupied(new_pt[0], new_pt[1]):
                     continue
                 to_visit.append(new_pt)
         return reachable_points
@@ -488,9 +483,7 @@ class AStar(Planner):
             if current == end_pt:
                 break
 
-            for nxt in neighbors(current):
-                if self.point_is_occupied(nxt[0], nxt[1]):
-                    continue
+            for nxt in navigable_neighbors(current, lambda p: not self.point_is_occupied(*p)):
                 new_cost = cost_so_far[current] + self.step_cost(current, nxt)
                 if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:
                     cost_so_far[nxt] = new_cost

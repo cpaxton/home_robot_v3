@@ -208,30 +208,12 @@ class LLMPlanWrapper:
         return task.run()
 
     def open_cabinet(self):
-        """Adds a SpeakOperation (not implemented) to the task"""
-        task = Task()
-        speak_not_implemented = SpeakOperation(
-            name="open_cabinet" + f"_{str(self._operation_naming_counter)}",
-            agent=self.agent,
-            robot=self.robot,
-        )
-        self._operation_naming_counter += 1
-        speak_not_implemented.configure(message="Open cabinet operation not implemented")
-        task.add_operation(speak_not_implemented, True)
-        return task.run()
+        """Fail explicitly: speaking an unsupported action is not execution."""
+        return False
 
     def close_cabinet(self):
-        """Adds a SpeakOperation (not implemented) to the task"""
-        task = Task()
-        speak_not_implemented = SpeakOperation(
-            name="close_cabinet" + f"_{str(self._operation_naming_counter)}",
-            agent=self.agent,
-            robot=self.robot,
-        )
-        self._operation_naming_counter += 1
-        speak_not_implemented.configure(message="Close cabinet operation not implemented")
-        task.add_operation(speak_not_implemented, True)
-        return task.run()
+        """Fail explicitly: speaking an unsupported action is not execution."""
+        return False
 
     def run(self):
         """Runs the task"""

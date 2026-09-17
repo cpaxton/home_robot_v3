@@ -19,9 +19,21 @@ import numpy as np
 from emet.motion.voxel_arm_collision import GridConvention, world_xy_to_grid
 
 
-def _neighbors8(pt: tuple[int, int]) -> list[tuple[int, int]]:
+def navigable_neighbors(pt: tuple[int, int], free: Callable[[tuple[int, int]], bool]):
+    """Eight-connected steps with both side cells free for diagonal motion.
+
+    Search and reachability must obey the same no-corner-cutting rule as path
+    simplification/execution; free endpoints alone do not make a safe edge.
+    """
     i, j = pt
-    return [(i + di, j + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if not (di == 0 and dj == 0)]
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            nxt = (i + di, j + dj)
+            if (di == 0 and dj == 0) or not free(nxt):
+                continue
+            if di and dj and (not free((i + di, j)) or not free((i, j + dj))):
+                continue
+            yield nxt
 
 
 def _euclid(a: tuple[int, int], b: tuple[int, int]) -> float:
@@ -107,9 +119,7 @@ def plan_grid_multi_goal(
                 break
             # Fall through: keep expanding so other goals can be classified.
 
-        for nxt in _neighbors8(current):
-            if not free(nxt):
-                continue
+        for nxt in navigable_neighbors(current, free):
             step = _euclid(current, nxt)
             new_cost = cost_so_far[current] + step
             if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:

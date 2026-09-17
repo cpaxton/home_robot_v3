@@ -10,6 +10,20 @@ import pytest
 from emet.mapping.voxel.dynamem_eqa import DynamemVoxelEQAMixin
 
 
+def test_caption_timeout_is_not_retried_or_swallowed(monkeypatch):
+    from unittest.mock import Mock
+
+    from PIL import Image
+
+    vm = DynamemVoxelEQAMixin()
+    vm.image_description_client = object()
+    call = Mock(side_effect=TimeoutError("worker still running"))
+    monkeypatch.setattr("emet.mapping.voxel.dynamem_eqa.dynamem_vllm_call", call)
+    with pytest.raises(TimeoutError, match="worker still running"):
+        vm.list_objects_in_an_image(Image.new("RGB", (8, 8)))
+    assert call.call_count == 1
+
+
 @pytest.mark.parametrize("action", ["", "bad", "0", "2", None])
 def test_json_answer_survives_invalid_navigation_action(tmp_path, monkeypatch, action):
     """A valid uncertain answer must not become a swallowed int(action) error."""

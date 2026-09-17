@@ -1,0 +1,5 @@
+<mujoco model="stretch scene">
+  <include file="scene_clearance_control.xml"/>
+  <!-- Explicit solver-only acceptance row; production physics is unchanged. -->
+  <option noslip_iterations="10"/>
+</mujoco>

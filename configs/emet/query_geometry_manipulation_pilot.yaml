@@ -1,0 +1,12 @@
+# Experimental shared query harness: calibrated 3D grasp centering rather than
+# a fixed wrist pixel/depth gate. Keep the previous preset as a paired control.
+extends: configs/emet/query_detector_segmented_pilot.yaml
+mapping:
+  motion:
+    joint_tolerance:
+      # Do not acknowledge a centimetre-scale base correction before it moves.
+      # Match native translation control's 5 mm gate; keep the coarse control
+      # preset unchanged. Hardware must meet this precision or fail closed.
+      base_x: 0.005
+  grasp:
+    geometry_servo: true

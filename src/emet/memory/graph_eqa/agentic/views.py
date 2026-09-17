@@ -32,6 +32,31 @@ def captured_view(executor, obs_id) -> CapturedView | None:
     return getattr(executor, "_captured_views", {}).get(obs_id)
 
 
+def ground_confirmed_view(executor, obs_id: int, query: str) -> dict | None:
+    """Try object grounding once per assessed view; never reinterpret a view pose.
+
+    Visual EQA confirmation remains valid if localization abstains. OVMM/TAMP
+    still require the independently admitted mask geometry.
+    """
+    view = captured_view(executor, obs_id)
+    if view is None:
+        return None
+    key = (obs_id, query)
+    attempted = getattr(executor, "_view_grounding_attempts", None)
+    if attempted is None:
+        attempted = executor._view_grounding_attempts = set()
+    if key in attempted:
+        return None
+    attempted.add(key)
+    result = executor.agent.ground_query_view(
+        query, source_obs_id=view.source_obs_id, target_description=executor.question
+    )
+    executor._append_trace({"tool": "ground_query_view", "view_obs_id": obs_id, "query": query, **result})
+    if result["ok"]:
+        executor._grounded_obs_id = result["obs_id"]
+    return result
+
+
 def retain_latest_view(executor, *, after: int) -> CapturedView | None:
     from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
 

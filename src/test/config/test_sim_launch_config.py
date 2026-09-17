@@ -35,6 +35,19 @@ from emet.config.sim_launch_config import (
 from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
 
+def test_open_receptacle_room_fixture_keeps_closed_cabinet_control():
+    candidate = load_sim_launch_config_from_path("configs/sim/robocasa_counter_to_sink_stretch.yaml")
+    control = load_sim_launch_config_from_path("configs/sim/robocasa_pick_place_stretch.yaml")
+    assert isinstance(candidate, SimLaunchRobocasa)
+    assert candidate.robocasa_task == "PickPlaceCounterToSink"
+    assert control.robocasa_task == "PickPlaceCounterToCabinet"
+    assert candidate.robot == control.robot == "stretch"
+    assert candidate.seed == control.seed == 0
+    assert candidate.robocasa_layout == control.robocasa_layout == 1
+    assert candidate.robocasa_style == control.robocasa_style == 1
+    assert apply_sim_launch_cli_overrides(candidate, seed=1).seed == 1
+
+
 def test_load_default_table_yaml():
     cfg = load_sim_launch_config_from_path("configs/sim/default_table_rby1.yaml")
     assert isinstance(cfg, SimLaunchDefaultMujoco)

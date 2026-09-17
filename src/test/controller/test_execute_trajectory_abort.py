@@ -33,5 +33,6 @@ def test_serial_waypoints_stop_on_failure(kind, outcomes, expected, calls):
         assert call.args == (trajectory[index],)
         assert call.kwargs["blocking"] is True
         assert call.kwargs["world_frame"] is True
+        assert call.kwargs["navigation_policy"] == "exploration"
         assert call.kwargs["timeout"] == (5 if index == 2 else 2)
     robot.wait_for_waypoint.assert_not_called()

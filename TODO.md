@@ -3,6 +3,468 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## PR #167 VLM-led acceptance (2026-09-09)
+
+Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).
+Do not merge on graph size or a tabletop smoke alone. Required gates are learned
+single-room MolmoSpaces/RoboCasa OVMM, learned multistep TAMP (not oracle controls),
+and EQA regression checks. Follow the [environment progression](docs/environments/README.md).
+
+Next battery: [bounded acceptance and stop gates](docs/experiments/manipulation_acceptance.md).
+
+- [ ] Room grasp retention: `20260914_230140_40e8a7` correctly grounds the can
+      and drives to it, but the native-NoSlip=0 trace loses the can during lift.
+      `_grasp()` currently returns lift-motion completion, so the task proceeds
+      to destination search without fresh held-object verification. Reuse fresh
+      Qwen-verified RGB-D to verify object motion with the gripper after lift and
+      the carry transition; absent/ambiguous evidence must stop placement, while
+      uncertain possession must still block an unsafe second pickup. Do not read
+      private simulator contacts or widen physical-success thresholds. Guard
+      `1d257800` passes offline tests; exact native retry stops correctly in
+      178 s (physical F/F), with a known-good tabletop control passing T/T in
+      251 s (one control, not a full new panel). Matched
+      solver replay `20260914_230920_5ac3db` reproduces native loss and retains
+      the payload under NoSlip=10, but is not learned acceptance. Retain both.
+- [ ] Resolve Molmo first-turn stall before more room policy cases. Failed
+      `20260914_231706_1626e6` remains upright but cannot finish its first yaw
+      goal. Check material mixing, overlapping floor contacts and simulated
+      versus wall-time progress; fixed-turn control `20260914_233017_b37556`
+      completes: native mixing turns 0.122 rad versus 2.111 rad with wheel
+      priority 1 over six sim seconds; both stay upright. Test a robot-authored
+      contact-profile correction on the exact room case and tabletop neighbor
+      before promotion; no production material change yet. Also inspect shutdown
+      manager/thread ordering (BrokenPipe).
+- [x] Fix evaluator contact margins (`65574600`): count active force-bearing
+      contacts, not only penetration. Add margin/gap controls and provenance;
+      broad suite 589 passed / 4 skipped. Original Molmo trace remains unverified;
+      the separately reconstructed contact diagnostic is F/F with a valid baseline.
+
+- [ ] Fix `emet jobs run` prerequisite ordering: wait for explicit PIDs before
+      acquiring the exclusive GPU lock. Currently a dependent can hold the lock
+      while waiting for a prerequisite that needs it. Until fixed/tested, submit
+      dependent jobs after prerequisites finish; do not build lock dependencies.
+
+- [ ] Close out the bounded accessible-task battery; general gripper-clearance
+      planning is explicitly deferred (September 14 scope decision), not a new
+      prerequisite. Keep the sink failure and contact audit in the report.
+      Basic gate is now 6/6 on `4f78ae62`. Next predeclare accessible room
+      fixtures for OVMM and learned two-step TAMP, then run paired EQA/find.
+      Do not lower acceptance thresholds or select fixtures by rollout success.
+      Keep failed `787acb6f` (4/5 completed, one unrun) separate from the repaired
+      panel. Detailed jobs, diagnostics and figures are in the experiment report.
+- [x] Preserve Molmo virtualenv interpreter paths (`b5fd55ef`): resolving the
+      Python symlink selected the bare interpreter and lost installed packages.
+      Import validity checks remain required. Broad tests: 570 passed / 4 skip;
+      focused config/CLI checks: 35 passed / 1 skip. Geometry-only job
+      `20260914_224024_b8970e` compiles/archives both Molmo scenes after fixing
+      private archive asset paths; no reinstall or policy change. This launch-only
+      source change is not in the physical panel SHA. Interior views and explicit
+      robot starts/tasks remain to be checked; exterior renders see the ceilings.
+- [ ] Repair/review the RoboCasa fork's blanket shell-inertia rewrite before
+      admitting new room manipulation fixtures. `Kitchen.edit_model_xml` in
+      installed fork `3d0bd42` inflates masses before EMET's preservation step;
+      source equality alone is insufficient. Matched cached-can control restores
+      authored mesh modes without density/geometry changes (see report). Keep
+      unrelated dirty dependency edits intact; separate review branch, never
+      main. Follow-up approved: separate [RoboCasa PR #1](https://github.com/cpaxton/robocasa/pull/1),
+      commit `f106e07`, removes only the blanket rewrite and adds a compiled
+      dynamics regression (1 passed). That exact source hunk is applied locally
+      while preserving unrelated dependency edits; fresh room preflight
+      `20260914_225528_1fa35e` passes generation/reload for both seeds with native
+      NoSlip=0 and gram-scale target masses. Four derived open-counter room
+      cases are being frozen before policy execution. The dependency PR is not merged.
+
+- [x] Complete the repaired-source basic physical gate: `4f78ae62` passes
+      **6/6 pickup and placement**, all three fixtures twice, in jobs
+      `20260914_220543_2c4d00` and `20260914_221712_59ba4e`. Uses tracked-narrow
+      and explicit NoSlip=10 physics; not a production default or hardware claim.
+      All final reconstructions manually inspected. Earlier v7 `ef533ed3` also
+      passed 6/6 but is not pooled into the repaired-source result.
+      [Results, failed panels and calibration figures](docs/experiments/shared_grounding_pilot.md).
+- [x] Fix native rendered-camera/grasp geometry and RGB-D snapshot consistency.
+      The measured 8.7 mm camera-to-grasp mismatch exceeded the 5 mm servo gate.
+      Snapshot timing transport follows in `fd6c0041`; v7 itself remains frozen
+      on `ef533ed3`, without later evaluator/timing changes.
+- [x] Keep verified manipulation references separate from unverified voxel search
+      hypotheses (`ec9e14ba`). The first running open-sink diagnostic found the
+      pear but rejected the handoff by counting both tiers as competing objects.
+      Fresh reacquisition and true ambiguity rejection remain required.
+- [x] Preserve source RoboCasa body mass/COM/inertia during mesh adaptation,
+      including zero-mass markers; full generation/export comparison passes.
+      The blanket shell conversion inflated a pear from 0.07874 to 4.57 kg.
+      Keep archived/corrected dynamics separate; do not tune object densities.
+- [ ] Complete repeatable room pickup **and placement**, then freeze Stage C's
+      visible/search starts and actual task identities for both environments.
+      Room retry `20260913_231231_143de9`: pickup T / place F;
+      payload retained through all 408 post-64 s samples, but placement point
+      was 1.017 m away and rejected before release. Earlier corrected-inertia
+      NoSlip=0 runs dropped the payload even while stationary. Matched 50 s
+      fixed-control continuation drops it under NoSlip=0 but retains it under
+      NoSlip=10 (2.64 mm drift); keep physics rows separate, defaults unchanged.
+      Candidate `b2c80dbc` adds kinematics-derived pickup and distant-placement
+      workspaces through the shared collision-checked navigator, with real-preset
+      radius accounting (`9f0a895b`). Find/EQA sampling and release gates are
+      unchanged. The next retry rejected the sink-center approach; cached-map
+      reconstruction shows the actual placement surface has a reachable pose.
+      Navigation now shares that point calculation with placement. Same NoSlip=10
+      fixture retry `20260913_233727_19e44f` reaches the planned pose, then
+      rejects placement because partial reacquisition shifts the local goal.
+      `7627d755` retains the planned static-support reference only after fresh
+      identity and 3D association pass. First trial `20260913_235140_680b61`
+      stops earlier: Qwen falsely rejects a clear wrist pear mask as a potato
+      (pickup F / place F; placement code untested). Keep that failure in the
+      results. Unchanged repeat `20260913_235819_32930b` gets through pickup
+      and navigation but fails final alignment: the gripper body contacts the
+      front counter edge. Do not relax release gates or push through contact.
+      Same-source tabletop control `20260914_000218_79fce1` also fails before
+      pickup after unwanted workspace relocation. Candidate `787acb6f` checks
+      actual pregrasp IK before moving and uses the real URDF wrist pivot;
+      tabletop retry `20260914_001546_f0b89d` passes T/T (final close/top-down
+      reconstructions inspected). Unchanged repeat `20260914_002232_e419bd`
+      also passes T/T, with its final close-up inspected: **2/2** on this
+      neighboring fixture and source, not room or full-panel acceptance.
+      Motion fixes already have a 9/9 empty-gripper simulator control plus
+      bounded extraction, sim-scaled waits and measured-progress stall tests.
+      **564 offline tests pass / 4 skip** on the latest candidate; this does not establish room acceptance. The previous
+      neighboring tabletop control passed T/T on `2e988c71`, not this candidate.
+      All run IDs, retained failures, masks, interventions and numerical audits
+      remain in the [experiment report](docs/experiments/shared_grounding_pilot.md).
+- [ ] Fix upstream RoboCasa generation ordering and test determinism across
+      processes as well as repeated calls. Python hash-seed pinning alone did
+      not stabilize object positions. Preserve generated geometry and validate
+      task identity before agent startup; do not count mismatched fixtures as
+      policy failures. Compiled XML export now expands mutable robot includes
+      (`cfb8558a`); external assets still require the same installation.
+- [ ] Validate geometry-preset arm-base completion against finer server tracking
+      in physical repeats; the configured 5 mm contract is now aligned and an
+      old-feedback false-completion regression is covered. Still align state-only
+      FK/joint feedback with the acquisition geometry contract.
+- [ ] Before claiming a solver necessity or hardware grasp safety, repeat
+      matched default/NoSlip retention controls with the repaired calibration.
+      Existing checkpoint controls isolate solver creep in an earlier grasp;
+      the six-case numerical-physics panel is not a hardware force/contact test.
+- [ ] Add observation-based held-payload monitoring and bounded recovery during
+      long transport, not only final release verification. A completed closure
+      is not persistent possession; ambiguous/occluded views must remain unknown,
+      not authorize release or a second pickup. Use shared state semantics and
+      adapter-provided sensing, never the private simulator evaluator.
+- [ ] Follow-up, not this PR's accessible-task gate: add collision-aware approach
+      selection before claiming general clutter robustness.
+      Narrowing an aperture is not a collision planner; an identity-positive
+      partial surface is not proof of complete grasp geometry.
+      The sink repeat now demonstrates gripper-body/counter contact before
+      release. Account for the robot's full end-effector envelope and observed
+      support/obstacle geometry when selecting a placement pose and approach;
+      simulator body names and private collision checks must remain evaluator-only.
+- [ ] Audit and explicitly select the embodiment's kinematic/collision model
+      before integrating gripper-clearance planning. The current generated
+      client URDF is RE1V0 dex-wrist-based while native simulation uses SE3/SG3.
+      Hash/archive the actual generated model, not just the source commit, and
+      validate joint/frame geometry against the bridge. Do not treat the legacy
+      model's collision meshes as the SE3 gripper or silently change hardware.
+- [ ] Improve private high-rate manipulation replay capture if contact failures
+      recur: 10 Hz sampled controls do not reproduce the latest release ejection.
+      Keep capture evaluator-only and distinguish replay from live evidence.
+- [ ] Calibrate private physical pickup/placement scoring against live held,
+      knocked, dropped and wrong-support controls. Recorder/scorer and synthetic
+      negative tests are implemented; live failures correctly fail the gate.
+      Object displacement and tool success are not sufficient physical evidence.
+- [ ] Implement door/drawer articulation separately: handle/axis grounding,
+      constrained contact-aware execution, force/travel limits, recovery, and
+      independent joint-state scoring. For this PR use explicitly open/pre-opened
+      receptacles; do not claim articulation. Shared agent and plan-wrapper stubs
+      now return false without motion instead of reporting a successful no-op.
+- [ ] Execute the staged Stretch manipulation → single-room OVMM → learned TAMP
+      → paired EQA/find battery. Freeze cases/settings first; stop on physical
+      manipulation failures. Keep oracle TAMP controls separate from learned runs.
+      Ordered distinct-object recording/scoring is now implemented privately:
+      synchronized traces, ordered releases and retained earlier placements.
+      Room-task manifests and actual learned two-step execution remain pending;
+      synthetic evaluator controls are not TAMP acceptance.
+
+- [ ] Fix manipulation handoff: pregrasp reachability/orientation, fail closed on
+      invalid IK, and reacquire the target after camera/posture changes. Latest
+      lifecycle retry reached manipulation but did not pick/place successfully.
+      Side-grasp alignment and pregrasp failure guards are implemented; wrist
+      audit `20260911_202818_77c40c` still rejects two spatial components although
+      the cylinder is visible and projected geometry agrees. Replace ambiguous
+      bounding-box-only wrist tracking with object-specific support association;
+      do not silently select the largest component or widen tolerances.
+      Candidate implementation now reuses head-frame mask/Qwen verification on
+      wrist RGB-D, then checks spatial association to the original target.
+      63 focused tests pass again after reboot. GPU driver mismatch is repaired.
+      Offline replay `20260912_153104_dafcde`: red support associates (1,397
+      pixels); blue support rejects association to red; absent banana abstains.
+      This is three queries on one saved frame, not manipulation acceptance.
+      Live retry `20260912_153738_fb4a22` passed wrist association but crashed
+      comparing wrist geometry with absent head semantic labels; no pickup.
+      `2db1b757` checks the actual wrist target mask, with regression coverage.
+      Same-preset retry `20260912_201500_bb5284`: wrist tracking converged from
+      0.369 to 0.166 m, gripper closed, then placement navigation timed out with
+      stop confirmed. No verified held object or successful place. Next: verify
+      physical pickup and diagnose post-grasp navigation; 65 focused tests pass.
+      Navigation root cause isolated: Stretch wheel commands/feedback confused
+      geared actuator velocity with joint velocity. Fix `76ebf9a1` passes 44
+      focused tests and the matched half-turn in 7.01 s (baseline times out).
+      No limits/tolerance/deadline relaxation. Integrated retry
+      `20260912_233137_f012c2` completes initial navigation but fresh grounding
+      rejects absent/ambiguous target before pickup. Post-grasp navigation and
+      physical grasp verification remain unvalidated in the integrated harness.
+      One precision-route repeat (`20260912_233819_e45145`) passes all 10 moves
+      at 2 cm / 0.03 rad; full probe remains incomplete due to missing posture
+      telemetry. Last grounding frames show cylinder leaving the image edge;
+      camera-only replay confirms another 8.9 degrees of view rotation after
+      soft sweep returns, carrying visible objects out of frame. `d9bb2ce3`
+      waits for blocking head motion/new frame on verification sweeps only;
+      91 tests pass; camera drift falls to 0.0037 degrees. Integrated retry
+      `20260912_234501_ffeb03` passes arrival/fresh grounding, then loses the
+      view after side-grasp rotation. `4f946d1d` waits for post-turn RGB-D there;
+      91 focused tests pass. Retry `20260912_234917_6b6fdf` passes both head
+      handoffs and reaches wrist approach, then rejects original-target 3D
+      association (39.6% support in bounds, required 80%). Qwen selects the red
+      cylinder, now partly finger-occluded/clipped. Diagnose contact/object
+      displacement versus mixed mask/pose timing; do not widen the threshold.
+      Audit zero center depths and repeated manipulation base goals. Head
+      completion receipts and sim image timestamps remain gaps.
+      September 13: command retry identity, embedded-base tolerance and shared
+      physics-command writeback race fixed. Private trace proved a lift request
+      was being dropped; matched retry now reaches nine wrist approach steps.
+      Still no pickup: replay shows the right fingertip colliding with the blue
+      cube next to the red target. Next: separated-neighbor control and observed-
+      geometry aperture/approach-clearance planning; do not loosen success gates.
+      Separated-neighbor controls now physically pick up the cylinder, isolating
+      the original neighbor obstruction. Carry exposed loaded lift sag and
+      unprofiled wrist motion (~21 rad/s), plus a lazy-controller placement API
+      gap. Lift/posture fixes and a 0.8 rad/s wrist reference limiter are tested;
+      matched held-object replay retains contact instead of ejecting the object.
+      Placement shares reach/alignment contracts and guards all release motions.
+      Retry `20260913_081154_ea1dcd` exposed infeasible fixed pregrasp; bounded
+      reachable standoffs fix it. `20260913_081801_d64db7` physically picks and
+      carries, but releases off-center above the cube and drops onto the table.
+      Final observed-payload alignment is implemented with bounded moves and
+      cached visual evidence; retry `20260913_083212_06fb47` rejects the payload
+      after it slips during carrying (not a VLM false negative). Hidden
+      payload geometry and moving supports remain limitations; no real-robot
+      acceptance is claimed. Original clutter still needs aperture clearance.
+      Geometry-servo preset now targets robust observed 3D bounds with the
+      measured grasp frame, retaining the old fixed-pixel/depth preset as a
+      control. Trial `20260913_084739_a09908` exposes a fine base-joint deadband;
+      5 mm actuator targeting and bounded no-progress stop implemented, retry
+      `20260913_085624_0c7f62` reaches 5.7 mm error and verified pickup, then
+      loses the payload during transport. Payload-aware posture preservation
+      is implemented (66 focused tests); full-task retry
+      `20260913_091308_642f8d` still loses contact during transport. Wheel
+      acceleration limiting does not eliminate the loss in matched replay.
+      Contact geometry shows gradual migration toward pad edges; matched
+      preclosure trials lose a nominal-depth grasp even stationary, while
+      15/25 mm additional insertion survives 35 s hold. Separate contact-point
+      calibration preset implemented; `20260913_092427_1e2e65` fails because its
+      offset uses the wrong diagnostic marker axes. Fixed the massless MJCF
+      marker's intrinsic/fixed-axis Euler mismatch against published URDF;
+      corrected palm offset is grasp-frame -X. Retry `20260913_093103_771bbf`
+      still slips; executed insertion is smaller than the static intervention.
+      Also fixed world-target versus episode-base mixing in grasp/place
+      geometry (62 focused tests); `20260913_093656_0b9dbd` reaches placement
+      but still loses the payload. Twenty-five mm contact trial
+      `20260913_094303_496e65` retains it through transport, then exposes an
+      untrimmed support-height outlier, a base translation that turns toward
+      lateral residuals, and premature arm completion while base yaw moves.
+      Robust height, translation-joint control, measured settling, and arm/lift
+      reference profiles implemented (90 focused tests). Full-task retry
+      `20260913_095547_9ec2d2` keeps the object held but refuses release because
+      depth contamination gives a false object bottom. Root cause: 15 mm head
+      RGB/depth baseline despite an aligned-pixel bridge contract. Fixed the
+      virtual registered-depth viewpoint (four render/geometry tests); retry
+      `20260913_100708_0f6983` still refuses release on residual mask-depth
+      tails (payload retained). Conservative median/MAD trimming now records
+      support statistics and abstains below 80% retained support (28 tests);
+      matched retry `20260913_102057_336037` cancelled on repeated no-progress
+      navigation before placement (physical pick true/place false). Fixed
+      diagonal search/execution disagreement, false arrival after safety
+      truncation, and missing chunk progress guard (45 tests). Driver-based
+      retry `20260913_103007_684ea5` is the first independently verified
+      separated-neighbor pick/place pass (168 focused tests). Unchanged repeat
+      `20260913_103442_018239` loses the payload during a longer turn (1/2 on
+      repaired configuration). Matched carry replay `20260913_104239_40cb0e`
+      did not reproduce the original loss. Original-clutter combined contact/aperture preset prepared, not
+      yet live tested; keep that stage closed until retention is repeatable. Navigation control
+      `20260913_095730_685498` passes all ten moves; health still reports
+      incomplete telemetry. Preserve all failed diagnostics.
+      Observed-aperture child preset is unit
+      tested but not yet live tested. Do not promote either on graph size or
+      a controller return without physical placement evidence.
+- [ ] Continue after wheel-curvature retry `20260913_104630_1f3338` (pick true,
+      place false: mixed receptacle/held-object mask) and navigation control
+      `20260913_104659_c274cb` (ten moves pass, incomplete telemetry). Replay controls did
+      not reproduce the previous slip, so no stronger closure or smoothing was
+      adopted. Wheel saturation now preserves curvature (29 focused tests);
+      independently verify retention and placement, not only command completion.
+      External masks now obey the existing measured depth boundary (34 tests);
+      retry `20260913_110132_edd836` passes physical pick/place on the longer
+      route. Unchanged repeat `20260913_110659_839e2c` fails on a navigation
+      deadline and payload slip: this version is 1/2, not reliable. Stable
+      approach/final-yaw phase handoff (`ded0a3a3`) passes physical pick/place
+      in `20260913_112012_a863a5` on the shorter route; unchanged repeat
+      `20260913_112432_810490` retains payload but fails placement (1/2):
+      repeatedly re-seeding wrist targets from loaded angles compounds sag.
+      Bounded fixed-reference correction (`cffc74d4`) is in live retry
+      `20260913_113323_333844`: physical pass, followed by an unchanged physical
+      pass `20260913_113742_45c27b` (2/2 diagnostics). Height error now corrects
+      from 1.577 to 0.488 cm. Expanded route `20260913_113326_d91f20` passes
+      all 14 moves, incomplete health telemetry; 255 focused tests pass.
+      Original-clutter contact/aperture pilot `20260913_114456_d0f9e2` fails
+      before pickup: right finger contacts cube during diagonal approach.
+      Full transverse alignment `20260913_115105_65d8ba` instead rejects
+      negative arm IK. Finger-axis-only alignment (`34ba733a`) preserves valid
+      extension in captured-pose IK; retry `20260913_115500_c04c71` passes
+      physical pick/place on the original fixture and longer transport route
+      (1/1). Matched easier-scene control `20260913_115609_934cb7` also passes.
+      Frozen panel `20260913_120543_168dcb` on `6e54ddd1` then stops at original
+      1/2: second run loses payload during an arc-to-turn transition. Four
+      cases remain unrun. Measured-state replay `20260913_121747_00b35f`
+      reproduces ejection at 2/3 checkpoints; wheel slew 8 retains all 3.
+      Production wheel-joint reference profile (8/3 rad/s²) and captured
+      negative/positive regression pass. First route catches incompatible
+      generic braking (3.23 cm coupled-goal overshoot); native profile
+      `e33bb5d1` passes unchanged 14-move retry `20260913_123817_b165a0`.
+      Failed-task retry `20260913_124152_159563` instead rejects wrist identity
+      before pickup (false/false); cached-image candidate replay
+      `20260913_124712_3cb5b1` reproduces surface-budget overflow from a false
+      gripper proposal (8 components plus the target), before Qwen. A separate
+      `query_geometry_recovery_pilot.yaml` row permits one Qwen-box/SAM proposal
+      recovery on geometric failure, never semantic rejection. Cached int4/SDPA
+      test `20260913_130039_59db80` passes 2/2 positives and 2/2 absent queries;
+      original live retry `20260913_164029_e59ea7` is running on `eeec07fd`.
+      Require physical scoring before rerunning a fresh frozen panel.
+      Mirrored neighbor at x=+0.18 m is predeclared for the six-case panel;
+      do not pool evolving diagnostic versions into that frozen acceptance.
+      This is not a general collision-free approach planner; validate varied
+      clutter and the earlier neighboring control before promoting it.
+      Arrival tolerances/deadlines are unchanged. Do not
+      compensate motion error or loosen release thresholds against a mixed mask.
+- [ ] Validate robot-visible head RGB-D and mapping self-filtering: current
+      simulator hides the robot in head renders, removing manipulation
+      self-occlusion. Wrist views retain it. Disclose this fixture limitation;
+      do not treat tabletop passes as real-perception acceptance.
+- [x] Repair CHAT multi-step continuation: shared bounded observation/action
+      loop, matching prompt, fresh optional images, structured motion and
+      manipulation outcomes, and no batch/follow-up execution after failure.
+      113 offline agent tests pass (4 simulation-gated tests skipped), including
+      two-step requests and forced-final tool rejection. Not in the frozen
+      `e33bb5d1` carry retry; learned TAMP physical acceptance remains pending.
+- [ ] Repeat precision-route validation and complete posture/actuator telemetry.
+      Manager-lock version passed six moves then stalled on move seven; frozen
+      pre-lock and native-lock controls each pass ten moves. Native-lock control
+      has max XY 1.958 cm / yaw 0.02874 rad, zero corrections. Keep the failed
+      run and do not infer broad no-regression or full health acceptance yet.
+- [ ] Habitat-OVMM remains unresolved and is deferred from this PR's performance
+      gate, not dropped: both paired strategies scored 0/4 localization phases.
+      Track long-range coverage, first target visibility and relational instance
+      selection separately. The bedding-as-lamp correctness bug still needs a
+      shared fix. [Results](docs/experiments/shared_grounding_pilot.md).
+
+Hypotheses/options: [grounding option register](docs/experiments/grounding_options.md).
+- [ ] Add stronger-model (e.g. GPT) paired evaluation: minimal RGB/query,
+      context-assisted, and bounded closed-loop modes; test whether less assistance
+      preserves grounding quality. Record cost, latency, model/input settings and
+      false acceptance. Keep geometry/freshness/execution checks model-independent.
+- [x] Run the separate best-local offline preset (whole-object prompt + context)
+      on original and supplementary caches with a matched isolated control;
+      document results before promoting to bounded find/OVMM. Do not change defaults.
+      Result: 9/31 visible targets yield >=95%-pure support, nine impure acceptances;
+      context ties isolated on the same masks. No promotion or new OVMM claim.
+- [ ] Improve support segmentation/point localization and missing-candidate
+      coverage before integrated acceptance; keep model-strength and assistance
+      ablations separate from mandatory geometry/freshness/safety contracts.
+- [x] Compare SAM2 masks on fixed Qwen boxes and connect an opt-in provider to the
+      shared query controller. [Evidence](docs/experiments/segmented_shared_grounding.md):
+      13 pure surfaces vs 9 RGB-D, but wrong-surface acceptance remains.
+- [x] Fix recursive config inheritance losing grandparent robot-client defaults;
+      retain proper override order and reject cycles instead of duplicating settings.
+- [x] Connect query-driven find to shared view-first grounding and fresh arrival
+      verification; preserve verified gaze and keep candidate approach separate
+      from success. Fix SAM2 float-mask rejection, motor/arrival tolerance mismatch,
+      and 2D table-ray rejection without removing footprint/path safety checks.
+- [x] Finish paired 60-view SAM2/YOLOE provider comparison (same Qwen verifier):
+      context SAM2 13 pure / 5 impure versus YOLOE 8 / 9; neither recovers held-out.
+- [x] Manually inspect nearby find smokes: YOLOE-box -> SAM2 -> Qwen gives verified
+      red-cylinder and blue-block finds (21.6 s / 25.0 s). Earlier context success
+      was a table-mask false positive; Qwen-box retries remain unreliable.
+- [x] Compare raw versus SAM2-refined YOLOE proposals on the same 60-view cache:
+      support-only Qwen gives 8 pure / 10 impure versus 15 / 3. Two refined-mask
+      failures still select the wrong object; held-out remains unrecovered.
+- [ ] Hold the hybrid pilot's harness/model fixed for bounded cluttered find/OVMM,
+      EQA and learned TAMP checks; simple nearby finds are not manipulation or
+      broad-environment acceptance. Do not promote defaults on these two smokes.
+      Serial [cross-task pilot](docs/experiments/shared_grounding_pilot.md) launched
+      as `20260910_213038_d86e1a` on frozen `b194395a`; includes learned pick/place,
+      not the oracle TAMP battery. Review task evidence, not process exits.
+- [x] Stop reporting failed find as success; relay executor failures and reject
+      intermediate search endpoints when navigation exhausts its budget.
+
+- [x] Bounded head-only view recovery, detector-free depth-surface grounding,
+      cached image/prompt audit, and explicit shared wrist-adapter CLI.
+- [x] Prevent generic embodied presets from re-enabling streaming instances in
+      lazy mode; block oracle TAMP/tool metadata bypasses in query mode.
+- [x] Recover stationary red/blue surfaces without a detector or evaluator-label
+      input; shared opt-in candidate strategy passes clean and noisy cached views.
+      See [surface pilot](docs/experiments/surface_candidate_pilot.md): partial
+      surfaces, not grasp acceptance or real-world robustness.
+- [ ] Recover the visible lamp and handle textured-scene proposal fragmentation;
+      frozen candidate audit still misses lamp and abstains on sofa. Test clutter
+      and occlusion before promoting the strategy or claiming OVMM recovery.
+- [x] Run paired touching/occlusion/same-color/farther-view diagnostics: surface
+      9/10 versus point 4/10 target gates; both 5/5 absent-query abstentions.
+      [Frozen results](docs/experiments/surface_stress_paired.md).
+- [x] Reject the known farther-view wrong-only proposal set with candidate-only
+      panels: frozen boxes/masks preserve nine target recoveries, reject the table
+      patch, and abstain on five absent queries. This is one rejection case.
+- [ ] Recover missing target proposals and expand wrong-only candidate tests
+      before promotion; a safe rejection is not successful localization.
+- [ ] Diagnose unsafe posture during known-route translation (upright dot
+      0.97898). Hold and turns pass; keep posture safety threshold unchanged.
+- [ ] Demonstrate non-oracle shared-agent pick/place with fresh wrist evidence
+      and independent post-action scoring; oracle TAMP control is not this test.
+- [x] Fix live shared-VLM caption latency: disabled Stretch visualizer spawned a
+      no-op busy loop. With the enabled check, identical integrated captions take
+      0.19–0.66 s instead of timing out at 180 s; tool reaches target rejection.
+      [Evidence and remaining limits](docs/experiments/live_caption_and_candidate_rejection.md).
+- [x] Compare observation coverage using the existing head sweep. Sweeps see the
+      objects and a later integrated grounding frame contains both targets;
+      this does not establish robust reacquisition or manipulation readiness.
+- [x] Test existing head sweep and fix the shared query VLM binding. Grounding
+      previously read an uninitialized graph client instead of the loaded voxel
+      client. Wired run now sees the target but rejects a misplaced table box.
+- [ ] Recover target proposals beyond inaccurate VLM boxes and audit the legacy
+      unconditional 90-degree find-to-manipulation turn; preserve acquisition
+      views and revalidate before action. Keep the table-rejection gate intact.
+- [x] Replay higher-precision Qwen on Caliban: FP16 passes 10/10 stress targets
+      versus int4 9/10; both 5/5 absent cases. FP16 still misses both live-frame
+      boxes. [Precision comparison](docs/experiments/caliban_fp16_grounding.md)
+      records runtime confounds; this is not proof of quantization causality.
+- [ ] Pass bounded OVMM localization in both pilot scenes before merge acceptance;
+      then freeze a paired no-regression comparison, not a full sweep.
+- [x] Cache 40 varied Molmo/RoboCasa views with separate simulator masks; run five
+      box ablations plus YOLOE-proposal/Qwen-verifier comparison serially.
+      [Results and artifacts](docs/experiments/grounding_verification_ablation.md):
+      whole-object prompt 7/21 pure surfaces vs baseline 5/21; no held-out recovery.
+- [ ] Fix final-verifier wrong-object acceptance: detector paper-towel case 14
+      selects a mug (zero target overlap). Box self-check alone did not help;
+      improve candidate identification and mask purity before OVMM promotion.
+- [x] Replay fixed candidates with context crops and target-blind identification.
+      [Results](docs/experiments/candidate_context_verification.md): context rejects
+      the known mug failure without losing five pure detector selections; blind
+      identity binding regresses RGB-D components to 0 pure / 10 impure acceptances.
+      Do not promote blind matching; context still does not fix mask contamination.
+- [x] Capture 20 supplementary close/high-angle views with scoring-only masks;
+      ten show targets, ten remain blocked. Expanded local sweep completed:
+      four pure-surface recoveries and three contaminated acceptances.
+- [x] Add clear-view controls alongside blocked/robot-occluded views in the new
+      dataset; do not confuse oracle camera placement with successful search.
+- [ ] Archive diagnostic RGB-D/trace/figure bundles outside temporary paths and
+      update paper evidence/limitations only after acceptance; Sourccey and Mars
+      remain deferred, not required for this closeout.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).

@@ -66,30 +66,8 @@ logger = Logger(__name__)
 # Fast text tool-router by default. Use ``--llm qwen3-vl-eqa`` for one shared VL (chat + EQA).
 DEFAULT_AGENT_LLM = "qwen35-4B"
 
-# Maximum follow-up LLM calls per user turn (prevents infinite loops)
+# Maximum tool-bearing rounds per user turn, followed by a no-tool summary.
 _MAX_TOOL_ROUNDS = 3
-
-# Info tools whose return text is already user-facing — skip a second VL summarize call.
-# Action-only executor tools (take_picture, take_ee_picture, go_home, …) must NOT be listed
-# here alone: they never set has_info, so the fast path cannot run.
-_FAST_REPLY_TOOLS = frozenset(
-    {
-        "describe_scene",
-        "send_image",
-        "list_scene_relations",
-        "navigation_diagnostics",
-        "send_map_snapshot",
-        "send_object_image",
-        "scan_environment",
-        "rotate_base",
-        "face_toward",
-        "move_forward",
-        "explore",
-        "take_picture",
-        "take_ee_picture",
-        "aim_arm_at",
-    }
-)
 
 
 def terminal_timestamp(now: datetime | None = None) -> str:
@@ -135,23 +113,6 @@ def _format_fast_tool_reply(results: list[str]) -> str | None:
     if not parts:
         return None
     return " ".join(parts)
-
-
-def _should_skip_llm_summarize(tool_calls: list[dict], results: list[str]) -> bool:
-    names = {str(tc.get("name") or "") for tc in tool_calls}
-    if not names:
-        return False
-    # Unavailable / stub refusals are already user-facing — relay without a second LLM call.
-    if results and all(
-        ("can't drive" in (r or "").lower())
-        or ("don't have a working" in (r or "").lower())
-        or ("tethered" in (r or "").lower() and "rotate-only" in (r or "").lower())
-        for r in results
-    ):
-        return _format_fast_tool_reply(results) is not None
-    if not names.issubset(_FAST_REPLY_TOOLS):
-        return False
-    return _format_fast_tool_reply(results) is not None
 
 
 def _env_agent_tool_debug() -> bool:
@@ -234,13 +195,13 @@ def _dispatch_tool_calls(
     tool) so sequences like ``[scan_environment, describe_scene]`` capture the
     post-scan frame.
 
-    Returns (continue_running, list_of_result_strings, has_info_results).
+    Returns (continue_running, list_of_result_strings, failed).
     continue_running is False if quit was requested.
-    has_info_results is True if any tool with returns_info=True produced output
-    (including failure messages that should be relayed to the user).
+    A failed tool stops this batch and further execution for this user turn,
+    but does not terminate the interactive session.
     """
     results: list[str] = []
-    has_info = False
+    failed = False
     ok = True
 
     if verbose_tools and tool_calls:
@@ -281,57 +242,60 @@ def _dispatch_tool_calls(
                 )
             logger.warning(f"Unknown or unavailable tool: {name}")
             results.append(msg)
-            has_info = True
-            continue
+            failed = True
+            break
 
-        cmds = tool.to_executor(args)
-        if cmds:
-            if any(c[0] == "quit" for c in cmds):
-                if chat_log:
-                    for r in results:
-                        chat_log.log("tool", r)
-                return False, results, has_info
-            if verbose_tools:
-                print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
-            keep_going = executor(cmds)
-            if not keep_going:
-                # Quit (or stop) — abort the agent turn.
-                ok = False
+        try:
+            cmds = tool.to_executor(args)
+            if cmds:
+                if any(c[0] == "quit" for c in cmds):
+                    if chat_log:
+                        for r in results:
+                            chat_log.log("tool", r)
+                    return False, results, failed
+                if verbose_tools:
+                    print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
+                keep_going = executor(cmds)
+                if not keep_going:
+                    # Quit (or stop) — abort the agent turn.
+                    ok = False
+                    cmd_names = [c[0] for c in cmds]
+                    summary = f"Executor ran: {', '.join(cmd_names)} -> quit/stop"
+                    results.append(summary)
+                    if verbose_tools:
+                        print(colored("[executor summary]", "magenta"), summary, flush=True)
+                    if chat_log:
+                        for r in results:
+                            chat_log.log("tool", r)
+                    return False, results, True
+                # Keep going; surface pickup/place failures via _last_exec_ok without quitting.
+                task_ok = bool(getattr(executor, "_last_exec_ok", True))
                 cmd_names = [c[0] for c in cmds]
-                summary = f"Executor ran: {', '.join(cmd_names)} -> quit/stop"
+                summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
                 results.append(summary)
                 if verbose_tools:
                     print(colored("[executor summary]", "magenta"), summary, flush=True)
-                if chat_log:
-                    for r in results:
-                        chat_log.log("tool", r)
-                return False, results, has_info
-            # Keep going; surface pickup/place failures via _last_exec_ok without quitting.
-            task_ok = bool(getattr(executor, "_last_exec_ok", True))
-            cmd_names = [c[0] for c in cmds]
-            summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
-            results.append(summary)
-            if verbose_tools:
-                print(colored("[executor summary]", "magenta"), summary, flush=True)
-            # Record pick/place outcomes into the attempt ledger when available.
-            gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
-            for cmd_name in cmd_names:
-                if cmd_name not in ("pickup", "place"):
-                    continue
-                maybe_record_tool_attempt(
-                    gm,
-                    ToolOutcome(
-                        ok=task_ok,
-                        status="ok" if task_ok else "failed",
-                        note=summary,
-                        tool=cmd_name,
-                        payload={"action_kind": "pick" if cmd_name == "pickup" else "place"},
-                    ),
-                    source="chat",
-                )
-            continue
+                # Record pick/place outcomes into the attempt ledger when available.
+                gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
+                for cmd_name in cmd_names:
+                    if cmd_name not in ("pickup", "place"):
+                        continue
+                    maybe_record_tool_attempt(
+                        gm,
+                        ToolOutcome(
+                            ok=task_ok,
+                            status="ok" if task_ok else "failed",
+                            note=summary,
+                            tool=cmd_name,
+                            payload={"action_kind": "pick" if cmd_name == "pickup" else "place"},
+                        ),
+                        source="chat",
+                    )
+                if not task_ok:
+                    failed = True
+                    break
+                continue
 
-        try:
             result = tool.func(**args) if args else tool.func()
             outcome = ToolOutcome.coerce(name, result)
             if isinstance(result, ToolOutcome) or (isinstance(result, dict) and "ok" in result):
@@ -339,8 +303,6 @@ def _dispatch_tool_calls(
             else:
                 result_str = f"[{name}] {result}" if result is not None else f"[{name}] ok"
             results.append(result_str)
-            if tool.returns_info and result is not None and result != "":
-                has_info = True
             if result is not None and result != "":
                 if verbose_tools:
                     print(colored(f"[{name}]", "magenta"), result_str, flush=True)
@@ -348,6 +310,9 @@ def _dispatch_tool_calls(
                     print(colored(f"[{name}]", "cyan"), result_str)
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
+            if not outcome.ok:
+                failed = True
+                break
         except Exception as e:
             outcome = ToolOutcome.from_exception(name, e)
             err = outcome.render()
@@ -358,16 +323,16 @@ def _dispatch_tool_calls(
 
                 traceback.print_exc()
             results.append(err)
-            if tool.returns_info:
-                has_info = True
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
+            failed = True
+            break
 
     if chat_log:
         for r in results:
             chat_log.log("tool", r)
 
-    return ok, results, has_info
+    return ok, results, failed
 
 
 # ---------------------------------------------------------------------------
@@ -1153,14 +1118,14 @@ def run_agent_with_robot(
                 print(colored(f"[DEBUG] User: {user_text!r}", "yellow"))
 
             # --- Multi-turn tool-use loop ---
-            # The LLM may call tools that return information (e.g. query_memory).
-            # When that happens we feed the results back and let the LLM summarize.
+            # Observations and actions both return to the same bounded loop.
+            # A tool category must not silently terminate an unfinished goal.
             current_input = user_text
             turn_t0 = timeit.default_timer()
             for _round in range(_MAX_TOOL_ROUNDS):
                 cam_image = None
                 followup_round = _round > 0
-                if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
+                if vl_include_camera and hasattr(robot_client, "get_observation"):
                     obs = robot_client.get_observation()
                     if obs is not None and getattr(obs, "rgb", None) is not None:
                         from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
@@ -1184,7 +1149,7 @@ def run_agent_with_robot(
                             from emet.agent.camera_debug import print_camera_frame_diagnostics
 
                             print_camera_frame_diagnostics(
-                                "VL first-turn (rgb passed to chat LLM)",
+                                "VL current round (rgb passed to chat LLM)",
                                 cam_image,
                                 force=True,
                             )
@@ -1272,7 +1237,7 @@ def run_agent_with_robot(
 
                 # Execute tool calls
                 tools_t0 = timeit.default_timer()
-                ok, results, has_info = _dispatch_tool_calls(
+                ok, results, failed = _dispatch_tool_calls(
                     tool_calls,
                     tools_by_name,
                     executor,
@@ -1294,99 +1259,48 @@ def run_agent_with_robot(
                 if verbose_tools and result_text.strip():
                     print(colored("[tool results combined]", "magenta"), result_text, sep="\n", flush=True)
 
-                if has_info:
-                    if _should_skip_llm_summarize(tool_calls, results):
-                        fast = _format_fast_tool_reply(results)
-                        if fast:
-                            print_terminal(f"{agent_name}: {fast}", color="blue")
-                            _send_to_discord(fast)
-                            chat_log.log("assistant", fast, fast_tool_reply=True)
-                            print_terminal(
-                                f"turn done in {timeit.default_timer() - turn_t0:.1f}s (fast tool reply)",
-                                color="cyan",
-                            )
-                            break
-                    # Last round: do not continue into exhaustion with a silent turn —
-                    # force a no-tool summarize or relay tool text.
-                    last_round = _round >= _MAX_TOOL_ROUNDS - 1
-                    followup = (
-                        f"[Tool results]\n{result_text}\n\n"
-                        "Summarize these results for the user in your message. "
-                        "Do not call any more tools."
+                remaining_rounds = _MAX_TOOL_ROUNDS - _round - 1
+                followup = f"[Tool results]\n{result_text}\n\n"
+                if failed or remaining_rounds == 0:
+                    reason = (
+                        "A tool failed; later calls in its batch were not executed."
+                        if failed
+                        else "Tool-round budget exhausted."
                     )
-                    if last_round:
-                        print_llm_invoke_line(
-                            llm_client,
-                            has_tools=False,
-                            has_image=False,
-                        )
-                        raw_response, elapsed = _call_llm(
-                            llm_client,
-                            followup,
-                            None,  # no tools — force a final answer
-                            debug_llm,
-                            image=None,
-                            reset_context=False,
-                            progress_callback=_llm_progress if show_thinking_status else None,
-                            robot=robot_client,
-                        )
-                        parsed_final = parse_tool_calls_response(raw_response)
-                        final_msg = (parsed_final.get("message") or "").strip()
-                        if not final_msg:
-                            final_msg = _format_fast_tool_reply(results) or result_text.strip()
-                        if final_msg:
-                            print_terminal(f"{agent_name}: {final_msg}", color="blue")
-                            _send_to_discord(final_msg)
-                            chat_log.log(
-                                "assistant",
-                                final_msg,
-                                raw=raw_response,
-                                time_s=elapsed,
-                                forced_final=True,
-                            )
-                        else:
-                            fallback = "I gathered tool results but could not summarize them."
-                            print_terminal(f"{agent_name}: {fallback}", color="yellow")
-                            _send_to_discord(fallback)
-                        print_terminal(
-                            f"turn done in {timeit.default_timer() - turn_t0:.1f}s "
-                            f"(forced final after {_MAX_TOOL_ROUNDS} rounds)",
-                            color="cyan",
-                        )
-                        break
-                    current_input = followup
-                    if debug_llm or verbose_tools:
-                        print(
-                            colored("[→ LLM follow-up user message]", "magenta"),
-                            followup,
-                            sep="\n",
-                            flush=True,
-                        )
-                    continue
-                else:
-                    # Action-only tools: intermediate message may already have been sent.
-                    if results and hasattr(llm_client, "add_history"):
-                        llm_client.add_history({"role": "assistant", "content": raw_response})
-                        llm_client.add_history({"role": "user", "content": f"[Tool results]\n{result_text}"})
-                    if not (message or "").strip():
-                        # Never leave Discord/terminal silent after a tool-only turn.
-                        names = [str(n) for n in tool_names if n]
-                        if names == ["take_ee_picture"] or set(names) == {"take_ee_picture"}:
-                            fallback = (
-                                "Wrist capture needs a successful aim_arm_at first (or use "
-                                "face_toward + describe_scene with the head camera)."
-                            )
-                        elif names == ["take_picture"] or set(names) == {"take_picture"}:
-                            fallback = (
-                                "I took a head-camera picture. Say if you want me to send it or describe the scene."
-                            )
-                        else:
-                            fallback = f"Done ({', '.join(names)})." if names else "Done."
-                        print_terminal(f"{agent_name}: {fallback}", color="blue")
-                        _send_to_discord(fallback)
-                        chat_log.log("assistant", fallback, silent_action_fallback=True)
-                    print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s", color="cyan")
+                    followup += (
+                        f"{reason} Summarize completed work, failures and any unfinished goal. "
+                        "Do not call any more tools or claim unverified physical success."
+                    )
+                    print_llm_invoke_line(llm_client, has_tools=False, has_image=False)
+                    raw_response, elapsed = _call_llm(
+                        llm_client,
+                        followup,
+                        None,
+                        debug_llm,
+                        image=None,
+                        reset_context=False,
+                        progress_callback=_llm_progress if show_thinking_status else None,
+                        robot=robot_client,
+                    )
+                    parsed_final = parse_tool_calls_response(raw_response)
+                    # Even if the model emits calls despite the final prompt,
+                    # this branch never dispatches them.
+                    final_msg = (parsed_final.get("message") or "").strip()
+                    if not final_msg or parsed_final.get("tool_calls"):
+                        final_msg = _format_fast_tool_reply(results) or "No further tools were executed."
+                    print_terminal(f"{agent_name}: {final_msg}", color="blue")
+                    _send_to_discord(final_msg)
+                    chat_log.log("assistant", final_msg, raw=raw_response, time_s=elapsed, forced_final=True)
+                    print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s (forced final)", color="cyan")
                     break
+                current_input = followup + (
+                    f"Continue only the unfinished parts of the user's request ({remaining_rounds} tool rounds remain). "
+                    "Use these results and the current view; do not repeat completed actions. "
+                    "If the request is complete, reply without tools. "
+                    "Controller completion is not independent verification of physical success."
+                )
+                if debug_llm or verbose_tools:
+                    print(colored("[→ LLM follow-up user message]", "magenta"), current_input, sep="\n", flush=True)
             if ok:
                 _print_user_turn_separator()
             continue

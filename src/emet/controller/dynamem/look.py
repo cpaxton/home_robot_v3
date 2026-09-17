@@ -154,7 +154,7 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
         time.sleep(0.04)
 
 
-def look_around(self):
+def look_around(self, *, on_observation=None):
     """Look around for mapping / agentic capture.
 
     Policy: :func:`look_around_should_sweep` (robot overlay
@@ -162,6 +162,10 @@ def look_around(self):
     Stretch as well as rby1 (single capture at look_front) — hardware 4-pan
     is opt-in. Paper coverage: ``EMET_FORCE_HEAD_SWEEP=1`` or
     ``--set mapping.look_around_head_sweep=true``.
+
+    Optional ``on_observation`` checks each captured view after a blocking head
+    move and post-motion frame wait. A true result stops scanning and preserves
+    that gaze; callers must still validate observation freshness.
     """
     skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
@@ -175,7 +179,7 @@ def look_around(self):
     if skip_sweep:
         self.announce_action("Look around: single capture (no head sweep)")
         self.update(full_perception=True)
-        return
+        return bool(on_observation()) if on_observation is not None else None
 
     self.announce_action("Look around: sweeping head")
     tilt = float(motion_constants.look_front[1])
@@ -192,13 +196,23 @@ def look_around(self):
     t_sweep = time.time()
     for i, pan in enumerate(pans):
         self.announce_motion_progress(f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})")
-        self._head_to_sweep(pan, tilt)
-        time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
+        if on_observation is not None:
+            # A mapping sweep may sample mid-pan. Verification cannot hand that
+            # transient view to manipulation while the head keeps moving.
+            self.robot.head_to(pan, tilt, blocking=True)
+            wait_post_motion_obs(self.robot, timeout=DYNAMEM_POST_MOTION_OBS_WAIT_S)
+        else:
+            self._head_to_sweep(pan, tilt)
+            time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
         self.update(full_perception=True)
+        if on_observation is not None and on_observation():
+            # Preserve the verified view for the next operation.
+            return True
     self.announce_motion_progress(f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)")
     # Return to look_front without a long blocking wait.
     self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
     time.sleep(DYNAMEM_HEAD_SETTLE_S)
+    return False if on_observation is not None else None
 
 
 def _find_phase_nav_timeout(self, default: float = 10.0) -> float:

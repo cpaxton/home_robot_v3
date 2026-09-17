@@ -59,8 +59,21 @@ def test_nav_filter_still_rejects_later_unsafe_segment():
 
     filtered, reason, _ = agent._filter_unsafe_nav_traj([start, escape, later], start_xyt=start)
 
-    assert filtered == [start, escape]
-    assert reason is None
+    assert filtered == []
+    assert reason == "rejected_low_clearance_segment"
+
+
+def test_truncated_route_never_keeps_original_arrival_marker():
+    from emet.controller.controller_dynamem import DynamemController
+
+    agent = DynamemController.__new__(DynamemController)
+    agent.planner = _TightStartPlanner()
+    agent._min_clearance_m = 0.22
+    start = [0.0, 0.0, 0.0]
+    route = [start, [0.3, 0, 0], [0.6, 0, 0], [np.nan] * 3, [1, 0, 0.5]]
+    filtered, reason, _ = agent._filter_unsafe_nav_traj(route, start_xyt=start)
+    assert filtered == []
+    assert reason == "rejected_low_clearance_segment"
 
 
 def test_mark_nav_goal_blocked_from_last_plan():

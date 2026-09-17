@@ -391,7 +391,7 @@ def pick_uncovered_explore_target(
     return None
 
 
-def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None) -> None:
+def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None, on_observation=None):
     """Rotate in place on Habitat (head stubs are no-ops; body turns build the map)."""
     sim = getattr(robot, "_sim", None)
     if sim is None or not hasattr(sim, "step"):
@@ -402,6 +402,9 @@ def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None)
             robot._sync_pose_from_sim()
         if on_step is not None:
             on_step()
+        if on_observation is not None and on_observation():
+            return True
+    return False if on_observation is not None else None
 
 
 def habitat_perfect_nav_enabled(parameters: Any) -> bool:

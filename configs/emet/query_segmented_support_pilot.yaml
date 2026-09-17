@@ -1,0 +1,6 @@
+# Experimental shared-agent variant: Qwen boxes + SAM2 + support-only identity.
+# Keep separate from context verification and production defaults.
+extends: configs/emet/query_segmented_pilot.yaml
+mapping:
+  query_memory:
+    surface_presentation: support_only

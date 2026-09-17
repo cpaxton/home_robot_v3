@@ -40,7 +40,7 @@ def parse_openai_endpoint_spec(spec: str) -> tuple[str, str | None]:
 
 
 class OpenaiVLLMClient(AbstractVLLMClient):
-    """Stateless multimodal client posting JPEG data-URLs to ``/v1/chat/completions``."""
+    """Stateless multimodal client posting image data-URLs to ``/v1/chat/completions``."""
 
     def __init__(
         self,
@@ -53,6 +53,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         image_max_side: int = 512,
         image_max_pixels: int = 0,
         jpeg_quality: int = 85,
+        image_format: str = "jpeg",
         device: str = "remote",
         **_kwargs: Any,
     ) -> None:
@@ -66,6 +67,9 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         self.image_max_side = int(image_max_side or 0)
         self.image_max_pixels = int(image_max_pixels or 0)
         self.jpeg_quality = int(jpeg_quality)
+        if image_format not in ("jpeg", "png"):
+            raise ValueError("image_format must be jpeg or png")
+        self.image_format = image_format
         self.device = device
         self._openai = OpenAI(api_key=self.api_key, base_url=self.base_url)
 
@@ -73,7 +77,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
     def canonical_model_key(self) -> str:
         return f"openai_vl:{self.base_url}:{self.model}"
 
-    def _rgb_to_jpeg_data_url(self, rgb: np.ndarray | Image.Image) -> str:
+    def _rgb_to_image_data_url(self, rgb: np.ndarray | Image.Image) -> str:
         arr = downsample_rgb_hwc(
             rgb,
             max_side=self.image_max_side,
@@ -81,9 +85,12 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         )
         pil = Image.fromarray(arr, mode="RGB")
         buf = BytesIO()
-        pil.save(buf, format="JPEG", quality=max(1, min(95, self.jpeg_quality)), optimize=True)
+        if self.image_format == "png":
+            pil.save(buf, format="PNG")
+        else:
+            pil.save(buf, format="JPEG", quality=max(1, min(95, self.jpeg_quality)), optimize=True)
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        return f"data:image/jpeg;base64,{b64}"
+        return f"data:image/{self.image_format};base64,{b64}"
 
     def _content_blocks(self, user_content: str | list[Any], image: Any | None) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
@@ -110,7 +117,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
                 blocks.append(
                     {
                         "type": "image_url",
-                        "image_url": {"url": self._rgb_to_jpeg_data_url(part)},
+                        "image_url": {"url": self._rgb_to_image_data_url(part)},
                     }
                 )
                 continue

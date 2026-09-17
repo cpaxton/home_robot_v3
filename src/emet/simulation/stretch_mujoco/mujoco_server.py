@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import contextlib
+import json
 import os
 import platform
 import signal
@@ -15,6 +16,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from multiprocessing import get_context
 from multiprocessing.managers import DictProxy, SyncManager
 from pathlib import Path
 from typing import Any
@@ -58,6 +60,7 @@ from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import (
     MujocoServerCameraManagerThreaded,
 )
 from emet.simulation.stretch_mujoco.mujoco_server_sensor_manager import MujocoServerSensorManagerThreaded
+from emet.simulation.stretch_mujoco.position_targets import PositionTargets
 from emet.simulation.stretch_mujoco.utils import FpsCounter
 from emet.utils.logger import Logger
 
@@ -71,6 +74,7 @@ class MujocoServerProxies:
     _cameras: "DictProxy[str, StatusStretchCameras]"
     _sensors: "DictProxy[str, StatusStretchSensors]"
     _joint_limits: "DictProxy[str, dict[Actuators, tuple[float, float]]]"
+    command_lock: Any
 
     def __setattr__(self, name: str, value) -> None:
         try:
@@ -119,6 +123,9 @@ class MujocoServerProxies:
             _cameras=manager.dict({"val": StatusStretchCameras.default()}),
             _sensors=manager.dict({"val": StatusStretchSensors.default()}),
             _joint_limits=manager.dict({"val": {}}),
+            # The simulator child explicitly uses spawn. A native shared lock
+            # avoids two extra manager RPCs on every physics tick.
+            command_lock=get_context("spawn").RLock(),
         )
 
 
@@ -130,6 +137,9 @@ class BaseController:
 
     def push_command(self, command: CommandMove | CommandBaseVelocity):
         """Push a command to the base. Call `update()` to set the next trajectory."""
+        if isinstance(command, CommandBaseVelocity) and command.stop:
+            self._clear_command(is_stop_motion=True)
+            return
         self.last_command = command
         self.start_pose = self.get_base_pose()
 
@@ -137,7 +147,7 @@ class BaseController:
         self.last_command = None
 
         if is_stop_motion:
-            self._set_base_velocity(0.0, 0.0)
+            self._set_base_velocity(0.0, 0.0, immediate=True)
 
     def update(self):
         """
@@ -192,7 +202,7 @@ class BaseController:
 
         self._set_base_velocity(0, config.base_motion["default_r_vel"] * sign)
 
-    def _set_base_velocity(self, v_linear: float, omega: float) -> None:
+    def _set_base_velocity(self, v_linear: float, omega: float, *, immediate: bool = False) -> None:
         """
         Set the base velocity of the robot
         Args:
@@ -201,8 +211,54 @@ class BaseController:
         """
         scale = float(getattr(self, "_base_speed_scale", 1.0))
         w_left, w_right = utils.diff_drive_inv_kinematics(v_linear * scale, omega * scale)
-        self.mujoco_server.mjdata.actuator(Actuators.left_wheel_vel.name).ctrl = w_left
-        self.mujoco_server.mjdata.actuator(Actuators.right_wheel_vel.name).ctrl = w_right
+        # MuJoCo velocity servos target transmission velocity, not joint
+        # velocity: actuator_velocity = gear * wheel_joint_velocity.
+        # Read the MJCF gear rather than assuming the Stretch asset uses 1.
+        targets = []
+        speed_fraction = 1.0
+        for name, wheel_velocity in (
+            (Actuators.left_wheel_vel.name, w_left),
+            (Actuators.right_wheel_vel.name, w_right),
+        ):
+            actuator = self.mujoco_server.mjmodel.actuator(name)
+            target = float(actuator.gear[0] * wheel_velocity)
+            # A velocity actuator is proportional feedback, not an ideal motor
+            # speed source. Compensate the loaded model's Coulomb joint friction
+            # so small nonzero commands can overcome its breakaway torque.
+            # In actuator units: gear * kv * bias = sign(qdot) * frictionloss.
+            bias = 0.0
+            if target != 0:
+                model = self.mujoco_server.mjmodel
+                dof = int(model.jnt_dofadr[int(actuator.trnid[0])])
+                gain = float(actuator.gainprm[0])
+                if gain <= 0:
+                    raise ValueError("Wheel velocity actuator requires positive feedback gain")
+                bias = float(np.sign(target) * model.dof_frictionloss[dof] / (abs(actuator.gear[0]) * gain))
+            if actuator.ctrllimited[0]:
+                lo, hi = actuator.ctrlrange
+                if not lo <= 0 <= hi:
+                    raise ValueError("Wheel velocity limits must include zero")
+                if not lo <= bias <= hi:
+                    raise ValueError("Wheel actuator limits cannot overcome modeled joint friction")
+                if target + bias > hi or target + bias < lo:
+                    speed_fraction = min(speed_fraction, float(((hi if target > 0 else lo) - bias) / target))
+            targets.append((name, target, bias))
+        # Independent actuator clipping changes curvature (both saturated
+        # wheels can drive straight despite a turn request). Slow both wheels
+        # together to preserve the requested twist within physical limits.
+        for name, target, bias in targets:
+            actuator = self.mujoco_server.mjdata.actuator(name)
+            desired = speed_fraction * target + bias
+            if not immediate:
+                # Advance once per physics tick, not per incoming command or
+                # wall-clock interval. Bound wheel-joint acceleration even with
+                # non-unit/negative gearing. Transient curvature can differ
+                # while the two wheels accelerate toward the requested twist.
+                gear = self.mujoco_server.mjmodel.actuator(name).gear[0]
+                step = abs(gear) * config.wheel_reference_acceleration * self.mujoco_server.mjmodel.opt.timestep
+                current = float(actuator.ctrl[0])
+                desired = current + np.clip(desired - current, -step, step)
+            actuator.ctrl = desired
 
 
 class MujocoServer:
@@ -348,6 +404,7 @@ class MujocoServer:
         self.mjmodel = model
 
         self.mjdata = MjData(self.mjmodel)
+        self.position_targets = PositionTargets(self.mjmodel, self.mjdata, config.joint_position_rates)
 
         self._base_in_pos_motion = False
 
@@ -359,6 +416,17 @@ class MujocoServer:
 
         self.physics_fps_counter = FpsCounter()
         self._fall_monitor = FallOverMonitor(base_body_name="base_link")
+
+        self._eval_trace = None
+        trace_config = os.environ.get("EMET_SIM_EVAL_CONFIG")
+        if trace_config:
+            from emet.eval.manipulation_trace import create_trace
+
+            self._eval_trace = create_trace(
+                self.mjmodel,
+                json.loads(Path(trace_config).read_text()),
+                Path(os.environ["EMET_SIM_EVAL_TRACE"]),
+            )
 
         self.sensor_manager = MujocoServerSensorManagerThreaded(
             sensor_hz=15,
@@ -448,6 +516,8 @@ class MujocoServer:
             self.sensor_manager.sensors_thread.join()
 
         self.camera_manager.close()
+        if self._eval_trace is not None:
+            self._eval_trace.close()
 
     def _run_ui_simulation(self, show_viewer_ui: bool) -> None:
         """
@@ -545,10 +615,17 @@ class MujocoServer:
 
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()
-        self.push_command(self.data_proxies.get_command())
+        # Consume/acknowledge under the same interprocess lock as writers.
+        # Otherwise this tick can overwrite a newly submitted arm command with
+        # its older snapshot after clearing trigger flags.
+        with self.data_proxies.command_lock:
+            self.push_command(self.data_proxies.get_command())
         monitor = getattr(self, "_fall_monitor", None)
         if monitor is not None:
             monitor.maybe_report(model, data)
+        trace = getattr(self, "_eval_trace", None)
+        if trace is not None:
+            trace.record(model, data)
 
     def pull_status(self):
         """
@@ -585,8 +662,10 @@ class MujocoServer:
         new_status.gripper.pos = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
         new_status.gripper.vel = self.mjdata.actuator("gripper").velocity[0]  # This is still in sim gripper range
 
-        left_wheel_vel = self.mjdata.actuator("left_wheel_vel").velocity[0]
-        right_wheel_vel = self.mjdata.actuator("right_wheel_vel").velocity[0]
+        # Odometry kinematics require wheel-joint rad/s, not the geared
+        # actuator velocities (3x joint velocity in the current Stretch MJCF).
+        left_wheel_vel = self.mjdata.joint("joint_left_wheel").qvel[0]
+        right_wheel_vel = self.mjdata.joint("joint_right_wheel").qvel[0]
         (
             new_status.base.x_vel,
             new_status.base.theta_vel,
@@ -624,10 +703,10 @@ class MujocoServer:
                 else:
                     if actuator_name == Actuators.gripper.name:
                         current_value = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
-                        self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(current_value + pos)
+                        self.position_targets.set(actuator_name, self._to_sim_gripper_range(current_value + pos))
                     else:
                         current_value = self.mjdata.actuator(actuator_name).length[0]
-                        self.mjdata.actuator(actuator_name).ctrl = current_value + pos
+                        self.position_targets.set(actuator_name, current_value + pos)
 
         # move_to
         for _, command in command_status.move_to.items():
@@ -636,11 +715,11 @@ class MujocoServer:
                 actuator_name = command.actuator_name
                 pos = command.pos
                 if actuator_name == Actuators.gripper.name:
-                    self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(pos)
+                    self.position_targets.set(actuator_name, self._to_sim_gripper_range(pos))
                 elif actuator_name in (Actuators.base_translate.name, Actuators.base_rotate.name):
                     raise NotImplementedError(f"Cannot set move_to for {actuator_name}, which is a relative joint.")
                 else:
-                    self.mjdata.actuator(actuator_name).ctrl = pos
+                    self.position_targets.set(actuator_name, pos)
 
         # set_base_velocity
         if command_status.base_velocity is not None and command_status.base_velocity.trigger:
@@ -659,7 +738,7 @@ class MujocoServer:
                 theta=tb.theta,
             ):
                 self.base_controller.last_command = None
-                self.base_controller._set_base_velocity(0.0, 0.0)
+                self.base_controller._clear_command(is_stop_motion=True)
             else:
                 logger.warning(
                     f"teleport_base failed (no free joint on base_link?); goal=({tb.x:.3f}, {tb.y:.3f}, {tb.theta:.3f})"
@@ -708,7 +787,9 @@ class MujocoServer:
         if command_status.keyframe is not None and command_status.keyframe.trigger:
             command_status.keyframe.trigger = False
             self.mjdata.ctrl = self.mjmodel.keyframe(command_status.keyframe.name).ctrl
+            self.position_targets.reset()
 
+        self.position_targets.step()
         self.base_controller.update()
 
         self.data_proxies.set_command(command_status)

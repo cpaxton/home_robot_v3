@@ -1,0 +1,10 @@
+# Open-receptacle room task; no door/drawer articulation is assumed.
+# This is a fixture candidate, not a passing OVMM/TAMP result.
+kind: robocasa
+robot: stretch
+robocasa_task: PickPlaceCounterToSink
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0

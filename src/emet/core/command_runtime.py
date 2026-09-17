@@ -211,11 +211,19 @@ class CommandRuntime:
 
     def _finish_cancel(self, status, reason, *, result=None):
         session, sequence, context = self._navigation_command
+        recovering_stop = self._navigation_fault
         try:
             stopped = self.cancel_navigation_command() is True
         except Exception:
             stopped = False
         self._navigation_fault = not stopped
+        if recovering_stop:
+            # The goal already failed with an unconfirmed stop. Its outcome is
+            # immutable, but a later explicit cancellation may establish safety.
+            if stopped:
+                self.command_tracker.confirm_navigation_stop(session, sequence)
+                self._navigation_command = None
+            return
         self.command_tracker.transition(
             session,
             sequence,

@@ -347,6 +347,8 @@ Env toggles: [environment_variables.md](docs/environment_variables.md), [molmosp
 | Doc | When to use |
 |-----|-------------|
 | [experiments/README.md](docs/experiments/README.md) | **Master index** — all paper tracks, smokes, output dirs |
+| [Documentation guide](docs/README.md) | Entry points for setup, tests, environments and results |
+| [Environment guides](docs/environments/README.md) | Acceptance progression, difficulty notes and figure checklist |
 | [paper_benchmarks.md](docs/paper_benchmarks.md) | Operator runbook ↔ LaTeX table mapping |
 | [evaluation.md](docs/evaluation.md) | Cross-track overnight, `emet eval` / `emet jobs`, agentic verify |
 | [habitat_eqa.md](docs/habitat_eqa.md) + [habitat/](docs/habitat/README.md) | HM-EQA harness install / data / troubleshooting |

@@ -56,3 +56,41 @@ def test_legacy_image_does_not_inherit_timestamp():
     full = {"head_cam_left/image_timing": {"timestamp_ns": 999}}
     merge_servo_images_into_full_obs(full, {"head_cam_left/color_image": b"pixels"})
     assert read_image_timing(full) == {}
+
+
+def test_stretch_full_and_servo_observations_preserve_capture_clock(monkeypatch):
+    from emet.controller.zmq_client import StretchZmqClient
+
+    timing = {"timestamp_ns": 0, "clock_domain": "mujoco_sim", "source": "render_state_snapshot", "available": True}
+    client = StretchZmqClient.__new__(StretchZmqClient)
+    client._obs_lock = threading.Lock()
+    client._servo_lock = threading.Lock()
+    client._state_lock = threading.Lock()
+    client._state = {}
+    client._seq_id = 1
+    client.is_up_to_date = lambda **kwargs: True
+    client._note_emet_session_from_zmq_dict = lambda message: None
+    client._obs = {
+        "gps": np.zeros(2),
+        "compass": np.zeros(1),
+        "rgb": np.zeros((2, 2, 3), dtype=np.uint8),
+        "depth": np.ones((2, 2)),
+        "xyz": None,
+        "lidar_points": None,
+        "lidar_timestamp": None,
+        "joint": np.zeros(11),
+        "head_cam/image_timing": timing,
+        "ee_pose": np.eye(4),
+        "camera_pose": np.eye(4),
+        "camera_K": np.eye(3),
+    }
+    monkeypatch.setattr("emet.controller.zmq_client.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("emet.controller.zmq_client.compression.from_jpg", lambda value: value)
+    monkeypatch.setattr("emet.controller.zmq_client.compression.from_jp2", lambda value: value)
+    assert client.get_observation().image_timing == {"head_cam": timing}
+    client.update_servo(client._obs)
+    assert client.get_servo_observation().image_timing == {"head_cam": timing}
+    del client._obs["head_cam/image_timing"]
+    assert client.get_observation().image_timing == {}
+    client.update_servo(client._obs)
+    assert client.get_servo_observation().image_timing == {}
