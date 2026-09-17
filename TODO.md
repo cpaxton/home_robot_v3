@@ -941,6 +941,20 @@ and that `n_explore` now increments `mapping_n_explore` in JSON.
       `NavAttemptResult` / `graph_memory.record_nav_attempt` instead of relying
       on status/note reconstruction in offline artifacts.
 
+## Habitat find proxy — object_relation versioning (PR #170)
+
+`configs/ovmm/habitat_find_phase_nearest_v2.yaml` (`object_relation: nearest`) is
+versioned next to the legacy `on` manifest; unknown relations fail closed. The
+relation field is threaded through FindObj question phrasing and result/trace
+metadata only — it does not branch the scorer.
+
+- [ ] **Implement support-relation (`on`) GT selection distinct from `nearest`.**
+      `pick_find_object_gt_body` disambiguates multiple object-category bodies by
+      nearest `start_recep` for **both** relations, so legacy `on` episodes are
+      scored with nearest-recep proximity rather than an actual support ("on")
+      relation. Until that lands, `on` and `nearest` scores are distinguishable
+      only by the `object_relation` metadata tag — do not pool them.
+
 ## Next experiments + tuning (2026-08-31)
 
 Priorities after PR #148 merged (OVMM find, fp16 analysis, TAMP signal) and PR #154
