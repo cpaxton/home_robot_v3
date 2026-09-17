@@ -48,13 +48,13 @@ def test_ovmm_find_questions():
     assert ovmm_find_object_question("jar", "counter") == "Where is the jar on the counter?"
     assert ovmm_find_object_question("bowl") == "Where is the bowl?"
     assert ovmm_find_recep_question("cab") == "Where is the cab?"
-    assert ovmm_find_object_question("lamp", "bed", relation="nearest") == "Where is the lamp nearest to a bed?"
+    assert ovmm_find_object_question("lamp", "bed", relation="nearest") == "Where is the lamp nearest to the bed?"
 
 
 def test_nearest_question_localizes_object_not_relation_phrase():
     from emet.eval.ovmm_agentic_find import _localize_phrases
 
-    assert _localize_phrases("Where is the lamp nearest to a bed?", None) == ["lamp"]
+    assert _localize_phrases("Where is the lamp nearest to the bed?", None) == ["lamp"]
 
 
 def test_should_use_agentic_find_defaults():

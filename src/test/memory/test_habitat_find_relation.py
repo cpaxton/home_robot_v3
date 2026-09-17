@@ -7,12 +7,13 @@
 from pathlib import Path
 
 import pytest
-from emet_habitat.ovmm_find_runner import load_habitat_find_phase_episodes
 
 from emet.eval.ovmm_agentic_find import ovmm_find_object_question
 
 
 def test_manifest_versions_do_not_silently_relabel_old_runs():
+    from emet_habitat.ovmm_find_runner import load_habitat_find_phase_episodes
+
     root = Path(__file__).resolve().parents[3]
     legacy = load_habitat_find_phase_episodes(root / "configs/ovmm/habitat_find_phase_episodes.yaml")
     corrected = load_habitat_find_phase_episodes(root / "configs/ovmm/habitat_find_phase_nearest_v2.yaml")
