@@ -45,30 +45,62 @@ export PYTHONPATH="$ROOT/src:$ROOT/packages/emet_habitat"
 mkdir -p "$OUT/eqa" "$OUT/ovmm"
 echo "seed=$SEED phase=$PHASE root=$ROOT sha=$(git rev-parse HEAD)" > "$OUT/manifest.txt"
 
+# Failures never abort the loop (partial runs stay scoreable) but are listed
+# per-episode below and in $OUT/failed.txt, and called out again after scoring.
+FAILED=()
+
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
     for q in $EQA_IDS; do
         echo "=== [eqa] q$q seed=$SEED ($(date -Is)) ==="
+        rc=0
         LD_LIBRARY_PATH="$HABITAT_ENV/lib:${LD_LIBRARY_PATH:-}" \
             timeout --signal=TERM --kill-after=20s 600 \
             "$HABITAT_BIN" run-episode --question-id "$q" --method lazy_graph --query-driven-memory \
             --seed "$SEED" --max-planning-steps 20 --max-movement-step 10 \
-            --no-hm3d-semantics --no-enrich-labels --output "$OUT/eqa/q$q.jsonl" || true
+            --no-hm3d-semantics --no-enrich-labels --output "$OUT/eqa/q$q.jsonl" || rc=$?
+        if [[ $rc -ne 0 ]]; then
+            echo "!!! [eqa] q$q FAILED (exit $rc; exit 139/134 = native crash, not a scored miss)"
+            FAILED+=("eqa:q$q:exit$rc")
+        elif [[ ! -s "$OUT/eqa/q$q.jsonl" ]]; then
+            echo "!!! [eqa] q$q exited 0 but wrote NO metrics (empty jsonl) — treat as a crash, not a miss"
+            FAILED+=("eqa:q$q:empty")
+        fi
         sleep 15
     done
 fi
 
 if [[ "$PHASE" == all || "$PHASE" == ovmm ]]; then
     echo "=== [ovmm] $OVMM_EP seed=$SEED ($(date -Is)) ==="
+    rc=0
     "$PYTHON" -m emet.cli ovmm find --episodes configs/ovmm/find_phase_episodes.yaml \
         --backend lazy_graph --query-driven-memory --episode-id "$OVMM_EP" \
-        --seed "$SEED" --mapping-rotate-steps 4 --output-dir "$OUT/ovmm" || true
+        --seed "$SEED" --mapping-rotate-steps 4 --output-dir "$OUT/ovmm" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "!!! [ovmm] $OVMM_EP FAILED (exit $rc)"
+        FAILED+=("ovmm:$OVMM_EP:exit$rc")
+    fi
 fi
 
 echo "=== scoring ==="
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
-    "$PYTHON" scripts/score_eqa.py "$OUT/eqa" || true
+    if ! "$PYTHON" scripts/score_eqa.py "$OUT/eqa"; then
+        echo "!!! score_eqa.py produced no summary — no readable q*.jsonl rows under $OUT/eqa?"
+        FAILED+=("scoring:eqa:no-rows")
+    fi
     echo
 fi
 if [[ "$PHASE" == all || "$PHASE" == ovmm ]]; then
-    "$PYTHON" scripts/score_ovmm.py "$OUT/ovmm" || true
+    if ! "$PYTHON" scripts/score_ovmm.py "$OUT/ovmm"; then
+        echo "!!! score_ovmm.py produced no summary — no find-phase *.json under $OUT/ovmm?"
+        FAILED+=("scoring:ovmm:no-rows")
+    fi
+fi
+
+echo
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+    echo "=== dev loop finished WITH ${#FAILED[@]} FAILURE(S): scores above are NOT a clean run ==="
+    printf '  FAIL %s\n' "${FAILED[@]}"
+    printf '%s\n' "${FAILED[@]}" > "$OUT/failed.txt"
+else
+    echo "=== dev loop finished clean: every requested episode produced metrics ==="
 fi

@@ -51,8 +51,11 @@ def load_rows(out_dir: Path) -> dict[int, dict]:
         text = path.read_text(encoding="utf-8").strip()
         if not text:
             continue
-        # Per-question files hold exactly one metrics object; accept the last line
-        # if a driver appended more than one.
+        # Per-question files hold exactly one metrics object, so only the LAST
+        # line of a q*.jsonl is scored. If a driver ever appends several rows
+        # (e.g. retries in one file), earlier rows are silently ignored — that
+        # drops a question from n rather than double-counting it. Empty files
+        # are treated as a native crash (missing run), not a scored miss.
         data = json.loads(text.splitlines()[-1])
         rows[int(data["question_id"])] = data
     return rows
