@@ -35,6 +35,25 @@ def test_multi_level_shared_preset_preserves_robot_mapping_defaults(tmp_path):
     assert params.get("local_radius") == 0.7
 
 
+def test_list_extends_resolves_each_parent_chain(tmp_path):
+    """``extends: [a, b]`` recurses through every listed parent's own extends hop."""
+    from emet.core.parameters import get_parameters
+
+    grandparent = tmp_path / "grandparent.yaml"
+    parent_a = tmp_path / "parent_a.yaml"
+    parent_b = tmp_path / "parent_b.yaml"
+    child = tmp_path / "child.yaml"
+    grandparent.write_text(f"extends: {default_config_path()}\nmapping:\n  voxel_size: 0.2\n")
+    parent_a.write_text(f"extends: {grandparent}\nmapping:\n  depth_source: sensor\n")
+    parent_b.write_text("mapping:\n  local_radius: 0.75\n")
+    child.write_text(f"extends: [{parent_a}, {parent_b}]\nmapping:\n  voxel_size: 0.15\n")
+    params = get_parameters(str(child), robot="stretch")
+    assert "use_realtime_updates" in params["agent"]
+    assert params.get("voxel_size") == 0.15
+    assert params.get("depth_source") == "sensor"
+    assert params.get("local_radius") == 0.75
+
+
 def test_inheritance_cycles_fail_with_a_clear_error(tmp_path):
     import pytest
 
