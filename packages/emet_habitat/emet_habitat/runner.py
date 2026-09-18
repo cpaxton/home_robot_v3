@@ -421,7 +421,12 @@ def run_hmeqa_episode(
     map_stride: int | None = None,
     extra_instruction: str | None = None,
     query_driven_memory: bool = False,
+    seed: int | None = None,
 ) -> EpisodeMetrics:
+    if seed is not None:
+        from emet.eval.ovmm_find_phase import set_find_phase_run_seed
+
+        set_find_phase_run_seed(int(seed))
     if query_driven_memory:
         if use_hm3d_semantics:
             raise ValueError("query-driven memory evaluation must not expose simulator semantics")
@@ -687,6 +692,7 @@ def run_hmeqa_episode(
         metrics = EpisodeMetrics(
             dataset="hmeqa",
             query_driven_memory=query_driven_memory,
+            seed=seed,
             method=method,
             question_id=question_id,
             scene=q.scene,
