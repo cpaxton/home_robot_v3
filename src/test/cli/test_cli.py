@@ -167,6 +167,7 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     assert params["rotate_in_place"] is True
     assert params["eqa_vl_quantization"] is None
     assert params["enable_rerun"] is False
+    assert params["seed"] is None
 
     captured = {}
     monkeypatch.setattr(
@@ -182,6 +183,14 @@ def test_habitat_package_hmeqa_help_and_defaults(monkeypatch):
     assert result.exit_code == 0, result.output
     assert captured["eqa_vl_quantization"] == "int8"
     assert "no_rerun" not in captured
+
+    captured.clear()
+    result = CliRunner().invoke(
+        habitat_main,
+        ["run-episode", "--mock-llm", "--seed", "17"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["seed"] == 17
 
     captured.clear()
     result = CliRunner().invoke(

@@ -453,3 +453,28 @@ def test_target_boost_phrases_expand_fixture_labels():
     assert "cab" in low
     assert "cabinet" in low
     assert "toaster" not in low
+
+
+def test_target_boost_phrases_drop_narrative_ngrams_for_extracted_target():
+    """EQA q25: the VLM target is 'towels'; heuristic n-grams must not resurrect
+    first-person narrative phrases ('going shower now', 'now need grab') as
+    voxel proposals."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.get_nodes = MagicMock(return_value=[])
+
+    question = (
+        "I am going to shower now. I need to grab some towels. "
+        "A) There are none in the bathroom B) There is only one in the bathroom "
+        "C) There are already some in the bathroom D) There are some in the bedroom. Answer:"
+    )
+    ex = AgenticEQAExecutor(agent, question=question, max_rounds=4, max_nav_steps=4, router=False)
+    ex._target_phrase = "towels"
+    low = {p.lower() for p in ex._target_boost_phrases()}
+    assert "towels" in low
+    assert "going shower now" not in low
+    assert "now need grab" not in low
