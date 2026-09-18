@@ -73,6 +73,7 @@ def _batch_options_from_click(
     agentic_max_nav_steps: int | None = None,
     mapping_rotate_steps: int | None = None,
     full: bool = False,
+    seed: int | None = None,
 ) -> OvmmBatchOptions:
     return OvmmBatchOptions(
         episodes=episodes,
@@ -102,6 +103,7 @@ def _batch_options_from_click(
         agentic_max_nav_steps=agentic_max_nav_steps,
         mapping_rotate_steps=mapping_rotate_steps,
         full=full,
+        seed=seed,
     )
 
 
@@ -257,6 +259,7 @@ def ovmm_group(ctx: click.Context) -> None:
     default=None,
     help="Mapping rotate_in_place scan steps (default 8; use 4 for fast rby1 gate)",
 )
+@click.option("--seed", type=int, default=None, help="Seed Python, NumPy and Torch for a paired find run.")
 def ovmm_find(
     query_driven_memory: bool,
     episodes: str,
@@ -284,6 +287,7 @@ def ovmm_find(
     agentic_max_rounds: int | None,
     agentic_max_nav_steps: int | None,
     mapping_rotate_steps: int | None,
+    seed: int | None,
 ) -> None:
     """Run find-phase episodes (same path as scripts/eval_ovmm_find_phases.py).
 
@@ -318,6 +322,7 @@ def ovmm_find(
         mapping_rotate_steps=mapping_rotate_steps,
         full=False,
         query_driven_memory=query_driven_memory,
+        seed=seed,
     )
     raise SystemExit(run_ovmm_batch(opts, repo_root=_project_root()))
 
