@@ -21,6 +21,30 @@ def test_default_config_path_points_at_repo_default():
     assert path.endswith("configs/emet/default.yaml")
 
 
+def test_multi_level_shared_preset_preserves_robot_mapping_defaults(tmp_path):
+    from emet.core.parameters import get_parameters
+
+    parent = tmp_path / "parent.yaml"
+    child = tmp_path / "child.yaml"
+    parent.write_text(f"extends: {default_config_path()}\nmapping:\n  voxel_size: 0.2\n")
+    child.write_text(f"extends: {parent}\nmapping:\n  local_radius: 0.7\n")
+    params = get_parameters(str(child), robot="stretch")
+    assert "use_realtime_updates" in params["agent"]
+    assert "moving_threshold" in params["motion"]
+    assert params.get("voxel_size") == 0.2
+    assert params.get("local_radius") == 0.7
+
+
+def test_inheritance_cycles_fail_with_a_clear_error(tmp_path):
+    import pytest
+
+    first, second = tmp_path / "first.yaml", tmp_path / "second.yaml"
+    first.write_text(f"extends: {second}\n")
+    second.write_text(f"extends: {first}\n")
+    with pytest.raises(ValueError, match="Config inheritance cycle"):
+        load_config(str(first))
+
+
 def test_defaults_compose_mapping_and_agent():
     cfg = load_config(default_config_path())
     assert cfg.mapping_dict.get("voxel_size") == 0.1
