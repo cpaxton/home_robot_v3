@@ -45,3 +45,31 @@ def test_empty_selection_fails_before_worker_start(capsys):
     )
     assert run_ovmm_batch(opts, repo_root=root) == 2
     assert "no episodes selected" in capsys.readouterr().err
+
+
+def test_batch_options_thread_seed_to_run_config():
+    from emet.app.eval_ovmm import _batch_options_from_click
+
+    opts = _batch_options_from_click(
+        episodes="configs/ovmm/find_phase_episodes.yaml",
+        backends=("lazy_graph",),
+        tier=(),
+        episode_id=("robocasa_rby1_pp_s1",),
+        merge_xy_m=None,
+        staleness_horizon=None,
+        compare_to_gt=False,
+        cpu_only=False,
+        sensor_perception=False,
+        graph_query=False,
+        not_rotate=False,
+        no_perfect_depth=False,
+        port_offset=140,
+        port_stride=2,
+        benchmark="configs/ovmm/benchmark.yaml",
+        output_dir=None,
+        dry_run=True,
+        query_driven_memory=True,
+        seed=17,
+    )
+    assert opts.seed == 17
+    assert opts.query_driven_memory is True
