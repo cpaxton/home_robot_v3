@@ -101,6 +101,7 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
     echo "=== dev loop finished WITH ${#FAILED[@]} FAILURE(S): scores above are NOT a clean run ==="
     printf '  FAIL %s\n' "${FAILED[@]}"
     printf '%s\n' "${FAILED[@]}" > "$OUT/failed.txt"
+    exit 1
 else
     echo "=== dev loop finished clean: every requested episode produced metrics ==="
 fi
