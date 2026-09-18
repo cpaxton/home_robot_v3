@@ -31,9 +31,14 @@ EQA_IDS="${DEV_EQA_IDS:-2 6 12 14 15 16 25 28 31 56 65 68}"
 OVMM_EP="${DEV_OVMM_EP:-robocasa_rby1_pp_s1}"
 HABITAT_BIN="${HABITAT_BIN:-$ROOT/.venv-habitat/bin/emet-habitat}"
 HABITAT_ENV="$(dirname "$(dirname "$HABITAT_BIN")")"
+# Direct venv python (not `uv run`): frozen worktrees have no synced .venv, and
+# `uv run` re-syncs and fails on missing third_party submodules. Override with
+# EMET_PY to point at a sibling checkout's .venv.
+PYTHON="${EMET_PY:-$ROOT/.venv/bin/python}"
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export EMET_ALLOW_SDPA_ATTN=1 MUJOCO_GL=egl
+export EMET_UV_RUN=1
 export HABITAT_EQA_DATA_DIR="${HABITAT_EQA_DATA_DIR:-$HOME/.cache/habitat_eqa/data}"
 export PYTHONPATH="$ROOT/src:$ROOT/packages/emet_habitat"
 
@@ -54,16 +59,16 @@ fi
 
 if [[ "$PHASE" == all || "$PHASE" == ovmm ]]; then
     echo "=== [ovmm] $OVMM_EP seed=$SEED ($(date -Is)) ==="
-    uv run emet ovmm find --episodes configs/ovmm/find_phase_episodes.yaml \
+    "$PYTHON" -m emet.cli ovmm find --episodes configs/ovmm/find_phase_episodes.yaml \
         --backend lazy_graph --query-driven-memory --episode-id "$OVMM_EP" \
         --seed "$SEED" --mapping-rotate-steps 4 --output-dir "$OUT/ovmm" || true
 fi
 
 echo "=== scoring ==="
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
-    uv run python scripts/score_eqa.py "$OUT/eqa" || true
+    "$PYTHON" scripts/score_eqa.py "$OUT/eqa" || true
     echo
 fi
 if [[ "$PHASE" == all || "$PHASE" == ovmm ]]; then
-    uv run python scripts/score_ovmm.py "$OUT/ovmm" || true
+    "$PYTHON" scripts/score_ovmm.py "$OUT/ovmm" || true
 fi
