@@ -1,0 +1,20 @@
+# Hill-climb dev / gate sets.
+#
+# Dev sets are the FAST inner loop (seeded, ~minutes). Gate sets are the only
+# thing that can promote a change to a claimed result.
+#
+# EQA: dev is a ~12-question slice of holdout-8 + balanced-32 (hot scenes
+# q104/q105 excluded so the dev loop stays stable). Gate = full holdout-8 +
+# balanced-32 + `emet hmeqa significance`.
+#
+# OVMM: dev = RoboCasa S1 rby1 (single kitchen, real retrieval ambiguity, no
+# Realsense head-sweep tax). Gate = Habitat HM3D nearest-v2 (multi-scene),
+# run occasionally to confirm generalization, not every iteration.
+eqa:
+  dev_ids: [2, 6, 12, 14, 15, 16, 25, 28, 31, 56, 65, 68]
+  gate_holdout8_ids: [15, 56, 65, 68, 79, 88, 104, 105]
+  gate_bal32_ids: [2, 6, 8, 11, 12, 14, 15, 16, 17, 18, 21, 25, 27, 28, 29, 31, 32, 33, 34, 38, 39, 40, 41, 43, 44, 47, 48, 49, 57, 76, 80, 84]
+
+ovmm:
+  dev_episodes: ["robocasa_rby1_pp_s1"]
+  gate_episodes: ["hm3d_lamp_bed_00006_nearest_v2", "hm3d_lamp_bed_00025_nearest_v2", "hm3d_lamp_bed_00057_nearest_v2"]
