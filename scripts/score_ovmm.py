@@ -59,6 +59,14 @@ def summarize(rows: list[dict], *, out_dir: Path | None = None) -> dict:
     obj_ok = sum(1 for r in rows if r.get("find_object_success"))
     rec_ok = sum(1 for r in rows if r.get("find_recep_success"))
     errored = sum(1 for r in rows if bool(r.get("error")))
+    # Errored rows stay in the headline success rates (flagged, not hidden);
+    # this is the supplementary view with them excluded entirely.
+    clean_rows = [r for r in rows if not r.get("error")]
+    clean = {
+        "n": len(clean_rows),
+        "find_object_success": sum(1 for r in clean_rows if r.get("find_object_success")),
+        "find_recep_success": sum(1 for r in clean_rows if r.get("find_recep_success")),
+    }
     obj_err = [r.get("localization_err_obj_m") for r in rows]
     rec_err = [r.get("localization_err_recep_m") for r in rows]
     partial = [r.get("find_partial_success") for r in rows if r.get("find_partial_success") is not None]
@@ -77,6 +85,7 @@ def summarize(rows: list[dict], *, out_dir: Path | None = None) -> dict:
     return {
         "n": len(rows),
         "n_errored": errored,
+        "clean": clean,
         "find_object_success": obj_ok,
         "find_recep_success": rec_ok,
         "mean_localization_err_obj_m": (
@@ -102,6 +111,10 @@ def print_summary(summary: dict) -> None:
     print(f"episodes: {n}")
     if errored:
         print(f"ERRORED (crashed/exception, not a clean miss): {errored}")
+        clean = summary["clean"]
+        print(
+            f"clean success, errored excluded: find-object {_rate(clean['find_object_success'], clean['n'])}, find-recep {_rate(clean['find_recep_success'], clean['n'])}"
+        )
     print(f"find-object success: {_rate(summary['find_object_success'], n)}")
     print(f"find-recep  success: {_rate(summary['find_recep_success'], n)}")
     obj = summary["mean_localization_err_obj_m"]

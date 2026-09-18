@@ -105,11 +105,18 @@ def summarize(rows: dict[int, dict], *, out_dir: Path | None = None) -> dict:
     forced_n = sum(by_prov.get(p, {"n": 0})["n"] for p in FORCED)
     forced_correct = sum(by_prov.get(p, {"correct": 0})["correct"] for p in FORCED)
     errored = sum(1 for f in flips if f["error"])
+    # Errored rows stay in the headline accuracy (flagged, not hidden); this is
+    # the supplementary view with them excluded entirely.
+    clean = {
+        "n": total - errored,
+        "correct": sum(1 for f in flips if f["correct"] and not f["error"]),
+    }
 
     return {
         "total": total,
         "correct": correct,
         "n_errored": errored,
+        "clean": clean,
         "by_prov": {p: dict(v) for p, v in sorted(by_prov.items())},
         "by_set": {s: dict(v) for s, v in sorted(by_set.items())},
         "committed": {"n": committed_n, "correct": committed_correct},
@@ -126,6 +133,8 @@ def print_summary(summary: dict) -> None:
     print(f"overall: {_acc(correct, total)}")
     if summary.get("n_errored"):
         print(f"ERRORED (crashed/exception, not a clean miss): {summary['n_errored']}")
+        clean = summary["clean"]
+        print(f"clean accuracy (errored excluded): {_acc(clean['correct'], clean['n'])}")
     print()
     print("split:")
     for name in ("holdout8", "bal32", "other"):
