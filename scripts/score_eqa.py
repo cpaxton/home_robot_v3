@@ -51,8 +51,11 @@ def load_rows(out_dir: Path) -> dict[int, dict]:
         text = path.read_text(encoding="utf-8").strip()
         if not text:
             continue
-        # Per-question files hold exactly one metrics object; accept the last line
-        # if a driver appended more than one.
+        # Per-question files hold exactly one metrics object, so only the LAST
+        # line of a q*.jsonl is scored. If a driver ever appends several rows
+        # (e.g. retries in one file), earlier rows are silently ignored — that
+        # drops a question from n rather than double-counting it. Empty files
+        # are treated as a native crash (missing run), not a scored miss.
         data = json.loads(text.splitlines()[-1])
         rows[int(data["question_id"])] = data
     return rows
@@ -93,6 +96,7 @@ def summarize(rows: dict[int, dict], *, out_dir: Path | None = None) -> dict:
                 "gold": str(row.get("gold_answer_letter") or ""),
                 "correct": c,
                 "provenance": prov,
+                "error": str(row.get("error") or ""),
             }
         )
 
@@ -100,10 +104,19 @@ def summarize(rows: dict[int, dict], *, out_dir: Path | None = None) -> dict:
     committed_correct = sum(by_prov.get(p, {"correct": 0})["correct"] for p in COMMITTED)
     forced_n = sum(by_prov.get(p, {"n": 0})["n"] for p in FORCED)
     forced_correct = sum(by_prov.get(p, {"correct": 0})["correct"] for p in FORCED)
+    errored = sum(1 for f in flips if f["error"])
+    # Errored rows stay in the headline accuracy (flagged, not hidden); this is
+    # the supplementary view with them excluded entirely.
+    clean = {
+        "n": total - errored,
+        "correct": sum(1 for f in flips if f["correct"] and not f["error"]),
+    }
 
     return {
         "total": total,
         "correct": correct,
+        "n_errored": errored,
+        "clean": clean,
         "by_prov": {p: dict(v) for p, v in sorted(by_prov.items())},
         "by_set": {s: dict(v) for s, v in sorted(by_set.items())},
         "committed": {"n": committed_n, "correct": committed_correct},
@@ -118,6 +131,10 @@ def print_summary(summary: dict) -> None:
     total = summary["total"]
     correct = summary["correct"]
     print(f"overall: {_acc(correct, total)}")
+    if summary.get("n_errored"):
+        print(f"ERRORED (crashed/exception, not a clean miss): {summary['n_errored']}")
+        clean = summary["clean"]
+        print(f"clean accuracy (errored excluded): {_acc(clean['correct'], clean['n'])}")
     print()
     print("split:")
     for name in ("holdout8", "bal32", "other"):
@@ -137,8 +154,9 @@ def print_summary(summary: dict) -> None:
     print()
     print("per-question (pred/gold/correct/provenance):")
     for f in summary["flips"]:
-        mark = "OK " if f["correct"] else "XX "
-        print(f"  q{f['qid']:>3d}  {mark} pred={f['pred']!r} gold={f['gold']} [{f['provenance']}]")
+        mark = "ERR" if f["error"] else ("OK " if f["correct"] else "XX ")
+        err = f"  ERROR={f['error']}" if f["error"] else ""
+        print(f"  q{f['qid']:>3d}  {mark} pred={f['pred']!r} gold={f['gold']} [{f['provenance']}]{err}")
 
 
 def main() -> int:
