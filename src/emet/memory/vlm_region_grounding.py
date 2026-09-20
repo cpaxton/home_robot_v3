@@ -69,55 +69,40 @@ def region_annotation(rgb, region):
 
 
 def _grounding_target(query, description):
-    """Split the object phrase to locate from optional task/question context.
+    """Return the object phrase to locate, never the task/question context.
 
     ``query`` is the short object phrase (e.g. ``"towels"``). ``description`` may
-    be the same phrase (OVMM/manipulation) or a full task/question (EQA MCQ). It
-    is verification context, never the literal object to locate: an EQA MCQ is
-    not a visual object and its answer options are hypothetical.
+    carry a full EQA MCQ or OVMM attributes, but grounding only locates the
+    object: an MCQ's relation/options are the *answer*, not something a single
+    view can (or should) verify. Fall back to ``description`` only when there is
+    no query.
     """
     target = " ".join((query or "").split())
-    context = " ".join((description or "").split())
     if not target:
-        target = context
-        context = ""
-    if context == target:
-        context = ""
-    return target, context
-
-
-def _verification_context_line(context):
-    """Context-only hint: verify attributes/relations, never locate the text."""
-    if not context:
-        return ""
-    return (
-        f" Verification context: {context!r}. It is not the object to locate; use it only to "
-        "check attributes or relationships against the pixels, and treat any answer options it "
-        "lists as hypothetical rather than observed. "
-    )
+        target = " ".join((description or "").split())
+    return target
 
 
 def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False, whole_object=False):
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
-    target, context = _grounding_target(query, description)
-    context_line = _verification_context_line(context)
+    target = _grounding_target(query, description)
     prompt = (
-        f"Locate the visible object {target!r}. {context_line}"
-        "Use pixels, not the phrase, as evidence. Return a tight bounding box around the target and an interior "
+        f"Locate the visible object {target!r}. "
+        "Use pixels as evidence. Return a tight bounding box around the target and an interior "
         "point on its visible physical surface, not a hole, occluder or support furniture. Coordinates are "
-        "integers normalized to 0..1000, x then y. Verify requested attributes and relationships. "
-        "If absent, ambiguous, or the relationship cannot be established, abstain. "
+        "integers normalized to 0..1000, x then y. "
+        "If the object is absent or ambiguous in this image, abstain. "
         'Return JSON only: {"verified":true,"box":[x_min,y_min,x_max,y_max],"point":[x,y],"reason":"..."}. '
         'For abstention return {"verified":false,"reason":"..."}.'
     )
     system = "Ground a robot target in the provided image. Do not invent missing visual evidence."
     if box_only:
         prompt = (
-            f"Locate the visible object {target!r} in the image. {context_line}"
+            f"Locate the visible object {target!r} in the image. "
             "Return a bounding box around the visible target; coordinates are integers normalized "
-            "to 0..1000 in x,y order. Check requested attributes and relationships from pixels. "
-            "Abstain if absent, ambiguous, or the relationship cannot be established. "
+            "to 0..1000 in x,y order. "
+            "Abstain if the object is absent or ambiguous in this image. "
             'Return JSON {"verified":true,"box":[x_min,y_min,x_max,y_max],"reason":"..."} '
             'or {"verified":false,"reason":"..."}. Do not predict a 3D position or surface point.'
         )
@@ -236,7 +221,7 @@ def select_candidate_surface(
 
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
-    target, _ = _grounding_target(query, description)
+    target = _grounding_target(query, description)
     if presentation not in ("isolated", "context", "support_only"):
         raise ValueError("Unknown surface presentation")
     if segmenter is not None and proposal_masks is not None:
