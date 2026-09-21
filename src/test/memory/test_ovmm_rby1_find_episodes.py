@@ -478,3 +478,33 @@ def test_target_boost_phrases_drop_narrative_ngrams_for_extracted_target():
     assert "towels" in low
     assert "going shower now" not in low
     assert "now need grab" not in low
+
+
+def test_target_boost_phrases_drop_room_context_glue():
+    """EQA q2/q12: object+room n-grams ('rug shower bathroom', 'many bedside
+    tables') are location context, not the object; the heuristic must not emit
+    them as retrieval phrases while keeping attribute compounds like
+    'large wall clock'."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    def boost(target, question):
+        agent = MagicMock()
+        agent.graph_memory = MagicMock()
+        agent.graph_memory.get_nodes = MagicMock(return_value=[])
+        ex = AgenticEQAExecutor(agent, question=question, max_rounds=4, max_nav_steps=4, router=False)
+        ex._target_phrase = target
+        return {p.lower() for p in ex._target_boost_phrases()}
+
+    rug = boost(
+        "rug",
+        "Which rug is at the shower in the bathroom, one in the bedroom? A) Dark blue B) Black C) Gray D) White. Answer:",
+    )
+    assert "rug" in rug
+    assert "rug shower bathroom" not in rug
+    assert "shower bathroom" not in rug
+
+    clock = boost("large wall clock", "I'm trying to remember where I placed the large wall clock. Where is it?")
+    assert "large wall clock" in clock
+    assert "wall clock" in clock
