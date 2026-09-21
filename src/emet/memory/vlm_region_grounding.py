@@ -68,25 +68,41 @@ def region_annotation(rgb, region):
     return image
 
 
+def _grounding_target(query, description):
+    """Return the object phrase to locate, never the task/question context.
+
+    ``query`` is the short object phrase (e.g. ``"towels"``). ``description`` may
+    carry a full EQA MCQ or OVMM attributes, but grounding only locates the
+    object: an MCQ's relation/options are the *answer*, not something a single
+    view can (or should) verify. Fall back to ``description`` only when there is
+    no query.
+    """
+    target = " ".join((query or "").split())
+    if not target:
+        target = " ".join((description or "").split())
+    return target
+
+
 def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False, whole_object=False):
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
+    target = _grounding_target(query, description)
     prompt = (
-        f"Locate the visible object referred to by {description or query!r}. Target category hint: {query!r}. "
-        "Use pixels, not the hint, as evidence. Return a tight bounding box around the target and an interior "
+        f"Locate the visible object {target!r}. "
+        "Use pixels as evidence. Return a tight bounding box around the target and an interior "
         "point on its visible physical surface, not a hole, occluder or support furniture. Coordinates are "
-        "integers normalized to 0..1000, x then y. Verify requested attributes and relationships. "
-        "If absent, ambiguous, or the relationship cannot be established, abstain. "
+        "integers normalized to 0..1000, x then y. "
+        "If the object is absent or ambiguous in this image, abstain. "
         'Return JSON only: {"verified":true,"box":[x_min,y_min,x_max,y_max],"point":[x,y],"reason":"..."}. '
         'For abstention return {"verified":false,"reason":"..."}.'
     )
     system = "Ground a robot target in the provided image. Do not invent missing visual evidence."
     if box_only:
         prompt = (
-            f"Locate {description or query!r} in the image. Category hint: {query!r}. "
+            f"Locate the visible object {target!r} in the image. "
             "Return a bounding box around the visible target; coordinates are integers normalized "
-            "to 0..1000 in x,y order. Check requested attributes and relationships from pixels. "
-            "Abstain if absent, ambiguous, or the relationship cannot be established. "
+            "to 0..1000 in x,y order. "
+            "Abstain if the object is absent or ambiguous in this image. "
             'Return JSON {"verified":true,"box":[x_min,y_min,x_max,y_max],"reason":"..."} '
             'or {"verified":false,"reason":"..."}. Do not predict a 3D position or surface point.'
         )
@@ -205,6 +221,7 @@ def select_candidate_surface(
 
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
+    target = _grounding_target(query, description)
     if presentation not in ("isolated", "context", "support_only"):
         raise ValueError("Unknown surface presentation")
     if segmenter is not None and proposal_masks is not None:
@@ -274,7 +291,7 @@ def select_candidate_surface(
         audit["failure_kind"] = "no_supported_surfaces"
         return parsed, mask, audit
     prompt = (
-        f"Select a measured surface of {description or query!r}. Image 1 is the original reference, NOT a candidate. "
+        f"Select a measured surface of {target!r}. Image 1 is the original reference, NOT a candidate. "
         "Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, "
         "image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. "
         "In each candidate panel, ONLY pixels on the measured surface are retained; "
@@ -292,7 +309,7 @@ def select_candidate_surface(
     if presentation == "context":
         from emet.memory.surface_candidates import context_panel, context_selection_prompt
 
-        prompt = context_selection_prompt(description or query)
+        prompt = context_selection_prompt(target)
         system = "Inspect visual evidence carefully. Return JSON only."
         panels = [
             image
@@ -311,7 +328,7 @@ def select_candidate_surface(
     if presentation == "support_only":
         from emet.memory.surface_candidates import support_selection_prompt
 
-        prompt = support_selection_prompt(description or query)
+        prompt = support_selection_prompt(target)
         system = "Inspect visual evidence carefully. Return JSON only."
         images = panels
         image_order = [f"surface_candidate_{r['id']}_rgb_file" for r in regions]

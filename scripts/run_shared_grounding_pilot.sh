@@ -2,7 +2,9 @@
 # Bounded diagnostic battery, not a sweep or a task-success aggregator.
 # Run from a frozen checkout through emet jobs --cpu-safe --gpu-exclusive.
 # Required: OUT and executables for the selected phase. Optional SAM2_SOURCE for environments
-# without an installed SAM2 package. See docs/experiments/shared_grounding_pilot.md.
+# without an installed SAM2 package. EQA_QIDS overrides the default q15/16/25 slice
+# (e.g. the paper holdout-8 / balanced-32 lists) for a larger bounded sweep. See
+# docs/experiments/shared_grounding_pilot.md.
 # SIM_AGENT_CONFIG, SIM_CONFIG, SIM_COMMAND and SIM_EVAL_CONFIG select explicit simulator cases only;
 # Habitat/EQA rows and the default simulator control remain unchanged.
 set -euo pipefail
@@ -66,6 +68,8 @@ run_case() {
 if [[ "$PHASE" == all || "$PHASE" == habitat || "$PHASE" == eqa ]]; then
     habitat_env="$(dirname "$(dirname "$HABITAT_BIN")")"
     LD_LIBRARY_PATH="$habitat_env/lib:${LD_LIBRARY_PATH:-}" \
+        "$habitat_env/bin/python" scripts/check_habitat_runtime.py > "$OUT/habitat_render_preflight.log" 2>&1
+    LD_LIBRARY_PATH="$habitat_env/lib:${LD_LIBRARY_PATH:-}" \
         "$habitat_env/bin/python" scripts/check_sam2_runtime.py > "$OUT/habitat_preflight.log" 2>&1
     for variant in hybrid qwen_box; do
         if [[ "$variant" == hybrid ]]; then
@@ -82,7 +86,7 @@ if [[ "$PHASE" == all || "$PHASE" == habitat || "$PHASE" == eqa ]]; then
                 --backend lazy_graph --query-driven-memory --seed 0 --agentic-find \
                 --agentic-max-rounds 12 --agentic-max-nav-steps 8 --output "$OUT/$name/result.json"
         done
-        for q in 15 16 25; do
+        for q in ${EQA_QIDS:-15 16 25}; do
             name="${variant}_eqa_${q}"
             run_case "$name" 600s "$HABITAT_BIN" run-episode --question-id "$q" \
                 --method lazy_graph --query-driven-memory --max-planning-steps 20 \
