@@ -7,7 +7,11 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from emet.memory.graph_eqa.agentic.view_quality import exploration_view_quality, recover_exploration_view
+from emet.memory.graph_eqa.agentic.view_quality import (
+    aim_arrival_view,
+    exploration_view_quality,
+    recover_exploration_view,
+)
 from emet.memory.graph_eqa.agentic.views import CapturedView
 
 
@@ -47,3 +51,49 @@ def test_open_view_does_not_move_head():
     cap = {"ok": True, "obs_id": 1}
     assert recover_exploration_view(ex, cap) == cap
     robot.head_to.assert_not_called()
+
+
+def arrival_executor():
+    robot = SimpleNamespace(head_to=Mock(return_value=True), get_pan_tilt=lambda: (0.0, 0.0))
+    intrinsics = np.array([[10.0, 0.0, 10.0], [0.0, 10.0, 10.0], [0.0, 0.0, 1.0]])
+    view = CapturedView(1, 1, np.zeros((20, 20, 3), dtype=np.uint8), np.eye(4), intrinsics)
+    return SimpleNamespace(
+        agent=SimpleNamespace(robot=robot),
+        _captured_views={1: view},
+        _append_trace=Mock(),
+        _tool_capture_and_update=Mock(return_value={"ok": True, "obs_id": 1}),
+    )
+
+
+def test_offscreen_arrival_aims_down_and_rejects_stale_capture():
+    ex = arrival_executor()
+    result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 2, 1])
+    assert result["status"] == "TARGET_OUTSIDE_VIEW"
+    assert result["ok"] is False
+    pan, tilt = ex.agent.robot.head_to.call_args.args
+    assert pan == 0 and -np.pi / 4 <= tilt < 0
+
+
+def test_inframe_arrival_does_not_move_or_claim_identity():
+    ex = arrival_executor()
+    cap = {"ok": True, "obs_id": 1}
+    assert aim_arrival_view(ex, cap, [0, 0, 1]) == cap
+    ex.agent.robot.head_to.assert_not_called()
+
+
+def test_aiming_accepts_only_new_inframe_capture():
+    ex = arrival_executor()
+    old = ex._captured_views[1]
+    pose = np.eye(4)
+    pose[1, 3] = 2
+    ex._captured_views[2] = CapturedView(2, 2, old.rgb, pose, old.camera_K)
+    ex._tool_capture_and_update.return_value = {"ok": True, "obs_id": 2}
+    result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 2, 1])
+    assert result == {"ok": True, "obs_id": 2}
+    assert ex.agent.robot.head_to.call_count == 1
+
+
+def test_behind_camera_does_not_trigger_unbounded_turn():
+    ex = arrival_executor()
+    assert not aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 0, -1])["ok"]
+    ex.agent.robot.head_to.assert_not_called()

@@ -423,6 +423,19 @@ def _tool_investigate(
                 **target_in_view(arrival_view, self._hypothesis_nav_anchor_xyz(oid)),
             }
         )
+    from emet.memory.graph_eqa.agentic.view_quality import aim_arrival_view
+
+    cap = aim_arrival_view(self, cap, self._hypothesis_nav_anchor_xyz(oid))
+    if cap.get("status") == "TARGET_OUTSIDE_VIEW":
+        return {
+            "ok": False,
+            "status": "TARGET_OUTSIDE_VIEW",
+            "obs_id": oid,
+            "nav_outcome": nav_outcome_str,
+            "nav_progress": nav_progress,
+            "capture": cap,
+            "verify": None,
+        }
     grounding = None
     if query_candidate:
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
