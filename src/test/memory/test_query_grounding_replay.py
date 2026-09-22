@@ -158,7 +158,7 @@ def test_stalled_inspection_uses_existing_fallback_without_model_call():
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
     ex = AgenticEQAExecutor(SimpleNamespace(parameters={}, graph_memory=None), "Where is the lamp?", router=False)
-    ex._unchanged_inspections = 1
+    ex._unchanged_inspections = 2
     ex._fallback_tool = Mock(return_value=("explore_frontier", {}))
     calls, source, _ = ex._route_tool_calls()
     assert calls == [("explore_frontier", {})]
