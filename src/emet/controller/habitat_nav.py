@@ -564,6 +564,7 @@ def habitat_navmesh_navigate(
     *,
     start_xyt: np.ndarray | None = None,
     target_theta: float | None = None,
+    look_at_xy: tuple[float, float] | None = None,
     max_waypoints: int = 24,
     min_success_dist_m: float = 0.08,
     finish_radius_m: float = 0.28,
@@ -593,7 +594,7 @@ def habitat_navmesh_navigate(
     before = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3].copy()
     start_goal_m = float(np.hypot(eff_x - before[0], eff_z - before[1]))
     finish_tol = max(min_success_dist_m, finish_radius_m)
-    if start_goal_m <= finish_tol:
+    if start_goal_m <= finish_tol and target_theta is None and look_at_xy is None:
         return NavAttemptResult(
             success=False,
             finished=False,
@@ -604,11 +605,20 @@ def habitat_navmesh_navigate(
             effective_goal_xy=(eff_x, eff_z),
         )
     yaw = float(target_theta if target_theta is not None else before[2])
+    if look_at_xy is not None:
+        yaw = math.atan2(look_at_xy[1] - eff_z, look_at_xy[0] - eff_x)
+    require_heading = target_theta is not None or look_at_xy is not None
     path_pts = sim.find_path_to_xy(eff_x, eff_z)
     path_xy: list[list[float]] | None = None
-    if path_pts is not None and len(path_pts) >= 2:
+    if start_goal_m <= finish_tol:
+        if look_at_xy is not None:
+            yaw = math.atan2(look_at_xy[1] - before[1], look_at_xy[0] - before[0])
+        robot.move_base_to(np.array([before[0], before[1], yaw]), blocking=True)
+    elif path_pts is not None and len(path_pts) >= 2:
         path_xy = [[float(p[0]), float(p[2])] for p in np.asarray(path_pts)]
         waypoints = navmesh_waypoints_to_xyt(path_pts, max_waypoints=max_waypoints)
+        if require_heading and waypoints:
+            waypoints[-1][2] = yaw
         if len(waypoints) >= 2 and hasattr(robot, "execute_trajectory"):
             robot.execute_trajectory(waypoints[1:], blocking=True)
         else:
@@ -616,15 +626,30 @@ def habitat_navmesh_navigate(
     else:
         robot.move_base_to(np.array([eff_x, eff_z, yaw], dtype=np.float64), blocking=True)
     after = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
+    # Recompute the bearing from the measured stop, not the planned waypoint.
+    # One bounded orientation command closes residual error; readback, not a
+    # command acknowledgment, decides whether the arrival heading was achieved.
+    if look_at_xy is not None:
+        yaw = math.atan2(look_at_xy[1] - after[1], look_at_xy[0] - after[0])
+    heading_error = abs((yaw - after[2] + math.pi) % (2 * math.pi) - math.pi)
+    if require_heading and np.hypot(after[0] - eff_x, after[1] - eff_z) <= finish_tol and heading_error > 0.1:
+        robot.move_base_to(np.array([after[0], after[1], yaw]), blocking=True)
+        after = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
+        if look_at_xy is not None:
+            yaw = math.atan2(look_at_xy[1] - after[1], look_at_xy[0] - after[0])
+        heading_error = abs((yaw - after[2] + math.pi) % (2 * math.pi) - math.pi)
     dist_m = float(np.hypot(after[0] - before[0], after[1] - before[1]))
     goal_dist = float(np.hypot(after[0] - eff_x, after[1] - eff_z))
     req_dist = float(np.hypot(after[0] - goal_x, after[1] - goal_z))
     at_goal = goal_dist <= finish_tol
     moved_enough = dist_m >= min_success_dist_m or (at_goal and start_goal_m > min_success_dist_m)
-    finished = moved_enough and at_goal
+    heading_ok = not require_heading or heading_error <= 0.1
+    finished = at_goal and heading_ok and (moved_enough or require_heading)
     success = finished
     if finished:
         note = f"ok_{resolved.mode}"
+    elif at_goal and not heading_ok:
+        note = f"heading_error_{heading_error:.3f}rad"
     elif at_goal and not moved_enough:
         note = f"already_at_goal_{start_goal_m:.2f}m"
     else:

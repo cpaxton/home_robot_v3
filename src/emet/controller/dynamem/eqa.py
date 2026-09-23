@@ -339,6 +339,7 @@ def navigate_to_target_pose(
             self.robot,
             goal_xy,
             target_theta=target_theta,
+            look_at_xy=look_at_xy,
         )
         nav_res.target_obs_id = target_obs_id
         self._last_nav_attempt = nav_res
