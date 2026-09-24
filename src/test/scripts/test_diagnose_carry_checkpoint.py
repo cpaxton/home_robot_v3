@@ -34,3 +34,34 @@ def test_wheel_profiles_stop_and_apply_transmission_gearing(mode):
 def test_braking_ablation_changes_only_deceleration_phase():
     assert helpers["drive_envelope"](6.25, brake_s=0.25) == 0
     assert helpers["drive_envelope"](6.25, brake_s=2) == 0.875
+
+
+@pytest.mark.parametrize("speed", [0.2, 0.5])
+def test_feedback_turn_reaches_same_angle_with_bounded_rate_and_acceleration(speed):
+    angle, rate, dt = 0.0, 0.0, 0.01
+    for _ in range(2500):
+        previous = rate
+        rate = helpers["bounded_turn_rate"](1.5 - angle, rate, dt, speed)
+        assert abs(rate) <= speed + 1e-9
+        assert abs(rate - previous) <= 0.25 * dt + 1e-9
+        angle += 0.65 * rate * dt  # Simulated imperfect wheel tracking, not a physics test.
+    assert angle == pytest.approx(1.5, abs=0.01)
+
+
+@pytest.mark.parametrize("yaw", [-2.0, 0.0, 1.5])
+def test_measured_yaw_uses_mujoco_wxyz(yaw):
+    qpos = np.array([0.0, 0.0, 0.0, np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
+    assert helpers["base_yaw"](qpos) == pytest.approx(yaw)
+
+
+@pytest.mark.parametrize(
+    "options", [["--noslip-iterations", "-1"], ["--modes", "release"], ["--turn-angle", "nan"], ["--turn-angle", "4"]]
+)
+def test_invalid_ablation_rejected_before_loading_scene(monkeypatch, options):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["diagnose", "--scene", "missing.xml", "--trace", "missing.jsonl", "--out", "unused", "--time", "80", *options],
+    )
+    with pytest.raises(SystemExit) as exc:
+        helpers["main"]()
+    assert exc.value.code == 2

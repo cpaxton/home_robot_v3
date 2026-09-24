@@ -341,3 +341,27 @@ already investigated NoSlip and depth corrections; see
 must remain explicit and apply consistently across benchmark rows. No new
 production speed, squeeze, contact, or safety-margin defaults were changed by
 this battery. These are privileged diagnostics, **not agent acceptance**.
+
+#### Predeclared matched-angle / solver-control follow-up
+
+The next eight conditions use the same checkpoint without changing the grasp:
+native hold (45 s); measured 1.5-rad turns at command caps 0.5 and 0.2 rad/s
+(20 s initial hold, 45 s total); native recorded-wheel replay (35 s); then
+NoSlip=10 hold, fast matched turn, recorded-wheel replay, and an 8 s release
+negative. The latter ramps the gripper actuator to the explicitly supplied
+0.04 open target between seconds 2 and 3. It does not remove an attachment.
+
+The matched turns share feedback and acceleration limit (0.25 rad/s²), command
+actual wheel motion, and record measured yaw/target completion. Neither case
+counts as matched unless final yaw is within 0.01 rad of the requested angle.
+This compares complete rate-limited turn profiles, not constant traversal time.
+The solver-only override is explicit in arguments and manifest, along with the
+model's original value. It is not a production environment change. If it reduces
+creep, that supports a numerical contribution; it does not validate real-world
+grasping. Keep the original-physics results and release negative alongside it.
+
+Runner options: `--turn-angle 1.5`, `--noslip-iterations 10`, and
+`--modes release --open-control 0.04`. Omitting the solver flag keeps original
+physics; omitting turn angle retains the earlier open-loop profiles. Command
+profile/validation tests: 22 pass. A real MuJoCo 0.3 s NoSlip smoke retained
+contact; the full eight-condition battery is pending.

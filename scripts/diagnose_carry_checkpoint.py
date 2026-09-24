@@ -7,8 +7,9 @@
 
 Restore a sampled physical trace checkpoint, keep arm/gripper references fixed,
 and compare bounded wheel profiles. ``recorded`` replays interpolated controls
-as a fidelity check, not an exact command replay. No teleport, attachment,
-contact-physics change, or policy access to ground truth is used.
+as a fidelity check, not an exact command replay. Solver overrides and release
+negative controls are explicit diagnostic options, never production settings.
+No teleport, attachment, or policy access to ground truth is used.
 """
 
 import argparse
@@ -35,6 +36,18 @@ def wheel_controls(mode, t, *, linear_speed, angular_speed, radius, separation, 
     return np.array([v - separation * w / 2, v + separation * w / 2]) / radius * gears
 
 
+def base_yaw(qpos):
+    """Yaw of the fixture's leading free joint (MuJoCo wxyz quaternion)."""
+    w, x, y, z = qpos[3:7]
+    return float(np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+
+
+def bounded_turn_rate(error, previous, dt, speed, acceleration=0.25):
+    """Same feedback/acceleration for both speed arms; no pose teleport."""
+    target = np.sign(error) * min(speed, 1.5 * abs(error), np.sqrt(2 * acceleration * abs(error)))
+    return float(previous + np.clip(target - previous, -acceleration * dt, acceleration * dt))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scene", type=Path, required=True)
@@ -51,7 +64,7 @@ def main():
     parser.add_argument(
         "--modes",
         nargs="+",
-        choices=["hold", "straight", "turn", "brake", "recorded", "recorded_wheels"],
+        choices=["hold", "straight", "turn", "brake", "recorded", "recorded_wheels", "release"],
         default=["hold", "straight", "turn", "brake", "recorded"],
     )
     parser.add_argument("--linear-speed", type=float, default=0.05)
@@ -60,6 +73,14 @@ def main():
     parser.add_argument("--wheel-separation", type=float, default=0.3153)
     parser.add_argument("--left-actuator", default="left_wheel_vel")
     parser.add_argument("--right-actuator", default="right_wheel_vel")
+    parser.add_argument("--turn-angle", type=float, help="Closed-loop measured yaw target, radians; turn mode only.")
+    parser.add_argument(
+        "--noslip-iterations", type=int, help="Explicit solver-only diagnostic override; omit for original physics."
+    )
+    parser.add_argument("--gripper-actuator", default="gripper")
+    parser.add_argument(
+        "--open-control", type=float, help="Explicit open actuator target for release negative control."
+    )
     args = parser.parse_args()
     for value in (args.duration, args.wheel_radius, args.wheel_separation, args.linear_speed, args.angular_speed):
         if not np.isfinite(value) or value <= 0:
@@ -68,6 +89,12 @@ def main():
         parser.error("time must be finite")
     if not np.isfinite(args.motion_delay) or not 0 <= args.motion_delay < args.duration:
         parser.error("motion delay must be finite, nonnegative and shorter than duration")
+    if args.turn_angle is not None and (not np.isfinite(args.turn_angle) or not 0 < abs(args.turn_angle) < np.pi):
+        parser.error("turn angle must be finite, nonzero and smaller than pi radians")
+    if args.noslip_iterations is not None and args.noslip_iterations < 0:
+        parser.error("noslip iterations must be nonnegative")
+    if "release" in args.modes and (args.open_control is None or not np.isfinite(args.open_control)):
+        parser.error("release requires an explicit finite open-control actuator value")
     with args.trace.open() as stream:
         header = json.loads(next(stream))
         rows = [json.loads(line) for line in stream]
@@ -83,6 +110,15 @@ def main():
     import mujoco
 
     model = mujoco.MjModel.from_xml_path(str(args.scene.resolve()))
+    if model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE or model.jnt_qposadr[0] != 0:
+        parser.error("diagnostic requires the fixture base to be the leading free joint")
+    original_noslip = int(model.opt.noslip_iterations)
+    if args.noslip_iterations is not None:
+        model.opt.noslip_iterations = args.noslip_iterations
+    gripper_id = model.actuator(args.gripper_actuator).id if "release" in args.modes else None
+    if gripper_id is not None and model.actuator_ctrllimited[gripper_id]:
+        if not model.actuator_ctrlrange[gripper_id, 0] <= args.open_control <= model.actuator_ctrlrange[gripper_id, 1]:
+            parser.error("open-control exceeds actuator limits")
     ids = [model.actuator(args.left_actuator).id, model.actuator(args.right_actuator).id]
     gears = model.actuator_gear[ids, 0]
     if np.any(gears == 0):
@@ -123,6 +159,8 @@ def main():
         kind="privileged_checkpoint_diagnostic",
         checkpoint_time=initial["sim_time"],
         mujoco_version=mujoco.__version__,
+        original_noslip_iterations=original_noslip,
+        effective_noslip_iterations=int(model.opt.noslip_iterations),
         script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         scene_sha256=hashlib.sha256(args.scene.read_bytes()).hexdigest(),
         trace_sha256=hashlib.sha256(args.trace.read_bytes()).hexdigest(),
@@ -142,6 +180,9 @@ def main():
         mujoco.mj_forward(model, data)
         reference = data.body(ee_id).xmat.reshape(3, 3).T @ (data.body(target_id).xpos - data.body(ee_id).xpos)
         initial_z = float(data.body(target_id).xpos[2])
+        previous_yaw = base_yaw(data.qpos)
+        yaw_travel = 0.0
+        turn_rate = 0.0
         next_sample = 0.0
         lost_since = None
         drop_time = None
@@ -163,7 +204,22 @@ def main():
                         separation=args.wheel_separation,
                         gears=gears,
                     )
+                    if mode == "turn" and args.turn_angle is not None and elapsed >= args.motion_delay:
+                        turn_rate = bounded_turn_rate(
+                            args.turn_angle - yaw_travel, turn_rate, model.opt.timestep, args.angular_speed
+                        )
+                        data.ctrl[ids] = (
+                            np.array([-1.0, 1.0]) * args.wheel_separation * turn_rate / (2 * args.wheel_radius) * gears
+                        )
+                    if mode == "release":
+                        # Open after 2 s, ramping over 1 s. No attachment removal,
+                        # object repositioning, or extra force is applied.
+                        blend = np.clip(elapsed - 2.0, 0.0, 1.0)
+                        data.ctrl[gripper_id] = (1 - blend) * initial["ctrl"][gripper_id] + blend * args.open_control
                 mujoco.mj_step(model, data)
+                yaw = base_yaw(data.qpos)
+                yaw_travel += float(np.arctan2(np.sin(yaw - previous_yaw), np.cos(yaw - previous_yaw)))
+                previous_yaw = yaw
                 elapsed = data.time - initial["sim_time"]
                 if elapsed < next_sample:
                     continue
@@ -198,6 +254,7 @@ def main():
                     "normal_forces_n": forces,
                     "wheel_controls": data.ctrl[ids].tolist(),
                     "base_qpos": data.qpos[:7].tolist(),
+                    "yaw_travel_rad": yaw_travel,
                 }
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
         summary = {
@@ -207,6 +264,10 @@ def main():
             "final_relative_distance_m": float(np.linalg.norm(relative)),
             "final_height_change_m": float(data.body(target_id).xpos[2]) - initial_z,
             "final_contact": bool(forces),
+            "measured_yaw_rad": yaw_travel,
+            "turn_target_reached": (
+                abs(yaw_travel - args.turn_angle) <= 0.01 if mode == "turn" and args.turn_angle is not None else None
+            ),
         }
         summaries.append(summary)
         print(json.dumps(summary), flush=True)
