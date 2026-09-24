@@ -11,6 +11,26 @@ import torch
 from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
 
 
+@pytest.mark.parametrize(
+    "occupied,seen,reason", [(False, False, "unobserved_footprint"), (True, True, "obstacle"), (False, True, "valid")]
+)
+def test_footprint_diagnostics_distinguish_unknown_from_collision(occupied, seen, reason):
+    from emet.mapping.voxel.voxel_map import SparseVoxelMapNavigationSpace as BaseSpace
+
+    obstacles = torch.full((7, 7), occupied, dtype=torch.bool)
+    explored = torch.full((7, 7), seen, dtype=torch.bool)
+    space = SimpleNamespace(
+        voxel_map=SimpleNamespace(
+            xyt_is_safe=lambda xy: True,
+            grid=SimpleNamespace(xy_to_grid_coords=lambda xy: torch.tensor([3, 3])),
+        ),
+        get_oriented_mask=lambda theta: torch.ones((3, 3), dtype=torch.bool),
+    )
+    valid = BaseSpace.is_valid(space, np.zeros(3), obstacles=obstacles, explored=explored)
+    assert valid is (reason == "valid")
+    assert space.last_validity["reason"] == reason
+
+
 def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     obstacles = torch.zeros((6, 2), dtype=torch.bool)
     space = SimpleNamespace(

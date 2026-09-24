@@ -244,6 +244,7 @@ class SparseVoxelMapNavigationSpace(XYT):
         explored: torch.Tensor | None = None,
     ) -> bool:
         """Check to see if state is valid; i.e. if there's any collisions if mask is at right place"""
+        self.last_validity = {"reason": "outside_map"}
         assert len(state) == 3
         if isinstance(state, np.ndarray):
             state = torch.from_numpy(state).float()
@@ -291,6 +292,10 @@ class SparseVoxelMapNavigationSpace(XYT):
             print(f"{collision=}, {is_safe=}, {p_is_safe=}, {is_safe_threshold=}")
 
         valid = bool((not collision) and is_safe)
+        self.last_validity = {
+            "reason": "obstacle" if collision else "unobserved_footprint" if not is_safe else "valid",
+            "explored_fraction": p_is_safe,
+        }
         if debug:
             if collision:
                 print("- state in collision")

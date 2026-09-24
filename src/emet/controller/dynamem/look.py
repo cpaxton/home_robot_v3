@@ -31,6 +31,43 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
+def observe_floor(agent) -> dict:
+    """Stationary head-only observation; never interpret unknown floor as free.
+
+    Reject adapters without measured head pose and a fresh-frame sequence. A
+    successful capture updates the map, but does not guarantee a safe approach.
+    """
+    robot = agent.robot
+    if not all(callable(getattr(robot, method, None)) for method in ("head_to", "get_pan_tilt")):
+        return {"ok": False, "status": "unsupported_head_observation"}
+    if not isinstance(getattr(robot, "_seq_id", None), int):
+        return {"ok": False, "status": "observation_freshness_unavailable"}
+    pan, _ = robot.get_pan_tilt()
+    tilt = -1.0
+    moved = robot.head_to(float(pan), tilt, blocking=True)
+    if moved is False:
+        return {"ok": False, "status": "head_motion_failed"}
+    sequence = robot._seq_id  # Require a frame received after motion completion.
+    wait_post_motion_obs(robot, timeout=5.0)
+    if robot._seq_id <= sequence:
+        return {"ok": False, "status": "stale_observation"}
+    measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+    if not np.isfinite(measured).all() or np.max(np.abs(measured - [pan, tilt])) > 0.12:
+        return {"ok": False, "status": "head_pose_unconfirmed"}
+    obs = robot.get_observation()
+    if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
+        return {"ok": False, "status": "calibrated_depth_unavailable"}
+    before = len(agent.voxel_map.observations)
+    agent.update(full_perception=True)
+    if len(agent.voxel_map.observations) <= before:
+        return {"ok": False, "status": "map_update_missing"}
+    return {
+        "ok": True,
+        "status": "floor_observed",
+        "note": "Fresh downward RGB-D added to map; base stationary. Replan to check safety; clearance is not guaranteed.",
+    }
+
+
 def wait_post_motion_obs(robot, timeout: float) -> None:
     """Wait for a camera frame newer than the one cached at end of motion.
 

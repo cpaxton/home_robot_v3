@@ -584,7 +584,25 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             if task_ok
             else "Pick/place failed or interrupted."
         )
-        return _pick_place_outcome(task_ok, note)
+        outcome = _pick_place_outcome(task_ok, note)
+        detail = getattr(executor, "last_query_manipulation", None)
+        if not task_ok and isinstance(detail, dict):
+            outcome.note = str(detail.get("reason") or note)
+            outcome.payload["manipulation"] = detail
+            navigation = detail.get("navigation", {})
+            outcome.status = str(navigation.get("status") or "manipulation_failed")
+            if (
+                detail.get("phase") == "pre_grasp"
+                and detail.get("payload_state") == "empty"
+                and detail.get("observed_after_action") is True
+                and outcome.status in {"insufficient_floor_coverage", "no_reachable_workspace"}
+            ):
+                outcome.payload["recovery_tools"] = ["observe_floor"]
+                outcome.payload["suggested_action"] = (
+                    "Observe floor, then replan if capture succeeds; do not bypass collision checks. "
+                    "No reachable workspace does not establish whether unseen space is clear."
+                )
+        return outcome
 
     def _build_tamp_plan(
         *,
@@ -1070,6 +1088,29 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             parameters=_NO_PARAMS,
             func=lambda: _exec("go_home", ""),
             executor_commands=_simple_exec_mapping("go_home"),
+        )
+    )
+
+    def observe_floor() -> ToolOutcome:
+        from emet.controller.dynamem.look import observe_floor as capture_floor
+
+        agent = _agent_from_context(context)
+        if agent is None:
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent))
+
+    tools.append(
+        Tool(
+            name="observe_floor",
+            description=(
+                "Look downward with the head, without moving the base, and update the map from fresh RGB-D. "
+                "Use when an approach reports insufficient_floor_coverage, or to check near-base floor "
+                "after no_reachable_workspace. Does not guarantee clearance; replan after observing. "
+                "Requires a movable head with measured pose and fresh calibrated depth."
+            ),
+            parameters=_NO_PARAMS,
+            func=observe_floor,
+            returns_info=True,
         )
     )
 

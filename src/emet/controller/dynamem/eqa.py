@@ -382,6 +382,7 @@ def navigate_to_target_pose(
         mode="exploration" if explore_goal else "navigation",
         **approach_options,
     )
+    self._last_approach_sampling = dict(getattr(self.space, "last_target_sampling", {})) if target_pose is None else {}
     # A projected base goal can differ substantially from the requested approach.
     # Recompute bearing there, not at the original waypoint.
     if target_pose is not None and look_at_xy is not None:

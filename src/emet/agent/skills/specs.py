@@ -431,6 +431,18 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         },
     ),
     SkillSpec(
+        name="observe_floor",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Look downward with the head without moving the base; update the map from fresh RGB-D. "
+            "Use for insufficient_floor_coverage, or to check nearby floor after no_reachable_workspace. "
+            "This does not guarantee clearance: replan after observing. Requires a movable head, "
+            "measured pose, and fresh calibrated depth."
+        ),
+        parameters={"type": "object", "properties": {}, "required": []},
+        returns_info=True,
+    ),
+    SkillSpec(
         name="scan_environment",
         modes=frozenset({AgentMode.CHAT}),
         description="Rotate in place through a full ≈360° scan to update the map and save memory. Use for 'look around', 'scan the room', or a full in-place survey — not for a single turn (use rotate_base) or a short drive (use move_forward). After scanning, you may call describe_scene to report the new view.",

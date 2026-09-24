@@ -1196,8 +1196,11 @@ class GraspObjectOperation(ManagedOperation):
         self.info(f"Viewing pose is outside the grasp workspace; planning within radial bounds {bounds}")
         self.robot.move_to_nav_posture()
         self.robot.switch_to_navigation_mode()
+        self.agent._last_approach_sampling = {}
         if not self.agent.navigate_to_target_pose(target, start, look_at_xy=tuple(target[:2]), distance_range=bounds):
-            raise RuntimeError("Could not reach a collision-checked grasp workspace")
+            from emet.controller.navigation_error import GraspWorkspaceError
+
+            raise GraspWorkspaceError(getattr(self.agent, "_last_approach_sampling", {}))
         measured = np.asarray(self.robot.get_base_pose_world(), dtype=float)
         if (
             not np.isfinite(measured).all()

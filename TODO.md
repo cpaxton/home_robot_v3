@@ -3,6 +3,16 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Floor-coverage recovery pilot (2026-09-24)
+
+- [x] Expose pre-grasp navigation rejection reasons to the high-level model;
+      add a head-only, fresh-frame floor observation and bounded recovery.
+      See [contract and acceptance](docs/experiments/floor_coverage_recovery.md).
+- [ ] Validate model-selected observation and physical pick/place on the frozen
+      Molmo/RoboCasa controls, serially. Do not infer success from tool completion.
+- [ ] Confirm EQA regression gates before promoting this experiment branch;
+      EQA policy and physical manipulation acceptance remain separate checks.
+
 ## PR #167 VLM-led acceptance (2026-09-09)
 
 Evidence: [OVMM grounding closeout](docs/experiments/ovmm_grounding_closeout.md).

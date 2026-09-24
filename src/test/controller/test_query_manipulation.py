@@ -74,6 +74,19 @@ def executor():
     return task, target
 
 
+@pytest.mark.parametrize("pickup_executed", [False, True])
+def test_workspace_recovery_requires_explicitly_empty_payload(pickup_executed):
+    from emet.controller.navigation_error import GraspWorkspaceError
+
+    task, _ = executor()
+    task.grasp_object.pickup_executed = pickup_executed
+    task.grasp_object.side_effect = GraspWorkspaceError({"status": "insufficient_floor_coverage"})
+    assert not task._pickup("mug")
+    detail = task.last_query_manipulation
+    assert (detail.get("payload_state") == "empty") is (not pickup_executed)
+    assert detail["observed_after_action"]
+
+
 @pytest.mark.parametrize("point,expected", [(None, False), (np.ones(3), True)])
 def test_find_reports_task_outcome_without_quitting(point, expected, monkeypatch):
     monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)

@@ -349,6 +349,12 @@ class DynamemTaskExecutor:
             self.last_query_manipulation.update(ok=ok, reason="executed" if ok else "operation failed")
         except (ValueError, RuntimeError) as exc:
             self.last_query_manipulation["reason"] = str(exc)
+            from emet.controller.navigation_error import GraspWorkspaceError
+
+            if isinstance(exc, GraspWorkspaceError) and not place and self.grasp_object.pickup_executed is False:
+                self.last_query_manipulation.update(
+                    navigation=exc.diagnostics, phase="pre_grasp", payload_state="empty"
+                )
             logger.warning(f"Query manipulation rejected: {exc}")
             ok = False
         finally:

@@ -131,6 +131,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             if not 0 <= distance_range[0] < distance_range[1]:
                 raise ValueError("Object-approach distance range must be ordered and nonnegative")
 
+        self.last_target_sampling = {"status": "no_reachable_workspace", "reachable_cells": 0}
         obstacles, explored = self.voxel_map.get_2d_map()
 
         # Extract edges from our explored mask
@@ -173,6 +174,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
         rejected = {"blocked": 0, "outside_range": 0, "footprint": 0, "visibility": 0}
         nearest_reachable_m = float("inf")
+        footprint_reasons = {}
 
         for min_standoff in standoffs:
             for selected_target in selected_targets:
@@ -191,8 +193,11 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 if distance_range is not None and dist_xy > distance_range[1]:
                     rejected["outside_range"] += 1
                     continue
+                self.last_validity = {}
                 if not self.is_valid(np.array([selected_x, selected_y, theta])):
                     rejected["footprint"] += 1
+                    reason = self.last_validity.get("reason", "unknown")
+                    footprint_reasons[reason] = footprint_reasons.get(reason, 0) + 1
                     continue
 
                 ok = True
@@ -216,11 +221,27 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     ok = False
 
                 if ok:
+                    self.last_target_sampling = {"status": "ok"}
                     return np.array([selected_x, selected_y, theta])
                 rejected["visibility"] += 1
 
         # No useful approach exists in the currently reachable map. Let the caller
         # explore; do not silently bypass footprint/visibility checks to claim arrival.
+        # Do not infer obstacles (or missing floor) from a reachability failure.
+        # Only label missing coverage when the actual footprint checks prove it.
+        status = "no_reachable_workspace"
+        if footprint_reasons and set(footprint_reasons) == {"unobserved_footprint"}:
+            status = "insufficient_floor_coverage"
+        elif footprint_reasons and set(footprint_reasons) == {"obstacle"}:
+            status = "workspace_obstructed"
+        self.last_target_sampling = {
+            "status": status,
+            "reachable_cells": len(xs),
+            "nearest_reachable_m": nearest_reachable_m,
+            "distance_range_m": list(distance_range) if distance_range is not None else None,
+            "rejected": rejected,
+            "footprint_reasons": footprint_reasons,
+        }
         if distance_range is not None:
             logger.warning(
                 f"Grasp approach sampling failed: target_xy=({px:.3f},{py:.3f}) "

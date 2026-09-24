@@ -188,6 +188,7 @@ def _dispatch_tool_calls(
     debug: bool = False,
     verbose_tools: bool = False,
     on_tool_start: Callable[[str], None] | None = None,
+    recovery_tools: list[str] | None = None,
 ) -> tuple[bool, list[str], bool]:
     """Execute a list of parsed tool_calls in model-specified order.
 
@@ -311,6 +312,12 @@ def _dispatch_tool_calls(
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
             if not outcome.ok:
+                if recovery_tools is not None:
+                    # Only controller-certified pre-grasp failures expose this
+                    # observation-only recovery. Always discard the old batch.
+                    recovery_tools.extend(
+                        name for name in outcome.payload.get("recovery_tools", []) if name == "observe_floor"
+                    )
                 failed = True
                 break
         except Exception as e:
@@ -1122,6 +1129,7 @@ def run_agent_with_robot(
             # A tool category must not silently terminate an unfinished goal.
             current_input = user_text
             turn_t0 = timeit.default_timer()
+            pending_recovery: list[str] = []
             for _round in range(_MAX_TOOL_ROUNDS):
                 cam_image = None
                 followup_round = _round > 0
@@ -1237,14 +1245,21 @@ def run_agent_with_robot(
 
                 # Execute tool calls
                 tools_t0 = timeit.default_timer()
+                dispatch_tools = (
+                    {name: tools_by_name[name] for name in pending_recovery if name in tools_by_name}
+                    if pending_recovery
+                    else tools_by_name
+                )
+                pending_recovery = []
                 ok, results, failed = _dispatch_tool_calls(
                     tool_calls,
-                    tools_by_name,
+                    dispatch_tools,
                     executor,
                     chat_log=chat_log,
                     debug=debug_llm,
                     verbose_tools=verbose_tools,
                     on_tool_start=_on_tool_start if show_thinking_status else None,
+                    recovery_tools=pending_recovery,
                 )
                 tools_elapsed = timeit.default_timer() - tools_t0
                 print_terminal(
@@ -1261,7 +1276,7 @@ def run_agent_with_robot(
 
                 remaining_rounds = _MAX_TOOL_ROUNDS - _round - 1
                 followup = f"[Tool results]\n{result_text}\n\n"
-                if failed or remaining_rounds == 0:
+                if (failed and not pending_recovery) or remaining_rounds == 0:
                     reason = (
                         "A tool failed; later calls in its batch were not executed."
                         if failed
@@ -1293,6 +1308,13 @@ def run_agent_with_robot(
                     chat_log.log("assistant", final_msg, raw=raw_response, time_s=elapsed, forced_final=True)
                     print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s (forced final)", color="cyan")
                     break
+                if pending_recovery:
+                    current_input = followup + (
+                        "Later calls in the failed batch were discarded. Only observe_floor is allowed next, "
+                        "or stop and report the failure. If that observation succeeds, you may replan/retry "
+                        "the unfinished task on the following round. Never infer clearance from the error alone."
+                    )
+                    continue
                 current_input = followup + (
                     f"Continue only the unfinished parts of the user's request ({remaining_rounds} tool rounds remain). "
                     "Use these results and the current view; do not repeat completed actions. "
