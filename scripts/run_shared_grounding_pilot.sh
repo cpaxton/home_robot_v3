@@ -115,8 +115,13 @@ if [[ "$PHASE" == all || "$PHASE" == sim || "$PHASE" == manipulation ]]; then
     export EMET_SIM_EVAL_TRACE="$OUT/hybrid_learned_pick_place/physical_trace.jsonl"
     cp "$EMET_SIM_EVAL_CONFIG" "$OUT/physical_eval_config.json"
     cp "$SIM_CONFIG" "$OUT/sim_config.yaml"
-    run_case hybrid_learned_pick_place 600s "${agent[@]}" --visual-servo \
-        -c "$SIM_COMMAND"
+    task_commands=(-c "$SIM_COMMAND")
+    # Explicit diagnostic follow-up, not an autonomous policy improvement.
+    # The complete command line is retained by run_case for attribution.
+    if [[ -n "${SIM_FOLLOWUP_COMMAND:-}" ]]; then
+        task_commands+=(-c "$SIM_FOLLOWUP_COMMAND")
+    fi
+    run_case hybrid_learned_pick_place 600s "${agent[@]}" --visual-servo "${task_commands[@]}"
     # Process completion is not task success. Private GT stays on disk and is
     # scored only after the agent exits; no evaluator labels enter observations.
     "$AGENT_PY" -m emet.eval.manipulation_trace "$EMET_SIM_EVAL_TRACE" \

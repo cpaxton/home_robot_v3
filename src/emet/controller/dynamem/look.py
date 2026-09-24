@@ -58,13 +58,43 @@ def observe_floor(agent) -> dict:
     if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
         return {"ok": False, "status": "calibrated_depth_unavailable"}
     before = len(agent.voxel_map.observations)
+    obstacles_before, explored_before = agent.voxel_map.get_2d_map()
     agent.update(full_perception=True)
     if len(agent.voxel_map.observations) <= before:
         return {"ok": False, "status": "map_update_missing"}
+    obstacles_after, explored_after = agent.voxel_map.get_2d_map()
+    observed_delta = int(explored_after.sum()) - int(explored_before.sum())
+    # Keep the exact captured view and map changes for offline inspection.
+    # A larger observed map is not proof of clearance or successful navigation.
+    evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
+    if evidence_dir:
+        from pathlib import Path
+
+        from PIL import Image
+
+        directory = Path(evidence_dir) / "navigation"
+        directory.mkdir(parents=True, exist_ok=True)
+        stem = directory / f"floor_observation_{time.time_ns()}"
+        Image.fromarray(np.asarray(obs.rgb, dtype=np.uint8)).save(stem.with_suffix(".png"))
+        np.savez_compressed(
+            stem.with_suffix(".npz"),
+            depth=obs.depth,
+            camera_K=obs.camera_K,
+            camera_pose=obs.camera_pose,
+            head_pan_tilt=measured,
+            base_pose=robot.get_base_pose_world(),
+            obstacles_before=obstacles_before.cpu().numpy(),
+            explored_before=explored_before.cpu().numpy(),
+            obstacles_after=obstacles_after.cpu().numpy(),
+            explored_after=explored_after.cpu().numpy(),
+        )
     return {
         "ok": True,
         "status": "floor_observed",
-        "note": "Fresh downward RGB-D added to map; base stationary. Replan to check safety; clearance is not guaranteed.",
+        "note": (
+            f"Fresh downward RGB-D added to map; base stationary; observed-cell change={observed_delta}. "
+            "Replan to check safety; clearance is not guaranteed. Stop repeating observations if no approach progress."
+        ),
     }
 
 

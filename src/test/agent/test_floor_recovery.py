@@ -9,6 +9,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+import torch
 
 from emet.agent.loop import _dispatch_tool_calls
 from emet.agent.tools import Tool, get_tools
@@ -89,7 +90,14 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure)
             get_xyz_in_world_frame=lambda: np.ones((2, 2, 3)),
         )
     )
-    agent = SimpleNamespace(robot=robot, voxel_map=SimpleNamespace(observations=[]))
+    monkeypatch.delenv("EMET_EQA_EPISODE_DIR", raising=False)
+    agent = SimpleNamespace(
+        robot=robot,
+        voxel_map=SimpleNamespace(
+            observations=[],
+            get_2d_map=lambda: (torch.zeros((2, 2), dtype=torch.bool), torch.ones((2, 2), dtype=torch.bool)),
+        ),
+    )
     agent.update = Mock(side_effect=lambda **kw: None if failure == "map" else agent.voxel_map.observations.append(1))
 
     def receive(robot, timeout):

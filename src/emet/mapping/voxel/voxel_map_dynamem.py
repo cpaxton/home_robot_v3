@@ -267,6 +267,8 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     target_xy=np.asarray([px, py]),
                     start_xy=np.asarray([float(start[0]), float(start[1])]),
                     distance_range=np.asarray(distance_range),
+                    clearance_m=np.asarray(getattr(planner, "_clearance_m", None), dtype=float),
+                    min_clearance_m=float(getattr(planner, "min_clearance_m", 0.0)),
                 )
         return None
 
