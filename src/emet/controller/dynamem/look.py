@@ -31,18 +31,29 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
-def observe_floor(agent) -> dict:
+def observe_floor(agent, pan_rad: float | None = None) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A
     successful capture updates the map, but does not guarantee a safe approach.
     """
+    if pan_rad is not None and (
+        isinstance(pan_rad, bool)
+        or not isinstance(pan_rad, (int, float))
+        or not np.isfinite(pan_rad)
+        or abs(pan_rad) > 1.0
+    ):
+        return {"ok": False, "status": "invalid_head_pan"}
     robot = agent.robot
     if not all(callable(getattr(robot, method, None)) for method in ("head_to", "get_pan_tilt")):
         return {"ok": False, "status": "unsupported_head_observation"}
     if not isinstance(getattr(robot, "_seq_id", None), int):
         return {"ok": False, "status": "observation_freshness_unavailable"}
     pan, _ = robot.get_pan_tilt()
+    if pan_rad is not None:
+        pan = float(pan_rad)
+    if not np.isfinite(pan):
+        return {"ok": False, "status": "head_pose_unconfirmed"}
     tilt = -1.0
     moved = robot.head_to(float(pan), tilt, blocking=True)
     if moved is False:

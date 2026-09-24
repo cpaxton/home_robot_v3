@@ -1091,13 +1091,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def observe_floor() -> ToolOutcome:
+    def observe_floor(pan_rad: float | None = None) -> ToolOutcome:
         from emet.controller.dynamem.look import observe_floor as capture_floor
 
         agent = _agent_from_context(context)
         if agent is None:
             return ToolOutcome(False, status="unavailable", note="Robot not connected.")
-        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent))
+        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent, pan_rad=pan_rad))
 
     tools.append(
         Tool(
@@ -1108,7 +1108,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "after no_reachable_workspace. Does not guarantee clearance; replan after observing. "
                 "Requires a movable head with measured pose and fresh calibrated depth."
             ),
-            parameters=_NO_PARAMS,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "pan_rad": {
+                        "type": "number",
+                        "minimum": -1.0,
+                        "maximum": 1.0,
+                        "description": "Absolute head pan in radians; omit to retain measured pan.",
+                    },
+                },
+                "required": [],
+            },
             func=observe_floor,
             returns_info=True,
         )

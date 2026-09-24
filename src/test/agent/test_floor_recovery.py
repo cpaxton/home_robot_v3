@@ -96,10 +96,12 @@ def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_stat
     assert recovery == (["observe_floor"] if payload_state == "empty" and status != "workspace_obstructed" else [])
 
 
+@pytest.mark.parametrize("pan_rad", [None, -0.8, 0.8])
 @pytest.mark.parametrize("failure", [None, "stale", "pose", "depth", "map", "unsupported", "sequence"])
-def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure):
+def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure, pan_rad):
     robot = SimpleNamespace(_seq_id=1, head_to=Mock(return_value=True))
-    robot.get_pan_tilt = Mock(side_effect=[(0.2, -0.5), (0.2, 0 if failure == "pose" else -1)])
+    expected_pan = 0.2 if pan_rad is None else pan_rad
+    robot.get_pan_tilt = Mock(side_effect=[(0.2, -0.5), (expected_pan, 0 if failure == "pose" else -1)])
     robot.get_observation = Mock(
         return_value=SimpleNamespace(
             rgb=np.ones((2, 2, 3)),
@@ -126,10 +128,15 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure)
         robot.head_to = None
     if failure == "sequence":
         robot._seq_id = None
-    result = look.observe_floor(agent)
+    result = look.observe_floor(agent, pan_rad=pan_rad)
     assert result["ok"] is (failure is None)
     if failure not in (None, "map"):
         agent.update.assert_not_called()
     if failure is None:
-        robot.head_to.assert_called_once_with(0.2, -1.0, blocking=True)
+        robot.head_to.assert_called_once_with(expected_pan, -1.0, blocking=True)
         agent.update.assert_called_once_with(full_perception=True)
+
+
+@pytest.mark.parametrize("pan_rad", [float("nan"), float("inf"), -1.01, 1.01, True, "left"])
+def test_floor_observation_rejects_invalid_pan_before_motion(pan_rad):
+    assert look.observe_floor(SimpleNamespace(), pan_rad=pan_rad) == {"ok": False, "status": "invalid_head_pan"}
