@@ -171,22 +171,28 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             # that may fall back to successively closer viewing locations.
             standoffs = [distance_range[0]]
         obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
+        rejected = {"blocked": 0, "outside_range": 0, "footprint": 0, "visibility": 0}
+        nearest_reachable_m = float("inf")
 
         for min_standoff in standoffs:
             for selected_target in selected_targets:
                 sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
                 selected_x, selected_y = planner.to_xy([sx_i, sy_i])
+                dist_xy = float(np.hypot(selected_x - px, selected_y - py))
+                nearest_reachable_m = min(nearest_reachable_m, dist_xy)
                 if blocked and (round(float(selected_x), 2), round(float(selected_y), 2)) in blocked:
+                    rejected["blocked"] += 1
                     continue
                 theta = self.compute_theta(selected_x, selected_y, px, py)
 
-                if not self.is_valid(np.array([selected_x, selected_y, theta])):
-                    continue
-
-                dist_xy = float(np.hypot(selected_x - px, selected_y - py))
                 if not exploration and dist_xy <= min_standoff:
+                    rejected["outside_range"] += 1
                     continue
                 if distance_range is not None and dist_xy > distance_range[1]:
+                    rejected["outside_range"] += 1
+                    continue
+                if not self.is_valid(np.array([selected_x, selected_y, theta])):
+                    rejected["footprint"] += 1
                     continue
 
                 ok = True
@@ -211,9 +217,36 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
                 if ok:
                     return np.array([selected_x, selected_y, theta])
+                rejected["visibility"] += 1
 
         # No useful approach exists in the currently reachable map. Let the caller
         # explore; do not silently bypass footprint/visibility checks to claim arrival.
+        if distance_range is not None:
+            logger.warning(
+                f"Grasp approach sampling failed: target_xy=({px:.3f},{py:.3f}) "
+                f"range={distance_range} reachable_cells={len(xs)} "
+                f"nearest_reachable_m={nearest_reachable_m:.3f} rejected={rejected}"
+            )
+            # Evaluation-only replay inputs; never feed private simulator state
+            # into planning. Unique files preserve repeated failed attempts.
+            import os
+            import time
+            from pathlib import Path
+
+            evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
+            if evidence_dir:
+                directory = Path(evidence_dir) / "navigation"
+                directory.mkdir(parents=True, exist_ok=True)
+                np.savez_compressed(
+                    directory / f"failed_approach_{time.time_ns()}.npz",
+                    obstacles=obstacles.detach().cpu().numpy(),
+                    explored=explored.detach().cpu().numpy(),
+                    reachable=reachable.detach().cpu().numpy(),
+                    reachable_xy=np.asarray([planner.to_xy([int(i), int(j)]) for i, j in selected_targets]),
+                    target_xy=np.asarray([px, py]),
+                    start_xy=np.asarray([float(start[0]), float(start[1])]),
+                    distance_range=np.asarray(distance_range),
+                )
         return None
 
     def sample_exploration(self, xyt, planner, text=None, debug=False, blocked=None):

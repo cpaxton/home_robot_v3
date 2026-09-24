@@ -48,7 +48,8 @@ def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     assert sample(space, start, target, planner, require_planar_visibility=False) is None
 
 
-def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint():
+def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
     obstacles = torch.zeros((12, 2), dtype=torch.bool)
     space = SimpleNamespace(
         voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles)),
@@ -72,6 +73,11 @@ def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint():
     obstacles[8, 0] = False
     space.is_valid = lambda pose: False
     assert sample(space, np.ones(3), np.zeros(3), planner, **kwargs) is None
+    archives = list((tmp_path / "navigation").glob("failed_approach_*.npz"))
+    assert len(archives) == 2
+    with np.load(archives[0], allow_pickle=False) as evidence:
+        np.testing.assert_allclose(evidence["distance_range"], [0.7, 0.8])
+        assert evidence["reachable_xy"].shape[1] == 2
 
 
 @pytest.mark.parametrize("bounds", [(0.8, 0.7), (-1, 1), (0, np.inf), (np.nan, 1), (0.7,)])
