@@ -365,3 +365,50 @@ Runner options: `--turn-angle 1.5`, `--noslip-iterations 10`, and
 physics; omitting turn angle retains the earlier open-loop profiles. Command
 profile/validation tests: 22 pass. A real MuJoCo 0.3 s NoSlip smoke retained
 contact; the full eight-condition battery is pending.
+
+#### Completed matched-angle and solver results
+
+Job `20260924_180149_7c03aa`, frozen source `dfe3a66b`, completed all eight
+conditions serially. Artifacts: `~/runs/emet/carry-matched-solver-20260924/`.
+Original solver manifests record NoSlip=0; explicit solver-control manifests
+record original 0 / effective 10. No scene files or production defaults changed.
+
+| Condition | Retention / loss time after checkpoint | Relative drift / measured yaw |
+| --- | --- | --- |
+| Original hold, 45 s | Retained | Max drift 13.92 mm |
+| Original matched turn, 0.5 rad/s cap | Retained | Max drift 14.56 mm; yaw 1.49989 rad, target reached |
+| Original matched turn, 0.2 rad/s cap | Retained | Max drift 14.26 mm; yaw 1.49989 rad, target reached |
+| Original recorded wheels, 35 s | Lost at 29.786 s | Contact lost; final separation 1.091 m |
+| NoSlip=10 hold, 45 s | Retained | Max drift 1.09 mm |
+| NoSlip=10 matched-turn request, 0.5 rad/s cap | **Lost at 26.114 s** | Yaw 1.48258 rad; **target tolerance failed** |
+| NoSlip=10 recorded wheels, 35 s | Retained | Max drift 2.91 mm; final separation 9.62 mm |
+| NoSlip=10 release negative, 8 s | Lost at 2.348 s after commanded opening begins at 2 s | No final gripper contact |
+
+![Matched-angle and explicit solver diagnostics](figures/carry-matched-solver-20260924.svg)
+
+Interpretation:
+
+- The original-physics matched turns both complete and retain the object. The
+  earlier faster/larger open-loop turn failure does **not** establish that a
+  0.5 rad/s cap alone is unsafe or that a lower cap fixes the harness. Braking,
+  trajectory shape and accumulated grasp drift remain relevant.
+- Changing only the solver option strongly reduces stationary creep and
+  prevents the recorded-wheel drop. This supports a numerical contribution,
+  not a universal solver fix: its turning counterexample must remain visible.
+- The NoSlip turn is not a successful matched-angle comparison: it drops the
+  object and misses the 0.01 rad yaw criterion by ending 0.01742 rad short.
+  Sampled peak yaw rates are similar for the two fast cases (~0.42 rad/s).
+  Base roll stays below 0.004° and pitch below 0.193° in all three turn cases;
+  there is no evidence here that the robot falls over.
+- The opening negative confirms release is still possible. It does not prove
+  general physical realism. All results are privileged diagnostics from one
+  measured grasp, not learned-agent scores or real-robot acceptance.
+
+Decision: retain production settings and both failure controls. Next inspect
+object/pad contact dynamics during the NoSlip turning counterexample before
+choosing a scoped physics or carry-controller change. Do not deepen an already
+near-centered grasp or promote a speed cap based on these results. The live
+carry-visibility guard still needs an episode that reaches manipulation; these
+offline controls do not validate its VLM behavior. Final focused suite:
+**286 passed**, two existing SWIG warnings. EQA was not rerun for diagnostic-only
+changes.

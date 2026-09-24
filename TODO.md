@@ -8,13 +8,20 @@ Strike through or move to a PR when done.
 - [x] Build/run a reproducible serial carry checkpoint battery; 12 controlled
       conditions isolate hold, translation, turns, braking and recorded wheels.
       277 focused tests pass; evidence/figure in the floor-coverage report.
-- [ ] Follow up carry physics with matched-angle turn profiles. Stationary
+- [x] Follow up carry physics with matched-angle turn profiles. Stationary
       hold already drifts ~13 mm/35 s; recorded wheels and the larger/faster
       native-profile turn drop the can, while the slower shorter turn retains
       it. Do not call this a rate-only proof: total angle differs. Initial pad
       alignment is near-centered, so blind extra insertion is not justified.
       A separate explicit solver-control comparison can test numerical creep;
       do not silently change benchmark physics or hardware defaults.
+- [ ] Investigate the solver-control turning counterexample before promoting
+      a physics or speed change. Job `20260924_180149_7c03aa`: both original
+      solver turns reach 1.5 rad and retain the can; NoSlip=10 reduces hold drift
+      13.92→1.09 mm and rescues recorded wheels, but loses the object in its
+      fast turn and misses yaw tolerance. Open-gripper negative drops normally.
+      All eight conditions and a figure are documented; 286 focused tests pass.
+      Keep original failures visible. No production default change is justified.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can
