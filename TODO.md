@@ -5,6 +5,17 @@ Strike through or move to a PR when done.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
+- [x] Build/run a reproducible serial carry checkpoint battery; 12 controlled
+      conditions isolate hold, translation, turns, braking and recorded wheels.
+      277 focused tests pass; evidence/figure in the floor-coverage report.
+- [ ] Follow up carry physics with matched-angle turn profiles. Stationary
+      hold already drifts ~13 mm/35 s; recorded wheels and the larger/faster
+      native-profile turn drop the can, while the slower shorter turn retains
+      it. Do not call this a rate-only proof: total angle differs. Initial pad
+      alignment is near-centered, so blind extra insertion is not justified.
+      A separate explicit solver-control comparison can test numerical creep;
+      do not silently change benchmark physics or hardware defaults.
+
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can
       during travel at sim ~109.8 s; placement search then continues. The

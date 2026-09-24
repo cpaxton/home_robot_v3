@@ -296,3 +296,48 @@ this is a diagnostic criterion, not the benchmark scorer. Inspect forces and
 relative displacement as well as the binary event. A no-loss 35 s result is not
 proof of indefinitely stable retention. Profile tests: 12 passed; a 0.3 s real
 MuJoCo hold smoke retained contact. Full battery pending.
+
+#### Completed checkpoint results (September 24)
+
+All conditions below use the same 80.048 s checkpoint from the loose-closure
+repeat, 35 s evaluation duration, and unchanged contact physics. Jobs run
+serially, single-threaded with CPU-safe affinity:
+
+| Job | Conditions | Outcome |
+| --- | --- | --- |
+| `20260924_163132_b815bb` | hold; early straight/turn/brake at 0.05 m/s, 0.2 rad/s; full recorded replay | First four retain contact with 13.06–13.12 mm relative drift. Recorded replay loses the object at +29.48 s. |
+| `20260924_163816_418c8a` | wheel-only recorded replay; same synthetic motions after 20 s hold | Wheel-only replay loses at +29.79 s. Delayed synthetic cases retain contact with 13.06–13.23 mm drift. |
+| `20260924_164059_c5f7a3` | delayed straight/turn/brake at existing native speed limits, 0.09 m/s and 0.5 rad/s | Turn loses at +24.89 s. Straight and brake retain contact with ~13.06 mm drift. |
+
+Artifacts are in `~/runs/emet/carry-checkpoint-{battery,aged,native-speed}-20260924/`.
+The runner now accepts `--motion-delay` and `--modes recorded_wheels` to separate
+grip aging and wheel motion from arm/head command changes. Recorded profiles
+ignore the synthetic delay. Unit/regression suite: **277 passed**.
+
+![Measured relative drift and contact force](figures/carry-checkpoint-20260924.svg)
+
+Actual motion was checked: the early straight profile travels 0.228 m, turn
+rotates 0.773 rad, and braking profile travels 0.197 m; the stationary base
+drifts only 0.00033 m. These are not failed-motion "retention successes".
+Numbers in the table are commanded speed limits, not measured speed claims.
+The faster synthetic turn also covers a larger angle because profile duration
+is fixed. **Rate and total turn angle are confounded**; use an equal-angle route
+comparison before claiming a rate-only repair or promoting a carry speed limit.
+
+Private model reconstruction further finds the actual can center initially
+~1.3–1.4 mm from pad center along pad-local X, drifting to ~24–25 mm before the
+original drop; pad half-width is 20 mm. No non-finger object contacts occur in
+the source trace from 95 s until contact loss. The gripper command remains
+unchanged. This supports outward slip followed by motion-sensitive loss, not
+an initially obvious shallow grasp, reopening command, or object/environment
+collision. It does not establish a purely numerical cause or hardware safety.
+
+Do not blindly deepen the grasp: the current preset already inherits 25 mm
+contact-depth calibration, and the initial pad alignment is near-centered.
+Next isolate equal-angle turn profiles and, separately, a clearly labeled
+solver-only control for contact creep. Older mirrored/tabletop experiments
+already investigated NoSlip and depth corrections; see
+[earlier carry diagnostics](shared_grounding_pilot.md). Any physics comparison
+must remain explicit and apply consistently across benchmark rows. No new
+production speed, squeeze, contact, or safety-margin defaults were changed by
+this battery. These are privileged diagnostics, **not agent acceptance**.
