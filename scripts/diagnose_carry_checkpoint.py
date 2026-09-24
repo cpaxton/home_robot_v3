@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+"""Serial, privileged MuJoCo carry diagnostic; NOT a learned-agent benchmark.
+
+Restore a sampled physical trace checkpoint, keep arm/gripper references fixed,
+and compare bounded wheel profiles. ``recorded`` replays interpolated controls
+as a fidelity check, not an exact command replay. No teleport, attachment,
+contact-physics change, or policy access to ground truth is used.
+"""
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
+
+
+def drive_envelope(t, *, ramp_s=2.0, cruise_s=4.0, brake_s=2.0):
+    if t < ramp_s:
+        return max(0.0, t / ramp_s)
+    if t < ramp_s + cruise_s:
+        return 1.0
+    return max(0.0, 1.0 - (t - ramp_s - cruise_s) / brake_s)
+
+
+def wheel_controls(mode, t, *, linear_speed, angular_speed, radius, separation, gears):
+    """Velocity actuator references include transmission gearing."""
+    envelope = drive_envelope(t, brake_s=0.25 if mode == "brake" else 2.0)
+    v = linear_speed * envelope if mode in {"straight", "brake"} else 0.0
+    w = angular_speed * envelope if mode == "turn" else 0.0
+    return np.array([v - separation * w / 2, v + separation * w / 2]) / radius * gears
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scene", type=Path, required=True)
+    parser.add_argument("--trace", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--time", type=float, required=True)
+    parser.add_argument("--duration", type=float, default=35.0)
+    parser.add_argument(
+        "--modes",
+        nargs="+",
+        choices=["hold", "straight", "turn", "brake", "recorded"],
+        default=["hold", "straight", "turn", "brake", "recorded"],
+    )
+    parser.add_argument("--linear-speed", type=float, default=0.05)
+    parser.add_argument("--angular-speed", type=float, default=0.2)
+    parser.add_argument("--wheel-radius", type=float, default=0.0508)
+    parser.add_argument("--wheel-separation", type=float, default=0.3153)
+    parser.add_argument("--left-actuator", default="left_wheel_vel")
+    parser.add_argument("--right-actuator", default="right_wheel_vel")
+    args = parser.parse_args()
+    for value in (args.duration, args.wheel_radius, args.wheel_separation, args.linear_speed, args.angular_speed):
+        if not np.isfinite(value) or value <= 0:
+            parser.error("duration, geometry and speeds must be finite and positive")
+    if not np.isfinite(args.time):
+        parser.error("time must be finite")
+    with args.trace.open() as stream:
+        header = json.loads(next(stream))
+        rows = [json.loads(line) for line in stream]
+    times = np.asarray([row["sim_time"] for row in rows])
+    if not len(times) or not np.all(np.diff(times) > 0) or not times[0] <= args.time <= times[-1]:
+        parser.error("checkpoint must lie within a strictly increasing trace")
+    index = int(np.argmin(abs(times - args.time)))
+    initial = rows[index]
+    if not initial["gripper_contact"]:
+        parser.error("checkpoint must have recorded gripper contact")
+    if "recorded" in args.modes and initial["sim_time"] + args.duration > times[-1]:
+        parser.error("recorded profile extends beyond trace; reduce duration")
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_path(str(args.scene.resolve()))
+    ids = [model.actuator(args.left_actuator).id, model.actuator(args.right_actuator).id]
+    gears = model.actuator_gear[ids, 0]
+    if np.any(gears == 0):
+        parser.error("wheel transmission gear must be nonzero")
+    for mode in args.modes:
+        peak = wheel_controls(
+            mode,
+            3,
+            linear_speed=args.linear_speed,
+            angular_speed=args.angular_speed,
+            radius=args.wheel_radius,
+            separation=args.wheel_separation,
+            gears=gears,
+        )
+        for actuator, target in zip(ids, peak, strict=True):
+            if (
+                model.actuator_ctrllimited[actuator]
+                and not model.actuator_ctrlrange[actuator, 0] <= target <= model.actuator_ctrlrange[actuator, 1]
+            ):
+                parser.error("requested wheel profile exceeds actuator limits")
+    target_id = model.body(header["config"]["object_body"]).id
+    ee_id = model.body(header["config"]["ee_body"]).id
+    gripper_roots = {model.body(name).id for name in header["config"]["gripper_bodies"]}
+
+    def under(body, roots):
+        while body:
+            if body in roots:
+                return True
+            body = int(model.body_parentid[body])
+        return False
+
+    targets = {i for i in range(model.nbody) if under(i, {target_id})}
+    fingers = {i for i in range(model.nbody) if under(i, gripper_roots)}
+    controls = np.asarray([row["ctrl"] for row in rows])
+    args.out.mkdir(parents=True, exist_ok=False)
+    manifest = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
+    manifest.update(
+        kind="privileged_checkpoint_diagnostic",
+        checkpoint_time=initial["sim_time"],
+        mujoco_version=mujoco.__version__,
+        script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        scene_sha256=hashlib.sha256(args.scene.read_bytes()).hexdigest(),
+        trace_sha256=hashlib.sha256(args.trace.read_bytes()).hexdigest(),
+        caveat="Sampled state/controls, not exact replay. Wheel dimensions are explicit fixture assumptions.",
+    )
+    (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (args.out / "checkpoint.json").write_text(json.dumps(initial) + "\n")
+    summaries = []
+    for mode in args.modes:
+        data = mujoco.MjData(model)
+        for name in ("qpos", "qvel", "act", "ctrl", "qacc_warmstart"):
+            values = np.asarray(initial[name])
+            if values.shape != getattr(data, name).shape or not np.isfinite(values).all():
+                raise ValueError(f"Checkpoint incompatible with model: {name}")
+            getattr(data, name)[:] = values
+        data.time = initial["sim_time"]
+        mujoco.mj_forward(model, data)
+        reference = data.body(ee_id).xmat.reshape(3, 3).T @ (data.body(target_id).xpos - data.body(ee_id).xpos)
+        initial_z = float(data.body(target_id).xpos[2])
+        next_sample = 0.0
+        lost_since = None
+        drop_time = None
+        max_slip = 0.0
+        with (args.out / f"{mode}.jsonl").open("x") as stream:
+            while data.time - initial["sim_time"] < args.duration:
+                elapsed = data.time - initial["sim_time"]
+                if mode == "recorded":
+                    data.ctrl[:] = [np.interp(data.time, times, controls[:, i]) for i in range(model.nu)]
+                else:
+                    data.ctrl[ids] = wheel_controls(
+                        mode,
+                        elapsed,
+                        linear_speed=args.linear_speed,
+                        angular_speed=args.angular_speed,
+                        radius=args.wheel_radius,
+                        separation=args.wheel_separation,
+                        gears=gears,
+                    )
+                mujoco.mj_step(model, data)
+                elapsed = data.time - initial["sim_time"]
+                if elapsed < next_sample:
+                    continue
+                next_sample = elapsed + 0.1
+                ee = data.body(ee_id)
+                obj = data.body(target_id)
+                relative = ee.xmat.reshape(3, 3).T @ (obj.xpos - ee.xpos)
+                slip = float(np.linalg.norm(relative - reference))
+                max_slip = max(max_slip, slip)
+                forces = []
+                for j, contact in enumerate(data.contact):
+                    a, b = [int(model.geom_bodyid[g]) for g in contact.geom]
+                    if (a in targets and b in fingers) or (b in targets and a in fingers):
+                        force = np.zeros(6)
+                        mujoco.mj_contactForce(model, data, j, force)
+                        if force[0] > 0:
+                            forces.append(float(force[0]))
+                # Sustained displacement, not momentary missing contact, defines
+                # this diagnostic's loss event. It is not the benchmark scorer.
+                if np.linalg.norm(relative) > 0.12:
+                    lost_since = elapsed if lost_since is None else lost_since
+                    if elapsed - lost_since >= 0.2 and drop_time is None:
+                        drop_time = lost_since
+                else:
+                    lost_since = None
+                row = {
+                    "elapsed_s": elapsed,
+                    "object_xyz": obj.xpos.tolist(),
+                    "ee_xyz": ee.xpos.tolist(),
+                    "relative_xyz": relative.tolist(),
+                    "slip_m": slip,
+                    "normal_forces_n": forces,
+                    "wheel_controls": data.ctrl[ids].tolist(),
+                    "base_qpos": data.qpos[:7].tolist(),
+                }
+                stream.write(json.dumps(row, allow_nan=False) + "\n")
+        summary = {
+            "mode": mode,
+            "loss_time_s": drop_time,
+            "max_relative_slip_m": max_slip,
+            "final_relative_distance_m": float(np.linalg.norm(relative)),
+            "final_height_change_m": float(data.body(target_id).xpos[2]) - initial_z,
+            "final_contact": bool(forces),
+        }
+        summaries.append(summary)
+        print(json.dumps(summary), flush=True)
+        (args.out / "summary.json").write_text(json.dumps(summaries, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    main()

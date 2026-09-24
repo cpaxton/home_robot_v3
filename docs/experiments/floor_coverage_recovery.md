@@ -260,3 +260,39 @@ with `payload_unverified`, and preserves the potentially-held-object interlock.
 Missing visibility is **not** reported as a confirmed drop. These are stationary
 boundary checks, not continuous sensing and not a repair for unstable grasping.
 264 focused tests pass; live detection acceptance remains pending.
+
+### Controlled carry battery
+
+The live detection pilot `20260924_143622_768dff` stopped at initial can
+grounding (68 s, physical false/false). It did not reach grasp or exercise the
+new carry checks. This is not evidence that drop detection works in an episode.
+
+Use `scripts/diagnose_carry_checkpoint.py` to separate that upstream variability
+from grasp physics. It restores the same sampled MuJoCo state and compares:
+stationary hold, straight travel, in-place turn, sharper braking, and interpolated
+recorded controls. Non-recorded cases keep all non-wheel controls fixed. Motion
+ramps up over 2 s, cruises for 4 s, then brakes over 2 s (0.25 s for the braking
+ablation); the remaining duration tests retention. Wheel actuator gearing is
+included, and references exceeding actuator limits are rejected.
+
+This is **privileged diagnostic evidence**, not a learned-agent score or exact
+replay. It uses existing physical-trace checkpoints, does not attach/teleport
+objects, and leaves contact physics unchanged. Defaults explicitly describe the
+Stretch fixture (wheel radius 0.0508 m, separation 0.3153 m), not a universal
+robot model. Supply appropriate geometry/actuator names for other fixtures.
+
+Example (from repo root, single-threaded CPU; run cases serially):
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  .venv/bin/python scripts/diagnose_carry_checkpoint.py \
+  --scene /path/to/frozen/scene.xml --trace /path/to/physical_trace.jsonl \
+  --time 80 --duration 35 --out /tmp/carry-diagnostic-new
+```
+
+Output includes input/script hashes, checkpoint, per-case sampled JSONL and a
+summary. Loss means object/gripper distance exceeds 0.12 m for at least 0.2 s;
+this is a diagnostic criterion, not the benchmark scorer. Inspect forces and
+relative displacement as well as the binary event. A no-loss 35 s result is not
+proof of indefinitely stable retention. Profile tests: 12 passed; a 0.3 s real
+MuJoCo hold smoke retained contact. Full battery pending.
