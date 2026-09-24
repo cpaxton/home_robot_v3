@@ -228,3 +228,35 @@ then AStar computes its 0.22 m clearance on that padded map; oriented footprint
 validation also consumes the padded obstacles. The YAML comment's `voxel_size`
 wording is misleading. This is evidence of overlapping conservative margins,
 not permission to remove them without geometry/contact acceptance tests.
+
+### Repeat and carry-loss detection
+
+Frozen `b40bf9b3` repeat `20260924_120339_d33727` completes in 578 s:
+physical pickup true, placement false. Unlike the first loose run, the actual
+can is lost during base travel: last contact at sim 109.730 s, falling by
+109.832 s and on the floor by 110.240 s. Destination search continues until
+`target absent or ambiguous`. The final object/gripper separation is 1.679 m.
+Thus loose closure has two pickup successes on the same fixture, but **does not
+establish reliable retention** and has zero complete placements.
+
+The same-source tight control `20260924_120343_f5b315` completes in 65 s and
+fails fresh can grounding before any closure. It is an end-to-end failure, but
+not an isolated control for closure efficacy. Do not pool it as another
+observed tight-grasp ejection.
+
+The repeat's actuator trace keeps the gripper target at 0.00410 simulated slide
+meters throughout travel. Relative object displacement gradually grows from
+about 4 mm to 23 mm before loss; contact forces fall substantially. Wrist/lift
+references are unchanged across the sampled loss interval. This is not an
+explicit reopening command. Do not claim a torque/friction fix from these data.
+
+New checks reuse fresh semantic RGB-D, gripper proximity and relative-position
+verification before navigation and after completed trajectory chunks, including
+the direct placement-workspace route. The head looks at the end effector and
+restores its prior measured pose; no arm/base motion or GT is used by the check.
+Confirmed grounded pickup installs the visual reference; confirmed release
+clears it. Failed verification latches uncertainty, aborts the placement batch
+with `payload_unverified`, and preserves the potentially-held-object interlock.
+Missing visibility is **not** reported as a confirmed drop. These are stationary
+boundary checks, not continuous sensing and not a repair for unstable grasping.
+264 focused tests pass; live detection acceptance remains pending.

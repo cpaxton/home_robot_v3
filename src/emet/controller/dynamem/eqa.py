@@ -526,6 +526,9 @@ def navigate_to_target_pose(
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             return NavOutcome.USER_CANCELLED
 
+        from emet.controller.operations.payload_verification import verify_carried_object
+
+        verify_carried_object(self)
         nav_timeout = self._find_phase_nav_timeout()
         exec_ok = self.robot.execute_trajectory(
             traj,
@@ -536,6 +539,7 @@ def navigate_to_target_pose(
             blocking=True,
             world_frame=True,
         )
+        verify_carried_object(self)
         if exec_ok is False:
             self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
             self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")

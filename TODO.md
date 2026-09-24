@@ -5,6 +5,16 @@ Strike through or move to a PR when done.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
+- [ ] Validate navigation-boundary payload verification in live sim. The loose
+      repeat (`20260924_120339_d33727`) scores pickup true but drops the can
+      during travel at sim ~109.8 s; placement search then continues. The
+      same-source tight control fails grounding before closure, so it does not
+      isolate closure. Loose pickup is 2/2, end-to-end placement 0/2, not a
+      reliable carry policy. New checks stop on uncertain possession and retain
+      the potentially-held state; they are not continuous slip sensing.
+      264 focused tests pass. Keep margins, physics and closure unchanged for
+      the detection pilot; gradual slipping still needs a separate repair.
+
 - [x] Split shared-VLM conversation isolation into main-based PR #176
       (`138ac920`); 35 targeted tests pass. Main remains unchanged.
 - [x] Run controlled second floor view and paired EQA slice; the second view

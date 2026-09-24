@@ -214,6 +214,9 @@ def execute_action(
         The second element is the location of the target object, useful used to tell the robot how to orient itself and prepare pregrasp pose for manipulation.
             If it is None, it means the navigation has some problem.
     """
+    from emet.controller.operations.payload_verification import verify_carried_object
+
+    verify_carried_object(self)
     if not self._realtime_updates:
         self.robot.look_front()
         if text and getattr(self, "query_driven_memory", False):
@@ -292,6 +295,7 @@ def execute_action(
                     blocking=True,
                     world_frame=True,
                 )
+                verify_carried_object(self)
                 if exec_ok is False:
                     self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
                     self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
@@ -329,6 +333,7 @@ def execute_action(
             blocking=True,
             world_frame=True,
         )
+        verify_carried_object(self)
         if exec_ok is False:
             self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
             self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")

@@ -355,6 +355,10 @@ class DynamemTaskExecutor:
                 self.last_query_manipulation.update(
                     navigation=exc.diagnostics, phase="pre_grasp", payload_state="empty"
                 )
+            from emet.controller.operations.payload_verification import PayloadVerificationError
+
+            if isinstance(exc, PayloadVerificationError):
+                self.last_query_manipulation.update(status="payload_unverified", phase="carry", payload_state="unknown")
             logger.warning(f"Query manipulation rejected: {exc}")
             ok = False
         finally:
@@ -717,6 +721,7 @@ class DynamemTaskExecutor:
             elif command == "place":
                 logger.info(f"[Pickup task] Place: {args}")
                 target_object = args
+                from emet.controller.operations.payload_verification import PayloadVerificationError
 
                 # Navigation
 
@@ -725,7 +730,22 @@ class DynamemTaskExecutor:
                     self.skip_confirmations
                     or (not self.skip_confirmations and input("Do you want to run navigation? [Y/n]: ").upper() != "N")
                 ):
-                    point = self._find(args)
+                    try:
+                        point = self._find(args)
+                    except PayloadVerificationError as exc:
+                        self.last_query_manipulation = {
+                            "ok": False,
+                            "query": args,
+                            "action": "place",
+                            "physical_success_verified": False,
+                            "status": "payload_unverified",
+                            "phase": "carry",
+                            "payload_state": "unknown",
+                            "reason": str(exc),
+                        }
+                        self._last_exec_ok = False
+                        logger.warning(f"Stopping placement navigation: {exc}")
+                        return True
                 # Or the user explicitly tells that he or she does not want to run navigation.
                 else:
                     point = None

@@ -1115,7 +1115,7 @@ class GraspObjectOperation(ManagedOperation):
                 self.robot.set_carry_configuration(self.robot.get_joint_positions())
                 self.robot.move_to_manip_posture()
                 if relative is not None:
-                    observe_lifted_query(
+                    carry_relative = observe_lifted_query(
                         self.agent,
                         self.robot,
                         self.target_object,
@@ -1123,6 +1123,14 @@ class GraspObjectOperation(ManagedOperation):
                         minimum_lift_m=self.lift_clearance_m / 2,
                         relative_reference=relative,
                         stage="grasp_carry_verification",
+                    )
+                    from emet.controller.operations.payload_verification import CarriedObject
+
+                    self.agent._carried_object = CarriedObject(
+                        self.target_object,
+                        np.array(object_xyz, copy=True),
+                        np.array(carry_relative, copy=True),
+                        self.lift_clearance_m / 2,
                     )
             except (ValueError, RuntimeError):
                 self._success = False

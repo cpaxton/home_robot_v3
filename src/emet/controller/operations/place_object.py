@@ -361,6 +361,7 @@ class PlaceObjectOperation(ManagedOperation):
             self.error("Gripper release did not complete; stopping without retreat.")
             return
         self.released = True
+        self.agent._carried_object = None
         time.sleep(0.5)
 
         # Move directly up

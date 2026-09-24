@@ -590,7 +590,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             outcome.note = str(detail.get("reason") or note)
             outcome.payload["manipulation"] = detail
             navigation = detail.get("navigation", {})
-            outcome.status = str(navigation.get("status") or "manipulation_failed")
+            outcome.status = str(detail.get("status") or navigation.get("status") or "manipulation_failed")
             if (
                 detail.get("phase") == "pre_grasp"
                 and detail.get("payload_state") == "empty"

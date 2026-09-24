@@ -165,6 +165,26 @@ def test_place_consumes_fresh_receptacle_points_and_observes_after():
     assert task.last_query_manipulation["observed_after_action"]
 
 
+def test_payload_failure_stops_place_batch_without_forgetting_possible_payload(monkeypatch):
+    from emet.controller.operations.payload_verification import PayloadVerificationError
+
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task, _ = executor()
+    held = SimpleNamespace(global_id=99, name="mug")
+    task._held_query_instance = held
+    task.manipulation_only = False
+    task.skip_confirmations = True
+    task._find = Mock(side_effect=PayloadVerificationError("payload not visible"))
+    task._place = Mock()
+    assert task([("place", "counter"), ("place", "other counter")]) is True
+    assert task._last_exec_ok is False
+    assert task.last_query_manipulation["status"] == "payload_unverified"
+    assert task.last_query_manipulation["payload_state"] == "unknown"
+    assert task._held_query_instance is held
+    task._place.assert_not_called()
+    task._find.assert_called_once()
+
+
 @pytest.mark.parametrize("released", [False, True])
 def test_failed_place_retains_only_unreleased_object(released):
     task, target = executor()
