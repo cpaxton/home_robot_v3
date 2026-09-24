@@ -15,13 +15,23 @@ Strike through or move to a PR when done.
       alignment is near-centered, so blind extra insertion is not justified.
       A separate explicit solver-control comparison can test numerical creep;
       do not silently change benchmark physics or hardware defaults.
-- [ ] Investigate the solver-control turning counterexample before promoting
+- [x] Investigate the solver-control turning counterexample before promoting
       a physics or speed change. Job `20260924_180149_7c03aa`: both original
       solver turns reach 1.5 rad and retain the can; NoSlip=10 reduces hold drift
       13.92→1.09 mm and rescues recorded wheels, but loses the object in its
       fast turn and misses yaw tolerance. Open-gripper negative drops normally.
       All eight conditions and a figure are documented; 286 focused tests pass.
       Keep original failures visible. No production default change is justified.
+- [ ] Isolate carry contact instability with a small timestep-convergence
+      control (2/1/0.5 ms), not a blanket speed/depth adjustment. Contact replay
+      `20260924_194422_d82001` exactly reproduces both summaries: native physics
+      creeps toward a pad edge and unloads; NoSlip stays centered until abrupt
+      rotation/force growth at ~25.5 s, then loses contact. Gripper target never
+      opens; first sampled external contact occurs after ejection. Solver
+      instability is a hypothesis, not yet a proven cause. Fixture already uses
+      elliptic/Newton/impratio=20. Keep hold, recorded wheels and release negative
+      gates before any live policy promotion. Evidence/figure in floor-coverage
+      report; 289 focused tests pass. Production physics remains unchanged.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can

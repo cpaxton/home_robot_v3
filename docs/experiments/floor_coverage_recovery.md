@@ -412,3 +412,64 @@ carry-visibility guard still needs an episode that reaches manipulation; these
 offline controls do not validate its VLM behavior. Final focused suite:
 **286 passed**, two existing SWIG warnings. EQA was not rerun for diagnostic-only
 changes.
+
+#### Contact-level follow-up: creep and abrupt rotation are different failures
+
+Job `20260924_194422_d82001`, source `2dd5ef71`, replayed the original and
+NoSlip=10 fast turns **serially**, adding only read-only contact/actuator logging.
+Both complete summary dictionaries exactly reproduce the earlier runs, including
+NoSlip loss at 26.114 s and original retention. Artifacts:
+`~/runs/emet/carry-contact-turns-20260924/{native,noslip}/`.
+Each directory contains input hashes, the checkpoint, manifest, detailed
+`turn.jsonl`, and summary. Reproduce using the preceding fast-turn arguments
+plus `--contact-details`; retain the default 0.1 s sampling for exact comparison.
+`--sample-period` optionally changes diagnostic sampling, not physics stepping.
+
+![Pad contacts and gripper forces around the turn](figures/carry-contact-turns-20260924.svg)
+
+Measured findings (times are relative to the checkpoint):
+
+- **Original physics: gradual creep with unloading.** At 19.994 s the can has
+  drifted 10.62 mm; pad normal forces are ~0.53 N each, down from ~2.4 N
+  initially. At 25.502 s drift is 13.10 mm and each pad carries ~0.20 N.
+  The can center moves from ~-1.3 mm to ~-18.1 mm along pad-local X, toward
+  the edge of a pad with 20 mm half-width. It remains held for this turn, but
+  retention alone hides a marginal contact state. Actuator closing force
+  magnitude falls from 9.27 N initially to ~0.21 N at 25.502 s.
+- **NoSlip: initially centered, then abrupt rotation/contact-force growth.**
+  At 25.400 s drift is only 2.11 mm; relative rotation from the checkpoint is
+  0.46 degrees and pad normal forces are 1.74/1.85 N. By 25.706 s rotation is
+  15.31 degrees; forces have risen to 3.89/5.79 N. At 25.910 s normal forces
+  reach 6.08/8.18 N and actuator closing force magnitude is 18.64 N. At
+  26.012 s there are no sampled gripper contacts and separation is growing.
+  This is not the gradual loss of squeezing force observed in the native run.
+- **No commanded opening.** The gripper target stays fixed at ~0.00410 in
+  both traces. Its position actuator has gain 4000 and velocity coefficient
+  124; measured actuator force is not a fixed grip-force command. Do not
+  conflate actuator force with the separately recorded pad normal forces.
+- **No sampled external collision before ejection.** The NoSlip trace's first
+  external object contact is at 26.522 s, after loss; the native trace has none.
+  The ~0.102 s sampling can miss brief contacts, so this is not proof that no
+  inter-sample impulse occurred. Earlier base-pose checks also found no tipping.
+
+Interpretation: the NoSlip counterexample is consistent with a contact/solver
+instability, rather than a shallow initial grasp or deliberate release. This is
+still a hypothesis: rotation and force growth are observed together, not a
+causal isolation of the numerical mechanism. MuJoCo's
+[modeling guidance](https://mujoco.readthedocs.io/en/latest/modeling.html#preventing-slip)
+also warns that NoSlip can destabilize complex multi-contact systems. The actual
+fixture uses MuJoCo 3.5.0, Newton, elliptic cones, `impratio=20`, implicit-fast
+integration and a 2 ms timestep; it is **already** using elevated friction
+impedance, so “switch to elliptic/increase impratio” is not a new baseline fix.
+The pads have six-dimensional contacts; neither friction coefficients nor pad
+geometry were changed by this diagnostic.
+
+Next bounded diagnostic: timestep convergence at 2/1/0.5 ms on this same turn,
+with the same continuous-time controller and grip command, keeping original
+and NoSlip physics separately labeled. If the abrupt event moves/disappears,
+investigate numerical/contact stability before considering a grip-depth or
+speed change. A retained turn alone is insufficient: any candidate must also
+pass stationary hold, recorded-wheel replay and commanded-release negative,
+then live learned pickup/carry/place. No runtime defaults changed; no new
+learned-agent or EQA scores are claimed. **289 focused tests pass**, including
+a real minimal MuJoCo contact-reading test that checks state is not mutated.
