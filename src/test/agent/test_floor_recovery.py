@@ -15,6 +15,30 @@ from emet.agent.tools import Tool, get_tools
 from emet.controller.dynamem import look
 
 
+@pytest.mark.parametrize("raises", [False, True])
+def test_shared_perception_does_not_replace_agent_conversation(raises):
+    from emet.llms.base import AbstractLLMClient
+
+    class Client(AbstractLLMClient):
+        def __call__(self, *args, **kwargs):
+            return ""
+
+    client = Client("agent tools")
+    original = [{"role": "system", "content": "agent tools"}, {"role": "user", "content": "put cup on table"}]
+    client.conversation_history = original.copy()
+    client._iterations = 2
+    try:
+        with client.preserve_conversation():
+            client.reset()
+            client.add_history({"role": "system", "content": "list object labels only"})
+            if raises:
+                raise RuntimeError("perception failed")
+    except RuntimeError:
+        pass
+    assert client.get_history() == original
+    assert client.steps == 2
+
+
 def test_system_prompt_allows_only_explicit_observation_recovery():
     from emet.agent.prompt import build_agent_system_prompt
 
