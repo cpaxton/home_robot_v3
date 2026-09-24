@@ -10,6 +10,11 @@ Strike through or move to a PR when done.
       See [contract and acceptance](docs/experiments/floor_coverage_recovery.md).
 - [ ] Validate model-selected observation and physical pick/place on the frozen
       Molmo/RoboCasa controls, serially. Do not infer success from tool completion.
+      September 24: model-selected floor observation + retry works after repairing
+      shared-VLM conversation contamination (`213b239f`), but Molmo still cannot
+      reach the 0.85 m workspace (nearest reachable 1.027→0.927 m; cells 28→37).
+      Inspect residual floor coverage/depth before increasing retries. RoboCasa's
+      first control failed fresh target verification; neither physical gate passes.
 - [ ] Confirm EQA regression gates before promoting this experiment branch;
       EQA policy and physical manipulation acceptance remain separate checks.
 
