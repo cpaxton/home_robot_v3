@@ -16,10 +16,18 @@ Strike through or move to a PR when done.
 - [ ] Observe/test a lateral Molmo approach. Straight-on cells are observed but
       below clearance; do not fix this by adding blind floor retries or relaxing
       margins. Audit combined obstacle padding and footprint/clearance semantics.
+      Bounded pan tool implemented (`17ce63f1`), 227 tests pass. Assisted lateral
+      pilot adds 65 observed cells and executes a side route, but still fails
+      grasp workspace (nearest 0.976 m; physical false/false). Coverage alone
+      is not acceptance; inspect remaining route/footprint constraints.
 - [ ] Fix RoboCasa grasp retention: floor recovery unlocked manipulation, but
       contact at ~2 mm center error did not retain the can during lift. Preserve
       same-object identity: the post-lift verifier accepted a paper-towel holder
       as `can`, although the near-gripper check correctly stopped placement.
+      Closure replay reproduces ejection before lift; existing loose preset
+      retains can through 12.6 cm lift in sampled-control diagnostic only.
+      Test opt-in `query_geometry_loose_pilot.yaml` end-to-end; no default or
+      contact-physics change. Identity verification remains separately open.
 - [x] Expose pre-grasp navigation rejection reasons to the high-level model;
       add a head-only, fresh-frame floor observation and bounded recovery.
       See [contract and acceptance](docs/experiments/floor_coverage_recovery.md).

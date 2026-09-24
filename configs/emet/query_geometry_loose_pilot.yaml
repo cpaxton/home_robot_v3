@@ -1,0 +1,8 @@
+# Closure-only ablation of the tracked/narrow control. Reuse the robot's existing
+# loose preset; do not change contact physics, alignment, clearance or verification.
+# Sampled-control replay retained a RoboCasa can, but this is not a validated
+# general grasp policy or force-controlled closure. Keep opt-in until room tests pass.
+extends: configs/emet/query_geometry_tracked_narrow_pilot.yaml
+mapping:
+  grasp:
+    loose: true

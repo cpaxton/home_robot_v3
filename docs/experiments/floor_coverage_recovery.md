@@ -161,3 +161,42 @@ All heavy jobs ran serially under the exclusive GPU lock with CPU-safe limits.
 - Diagnose RoboCasa grasp retention from the contact/closure/lift trace, and
   preserve target identity in post-action verification. Neither small-room
   physical manipulation gate has passed.
+
+### Lateral observation and closure diagnosis (September 24 follow-up)
+
+`17ce63f1` exposes optional absolute `pan_rad` on `observe_floor`, bounded to
+[-1, 1] radians. Omitting it preserves measured pan. Invalid values stop before
+motion; measured head pose, fresh-frame and map-update checks remain unchanged.
+No base motion or clearance relaxation is added. 227 focused tests pass.
+
+Molmo job `20260924_111809_f49e11` (`floor-lateral-molmo-20260924`) completed
+in 327 seconds. An explicit diagnostic follow-up requested pan -0.8, then
+another pick/place attempt; this is not an autonomous policy score. The floor
+capture measured pan -0.7994 / tilt -0.9992 and added 65 observed cells. The
+planner found a lateral route toward (-0.8, -0.6), with minimum clearance
+0.2383 m against the unchanged 0.22 m requirement, and the robot moved.
+However, final grasp sampling still failed: 38 reachable cells, nearest target
+0.9763 m versus 0.85 m maximum. Independent physical pick/place is false/false.
+Do not equate more observed cells or a new route with successful approach.
+
+The prior RoboCasa trace identifies excessive closure as a concrete hypothesis:
+before lift, both tips apply roughly 19 N with 5–7 mm simulated penetration;
+the can moves ~2 cm while lift stays at ~0.8684 m. The lift command does **not**
+overwrite the gripper target: full joints are converted to the six manipulation
+joints. Do not attribute this failure to a reopening command.
+
+A private sampled-control checkpoint diagnostic starts at sim time 73.01 s
+from the saved qpos/qvel/act/ctrl/warm-start state in the unchanged frozen scene.
+Linearly replayed controls reproduce failure (maximum rise 0.0103 m; final
+object/gripper separation 0.1858 m). Clamping only gripper closure to the existing
+`GRIPPER_CLOSED_LOOSE` preset gives 0.1263 m rise and 0.00635 m final separation.
+This is approximate sampled replay with evaluator state, **not learned-agent
+evidence**, and supplies no GT to the live agent. Diagnostic script:
+`/tmp/replay_closure_20260924.py`; source trace is the RoboCasa run above.
+
+`query_geometry_loose_pilot.yaml` selects that existing preset through
+`mapping.grasp.loose`, inheriting all tracked/narrow settings. Explicit operation
+arguments override config; absent config preserves the old false default.
+Non-boolean values are rejected. This is a closure-only ablation, not force
+control, a physics change, or a proposed hardware default. Full learned RoboCasa
+validation and same-object post-lift identity remain required.

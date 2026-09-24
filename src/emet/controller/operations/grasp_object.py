@@ -154,7 +154,7 @@ class GraspObjectOperation(ManagedOperation):
         show_servo_gui: bool = True,
         show_point_cloud: bool = False,
         reset_observation: bool = False,
-        grasp_loose: bool = False,
+        grasp_loose: bool | None = None,
         talk: bool = True,
         match_method: str = "class",
         delete_object_after_grasp: bool = True,
@@ -169,7 +169,8 @@ class GraspObjectOperation(ManagedOperation):
             show_servo_gui (bool, optional): Show the servo GUI. Defaults to True.
             show_point_cloud (bool, optional): Show the point cloud. Defaults to False.
             reset_observation (bool, optional): Reset the observation. Defaults to False.
-            grasp_loose (bool, optional): Grasp loosely. Useful for grasping some objects like cups. Defaults to False.
+            grasp_loose (bool, optional): Select the robot's loose closure preset. If omitted,
+                use grasp.loose from parameters (default False). This is not force control.
             talk (bool, optional): Talk as the robot tries to grab stuff. Defaults to True.
             match_method (str, optional): Matching method. Defaults to "class". This is how the policy determines which object mask it should try to grasp.
             delete_object_after_grasp (bool, optional): Delete the object after grasping. Defaults to True.
@@ -186,6 +187,10 @@ class GraspObjectOperation(ManagedOperation):
         self.show_point_cloud = show_point_cloud
         self.reset_observation = reset_observation
         self.delete_object_after_grasp = delete_object_after_grasp
+        if grasp_loose is None:
+            grasp_loose = (self.parameters.get("grasp", {}) or {}).get("loose", False)
+        if not isinstance(grasp_loose, bool):
+            raise ValueError("grasp.loose must be a boolean")
         self.grasp_loose = grasp_loose
         self.talk = talk
         self.match_method = match_method

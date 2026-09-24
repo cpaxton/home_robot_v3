@@ -27,6 +27,23 @@ def operation():
     return op
 
 
+@pytest.mark.parametrize("configured", [None, False, True])
+@pytest.mark.parametrize("explicit", [None, False, True])
+def test_grasp_closure_preset_preserves_default_and_explicit_override(configured, explicit):
+    op = operation()
+    op.parameters = {} if configured is None else {"grasp": {"loose": configured}}
+    op.configure(grasp_loose=explicit)
+    assert op.grasp_loose is (explicit if explicit is not None else bool(configured))
+
+
+@pytest.mark.parametrize("configured", ["false", 0, 1, None])
+def test_grasp_closure_preset_rejects_non_boolean_configuration(configured):
+    op = operation()
+    op.parameters = {"grasp": {"loose": configured}}
+    with pytest.raises(ValueError, match="boolean"):
+        op.configure()
+
+
 @pytest.mark.parametrize("failure_stage", [None, "lift", "carry"])
 def test_query_grasp_verifies_before_and_after_carry_without_forgetting_possible_payload(failure_stage):
     op = operation()
