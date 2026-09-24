@@ -55,7 +55,14 @@ def test_measured_yaw_uses_mujoco_wxyz(yaw):
 
 
 @pytest.mark.parametrize(
-    "options", [["--noslip-iterations", "-1"], ["--modes", "release"], ["--turn-angle", "nan"], ["--turn-angle", "4"]]
+    "options",
+    [
+        ["--noslip-iterations", "-1"],
+        ["--modes", "release"],
+        ["--turn-angle", "nan"],
+        ["--turn-angle", "4"],
+        ["--sample-period", "0"],
+    ],
 )
 def test_invalid_ablation_rejected_before_loading_scene(monkeypatch, options):
     monkeypatch.setattr(
@@ -65,3 +72,27 @@ def test_invalid_ablation_rejected_before_loading_scene(monkeypatch, options):
     with pytest.raises(SystemExit) as exc:
         helpers["main"]()
     assert exc.value.code == 2
+
+
+def test_local_contact_coordinates_include_rotation_and_translation():
+    rotation = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+    np.testing.assert_allclose(helpers["local_point"]([1, 4, 3], [1, 2, 3], rotation), [2, 0, 0])
+
+
+def test_contact_evidence_includes_external_contacts_without_mutating_state():
+    mujoco = pytest.importorskip("mujoco")
+    model = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+      <geom name="floor" type="plane" size="1 1 .1"/>
+      <body name="object" pos="0 0 .09"><freejoint/>
+        <geom name="ball" type="sphere" size=".1" mass="1"/>
+      </body></worldbody></mujoco>""")
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    before = data.qpos.copy()
+    contacts = helpers["object_contacts"](model, data, {model.body("object").id}, set())
+    assert len(contacts) == 1
+    assert not contacts[0]["gripper_contact"]
+    assert contacts[0]["distance_m"] == pytest.approx(-0.01)
+    assert contacts[0]["wrench_contact_frame"][0] > 0
+    np.testing.assert_allclose(contacts[0]["object_center_other_geom"], [0, 0, 0.09])
+    np.testing.assert_array_equal(data.qpos, before)

@@ -48,6 +48,45 @@ def bounded_turn_rate(error, previous, dt, speed, acceleration=0.25):
     return float(previous + np.clip(target - previous, -acceleration * dt, acceleration * dt))
 
 
+def local_point(world_point, origin, rotation):
+    """Convert a world point to a body/geom frame (MuJoCo row-major xmat)."""
+    return np.asarray(rotation).reshape(3, 3).T @ (np.asarray(world_point) - origin)
+
+
+def object_contacts(model, data, targets, fingers):
+    """Read-only contact evidence, including contacts outside the gripper."""
+    import mujoco
+
+    result = []
+    for index, contact in enumerate(data.contact):
+        geoms = [int(g) for g in contact.geom]
+        bodies = [int(model.geom_bodyid[g]) for g in geoms]
+        if not any(body in targets for body in bodies):
+            continue
+        other = 1 if bodies[0] in targets else 0
+        geom = geoms[other]
+        wrench = np.zeros(6)
+        mujoco.mj_contactForce(model, data, index, wrench)
+        result.append(
+            {
+                "geoms": [model.geom(g).name for g in geoms],
+                "other_geom_id": geom,
+                "gripper_contact": bodies[other] in fingers,
+                "distance_m": float(contact.dist),
+                "dimension": int(contact.dim),
+                "friction": contact.friction.tolist(),
+                "contact_frame": contact.frame.tolist(),
+                "wrench_contact_frame": wrench.tolist(),
+                "position_other_geom": local_point(contact.pos, data.geom_xpos[geom], data.geom_xmat[geom]).tolist(),
+                "other_geom_size": model.geom_size[geom].tolist(),
+                "object_center_other_geom": local_point(
+                    data.body(bodies[1 - other]).xpos, data.geom_xpos[geom], data.geom_xmat[geom]
+                ).tolist(),
+            }
+        )
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scene", type=Path, required=True)
@@ -55,6 +94,10 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--time", type=float, required=True)
     parser.add_argument("--duration", type=float, default=35.0)
+    parser.add_argument("--sample-period", type=float, default=0.1)
+    parser.add_argument(
+        "--contact-details", action="store_true", help="Log object contacts and actuator state; read-only."
+    )
     parser.add_argument(
         "--motion-delay",
         type=float,
@@ -82,9 +125,16 @@ def main():
         "--open-control", type=float, help="Explicit open actuator target for release negative control."
     )
     args = parser.parse_args()
-    for value in (args.duration, args.wheel_radius, args.wheel_separation, args.linear_speed, args.angular_speed):
+    for value in (
+        args.duration,
+        args.sample_period,
+        args.wheel_radius,
+        args.wheel_separation,
+        args.linear_speed,
+        args.angular_speed,
+    ):
         if not np.isfinite(value) or value <= 0:
-            parser.error("duration, geometry and speeds must be finite and positive")
+            parser.error("duration, sample period, geometry and speeds must be finite and positive")
     if not np.isfinite(args.time):
         parser.error("time must be finite")
     if not np.isfinite(args.motion_delay) or not 0 <= args.motion_delay < args.duration:
@@ -161,6 +211,7 @@ def main():
         mujoco_version=mujoco.__version__,
         original_noslip_iterations=original_noslip,
         effective_noslip_iterations=int(model.opt.noslip_iterations),
+        actuator_names=[model.actuator(i).name for i in range(model.nu)],
         script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         scene_sha256=hashlib.sha256(args.scene.read_bytes()).hexdigest(),
         trace_sha256=hashlib.sha256(args.trace.read_bytes()).hexdigest(),
@@ -223,7 +274,7 @@ def main():
                 elapsed = data.time - initial["sim_time"]
                 if elapsed < next_sample:
                     continue
-                next_sample = elapsed + 0.1
+                next_sample = elapsed + args.sample_period
                 ee = data.body(ee_id)
                 obj = data.body(target_id)
                 relative = ee.xmat.reshape(3, 3).T @ (obj.xpos - ee.xpos)
@@ -256,6 +307,16 @@ def main():
                     "base_qpos": data.qpos[:7].tolist(),
                     "yaw_travel_rad": yaw_travel,
                 }
+                if args.contact_details:
+                    row.update(
+                        object_contacts=object_contacts(model, data, targets, fingers),
+                        actuator_ctrl=data.ctrl.tolist(),
+                        actuator_length=data.actuator_length.tolist(),
+                        actuator_velocity=data.actuator_velocity.tolist(),
+                        actuator_force=data.actuator_force.tolist(),
+                        object_rotation=obj.xmat.tolist(),
+                        ee_rotation=ee.xmat.tolist(),
+                    )
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
         summary = {
             "mode": mode,
