@@ -75,3 +75,89 @@ Next investigate why one floor view leaves the remaining approach unobserved:
 inspect actual depth/map support and footprint coverage before adding retries
 or enlarging budgets. Do not increase grasp reach or weaken unknown-space checks.
 This establishes usable model-directed recovery, not completed OVMM acceptance.
+
+## Follow-up: coverage versus clearance
+
+The follow-up **corrects the pure missing-floor hypothesis above**. Along the
+straight approach, the next cell at (-0.8, -0.3) is already observed but has
+0.156 m obstacle clearance, below the configured 0.22 m requirement. Sensor
+depth places the counter edge near x=-0.43 m; the 0.1 m grid pads obstacles by
+two cells before A* applies clearance. These safeguards combine to constrain
+the approach. This is not sufficient evidence to weaken either safeguard.
+
+![Observed floor expands the reachable patch, but padded obstacles and clearance still separate the robot from grasp range.](figures/floor-approach-boundary-20260924.svg)
+
+The figure replays the saved `floor-second-observation-20260924` planner maps
+(0.1 m cells, grid origin 512,512). It uses no simulator geometry. Red is the
+**padded map**, not the physical counter outline. Eight observed, center-clear
+cells fall within the grasp-distance annulus beside the counter, but are
+disconnected from the reachable component. Full footprint/path validity at
+those cells has not been established. A lateral observation/route is a useful
+next hypothesis; straight-ahead observations cannot remove an observed obstacle.
+
+### Controlled second observation
+
+The default three-round budget was not increased. The pilot driver accepts an
+optional recorded `SIM_FOLLOWUP_COMMAND` for a second user instruction. Such a
+run is **assisted diagnostic evidence**, not an autonomous policy score.
+
+- `20260924_101650_2846e7` (`a35da35e`): conditional follow-up was not executed;
+  the model emitted malformed farewell JSON. Do not count it as a second view.
+- `20260924_102207_03e568` (`a35da35e`): direct follow-up attempted
+  `observe_floor` with a missing JSON brace. The parser salvaged its inner
+  arguments dictionary and silently treated it as a completed turn.
+- `d5398a75` repairs that failure: malformed tool envelopes return
+  `invalid_tool_call_json`; no action is dispatched, and correction consumes an
+  existing tool round. No string-based action repair or extra budget is added.
+- `20260924_103619_b798fd` (`d5398a75`): the model corrected its malformed reply,
+  executed the second floor observation and retried. Reachable cells stayed
+  **37→37**, nearest reachable target distance stayed **0.927→0.927 m**, and the
+  measured base stayed approximately **(-0.8982, -0.2989)**. Observed-cell count
+  changed 230→222; global observed counts are not a navigation-success metric.
+  Physical pick/place remained false, and execution stopped at the budget.
+
+Each output directory is under `~/runs/emet/`, named after its job (without the
+timestamp ID). Floor captures now retain RGB, depth, calibration, head/base pose,
+and before/after maps in `evidence/navigation/floor_observation_*.{png,npz}`.
+Failed approaches also retain the clearance field and required clearance.
+
+### RoboCasa and EQA rechecks
+
+`20260924_101836_068a73`, source `a35da35e`, uses the unchanged RoboCasa task
+prompt. Five in-range footprint checks initially fail on unknown floor. Qwen
+requests a floor view, adds 51 observed cells, retries and reaches manipulation.
+Thus coverage recovery works in this episode, but **physical pick/place is
+still false**. The independent trace records 37 gripper-contact samples and a
+minimum gripper-center/can-center separation of 0.00215 m. The can shifts about
+10 cm and topples rather than lifting; the gripper subsequently rises about
+13 cm without it. This is a grasp-retention failure, not navigation timeout.
+
+Manual inspection also finds a distinct verifier error: the post-lift crop
+accepts the nearby metal paper-towel holder as `can`. Initial grounding tracked
+the actual red can. The near-gripper check rejects the final result, correctly
+preventing placement, but same-object identity needs to survive manipulation.
+Exact image: `floor-followup-robocasa-20260924/robocasa/hybrid_learned_pick_place/`
+`evidence/grasp_lift_verification/grounding-40195db7d3cf4c79b0d8a01292ecd3db.png`.
+
+EQA job `20260924_101816_1a1131` compares `91871b77` with `a35da35e`, seed 0,
+q12/q16: **both 1/2**, identical answers (q12 B/wrong, q16 C/right), 14 planning
+steps each, all four processes exit zero. Final-source recheck
+`20260924_103655_e82504` on `d5398a75` reproduces those answers and step counts.
+This is a small paired non-regression signal, not a broad EQA acceptance claim.
+All heavy jobs ran serially under the exclusive GPU lock with CPU-safe limits.
+
+### Review and remaining gates
+
+- Standalone conversation isolation is [PR #176](https://github.com/cpaxton/home_robot_v3/pull/176),
+  branch `fix/shared-vlm-conversation`, commit `138ac920`, based on main. Only
+  dialogue isolation and its tests are included: no experimental recovery,
+  navigation, benchmark or threshold changes. 35 targeted tests and hooks pass;
+  no remote CI checks were reported at the time of testing. Main is unchanged.
+- The experiment candidate passes 207 focused tests. Evidence capture and
+  malformed-response handling remain on `experiment/eqa-inspection-progress`.
+- Do not increase straight-ahead recovery retries: the second view plateaued.
+  Test floor coverage along a lateral approach, retaining full footprint/path
+  checks; audit padding/clearance semantics before any safety-margin change.
+- Diagnose RoboCasa grasp retention from the contact/closure/lift trace, and
+  preserve target identity in post-action verification. Neither small-room
+  physical manipulation gate has passed.

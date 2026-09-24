@@ -5,6 +5,21 @@ Strike through or move to a PR when done.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
+- [x] Split shared-VLM conversation isolation into main-based PR #176
+      (`138ac920`); 35 targeted tests pass. Main remains unchanged.
+- [x] Run controlled second floor view and paired EQA slice; the second view
+      does not improve Molmo reachability (37→37 cells, nearest target 0.927 m).
+      EQA q12/q16 remains 1/2 with identical answers and steps before/after,
+      including final parser-repair candidate. Details and map figure below.
+- [x] Reject malformed tool-call envelopes explicitly and allow model correction
+      within the existing round budget (`d5398a75`); 207 focused tests pass.
+- [ ] Observe/test a lateral Molmo approach. Straight-on cells are observed but
+      below clearance; do not fix this by adding blind floor retries or relaxing
+      margins. Audit combined obstacle padding and footprint/clearance semantics.
+- [ ] Fix RoboCasa grasp retention: floor recovery unlocked manipulation, but
+      contact at ~2 mm center error did not retain the can during lift. Preserve
+      same-object identity: the post-lift verifier accepted a paper-towel holder
+      as `can`, although the near-gripper check correctly stopped placement.
 - [x] Expose pre-grasp navigation rejection reasons to the high-level model;
       add a head-only, fresh-frame floor observation and bounded recovery.
       See [contract and acceptance](docs/experiments/floor_coverage_recovery.md).
