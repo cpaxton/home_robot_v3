@@ -13,7 +13,7 @@ import pytest
 helpers = runpy.run_path(str(Path(__file__).resolve().parents[3] / "scripts/diagnose_carry_checkpoint.py"))
 
 
-@pytest.mark.parametrize("t,expected", [(0, 0), (1, 0.5), (2, 1), (5, 1), (7, 0.5), (8, 0), (35, 0)])
+@pytest.mark.parametrize("t,expected", [(-20, 0), (0, 0), (1, 0.5), (2, 1), (5, 1), (7, 0.5), (8, 0), (35, 0)])
 def test_bounded_drive_profile(t, expected):
     assert helpers["drive_envelope"](t) == expected
 

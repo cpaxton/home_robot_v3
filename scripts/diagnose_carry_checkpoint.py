@@ -43,9 +43,15 @@ def main():
     parser.add_argument("--time", type=float, required=True)
     parser.add_argument("--duration", type=float, default=35.0)
     parser.add_argument(
+        "--motion-delay",
+        type=float,
+        default=0.0,
+        help="Stationary seconds before synthetic wheel profiles; recorded controls are unaffected.",
+    )
+    parser.add_argument(
         "--modes",
         nargs="+",
-        choices=["hold", "straight", "turn", "brake", "recorded"],
+        choices=["hold", "straight", "turn", "brake", "recorded", "recorded_wheels"],
         default=["hold", "straight", "turn", "brake", "recorded"],
     )
     parser.add_argument("--linear-speed", type=float, default=0.05)
@@ -60,6 +66,8 @@ def main():
             parser.error("duration, geometry and speeds must be finite and positive")
     if not np.isfinite(args.time):
         parser.error("time must be finite")
+    if not np.isfinite(args.motion_delay) or not 0 <= args.motion_delay < args.duration:
+        parser.error("motion delay must be finite, nonnegative and shorter than duration")
     with args.trace.open() as stream:
         header = json.loads(next(stream))
         rows = [json.loads(line) for line in stream]
@@ -70,7 +78,7 @@ def main():
     initial = rows[index]
     if not initial["gripper_contact"]:
         parser.error("checkpoint must have recorded gripper contact")
-    if "recorded" in args.modes and initial["sim_time"] + args.duration > times[-1]:
+    if any(mode.startswith("recorded") for mode in args.modes) and initial["sim_time"] + args.duration > times[-1]:
         parser.error("recorded profile extends beyond trace; reduce duration")
     import mujoco
 
@@ -143,10 +151,12 @@ def main():
                 elapsed = data.time - initial["sim_time"]
                 if mode == "recorded":
                     data.ctrl[:] = [np.interp(data.time, times, controls[:, i]) for i in range(model.nu)]
+                elif mode == "recorded_wheels":
+                    data.ctrl[ids] = [np.interp(data.time, times, controls[:, i]) for i in ids]
                 else:
                     data.ctrl[ids] = wheel_controls(
                         mode,
-                        elapsed,
+                        elapsed - args.motion_delay,
                         linear_speed=args.linear_speed,
                         angular_speed=args.angular_speed,
                         radius=args.wheel_radius,
