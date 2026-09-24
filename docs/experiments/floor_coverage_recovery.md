@@ -200,3 +200,31 @@ arguments override config; absent config preserves the old false default.
 Non-boolean values are rejected. This is a closure-only ablation, not force
 control, a physics change, or a proposed hardware default. Full learned RoboCasa
 validation and same-object post-lift identity remain required.
+
+Full learned RoboCasa job `20260924_112629_939c18`
+(`closure-loose-robocasa-20260924`, source `1f25ddae`) completed in 308 seconds:
+**independent physical pickup true, placement false**. The original task prompt
+and scene are unchanged; no assisted follow-up was supplied. Qwen selected floor
+recovery, retried, and the log confirms closure to 0.0 rather than -0.3. Both
+lift/carry visual checks passed. At the last private trace sample (124.826 s),
+the actual can remained in gripper contact, 0.02179 m from its center, after
+navigation to the placement area. This supports retention on one live episode;
+it does not establish generality across objects or real robots.
+
+Placement stops on `target absent or ambiguous`, not a dropped object. Saved
+grounding records show inconsistent localization of `countertop_right_of_stove`:
+one abstention cites a missing stove in the current coffee-machine view.
+Inspect relational destination context and final support verification next;
+do not bypass abstention or release onto an unverified surface. The separate
+same-object verifier weakness exposed by the earlier failed pickup remains open.
+Final focused suite: **240 passed**, two existing SWIG warnings. No new EQA
+episode was run for these CHAT/grasp-only changes; prior EQA numbers above are
+not a new acceptance result.
+
+The final Molmo lateral map also shows observed neighboring cells failing
+clearance (0.067–0.176 m). Audit map semantics before further scans: the
+`pad_obstacles: 2` dilation operates on 2D grid cells (0.1 m in this pilot),
+then AStar computes its 0.22 m clearance on that padded map; oriented footprint
+validation also consumes the padded obstacles. The YAML comment's `voxel_size`
+wording is misleading. This is evidence of overlapping conservative margins,
+not permission to remove them without geometry/contact acceptance tests.

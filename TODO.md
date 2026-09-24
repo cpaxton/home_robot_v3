@@ -28,6 +28,11 @@ Strike through or move to a PR when done.
       retains can through 12.6 cm lift in sampled-control diagnostic only.
       Test opt-in `query_geometry_loose_pilot.yaml` end-to-end; no default or
       contact-physics change. Identity verification remains separately open.
+      Live closure-only job `20260924_112629_939c18` now scores pickup true,
+      placement false: actual can retained through carry/navigation; destination
+      `countertop_right_of_stove` rejected as absent/ambiguous. Inspect relational
+      support grounding next. One episode is not cross-object acceptance.
+      Final focused suite: 240 passed. Full small-room gates remain open.
 - [x] Expose pre-grasp navigation rejection reasons to the high-level model;
       add a head-only, fresh-frame floor observation and bounded recovery.
       See [contract and acceptance](docs/experiments/floor_coverage_recovery.md).
