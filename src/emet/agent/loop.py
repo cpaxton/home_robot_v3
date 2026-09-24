@@ -1214,6 +1214,18 @@ def run_agent_with_robot(
 
                 chat_log.log("assistant", message, tool_calls=tool_calls, raw=raw_response, time_s=elapsed)
 
+                if parsed.get("format_error"):
+                    format_error = "Invalid tool-call JSON; no actions from this response were executed."
+                    chat_log.log("tool", format_error)
+                    if _round + 1 < _MAX_TOOL_ROUNDS:
+                        current_input = (
+                            format_error + " Correct the JSON and continue the unfinished task, respecting "
+                            "the latest tool restrictions. Return a complete object with tool_calls (a list) "
+                            "and message (a string). Do not repeat actions that already completed."
+                        )
+                        continue
+                    message = format_error + " Tool-round budget exhausted."
+
                 # No tool calls — this is the final answer
                 if not tool_calls:
                     if message:

@@ -16,6 +16,23 @@ from emet.agent.tools import Tool, get_tools
 from emet.controller.dynamem import look
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"tool_calls": [{"name": "observe_floor", "arguments": {}], "message": ""}',
+        '{"tool_calls": [{"name": "wave", "message": "Goodbye!"}',
+        '```json\n{"tool_calls": [{"name": "observe_floor", "arguments": {}]\n```',
+        '{"tool_calls": "observe_floor", "message": ""}',
+    ],
+)
+def test_malformed_tool_envelope_is_an_error_not_a_completed_turn(raw):
+    from emet.agent.prompt import parse_tool_calls_response
+
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == []
+    assert result["format_error"] == "invalid_tool_call_json"
+
+
 @pytest.mark.parametrize("raises", [False, True])
 def test_shared_perception_does_not_replace_agent_conversation(raises):
     from emet.llms.base import AbstractLLMClient

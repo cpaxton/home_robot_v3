@@ -219,6 +219,15 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
         if data is not None:
             break
 
+    # A broken outer tool-call envelope can contain a perfectly valid inner
+    # arguments dict. Do not mistake that salvaged dict for a final response.
+    if (
+        any(blob.lstrip().startswith("{") for blob in candidate_sources)
+        and '"tool_calls"' in response
+        and (data is None or "tool_calls" not in data or not isinstance(data["tool_calls"], list))
+    ):
+        return {"tool_calls": [], "message": "", "format_error": "invalid_tool_call_json"}
+
     tool_calls: list[dict[str, Any]] = []
     message = ""
     current_room: str | None = None
