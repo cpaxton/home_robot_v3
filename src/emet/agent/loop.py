@@ -198,8 +198,8 @@ def _dispatch_tool_calls(
 
     Returns (continue_running, list_of_result_strings, failed).
     continue_running is False if quit was requested.
-    A failed tool stops this batch and further execution for this user turn,
-    but does not terminate the interactive session.
+    A failed tool stops this batch, but does not terminate the interactive
+    session. An explicitly permitted observation recovery is returned separately.
     """
     results: list[str] = []
     failed = False
@@ -1313,6 +1313,7 @@ def run_agent_with_robot(
                         "Later calls in the failed batch were discarded. Only observe_floor is allowed next, "
                         "or stop and report the failure. If that observation succeeds, you may replan/retry "
                         "the unfinished task on the following round. Never infer clearance from the error alone."
+                        ' Respond with JSON: {"tool_calls": [...], "message": "..."}; a prose plan does not execute a tool.'
                     )
                     continue
                 current_input = followup + (

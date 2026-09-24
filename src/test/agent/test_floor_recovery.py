@@ -15,6 +15,15 @@ from emet.agent.tools import Tool, get_tools
 from emet.controller.dynamem import look
 
 
+def test_system_prompt_allows_only_explicit_observation_recovery():
+    from emet.agent.prompt import build_agent_system_prompt
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Robot")
+    assert "explicitly lists recovery_tools" in prompt
+    assert "uncertain payload" in prompt
+    assert "without claiming success or attempting recovery" not in prompt
+
+
 @pytest.mark.parametrize("status", ["insufficient_floor_coverage", "no_reachable_workspace", "workspace_obstructed"])
 @pytest.mark.parametrize("payload_state", ["empty", "unknown"])
 def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_state):

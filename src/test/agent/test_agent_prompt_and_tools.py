@@ -237,7 +237,8 @@ def test_prompt_uses_one_bounded_observation_action_loop():
     prompt = build_agent_system_prompt()
     assert "All tools return results for the next round" in prompt
     assert "continue only unfinished parts" in prompt
-    assert "Tool failure stops execution for this turn" in prompt
+    assert "Tool failure discards the remaining calls in its batch" in prompt
+    assert "Otherwise stop and report the failure" in prompt
     assert "Do not repeat completed actions" in prompt
     assert "the turn ends after the action" not in prompt
     assert "take_picture alone" in prompt
