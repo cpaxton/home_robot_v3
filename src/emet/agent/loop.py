@@ -22,6 +22,7 @@ import sys
 import threading
 import timeit
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Any
 
@@ -54,7 +55,7 @@ from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.core import get_parameters
 from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
-from emet.llms.base import AbstractVLLMClient
+from emet.llms.base import AbstractLLMClient, AbstractVLLMClient
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -1272,15 +1273,18 @@ def run_agent_with_robot(
 
                 # Execute tool calls
                 tools_t0 = timeit.default_timer()
-                ok, results, has_info = _dispatch_tool_calls(
-                    tool_calls,
-                    tools_by_name,
-                    executor,
-                    chat_log=chat_log,
-                    debug=debug_llm,
-                    verbose_tools=verbose_tools,
-                    on_tool_start=_on_tool_start if show_thinking_status else None,
-                )
+                # Tool perception may reset the shared VLM's dialogue. Share
+                # weights, not the captioner's conversation with the agent.
+                with llm_client.preserve_conversation() if isinstance(llm_client, AbstractLLMClient) else nullcontext():
+                    ok, results, has_info = _dispatch_tool_calls(
+                        tool_calls,
+                        tools_by_name,
+                        executor,
+                        chat_log=chat_log,
+                        debug=debug_llm,
+                        verbose_tools=verbose_tools,
+                        on_tool_start=_on_tool_start if show_thinking_status else None,
+                    )
                 tools_elapsed = timeit.default_timer() - tools_t0
                 print_terminal(
                     f"tools done in {tools_elapsed:.1f}s ({', '.join(tool_names)})",
