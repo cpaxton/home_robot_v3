@@ -75,6 +75,40 @@ Before promotion, add a positive view of the intended right counter and rerun
 the frozen live task. The original physics versus NoSlip10/1ms distinction
 remains in force.
 
+### Query-independent relation replay (September 25)
+
+Job `20260925_105133_e602b8`, source `7bf6666c`, completed on the same eight
+cases, Qwen3-VL-8B int4 and fixed measured candidates. One query-blind visual
+description per view was reused for all four requests; a second text-only call
+selected from those descriptions. The direct placement-context control was
+rerun in the same job. No runtime agent changes or live task were made.
+Artifacts, full prompts/responses, candidate panels, input hashes, manifest and
+the exact diagnostic driver are in
+`~/runs/emet/placement-blind-relations-20260925/`.
+
+| Variant | Correct selections/abstentions | Wrong-side negatives | Missing-anchor negatives |
+| --- | --- | --- | --- |
+| Direct placement context, rerun | 6/8 | 1/2 | 1/2 |
+| Query-blind description then selection | 7/8 | 1/2 | 2/2 |
+
+Both variants accept all four positive requests, but the nominal score hides
+inconsistent reasoning. On the earlier frame, the blind description already
+misstates the countertop as right of the stove and invents a paper towel from
+its texture. The selector then accepts the left-of-stove request despite that
+opposite recorded relation, and also accepts right-of-stove. Thus this is not
+only target-conditioned visual agreement: the blind visual stage is wrong,
+and the text selection stage does not consistently obey its evidence. A
+nominally correct selection can have an unsupported rationale.
+
+**Do not promote this two-stage variant.** It adds inference without clearing
+the failed negative gate. Direct replay also changed from the earlier 7/8 to
+6/8; these tiny diagnostic runs are not a robust accuracy estimate. Runtime
+remains on the existing placement-purpose repair, with live acceptance still
+blocked. Next isolate the visual relation on a single full-frame image and
+test explicit candidate/anchor localization, rather than adding more semantic
+verification stages. Include an actual positive right-counter view before
+retesting live. No geometry, clearance or release threshold was relaxed.
+
 ## Starting point
 
 The September 23 small-room controls both stopped before grasping. Molmo had

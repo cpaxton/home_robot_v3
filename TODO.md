@@ -72,6 +72,12 @@ Strike through or move to a PR when done.
       versus independent relation description; retain both-direction and
       missing-anchor controls and add a positive intended-counter view. This
       tests fixed-candidate semantics, not end-to-end placement acceptance.
+      Query-blind relation replay `20260925_105133_e602b8` also leaves the
+      wrong-side error (7/8; direct rerun 6/8). Blind visual descriptions already
+      reverse the relation; text selection additionally contradicts its own
+      evidence. Do not add this two-stage variant to runtime. Next isolate
+      single-frame relation/localization and capture a true right-counter
+      positive before live promotion. Detailed evidence in floor-coverage report.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can
