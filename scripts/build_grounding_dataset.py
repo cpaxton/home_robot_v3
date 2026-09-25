@@ -35,6 +35,7 @@ def capture(model, data, camera, height, width):
     option = mujoco.MjvOption()
     # Visual geometry only; exclude conventional collision-only groups 3..5.
     option.geomgroup[:] = [1, 1, 1, 0, 0, 0]
+    option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
     with mujoco.Renderer(model, height=height, width=width) as renderer:
         renderer.update_scene(data, camera=camera, scene_option=option)
         rgb = renderer.render().copy()
