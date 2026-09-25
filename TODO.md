@@ -78,6 +78,18 @@ Strike through or move to a PR when done.
       evidence. Do not add this two-stage variant to runtime. Next isolate
       single-frame relation/localization and capture a true right-counter
       positive before live promotion. Detailed evidence in floor-coverage report.
+      Paired full-image localization job `20260925_112141_1c6125` now compares
+      direct relational boxes against independent object/anchor boxes plus a
+      fixed image-space check: five views, three queries, three repeats. Clean
+      static captures include the actual right counter. 429 focused tests pass.
+      Preserve negative-case gates; see the report for staged matched RoboCasa,
+      EQA and Molmo acceptance pairs. No runtime box-ordering policy yet.
+      Completed: direct 36/45 (positives 21/24, negatives 15/21), independent
+      boxes 33/45 (positives 12/24, negatives 21/21). Neither clears promotion:
+      independent boxes merge both counters and stove; direct grounding still
+      reverses relations. Keep paired results and visual failures. Next test
+      separate measured support candidates with independently localized anchors
+      on the same frozen views before runtime integration or live promotion.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can

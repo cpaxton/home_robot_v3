@@ -23,7 +23,7 @@ was not refreshed by this diagnostic batch. Conversation isolation was already
 split into main-based PR #176; keep other independently verified repairs scoped
 for review rather than merge the entire stack on checkpoint evidence. No main
 push or production physics change was made here. Current focused suite:
-**420 passed** on the placement-purpose repair. Detailed source revisions,
+**429 passed** including the paired localization audit. Detailed source revisions,
 jobs, results and figures follow.
 
 ### Placement-purpose repair (source `7a9a29cc`)
@@ -108,6 +108,102 @@ blocked. Next isolate the visual relation on a single full-frame image and
 test explicit candidate/anchor localization, rather than adding more semantic
 verification stages. Include an actual positive right-counter view before
 retesting live. No geometry, clearance or release threshold was relaxed.
+
+### Frozen paired acceptance sequence (September 25)
+
+The immediate comparison isolates perception, not the full agent. Run
+`scripts/audit_placement_relations.py` with a frozen manifest and fresh output
+directory through the serial CPU-safe GPU job runner. Source `161d95cc`, job
+`20260925_112141_1c6125`, artifacts `~/runs/emet/placement-paired-20260925/`.
+
+- Five full-image views: the two saved failures and three static, oracle-aimed
+  RoboCasa camera views showing both sides of the stove. Three repeated calls
+  per view/query, not three independent environments or episode seeds.
+- Three requests per view: countertop left of stove, right of stove, and right
+  of refrigerator. The refrigerator is absent in the old views and partially
+  visible at the far right in some new views; no countertop is to its right.
+- Control: direct full-image relational bounding box. Candidate: independently
+  locate all countertop top surfaces, stove and refrigerator, then apply fixed
+  image-coordinate center ordering with a 50/1000 margin. A missing/ambiguous
+  anchor or multiple qualifying counters produces abstention. Neither variant
+  receives evaluator labels or simulator IDs. This is not the previous
+  multi-panel measured-surface verifier; scores cannot be pooled across them.
+- Reference top-surface boxes manually frozen before inference. Positive box
+  agreement requires IoU >= 0.3; negatives require abstention. Malformed outputs
+  are failures, not successful abstentions. Save all boxes, prompts, responses,
+  image hashes and overlays. These loose 2D annotations do not establish safe
+  3D support or a successful placement.
+- Promotion gate: no wrong-side/missing-anchor false acceptance in the repeated
+  diagnostic, positive localization at least as good as the paired control,
+  and manual overlay review. Do not adjust thresholds after seeing outcomes.
+  Any failure keeps the candidate offline; investigate the earliest bad box or
+  unsupported relation rather than add generic retries.
+
+Capture preflight rejected one outside-wall camera attempt and one attempt
+with rangefinder debug overlays. Both are retained under `inputs`/`inputs-v2`;
+only inspected clean `inputs-v3` images enter inference. The capture helper now
+disables rangefinder visualization. No physics, actuation or robot navigation
+is performed in these free-camera captures.
+
+After this gate, the bounded *agent* pairs should be staged as follows. Freeze
+an implementation SHA before starting; never edit a running checkout. Use the
+same local Qwen configuration, instructions, initial state, scene hashes,
+budgets and evaluator for each pair, with fresh process/evidence directories.
+
+| Stage | Control / candidate | Minimum bounded evidence | Response to failure |
+| --- | --- | --- | --- |
+| RoboCasa learned pick/carry/place | Pre-placement-purpose `1a597378` / accepted runtime repair SHA, if one is ready | Two matched repeats of the frozen visible-can case using the **same explicit NoSlip10/1ms derivative**; physical pick, retention, correct support, release, runtime and tool traces | Stop at first failed stage; do not count wrong-target placement or agent text as success |
+| EQA non-regression | Same frozen code pair, identical config and question IDs | q12/q16 repeated twice per side, paired answers, observations, motion/coverage and forced-answer status | Investigate paired trace differences; tiny slice is a smoke gate, not a paper accuracy claim |
+| Molmo small-room manipulation | Same frozen code pair and previously audited scene/config | Two matched repeats; physical success and workspace/clearance rejection reasons | Keep the known 0.976 m versus 0.85 m workspace issue visible; no threshold relaxation |
+
+The staged NoSlip pair isolates policy effects within that declared diagnostic
+physics. It does not clear original/default-physics robustness, broader EQA,
+possession-loss negatives, TAMP or Habitat-OVMM. Those remain separately tracked.
+No full sweep, real-robot run or main push is part of this batch.
+
+#### Completed paired localization results
+
+The job completed all 90 decisions (45 per approach), with no malformed
+responses. Same Qwen3-VL-8B int4, full images, max 512 output tokens, reference
+labels and scorer throughout. Results are repeated diagnostic decisions, **not
+45 independent scenes** or end-to-end task success.
+
+| Approach | Total | Positive localization | Negative abstention |
+| --- | --- | --- | --- |
+| Direct full-image relational box | 36/45 | 21/24 | 15/21 |
+| Independent entity boxes + fixed center ordering | 33/45 | 12/24 | 21/21 |
+
+Failure patterns repeated across all three calls:
+
+- Direct grounding selects the wrong-side counter in the earlier saved view
+  (3/3), and incorrectly selects a counter for right-of-refrigerator in the
+  new oblique-left view (3/3). Both variants poorly localize the left countertop
+  in the new oblique-right view (3/3 each).
+- Independent localization merges both counters and the stove into one wide
+  countertop box in the front and oblique-left views. This misses the front
+  left target and both oblique-left targets (nine additional positive failures).
+  A front right selection can still pass loose bbox IoU despite containing
+  the stove; manual overlay review therefore fails even some nominal passes.
+- The original saved-view wrong-side error disappears under coordinate
+  ordering, but the new multi-instance localization errors offset that gain.
+  This separates relation-reasoning failure from candidate-localization failure;
+  it does not establish a safe general placement method.
+
+**Neither approach clears promotion.** No runtime box-ordering policy or live
+RoboCasa rerun was introduced. Preserve the fixed threshold and both scores.
+Next bounded diagnostic: retain separately measured surface candidates and
+localize the anchor independently, instead of asking Qwen to enumerate all
+countertops in one box response. Compare on these exact inputs, with no added
+retry budget, before any runtime integration. Identity validation and actual
+depth/clearance checks are still required; 2D ordering alone is insufficient.
+
+Visual audit files (under the artifact root's `results/`):
+`0-front/localized.png`, `0-oblique_left/localized.png`,
+`0-oblique_right/localized.png`, `0-saved_early/localized.png`.
+Each case also retains prediction-versus-reference overlays, localization JSON,
+raw prompts/responses, hashes and repeated outcomes in `results.json`. The
+three new views positively cover the intended right countertop, unlike the
+earlier eight-case replay.
 
 ## Starting point
 
