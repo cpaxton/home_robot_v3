@@ -183,6 +183,7 @@ def test_payload_failure_stops_place_batch_without_forgetting_possible_payload(m
     assert task._held_query_instance is held
     task._place.assert_not_called()
     task._find.assert_called_once()
+    assert task._find.call_args.kwargs == {"grounding_purpose": "placement_surface"}
 
 
 @pytest.mark.parametrize("released", [False, True])

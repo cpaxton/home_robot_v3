@@ -1,6 +1,7 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
+import json
 from unittest.mock import Mock
 
 import numpy as np
@@ -32,6 +33,49 @@ def scene():
     depth = np.full((60, 80), 2.0)
     depth[15:45, 20:50] = 1.0
     return np.zeros((60, 80, 3), dtype=np.uint8), depth
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_placement_purpose_preserves_context_and_semantic_abstention(accepted):
+    rgb, depth = scene()
+    client = Mock(return_value=json.dumps({"selected_id": 0 if accepted else None, "target_unambiguous": accepted}))
+    _, mask, audit = select_supported_region(
+        rgb,
+        depth,
+        "countertop_right_of_stove",
+        "countertop_right_of_stove",
+        client=client,
+        min_depth=0,
+        max_depth=4,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones_like(depth, dtype=bool)],
+        presentation="support_only",
+        purpose="placement_surface",
+    )
+    prompt = audit["surface_selection"]["prompt"]
+    assert "Countertops" in prompt and "wrong side" in prompt
+    assert "If it shows support furniture" not in prompt
+    assert audit["surface_selection"]["image_order"][0] == "rgb_file"
+    assert audit["surface_selection"]["presentation"] == "context"
+    assert audit["purpose"] == "placement_surface"
+    assert audit["valid"] is accepted
+    assert np.any(mask >= 0) == accepted
+
+
+def test_invalid_grounding_purpose_is_rejected():
+    rgb, depth = scene()
+    with pytest.raises(ValueError, match="purpose"):
+        select_supported_region(
+            rgb,
+            depth,
+            "cup",
+            "cup",
+            client=Mock(),
+            min_depth=0,
+            max_depth=4,
+            strategy="depth_candidates",
+            purpose="anything",
+        )
 
 
 def test_unrelated_fragmented_proposal_reports_budget_failure_before_semantics():

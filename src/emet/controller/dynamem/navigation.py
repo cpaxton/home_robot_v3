@@ -199,6 +199,8 @@ def _record_nav_plan_fields(self, **fields: Any) -> None:
 def execute_action(
     self,
     text: str,
+    *,
+    grounding_purpose="object",
 ) -> tuple[bool | None, np.ndarray | None]:
     """
     This function is used to navigate the robot give text query.
@@ -222,7 +224,7 @@ def execute_action(
         if text and getattr(self, "query_driven_memory", False):
             # Search visible views before trusting a weak voxel anchor. This
             # grounds an approach target, not arrival or manipulation success.
-            self.verify_query_arrival(text)
+            self.verify_query_arrival(text, purpose=grounding_purpose)
         else:
             self.look_around()
         self.robot.look_front()
@@ -303,7 +305,9 @@ def execute_action(
                     return None, None
 
             if text and getattr(self, "query_driven_memory", False):
-                point = self.verify_query_arrival(text, candidate_handle=plan_meta.get("query_candidate_handle"))
+                point = self.verify_query_arrival(
+                    text, candidate_handle=plan_meta.get("query_candidate_handle"), purpose=grounding_purpose
+                )
                 if point is None:
                     handle = plan_meta.get("query_candidate_handle")
                     if handle is not None:
@@ -794,7 +798,7 @@ def process_text(self, text, start_pose):
     return traj
 
 
-def navigate(self, text, max_step=10):
+def navigate(self, text, max_step=10, *, grounding_purpose="object"):
     """
     The robot calls this function to navigate to the object.
     It will call execute_action function until it is ready for manipulation
@@ -806,7 +810,7 @@ def navigate(self, text, max_step=10):
     while not finished and step < max_step:
         logger.debug("navigate step %s/%s", step, max_step)
         step += 1
-        finished, end_point = self.execute_action(text)
+        finished, end_point = self.execute_action(text, grounding_purpose=grounding_purpose)
         if finished is None:
             logger.warning("Navigation failed (blocked or no progress).")
             return None

@@ -74,6 +74,23 @@ def test_missing_client_is_not_semantic_absence():
         select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "mug", "mug", client=None)
 
 
+def test_placement_box_prompt_permits_requested_support_and_requires_relation():
+    from emet.memory.vlm_region_grounding import select_vlm_region
+
+    client = Mock(return_value='{"verified":false}')
+    _, audit = select_vlm_region(
+        np.zeros((8, 8, 3), dtype=np.uint8),
+        "countertop right of stove",
+        "countertop right of stove",
+        client=client,
+        box_only=True,
+        purpose="placement_surface",
+    )
+    assert "Support furniture" in audit["prompt"]
+    assert "wrong side" in audit["prompt"]
+    assert "not a hole, occluder or support furniture" not in audit["prompt"]
+
+
 def test_grounding_prompt_locates_query_only_not_question():
     from emet.memory.vlm_region_grounding import select_vlm_region
 

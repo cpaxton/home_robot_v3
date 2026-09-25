@@ -157,6 +157,25 @@ def support_selection_prompt(query):
     )
 
 
+def placement_selection_prompt(query):
+    """Select a receptacle in context; geometric placement safety is separate."""
+    return (
+        f"Select the measured placement surface or receptacle described by {query!r}. "
+        "Image 1 is the full reference scene, NOT a candidate. Each subsequent pair shows "
+        "one numbered candidate outlined in context, then its isolated measured pixels. "
+        "Countertops, tables, shelves, trays and receptacles are valid targets when requested. "
+        "Use the full scene to verify identity AND spatial relationships; use the isolated "
+        "pixels to verify that the selected geometry belongs to that target, not a nearby "
+        "object, appliance, occluder or mixed surface. Black pixels are missing data. "
+        "For unqualified left/right use the full reference image, not the candidate crop. "
+        "Honor an explicitly requested different reference frame only if the visual evidence "
+        "establishes it. If an anchor is missing, the frame is ambiguous, or the relation "
+        "is not visible, abstain; do not invent the missing context. A visible countertop "
+        "on the wrong side is not a match. Selection does not establish clearance or reachability. "
+        'Return {"selected_id":integer or null,"target_unambiguous":boolean,"reason":"short explanation"}.'
+    )
+
+
 def surface_candidate_panels(rgb, regions):
     """Enlarged candidate panels; retain RGB only on measured support.
 

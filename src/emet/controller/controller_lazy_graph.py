@@ -138,7 +138,7 @@ class LazyGraphController(DynagraphController):
         )
         return detected, detections
 
-    def ground_query_candidate(self, handle, *, after_observation: int):
+    def ground_query_candidate(self, handle, *, after_observation: int, purpose="object"):
         """Promote only from admitted, object-specific geometry in a new frame."""
         record = self.query_candidates.records[handle]
         self._grounded_query_target = None
@@ -146,9 +146,11 @@ class LazyGraphController(DynagraphController):
         record.invalidation_reason = "reacquisition pending"
         if len(self.voxel_map.observations) <= max(after_observation, record.source_obs_id):
             return {"ok": False, "reason": "fresh observation required"}
-        return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
+        return self._ground_query_frame(
+            record.query, record.target_description, record.source_obs_id, handle=handle, purpose=purpose
+        )
 
-    def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str):
+    def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str, purpose="object"):
         """Localize a target in the current captured view without a retrieval prerequisite.
 
         Historical views remain evidence, but cannot authorize current geometry.
@@ -160,9 +162,9 @@ class LazyGraphController(DynagraphController):
         query = " ".join(query.lower().split())
         if not query or not target_description.strip():
             return {"ok": False, "reason": "target description required"}
-        return self._ground_query_frame(query, target_description, source_obs_id)
+        return self._ground_query_frame(query, target_description, source_obs_id, purpose=purpose)
 
-    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None):
+    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None, purpose="object"):
         """Shared mask, semantic verification and instance-admission boundary."""
         from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
         from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
@@ -192,7 +194,9 @@ class LazyGraphController(DynagraphController):
         client = getattr(self.graph_memory, "eqa_client", None)
         if backend == "vlm":
             try:
-                frame, detections, matching_ids, verification = self.ground_vlm_frame(frame, query, target_description)
+                frame, detections, matching_ids, verification = self.ground_vlm_frame(
+                    frame, query, target_description, purpose=purpose
+                )
             except ValueError as exc:
                 return {"ok": False, "reason": str(exc)}
         elif backend == "yoloe":
@@ -314,7 +318,7 @@ class LazyGraphController(DynagraphController):
         )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
 
-    def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None):
+    def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None, purpose="object"):
         """Shared head/wrist perception without admitting a new memory instance."""
         from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
         from emet.memory.vlm_region_grounding import ground_vlm_region
@@ -376,6 +380,7 @@ class LazyGraphController(DynagraphController):
         if "whole_object_box" in config:
             options["whole_object"] = config["whole_object_box"]
         options.update(
+            purpose=purpose,
             client=client,
             min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
             max_depth=self.voxel_map.max_depth,
@@ -402,7 +407,7 @@ class LazyGraphController(DynagraphController):
             result[3]["tracking_proposal"] = tracking_proposal
         return result
 
-    def prepare_query_target(self, query: str):
+    def prepare_query_target(self, query: str, *, purpose="object"):
         """Reacquire a unique query reference immediately before manipulation."""
         query = " ".join(query.lower().split())
         records = [
@@ -425,7 +430,7 @@ class LazyGraphController(DynagraphController):
             if len(self.voxel_map.observations) <= before:
                 raise ValueError("fresh observation required")
             result = self.ground_query_view(
-                query, source_obs_id=len(self.voxel_map.observations), target_description=query
+                query, source_obs_id=len(self.voxel_map.observations), target_description=query, purpose=purpose
             )
             if not result["ok"]:
                 raise ValueError(result["reason"])
@@ -434,13 +439,13 @@ class LazyGraphController(DynagraphController):
             raise ValueError("Manipulation requires a unique query candidate")
         before = len(self.voxel_map.observations)
         self.update(full_perception=True)
-        result = self.ground_query_candidate(records[0].handle, after_observation=before)
+        result = self.ground_query_candidate(records[0].handle, after_observation=before, purpose=purpose)
         if not result["ok"]:
             raise ValueError(result["reason"])
         records[0].require_grounding(len(self.voxel_map.observations))
         return self._grounded_query_target
 
-    def verify_query_arrival(self, query: str, *, candidate_handle=None):
+    def verify_query_arrival(self, query: str, *, candidate_handle=None, purpose="object"):
         """A reached search waypoint is not success until a fresh view grounds it."""
         before = len(self.voxel_map.observations)
         result = {"ok": False, "reason": "fresh observation required"}
@@ -451,12 +456,14 @@ class LazyGraphController(DynagraphController):
             if revision <= before:
                 return False
             if candidate_handle is None:
-                result = self.ground_query_view(query, source_obs_id=revision, target_description=query)
+                result = self.ground_query_view(
+                    query, source_obs_id=revision, target_description=query, purpose=purpose
+                )
             else:
                 record = self.query_candidates.records[candidate_handle]
                 if record.query != " ".join(query.lower().split()):
                     raise ValueError("Search candidate does not match arrival query")
-                result = self.ground_query_candidate(candidate_handle, after_observation=before)
+                result = self.ground_query_candidate(candidate_handle, after_observation=before, purpose=purpose)
             before = revision
             return bool(result["ok"])
 
@@ -475,8 +482,8 @@ class LazyGraphController(DynagraphController):
             return np.asarray(result["xyz"], dtype=float)
         return None
 
-    def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
-        status, object_xyz = super().execute_action(text)
+    def execute_action(self, text: str, *, grounding_purpose="object") -> tuple[bool | None, np.ndarray | None]:
+        status, object_xyz = super().execute_action(text, grounding_purpose=grounding_purpose)
         if status is True and self.graph_memory is not None and not self.query_driven_memory:
             obs = self.robot.get_observation()
             plan = getattr(self, "_last_nav_plan", None) or {}

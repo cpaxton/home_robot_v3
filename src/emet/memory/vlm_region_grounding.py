@@ -83,7 +83,9 @@ def _grounding_target(query, description):
     return target
 
 
-def select_vlm_region(rgb, query, description, *, client, correction=None, box_only=False, whole_object=False):
+def select_vlm_region(
+    rgb, query, description, *, client, correction=None, box_only=False, whole_object=False, purpose="object"
+):
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
     target = _grounding_target(query, description)
@@ -111,6 +113,19 @@ def select_vlm_region(rgb, query, description, *, client, correction=None, box_o
             " Enclose the ENTIRE visible extent of the requested object, including its "
             "top, bottom, left and right edges. Do not return only one face or a small surface patch."
         )
+    if purpose == "placement_surface":
+        prompt = (
+            f"Locate the visible placement surface or receptacle {target!r}. "
+            "Support furniture such as a countertop is a valid target when requested. "
+            "Verify the requested relation in this full image. Unqualified left/right is "
+            "image-relative; if a different stated reference frame or the anchor cannot be "
+            "established visually, abstain. Do not select a surface on the wrong side. "
+            "Coordinates are integers normalized to 0..1000, x then y. "
+            'Return {"verified":true,"box":[x_min,y_min,x_max,y_max],"point":[x,y],"reason":"..."} '
+            'with the point on the visible target, or {"verified":false,"reason":"..."}.'
+        )
+    elif purpose != "object":
+        raise ValueError("Unknown grounding purpose")
     images = [Image.fromarray(rgb)]
     if correction is not None:
         prompt += (
@@ -123,6 +138,7 @@ def select_vlm_region(rgb, query, description, *, client, correction=None, box_o
     parsed = _parse_json_object(raw)
     verification = {
         "source": "vlm_region",
+        "purpose": purpose,
         "prompt": prompt,
         "system_prompt": system,
         "raw": raw,
@@ -147,6 +163,7 @@ def select_supported_region(
     whole_object=False,
     proposal_masks=None,
     candidate_filter=None,
+    purpose="object",
 ):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
@@ -163,6 +180,7 @@ def select_supported_region(
             whole_object=whole_object,
             proposal_masks=proposal_masks,
             candidate_filter=candidate_filter,
+            purpose=purpose,
         )
     if candidate_filter is not None:
         raise ValueError("Candidate filtering requires depth_candidates strategy")
@@ -174,7 +192,9 @@ def select_supported_region(
     attempts = []
     mask = np.full(depth.shape, -1, dtype=np.int32)
     for _ in range(2):
-        parsed, audit = select_vlm_region(rgb, query, description, client=client, correction=correction)
+        parsed, audit = select_vlm_region(
+            rgb, query, description, client=client, correction=correction, purpose=purpose
+        )
         attempts.append({**audit, "selection": parsed})
         if parsed.get("verified") is not True:
             audit["reason"] = "VLM abstained or returned invalid output"
@@ -211,6 +231,7 @@ def select_candidate_surface(
     presentation="isolated",
     whole_object=False,
     candidate_filter=None,
+    purpose="object",
 ):
     from emet.memory.surface_candidates import (
         SurfaceCandidateOverflow,
@@ -222,13 +243,17 @@ def select_candidate_surface(
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
     target = _grounding_target(query, description)
+    if purpose not in ("object", "placement_surface"):
+        raise ValueError("Unknown grounding purpose")
+    if purpose == "placement_surface":
+        presentation = "context"
     if presentation not in ("isolated", "context", "support_only"):
         raise ValueError("Unknown surface presentation")
     if segmenter is not None and proposal_masks is not None:
         raise ValueError("Provide a segmenter or cached masks, not both")
     if proposal_masks is None:
         parsed, audit = select_vlm_region(
-            rgb, query, description, client=client, box_only=True, whole_object=whole_object
+            rgb, query, description, client=client, box_only=True, whole_object=whole_object, purpose=purpose
         )
     else:
         # External masks propose support, never semantic acceptance. The same
@@ -236,7 +261,7 @@ def select_candidate_surface(
         parsed = {"verified": True, "box": [0, 0, 1000, 1000], "reason": "unverified external proposals"}
         audit = {"source": "external_mask_proposals", "valid": False}
     mask = np.full(depth.shape, -1, dtype=np.int32)
-    audit.update(strategy="depth_candidates", valid=False)
+    audit.update(strategy="depth_candidates", valid=False, purpose=purpose)
     if parsed.get("verified") is not True:
         audit["reason"] = "VLM abstained or returned invalid output"
         return parsed, mask, audit
@@ -332,6 +357,10 @@ def select_candidate_surface(
         system = "Inspect visual evidence carefully. Return JSON only."
         images = panels
         image_order = [f"surface_candidate_{r['id']}_rgb_file" for r in regions]
+    if purpose == "placement_surface":
+        from emet.memory.surface_candidates import placement_selection_prompt
+
+        prompt = placement_selection_prompt(target)
     raw = _call_eqa_client(
         client,
         [prompt, *images],
@@ -375,6 +404,7 @@ def ground_vlm_region(
     whole_object=False,
     proposal_masks=None,
     candidate_filter=None,
+    purpose="object",
 ):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
@@ -400,6 +430,7 @@ def ground_vlm_region(
         whole_object=whole_object,
         proposal_masks=proposal_masks,
         candidate_filter=candidate_filter,
+        purpose=purpose,
     )
     if not verification["valid"]:
         return detected, [], [], verification

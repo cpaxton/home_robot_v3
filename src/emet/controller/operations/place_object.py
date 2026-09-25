@@ -91,7 +91,7 @@ class PlaceObjectOperation(ManagedOperation):
 
         self._placement_reference = None
         self._support_height_reference = None
-        target = self.agent.prepare_query_target(query)
+        target = self.agent.prepare_query_target(query, purpose="placement_surface")
         start = np.asarray(self.robot.get_base_pose_world(), dtype=float)
         bounds = (float(self.agent.manipulation_radius), float(self.agent.manipulation_radius) + self.place_step_size)
         if not np.isfinite(target.xyz).all() or not np.isfinite(start).all():
@@ -114,7 +114,7 @@ class PlaceObjectOperation(ManagedOperation):
             ):
                 raise RuntimeError("Measured placement workspace is still too far away")
         orient_arm_toward_target(self.robot, target.xyz)
-        fresh = self.agent.prepare_query_target(query)
+        fresh = self.agent.prepare_query_target(query, purpose="placement_surface")
         # Reacquisition may show only a different part of a large support.
         # Verify association using the existing whole-mask geometry gate, but
         # do not silently replace the point we just navigated toward. This

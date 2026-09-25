@@ -13,6 +13,16 @@ import pytest
 from emet.controller.dynamem.navigation import execute_action
 
 
+def test_lazy_wrapper_forwards_explicit_grounding_purpose(monkeypatch):
+    from emet.controller.controller_lazy_graph import DynagraphController, LazyGraphController
+
+    parent = Mock(return_value=(False, None))
+    monkeypatch.setattr(DynagraphController, "execute_action", parent)
+    agent = object.__new__(LazyGraphController)
+    assert agent.execute_action("counter", grounding_purpose="placement_surface") == (False, None)
+    parent.assert_called_once_with("counter", grounding_purpose="placement_surface")
+
+
 def test_real_lazy_controller_scan_forwards_verification(monkeypatch):
     from emet.controller.controller_lazy_graph import LazyGraphController
 
@@ -42,7 +52,8 @@ def test_habitat_scan_preserves_verified_view():
 
 
 @pytest.mark.parametrize("accepted", [True, False])
-def test_query_arrival_returns_only_verified_geometry(monkeypatch, accepted):
+@pytest.mark.parametrize("purpose", ["object", "placement_surface"])
+def test_query_arrival_returns_only_verified_geometry(monkeypatch, accepted, purpose):
     monkeypatch.setattr("emet.controller.dynamem.navigation.time.sleep", lambda _: None)
     monkeypatch.setattr("emet.controller.nav_confirm.confirm_navigation_plan", lambda *a, **kw: True)
     anchor = np.array([9, 9, 9])
@@ -62,10 +73,10 @@ def test_query_arrival_returns_only_verified_geometry(monkeypatch, accepted):
         query_candidates=Mock(),
         voxel_map=SimpleNamespace(observations=[0, 1]),
     )
-    status, point = execute_action(agent, "cup")
+    status, point = execute_action(agent, "cup", grounding_purpose=purpose)
     assert status is accepted
     assert point is verified
-    agent.verify_query_arrival.assert_called_once_with("cup", candidate_handle=7)
+    agent.verify_query_arrival.assert_called_once_with("cup", candidate_handle=7, purpose=purpose)
     if accepted:
         agent.query_candidates.reject.assert_not_called()
     else:

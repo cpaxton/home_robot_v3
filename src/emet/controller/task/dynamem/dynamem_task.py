@@ -205,7 +205,7 @@ class DynamemTaskExecutor:
             embodied_agent=self.embodied_agent,
         )
 
-    def _find(self, target_object: str) -> np.ndarray:
+    def _find(self, target_object: str, *, grounding_purpose="object") -> np.ndarray:
         """Find an object. This is a helper function for the main loop.
 
         Args:
@@ -215,7 +215,7 @@ class DynamemTaskExecutor:
             The point where the object is located.
         """
         self.robot.switch_to_navigation_mode()
-        point = self.agent.navigate(target_object)
+        point = self.agent.navigate(target_object, grounding_purpose=grounding_purpose)
         # `filename` = None means write to default log path (the datetime you started to run the process)
         self.agent.voxel_map.write_to_pickle(filename=None)
         if point is None:
@@ -731,7 +731,7 @@ class DynamemTaskExecutor:
                     or (not self.skip_confirmations and input("Do you want to run navigation? [Y/n]: ").upper() != "N")
                 ):
                     try:
-                        point = self._find(args)
+                        point = self._find(args, grounding_purpose="placement_surface")
                     except PayloadVerificationError as exc:
                         self.last_query_manipulation = {
                             "ok": False,

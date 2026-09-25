@@ -208,6 +208,7 @@ def test_place_reacquires_after_arm_facing_rotation():
     assert orient.call_args.args[0] is op.robot
     np.testing.assert_array_equal(orient.call_args.args[1], old.xyz)
     assert op.agent.prepare_query_target.call_count == 2
+    assert all(call.kwargs == {"purpose": "placement_surface"} for call in op.agent.prepare_query_target.call_args_list)
     op.agent.navigate_to_target_pose.assert_not_called()
 
 

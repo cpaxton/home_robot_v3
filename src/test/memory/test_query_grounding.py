@@ -32,7 +32,9 @@ def test_query_arrival_requires_new_frame_and_verifier_acceptance(fresh, accepte
     assert agent.look_around.call_count == (0 if fresh and accepted else 1)
     assert (result is not None) is (fresh and accepted)
     if fresh:
-        agent.ground_query_view.assert_called_once_with("cup", source_obs_id=2, target_description="cup")
+        agent.ground_query_view.assert_called_once_with(
+            "cup", source_obs_id=2, target_description="cup", purpose="object"
+        )
     else:
         agent.ground_query_view.assert_not_called()
 

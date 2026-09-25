@@ -21,6 +21,7 @@ from emet.memory.surface_candidates import (
     candidate_mask,
     context_panel,
     context_selection_prompt,
+    placement_selection_prompt,
     support_selection_prompt,
     surface_candidate_panels,
 )
@@ -93,7 +94,7 @@ def verify(client, rgb, regions, query, variant, isolated_prompt=None):
         )
     else:
         verdict = call(
-            context_selection_prompt(query),
+            placement_selection_prompt(query) if variant == "placement_surface" else context_selection_prompt(query),
             [Image.fromarray(rgb), *panels],
         )
     return selected_id(verdict, regions, identities), requests, panels
@@ -105,7 +106,7 @@ def main():
     parser.add_argument(
         "--variants",
         nargs="+",
-        choices=["isolated", "context", "blind_context", "support_only"],
+        choices=["isolated", "context", "blind_context", "support_only", "placement_surface"],
         default=["isolated", "context", "blind_context"],
     )
     parser.add_argument("--baseline", type=Path, required=True)
