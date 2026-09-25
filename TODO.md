@@ -65,6 +65,13 @@ Strike through or move to a PR when done.
       Establish the intended relation before accepting a support; do not weaken
       surface checks or rename the target. Offline saved-view check first,
       then frozen live task. Negative carry-loss guard validation remains open.
+      Placement-purpose plumbing/prompt implemented in `7a9a29cc`; 420 focused
+      tests pass. Saved-view paired replay `20260924_225538_94e7dd` finishes
+      7/8 versus support-only 5/8, but still accepts one wrong-side counter.
+      Live rerun held on that failed negative gate. Diagnose request-agreement
+      versus independent relation description; retain both-direction and
+      missing-anchor controls and add a positive intended-counter view. This
+      tests fixed-candidate semantics, not end-to-end placement acceptance.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can

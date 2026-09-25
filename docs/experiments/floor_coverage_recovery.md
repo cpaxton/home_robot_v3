@@ -23,7 +23,57 @@ was not refreshed by this diagnostic batch. Conversation isolation was already
 split into main-based PR #176; keep other independently verified repairs scoped
 for review rather than merge the entire stack on checkpoint evidence. No main
 push or production physics change was made here. Current focused suite:
-**335 passed**. Detailed source revisions, jobs, results and figures follow.
+**420 passed** on the placement-purpose repair. Detailed source revisions,
+jobs, results and figures follow.
+
+### Placement-purpose repair (source `7a9a29cc`)
+
+The object verifier explicitly rejected support furniture, while placement
+asked it to ground a countertop. The configured isolated-support presentation
+also omitted the stove needed to verify the destination relation. Placement
+now passes an explicit `placement_surface` purpose through destination search,
+arrival verification and final reacquisition. It reuses existing full-scene,
+outlined-context and isolated-measured-pixel panels. Object verification remains
+unchanged, as do workspace, clearance and release gates.
+
+The prompt accepts requested support furniture, but requires visible anchors
+and rejects wrong-side candidates. Unqualified left/right is explicitly relative
+to the full reference image; an explicitly different frame must be visually
+established. This convention does not solve arbitrary viewpoint-dependent
+language or navigation to an unseen receptacle.
+
+Offline inspection of the frozen simulator scene confirms a separate counter
+right of the stove. The failed saved view instead shows the left counter, so
+rejecting that view is appropriate. Simulator body identities/positions were
+used only for this audit, never supplied to the agent.
+
+Paired replay job `20260924_225538_94e7dd` compares `support_only` with
+`placement_surface` on eight manually labeled cases from two saved views:
+generic countertop, left-of-stove, wrong-side right-of-stove, and missing-anchor
+right-of-refrigerator requests. Multiple patches of the same countertop are
+allowed where appropriate. Labels are fixed before inference and withheld from
+the model. Artifacts: `~/runs/emet/placement-context-offline-20260925/`.
+This is a diagnostic set, not held-out acceptance: it contains no positive view
+of the intended right-side counter.
+
+Completed replay: **support-only 5/8, placement-context 7/8**. The new variant
+accepts all four valid countertop requests and rejects both missing-refrigerator
+requests. However, it still accepts the left counter for a right-of-stove query
+in the earlier frame (`grounding-91d6c03bbf6d48009d38c7d798edbf7b`). In that same
+frame it accepts the opposite, left-of-stove request too. Full scene inspection
+confirms this is a model relation error, not a correct alternative target.
+The old variant makes the same wrong-side error and additionally invents a
+refrigerator anchor. No prompts were tuned after these results.
+
+**Live placement rerun held:** the wrong-side negative gate is not cleared.
+This small result supports fixing the contradictory task semantics, not claiming
+reliable relational grounding or end-to-end placement. Next diagnose whether
+query-independent relation description (using the existing context replay
+machinery) removes request agreement, with both directions and missing-anchor
+controls. Do not force acceptance, weaken clearance, or redefine the task.
+Before promotion, add a positive view of the intended right counter and rerun
+the frozen live task. The original physics versus NoSlip10/1ms distinction
+remains in force.
 
 ## Starting point
 
