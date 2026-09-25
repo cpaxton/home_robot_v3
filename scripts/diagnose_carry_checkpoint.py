@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -46,6 +47,20 @@ def bounded_turn_rate(error, previous, dt, speed, acceleration=0.25):
     """Same feedback/acceleration for both speed arms; no pose teleport."""
     target = np.sign(error) * min(speed, 1.5 * abs(error), np.sqrt(2 * acceleration * abs(error)))
     return float(previous + np.clip(target - previous, -acceleration * dt, acceleration * dt))
+
+
+def apply_wheel_targets(data, ids, targets, gears, controller=None):
+    """Raw historical control or the real server's wheel path, never both.
+
+    Do not overwrite current ctrl before calling the controller: its ramp must
+    start from the previous actuator references, not the new requested targets.
+    """
+    if controller is None:
+        data.ctrl[ids] = targets
+    else:
+        from emet.simulation.stretch_mujoco.utils import diff_drive_fwd_kinematics
+
+        controller._set_base_velocity(*diff_drive_fwd_kinematics(*(targets / gears)))
 
 
 def local_point(world_point, origin, rotation):
@@ -119,6 +134,7 @@ def main():
     parser.add_argument("--wheel-separation", type=float, default=0.3153)
     parser.add_argument("--left-actuator", default="left_wheel_vel")
     parser.add_argument("--right-actuator", default="right_wheel_vel")
+    parser.add_argument("--wheel-controller", choices=["raw", "production"], default="raw")
     parser.add_argument("--turn-angle", type=float, help="Closed-loop measured yaw target, radians; turn mode only.")
     parser.add_argument(
         "--noslip-iterations", type=int, help="Explicit solver-only diagnostic override; omit for original physics."
@@ -150,6 +166,18 @@ def main():
         parser.error("timestep must be finite and positive")
     if "release" in args.modes and (args.open_control is None or not np.isfinite(args.open_control)):
         parser.error("release requires an explicit finite open-control actuator value")
+    if args.wheel_controller == "production" and any(mode.startswith("recorded") for mode in args.modes):
+        parser.error("recorded actuator controls must not be compensated twice; use raw replay")
+    if args.wheel_controller == "production":
+        from emet.simulation.stretch_mujoco import config as wheel_config
+        from emet.simulation.stretch_mujoco.mujoco_server import BaseController
+
+        if (
+            (args.left_actuator, args.right_actuator) != ("left_wheel_vel", "right_wheel_vel")
+            or not np.isclose(2 * args.wheel_radius, wheel_config.robot_settings["wheel_diameter"])
+            or not np.isclose(args.wheel_separation, wheel_config.robot_settings["wheel_separation"])
+        ):
+            parser.error("production controller requires its configured wheel geometry and actuator names")
     with args.trace.open() as stream:
         header = json.loads(next(stream))
         rows = [json.loads(line) for line in stream]
@@ -232,6 +260,11 @@ def main():
     summaries = []
     for mode in args.modes:
         data = mujoco.MjData(model)
+        controller = (
+            BaseController(SimpleNamespace(mjmodel=model, mjdata=data))
+            if args.wheel_controller == "production"
+            else None
+        )
         for name in ("qpos", "qvel", "act", "ctrl", "qacc_warmstart"):
             values = np.asarray(initial[name])
             if values.shape != getattr(data, name).shape or not np.isfinite(values).all():
@@ -248,6 +281,7 @@ def main():
         lost_since = None
         drop_time = None
         max_slip = 0.0
+        max_turn_overshoot = 0.0
         with (args.out / f"{mode}.jsonl").open("x") as stream:
             while data.time - initial["sim_time"] < args.duration:
                 elapsed = data.time - initial["sim_time"]
@@ -256,7 +290,7 @@ def main():
                 elif mode == "recorded_wheels":
                     data.ctrl[ids] = [np.interp(data.time, times, controls[:, i]) for i in ids]
                 else:
-                    data.ctrl[ids] = wheel_controls(
+                    targets_ctrl = wheel_controls(
                         mode,
                         elapsed - args.motion_delay,
                         linear_speed=args.linear_speed,
@@ -269,9 +303,10 @@ def main():
                         turn_rate = bounded_turn_rate(
                             args.turn_angle - yaw_travel, turn_rate, model.opt.timestep, args.angular_speed
                         )
-                        data.ctrl[ids] = (
+                        targets_ctrl = (
                             np.array([-1.0, 1.0]) * args.wheel_separation * turn_rate / (2 * args.wheel_radius) * gears
                         )
+                    apply_wheel_targets(data, ids, targets_ctrl, gears, controller)
                     if mode == "release":
                         # Open after 2 s, ramping over 1 s. No attachment removal,
                         # object repositioning, or extra force is applied.
@@ -281,6 +316,10 @@ def main():
                 yaw = base_yaw(data.qpos)
                 yaw_travel += float(np.arctan2(np.sin(yaw - previous_yaw), np.cos(yaw - previous_yaw)))
                 previous_yaw = yaw
+                if mode == "turn" and args.turn_angle is not None:
+                    max_turn_overshoot = max(
+                        max_turn_overshoot, np.sign(args.turn_angle) * yaw_travel - abs(args.turn_angle)
+                    )
                 elapsed = data.time - initial["sim_time"]
                 if elapsed < next_sample:
                     continue
@@ -336,6 +375,9 @@ def main():
             "final_height_change_m": float(data.body(target_id).xpos[2]) - initial_z,
             "final_contact": bool(forces),
             "measured_yaw_rad": yaw_travel,
+            "max_turn_overshoot_rad": float(max_turn_overshoot)
+            if mode == "turn" and args.turn_angle is not None
+            else None,
             "turn_target_reached": (
                 abs(yaw_travel - args.turn_angle) <= 0.01 if mode == "turn" and args.turn_angle is not None else None
             ),

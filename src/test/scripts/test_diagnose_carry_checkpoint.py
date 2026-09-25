@@ -6,6 +6,8 @@
 
 import runpy
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -66,6 +68,7 @@ def test_measured_yaw_uses_mujoco_wxyz(yaw):
         ["--timestep", "-0.001"],
         ["--timestep", "nan"],
         ["--timestep", "inf"],
+        ["--wheel-controller", "production", "--modes", "recorded_wheels"],
     ],
 )
 def test_invalid_ablation_rejected_before_loading_scene(monkeypatch, options):
@@ -100,3 +103,21 @@ def test_contact_evidence_includes_external_contacts_without_mutating_state():
     assert contacts[0]["wrench_contact_frame"][0] > 0
     np.testing.assert_allclose(contacts[0]["object_center_other_geom"], [0, 0, 0.09])
     np.testing.assert_array_equal(data.qpos, before)
+
+
+def test_production_wheel_path_preserves_previous_reference_for_ramp():
+    data = SimpleNamespace(ctrl=np.array([0.1, -0.1, 7.0]))
+    previous = data.ctrl.copy()
+    controller = Mock()
+    controller._set_base_velocity.side_effect = lambda *_: np.testing.assert_array_equal(data.ctrl, previous)
+    helpers["apply_wheel_targets"](data, [0, 1], np.array([-3.0, 3.0]), np.array([3.0, 3.0]), controller)
+    controller._set_base_velocity.assert_called_once()
+    v, w = controller._set_base_velocity.call_args.args
+    assert v == pytest.approx(0)
+    assert w == pytest.approx(2 * 0.0508 / 0.3153)
+
+
+def test_raw_wheel_path_remains_unmodified_replay():
+    data = SimpleNamespace(ctrl=np.array([0.1, -0.1, 7.0]))
+    helpers["apply_wheel_targets"](data, [0, 1], np.array([-3.0, 3.0]), np.array([3.0, 3.0]))
+    np.testing.assert_array_equal(data.ctrl, [-3.0, 3.0, 7.0])
