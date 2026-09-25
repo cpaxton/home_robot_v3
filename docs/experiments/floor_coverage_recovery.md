@@ -1,5 +1,32 @@
 # Floor-coverage recovery pilot
 
+## Current handoff: September 24
+
+**The shared harness has useful repairs and reproducible diagnostics, but the
+small-room end-to-end manipulation gates are not cleared.** Do not confuse
+physics replay retention with learned pickup/carry/place success.
+
+| Area | Latest supported status | Remaining gate |
+| --- | --- | --- |
+| Shared agent loop | Model-requested floor views and bounded retries work after isolating perception/chat conversations; malformed tool envelopes return actionable errors | Broader learned-task acceptance, without extra retries or weaker clearance |
+| EQA | Last paired q12/q16 slice is 1/2 before/after with identical answers and steps; later diagnostic-only commits did not rerun EQA | Broader paired non-regression before merging the experimental stack |
+| Molmo small-room OVMM | Lateral floor evidence enables a side route, but nearest target distance 0.976 m remains outside the 0.85 m grasp workspace | Audit padding/clearance/footprint interaction without bypassing safety |
+| RoboCasa small-room OVMM | Two loose-closure learned trials physically lifted the can; neither placed it. One lost it during travel; the other reached the destination but failed support grounding | Reliable retention, same-object verification, and relational destination grounding |
+| Carry-loss guard | Implemented with focused tests; live pilot failed initial grounding before exercising it | Live validation after successful pickup, including loss/uncertainty behavior |
+| Physics diagnostics | Native creep persists at smaller timesteps; NoSlip's abrupt turn drop disappears at 1/0.5 ms. At 1 ms, hold/recorded-route/release controls pass, but matched-angle tolerance still fails | Isolate low-speed diagnostic turn tracking; no physics promotion yet |
+| TAMP / Habitat OVMM | Not rerun in this carry-debugging batch | Later gates, after prioritized EQA and small-room OVMM |
+
+Work is on `experiment/eqa-inspection-progress`, not main. This is a large
+experimental stack (284 commits ahead of the **local** main reference when
+checked at `8e66ad31`), not a single merge-ready patch. The remote main/PR status
+was not refreshed by this diagnostic batch. Conversation isolation was already
+split into main-based PR #176; keep other independently verified repairs scoped
+for review rather than merge the entire stack on checkpoint evidence. No main
+push or production physics change was made here. Current focused suite:
+**293 passed**. Detailed source revisions, jobs, results and figures follow.
+
+## Starting point
+
 The September 23 small-room controls both stopped before grasping. Molmo had
 28 reachable cells, all outside the 0.709–0.85 m grasp workspace. RoboCasa had
 five candidates in range, all rejected by the explored-footprint check, not
@@ -473,3 +500,70 @@ pass stationary hold, recorded-wheel replay and commanded-release negative,
 then live learned pickup/carry/place. No runtime defaults changed; no new
 learned-agent or EQA scores are claimed. **289 focused tests pass**, including
 a real minimal MuJoCo contact-reading test that checks state is not mutated.
+
+#### Timestep comparison: retention improves, combined gate still fails
+
+Job `20260924_213259_ab5286`, source `8e66ad31`, completed six serial 45 s
+turns. Artifacts: `~/runs/emet/carry-timestep-20260924/`. The runner now accepts
+an explicit `--timestep` and records the original/effective value; omission
+preserves scene physics. All runs restore the same 80.048 s checkpoint, keep
+the gripper command fixed, delay motion 20 s, and request 1.5 rad with a
+0.5 rad/s cap. The controller definition and acceleration limit stay fixed;
+it is evaluated at each integration step. Wheel reference sequences therefore
+respond to measured state, rather than being forced identical across runs.
+This is an integration/controller-discretization check, not proof of a specific
+internal solver bug. No geometry, mass, friction or success tolerance changed.
+
+| Solver | Timestep | Retention at 45 s | Max relative drift | Final yaw / 0.01 rad gate |
+| --- | --- | --- | --- | --- |
+| Original | 2 ms | Retained | 14.56 mm | 1.49989 / pass |
+| Original | 1 ms | Retained | 14.32 mm | 1.49989 / pass |
+| Original | 0.5 ms | Retained | 13.83 mm | 1.49989 / pass |
+| NoSlip=10 | 2 ms | Lost at 26.114 s | 1149.89 mm (includes fall) | 1.48258 / fail |
+| NoSlip=10 | 1 ms | Retained | 5.52 mm | 1.48209 / fail |
+| NoSlip=10 | 0.5 ms | Retained | 3.26 mm | 1.47937 / fail |
+
+![Timestep comparison, showing retention and yaw error separately](figures/carry-timestep-20260924.svg)
+
+The native creep persists as the timestep shrinks. Conversely, the abrupt
+NoSlip drop disappears at both smaller steps on this one checkpoint. That
+supports numerical sensitivity but does not establish convergence or a robust
+cross-object repair. The smaller-step NoSlip cases still under-turn by
+0.01791/0.02063 rad: this is a failure of the diagnostic's matched-angle gate,
+not by itself evidence that production navigation fails. At 1 ms, yaw advances
+only 0.00258 rad over the last ~10 s while nonzero wheel references remain.
+Low-speed tracking and the diagnostic controller need separate investigation;
+do not silently relax the tolerance or claim these are successful matched turns.
+
+Follow-up job `20260924_214214_77e9a3` tests NoSlip=10 / 1 ms stationary hold
+(45 s), recorded wheels (35 s), and commanded release (8 s), serially after
+all six turns. The 1 ms setting is selected for these **retention diagnostics**
+because it is the cheapest smaller step that avoided the drop, not because it
+passed the combined gate. Its known yaw failure remains visible regardless of
+the follow-up results. No default promotion or new learned-agent score is
+authorized by these controls alone. Focused tests: **293 passed**, two existing
+SWIG warnings.
+
+The follow-up completed all three controls at the same frozen source:
+
+| NoSlip=10, 1 ms control | Outcome | Evidence |
+| --- | --- | --- |
+| Stationary hold, 45 s | Retained | Max relative drift 1.06 mm, final contact true |
+| Recorded wheel sequence, 35 s | Retained | Max relative drift 2.80 mm, final contact true |
+| Open-gripper negative, 8 s | Released as expected | Opening begins at 2 s; loss event at 2.301 s, no final contact |
+
+Artifacts: `~/runs/emet/carry-timestep-controls-20260924/`. Both managed jobs
+finished successfully; all nine conditions are recorded, not selectively
+reported. Release is an expected negative, not a task failure. These results
+support a **retention candidate** at 1 ms, not a complete matched-turn or
+learned-agent acceptance result. There is no reason to declare the original
+creep repaired, and the 0.5 ms condition has not received separate hold/route/
+release checks. Retain those distinctions when comparing simulation settings.
+
+Decision: no production physics changes and no new live agent battery on the
+basis of a failed matched-angle gate. Next isolate the diagnostic's low-speed
+wheel tracking while keeping the same angle tolerance, acceleration and safety
+limits. A validated candidate then goes through live RoboCasa pickup/carry/
+placement (including possession-loss behavior), small-room Molmo, and a paired
+EQA regression check. That sequence remains open; this batch does not establish
+long-horizon manipulation capability or justify merging the experimental stack.

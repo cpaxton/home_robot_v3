@@ -22,7 +22,7 @@ Strike through or move to a PR when done.
       fast turn and misses yaw tolerance. Open-gripper negative drops normally.
       All eight conditions and a figure are documented; 286 focused tests pass.
       Keep original failures visible. No production default change is justified.
-- [ ] Isolate carry contact instability with a small timestep-convergence
+- [x] Isolate carry contact instability with a small timestep-convergence
       control (2/1/0.5 ms), not a blanket speed/depth adjustment. Contact replay
       `20260924_194422_d82001` exactly reproduces both summaries: native physics
       creeps toward a pad edge and unloads; NoSlip stays centered until abrupt
@@ -32,6 +32,21 @@ Strike through or move to a PR when done.
       elliptic/Newton/impratio=20. Keep hold, recorded wheels and release negative
       gates before any live policy promotion. Evidence/figure in floor-coverage
       report; 289 focused tests pass. Production physics remains unchanged.
+- [x] Close out timestep retention controls. Six serial turns
+      (`20260924_213259_ab5286`, source `8e66ad31`) show original creep remains
+      ~14 mm at 2/1/0.5 ms. NoSlip drops at 2 ms but retains at 1/0.5 ms with
+      5.52/3.26 mm drift; all NoSlip turns miss the fixed 0.01 rad yaw tolerance.
+      Follow-up `20260924_214214_77e9a3` completed: 1 ms NoSlip hold drift
+      1.06 mm, recorded-wheel drift 2.80 mm, release negative drops at 2.301 s.
+      This supports timestep sensitivity, not a completed harness fix or a
+      production-navigation regression claim. 293 focused tests pass.
+- [ ] Investigate low-speed diagnostic turn tracking before promoting the
+      smaller-step retention candidate. All NoSlip turns miss the 0.01 rad
+      tolerance (1 ms ends at 1.48209 rad for a 1.5 rad target). Do not infer
+      production-navigation regression from this custom controller or relax
+      the threshold after seeing results. Then validate live learned RoboCasa
+      pickup/carry/place and possession-loss handling, Molmo workspace safety,
+      and paired EQA non-regression. No full sweep or production physics change.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can
