@@ -62,6 +62,10 @@ def test_measured_yaw_uses_mujoco_wxyz(yaw):
         ["--turn-angle", "nan"],
         ["--turn-angle", "4"],
         ["--sample-period", "0"],
+        ["--timestep", "0"],
+        ["--timestep", "-0.001"],
+        ["--timestep", "nan"],
+        ["--timestep", "inf"],
     ],
 )
 def test_invalid_ablation_rejected_before_loading_scene(monkeypatch, options):

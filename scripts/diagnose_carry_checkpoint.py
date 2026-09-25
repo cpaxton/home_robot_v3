@@ -94,6 +94,9 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--time", type=float, required=True)
     parser.add_argument("--duration", type=float, default=35.0)
+    parser.add_argument(
+        "--timestep", type=float, help="Explicit diagnostic physics timestep in seconds; omit to preserve scene."
+    )
     parser.add_argument("--sample-period", type=float, default=0.1)
     parser.add_argument(
         "--contact-details", action="store_true", help="Log object contacts and actuator state; read-only."
@@ -143,6 +146,8 @@ def main():
         parser.error("turn angle must be finite, nonzero and smaller than pi radians")
     if args.noslip_iterations is not None and args.noslip_iterations < 0:
         parser.error("noslip iterations must be nonnegative")
+    if args.timestep is not None and (not np.isfinite(args.timestep) or args.timestep <= 0):
+        parser.error("timestep must be finite and positive")
     if "release" in args.modes and (args.open_control is None or not np.isfinite(args.open_control)):
         parser.error("release requires an explicit finite open-control actuator value")
     with args.trace.open() as stream:
@@ -163,6 +168,9 @@ def main():
     if model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE or model.jnt_qposadr[0] != 0:
         parser.error("diagnostic requires the fixture base to be the leading free joint")
     original_noslip = int(model.opt.noslip_iterations)
+    original_timestep = float(model.opt.timestep)
+    if args.timestep is not None:
+        model.opt.timestep = args.timestep
     if args.noslip_iterations is not None:
         model.opt.noslip_iterations = args.noslip_iterations
     gripper_id = model.actuator(args.gripper_actuator).id if "release" in args.modes else None
@@ -211,6 +219,8 @@ def main():
         mujoco_version=mujoco.__version__,
         original_noslip_iterations=original_noslip,
         effective_noslip_iterations=int(model.opt.noslip_iterations),
+        original_timestep_s=original_timestep,
+        effective_timestep_s=float(model.opt.timestep),
         actuator_names=[model.actuator(i).name for i in range(model.nu)],
         script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         scene_sha256=hashlib.sha256(args.scene.read_bytes()).hexdigest(),
