@@ -11,9 +11,9 @@ physics replay retention with learned pickup/carry/place success.
 | Shared agent loop | Model-requested floor views and bounded retries work after isolating perception/chat conversations; malformed tool envelopes return actionable errors | Broader learned-task acceptance, without extra retries or weaker clearance |
 | EQA | Last paired q12/q16 slice is 1/2 before/after with identical answers and steps; later diagnostic-only commits did not rerun EQA | Broader paired non-regression before merging the experimental stack |
 | Molmo small-room OVMM | Lateral floor evidence enables a side route, but nearest target distance 0.976 m remains outside the 0.85 m grasp workspace | Audit padding/clearance/footprint interaction without bypassing safety |
-| RoboCasa small-room OVMM | Two loose-closure learned trials physically lifted the can; neither placed it. One lost it during travel; the other reached the destination but failed support grounding | Reliable retention, same-object verification, and relational destination grounding |
-| Carry-loss guard | Implemented with focused tests; live pilot failed initial grounding before exercising it | Live validation after successful pickup, including loss/uncertainty behavior |
-| Physics diagnostics | Native creep persists at smaller timesteps; NoSlip's abrupt turn drop disappears at 1/0.5 ms. At 1 ms, hold/recorded-route/release controls pass, but matched-angle tolerance still fails | Isolate low-speed diagnostic turn tracking; no physics promotion yet |
+| RoboCasa small-room OVMM | New explicit NoSlip10/1ms live trial lifts and retains the can through navigation; placement still rejects the relational destination. Earlier original-physics loose trials were inconsistent in carry | Relational destination grounding and broader retention validation; keep physics variants separate |
+| Carry-loss guard | New live trial exercises two successful navigation-boundary possession checks, agreeing with the physical trace | Live loss/uncertainty behavior is still untested; positive checks do not validate drop detection |
+| Physics diagnostics | Reusing the production wheel controller resolves the diagnostic heading shortfall. The 1 ms NoSlip candidate completes the turn and retains the can, with prior hold/route/release controls passing | Live learned validation; original physics still creeps and no default was changed |
 | TAMP / Habitat OVMM | Not rerun in this carry-debugging batch | Later gates, after prioritized EQA and small-room OVMM |
 
 Work is on `experiment/eqa-inspection-progress`, not main. This is a large
@@ -23,7 +23,7 @@ was not refreshed by this diagnostic batch. Conversation isolation was already
 split into main-based PR #176; keep other independently verified repairs scoped
 for review rather than merge the entire stack on checkpoint evidence. No main
 push or production physics change was made here. Current focused suite:
-**293 passed**. Detailed source revisions, jobs, results and figures follow.
+**335 passed**. Detailed source revisions, jobs, results and figures follow.
 
 ## Starting point
 
@@ -567,3 +567,93 @@ limits. A validated candidate then goes through live RoboCasa pickup/carry/
 placement (including possession-loss behavior), small-room Molmo, and a paired
 EQA regression check. That sequence remains open; this batch does not establish
 long-horizon manipulation capability or justify merging the experimental stack.
+
+#### Production wheel path resolves the diagnostic heading shortfall
+
+The preceding failed yaw gate was **not a production control-stack failure**.
+The diagnostic wrote transmission targets directly, bypassing the simulator's
+existing `BaseController._set_base_velocity` path. That path already supplies
+modeled joint-friction compensation, curvature-preserving saturation, and
+wheel-reference acceleration limits. Near the stalled endpoint the raw targets
+were ~+/-0.25; this fixture's compensation is ~+/-0.5833 (gear 3, gain 20,
+joint frictionloss 35). No new minimum-speed trick, integral controller, or
+looser tolerance was necessary to resolve this test mismatch.
+
+Source `f55d4238` adds explicit `--wheel-controller production` for synthetic
+profiles, calling the real controller without copying its logic. Previous
+references are preserved before each controller call, so the acceleration ramp
+is not bypassed. Historical `raw` remains the default for reproducibility.
+Recorded actuator traces cannot use the production flag: compensating recorded
+actuator outputs again would change the replay. Geometry/names must match the
+production controller's configuration. The outer measured-yaw controller is
+still the diagnostic controller, not a complete navigation-stack benchmark.
+
+Job `20260924_221451_5e521b`, artifacts
+`~/runs/emet/carry-production-wheels-20260924/`, ran both cases serially:
+
+| Production wheel path | Final yaw | Peak overshoot | Max object/EE drift | Retention |
+| --- | --- | --- | --- | --- |
+| Original physics / 2 ms | 1.500192 rad | 0.001274 rad (0.073 degrees) | 14.79 mm | Retained |
+| Explicit NoSlip=10 / 1 ms | 1.500462 rad | 0.000704 rad (0.040 degrees) | 5.98 mm | Retained |
+
+Both clear the original 0.01 rad endpoint tolerance and a 0.01 rad overshoot
+check. Compare each against its own raw-path control above, not against the
+other physics setting: NoSlip / 1 ms changes from 1.48209 to 1.50046 rad while
+remaining held. The native creep remains; a base-motion repair is not a grip
+repair. Small residual feedback oscillations are visible in the plot, well
+inside the angle tolerance on this checkpoint. Broader load/direction/task
+acceptance is still open.
+
+![Raw versus production wheel paths](figures/carry-production-wheels-20260924.svg)
+
+Focused suite: **335 passed**, including 71 diagnostic/wheel-controller tests.
+No production controller behavior or physics defaults changed. The next live
+RoboCasa pilot is `20260924_221944_72874e`, source `f55d4238`, using an explicit
+derived scene with NoSlip=10 / 1 ms, the existing loose-grip config, Qwen3-VL-8B
+int4, unchanged task prompt and independent physical scorer. The original scene
+is untouched; model-load checks confirm matching masses, geometry, initial
+qpos, actuator gains and dimensions. The live trial is gated on the completed
+turn's retention, heading and overshoot checks. Keep this physics variant
+separate from original-physics learned results.
+
+#### Live candidate: verified pickup and retained carry, placement still blocked
+
+Job `20260924_221944_72874e` finished in 443 s, agent exit code 0. The
+independent scorer reports **pickup true / placement false**, verified trace;
+the managed job correctly fails the task-success gate. It did not time out.
+Artifacts: `~/runs/emet/carry-production-live-20260924/robocasa/`, including
+the derived-scene XML and hashes, config snapshots, physical result, trace,
+and RGB/grounding records. Comparing all loaded `model.opt` attributes confirms
+only `timestep` and `noslip_iterations` differ from the original scene.
+
+- Pickup is physically scored at sim 45.746 s. From sim 46 s to the final
+  80.427 s sample, **343/343 recorded samples have gripper contact**; maximum
+  object/EE separation is 10.78 mm and final separation is 3.72 mm. No sampled
+  carry loss occurs. This is one learned trial on one object, not a general
+  success rate or proof of continuous contact between samples.
+- Two `navigation_payload_verification` records accept the actual red Coke
+  can before/after the route. Manual inspection of the saved RGB agrees with
+  the trace. The positive guard path is now exercised live; no induced-loss
+  trial was performed, so the negative path remains open.
+- Final placement returns `target absent or ambiguous` for
+  `countertop_right_of_stove`. No release is commanded onto an unverified
+  support. The task remains an end-to-end failure despite the carry progress.
+- In final evidence `grounding-2e63c17500ad405c9452576f470f3cce`, the full RGB
+  shows a countertop on the **image-left** side of the stove; the candidate
+  sheet isolates small surfaces on black and omits the relational context.
+  The VLM rejects the candidates for lacking stove/countertop context. This is
+  not enough to claim the rejection is wrong: image-relative, scene-relative,
+  and task-relative "right" must be disambiguated before selecting a support.
+  An earlier candidate was accepted and subsequently rejected in a fresh view.
+- Startup logs contain one gripper-open timeout; shutdown logs contain manager
+  broken-pipe/reset errors after the task result. Neither is the recorded task
+  failure, but this run is not evidence that simulator lifecycle/timing is clean.
+
+Next scoped task: give relational support grounding the full contextual view
+and an explicit reference-frame contract, while verifying the proposed local
+placement surface from measured geometry. Do not simply loosen acceptance or
+rename the target to whichever countertop is visible. Reuse saved views for a
+small offline check, then rerun the same learned task with physics/model/budgets
+frozen. Retain original-physics carry failures and the unresolved Molmo workspace
+gate. No new EQA, Molmo or TAMP episode was run for this diagnostic-only code
+change; the historical scores above are not fresh acceptance results.

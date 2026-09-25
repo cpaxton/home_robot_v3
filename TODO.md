@@ -40,13 +40,31 @@ Strike through or move to a PR when done.
       1.06 mm, recorded-wheel drift 2.80 mm, release negative drops at 2.301 s.
       This supports timestep sensitivity, not a completed harness fix or a
       production-navigation regression claim. 293 focused tests pass.
-- [ ] Investigate low-speed diagnostic turn tracking before promoting the
+- [x] Investigate low-speed diagnostic turn tracking before promoting the
       smaller-step retention candidate. All NoSlip turns miss the 0.01 rad
       tolerance (1 ms ends at 1.48209 rad for a 1.5 rad target). Do not infer
       production-navigation regression from this custom controller or relax
       the threshold after seeing results. Then validate live learned RoboCasa
       pickup/carry/place and possession-loss handling, Molmo workspace safety,
       and paired EQA non-regression. No full sweep or production physics change.
+- [x] Finish learned RoboCasa candidate pilot `20260924_221944_72874e` before
+      claiming a carry repair. Production-wheel replay `20260924_221451_5e521b`
+      clears the unchanged heading/overshoot gates: NoSlip10/1ms ends at
+      1.50046 rad, peak overshoot 0.040 degrees, drift 5.98 mm, retained.
+      The raw diagnostic had bypassed existing friction compensation; production
+      control did not need a new controller or relaxed tolerance. Source f55d4238
+      reuses the real wheel path; 335 focused tests pass. Original-physics creep
+      remains. Live pilot uses a separately labeled physics derivative, not a
+      silently changed benchmark scene or default.
+- [ ] Fix relational placement context/reference-frame handling. The live
+      NoSlip10/1ms candidate scores pickup true, placement false in 443 s:
+      can retained through final sample, 343/343 post-lift contact samples,
+      3.72 mm final object/EE separation. Two navigation possession checks pass.
+      Placement rejects `countertop_right_of_stove`; isolated surface crops
+      omit the stove, and final full RGB shows a counter on image-left of it.
+      Establish the intended relation before accepting a support; do not weaken
+      surface checks or rename the target. Offline saved-view check first,
+      then frozen live task. Negative carry-loss guard validation remains open.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can
