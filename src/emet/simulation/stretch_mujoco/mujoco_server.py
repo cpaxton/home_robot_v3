@@ -67,6 +67,7 @@ logger = Logger(__name__)
 
 @dataclass
 class MujocoServerProxies:
+    command_lock: object
     _command: "DictProxy[str, StatusCommand]"
     _status: "DictProxy[str, StatusStretchJoints]"
     _cameras: "DictProxy[str, StatusStretchCameras]"
@@ -115,6 +116,7 @@ class MujocoServerProxies:
     @staticmethod
     def default(manager: SyncManager) -> "MujocoServerProxies":
         return MujocoServerProxies(
+            command_lock=manager.RLock(),
             _command=manager.dict({"val": StatusCommand.default()}),
             _status=manager.dict({"val": StatusStretchJoints.default()}),
             _cameras=manager.dict({"val": StatusStretchCameras.default()}),
@@ -558,13 +560,20 @@ class MujocoServer:
 
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()
-        self.push_command(self.data_proxies.get_command())
+        self._consume_commands()
         trace = getattr(self, "_eval_trace", None)
         if trace is not None:
             trace.record(model, data)
         monitor = getattr(self, "_fall_monitor", None)
         if monitor is not None:
             monitor.maybe_report(model, data)
+
+    def _consume_commands(self):
+        # The producer and consumer both update the whole command snapshot.
+        # Hold the same interprocess lock through read, actuation, and trigger
+        # acknowledgement, or an older acknowledgement can erase a new target.
+        with self.data_proxies.command_lock:
+            self.push_command(self.data_proxies.get_command())
 
     def pull_status(self):
         """

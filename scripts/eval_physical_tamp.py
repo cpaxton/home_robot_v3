@@ -22,6 +22,10 @@ from types import SimpleNamespace
 import numpy as np
 
 
+class TrialWallTimeout(BaseException):
+    """Escape task/controller Exception handlers to terminate the whole trial."""
+
+
 def arm_client_command(values):
     """Bind MJCF coordinates to the ZMQ client's base/lift/arm/roll/pitch/yaw API."""
     return [
@@ -89,7 +93,7 @@ def run(args):
     capture_counts = {}
 
     def timed_out(_signum, _frame):
-        raise TimeoutError("trial_wall_timeout")
+        raise TrialWallTimeout("trial_wall_timeout")
 
     signal.signal(signal.SIGALRM, timed_out)
     signal.setitimer(signal.ITIMER_REAL, args.timeout)
@@ -98,7 +102,7 @@ def run(args):
         events.write(json.dumps({"wall_elapsed_s": time.monotonic() - started, **kwargs}, allow_nan=False) + "\n")
         events.flush()
         if time.monotonic() - started > args.timeout:
-            raise TimeoutError("trial_wall_timeout")
+            raise TrialWallTimeout("trial_wall_timeout")
         if kwargs.get("phase") in ("pregrasp_complete", "grasp_complete", "lift_complete", "place_complete", "release"):
             capture(kwargs["phase"])
 
@@ -516,11 +520,11 @@ def run(args):
             result["status"] = "passed" if result["task_success"] else "failed"
         elif args.tier == "physical":
             result.update(score_physical_acceptance(trace, audit, execution_completed=False))
-    except Exception as exc:
+    except (TrialWallTimeout, Exception) as exc:
         result.update(
             status=(
                 "timeout"
-                if isinstance(exc, TimeoutError)
+                if isinstance(exc, (TrialWallTimeout, TimeoutError))
                 else "unsupported_capability"
                 if str(exc).startswith("unsupported_")
                 else "error"

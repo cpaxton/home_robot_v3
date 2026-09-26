@@ -16,7 +16,7 @@ import signal
 import sys
 import threading
 import time
-from multiprocessing import Lock, Manager, Process
+from multiprocessing import Manager, Process
 from typing import Any
 
 import numpy as np
@@ -97,7 +97,7 @@ class StretchMujocoSimulator:
 
         self.data_proxies = MujocoServerProxies.default(self._manager)
 
-        self._command_lock = Lock()
+        self._command_lock = self.data_proxies.command_lock
 
     def start(
         self,
