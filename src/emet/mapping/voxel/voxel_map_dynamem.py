@@ -40,7 +40,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         dilate_frontier_size: int = 12,
         dilate_obstacle_size: int = 2,
         extend_mode: str = "separate",
+        obstacle_map_mode: str = "legacy_padded",
+        footprint: Footprint | None = None,
     ):
+        if obstacle_map_mode not in {"legacy_padded", "physical"}:
+            raise ValueError("obstacle_map_mode must be legacy_padded or physical")
+        self.obstacle_map_mode = obstacle_map_mode
+        self._navigation_footprint = footprint
         super().__init__(
             voxel_map=voxel_map,
             robot=None,
@@ -55,19 +61,38 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         self.create_collision_masks(orientation_resolution)
         self.traj = None
 
+    def get_navigation_map(self):
+        if self.obstacle_map_mode == "physical":
+            return self.voxel_map.get_navigation_map()
+        return self.voxel_map.get_2d_map()
+
+    def get_oriented_mask(self, theta):
+        if self.obstacle_map_mode == "physical":
+            return torch.from_numpy(
+                self._footprint.get_conservative_rotated_mask(self.voxel_map.grid_resolution, float(theta))
+            )
+        return super().get_oriented_mask(theta)
+
     def create_collision_masks(self, orientation_resolution: int):
         """Create a set of orientation masks
 
         Args:
             orientation_resolution: number of bins to break it into
         """
-        self._footprint = Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1)
-        self._orientation_resolution = 64
+        self._footprint = self._navigation_footprint or Footprint(
+            width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1
+        )
+        self._orientation_resolution = orientation_resolution
         self._oriented_masks = []
 
         for i in range(orientation_resolution):
             theta = i * 2 * np.pi / orientation_resolution
-            mask = self._footprint.get_rotated_mask(self.voxel_map.grid_resolution, angle_radians=theta)
+            rasterize = (
+                self._footprint.get_conservative_rotated_mask
+                if self.obstacle_map_mode == "physical"
+                else self._footprint.get_rotated_mask
+            )
+            mask = rasterize(self.voxel_map.grid_resolution, angle_radians=theta)
             # Footprint returns numpy; store as tensor for get_oriented_mask / collision checks
             mask_t = torch.from_numpy(np.asarray(mask)).bool() if not hasattr(mask, "cuda") else mask
             self._oriented_masks.append(mask_t)
@@ -132,7 +157,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 raise ValueError("Object-approach distance range must be ordered and nonnegative")
 
         self.last_target_sampling = {"status": "no_reachable_workspace", "reachable_cells": 0}
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
 
         # Extract edges from our explored mask
         start_pt = planner.to_pt(start)
@@ -147,7 +172,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         reachable = torch.empty(obstacles.shape, dtype=torch.bool).fill_(False)
         reachable[reachable_xs, reachable_ys] = True
 
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         reachable = reachable & ~obstacles
 
         target_x, target_y = planner.to_pt(point)
@@ -243,6 +268,27 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             "footprint_reasons": footprint_reasons,
         }
         if distance_range is not None:
+            # Distinguish missing observations from disconnected approach space.
+            # These are center-cell diagnostics, NOT full-footprint certificates.
+            counts = {"unknown": 0, "occupied": 0, "below_clearance": 0, "disconnected": 0, "reachable": 0}
+            radius = int(np.ceil(distance_range[1] / self.voxel_map.grid_resolution)) + 1
+            clearance = getattr(planner, "_clearance_m", None)
+            for i in range(max(0, target_x - radius), min(obs_h, target_x + radius + 1)):
+                for j in range(max(0, target_y - radius), min(obs_w, target_y + radius + 1)):
+                    x, y = planner.to_xy([i, j])
+                    if not distance_range[0] < np.hypot(x - px, y - py) <= distance_range[1]:
+                        continue
+                    if bool(obstacles[i, j]):
+                        key = "occupied"
+                    elif not bool(explored[i, j]):
+                        key = "unknown"
+                    elif clearance is not None and clearance[i, j] < getattr(planner, "min_clearance_m", 0):
+                        key = "below_clearance"
+                    else:
+                        key = "reachable" if bool(reachable[i, j]) else "disconnected"
+                    counts[key] += 1
+            self.last_target_sampling["in_range_center_cells"] = counts
+            self.last_target_sampling["obstacle_map_mode"] = self.obstacle_map_mode
             logger.warning(
                 f"Grasp approach sampling failed: target_xy=({px:.3f},{py:.3f}) "
                 f"range={distance_range} reachable_cells={len(xs)} "

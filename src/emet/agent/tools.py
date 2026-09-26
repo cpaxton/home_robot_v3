@@ -602,6 +602,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                     "Observe floor, then replan if capture succeeds; do not bypass collision checks. "
                     "No reachable workspace does not establish whether unseen space is clear."
                 )
+                if navigation.get("in_range_center_cells", {}).get("disconnected", 0):
+                    outcome.payload["suggested_action"] = (
+                        "Observed in-range center cells exist but no safe route connects them to the robot. "
+                        "Inspect adjacent/lateral floor with observe_floor pan_rad, then replan; repeating the "
+                        "same forward view may not help. Center clearance does not certify footprint safety. "
+                        "Do not bypass collision checks or increase the grasp reach limit."
+                    )
         return outcome
 
     def _build_tamp_plan(

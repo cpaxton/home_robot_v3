@@ -234,6 +234,10 @@ class SparseVoxelMapNavigationSpace(XYT):
         theta_idx = self._get_theta_index(theta)
         return self._oriented_masks[theta_idx]
 
+    def get_navigation_map(self):
+        """Map used consistently by collision checks and route planning."""
+        return self.voxel_map.get_2d_map()
+
     def is_valid(
         self,
         state: torch.Tensor,
@@ -270,7 +274,7 @@ class SparseVoxelMapNavigationSpace(XYT):
             max_attempts = 10
             while True:
                 try:
-                    obstacles, explored = self.voxel_map.get_2d_map()
+                    obstacles, explored = self.get_navigation_map()
                     break
                 except Exception as e:
                     attempt += 1
@@ -281,8 +285,8 @@ class SparseVoxelMapNavigationSpace(XYT):
 
         crop_obs = obstacles[x0:x1, y0:y1]
         crop_exp = explored[x0:x1, y0:y1]
-        assert mask.shape == crop_obs.shape
-        assert mask.shape == crop_exp.shape
+        if x0 < 0 or y0 < 0 or mask.shape != crop_obs.shape or mask.shape != crop_exp.shape:
+            return False
 
         collision = torch.any(crop_obs & mask)
 

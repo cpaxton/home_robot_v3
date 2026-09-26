@@ -93,6 +93,15 @@ def _filter_unsafe_nav_traj(
             object_tail = body[-2:]
             body = body[:-2]
 
+    if getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
+        from emet.motion.navigation_sweep import validate_navigation_sweep
+
+        if start_xyt is None:
+            return [], "missing_sweep_start", None
+        valid, reason = validate_navigation_sweep(self.space, start_xyt, body)
+        if not valid:
+            return [], f"rejected_swept_footprint:{reason}", None
+
     start_xy = None
     if start_xyt is not None:
         s = np.asarray(start_xyt, dtype=np.float64).reshape(-1)

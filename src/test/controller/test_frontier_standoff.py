@@ -34,7 +34,9 @@ def test_footprint_diagnostics_distinguish_unknown_from_collision(occupied, seen
 def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     obstacles = torch.zeros((6, 2), dtype=torch.bool)
     space = SimpleNamespace(
-        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles)),
+        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles), grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="legacy_padded",
         compute_theta=lambda x, y, px, py: float(np.arctan2(py - y, px - x)),
         is_valid=lambda pose: True,
         _line_of_sight_clear=lambda *args: True,
@@ -72,7 +74,9 @@ def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint(tmp_p
     monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
     obstacles = torch.zeros((12, 2), dtype=torch.bool)
     space = SimpleNamespace(
-        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles)),
+        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles), grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="legacy_padded",
         compute_theta=lambda *args: 0.0,
         is_valid=lambda pose: True,
         _line_of_sight_clear=lambda *args: False,

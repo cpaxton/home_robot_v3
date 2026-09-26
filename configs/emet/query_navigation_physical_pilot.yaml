@@ -1,0 +1,7 @@
+# Collision-contract diagnostic, not an accepted hardware/default configuration.
+# Keep the same 0.22 m center clearance and robot footprint; apply them to
+# physical obstacle cells instead of obstacles already dilated by pad_obstacles.
+extends: configs/emet/query_geometry_tracked_narrow_pilot.yaml
+mapping:
+  motion_planner:
+    obstacle_map_mode: physical
