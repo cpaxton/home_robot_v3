@@ -135,6 +135,7 @@ class PhysicalPickPlaceExecutor:
             )
             if not ok or residual > self.joint_tolerance:
                 return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
+        self.event(phase=f"{phase}_complete", controller_success=True, residual=residual)
         return PhysicalMotionResult(True, "ok", phase, residual)
 
     def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
@@ -152,7 +153,6 @@ class PhysicalPickPlaceExecutor:
         self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
-        self.event(phase="lift_complete", controller_success=result.success)
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):

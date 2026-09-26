@@ -46,12 +46,15 @@ def test_physical_trace_requires_complete_retained_supported_task(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "fault", ["drop", "wrong_support", "collision", "missing_audit", "truncated", "incomplete", "teleport"]
+    "fault",
+    ["drop", "slip_rotation", "wrong_support", "collision", "missing_audit", "truncated", "incomplete", "teleport"],
 )
 def test_physical_negatives(tmp_path, fault):
     records = rows()
     if fault == "drop":
         records[35]["gripper_contact"] = False
+    elif fault == "slip_rotation":
+        records[35]["relative_rot"] = [0, -1, 0, 1, 0, 0, 0, 0, 1]
     elif fault == "wrong_support":
         for row in records[45:]:
             row["support_contact"] = False

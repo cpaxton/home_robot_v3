@@ -38,6 +38,7 @@ def latest_trace(path):
 
 
 def run(args):
+    os.environ.setdefault("MUJOCO_GL", "egl")
     import mujoco
 
     from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
@@ -47,6 +48,7 @@ def run(args):
         base_pose,
         freeze_fixture,
         make_scene_checker,
+        save_motion_overview,
         score_physical_acceptance,
     )
     from emet.motion.mujoco_collision import body_subtree
@@ -60,6 +62,7 @@ def run(args):
         source_sha=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         source_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
     )
+    manifest["budgets"]["wall_timeout_s"] = args.timeout
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     server = robot = server_fh = None
     trace = output / "physical_trace.jsonl"
@@ -67,6 +70,9 @@ def run(args):
     events = (output / "stages.jsonl").open("x")
     result = {"task_success": False, "tier": args.tier, "seed": args.seed, "status": "not_started"}
     started = time.monotonic()
+    diagnostics, selected = [], {}
+    initial_base = None
+    capture_counts = {}
 
     def timed_out(_signum, _frame):
         raise TimeoutError("trial_wall_timeout")
@@ -79,6 +85,8 @@ def run(args):
         events.flush()
         if time.monotonic() - started > args.timeout:
             raise TimeoutError("trial_wall_timeout")
+        if kwargs.get("phase") in ("pregrasp_complete", "grasp_complete", "lift_complete", "place_complete", "release"):
+            capture(kwargs["phase"])
 
     def synchronize(target):
         if args.tier == "physical":
@@ -95,11 +103,20 @@ def run(args):
         if robot is None:
             return
         try:
+            capture_counts[stage] = capture_counts.get(stage, 0) + 1
+            stage = f"{stage}_{capture_counts[stage]}"
             observation = robot.get_observation()
             from PIL import Image
 
             Image.fromarray(observation.rgb).save(output / f"{stage}_head.png")
             np.save(output / f"{stage}_depth.npy", observation.depth)
+            synchronize(data)
+            camera = mujoco.MjvCamera()
+            camera.lookat[:] = (data.body("base_link").xpos + data.body(scorer["object_body"]).xpos) / 2
+            camera.distance, camera.azimuth, camera.elevation = 2.5, 135, -25
+            with mujoco.Renderer(model, height=480, width=640) as renderer:
+                renderer.update_scene(data, camera=camera)
+                Image.fromarray(renderer.render()).save(output / f"{stage}_side.png")
         except Exception as exc:
             event(phase="capture", stage=stage, error=str(exc))
 
@@ -212,8 +229,6 @@ def run(args):
             coupled_groups=(tuple(f"joint_arm_l{i}" for i in range(4)),),
             event=event,
         )
-        diagnostics = []
-        selected = {}
         candidates = []
         # First preserve a stationary witness; then explore a fixed ring order.
         poses = [initial_base.copy()]
@@ -290,41 +305,51 @@ def run(args):
             lift_state = data.qpos.copy()
             place_route = None
             place_pose = None
+            place_paths = []
+            place_goals = [approach.copy()]
             for angle in np.linspace(-np.pi, np.pi, 8, endpoint=False):
                 xy = release[:2] + 0.55 * np.array([np.cos(angle), np.sin(angle)])
                 yaw = np.arctan2(release[1] - xy[1], release[0] - xy[0]) - approach_axis
-                goal = np.r_[xy, np.arctan2(np.sin(yaw), np.cos(yaw))]
+                place_goals.append(np.r_[xy, np.arctan2(np.sin(yaw), np.cos(yaw))])
+            # A navigable place pose is insufficient: try the next pose when its
+            # arm witness fails, preserving the grasp-relative payload transform.
+            payload_transform = checker.payload_transform.copy()
+            place_rejections = []
+            for goal in place_goals:
                 data.qpos[:] = lift_state
+                checker.payload_body = scorer["object_body"]
+                checker.payload_parent = scorer["ee_body"]
+                checker.payload_transform = payload_transform.copy()
                 possible = space.plan_route(approach, goal)
-                if possible:
-                    place_pose, place_route = goal, possible
+                if not possible:
+                    place_rejections.append({"pose": goal.tolist(), "phase": "transport"})
+                    continue
+                data.qpos[:] = lift_state
+                write_base_freejoint_xyt(model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2])
+                mujoco.mj_forward(model, data)
+                place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
+                paths = []
+                for phase, point in [
+                    ("preplace", release + [0, 0, 0.12]),
+                    ("place", release),
+                    ("retreat", release + [0, 0, 0.12]),
+                ]:
+                    if phase == "retreat":
+                        checker.set_payload(model, data, None)
+                    path, error = executor.plan_pose(point, place_rotation)
+                    if error:
+                        place_rejections.append({"pose": goal.tolist(), "phase": phase, "reason": error})
+                        break
+                    paths.append(path)
+                if len(paths) == 3:
+                    place_pose, place_route, place_paths = goal, possible, paths
                     break
+            item["place_rejections"] = place_rejections
             if place_route is None:
-                plan.message = "no_carried_object_route_within_budget"
-                item.update(phase="transport", reason=plan.message)
+                plan.message = "no_place_witness_within_budget"
+                item.update(phase="place", reason=plan.message)
                 event(**item)
                 return False
-            data.qpos[:] = lift_state
-            write_base_freejoint_xyt(
-                model, data, base_body_name="base_link", x=place_pose[0], y=place_pose[1], theta=place_pose[2]
-            )
-            mujoco.mj_forward(model, data)
-            place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
-            place_paths = []
-            for phase, point in [
-                ("preplace", release + [0, 0, 0.12]),
-                ("place", release),
-                ("retreat", release + [0, 0, 0.12]),
-            ]:
-                if phase == "retreat":
-                    checker.set_payload(model, data, None)
-                path, error = executor.plan_pose(point, place_rotation)
-                if error:
-                    plan.message = error
-                    item.update(phase=phase, reason=error)
-                    event(**item)
-                    return False
-                place_paths.append(path)
             item.update(phase="witness", accepted=True)
             selected.update(
                 approach_route=route,
@@ -388,6 +413,23 @@ def run(args):
         (output / "error.txt").write_text(traceback.format_exc())
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
+        (output / "candidates.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
+        (output / "witness.json").write_text(json.dumps(selected, indent=2) + "\n")
+        if initial_base is not None:
+            try:
+                data.qpos[:] = initial
+                save_motion_overview(
+                    output / "motion_overview.png",
+                    model,
+                    data,
+                    scorer=scorer,
+                    footprint=spec.footprint,
+                    initial_pose=initial_base,
+                    candidates=diagnostics,
+                    witness=selected,
+                )
+            except Exception as exc:
+                result["visualization_error"] = str(exc)
         if robot is not None:
             robot.stop()
         if server is not None:

@@ -91,13 +91,17 @@ class SceneNavigationSpace(XYT):
         self.step_size = 0.025
         self.rng = np.random.default_rng(seed)
         self.last_validity = {}
-        self.min_clearance_m = .22
-        self.environment_geoms = np.array([
-            g for g in range(model.ngeom)
-            if model.geom_bodyid[g] not in checker.robot_ids
-            and model.geom_type[g] != mujoco.mjtGeom.mjGEOM_PLANE
-            and (model.geom_contype[g] or model.geom_conaffinity[g])
-        ], dtype=int)
+        self.min_clearance_m = 0.22
+        self.environment_geoms = np.array(
+            [
+                g
+                for g in range(model.ngeom)
+                if model.geom_bodyid[g] not in checker.robot_ids
+                and model.geom_type[g] != mujoco.mjtGeom.mjGEOM_PLANE
+                and (model.geom_contype[g] or model.geom_conaffinity[g])
+            ],
+            dtype=int,
+        )
 
     def sample(self):
         return self.rng.uniform(self.mins, self.maxs)
@@ -139,7 +143,7 @@ class SceneNavigationSpace(XYT):
             centers = self.data.geom_xpos[geoms] + np.einsum("nij,nj->ni", rotation, self.model.geom_aabb[geoms, :3])
             half = np.einsum("nij,nj->ni", np.abs(rotation), self.model.geom_aabb[geoms, 3:])
             height = float(self.data.body(self.base_body).xpos[2])
-            relevant = (centers[:, 2] + half[:, 2] > height + .05) & (centers[:, 2] - half[:, 2] < height + .5)
+            relevant = (centers[:, 2] + half[:, 2] > height + 0.05) & (centers[:, 2] - half[:, 2] < height + 0.5)
             distances = np.linalg.norm(np.maximum(np.abs(centers[:, :2] - pose[:2]) - half[:, :2], 0), axis=1)
             clearance = float(distances[relevant].min()) if relevant.any() else None
             self.last_validity["min_clearance_m"] = clearance
@@ -153,6 +157,11 @@ class SceneNavigationSpace(XYT):
 
         before = self.data.qpos.copy()
         try:
+            # Reject invalid endpoints before an expensive mesh sweep. This
+            # preserves the same validity contract while reserving search time
+            # for candidates that can actually be reached.
+            if not self.is_valid(start) or not self.is_valid(goal):
+                return []
             if validate_navigation_sweep(self, start, [goal])[0]:
                 # Short waypoints bound unobserved tracking divergence.
                 points = list(self.extend(start, goal))
@@ -223,9 +232,12 @@ def score_physical_acceptance(trace_path, audit_path, *, execution_completed):
         carry = [r for r in rows if start <= r["sim_time"] < release and not r["support_contact"]]
         if carry:
             origin = np.asarray(carry[0]["relative_pos"])
+            rotations = np.asarray([r["relative_rot"] for r in carry]).reshape(-1, 3, 3)
+            angles = np.arccos(np.clip((np.einsum("nij,ij->n", rotations, rotations[0]) - 1) / 2, -1, 1))
             result["physical_transport_success"] = bool(
                 all(r["gripper_contact"] and not r["other_contact"] for r in carry)
                 and all(np.linalg.norm(np.asarray(r["relative_pos"]) - origin) <= 0.02 for r in carry)
+                and np.max(angles) <= 0.1
                 and all(b["sim_time"] - a["sim_time"] <= 0.25 for a, b in zip(carry, carry[1:], strict=False))
             )
     result["task_success"] = bool(
@@ -239,3 +251,59 @@ def score_physical_acceptance(trace_path, audit_path, *, execution_completed):
         and not result["forbidden_robot_contacts"]
     )
     return result
+
+
+def save_motion_overview(path, model, data, *, scorer, footprint, initial_pose, candidates, witness):
+    """Export auditable GT geometry and sampled routes; never feeds the planner."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Polygon, Rectangle
+
+    figure = Figure(figsize=(9, 8))
+    FigureCanvasAgg(figure)
+    ax = figure.subplots()
+    mujoco.mj_forward(model, data)
+    robot_ids = body_subtree(model, "base_link")
+    z = data.body("base_link").xpos[2]
+    for g in range(model.ngeom):
+        if model.geom_bodyid[g] in robot_ids or not (model.geom_contype[g] or model.geom_conaffinity[g]):
+            continue
+        if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_PLANE:
+            continue
+        rotation = data.geom(g).xmat.reshape(3, 3)
+        center = data.geom(g).xpos + rotation @ model.geom_aabb[g, :3]
+        half = np.abs(rotation) @ model.geom_aabb[g, 3:]
+        if center[2] + half[2] <= z + 0.05 or center[2] - half[2] >= z + 1.5:
+            continue
+        ax.add_patch(Rectangle(center[:2] - half[:2], *(2 * half[:2]), color="0.5", alpha=0.08))
+    for row in candidates:
+        pose = row["approach"]
+        color = "green" if row.get("accepted") else "crimson"
+        ax.plot(*pose[:2], marker="x", color=color)
+        ax.arrow(*pose[:2], 0.1 * np.cos(pose[2]), 0.1 * np.sin(pose[2]), color=color, head_width=0.025)
+    for key, color in [("approach_route", "royalblue"), ("place_route", "darkorange")]:
+        if witness.get(key):
+            route = np.asarray(witness[key])
+            ax.plot(route[:, 0], route[:, 1], color=color, label=key.replace("_", " "))
+    pose = np.asarray(initial_pose)
+    corners = np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]]) * [footprint.length / 2, footprint.width / 2]
+    corners += [footprint.length_offset, footprint.width_offset]
+    rotation = np.array([[np.cos(pose[2]), -np.sin(pose[2])], [np.sin(pose[2]), np.cos(pose[2])]])
+    ax.add_patch(Polygon(corners @ rotation.T + pose[:2], fill=False, edgecolor="royalblue", label="initial footprint"))
+    points = [pose[:2]]
+    for key, label, color in [("object_body", "target", "red"), ("support_body", "support", "purple")]:
+        point = data.body(scorer[key]).xpos[:2]
+        points.append(point.copy())
+        ax.scatter(*point, color=color, label=label, zorder=5)
+    points = np.asarray(points)
+    ax.set(
+        xlim=(points[:, 0].min() - 1, points[:, 0].max() + 1),
+        ylim=(points[:, 1].min() - 1, points[:, 1].max() + 1),
+        xlabel="world X (m)",
+        ylabel="world Y (m)",
+        title="GT geometry / candidate rejections / planned routes\nRed candidates are rejected; this is not execution evidence",
+    )
+    ax.set_aspect("equal")
+    ax.legend()
+    ax.grid(alpha=0.2)
+    figure.savefig(path, dpi=160, bbox_inches="tight")

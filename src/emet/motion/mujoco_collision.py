@@ -52,7 +52,7 @@ class MujocoSceneCollisionChecker:
         if body is not None:
             if parent is None:
                 raise ValueError("Payload needs a parent frame")
-            mujoco.mj_forward(model, data)
+            mujoco.mj_fwdPosition(model, data)
             ee, obj = data.body(parent), data.body(body)
             transform = np.eye(4)
             transform[:3, :3] = ee.xmat.reshape(3, 3).T @ obj.xmat.reshape(3, 3)
@@ -60,7 +60,7 @@ class MujocoSceneCollisionChecker:
             self.payload_transform = transform
 
     def configuration_collides(self, model, data) -> bool:
-        mujoco.mj_forward(model, data)
+        mujoco.mj_fwdPosition(model, data)
         watched = set(self.robot_ids)
         if self.payload_body is not None:
             body = model.body(self.payload_body)
@@ -74,7 +74,7 @@ class MujocoSceneCollisionChecker:
             quat = np.empty(4)
             mujoco.mju_mat2Quat(quat, (rotation @ self.payload_transform[:3, :3]).ravel())
             data.qpos[address + 3 : address + 7] = quat
-            mujoco.mj_forward(model, data)
+            mujoco.mj_fwdPosition(model, data)
             watched |= body_subtree(model, self.payload_body)
         self.last_contacts = []
         for contact in data.contact[: data.ncon]:

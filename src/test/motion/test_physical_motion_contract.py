@@ -144,3 +144,29 @@ def test_payload_geometry_is_checked_offline():
     # No payload: the thin arm clears the wall.
     checker.set_payload(m, d, None)
     assert not checker.configuration_collides(m, d)
+
+
+def test_pose_ik_saturated_joint_does_not_freeze_other_axes():
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody><body name="ee">
+    <joint name="x" type="slide" axis="1 0 0" range="0 1"/>
+    <joint name="z" type="slide" axis="0 0 1" range="0 1"/><geom size=".02"/>
+    </body></worldbody></mujoco>""")
+    d = mujoco.MjData(m)
+    result = solve_pose_ik(
+        m,
+        d,
+        ee_body="ee",
+        joint_names=["x", "z"],
+        target_pos=[-0.1, 0, 0.5],
+        target_rotation=np.eye(3),
+    )
+    assert not result.success  # X is unreachable; Z should still converge.
+    assert abs(d.qpos[1] - 0.5) < 0.01
+    assert d.qpos[0] >= 0
+
+
+@pytest.mark.parametrize("start, goal, reason", [(0, 4, "invalid_goal"), (4, 0, "invalid_start")])
+def test_arm_does_not_silently_replace_out_of_limit_endpoints(start, goal, reason):
+    m = model()
+    result = plan_arm_joint_path(m, mujoco.MjData(m), joint_names=["yaw"], q_start=[start], q_goal=[goal])
+    assert not result.success and result.reason == reason

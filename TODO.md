@@ -3,6 +3,21 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Physical TAMP acceptance (2026-09-26)
+
+Evidence and commands: [physical acceptance](docs/experiments/physical_tamp_acceptance.md).
+The user-selected experiment scope is GT/MCTS only, including the full 200-row
+registry. Oracle teleport and kinematic latch remain separately labeled controls.
+
+- [ ] Pass three matched physical pick/place trials on each original Molmo and
+      RoboCasa fixture, with independent retention, support, contact and actuation audits.
+- [ ] After that gate, validate broader layouts and bounded partial-map observation/replanning.
+- [ ] Complete the 24-case protocol, seven small-registry rows, GT floor/tool controls,
+      and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
+- [ ] Add physical adapters and collision coverage for deferred robots before claiming
+      multi-robot physical acceptance. Habitat-OVMM, long-horizon tasks, learned-agent
+      comparisons and hardware remain deferred. Update paper claims only from scored artifacts.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).

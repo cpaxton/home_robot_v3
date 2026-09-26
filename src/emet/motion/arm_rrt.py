@@ -127,10 +127,6 @@ def plan_arm_joint_path(
         return ArmRrtPlanResult(False, [], planner, "nonfinite_configuration")
 
     space = make_arm_configuration_space(model, joint_names, step_size=step_size)
-    # Live sim can report slightly out-of-range q; clamp so RRT can start.
-    q0 = np.clip(q0, space.mins, space.maxs)
-    q1 = np.clip(q1, space.mins, space.maxs)
-
     validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs)
 
     if not validate(q0):

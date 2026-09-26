@@ -52,6 +52,7 @@ def solve_pose_ik(
     telescoping arm). They are not independent IK degrees of freedom.
     Does not certify collision or change simulator state.
     """
+    from scipy.optimize import lsq_linear
     from scipy.spatial.transform import Rotation
 
     target = np.asarray(target_pos, dtype=float).reshape(3)
@@ -79,26 +80,42 @@ def solve_pose_ik(
             coupling[names.index(name), column] = 1.0 / len(group)
     jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
     for iteration in range(max_iters + 1):
-        mujoco.mj_forward(model, data)
+        # IK needs transforms and motion axes, not full-scene contact solving.
+        # Collision certification remains a separate mandatory path check.
+        mujoco.mj_kinematics(model, data)
+        mujoco.mj_comPos(model, data)
         delta = target - data.body(body_id).xpos
         angular = Rotation.from_matrix(rotation @ data.body(body_id).xmat.reshape(3, 3).T).as_rotvec()
         pos_error, rot_error = float(np.linalg.norm(delta)), float(np.linalg.norm(angular))
         success = pos_error <= tol_m and rot_error <= tol_rad
         if success or iteration == max_iters:
+            mujoco.mj_forward(model, data)
             return MujocoArmIkResult(success, data.qpos.copy(), pos_error, iteration, rot_error)
         mujoco.mj_jacBody(model, data, jacp, jacr, body_id)
         jacobian = np.vstack((jacp[:, dadr], jacr[:, dadr])) @ coupling
         error = np.r_[delta, angular]
-        update = coupling @ (jacobian.T @ np.linalg.solve(jacobian @ jacobian.T + damping**2 * np.eye(6), error))
-        # Bound the update as a whole to preserve coupling and avoid large jumps.
-        scale = min(step, 0.15 / max(float(np.max(np.abs(update))), 1e-9))
-        for index, name in enumerate(names):
-            joint = model.joint(name)
-            if model.jnt_limited[joint.id] and abs(update[index]) > 1e-12:
-                lo, hi = model.jnt_range[joint.id]
-                limit = hi if update[index] > 0 else lo
-                scale = min(scale, max(0.0, (limit - data.qpos[qadr[index]]) / update[index]))
-        data.qpos[qadr] += scale * update
+        # Solve bounded increments in actuator coordinates. Scaling every joint
+        # by the first saturated joint freezes otherwise usable degrees of freedom.
+        lower, upper = np.empty(len(groups)), np.empty(len(groups))
+        for column, group in enumerate(groups):
+            lower[column], upper[column] = -0.15 * len(group), 0.15 * len(group)
+            for name in group:
+                index = names.index(name)
+                joint = model.joint(name)
+                if model.jnt_limited[joint.id]:
+                    lo, hi = model.jnt_range[joint.id]
+                    lower[column] = max(lower[column], (lo - data.qpos[qadr[index]]) * len(group))
+                    upper[column] = min(upper[column], (hi - data.qpos[qadr[index]]) * len(group))
+        if np.any(lower > upper):
+            return MujocoArmIkResult(False, data.qpos.copy(), pos_error, iteration, rot_error)
+        free = upper - lower > 1e-12
+        delta_q = lower.copy()
+        if free.any():
+            fixed_error = jacobian[:, ~free] @ delta_q[~free]
+            matrix = np.vstack((jacobian[:, free], damping * np.eye(int(free.sum()))))
+            rhs = np.r_[step * error - fixed_error, np.zeros(int(free.sum()))]
+            delta_q[free] = lsq_linear(matrix, rhs, bounds=(lower[free], upper[free])).x
+        data.qpos[qadr] += coupling @ delta_q
     raise AssertionError("unreachable")
 
 
