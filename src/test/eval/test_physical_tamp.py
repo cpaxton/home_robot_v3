@@ -162,5 +162,9 @@ def test_support_surface_ignores_tiny_parked_geoms_without_height_cutoff():
       <geom type="box" pos="0 0 10" size=".01 .01 .01"/>
     </body></worldbody></mujoco>""")
     points = support_release_points(m, mujoco.MjData(m), support_body="support", payload_body="payload", ee_body="ee")
-    assert len(points) == 1
+    assert len(points) == 9
     np.testing.assert_allclose(points[0], [2, 0, 1.015])
+    assert all(abs(p[0] - 2) + .04 < .4 and abs(p[1]) + .04 < .4 for p in points)
+    assert all(abs(p[2] - 1.015) < 1e-8 for p in points)
+    # An obstacle at the center need not rule out the whole named support.
+    assert any(np.linalg.norm(p[:2] - [2, 0]) > .25 for p in points)

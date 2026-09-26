@@ -62,6 +62,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "grasp_rotations": 2,
             "place_base_candidates": 41,
             "support_surfaces": 4,
+            "release_points_per_surface": 9,
             "preplace_clearances_m": [0.12, 0.06, 0.03],
             "arm_rrt_iterations": 400,
             "replans": 2,
@@ -450,12 +451,24 @@ def support_release_points(model, data, *, support_body, payload_body, ee_body, 
             groups.append([])
         groups[-1].append((lo, hi))
     points = []
+    surfaces = 0
     for group in groups:
         lo = np.min([a for a, b in group], axis=0)
         hi = np.max([b for a, b in group], axis=0)
         if np.any(hi[:2] - lo[:2] < payload_hi[:2] - payload_lo[:2]):
             continue
-        points.append(np.r_[(lo[:2] + hi[:2]) / 2 - center_offset, hi[2] + bottom_offset + 0.015])
-        if len(points) >= max_surfaces:
+        # A named support's center may be occupied (e.g. by an appliance).
+        # Search its interior with payload-sized edge clearance. These AABB
+        # candidates still require full geometry checks and physical support.
+        center = (lo[:2] + hi[:2]) / 2
+        inset_half = (hi[:2] - lo[:2] - (payload_hi[:2] - payload_lo[:2])) / 2
+        offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
+        for offset in offsets:
+            xy = center + 0.8 * inset_half * offset - center_offset
+            point = np.r_[xy, hi[2] + bottom_offset + 0.015]
+            if not any(np.allclose(point, previous) for previous in points):
+                points.append(point)
+        surfaces += 1
+        if surfaces >= max_surfaces:
             break
     return points
