@@ -297,6 +297,22 @@ failures separately. A larger count on the same views/questions is not
 evidence of environment generalization. Live placement remains unresolved
 until the selected support and physical outcome are independently verified.
 
+Overnight battery launched as `20260926_011549_b33cfb`, frozen worktrees
+`/tmp/emet-placement-control-20260926` (`1a597378`) and
+`/tmp/emet-placement-current-20260926` (`01b37223`). Artifacts and exact driver:
+`~/runs/emet/placement-runtime-overnight-20260926/`. Schedule: eight EQA smoke
+episodes, eight small-room manipulation episodes, then twenty EQA development
+episodes (36 total, including both arms). Both Habitat render/import and SAM2
+runtime preflights passed. First q12/seed0 pair completes normally; both answer
+incorrectly. This is partial evidence, not the completed battery.
+
+Lightweight dependent report job `20260926_011851_3fde43` waits for the battery
+supervisor to exit, then writes `SUMMARY.md`, `summary.json` and its exact
+summarizer into the artifact directory. It reports partial results if a gate
+stops the battery; missing episodes do not become successes. Check `status.tsv`
+and the managed job log before interpreting that summary. No real robots or
+main-branch writes are involved.
+
 ## Starting point
 
 The September 23 small-room controls both stopped before grasping. Molmo had
