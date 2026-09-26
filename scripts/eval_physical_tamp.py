@@ -236,7 +236,10 @@ def run(args):
             robot.switch_to_manipulation_mode()
             values = dict(zip(joints, q, strict=True))
             cmd = arm_client_command(values)
-            ok = robot.arm_to(cmd, blocking=True, timeout=15, min_time=0.1)
+            # arm_to otherwise slews the head to a default EE view, outside the
+            # validated arm path. Hold the freshly measured head configuration.
+            head = [float(data.qpos[model.joint(name).qposadr[0]]) for name in ("joint_head_pan", "joint_head_tilt")]
+            ok = robot.arm_to(cmd, head=head, blocking=True, timeout=15, min_time=0.1)
             time.sleep(0.12)
             return ok
 
