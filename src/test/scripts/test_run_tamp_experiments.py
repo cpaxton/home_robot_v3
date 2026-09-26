@@ -4,6 +4,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 
 def runner():
     path=Path(__file__).resolve().parents[3]/'scripts/run_tamp_experiments.py'
@@ -19,6 +21,18 @@ def test_full_matrix_retains_all_200_rows_and_modes():
     assert Counter(c['robot'] for c in cases)=={'rby1':110,'stretch':30,'innate_mars':30,'nori':30}
     assert {c['execution_mode'] for c in cases}=={'oracle_teleport','kinematic_latch'}
     assert all('--episode-id' in c['command'] for c in cases)
+
+
+def test_robot_revalidation_is_an_explicit_subset_without_rewriting_cases():
+    module = runner()
+    full = module.build_cases('full', python='python')
+    subset = module.build_cases('full', python='python', robot='stretch')
+    assert len(subset) == 30
+    assert subset == [case for case in full if case['robot'] == 'stretch']
+    with pytest.raises(ValueError, match='No registry cases'):
+        module.build_cases('full', robot='missing_robot')
+    with pytest.raises(ValueError, match='only for small/full'):
+        module.build_cases('protocol', robot='stretch')
 
 
 def test_protocol_has_24_cases_and_floor_includes_deferred_find():

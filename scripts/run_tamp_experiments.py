@@ -24,7 +24,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build_cases(suite, python=sys.executable):
+def build_cases(suite, python=sys.executable, *, robot=None):
+    if robot is not None and suite not in ("small", "full"):
+        raise ValueError("Robot filtering is supported only for small/full registry revalidation")
     script = str(ROOT / "scripts/eval_tamp_clutter.py")
     if suite == "protocol":
         return [
@@ -54,6 +56,8 @@ def build_cases(suite, python=sys.executable):
 
         cases = []
         for row in rows:
+            if robot is not None and row["robot"] != robot:
+                continue
             mode = row.get("manip_mode") or ROBOT_DEFAULT_MANIP_MODE[row["robot"]]
             cases.append(
                 {
@@ -70,6 +74,8 @@ def build_cases(suite, python=sys.executable):
                     "command": [python, script, "--episodes", str(registry), "--episode-id", row["id"]],
                 }
             )
+        if not cases:
+            raise ValueError(f"No registry cases for robot {robot!r}")
         return cases
     if suite == "floor":
         rows = yaml.safe_load((ROOT / "configs/ovmm/full_episodes.yaml").read_text())["episodes"]
@@ -129,8 +135,12 @@ def main():
     parser.add_argument("--episode-timeout", type=float, default=900)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--robot", help="Optional small/full registry subset for explicit robot revalidation")
     args = parser.parse_args()
-    cases = build_cases(args.suite)
+    try:
+        cases = build_cases(args.suite, robot=args.robot)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.dry_run:
         print(
             json.dumps(
@@ -150,6 +160,7 @@ def main():
     manifest = {
         "schema": 1,
         "suite": args.suite,
+        "robot_filter": args.robot,
         "source_sha": source,
         "cases": cases,
         "episode_timeout_s": args.episode_timeout,
