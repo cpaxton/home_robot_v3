@@ -12,7 +12,7 @@ Grasp branches are ranked by offline position-IK feasibility before execution.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,6 +45,8 @@ class TaskPlan:
     grasp_poses: list[Any] = field(default_factory=list)
     completed_ops: list[str] = field(default_factory=list)
     failed_op: str | None = None
+    execution_mode: str | None = None
+    diagnostics: list[dict[str, Any]] = field(default_factory=list)
 
 
 def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
@@ -185,6 +187,8 @@ def plan_pick_place(
     approach_standoff_m: float = 0.55,
     top_k_grasps: int = 8,
     executor: Any | None = None,
+    approach_pose: Sequence[float] | None = None,
+    approach_validator: Callable[[np.ndarray], bool] | None = None,
 ) -> TaskPlan:
     """Build a grounded approach → grasp → place plan with IK-ranked grasps.
 
@@ -207,7 +211,20 @@ def plan_pick_place(
     obj_xy = np.asarray(pl[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
     mode, arm = _tamp_approach_mode_and_arm(robot, executor)
     approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+    if approach_pose is not None:
+        approach = np.asarray(approach_pose, dtype=float)
+        if approach.shape != (3,) or not np.isfinite(approach).all():
+            raise ValueError("Approach pose must be finite XYT")
     expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
+    if approach_validator is not None and not approach_validator(approach.copy()):
+        return TaskPlan(
+            steps=[],
+            object_body=object_gt_body,
+            receptacle_body=receptacle_gt_body,
+            expanded_nodes=expanded,
+            success=False,
+            message="approach_route_invalid",
+        )
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
@@ -296,12 +313,26 @@ def execute_task_plan(
     grasp_poses: Sequence[Any],
     manip_mode: str = "kinematic",
     video_recorder: Any | None = None,
+    approach_executor: Callable[[np.ndarray], Any] | None = None,
 ) -> TaskPlan:
     """Execute a :class:`TaskPlan` in order; updates ``plan.success`` / ``message``.
 
     Optional *video_recorder* (``ManipVideoRecorder``) gets status updates per step
     and dumps clean paper stills after each completed operator.
     """
+    plan.success = False
+    plan.completed_ops.clear()
+    plan.failed_op = None
+    plan.diagnostics.clear()
+    mode = str(manip_mode).lower()
+    plan.execution_mode = mode
+    if mode not in ("kinematic", "latch", "teleport", "sim", "physical", "attempt"):
+        plan.message = "unsupported_execution_mode"
+        return plan
+    physical = mode in ("physical", "attempt")
+    if physical and getattr(executor, "execution_mode", None) != "physical":
+        plan.message = "unsupported_physical_executor"
+        return plan
     if not plan.steps:
         plan.success = False
         plan.message = plan.message or "empty_plan"
@@ -333,7 +364,20 @@ def execute_task_plan(
             _status("approach", detail=f"xyt={args.get('xyt')}")
             xyt = np.asarray(args["xyt"], dtype=np.float64)
             try:
-                robot.move_base_to(xyt, blocking=True, world_frame=bool(args.get("world_frame", True)))
+                if physical and approach_executor is None:
+                    return _fail(op, "missing_validated_route_executor")
+                result = (
+                    approach_executor(xyt)
+                    if approach_executor is not None
+                    else robot.move_base_to(xyt, blocking=True, world_frame=bool(args.get("world_frame", True)))
+                )
+                success = getattr(result, "success", result)
+                diagnostic = {"phase": op, "goal_pose": xyt.tolist(), "success": bool(success)}
+                if hasattr(result, "__dict__"):
+                    diagnostic.update(vars(result))
+                plan.diagnostics.append(diagnostic)
+                if not isinstance(success, (bool, np.bool_)) or not success:
+                    return _fail(op, "approach_failed:" + str(getattr(result, "reason", "movement_not_confirmed")))
             except Exception as exc:
                 return _fail(op, f"approach_failed:{type(exc).__name__}")
         elif op == "grasp":
@@ -343,7 +387,7 @@ def execute_task_plan(
                 return _fail(op, f"bad_grasp_index_{gi}")
             g = grasp_poses[gi]
             T = getattr(g, "T_world", g)
-            if str(manip_mode).lower() == "kinematic":
+            if mode in ("kinematic", "latch", "physical", "attempt"):
                 try:
                     result = executor.grasp_only(
                         args["object_query"],
@@ -366,7 +410,7 @@ def execute_task_plan(
                     return _fail(op, "teleport_grasp_failed")
         elif op == "place":
             _status("place", detail=f"receptacle={args.get('receptacle_query')!r}")
-            if str(manip_mode).lower() == "kinematic":
+            if mode in ("kinematic", "latch", "physical", "attempt"):
                 try:
                     result = executor.place_only(
                         args["receptacle_query"],
@@ -423,6 +467,9 @@ def plan_pick_place_mcts(
     mcts_depth: int = 5,
     mcts_uct_c: float = 1.3,
     seed: int | None = None,
+    approach_validator: Callable[[np.ndarray], bool] | None = None,
+    plan_validator: Callable[[TaskPlan], bool] | None = None,
+    max_candidates: int = 64,
 ) -> TaskPlan:
     """MCTS over candidate (object, receptacle) task assignments.
 
@@ -440,10 +487,17 @@ def plan_pick_place_mcts(
     This is the "agent-call-wrapping" TAMP seam: the distance heuristic policy
     stands in for an LLM proposer, and the executor/MuJoCo grounding is the
     simulator. Returns the best reachable plan (or an empty failed TaskPlan).
+
+    For navigation feasibility tests, candidates may supply ``approach_pose``
+    and the evaluator supplies ``approach_validator`` (route + swept footprint).
+    Without that validator, symbolic/IK success does NOT establish a clear route.
+    A failed bounded search is not proof that no physical plan exists.
     """
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
     from emet.motion.agent_mcts import AgentMCTSPlanner, MCTSConfig, PickPlaceDistancePolicy
 
+    if max_candidates < 1 or mcts_iterations < 1:
+        raise ValueError("Search budgets must be positive")
     pl = read_sim_object_placements(robot.get_emet_session()) or {}
     cands = [
         c
@@ -509,7 +563,8 @@ def plan_pick_place_mcts(
 
     best: TaskPlan | None = None
     last_fail: str | None = None
-    for cand in cands:
+    rejected: list[str] = []
+    for cand in cands[:max_candidates]:
         obj_body = str(cand["object_gt_body"])
         recep_body = str(cand.get("receptacle_gt_body") or "")
         state = make_state(obj_body, recep_body)
@@ -536,15 +591,26 @@ def plan_pick_place_mcts(
             approach_standoff_m=approach_standoff_m,
             top_k_grasps=top_k_grasps,
             executor=executor,
+            approach_pose=cand.get("approach_pose"),
+            approach_validator=approach_validator,
         )
         plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())
+        if plan.success and plan_validator is not None and not plan_validator(plan):
+            plan.success = False
+            plan.message = plan.message if plan.message not in ("", "ok") else "motion_validation_failed"
         if not plan.success:
             # Keep the most informative failure for diagnostics.
             last_fail = str(plan.message or "")
-        if plan.success and (best is None or len(best.steps) <= len(plan.steps)):
+            rejected.extend(plan.expanded_nodes)
+            rejected.append(last_fail)
+        if plan.success and (best is None or len(plan.steps) < len(best.steps)):
             best = plan
+            if plan_validator is not None:
+                # A complete validated witness suffices; preserve its executor state.
+                break
     if best is not None:
+        best.expanded_nodes = rejected + best.expanded_nodes
         return best
     detail = f"last_grounding={last_fail}" if last_fail else f"candidates={len(cands)}"
     return TaskPlan(
@@ -552,8 +618,8 @@ def plan_pick_place_mcts(
         object_body="",
         receptacle_body=None,
         success=False,
-        message=f"no_reachable_task:{detail}",
-        expanded_nodes=[c.get("object_query", "") for c in cands],
+        message=f"no_plan_within_budget:{detail}",
+        expanded_nodes=rejected + [f"candidate_budget={max_candidates}", f"mcts_iterations={mcts_iterations}"],
     )
 
 

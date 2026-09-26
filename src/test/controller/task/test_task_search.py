@@ -34,6 +34,7 @@ class _FakeRobot:
 
     def move_base_to(self, xyt, blocking=True, world_frame=True):
         self.moved.append(np.asarray(xyt, dtype=np.float64).copy())
+        return True
 
 
 class _FakeGrasp:

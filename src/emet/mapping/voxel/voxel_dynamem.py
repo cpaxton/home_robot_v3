@@ -435,6 +435,16 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             return self._scene_graph_processor.scene_graph
         return None
 
+    def get_navigation_map(self) -> tuple[Tensor, Tensor]:
+        """Observed physical obstacles, before legacy configuration-space dilation.
+
+        Navigation owns robot clearance and swept-footprint checks. Keep the
+        historical padded map for other consumers; never erode it to infer raw
+        geometry. Both maps share observation history and boundary barriers.
+        """
+        self.get_2d_map()
+        return self._physical_map2d
+
     def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
         Get 2d map with explored area and frontiers.
@@ -492,6 +502,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             # Remove "visited" points containing observations of the robot
             obstacles *= (1 - self._visited).bool()
 
+        physical_obstacles = obstacles.clone()
         if self.dilate_obstacles_kernel is not None:
             obstacles = binary_dilation(
                 obstacles.float().unsqueeze(0).unsqueeze(0),
@@ -538,8 +549,10 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
 
         # Optional grid-edge obstacle barrier (map_boundary/obstacle_barrier_cells in dynav YAML).
         _apply_map_boundary_2d(obstacles, history_soft, self.parameters)
+        _apply_map_boundary_2d(physical_obstacles, history_soft, self.parameters)
 
         # Update cache
+        self._physical_map2d = (physical_obstacles, explored)
         self._map2d = (obstacles, explored)
         self._2d_last_updated = self._seq
         self._history_soft = history_soft
@@ -1095,4 +1108,3 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         with open(filename, "wb") as f:
             pickle.dump(data, f)
         print("write all data to", filename)
-

@@ -120,6 +120,22 @@ def plan_clear_clutter(
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 
     t0 = time.monotonic()
+    if manip_mode not in ("sim", "latch", "attempt"):
+        raise ValueError(f"unsupported manipulation mode: {manip_mode}")
+    # Never silently substitute attachment for a contact-based attempt.
+    if manip_mode == "attempt":
+        return {
+            "mode": mode,
+            "n_objects": len(objects),
+            "n_relocated": 0,
+            "n_cleared": 0,
+            "task_success": False,
+            "goal_reached": False,
+            "nav_path_open": False,
+            "execution_mode": "physical",
+            "status": "unsupported_capability",
+            "error": "physical_clutter_executor_not_available",
+        }
     pl = read_sim_object_placements(robot.get_emet_session()) or {}
     bin_body, bin_matched = _resolve_bin_body(pl, bin_query)
     if bin_body is None:
@@ -139,7 +155,7 @@ def plan_clear_clutter(
             "nav_path_open": False,
         }
 
-    exec_manip = "kinematic" if str(manip_mode).lower() in ("latch", "attempt") else "teleport"
+    exec_manip = "kinematic" if manip_mode == "latch" else "teleport"
     if executor is None and exec_manip == "kinematic":
         from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
 
