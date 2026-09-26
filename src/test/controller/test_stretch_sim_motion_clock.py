@@ -29,3 +29,19 @@ def test_controller_timeout_uses_simulation_time(monkeypatch):
     controller.timeout.assert_called_once_with(2.)
     robot.set_base_velocity.assert_called_once_with(v_linear=.1, omega=.2)
     assert not server.is_done and server.active
+
+
+def test_accepted_navigation_transitions_mode_inside_adapter():
+    server = SimpleNamespace()
+    received = []
+
+    def handle(action):
+        received.append(action)
+        server._contract_navigation_context = {"resolved_goal": action["xyt"]}
+
+    server.handle_action = handle
+    action = {"xyt": [1., 0., .5]}
+    context = MujocoZmqServer.start_navigation_command(server, action)
+    assert context["resolved_goal"] == action["xyt"]
+    assert received[0]["control_mode"] == "navigation"
+    assert "control_mode" not in action

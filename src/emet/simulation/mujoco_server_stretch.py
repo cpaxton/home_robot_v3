@@ -429,7 +429,10 @@ class MujocoZmqServer(BaseZmqServer):
 
     def start_navigation_command(self, action):
         self._contract_navigation_context = None
-        self.handle_action(action)
+        # The wire protocol requires standalone navigation. Perform the mode
+        # transition inside the accepted command, atomically with goal dispatch.
+        # The next manipulation transition then records the fresh arrival pose.
+        self.handle_action({**action, "control_mode": "navigation"})
         if action.get("nav_policy"):
             from emet.core.navigation_result import NAVIGATION_POLICIES
 

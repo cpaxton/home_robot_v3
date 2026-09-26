@@ -379,7 +379,7 @@ def execute_task_plan(
                 if not isinstance(success, (bool, np.bool_)) or not success:
                     return _fail(op, "approach_failed:" + str(getattr(result, "reason", getattr(result, "message", "movement_not_confirmed"))))
             except Exception as exc:
-                return _fail(op, f"approach_failed:{type(exc).__name__}")
+                return _fail(op, f"approach_failed:{type(exc).__name__}:{exc}")
         elif op == "grasp":
             gi = int(args["grasp_index"])
             _status("grasp", detail=f"grasp_index={gi} object={args.get('object_query')!r}")
