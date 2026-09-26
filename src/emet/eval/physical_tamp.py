@@ -76,6 +76,9 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "ik_position_m": 0.01,
             "ik_orientation_rad": 0.1,
             "joint_tracking": 0.03,
+            "telescoping_joint_limit_margin_m": 0.005,
+            "base_drift_during_arm_m": 0.01,
+            "base_drift_during_arm_rad": 0.02,
             "penetration_m": 0.001,
         },
     }

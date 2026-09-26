@@ -49,6 +49,7 @@ class PhysicalPickPlaceExecutor:
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
         base_body: str | None = None,
+        joint_limit_margins=None,
     ):
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
@@ -62,6 +63,7 @@ class PhysicalPickPlaceExecutor:
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.base_body = base_body
+        self.joint_limit_margins = dict(joint_limit_margins or {})
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -80,6 +82,7 @@ class PhysicalPickPlaceExecutor:
             target_pos=position,
             target_rotation=rotation,
             coupled_groups=self.coupled_groups,
+            joint_limit_margins=self.joint_limit_margins,
             tol_m=self.position_tolerance_m,
             tol_rad=self.orientation_tolerance_rad,
         )
@@ -277,6 +280,7 @@ class PhysicalPickPlaceExecutor:
                 goal_tolerance=0.001,
             )
             if not check.success:
+                self.event(phase=phase, reason=check.reason, measured=current.tolist(), contacts=list(self.collision.last_contacts))
                 return PhysicalMotionResult(False, f"revalidation_failed:{check.reason}", phase)
             response = self.command_joints(np.asarray(target))
             ok = isinstance(response, (bool, np.bool_)) and bool(response)

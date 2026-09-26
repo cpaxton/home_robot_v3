@@ -165,6 +165,21 @@ def test_pose_ik_saturated_joint_does_not_freeze_other_axes():
     assert d.qpos[0] >= 0
 
 
+@pytest.mark.parametrize("target,expected", [(.99, True), (.999, False)])
+def test_pose_ik_reserves_tracking_margin_inside_joint_limits(target, expected):
+    m = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="ee">
+      <joint name="extension" type="slide" axis="1 0 0" range="0 1"/>
+      <geom size=".02"/></body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    d.qpos[0] = 1.  # Even an initially satisfied pose must respect the reserve.
+    result = solve_pose_ik(
+        m, d, ee_body="ee", joint_names=["extension"], target_pos=[target, 0, 0],
+        target_rotation=np.eye(3), tol_m=.001, joint_limit_margins={"extension": .005},
+    )
+    assert result.success == expected
+    assert .005 <= d.qpos[0] <= .995 + 1e-9
+
+
 @pytest.mark.parametrize("start, goal, reason", [(0, 4, "invalid_goal"), (4, 0, "invalid_start")])
 def test_arm_does_not_silently_replace_out_of_limit_endpoints(start, goal, reason):
     m = model()

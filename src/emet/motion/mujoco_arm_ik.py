@@ -45,6 +45,7 @@ def solve_pose_ik(
     damping: float = 0.02,
     step: float = 0.5,
     coupled_groups=(),
+    joint_limit_margins=None,
 ) -> MujocoArmIkResult:
     """Pose IK on an offline model, with optional equal-motion joint groups.
 
@@ -68,7 +69,19 @@ def solve_pose_ik(
         raise ValueError("Pose IK requires a finite rigid target and positive solver parameters")
     body_id = model.body(ee_body).id
     names = list(joint_names)
+    margins = dict(joint_limit_margins or {})
+    if not set(margins).issubset(names) or any(not np.isfinite(v) or v < 0 for v in margins.values()):
+        raise ValueError("Joint limit margins must be finite nonnegative values for controlled joints")
     qadr, dadr = joint_qpos_addrs(model, names), joint_dof_addrs(model, names)
+    bounds = {}
+    for name in names:
+        joint = model.joint(name)
+        if model.jnt_limited[joint.id]:
+            lo, hi = model.jnt_range[joint.id]
+            margin = margins.get(name, 0.0)
+            if lo + margin >= hi - margin:
+                raise ValueError("Joint limit margin leaves no usable range")
+            bounds[name] = (lo + margin, hi - margin)
     groups = [list(group) for group in coupled_groups]
     grouped = [name for group in groups for name in group]
     if len(grouped) != len(set(grouped)) or not set(grouped).issubset(names) or any(not g for g in groups):
@@ -91,7 +104,8 @@ def solve_pose_ik(
         delta = target - data.body(body_id).xpos
         angular = Rotation.from_matrix(rotation @ data.body(body_id).xmat.reshape(3, 3).T).as_rotvec()
         pos_error, rot_error = float(np.linalg.norm(delta)), float(np.linalg.norm(angular))
-        success = pos_error <= tol_m and rot_error <= tol_rad
+        inside = all(lo - 1e-9 <= data.qpos[model.joint(name).qposadr[0]] <= hi + 1e-9 for name, (lo, hi) in bounds.items())
+        success = pos_error <= tol_m and rot_error <= tol_rad and inside
         if success or iteration == max_iters:
             mujoco.mj_kinematics(model, data)
             return MujocoArmIkResult(success, data.qpos.copy(), pos_error, iteration, rot_error)
@@ -107,7 +121,7 @@ def solve_pose_ik(
                 index = names.index(name)
                 joint = model.joint(name)
                 if model.jnt_limited[joint.id]:
-                    lo, hi = model.jnt_range[joint.id]
+                    lo, hi = bounds[name]
                     lower[column] = max(lower[column], (lo - data.qpos[qadr[index]]) * len(group))
                     upper[column] = min(upper[column], (hi - data.qpos[qadr[index]]) * len(group))
         if np.any(lower > upper):

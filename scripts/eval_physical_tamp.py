@@ -259,6 +259,7 @@ def run(args):
             coupled_groups=(tuple(f"joint_arm_l{i}" for i in range(4)),),
             event=event,
             base_body="base_link",
+            joint_limit_margins={f"joint_arm_l{i}": 0.005 for i in range(4)},
         )
         preparation_path = None
         preparation_state = initial.copy()
