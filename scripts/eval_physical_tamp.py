@@ -229,6 +229,15 @@ def run(args):
             coupled_groups=(tuple(f"joint_arm_l{i}" for i in range(4)),),
             event=event,
         )
+        preparation_path = None
+        preparation_state = initial.copy()
+        preparation_error = None
+        if chain.navigation_arm_q:
+            targets = dict(zip(chain.joint_names, chain.navigation_arm_q, strict=True))
+            preparation_path, preparation_error = executor.plan_joint_target(np.array([targets[n] for n in joints]))
+            if preparation_path is not None:
+                preparation_state = data.qpos.copy()
+            data.qpos[:] = initial
         candidates = []
         # First preserve a stationary witness; then explore a fixed ring order.
         poses = [initial_base.copy()]
@@ -253,9 +262,17 @@ def run(args):
             data.qpos[:] = initial
             checker.set_payload(model, data, None)
             approach = np.asarray(plan.steps[0].args["xyt"])
-            route = space.plan_route(initial_base, approach)
             item = {"approach": approach.tolist(), "phase": "approach", "accepted": False}
             diagnostics.append(item)
+            prepare = not np.allclose(approach, initial_base)
+            if prepare and preparation_error:
+                item.update(phase="navigation_posture", reason=preparation_error)
+                plan.message = preparation_error
+                event(**item)
+                return False
+            if prepare:
+                data.qpos[:] = preparation_state
+            route = space.plan_route(initial_base, approach)
             if not route:
                 plan.message = "approach_route_invalid"
                 item["contacts"] = list(checker.last_contacts)
@@ -357,6 +374,7 @@ def run(args):
                 place_pose=place_pose.tolist(),
                 grasp_paths=[[q.tolist() for q in p] for p in grasp_paths],
                 place_paths=[[q.tolist() for q in p] for p in place_paths],
+                preparation_path=[q.tolist() for q in preparation_path] if prepare and preparation_path else [],
             )
             event(**item)
             return True
@@ -376,12 +394,19 @@ def run(args):
             executor.grasp_paths = [list(map(np.asarray, path)) for path in selected["grasp_paths"]]
             executor.place_paths = [list(map(np.asarray, path)) for path in selected["place_paths"]]
             checker.set_payload(model, data, None)
+            preparation_pending = bool(selected["preparation_path"])
 
             def measure():
                 synchronize(data)
                 return base_pose(model, data)
 
             def navigate(goal):
+                nonlocal preparation_pending
+                if preparation_pending:
+                    prepared = executor.prepare_for_navigation(list(map(np.asarray, selected["preparation_path"])))
+                    if not prepared.success:
+                        return prepared
+                    preparation_pending = False
                 outcome = execute_measured_route(
                     robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event
                 )

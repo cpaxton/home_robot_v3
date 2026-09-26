@@ -46,6 +46,8 @@ class ArmChain:
     link_bodies: tuple[str, ...] = ()
     gripper_bodies: tuple[str, ...] = ()
     home_arm_q: tuple[float, ...] = ()
+    navigation_arm_q: tuple[float, ...] = ()
+    """Optional collision-checked navigation posture, aligned with joint_names."""
     base_freejoint_name: str = "base_freejoint"
 
 

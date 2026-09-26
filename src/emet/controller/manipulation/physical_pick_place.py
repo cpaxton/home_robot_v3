@@ -63,7 +63,6 @@ class PhysicalPickPlaceExecutor:
     def plan_pose(self, position, rotation):
         """Plan from the offline current state; caller preserves candidate state."""
         start = self.data.qpos.copy()
-        q0 = start[self.qadr].copy()
         result = solve_pose_ik(
             self.model,
             self.data,
@@ -80,6 +79,12 @@ class PhysicalPickPlaceExecutor:
             return None, f"pose_ik_failed:position={result.pos_error_m:.4f},rotation={result.orientation_error_rad:.4f}"
         goal = self.data.qpos[self.qadr].copy()
         self.data.qpos[:] = start
+        return self.plan_joint_target(goal)
+
+    def plan_joint_target(self, goal):
+        """Certify a profile posture transition using the same arm collision path."""
+        start = self.data.qpos.copy()
+        q0 = start[self.qadr].copy()
         path = plan_arm_joint_path(
             self.model,
             self.data,
@@ -100,6 +105,9 @@ class PhysicalPickPlaceExecutor:
             mujoco.mj_forward(self.model, self.data)
             return path.waypoints, None
         return None, f"arm_path_failed:{path.reason}"
+
+    def prepare_for_navigation(self, path):
+        return self._execute_path("navigation_posture", path)
 
     def _execute_path(self, phase, path):
         self.synchronize(self.data)

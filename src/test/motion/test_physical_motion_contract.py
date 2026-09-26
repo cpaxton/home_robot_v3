@@ -170,3 +170,33 @@ def test_arm_does_not_silently_replace_out_of_limit_endpoints(start, goal, reaso
     m = model()
     result = plan_arm_joint_path(m, mujoco.MjData(m), joint_names=["yaw"], q_start=[start], q_goal=[goal])
     assert not result.success and result.reason == reason
+
+
+def test_navigation_posture_requires_collision_path_and_measured_tracking():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = model()
+    d = mujoco.MjData(m)
+    calls = []
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(),
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["yaw"],
+        collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
+        synchronize=lambda state: mujoco.mj_forward(m, state),
+        command_joints=lambda q: calls.append(q) or True,
+    )
+    path, error = executor.plan_joint_target(np.array([1.0]))
+    assert path is None and error == "arm_path_failed:invalid_start" and not calls
+    # With a clear scene, a successful controller return still needs state progress.
+    m.geom_pos[m.geom("wall").id] = [2, 0, 0]
+    path, error = executor.plan_joint_target(np.array([0.2]))
+    assert error is None
+    d.qpos[0] = 0
+    measured = d.qpos.copy()
+    executor.synchronize = lambda state: state.qpos.__setitem__(slice(None), measured)
+    result = executor.prepare_for_navigation(path)
+    assert not result.success and result.message == "arm_tracking_failed"
+    assert calls
