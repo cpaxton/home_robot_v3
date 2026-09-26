@@ -986,3 +986,63 @@ paired small-room OVMM and EQA. The earlier overnight comparison stopped after
 failed approach, three completed RoboCasa trials picked but failed placement,
 and one RoboCasa control timed out. It is not a completed overnight sweep or
 evidence of broad non-regression.
+
+### September 26: bounded observation recovery and its limits
+
+Changes on `experiment/eqa-inspection-progress`:
+
+- `4a143651`: expose rejected footprint pose, unknown-cell count and bounded
+  world-axis cell offsets in navigation outcomes. Allow stationary observation
+  recovery only for unknown-footprint failure before any pickup has executed;
+  retain collision/uncertain-payload stops and the existing tool-round budget.
+- `169af836`: add optional `observe_floor(tilt_rad=...)` in [-1.4,-0.7], retaining
+  the -1.0 default, fresh calibrated depth and measured-pose checks. This is not
+  a relaxation of navigation checks or proof of all-robot head capability.
+- `d3a85724`: count stable grounded identities rather than duplicate query
+  handles at manipulation handoff. Still reject distinct identities and require
+  fresh reacquisition. This is unit-tested; the latest live run never reached
+  the handoff, so its relevance to the live ambiguity remains unverified.
+
+| Serial job | Intervention | Observed result |
+| --- | --- | --- |
+| `20260926_090242_0c1603` | Autonomous recovery, default floor tilt | Qwen chose observe_floor, captured fresh depth (+89 observed cells), then retried. Same four rear footprint cells remained unknown; no approach/pickup. |
+| `20260926_090710_f40f4b` | Explicit assisted follow-up requesting tilt -1.4 | Measured tilt -1.3095; +23 cells, including all four previous blockers. Route passed unchanged sweep and wheel-driven approach executed. Pickup refused at unique-candidate handoff. |
+| `20260926_091258_08c640` | Matched assisted follow-up after identity repair | Steep view added 18 cells, further observation added 3; one rear footprint cell remained unknown. No approach/pickup; handoff repair not exercised. |
+
+All three physical pick/place scores are false. The latter two are assisted
+diagnostics, not autonomous improvements or a statistically controlled efficacy
+comparison. Same seed/config does not imply identical measured initial pose or
+head settling. Shutdown manager connection-reset messages remain visible in logs.
+
+The initial saved-map audit finds unknown cells (498,507), (498,508), (498,510),
+(498,511) on a 0.1 m grid with origin (512,512). Measured base XY was
+(-1.00237,-0.27980), yaw .01856. The checker truncates its continuous grid pose
+to (501,509): cell X=-1.4 is ~.398 m behind the actual base, not merely the
+.3 m offset from the truncated grid center. This raises a fractional-cell
+footprint-placement question for the motion branch; it is not permission to
+erase unknown or occupied cells. In the ordinary floor capture these cell
+centers project below the image (rows ~690 versus height 424).
+
+In the successful assisted approach, planned XY was (-.7,-.3), while the fresh
+arrival frame measured (-.740715,-.296769), yaw -.07820. Target surface XY was
+(.125654,-.279428), ~.8665 m away, outside the .85 m grasp limit. Thus the
+navigation leg made physical progress but did not establish grasp-workspace
+acceptance. The motion/TAMP handoff in the sibling checkout records these
+coordinates and the rasterization issue; this branch does not duplicate its
+collision-geometry or low-level control repairs.
+
+Evidence roots (each includes job-specific `molmo/` logs, physical traces,
+grounding RGB/geometry and floor-observation RGB/depth/maps):
+
+- `~/runs/emet/navigation-floor-recovery-20260926/` (also
+  `offline_initial_footprint/initial_footprint.png`, replay map and driver).
+- `~/runs/emet/navigation-steep-floor-20260926/`.
+- `~/runs/emet/navigation-handoff-recheck-20260926/`.
+
+Latest scoped software regression suite: **437 passed**, two existing SWIG
+warnings. Includes navigation, tool dispatch, fresh observation, safe recovery,
+distinct-identity rejection and lazy graph grounding tests. No safety/default
+promotion, new physical TAMP pass, or fresh paired EQA/RoboCasa result is claimed.
+Next gate is repeatable observation plus workspace-valid measured arrival, then
+live handoff and paired small-room/EQA acceptance. Do not spend a full sweep on
+the unresolved one-cell start-state failure.

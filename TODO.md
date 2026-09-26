@@ -17,6 +17,21 @@ Strike through or move to a PR when done.
       mark unknown cells free or reduce safety thresholds to obtain success.
       Follow with wheel-executed approach, blocked-route negatives, paired
       small-room manipulation and EQA before promoting the pilot.
+- [x] Preserve footprint rejection details and test bounded pre-pick observation
+      recovery (`4a143651`); optional measured downward tilt (`169af836`). Live
+      job `20260926_090242_0c1603` autonomously observes/retries but remains
+      blocked. Assisted steep-look job `20260926_090710_f40f4b` observes the four
+      missing rear cells and drives ~26 cm; pickup still fails candidate handoff.
+- [ ] Resolve repeatability before paired acceptance: recheck
+      `20260926_091258_08c640` remains blocked by one unknown rear cell despite
+      steep views. Coordinate fractional-cell footprint placement and task-space
+      arrival tolerances with the separate physical-TAMP branch; do not bypass
+      unknown cells. Earlier arrival was ~0.866 m from target, beyond .85 m reach.
+- [ ] Live-validate duplicate query-reference repair `d3a85724`. Unit tests
+      distinguish repeated handles for one stable identity from truly distinct
+      objects; the recheck stopped before manipulation, so it did not establish
+      whether this explains the previous live handoff failure. Latest scoped
+      regression suite: 437 passed. No fresh paired EQA/RoboCasa acceptance yet.
 - [x] Build/run a reproducible serial carry checkpoint battery; 12 controlled
       conditions isolate hold, translation, turns, braking and recorded wheels.
       277 focused tests pass; evidence/figure in the floor-coverage report.
