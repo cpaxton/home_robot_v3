@@ -303,6 +303,7 @@ def run(args):
             if prepare:
                 data.qpos[:] = preparation_state
             route = space.plan_route(initial_base, approach)
+            item["approach_route_stats"] = dict(space.route_stats)
             if not route:
                 plan.message = "approach_route_invalid"
                 item["contacts"] = list(checker.last_contacts)
@@ -442,9 +443,22 @@ def run(args):
             event(**item)
             return True
 
-        plan = plan_pick_place_mcts(
-            oracle, candidates=candidates, executor=None, plan_validator=validate, seed=args.seed, max_candidates=48
-        )
+        # Keep a main-thread profile of live planning: an offline replay does
+        # not include observation-thread contention or the same settled state.
+        import cProfile
+        import pstats
+
+        profile = cProfile.Profile()
+        profile.enable()
+        try:
+            plan = plan_pick_place_mcts(
+                oracle, candidates=candidates, executor=None, plan_validator=validate, seed=args.seed, max_candidates=48
+            )
+        finally:
+            profile.disable()
+            profile.dump_stats(str(output / "planning.prof"))
+            with (output / "planning_profile.txt").open("w") as stream:
+                pstats.Stats(profile, stream=stream).sort_stats("cumulative").print_stats(50)
         (output / "candidates.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
         (output / "witness.json").write_text(json.dumps(selected, indent=2) + "\n")
         result.update(

@@ -116,3 +116,26 @@ All submissions below are pending until their terminal ledgers are inspected.
 | GT floor, 4 rows | `20260926_105236_f9f497` | `/tmp/tamp-floor-20260926-r5` |
 | Full, 200 rows | `20260926_105236_43eed7` | `/tmp/tamp-full-20260926-r5` |
 | Scripted tool controls, 3 items | `20260926_105251_7b1af8` | `/tmp/tamp-tools-20260926-r5` |
+
+## Revision 4 terminal outcomes and follow-up
+
+Molmo timed out without a full witness (657.2 seconds including cleanup).
+RoboCasa exhausted its search without a full witness (617.9 seconds including
+cleanup). Two RoboCasa candidates passed the offline approach/grasp/lift sequence,
+but each rejected all 40 transport alternatives. Many endpoint contacts involved
+the toaster at the selected counter center. No physical pickup or placement ran.
+
+Revision `0d08387a` searches nine interior release positions per support level,
+retaining payload-sized edge clearance and full geometry validation. Its focused
+16 tests pass. It is frozen in `/tmp/emet-physical-tamp-20260926-r6`; RoboCasa
+job `20260926_110716_7c4a47` is queued with output
+`/tmp/physical-tamp-robocasa-20260926-r6`.
+
+The archived-route profile completed two routes in 1.035 seconds (798 validity
+calls). A separate symbolic candidate profile took 0.058 seconds. Neither
+reproduces the live route delays; these are diagnostic timings, not a speedup
+claim or an execution witness. A moved-pose contact-count probe matched the full
+position pass, but this alone is not broad collision-kernel validation.
+
+The revision-5 protocol has completed Nori scene 0 with all four oracle tests
+passing. The remaining protocol, registry, floor, and tool results are pending.
