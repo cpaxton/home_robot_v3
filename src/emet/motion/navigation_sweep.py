@@ -127,6 +127,8 @@ def execute_measured_route(
                 return invalid_measurement(attempt, cancel_motion=True)
             xy = float(np.linalg.norm(current[:2] - waypoint[:2]))
             yaw = float(abs(np.arctan2(np.sin(current[2] - waypoint[2]), np.cos(current[2] - waypoint[2]))))
+            receipt = getattr(robot, "_command_receipt", None)
+            controller_result = receipt.get("result") if isinstance(receipt, dict) else None
             event(
                 phase="navigation",
                 command=waypoint.tolist(),
@@ -134,10 +136,13 @@ def execute_measured_route(
                 position_residual_m=xy,
                 yaw_residual_rad=yaw,
                 controller_success=bool(ok),
+                controller_result=controller_result,
                 replan=attempt,
             )
             if not ok or not np.isfinite(current).all() or xy > position_tolerance_m or yaw > yaw_tolerance_rad:
                 reason = "base_tracking_failed"
+                if isinstance(controller_result, dict) and controller_result.get("reason"):
+                    reason += ":" + str(controller_result["reason"])
                 diverged = True
                 break
         if not diverged:

@@ -69,3 +69,16 @@ def test_stalled_motion_has_fresh_telemetry_but_no_progress():
     for i in range(10):
         assert update(m, i * 0.5, (1, 0, 0), stopped=False) is None
     assert update(m, 5, (1, 0, 0), stopped=False)[1]["reason"] == "navigation stalled"
+
+
+def test_slow_simulation_gets_a_measured_time_progress_window():
+    m = monitor()
+    for tick in range(51):
+        assert m.update([1 - .0003 * tick, 0, 0], sample_time=.1 * tick, now=tick, stopped=False) is None
+
+
+def test_slow_simulation_still_rejects_a_real_stall():
+    m = monitor()
+    for tick in range(50):
+        assert m.update([1, 0, 0], sample_time=.1 * tick, now=tick, stopped=False) is None
+    assert m.update([1, 0, 0], sample_time=5, now=50, stopped=False)[1]['reason'] == 'navigation stalled'
