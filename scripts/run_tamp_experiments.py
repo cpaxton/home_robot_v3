@@ -94,6 +94,11 @@ def summarize_case(case, directory, returncode):
         path = directory / (case["id"] + ".json")
     else:
         path = directory / (case["id"] + ".json")
+    if returncode < 0:
+        return {
+            "status": "crashed", "task_success": False, "exit_code": returncode,
+            "reason": "terminated_by_signal", "evidence": str(path) if path.exists() else None,
+        }
     if not path.exists():
         return {"status": "error", "task_success": False, "reason": "missing_result_artifact", "exit_code": returncode}
     result = json.loads(path.read_text())
@@ -103,16 +108,16 @@ def summarize_case(case, directory, returncode):
         )
         return {
             "status": "completed" if returncode == 0 else "failed",
-            "task_success": bool(passed),
+            "task_success": bool(passed and returncode == 0),
             "evidence": str(path),
             "exit_code": returncode,
             "battery": result,
         }
-    success = bool(result.get("task_success", False))
+    success = bool(result.get("task_success", False)) and returncode == 0
     status = result.get("status")
     if status not in ("unsupported_capability", "deferred_gt_only"):
         status = (
-            "invalid_fixture" if result.get("skipped_invalid") else ("error" if result.get("error") else "completed")
+            "invalid_fixture" if result.get("skipped_invalid") else ("error" if result.get("error") or returncode else "completed")
         )
     return {"status": status, "task_success": success, "exit_code": returncode, "evidence": str(path), "result": result}
 
@@ -215,7 +220,7 @@ def main():
         persist()
         print(json.dumps({"case": case["id"], **score}), flush=True)
         # A timeout requires explicit simulator/job cleanup inspection before continuing.
-        if score["status"] == "timeout":
+        if score["status"] in ("timeout", "crashed"):
             break
     summary = {
         "scheduled_cases": len(cases),
@@ -231,7 +236,7 @@ def main():
     return (
         0
         if summary["terminal_cases"] == len(cases)
-        and not any(r["status"] in ("error", "timeout") for r in ledger.values())
+        and not any(r["status"] in ("error", "timeout", "crashed", "failed") for r in ledger.values())
         else 1
     )
 

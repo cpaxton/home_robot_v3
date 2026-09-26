@@ -41,3 +41,14 @@ def test_missing_and_invalid_rows_remain_visible(tmp_path):
     assert module.summarize_case(case,tmp_path,0)['status']=='error'
     (tmp_path/'episode.json').write_text(json.dumps({'skipped_invalid':True,'task_success':False}))
     assert module.summarize_case(case,tmp_path,0)['status']=='invalid_fixture'
+
+
+def test_crash_overrides_success_artifact_and_missing_artifact(tmp_path):
+    module = runner()
+    case = {'id': 'episode', 'execution_mode': 'oracle_teleport', 'expected_episodes': 1}
+    assert module.summarize_case(case, tmp_path, -11)['status'] == 'crashed'
+    (tmp_path / 'episode.json').write_text(json.dumps({'task_success': True}))
+    result = module.summarize_case(case, tmp_path, -11)
+    assert result['status'] == 'crashed' and not result['task_success']
+    assert result['evidence'] and result['exit_code'] == -11
+    assert not module.summarize_case(case, tmp_path, 1)['task_success']

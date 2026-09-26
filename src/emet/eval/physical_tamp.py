@@ -164,6 +164,7 @@ class SceneNavigationSpace(XYT):
             raise ValueError("Positive finite route planning timeout required")
         self.route_timeout_s = float(route_timeout_s)
         self._route_deadline = None
+        self.route_stats = {}
         self.min_clearance_m = 0.22
         self.environment_geoms = np.array(
             [
@@ -187,6 +188,14 @@ class SceneNavigationSpace(XYT):
             yield np.r_[start[:2] + t * (goal[:2] - start[:2]), start[2] + t * delta]
 
     def is_valid(self, pose):
+        started = time.monotonic()
+        try:
+            return self._is_valid(pose)
+        finally:
+            self.route_stats["validity_calls"] = self.route_stats.get("validity_calls", 0) + 1
+            self.route_stats["validity_wall_s"] = self.route_stats.get("validity_wall_s", 0.0) + time.monotonic() - started
+
+    def _is_valid(self, pose):
         if self._route_deadline is not None and time.monotonic() >= self._route_deadline:
             raise TimeoutError("route_planning_budget_exhausted")
         pose = np.asarray(pose)
@@ -231,23 +240,28 @@ class SceneNavigationSpace(XYT):
         from emet.motion.algo import get_planner
 
         before = self.data.qpos.copy()
-        self._route_deadline = time.monotonic() + self.route_timeout_s
+        started = time.monotonic()
+        self.route_stats = {"validity_calls": 0, "validity_wall_s": 0.0, "phase": "endpoints"}
+        self._route_deadline = started + self.route_timeout_s
         try:
             # Reject invalid endpoints before an expensive mesh sweep. This
             # preserves the same validity contract while reserving search time
             # for candidates that can actually be reached.
             if not self.is_valid(start) or not self.is_valid(goal):
                 return []
+            self.route_stats["phase"] = "direct_sweep"
             if validate_navigation_sweep(self, start, [goal])[0]:
                 # Short waypoints bound unobserved tracking divergence.
                 points = list(self.extend(start, goal))
                 return [q.tolist() for q in points[7::8]] + [np.asarray(goal).tolist()]
+            self.route_stats["phase"] = "rrt"
             planner = get_planner("rrt_connect", self, self.is_valid, max_iter=400, goal_tolerance=0.025)
             result = planner.plan(np.asarray(start), np.asarray(goal))
             if not result.success:
                 return []
             route = [node.state for node in result.trajectory]
             route.append(np.asarray(goal))
+            self.route_stats["phase"] = "rrt_sweep"
             if not validate_navigation_sweep(self, start, route)[0]:
                 return []
             return [np.asarray(q).tolist() for q in route]
@@ -257,6 +271,8 @@ class SceneNavigationSpace(XYT):
             self.last_validity = {"reason": "route_planning_budget_exhausted"}
             return []
         finally:
+            self.route_stats["wall_s"] = time.monotonic() - started
+            self.last_validity["route_stats"] = dict(self.route_stats)
             self._route_deadline = None
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
