@@ -537,6 +537,11 @@ def run(args):
         (output / "error.txt").write_text(traceback.format_exc())
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
+        if args.tier == "physical" and trace.exists() and "verified" not in result:
+            try:
+                result.update(score_physical_acceptance(trace, audit, execution_completed=False))
+            except Exception as exc:
+                result["scoring_error"] = f"{type(exc).__name__}: {exc}"
         (output / "candidates.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
         (output / "witness.json").write_text(json.dumps(selected, indent=2) + "\n")
         if initial_base is not None:

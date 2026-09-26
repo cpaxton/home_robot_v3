@@ -44,3 +44,39 @@ def test_producer_waits_for_atomic_command_consumption():
     assert stored.is_set()
     target = proxy.get_command().move_to["wrist_pitch"]
     assert target.trigger and target.pos == -.5
+
+
+def test_stop_allows_physics_consumer_to_acknowledge():
+    from emet.simulation.stretch_mujoco.stretch_mujoco_simulator import StretchMujocoSimulator
+
+    lock = threading.RLock()
+    submitted = threading.Event()
+    command = StatusCommand()
+    stamp = 0.
+
+    def status():
+        nonlocal stamp
+        stamp += .01
+        return SimpleNamespace(time=stamp, base=SimpleNamespace(x_vel=0., theta_vel=0.))
+
+    def publish(value):
+        nonlocal command
+        command = value
+        submitted.set()
+
+    def physics():
+        assert submitted.wait(1)
+        with lock:
+            command.base_velocity.trigger = False
+
+    worker = threading.Thread(target=physics)
+    worker.start()
+    simulator = SimpleNamespace(
+        is_running=lambda: True, _command_lock=lock,
+        data_proxies=SimpleNamespace(get_command=lambda: command, set_command=publish, get_status=status),
+    )
+    try:
+        assert StretchMujocoSimulator.cancel_base_motion(simulator, timeout=.5)
+    finally:
+        worker.join(timeout=1)
+    assert not worker.is_alive()
