@@ -409,3 +409,29 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
     assert result.success == expected
     assert commands == [{"blocking": False}]
     assert executor.payload_body is None  # Motor settling never asserts pickup or attachment.
+
+
+def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = model()
+    m.geom_pos[m.geom('wall').id] = [2, 0, 0]
+    d = mujoco.MjData(m)
+    measured = np.array([0.0])
+    commanded = []
+    sleeps = []
+
+    def settle(delay):
+        sleeps.append(delay)
+        measured[:] = commanded[-1]
+
+    monkeypatch.setattr('emet.controller.manipulation.physical_pick_place.time.sleep', settle)
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(), model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda state: state.qpos.__setitem__(slice(None), measured),
+        command_joints=lambda q: commanded.append(q.copy()) or True,
+    )
+    result = executor._execute_path('navigation_posture', [np.array([0.0]), np.array([0.2])])
+    assert result.success and result.residual == pytest.approx(0)
+    assert sleeps == [0.05]

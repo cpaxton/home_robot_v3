@@ -66,6 +66,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "preplace_clearances_m": [0.12, 0.06, 0.03],
             "arm_rrt_iterations": 400,
             "replans": 2,
+            "joint_settle_wall_s": 5.0,
             "wall_timeout_s": 600,
         },
         "tolerances": {

@@ -45,6 +45,7 @@ class PhysicalPickPlaceExecutor:
         coupled_groups=(),
         event: Callable = lambda **kwargs: None,
         joint_tolerance: float = 0.03,
+        joint_settle_timeout_s: float = 5.0,
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
     ):
@@ -54,6 +55,9 @@ class PhysicalPickPlaceExecutor:
         self.synchronize, self.command_joints = synchronize, command_joints
         self.coupled_groups, self.event = coupled_groups, event
         self.joint_tolerance = joint_tolerance
+        if not np.isfinite(joint_settle_timeout_s) or joint_settle_timeout_s <= 0:
+            raise ValueError("Positive finite joint settling timeout required")
+        self.joint_settle_timeout_s = float(joint_settle_timeout_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.grasp_paths: list = []
@@ -221,6 +225,8 @@ class PhysicalPickPlaceExecutor:
     def _execute_path(self, phase, path):
         def joint_residual(target):
             delta = self.data.qpos[self.qadr] - target
+            if not np.isfinite(delta).all():
+                return float("inf")
             errors = [float(np.max(np.abs(delta)))]
             errors.extend(
                 abs(float(sum(delta[self.joint_names.index(n)] for n in group))) for group in self.coupled_groups
@@ -258,6 +264,18 @@ class PhysicalPickPlaceExecutor:
             if not self.payload_retained():
                 return PhysicalMotionResult(False, "payload_not_retained", phase)
             residual = joint_residual(target)
+            # A client may acknowledge within a looser tolerance before the
+            # simulator has applied/settled the command. Wait for measured
+            # convergence, retaining the same certificate tolerance.
+            settle_deadline = time.monotonic() + self.joint_settle_timeout_s
+            while ok and np.isfinite(residual) and residual > self.joint_tolerance and time.monotonic() < settle_deadline:
+                time.sleep(0.05)
+                self.synchronize(self.data)
+                if not self.payload_retained():
+                    return PhysicalMotionResult(False, "payload_not_retained", phase)
+                residual = joint_residual(target)
+            if not np.isfinite(residual):
+                return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
             self.event(
                 phase=phase,
                 command=np.asarray(target).tolist(),

@@ -377,7 +377,7 @@ def execute_task_plan(
                     diagnostic.update(vars(result))
                 plan.diagnostics.append(diagnostic)
                 if not isinstance(success, (bool, np.bool_)) or not success:
-                    return _fail(op, "approach_failed:" + str(getattr(result, "reason", "movement_not_confirmed")))
+                    return _fail(op, "approach_failed:" + str(getattr(result, "reason", getattr(result, "message", "movement_not_confirmed"))))
             except Exception as exc:
                 return _fail(op, f"approach_failed:{type(exc).__name__}")
         elif op == "grasp":
