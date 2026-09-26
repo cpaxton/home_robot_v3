@@ -89,7 +89,7 @@ def solve_pose_ik(
         pos_error, rot_error = float(np.linalg.norm(delta)), float(np.linalg.norm(angular))
         success = pos_error <= tol_m and rot_error <= tol_rad
         if success or iteration == max_iters:
-            mujoco.mj_fwdPosition(model, data)
+            mujoco.mj_kinematics(model, data)
             return MujocoArmIkResult(success, data.qpos.copy(), pos_error, iteration, rot_error)
         mujoco.mj_jacBody(model, data, jacp, jacr, body_id)
         jacobian = np.vstack((jacp[:, dadr], jacr[:, dadr])) @ coupling

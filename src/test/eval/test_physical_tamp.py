@@ -27,6 +27,8 @@ def rows():
             "scored_execution": True,
             "robot_collision_audited": True,
             "forbidden_robot_contacts": [],
+            "release_command_audited": True,
+            "release_open_command": placed,
         }
         result.append(row)
     return result
@@ -130,3 +132,35 @@ def test_offline_base_pose_preserves_measured_tilt_height_and_velocity():
     np.testing.assert_allclose(angles, [0.1, -0.05, 1.2], atol=1e-9)
     np.testing.assert_allclose(d.qpos[:3], [1, 2, 0.2])
     np.testing.assert_array_equal(d.qvel, np.arange(6))
+
+
+def test_commanded_release_allows_brief_settling_before_stable_support(tmp_path):
+    records = rows()
+    for row in records[43:45]:
+        row["release_open_command"] = True
+        row["gripper_contact"] = False
+    assert score(tmp_path, records)["task_success"]
+
+
+def test_uncommanded_drop_onto_correct_support_is_not_release(tmp_path):
+    records = rows()
+    for row in records:
+        row["release_open_command"] = False
+    assert not score(tmp_path, records)["task_success"]
+
+
+def test_support_surface_ignores_tiny_parked_geoms_without_height_cutoff():
+    import mujoco
+
+    from emet.eval.physical_tamp import support_release_points
+
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+    <body name="ee" pos="0 0 1"><geom size=".01"/></body>
+    <body name="payload" pos="0 0 1"><freejoint/><geom type="box" size=".04 .04 .05"/></body>
+    <body name="support" pos="2 0 0">
+      <geom type="box" pos="0 0 .9" size=".4 .4 .05"/>
+      <geom type="box" pos="0 0 10" size=".01 .01 .01"/>
+    </body></worldbody></mujoco>""")
+    points = support_release_points(m, mujoco.MjData(m), support_body="support", payload_body="payload", ee_body="ee")
+    assert len(points) == 1
+    np.testing.assert_allclose(points[0], [2, 0, 1.015])

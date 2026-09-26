@@ -20,6 +20,15 @@ import numpy as np
 class ManipulationTrace:
     def __init__(self, model, config: dict, output: Path):
         self.config = config
+        self.release_actuator = None
+        if config.get("release_actuator"):
+            actuator = model.actuator(config["release_actuator"])
+            lo, hi = model.actuator_ctrlrange[actuator.id]
+            fraction = float(config.get("release_open_fraction", 0.9))
+            if not model.actuator_ctrllimited[actuator.id] or hi <= lo or not 0 < fraction <= 1:
+                raise ValueError("Release audit requires a bounded position actuator and open fraction")
+            self.release_actuator = actuator.id
+            self.release_threshold = float(lo + fraction * (hi - lo))
         self.target = int(model.body(config["object_body"]).id)
         self.support = int(model.body(config["support_body"]).id)
         self.ee = int(model.body(config["ee_body"]).id)
@@ -166,6 +175,10 @@ class ManipulationTrace:
             "qacc_warmstart": data.qacc_warmstart.tolist(),
             "ctrl": data.ctrl.tolist(),
             "scored_execution": scored_execution,
+            "release_command_audited": self.release_actuator is not None,
+            "release_open_command": bool(
+                self.release_actuator is not None and data.ctrl[self.release_actuator] >= self.release_threshold
+            ),
         }
         if checker is not None:
             row["robot_collision_audited"] = True

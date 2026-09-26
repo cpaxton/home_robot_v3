@@ -338,3 +338,74 @@ def test_coupled_arm_can_raise_then_extend_around_blocked_diagonal():
         d.qpos[:] = q
         assert not checker.configuration_collides(m, d)
     np.testing.assert_allclose(path[-1], goal)
+
+
+def test_rigid_collision_only_pass_matches_full_position_contacts():
+    m = model()
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body="robot")
+    for yaw in np.linspace(-0.5, 0.5, 9):
+        d.qpos[0] = yaw
+        checker.configuration_collides(m, d)
+        fast = sorted((tuple(c.geom), float(c.dist)) for c in d.contact[: d.ncon])
+        mujoco.mj_fwdPosition(m, d)
+        full = sorted((tuple(c.geom), float(c.dist)) for c in d.contact[: d.ncon])
+        assert fast == full
+
+
+def test_planned_lift_leaves_offline_payload_at_lifted_pose():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+    <body name="ee"><joint name="z" type="slide" axis="0 0 1" range="0 1"/><geom size=".02"/></body>
+    <body name="payload" pos="0 .2 0"><freejoint/><geom size=".02"/></body>
+    </worldbody></mujoco>""")
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body="ee")
+    checker.set_payload(m, d, "payload", "ee")
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(),
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["z"],
+        collision=checker,
+        synchronize=lambda state: None,
+        command_joints=lambda q: True,
+    )
+    path, error = executor.plan_joint_target(np.array([0.2]))
+    assert error is None
+    assert abs(d.body("payload").xpos[2] - 0.2) < 1e-9
+
+
+@pytest.mark.parametrize("advance, expected", [(0.1, True), (0.0, False)])
+def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch, advance, expected):
+    import emet.controller.manipulation.physical_pick_place as module
+
+    clock = [0.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(module.time, "sleep", lambda dt: clock.__setitem__(0, clock[0] + dt))
+    m = model()
+    d = mujoco.MjData(m)
+    commands = []
+    robot = SimpleNamespace(
+        close_gripper=lambda **kwargs: commands.append(kwargs) or True, get_gripper_position=lambda: 0.2
+    )  # Contact stops short of the empty-jaw endpoint.
+
+    def sync(state):
+        state.time += advance
+
+    executor = module.PhysicalPickPlaceExecutor(
+        robot,
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["yaw"],
+        collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
+        synchronize=sync,
+        command_joints=lambda q: True,
+    )
+    result = executor._close_gripper_until_still(timeout_s=1.0)
+    assert result.success == expected
+    assert commands == [{"blocking": False}]
+    assert executor.payload_body is None  # Motor settling never asserts pickup or attachment.

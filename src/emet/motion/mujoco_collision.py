@@ -8,6 +8,8 @@ are reported as unsupported; this is a sampled static check, not a dynamics proo
 
 from __future__ import annotations
 
+import time
+
 import mujoco
 import numpy as np
 
@@ -18,6 +20,36 @@ def body_subtree(model, root: str) -> set[int]:
         if int(model.body_parentid[body]) in found:
             found.add(body)
     return found
+
+
+def verify_collision_kernel(model, data):
+    """Compare the optimized rigid pass to the full pipeline on a fixture state."""
+
+    def contacts():
+        return np.asarray(
+            sorted((int(c.geom[0]), int(c.geom[1]), float(c.dist)) for c in data.contact[: data.ncon])
+        ).reshape(-1, 3)
+
+    start = time.monotonic()
+    mujoco.mj_fwdPosition(model, data)
+    full_seconds = time.monotonic() - start
+    full = contacts()
+    start = time.monotonic()
+    mujoco.mj_kinematics(model, data)
+    if model.nflex:
+        mujoco.mj_fwdPosition(model, data)
+    else:
+        mujoco.mj_collision(model, data)
+    fast_seconds = time.monotonic() - start
+    fast = contacts()
+    return {
+        "equivalent": bool(full.shape == fast.shape and np.allclose(full, fast, rtol=0, atol=1e-10)),
+        "full_position_wall_s": full_seconds,
+        "collision_only_wall_s": fast_seconds,
+        "contacts": len(full),
+        "geoms": model.ngeom,
+        "flex_models": model.nflex,
+    }
 
 
 class MujocoSceneCollisionChecker:
@@ -52,7 +84,7 @@ class MujocoSceneCollisionChecker:
         if body is not None:
             if parent is None:
                 raise ValueError("Payload needs a parent frame")
-            mujoco.mj_fwdPosition(model, data)
+            mujoco.mj_kinematics(model, data)
             ee, obj = data.body(parent), data.body(body)
             transform = np.eye(4)
             transform[:3, :3] = ee.xmat.reshape(3, 3).T @ obj.xmat.reshape(3, 3)
@@ -60,7 +92,7 @@ class MujocoSceneCollisionChecker:
             self.payload_transform = transform
 
     def configuration_collides(self, model, data) -> bool:
-        mujoco.mj_fwdPosition(model, data)
+        mujoco.mj_kinematics(model, data)
         watched = set(self.robot_ids)
         if self.payload_body is not None:
             body = model.body(self.payload_body)
@@ -74,8 +106,15 @@ class MujocoSceneCollisionChecker:
             quat = np.empty(4)
             mujoco.mju_mat2Quat(quat, (rotation @ self.payload_transform[:3, :3]).ravel())
             data.qpos[address + 3 : address + 7] = quat
-            mujoco.mj_fwdPosition(model, data)
+            mujoco.mj_kinematics(model, data)
             watched |= body_subtree(model, self.payload_body)
+        # Rigid collision detection only needs current kinematics. Building the
+        # full constraint/mass system for every sampled pose is unnecessary and
+        # costly in furnished scenes. Flex models retain the full position pass.
+        if model.nflex:
+            mujoco.mj_fwdPosition(model, data)
+        else:
+            mujoco.mj_collision(model, data)
         self.last_contacts = []
         for contact in data.contact[: data.ncon]:
             a, b = (int(model.geom_bodyid[g]) for g in contact.geom)

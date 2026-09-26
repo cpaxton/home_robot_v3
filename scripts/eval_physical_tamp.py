@@ -63,9 +63,10 @@ def run(args):
         make_scene_checker,
         save_motion_overview,
         score_physical_acceptance,
+        support_release_points,
         write_offline_base_pose,
     )
-    from emet.motion.mujoco_collision import body_subtree
+    from emet.motion.mujoco_collision import verify_collision_kernel
     from emet.motion.navigation_sweep import execute_measured_route
 
     output = Path(args.output_dir).expanduser().resolve()
@@ -110,7 +111,7 @@ def run(args):
             target.qvel[:] = row["qvel"]
             target.ctrl[:] = row["ctrl"]
             target.time = row["sim_time"]
-        mujoco.mj_fwdPosition(model, target)
+        mujoco.mj_kinematics(model, target)
 
     def capture(stage):
         if robot is None:
@@ -164,7 +165,12 @@ def run(args):
                 EMET_SIM_EVAL_TRACE=str(trace),
                 EMET_PHYSICAL_START_MARKER=str(output / "execution_started.json"),
             )
-            scorer = {**scorer, "require_robot_collision_audit": True}
+            scorer = {
+                **scorer,
+                "require_robot_collision_audit": True,
+                "release_actuator": "gripper",
+                "release_open_fraction": 0.9,
+            }
             (output / "runtime_scorer.json").write_text(json.dumps(scorer, indent=2) + "\n")
             os.environ["EMET_SIM_EVAL_CONFIG"] = str(output / "runtime_scorer.json")
             from eval_tamp_clutter import _launch_server
@@ -203,8 +209,12 @@ def run(args):
             if args.initial_state:
                 state = np.load(args.initial_state)
                 data.qpos[:] = state["qpos"]
-                mujoco.mj_fwdPosition(model, data)
+                mujoco.mj_kinematics(model, data)
 
+        kernel = verify_collision_kernel(model, data)
+        (output / "collision_kernel.json").write_text(json.dumps(kernel, indent=2) + "\n")
+        if not kernel["equivalent"]:
+            raise RuntimeError("collision_kernel_validation_failed")
         checker = make_scene_checker(model, scorer)
         collision_links = [model.body(int(model.joint(name).bodyid[0])).name for name in joints]
         result["unsupported_collision_links"] = checker.unsupported_links(model, collision_links)
@@ -299,7 +309,7 @@ def run(args):
             write_offline_base_pose(
                 model, data, base_body_name="base_link", x=approach[0], y=approach[1], theta=approach[2]
             )
-            mujoco.mj_fwdPosition(model, data)
+            mujoco.mj_kinematics(model, data)
             navigation_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
             yaw_delta = approach[2] - initial_base[2]
             c, sn = np.cos(yaw_delta), np.sin(yaw_delta)
@@ -335,70 +345,76 @@ def run(args):
                 item.update(phase="grasp", reason=plan.message)
                 event(**item)
                 return False
-            # Named support geometry defines candidate release points, never a semantic guess.
-            support_ids = body_subtree(model, scorer["support_body"])
-            support_geoms = [
-                g
-                for g in range(model.ngeom)
-                if model.geom_bodyid[g] in support_ids and (model.geom_contype[g] or model.geom_conaffinity[g])
-            ]
-            if not support_geoms:
-                plan.message = "unsupported_support_geometry"
+            releases = support_release_points(
+                model,
+                data,
+                support_body=scorer["support_body"],
+                payload_body=scorer["object_body"],
+                ee_body=scorer["ee_body"],
+            )
+            if not releases:
+                plan.message = "unsupported_support_surface"
+                item.update(phase="place", reason=plan.message)
+                event(**item)
                 return False
-            bounds = []
-            for g in support_geoms:
-                rot = data.geom(g).xmat.reshape(3, 3)
-                center = data.geom(g).xpos + rot @ model.geom_aabb[g, :3]
-                half = np.abs(rot) @ model.geom_aabb[g, 3:]
-                bounds.append((center - half, center + half))
-            top = max(hi[2] for lo, hi in bounds)
-            release = np.r_[support_pos[:2], top + 0.08]
             lift_state = data.qpos.copy()
             place_route = None
             place_pose = None
             place_paths = []
-            place_goals = [approach.copy()]
-            place_goals.extend(
-                kinematic_base_candidates(
-                    model,
-                    data,
-                    target_xy=release[:2],
-                    ee_body=scorer["ee_body"],
-                    extension_joints=tuple(f"joint_arm_l{i}" for i in range(4)),
-                )
-            )
-            # A navigable place pose is insufficient: try the next pose when its
-            # arm witness fails, preserving the grasp-relative payload transform.
+            place_targets = []
             payload_transform = checker.payload_transform.copy()
             place_rejections = []
-            for goal in place_goals:
+            for release in releases:
                 data.qpos[:] = lift_state
-                checker.payload_body = scorer["object_body"]
-                checker.payload_parent = scorer["ee_body"]
-                checker.payload_transform = payload_transform.copy()
-                possible = space.plan_route(approach, goal)
-                if not possible:
-                    place_rejections.append({"pose": goal.tolist(), "phase": "transport"})
-                    continue
-                data.qpos[:] = lift_state
-                write_offline_base_pose(model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2])
-                mujoco.mj_fwdPosition(model, data)
-                place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
-                paths = []
-                for phase, point in [
-                    ("preplace", release + [0, 0, 0.12]),
-                    ("place", release),
-                    ("retreat", release + [0, 0, 0.12]),
-                ]:
-                    if phase == "retreat":
-                        checker.set_payload(model, data, None)
-                    path, error = executor.plan_pose(point, place_rotation)
-                    if error:
-                        place_rejections.append({"pose": goal.tolist(), "phase": phase, "reason": error})
+                place_goals = [approach.copy()]
+                place_goals.extend(
+                    kinematic_base_candidates(
+                        model,
+                        data,
+                        target_xy=release[:2],
+                        ee_body=scorer["ee_body"],
+                        extension_joints=tuple(f"joint_arm_l{i}" for i in range(4)),
+                    )
+                )
+                for goal in place_goals:
+                    data.qpos[:] = lift_state
+                    checker.payload_body, checker.payload_parent = scorer["object_body"], scorer["ee_body"]
+                    checker.payload_transform = payload_transform.copy()
+                    possible = space.plan_route(approach, goal)
+                    if not possible:
+                        place_rejections.append(
+                            {"pose": goal.tolist(), "phase": "transport", "validity": dict(space.last_validity)}
+                        )
+                        continue
+                    # Extra preplace height is a path candidate, not a task
+                    # requirement. Try smaller clearances if the first exceeds reach.
+                    for clearance in (0.12, 0.06, 0.03):
+                        data.qpos[:] = lift_state
+                        checker.payload_body, checker.payload_parent = scorer["object_body"], scorer["ee_body"]
+                        checker.payload_transform = payload_transform.copy()
+                        write_offline_base_pose(
+                            model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2]
+                        )
+                        place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
+                        targets = [release + [0, 0, clearance], release, release + [0, 0, clearance]]
+                        paths = []
+                        for phase, point in zip(("preplace", "place", "retreat"), targets, strict=True):
+                            if phase == "retreat":
+                                checker.set_payload(model, data, None)
+                            path, error = executor.plan_pose(point, place_rotation)
+                            if error:
+                                place_rejections.append(
+                                    {"pose": goal.tolist(), "phase": phase, "reason": error, "clearance_m": clearance}
+                                )
+                                break
+                            paths.append(path)
+                        if len(paths) == 3:
+                            place_pose, place_route, place_paths = goal, possible, paths
+                            place_targets = [[point.tolist(), place_rotation.tolist()] for point in targets]
+                            break
+                    if place_route is not None:
                         break
-                    paths.append(path)
-                if len(paths) == 3:
-                    place_pose, place_route, place_paths = goal, possible, paths
+                if place_route is not None:
                     break
             item["place_rejections"] = place_rejections
             if place_route is None:
@@ -417,10 +433,7 @@ def run(args):
                     [point.tolist(), rotation.tolist()]
                     for point in (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])
                 ],
-                place_targets=[
-                    [point.tolist(), place_rotation.tolist()]
-                    for point in (release + [0, 0, 0.12], release, release + [0, 0, 0.12])
-                ],
+                place_targets=place_targets,
                 preparation_path=[q.tolist() for q in preparation_path] if prepare and preparation_path else [],
             )
             event(**item)
@@ -482,7 +495,14 @@ def run(args):
             result.update(score_physical_acceptance(trace, audit, execution_completed=False))
     except Exception as exc:
         result.update(
-            status="timeout" if isinstance(exc, TimeoutError) else "error", error=f"{type(exc).__name__}: {exc}"
+            status=(
+                "timeout"
+                if isinstance(exc, TimeoutError)
+                else "unsupported_capability"
+                if str(exc).startswith("unsupported_")
+                else "error"
+            ),
+            error=f"{type(exc).__name__}: {exc}",
         )
         import traceback
 

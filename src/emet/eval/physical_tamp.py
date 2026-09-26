@@ -35,7 +35,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
         model.body(name)  # Fail on missing identity; no category fallback.
     mujoco.mj_saveModel(model, str(output / "model.mjb"))
     data = mujoco.MjData(model)
-    mujoco.mj_fwdPosition(model, data)
+    mujoco.mj_kinematics(model, data)
     np.savez(output / "initial_state.npz", qpos=data.qpos, qvel=data.qvel, ctrl=data.ctrl, act=data.act)
     (output / "scene.xml").write_bytes(scene.read_bytes())
     config.update(seed=int(seed), scene_path=str(scene), headless=True)
@@ -59,6 +59,10 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "mcts_iterations": 120,
             "base_rrt_iterations": 400,
             "base_route_wall_s": 10,
+            "grasp_rotations": 2,
+            "place_base_candidates": 41,
+            "support_surfaces": 4,
+            "preplace_clearances_m": [0.12, 0.06, 0.03],
             "arm_rrt_iterations": 400,
             "replans": 2,
             "wall_timeout_s": 600,
@@ -255,7 +259,7 @@ class SceneNavigationSpace(XYT):
         finally:
             self._route_deadline = None
             self.data.qpos[:] = before
-            mujoco.mj_fwdPosition(self.model, self.data)
+            mujoco.mj_kinematics(self.model, self.data)
 
 
 def make_scene_checker(model, scorer):
@@ -304,10 +308,15 @@ def score_physical_acceptance(trace_path, audit_path, *, execution_completed):
     result["robot_collision_audited"] = bool(rows) and all(r.get("robot_collision_audited", False) for r in rows)
     result["forbidden_robot_contacts"] = rows[-1].get("forbidden_robot_contacts", []) if rows else []
     result["physical_transport_success"] = False
+    result["release_command_audited"] = bool(rows) and all(r.get("release_command_audited", False) for r in rows)
     if result.get("physical_pick_success") and result.get("physical_place_success"):
         start = result["pick_time"]
-        release = result["first_place_time"] - 1.0
-        carry = [r for r in rows if start <= r["sim_time"] < release and not r["support_contact"]]
+        # Intentional release precedes settling onto the support. The motor
+        # command distinguishes that interval from an uncommanded transport drop.
+        openings = [r["sim_time"] for r in rows if r["sim_time"] > start and r.get("release_open_command", False)]
+        release = openings[0] if openings else None
+        result["release_command_time"] = release
+        carry = [r for r in rows if release is not None and start <= r["sim_time"] < release]
         if carry:
             origin = np.asarray(carry[0]["relative_pos"])
             rotations = np.asarray([r["relative_rot"] for r in carry]).reshape(-1, 3, 3)
@@ -323,6 +332,7 @@ def score_physical_acceptance(trace_path, audit_path, *, execution_completed):
         and result.get("verified")
         and result.get("physical_place_success")
         and result["physical_transport_success"]
+        and result["release_command_audited"]
         and audit
         and not result["forbidden_actuation"]
         and result["robot_collision_audited"]
@@ -385,3 +395,51 @@ def save_motion_overview(path, model, data, *, scorer, footprint, initial_pose, 
     ax.legend()
     ax.grid(alpha=0.2)
     figure.savefig(path, dpi=160, bbox_inches="tight")
+
+
+def support_release_points(model, data, *, support_body, payload_body, ee_body, max_surfaces=4):
+    """Candidate support levels from named collision geometry and payload extent.
+
+    Group nearby geom tops and require enough XY extent for the payload. This
+    excludes tiny parked fixture geoms without a scene-specific height cutoff.
+    These are candidates: full payload collision and physical settling still decide.
+    """
+
+    def bounds(body):
+        ids = body_subtree(model, body)
+        result = []
+        for g in range(model.ngeom):
+            if model.geom_bodyid[g] not in ids or not (model.geom_contype[g] or model.geom_conaffinity[g]):
+                continue
+            if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_PLANE:
+                continue
+            rotation = data.geom(g).xmat.reshape(3, 3)
+            center = data.geom(g).xpos + rotation @ model.geom_aabb[g, :3]
+            half = np.abs(rotation) @ model.geom_aabb[g, 3:]
+            result.append((center - half, center + half))
+        return result
+
+    mujoco.mj_kinematics(model, data)
+    payload, support = bounds(payload_body), bounds(support_body)
+    if not payload or not support:
+        return []
+    payload_lo = np.min([lo for lo, hi in payload], axis=0)
+    payload_hi = np.max([hi for lo, hi in payload], axis=0)
+    ee = data.body(ee_body).xpos
+    bottom_offset = float(ee[2] - payload_lo[2])
+    center_offset = (payload_lo[:2] + payload_hi[:2]) / 2 - ee[:2]
+    groups = []
+    for lo, hi in sorted(support, key=lambda b: -b[1][2]):
+        if not groups or groups[-1][0][1][2] - hi[2] > 0.03:
+            groups.append([])
+        groups[-1].append((lo, hi))
+    points = []
+    for group in groups:
+        lo = np.min([a for a, b in group], axis=0)
+        hi = np.max([b for a, b in group], axis=0)
+        if np.any(hi[:2] - lo[:2] < payload_hi[:2] - payload_lo[:2]):
+            continue
+        points.append(np.r_[(lo[:2] + hi[:2]) / 2 - center_offset, hi[2] + bottom_offset + 0.015])
+        if len(points) >= max_surfaces:
+            break
+    return points
