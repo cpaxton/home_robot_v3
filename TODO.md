@@ -90,6 +90,16 @@ Strike through or move to a PR when done.
       reverses relations. Keep paired results and visual failures. Next test
       separate measured support candidates with independently localized anchors
       on the same frozen views before runtime integration or live promotion.
+      September 26 audit: SAM2 37/45 (16/24 positives, 21/21 negatives), but
+      Qwen accepts wall-only and mostly-toaster masks in an oblique view.
+      Frontal right-counter masks are pure; semantic verification rejects them.
+      Same-panel batch vs individual smoke is 12/18 vs 13/18; individual
+      verification increases bad-mask acceptance. Neither is promoted.
+      436 focused tests pass. Preserve SAM2 opt-in and unchanged safety gates.
+      Run frozen pre-placement-purpose/current-runtime EQA + small-room pairs
+      as health/attribution evidence, NOT acceptance of this offline verifier.
+      Revisit measured-mask/context identity before runtime integration; do not
+      optimize box-overlap alone. Evidence and next gates in the report.
 
 - [ ] Validate navigation-boundary payload verification in live sim. The loose
       repeat (`20260924_120339_d33727`) scores pickup true but drops the can

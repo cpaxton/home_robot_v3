@@ -205,6 +205,98 @@ raw prompts/responses, hashes and repeated outcomes in `results.json`. The
 three new views positively cover the intended right countertop, unlike the
 earlier eight-case replay.
 
+### Measured-support follow-up (September 25)
+
+Source `fb4560f8`, job `20260925_133331_072c5f`, same five views/three requests/
+three repeats. Reuse the prior query-independent countertop search boxes and
+anchor predictions exactly. Replace the broad countertop boxes with the
+existing RGB-D connected surface proposals, then ask Qwen to identify pure
+countertop supports without seeing the requested relation. Fixed coordinate
+ordering, eight-candidate bound and original scoring thresholds remain unchanged.
+No GT masks or detector labels enter inference.
+
+The first temporary driver incorrectly passed NumPy scalar coordinates into
+the strict JSON-box validator, creating spurious positive abstentions. The
+corrected driver converts them to Python floats and replays the **same cached
+semantic responses**, with no new model inference or threshold change. Original
+artifacts remain in `~/runs/emet/placement-measured-paired-20260925/`; authoritative
+rescoring, overlays, protocol and exact driver are in
+`~/runs/emet/placement-measured-paired-rescore-20260925/`.
+
+Corrected result: **35/45**, positives **17/24**, negatives **18/21**. All three
+negative failures are pipeline overflows on the oblique-right view, not wrong-
+side selections; they are deliberately not counted as successful abstentions.
+The same overflow loses six positives. One further positive is an abstention
+on the oblique-left right counter. Repeats score 11/15, 12/15, 12/15.
+
+Manual review still fails: in the front view the RGB-D component joins stove
+pixels to the right countertop, and Qwen accepts it. The isolated support panel
+(`0-front/panel-3.png`) confirms actual mixed measured support, not merely a
+wide enclosing box. Loose bbox agreement therefore overstates safe support
+identification. The RGB-D proposal variant is not promoted.
+
+A bounded SAM2 follow-up (`20260925_133732_8c3814`) uses the existing small
+SAM2 model inside the exact same cached boxes, followed by the same connected-
+depth splitting, semantic prompt, anchors and scorer. No YOLOE or GT masks are
+used. Artifacts: `~/runs/emet/placement-sam2-paired-20260925/`. Its purpose is
+to test mixed-support separation without increasing the candidate bound or
+introducing a new runtime policy.
+
+#### Final mask audit and verifier ablation (September 26)
+
+SAM2 finishes **37/45**: positives **16/24**, negatives **21/21**, with six
+positive abstentions and two low-overlap boxes. This is box agreement, not a
+placement success rate. The final relation check can abstain even when the
+preceding verifier accepts an unsafe candidate.
+
+The completed mask audit finds exactly that problem. Compare every new-view
+candidate with the separately saved simulator segmentation, after inference.
+`~/runs/emet/placement-sam2-mask-audit-20260926/` contains the exact evaluator,
+geometry-ID mapping, per-mask pixel counts and accepted-mask contact sheet.
+Of 17 accepted candidates in the three new views/repeats, five contain less
+than 95% counter-top geometry (a post-hoc descriptive cutoff, not a new runtime
+threshold). Most importantly, `2-oblique_right` accepts a **wall-only** mask
+and a **mostly-toaster** mask (3.7% countertop). Manual review agrees. Old
+saved views have no GT segmentation; their six accepted masks were reviewed
+visually only. Geometry membership does not establish upward-facing support,
+clearance, reachability or safe release.
+
+The frontal right-counter miss is **not SAM2 losing the counter**. Candidate 0
+contains 100% counter-top geometry in all three frozen repeats, but Qwen omits
+it. The earlier hypothesis of missing SAM2 geometry is therefore rejected.
+
+Job `20260926_011026_4f12ab` tests the simplest presentation alternative:
+batch versus one candidate per call, using identical saved panels, prompt,
+geometry, Qwen3-VL-8B int4 configuration, anchors and scoring. Tool:
+`scripts/audit_surface_verification.py`; artifacts:
+`~/runs/emet/placement-verifier-smoke-20260926/`. Two development views (front,
+oblique-right), three frozen proposal sets each, three relation queries yield
+18 decisions per arm. Batch **12/18**, individual **13/18**. Individual
+verification recovers the frontal positives but accepts additional wall,
+sink/appliance and mixed candidates. Its explanations sometimes describe the
+surrounding countertop instead of the measured mask. This supports contextual
+misidentification, not a proven model/transport root cause. Per-call prompts,
+raw responses, panel hashes and latency are saved. Neither variant is promoted.
+
+The focused suite passes **436 tests**. No runtime defaults, thresholds or
+physics were changed. SAM2 remains opt-in. The proposed overnight agent
+comparison is therefore a **runtime health/attribution** run, not a trial of
+an accepted new verifier: pre-placement-purpose `1a597378` versus the frozen
+current branch. Pair q12/q16 at seeds 0/1 first; then two RoboCasa and two
+Molmo repeats per arm; then the remaining ten established EQA development
+questions at seed 0. Run serially with CPU-safe/GPU-exclusive scheduling.
+RoboCasa retains the explicit NoSlip10/1ms derivative on both arms; Molmo
+retains its existing physics/config and workspace limits. Save images, maps,
+tool traces and physical scores. Stop on timeout/native crash/preflight
+failure; ordinary task failures remain scored and do not abort unrelated
+cases. No new unsafe verifier is wired in to make the run look better.
+
+The EQA development extension is not a held-out paper result. Report paired
+question/seed outcomes, forced-answer behavior, runtime and infrastructure
+failures separately. A larger count on the same views/questions is not
+evidence of environment generalization. Live placement remains unresolved
+until the selected support and physical outcome are independently verified.
+
 ## Starting point
 
 The September 23 small-room controls both stopped before grasping. Molmo had
