@@ -128,8 +128,10 @@ the toaster at the selected counter center. No physical pickup or placement ran.
 Revision `0d08387a` searches nine interior release positions per support level,
 retaining payload-sized edge clearance and full geometry validation. Its focused
 16 tests pass. It is frozen in `/tmp/emet-physical-tamp-20260926-r6`; RoboCasa
-job `20260926_110716_7c4a47` is queued with output
-`/tmp/physical-tamp-robocasa-20260926-r6`.
+job `20260926_110716_7c4a47` was cancelled before execution to add a live
+planning profile. Replacement revision `9893261c` is frozen in
+`/tmp/emet-physical-tamp-20260926-r7`; job `20260926_111629_106b81` is queued
+with output `/tmp/physical-tamp-robocasa-20260926-r7`.
 
 The archived-route profile completed two routes in 1.035 seconds (798 validity
 calls). A separate symbolic candidate profile took 0.058 seconds. Neither
@@ -139,3 +141,35 @@ position pass, but this alone is not broad collision-kernel validation.
 
 The revision-5 protocol has completed Nori scene 0 with all four oracle tests
 passing. The remaining protocol, registry, floor, and tool results are pending.
+
+Protocol interim result: 9/12 tests passed across Nori scenes 0/1 and Mars scene 0.
+Nori scene 1 cleared 8/8 objects and found an open route but did not report final
+navigation arrival. Mars scene 0 passed manipulation and failed both navigation
+checks, including an explicit no-route rejection. These are preserved failures,
+not evidence of fixture invalidity or a matched regression attribution. The
+historical 24/24 result predates current navigation guards.
+
+The Mars scene-1 protocol failures were all startup failures: the server logs
+stopped at collision-free spawn search before the client's 60-second observation
+wait expired. Planning never started. RBY1 scene 0 subsequently passed 4/4;
+completed groups total 13/20, with RBY1 scene 1 still in progress.
+
+## Completed regression suites
+
+The revision-5 protocol is complete: **17/24 tests passed**, with all six process
+ledgers terminal. Four failures were Mars scene-1 startup timeouts; three were
+navigation failures (Nori scene 1 blocked-navigation, Mars scene 0 both navigation
+checks). RBY1 passed 8/8. Evidence: `/tmp/tamp-protocol-20260926-r5`.
+
+The small registry is complete: **4/7 tasks succeeded**. The six-object latch
+row cleared 5/6 and failed potato attachment verification; its teleport control
+cleared 6/6. Two navigation rows failed with `missing_landmark` for their named
+sofa/fridge. The eight-object latch/navigation row and final Stretch row passed.
+All seven rows remain in `/tmp/tamp-small-20260926-r5/ledger.json`.
+
+The unstarted full job `20260926_105236_43eed7` was cancelled only to reorder our
+queue. Its unchanged source, commands, output root, and budgets were resubmitted
+as **`20260926_114041_1123fe`**, job log
+`/tmp/tamp-full-job-20260926-r5-final/job.log`. It follows the floor, scripted tool,
+and profiled physical diagnostic jobs, so the 200-row sweep is the final run.
+It contains 110 kinematic-latch and 90 oracle-teleport rows.
