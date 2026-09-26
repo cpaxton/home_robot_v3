@@ -100,6 +100,7 @@ def _filter_unsafe_nav_traj(
             return [], "missing_sweep_start", None
         valid, reason = validate_navigation_sweep(self.space, start_xyt, body)
         if not valid:
+            self._last_nav_sweep_failure = dict(getattr(self.space, "last_validity", {}) or {})
             return [], f"rejected_swept_footprint:{reason}", None
 
     start_xy = None
@@ -706,6 +707,8 @@ def process_text(self, text, start_pose):
                 "announce": f"Plan rejected ({reject_reason or 'unsafe'})",
                 "traj": [],
             }
+            if reject_reason and reject_reason.startswith("rejected_swept_footprint:"):
+                self._last_nav_plan["footprint"] = dict(getattr(self, "_last_nav_sweep_failure", {}) or {})
             return []
         logger.info(
             "Planned trajectory: %d exec / %d planned waypoints (finished_chunk=%s min_clearance=%.3f)",

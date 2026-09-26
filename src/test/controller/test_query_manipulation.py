@@ -74,20 +74,23 @@ def executor():
     return task, target
 
 
-def test_find_failure_preserves_navigation_rejection_and_clears_stale_recovery():
+@pytest.mark.parametrize("pickup_executed", [False, True, None])
+@pytest.mark.parametrize("purpose", ["object", "placement_surface"])
+def test_find_failure_preserves_navigation_rejection_and_clears_stale_recovery(pickup_executed, purpose):
     task, _ = executor()
     task.robot = Mock()
+    task.grasp_object.pickup_executed = pickup_executed
     task.agent.navigate = Mock(return_value=None)
     task.agent.voxel_map.write_to_pickle = Mock()
     task.agent._last_nav_plan = {"outcome": "rejected_swept_footprint:unobserved_footprint"}
     task.last_query_manipulation = {"phase": "pre_grasp", "payload_state": "empty", "observed_after_action": True}
 
-    assert task._find("mug") is None
+    assert task._find("mug", grounding_purpose=purpose) is None
     detail = task.last_query_manipulation
     assert detail["status"] == "rejected_swept_footprint:unobserved_footprint"
     assert detail["navigation"] == task.agent._last_nav_plan
     assert detail["phase"] == "navigation"
-    assert detail["payload_state"] == "unknown"
+    assert detail["payload_state"] == ("empty" if pickup_executed is False and purpose == "object" else "unknown")
     assert "observed_after_action" not in detail
     task.robot.move_base_to.assert_not_called()
 

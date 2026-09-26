@@ -235,6 +235,14 @@ class DynamemTaskExecutor:
                     "payload_state": "unknown",
                     "physical_success_verified": False,
                 }
+                if (
+                    grounding_purpose == "object"
+                    and getattr(self, "_held_query_instance", None) is None
+                    and getattr(getattr(self, "grasp_object", None), "pickup_executed", None) is False
+                ):
+                    # No pickup has executed; allow only a stationary observation,
+                    # never an escape motion through the rejected footprint.
+                    self.last_query_manipulation["payload_state"] = "empty"
             logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])

@@ -591,11 +591,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             outcome.payload["manipulation"] = detail
             navigation = detail.get("navigation", {})
             outcome.status = str(detail.get("status") or navigation.get("status") or "manipulation_failed")
-            if (
-                detail.get("phase") == "pre_grasp"
-                and detail.get("payload_state") == "empty"
-                and detail.get("observed_after_action") is True
-                and outcome.status in {"insufficient_floor_coverage", "no_reachable_workspace"}
+            if detail.get("payload_state") == "empty" and (
+                (
+                    detail.get("phase") == "pre_grasp"
+                    and detail.get("observed_after_action") is True
+                    and outcome.status in {"insufficient_floor_coverage", "no_reachable_workspace"}
+                )
+                or (
+                    detail.get("phase") == "navigation"
+                    and outcome.status == "rejected_swept_footprint:unobserved_footprint"
+                )
             ):
                 outcome.payload["recovery_tools"] = ["observe_floor"]
                 outcome.payload["suggested_action"] = (

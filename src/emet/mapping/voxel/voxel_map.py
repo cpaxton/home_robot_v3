@@ -300,6 +300,15 @@ class SparseVoxelMapNavigationSpace(XYT):
             "reason": "obstacle" if collision else "unobserved_footprint" if not is_safe else "valid",
             "explored_fraction": p_is_safe,
         }
+        if not valid:
+            missing = (mask & ~crop_exp).nonzero()
+            self.last_validity.update(
+                checked_pose=state.tolist(),
+                footprint_cells=int(mask.sum()),
+                unknown_footprint_cells=len(missing),
+                # Bounded, world-axis offsets from this footprint's grid center.
+                unknown_cell_offsets_m=((missing[:16] - half_dim) * self.voxel_map.grid_resolution).tolist(),
+            )
         if debug:
             if collision:
                 print("- state in collision")

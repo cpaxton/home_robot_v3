@@ -21,6 +21,7 @@ def test_footprint_diagnostics_distinguish_unknown_from_collision(occupied, seen
     explored = torch.full((7, 7), seen, dtype=torch.bool)
     space = SimpleNamespace(
         voxel_map=SimpleNamespace(
+            grid_resolution=0.1,
             xyt_is_safe=lambda xy: True,
             grid=SimpleNamespace(xy_to_grid_coords=lambda xy: torch.tensor([3, 3])),
         ),
@@ -29,6 +30,11 @@ def test_footprint_diagnostics_distinguish_unknown_from_collision(occupied, seen
     valid = BaseSpace.is_valid(space, np.zeros(3), obstacles=obstacles, explored=explored)
     assert valid is (reason == "valid")
     assert space.last_validity["reason"] == reason
+    if not valid:
+        assert space.last_validity["checked_pose"] == [0, 0, 0]
+        assert space.last_validity["footprint_cells"] == 9
+        assert space.last_validity["unknown_footprint_cells"] == (0 if seen else 9)
+        assert len(space.last_validity["unknown_cell_offsets_m"]) == (0 if seen else 9)
 
 
 def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():

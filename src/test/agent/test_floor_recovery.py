@@ -67,16 +67,26 @@ def test_system_prompt_allows_only_explicit_observation_recovery():
 
 
 @pytest.mark.parametrize("disconnected", [False, True])
-@pytest.mark.parametrize("status", ["insufficient_floor_coverage", "no_reachable_workspace", "workspace_obstructed"])
+@pytest.mark.parametrize("phase", ["pre_grasp", "navigation"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        "insufficient_floor_coverage",
+        "no_reachable_workspace",
+        "workspace_obstructed",
+        "rejected_swept_footprint:unobserved_footprint",
+        "rejected_swept_footprint:obstacle",
+    ],
+)
 @pytest.mark.parametrize("payload_state", ["empty", "unknown"])
-def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_state, disconnected):
+def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_state, disconnected, phase):
     executor = Mock(return_value=True)
     executor._last_exec_ok = False
     executor.visual_servo = True
     executor.agent = SimpleNamespace(query_driven_memory=True)
     executor.last_query_manipulation = {
         "reason": "workspace rejected",
-        "phase": "pre_grasp",
+        "phase": phase,
         "payload_state": payload_state,
         "observed_after_action": True,
         "navigation": {
@@ -98,7 +108,11 @@ def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_stat
     assert ok and failed
     later.assert_not_called()
     assert status in results[0] and '"reachable_cells": 28' in results[0]
-    assert recovery == (["observe_floor"] if payload_state == "empty" and status != "workspace_obstructed" else [])
+    permitted = payload_state == "empty" and (
+        (phase == "pre_grasp" and status in {"insufficient_floor_coverage", "no_reachable_workspace"})
+        or (phase == "navigation" and status == "rejected_swept_footprint:unobserved_footprint")
+    )
+    assert recovery == (["observe_floor"] if permitted else [])
     if disconnected and recovery:
         assert "adjacent/lateral" in results[0]
 
