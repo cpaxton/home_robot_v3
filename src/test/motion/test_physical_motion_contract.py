@@ -458,3 +458,18 @@ def test_precision_route_uses_policy_and_checks_measured_arrival(yaw_error, succ
     )
     assert result.success is success
     assert policies == ['precision']
+
+
+def test_pose_ik_uses_orientation_slack_without_relaxing_tolerances():
+    m = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+      <joint name="yaw" type="hinge" axis="0 0 1" range="-90 90"/>
+      <geom size=".01"/><body name="ee" pos=".5 0 0"><geom size=".01"/></body>
+    </body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    angle = .05
+    result = solve_pose_ik(
+        m, d, ee_body='ee', joint_names=['yaw'],
+        target_pos=[.5 * np.cos(angle), .5 * np.sin(angle), 0], target_rotation=np.eye(3),
+        tol_m=.01, tol_rad=.1,
+    )
+    assert result.success and result.pos_error_m <= .01 and result.orientation_error_rad <= .1

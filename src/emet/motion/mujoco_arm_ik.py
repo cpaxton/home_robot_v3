@@ -79,6 +79,10 @@ def solve_pose_ik(
         for name in group:
             coupling[names.index(name), column] = 1.0 / len(group)
     jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
+    # Meters and radians have different acceptance scales. Otherwise a small
+    # orientation improvement can outweigh a position error several times its
+    # tolerance, despite a feasible solution inside both declared tolerances.
+    weights = np.r_[np.full(3, 1.0 / tol_m), np.full(3, 1.0 / tol_rad)]
     for iteration in range(max_iters + 1):
         # IK needs transforms and motion axes, not full-scene contact solving.
         # Collision certification remains a separate mandatory path check.
@@ -92,8 +96,8 @@ def solve_pose_ik(
             mujoco.mj_kinematics(model, data)
             return MujocoArmIkResult(success, data.qpos.copy(), pos_error, iteration, rot_error)
         mujoco.mj_jacBody(model, data, jacp, jacr, body_id)
-        jacobian = np.vstack((jacp[:, dadr], jacr[:, dadr])) @ coupling
-        error = np.r_[delta, angular]
+        jacobian = (np.vstack((jacp[:, dadr], jacr[:, dadr])) @ coupling) * weights[:, None]
+        error = np.r_[delta, angular] * weights
         # Solve bounded increments in actuator coordinates. Scaling every joint
         # by the first saturated joint freezes otherwise usable degrees of freedom.
         lower, upper = np.empty(len(groups)), np.empty(len(groups))
