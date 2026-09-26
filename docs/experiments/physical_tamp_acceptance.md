@@ -88,3 +88,9 @@ This is not a claim that the task is impossible: acceptance requires replaying a
 measured settled state and then passing the physical gates. Broader environment
 variants, partial-observation execution, and completed full-suite result tables
 must be backed by their own artifacts before being claimed.
+
+Dated submissions and measured outcomes are tracked in
+[the September 26 ledger](physical_tamp_acceptance_20260926_results.md). The live
+server now archives its compiled model and physics settings; physical planning
+uses that exact model. A profile navigation posture is itself collision-checked
+and measured before base motion. This does not bypass failed posture transitions.
