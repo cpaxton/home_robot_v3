@@ -117,6 +117,18 @@ def test_find_reports_task_outcome_without_quitting(point, expected, monkeypatch
     assert task._last_exec_ok is expected
 
 
+@pytest.mark.parametrize("progress", [True, False, None])
+def test_explore_propagates_no_progress_and_stops_repeating(progress, monkeypatch):
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task = object.__new__(DynamemTaskExecutor)
+    task.agent = Mock()
+    task.agent.run_exploration.return_value = progress
+    task.explore_iter = 3
+    assert task([("explore", None)]) is True
+    assert task._last_exec_ok is (progress is True)
+    assert task.agent.run_exploration.call_count == (3 if progress else 1)
+
+
 @pytest.mark.parametrize("status,expected", [(False, False), (None, False), (True, True)])
 def test_navigation_only_returns_confirmed_target(status, expected):
     from emet.controller.dynamem.navigation import navigate

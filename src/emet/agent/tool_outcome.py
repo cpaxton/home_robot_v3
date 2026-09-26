@@ -52,7 +52,7 @@ class ToolOutcome:
         # Actionable details must reach the model, not just the trace ledger.
         details = {
             key: self.payload[key]
-            for key in ("manipulation", "recovery_tools", "suggested_action")
+            for key in ("manipulation", "navigation", "observation", "recovery_tools", "suggested_action")
             if key in self.payload
         }
         if details:

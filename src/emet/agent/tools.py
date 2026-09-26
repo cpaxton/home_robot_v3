@@ -64,6 +64,23 @@ def _agent_from_context(context: dict[str, Any]) -> Any | None:
     return context.get("agent")
 
 
+def navigation_feedback(agent: Any | None) -> dict:
+    """Bounded navigation evidence; never dump full waypoint arrays into prompts."""
+    meta = getattr(agent, "_last_nav_plan", None) or {}
+    keys = (
+        "mode",
+        "outcome",
+        "status_code",
+        "localize_source",
+        "goal_xyt",
+        "n_planned",
+        "min_clearance_m",
+        "min_clearance_required_m",
+        "footprint",
+    )
+    return {key: meta[key] for key in keys if key in meta}
+
+
 def format_last_nav_plan_summary(agent: Any | None) -> str:
     """Compact last-plan line for explore/find/diagnostics tool returns."""
     if agent is None:
@@ -98,6 +115,9 @@ def format_last_nav_plan_summary(agent: Any | None) -> str:
     status_code = meta.get("status_code")
     if status_code and status_code != outcome:
         parts.append(f"status={status_code}")
+    footprint = meta.get("footprint") or {}
+    if "unknown_footprint_cells" in footprint:
+        parts.append(f"unknown_footprint_cells={footprint['unknown_footprint_cells']}")
     if meta.get("confirmed") is True:
         parts.append("confirmed=yes")
     elif meta.get("confirmed") is False or outcome == "user_cancelled":
@@ -382,6 +402,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return ToolOutcome(ok, note="Done." if ok else "Command was interrupted or failed.")
 
     # -- explore -------------------------------------------------------------
+    def _navigation_recovery(result: ToolOutcome) -> ToolOutcome:
+        executor = context.get("executor")
+        if (
+            not result.ok
+            and result.status == "rejected_swept_footprint:unobserved_footprint"
+            and getattr(executor, "_held_query_instance", None) is None
+            and getattr(getattr(executor, "grasp_object", None), "pickup_executed", None) is False
+        ):
+            result.payload["recovery_tools"] = ["observe_floor"]
+            result.payload["suggested_action"] = (
+                "Inspect the unknown footprint area with a stationary head observation. "
+                "Pan changes the side viewed; more negative tilt looks nearer the base. "
+                "Compare blocking-cell counts before/after and change view or stop if unchanged. "
+                "Replan before motion; never treat unknown space as free."
+            )
+        return result
+
     def explore() -> ToolOutcome:
         executor = context.get("executor")
         robot = context.get("robot")
@@ -405,7 +442,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             _logger.info(gsize)
             parts.append(f"[{gsize}]")
         result.note = " ".join(parts)
-        return result
+        result.status = str(outcome or ("controller_completed" if ok else "navigation_failed"))
+        result.payload["navigation"] = navigation_feedback(agent)
+        attempt = getattr(agent, "_last_nav_attempt", None)
+        distance = getattr(attempt, "dist_m", None)
+        if isinstance(distance, (int, float)) and np.isfinite(distance):
+            result.payload["navigation"]["measured_distance_m"] = float(distance)
+        return _navigation_recovery(result)
 
     tools.append(
         Tool(
@@ -950,10 +993,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- find_objects --------------------------------------------------------
-    def find_objects(text: str) -> str:
+    def find_objects(text: str) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         ok = executor([("find", text)])
         ok = bool(ok) and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
@@ -978,7 +1021,14 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "Do not immediately re-call find_objects; ask the user or use "
                 "navigation_diagnostics / send_map_snapshot / scan_environment first."
             )
-        return " ".join(parts)
+        return _navigation_recovery(
+            ToolOutcome(
+                ok,
+                status=str(outcome or ("controller_completed" if ok else "navigation_failed")),
+                note=" ".join(parts),
+                payload={"navigation": navigation_feedback(agent)},
+            )
+        )
 
     tools.append(
         Tool(
@@ -995,7 +1045,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["text"],
             },
             func=find_objects,
-            executor_commands=lambda args: [("find", args.get("text", ""))],
             returns_info=True,
         )
     )

@@ -104,7 +104,8 @@ def test_failed_find_is_information_not_a_generic_done():
     ok, results, failed = _dispatch_tool_calls([{"name": "find_objects", "arguments": {"text": "cup"}}], tools, exe)
     assert ok  # Task failure does not shut down the agent.
     assert failed
-    assert results == ["Executor ran: find -> failed"]
+    assert len(results) == 1
+    assert "[find_objects] failed status=navigation_failed" in results[0]
 
 
 def _make_kinematic_dynamem_executor():

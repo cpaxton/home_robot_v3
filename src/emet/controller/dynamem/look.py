@@ -31,6 +31,23 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
+def _rejected_footprint_status(agent, pose):
+    """Recheck a fixed rejected pose, not a route or motion authorization."""
+    space = getattr(agent, "space", None)
+    if pose is None or not callable(getattr(space, "is_valid", None)):
+        return None
+    pose = np.asarray(pose, dtype=float)
+    if pose.shape != (3,) or not np.isfinite(pose).all():
+        return None
+    valid = bool(space.is_valid(pose))
+    detail = getattr(space, "last_validity", {}) or {}
+    return {
+        "pose_valid": valid,
+        "reason": detail.get("reason", "unknown"),
+        "unknown_cells": detail.get("unknown_footprint_cells", 0 if valid else None),
+    }
+
+
 def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
@@ -76,12 +93,16 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
     if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
         return {"ok": False, "status": "calibrated_depth_unavailable"}
     before = len(agent.voxel_map.observations)
+    plan = getattr(agent, "_last_nav_plan", None) or {}
+    checked_pose = plan.get("footprint", {}).get("checked_pose")
+    footprint_before = _rejected_footprint_status(agent, checked_pose)
     obstacles_before, explored_before = agent.voxel_map.get_2d_map()
     agent.update(full_perception=True)
     if len(agent.voxel_map.observations) <= before:
         return {"ok": False, "status": "map_update_missing"}
     obstacles_after, explored_after = agent.voxel_map.get_2d_map()
     observed_delta = int(explored_after.sum()) - int(explored_before.sum())
+    footprint_after = _rejected_footprint_status(agent, checked_pose)
     # Keep the exact captured view and map changes for offline inspection.
     # A larger observed map is not proof of clearance or successful navigation.
     evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
@@ -109,9 +130,19 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
     return {
         "ok": True,
         "status": "floor_observed",
+        "observation": {
+            "measured_head_pan_tilt_rad": measured.tolist(),
+            "observed_cell_change": observed_delta,
+            "checked_pose": checked_pose,
+            "footprint_before": footprint_before,
+            "footprint_after": footprint_after,
+            "replan_required": True,
+        },
         "note": (
             f"Fresh downward RGB-D added to map; base stationary; observed-cell change={observed_delta}. "
-            "Replan to check safety; clearance is not guaranteed. Stop repeating observations if no approach progress."
+            "Compare footprint_before/after: map growth elsewhere does not resolve the rejection. "
+            "If unknown cells remain, choose a different bounded pan/tilt or stop; do not repeat an unhelpful view. "
+            "Replan before movement even if this checked pose becomes valid; the route is not certified."
         ),
     }
 

@@ -859,8 +859,10 @@ class DynamemTaskExecutor:
                         self.agent.announce_motion_progress(f"Exploring… step {i + 1}/{self.explore_iter}")
                     elif hasattr(self.agent, "announce_action"):
                         self.agent.announce_action(f"Exploring… step {i + 1}/{self.explore_iter}", discord=False)
-                    self.agent.run_exploration()
-                if hasattr(self.agent, "announce_motion_progress"):
+                    if not self.agent.run_exploration():
+                        self._last_exec_ok = False
+                        break
+                if self._last_exec_ok and hasattr(self.agent, "announce_motion_progress"):
                     self.agent.announce_motion_progress("Exploring… done")
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")

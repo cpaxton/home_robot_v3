@@ -66,6 +66,43 @@ def test_system_prompt_allows_only_explicit_observation_recovery():
     assert "without claiming success or attempting recovery" not in prompt
 
 
+def test_final_tool_schema_exposes_floor_tilt_and_feedback():
+    tool = next(tool for tool in get_tools({}) if tool.name == "observe_floor")
+    tilt = tool.parameters["properties"]["tilt_rad"]
+    assert (tilt["minimum"], tilt["maximum"]) == (-1.4, -0.7)
+    assert "footprint_before/after" in tool.description
+
+
+@pytest.mark.parametrize("payload_uncertain", [False, True])
+@pytest.mark.parametrize("reason", ["unobserved_footprint", "obstacle"])
+def test_find_dispatch_preserves_navigation_details_and_safe_recovery(payload_uncertain, reason):
+    executor = Mock(return_value=True)
+    executor._last_exec_ok = False
+    executor._held_query_instance = None
+    executor.grasp_object.pickup_executed = None if payload_uncertain else False
+    executor.agent = SimpleNamespace(
+        _last_nav_plan={
+            "outcome": f"rejected_swept_footprint:{reason}",
+            "footprint": {"unknown_footprint_cells": 4},
+        },
+        planner=None,
+    )
+    tools = {tool.name: tool for tool in get_tools({"executor": executor})}
+    later = Mock()
+    tools["later"] = Tool("later", "must not run", {}, later)
+    recovery = []
+    ok, results, failed = _dispatch_tool_calls(
+        [{"name": "find_objects", "arguments": {"text": "mug"}}, {"name": "later"}],
+        tools,
+        executor,
+        recovery_tools=recovery,
+    )
+    assert ok and failed
+    later.assert_not_called()
+    assert '"unknown_footprint_cells": 4' in results[0]
+    assert recovery == (["observe_floor"] if reason == "unobserved_footprint" and not payload_uncertain else [])
+
+
 @pytest.mark.parametrize("disconnected", [False, True])
 @pytest.mark.parametrize("phase", ["pre_grasp", "navigation"])
 @pytest.mark.parametrize(
@@ -140,6 +177,17 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
         ),
     )
     agent.update = Mock(side_effect=lambda **kw: None if failure == "map" else agent.voxel_map.observations.append(1))
+    agent._last_nav_plan = {"footprint": {"checked_pose": [0, 0, 0]}}
+    agent.space = SimpleNamespace(last_validity={})
+
+    def check_footprint(pose):
+        agent.space.last_validity = {
+            "reason": "unobserved_footprint",
+            "unknown_footprint_cells": 1 if agent.voxel_map.observations else 4,
+        }
+        return False
+
+    agent.space.is_valid = check_footprint
 
     def receive(robot, timeout):
         if failure != "stale":
@@ -157,6 +205,16 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
     if failure is None:
         robot.head_to.assert_called_once_with(expected_pan, tilt_rad, blocking=True)
         agent.update.assert_called_once_with(full_perception=True)
+        feedback = result["observation"]
+        assert feedback["footprint_before"]["unknown_cells"] == 4
+        assert feedback["footprint_after"]["unknown_cells"] == 1
+        assert feedback["footprint_after"]["pose_valid"] is False
+        assert feedback["replan_required"] is True
+        from emet.agent.tool_outcome import ToolOutcome
+
+        rendered = ToolOutcome.from_eqa_dict("observe_floor", result).render()
+        assert '"unknown_cells": 1' in rendered
+        assert '"measured_head_pan_tilt_rad"' in rendered
 
 
 @pytest.mark.parametrize("pan_rad", [float("nan"), float("inf"), -1.01, 1.01, True, "left"])

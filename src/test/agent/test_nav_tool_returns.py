@@ -61,10 +61,12 @@ def test_find_objects_surfaces_abort_outcome():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["find_objects"].func(text="aerosol")
-    assert "aborted" in out.lower()
-    assert "Last plan:" in out
-    assert "localize=voxel" in out
-    assert "do not immediately re-call" in out.lower()
+    assert not out.ok
+    assert out.status == "aborted_waypoint_timeout"
+    assert "Last plan:" in out.note
+    assert "localize=voxel" in out.note
+    assert "do not immediately re-call" in out.note.lower()
+    assert by_name["find_objects"].to_executor({"text": "aerosol"}) == []
     assert by_name["find_objects"].returns_info is True
 
 
