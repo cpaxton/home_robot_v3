@@ -5,6 +5,18 @@ Strike through or move to a PR when done.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
+- [x] Diagnose compounded navigation padding and add an opt-in physical-map
+      pilot (`query_navigation_physical_pilot.yaml`). Saved-map replay recovers
+      an approach without reducing the 0.22 m clearance or 0.85 m reach limit;
+      static MuJoCo contact checks supply an approach witness to existing MCTS.
+      This is not full dynamic TAMP or manipulation acceptance.
+- [ ] Finish live physical-map navigation acceptance. Job
+      `20260926_084004_726c49` refused unobserved footprint space before pickup.
+      Preserve that reason through pick_place; determine missing footprint
+      cells, then test stationary floor observations and replanning. Do not
+      mark unknown cells free or reduce safety thresholds to obtain success.
+      Follow with wheel-executed approach, blocked-route negatives, paired
+      small-room manipulation and EQA before promoting the pilot.
 - [x] Build/run a reproducible serial carry checkpoint battery; 12 controlled
       conditions isolate hold, translation, turns, braking and recorded wheels.
       277 focused tests pass; evidence/figure in the floor-coverage report.

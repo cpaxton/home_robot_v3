@@ -937,7 +937,7 @@ only `timestep` and `noslip_iterations` differ from the original scene.
   broken-pipe/reset errors after the task result. Neither is the recorded task
   failure, but this run is not evidence that simulator lifecycle/timing is clean.
 
-Next scoped task: give relational support grounding the full contextual view
+Next scoped task at that checkpoint: give relational support grounding the full contextual view
 and an explicit reference-frame contract, while verifying the proposed local
 placement surface from measured geometry. Do not simply loosen acceptance or
 rename the target to whichever countertop is visible. Reuse saved views for a
@@ -945,3 +945,44 @@ small offline check, then rerun the same learned task with physics/model/budgets
 frozen. Retain original-physics carry failures and the unresolved Molmo workspace
 gate. No new EQA, Molmo or TAMP episode was run for this diagnostic-only code
 change; the historical scores above are not fresh acceptance results.
+
+### September 26: navigation padding and movement rejection
+
+The current repair targets the harness, not the VLM's relational judgments.
+Map dilation (two 0.1 m cells), planner clearance (0.22 m), and footprint checks
+were applied cumulatively. The opt-in
+`configs/emet/query_navigation_physical_pilot.yaml` separates physical obstacles
+from legacy dilation and retains clearance, unknown-space rejection, and a
+conservative orientation-aware footprint sweep. Defaults remain unchanged.
+
+- Replay `20260926_083408_ffc15f` reproduces 37 reachable cells and a nearest
+  reachable distance of 0.927 m with legacy padding. The physical-map variant
+  finds an approach at approximately (-0.7, -0.3), 0.827 m from the observed
+  target surface, with a valid sampled footprint sweep. The saved memory is
+  not pixel-identical to the last failure map (25 obstacle cells differ).
+- Private GT diagnostic `20260926_083649_3eb915` checks that approach against
+  MuJoCo geometry at 64 static samples. Existing MCTS selects it and rejects an
+  alternative through the island. This certifies neither wheel execution,
+  arm IK, grasp, nor the placement leg; failed bounded search is not proof of
+  infeasibility. GT object center and observed target surface also differ.
+- Live learned Molmo job `20260926_084004_726c49` at `9452caa3` fails before
+  pickup: both the target approach and fallback frontier are rejected with
+  `rejected_swept_footprint:unobserved_footprint`. Physical pick/place are false.
+  The tool previously hid that reason behind generic failure; the follow-up
+  preserves navigation diagnostics and clears stale manipulation recovery
+  permissions. It does not bypass the rejection or authorize blind motion.
+- The broader focused regression suite passed 511 tests before that reporting
+  follow-up. This is software coverage, not live navigation acceptance.
+
+Artifacts: `~/runs/emet/navigation-contract-replay-20260926/`,
+`~/runs/emet/navigation-tamp-witness-20260926/`, and
+`~/runs/emet/navigation-physical-molmo-20260926/`.
+
+Next: localize the unobserved footprint cells, verify observation-only recovery,
+then execute and measure the approach with wheel control. Keep positive and
+blocked-route tests and the same grasp reach/physics/model. Only then rerun
+paired small-room OVMM and EQA. The earlier overnight comparison stopped after
+14/36 scheduled trials: the EQA slice was 2/4 in each arm, both Molmo trials
+failed approach, three completed RoboCasa trials picked but failed placement,
+and one RoboCasa control timed out. It is not a completed overnight sweep or
+evidence of broad non-regression.
