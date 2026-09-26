@@ -59,6 +59,7 @@ def execute_measured_route(
     position_tolerance_m=0.05,
     yaw_tolerance_rad=0.1,
     waypoint_timeout_s=30.0,
+    navigation_policy=None,
     event=lambda **kwargs: None,
 ):
     """Follow validated waypoints with shared base control and bounded replans.
@@ -119,7 +120,8 @@ def execute_measured_route(
                 reason = f"rejected_swept_footprint:{rejected}"
                 diverged = True
                 break
-            ok = succeeded(robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s))
+            options = {"navigation_policy": navigation_policy} if navigation_policy is not None else {}
+            ok = succeeded(robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s, **options))
             current = read_measurement()
             if not valid_measurement(current):
                 return invalid_measurement(attempt, cancel_motion=True)

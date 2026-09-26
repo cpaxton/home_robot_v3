@@ -168,3 +168,18 @@ def test_support_surface_ignores_tiny_parked_geoms_without_height_cutoff():
     assert all(abs(p[2] - 1.015) < 1e-8 for p in points)
     # An obstacle at the center need not rule out the whole named support.
     assert any(np.linalg.norm(p[:2] - [2, 0]) > .25 for p in points)
+
+
+def test_direct_route_does_not_command_duplicate_final_pose():
+    import mujoco
+
+    from emet.eval.physical_tamp import SceneNavigationSpace
+    from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
+
+    m = mujoco.MjModel.from_xml_string('<mujoco><worldbody><body name="base_link"><freejoint/><geom size=".1"/></body></worldbody></mujoco>')
+    d = mujoco.MjData(m)
+    space = SceneNavigationSpace(m, d, MujocoSceneCollisionChecker(m, robot_body='base_link'))
+    route = np.asarray(space.plan_route(np.zeros(3), np.array([.8, 0, 0])))
+    assert len(route) == 4
+    assert np.all(np.linalg.norm(np.diff(route, axis=0), axis=1) > 0)
+    np.testing.assert_allclose(route[-1], [.8, 0, 0])

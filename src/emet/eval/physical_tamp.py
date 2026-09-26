@@ -70,8 +70,9 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "wall_timeout_s": 600,
         },
         "tolerances": {
-            "base_position_m": 0.05,
-            "base_yaw_rad": 0.1,
+            "navigation_policy": "precision",
+            "base_position_m": 0.02,
+            "base_yaw_rad": 0.03,
             "ik_position_m": 0.01,
             "ik_orientation_rad": 0.1,
             "joint_tracking": 0.03,
@@ -255,7 +256,7 @@ class SceneNavigationSpace(XYT):
             if validate_navigation_sweep(self, start, [goal])[0]:
                 # Short waypoints bound unobserved tracking divergence.
                 points = list(self.extend(start, goal))
-                return [q.tolist() for q in points[7::8]] + [np.asarray(goal).tolist()]
+                return [q.tolist() for q in points[7:-1:8]] + [np.asarray(goal).tolist()]
             self.route_stats["phase"] = "rrt"
             planner = get_planner("rrt_connect", self, self.is_valid, max_iter=400, goal_tolerance=0.025)
             result = planner.plan(np.asarray(start), np.asarray(goal))

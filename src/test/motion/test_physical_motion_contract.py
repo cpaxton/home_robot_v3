@@ -435,3 +435,26 @@ def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
     result = executor._execute_path('navigation_posture', [np.array([0.0]), np.array([0.2])])
     assert result.success and result.residual == pytest.approx(0)
     assert sleeps == [0.05]
+
+
+@pytest.mark.parametrize('yaw_error,success', [(0.02, True), (0.04, False)])
+def test_precision_route_uses_policy_and_checks_measured_arrival(yaw_error, success):
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    measured = np.zeros(3)
+    policies = []
+
+    def move(goal, **kwargs):
+        policies.append(kwargs['navigation_policy'])
+        measured[:] = goal
+        measured[2] += yaw_error
+        return True
+
+    result = execute_measured_route(
+        SimpleNamespace(move_base_to=move, cancel_navigation=lambda: True),
+        goal=[.1, 0, 0], measure=lambda: measured.copy(), plan_route=lambda start, goal: [goal],
+        space=SimpleNamespace(is_valid=lambda q: True), navigation_policy='precision',
+        position_tolerance_m=.02, yaw_tolerance_rad=.03, max_replans=0,
+    )
+    assert result.success is success
+    assert policies == ['precision']

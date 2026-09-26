@@ -493,7 +493,8 @@ def run(args):
                         return prepared
                     preparation_pending = False
                 outcome = execute_measured_route(
-                    robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event
+                    robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event,
+                    navigation_policy="precision", position_tolerance_m=0.02, yaw_tolerance_rad=0.03,
                 )
                 capture("navigation")
                 return outcome
