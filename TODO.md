@@ -5,6 +5,17 @@ Strike through or move to a PR when done.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
+- [x] Sanity-check the actual CHAT tool contract (`59703152`): publish tilt in
+      canonical SkillSpec (previous Python-only addition was overwritten),
+      route find through structured results instead of executor-only dispatch,
+      propagate exploration no-progress, and render before/after checks of the
+      rejected footprint. Latest scoped regression suite: 451 passed.
+- [ ] Score navigation-only, unassisted-view-choice pilots at frozen
+      `/tmp/emet-navigation-info-59703152`: find job `20260926_093901_435cf0`
+      and exploration job `20260926_094153_3d5a62`. Artifacts under
+      `~/runs/emet/navigation-info-pilot-20260926/`. Both queued behind the
+      physical-TAMP lock at launch; do not label process exit 0 as task success.
+      No head angle or manipulation is prescribed in either request.
 - [x] Diagnose compounded navigation padding and add an opt-in physical-map
       pilot (`query_navigation_physical_pilot.yaml`). Saved-map replay recovers
       an approach without reducing the 0.22 m clearance or 0.85 m reach limit;

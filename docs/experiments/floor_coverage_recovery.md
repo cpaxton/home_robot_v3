@@ -1046,3 +1046,42 @@ promotion, new physical TAMP pass, or fresh paired EQA/RoboCasa result is claime
 Next gate is repeatable observation plus workspace-valid measured arrival, then
 live handoff and paired small-room/EQA acceptance. Do not spend a full sweep on
 the unresolved one-cell start-state failure.
+
+### September 26: sanity-check the tools the model actually receives
+
+`59703152` repairs three interface defects found while checking exploration:
+
+1. The canonical CHAT SkillSpec overwrote the local `observe_floor` schema,
+   hiding `tilt_rad` from the model. The earlier explicit assisted command could
+   call the Python parameter but did not prove autonomous discoverability.
+   The canonical schema now includes the same bounded tilt option.
+2. `find_objects` was dispatched through its executor mapping, bypassing the
+   richer result formatter. It now returns a structured ToolOutcome with
+   navigation rejection evidence and narrowly gated observation recovery.
+3. The task executor ignored a failed `run_exploration()` return, repeated its
+   loop, and could report completion. It now stops at the first failed step and
+   exposes no-progress; the tool includes measured exploration distance when
+   available. Success is not inferred from planned waypoints.
+
+Floor observations now recheck the same rejected footprint pose before/after
+map update, reporting unknown-cell counts, validity/reason, measured head pose,
+and an explicit replan requirement. Global map growth is retained as a separate
+metric. Even a valid checked pose does not certify a route or authorize motion.
+The result renderer includes these fields so they reach the model, not only
+saved artifacts. Collision, uncertain-payload, freshness and tool-budget guards
+remain unchanged. Tests cover the final registry/schema, dispatch, failed-batch
+discard, no-progress propagation and rendered observation evidence.
+
+Scoped regression suite: **451 passed**, two existing SWIG warnings.
+
+Two serial navigation-only pilots are queued at this revision: target search
+`20260926_093901_435cf0` and exploration `20260926_094153_3d5a62`. They use the
+same Molmo fixture/seed/model and opt-in physical map, without prescribing a
+head angle or requesting manipulation. Source is frozen in
+`/tmp/emet-navigation-info-59703152`; driver is
+`/tmp/run_navigation_info_pilot_20260926.sh` and is archived on startup.
+Artifacts: `~/runs/emet/navigation-info-pilot-20260926/{find,explore}/`.
+At this checkpoint they are waiting for the shared GPU lock behind physical
+TAMP work. Pending results are not navigation acceptance; score tool choices,
+blocking-cell change, measured motion and target verification separately from
+process exit status. No new EQA or RoboCasa result is claimed here.
