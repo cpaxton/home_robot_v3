@@ -8,6 +8,7 @@ sustained physical evidence, not tool returns or object displacement alone.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -53,9 +54,32 @@ class ManipulationTrace:
                     raise ValueError("Placement regions must be box geoms belonging to the designated support")
                 self.placement_regions.append(int(region.id))
         output.parent.mkdir(parents=True, exist_ok=True)
+        runtime = {}
+        if config.get("require_robot_collision_audit"):
+            import mujoco
+
+            runtime_path = output.with_suffix(".model.mjb")
+            mujoco.mj_saveModel(model, str(runtime_path))
+            runtime = {
+                "runtime_model_path": str(runtime_path),
+                "runtime_model_sha256": hashlib.sha256(runtime_path.read_bytes()).hexdigest(),
+                "mujoco_version": mujoco.__version__,
+                "timestep_s": float(model.opt.timestep),
+                "gravity": model.opt.gravity.tolist(),
+                "integrator": int(model.opt.integrator),
+                "solver": int(model.opt.solver),
+            }
         self.stream = output.open("x")
         self.stream.write(
-            json.dumps({"schema": 1, "config": config, "sample_period_s": 0.1, "contact_rule": "positive_normal_force"})
+            json.dumps(
+                {
+                    "schema": 1,
+                    "config": config,
+                    "sample_period_s": 0.1,
+                    "contact_rule": "positive_normal_force",
+                    **runtime,
+                }
+            )
             + "\n"
         )
         self.stream.flush()

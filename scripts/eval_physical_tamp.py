@@ -22,6 +22,18 @@ from types import SimpleNamespace
 import numpy as np
 
 
+def arm_client_command(values):
+    """Bind MJCF coordinates to the ZMQ client's base/lift/arm/roll/pitch/yaw API."""
+    return [
+        0,
+        values["joint_lift"],
+        sum(values[f"joint_arm_l{i}"] for i in range(4)),
+        values["joint_wrist_roll"],
+        values["joint_wrist_pitch"],
+        values["joint_wrist_yaw"],
+    ]
+
+
 def latest_trace(path):
     with Path(path).open("rb") as stream:
         stream.seek(0, 2)
@@ -167,6 +179,14 @@ def run(args):
                 start_immediately=True,
                 allow_missing_depth=True,
             )
+            with trace.open() as stream:
+                runtime = json.loads(stream.readline())
+            # The server may resolve startup model settings. Plan against its
+            # exact compiled geometry/physics, preserving the source model too.
+            model = mujoco.MjModel.from_binary_path(runtime["runtime_model_path"])
+            data = mujoco.MjData(model)
+            manifest["runtime_model"] = {k: v for k, v in runtime.items() if k not in ("config", "schema")}
+            (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
             synchronize(data)
             np.savez(
                 output / "measured_initial_state.npz", qpos=data.qpos, qvel=data.qvel, ctrl=data.ctrl, act=data.act
@@ -205,14 +225,7 @@ def run(args):
         def command(q):
             robot.switch_to_manipulation_mode()
             values = dict(zip(joints, q, strict=True))
-            cmd = [
-                0,
-                values["joint_lift"],
-                sum(values[f"joint_arm_l{i}"] for i in range(4)),
-                values["joint_wrist_yaw"],
-                values["joint_wrist_pitch"],
-                values["joint_wrist_roll"],
-            ]
+            cmd = arm_client_command(values)
             ok = robot.arm_to(cmd, blocking=True, timeout=15, min_time=0.1)
             time.sleep(0.12)
             return ok
