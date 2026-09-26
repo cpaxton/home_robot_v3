@@ -1,175 +1,140 @@
-# Physical motion and TAMP experiment ledger — September 26, 2026
+# Physical motion and full TAMP acceptance — September 26, 2026
 
-This report separates contact-based physical acceptance from the existing teleport
-and latch controls. The requested scope is GT/MCTS only. No learned-agent comparison,
-real robot test, or main-branch push is part of this run.
+**Physical acceptance remains unestablished.** Both matched Stretch fixtures now
+produce complete static navigation/grasp/lift/transport/release witnesses, but no
+contact-based pickup and placement has passed the independent scorer. Static
+feasibility and controller acknowledgements are not task success.
 
-## Completed evidence
+Scope: GT/MCTS, simulated robots, the existing full TAMP registries, and a separately
+scored physical track. No learned-model comparison, real-robot trial, or main push.
+The requested plan is [the motion acceptance handoff](../plans/2026-09-26_physical_tamp_motion_acceptance.md).
+Earlier raw findings and canceled submissions are preserved in
+[the diagnostic history](physical_tamp_acceptance_20260926_diagnostics.md).
 
-| Check | Outcome | Evidence |
-| --- | --- | --- |
-| Archived fractional start footprint | 24 cells; zero unknown or occupied cells after continuous-pose rasterization | Original map: `/home/cpaxton/runs/emet/navigation-floor-recovery-20260926/offline_initial_footprint/map.npz`; regression in `test_navigation_sweep.py` |
-| Targeted motion, scoring, task, and runner tests | 147 passed at `7b6ad51d` | Includes collision/unknown-space negatives, orientation IK, bounded tracking, payload slip/drop, forbidden actuation, and 200-row registry accounting |
-| Molmo physical diagnostic, seed 0, `b43dcc5e` | Timeout at 600-second budget; no complete witness or executed approach | `/tmp/physical-tamp-molmo-20260926-r0/result.json`, `stages.jsonl`, `physical_trace.jsonl`, `motion_overview.png` |
-| Protocol infrastructure attempt, `b43dcc5e` | 24/24 failed before simulation: frozen checkout could not locate the installed MolmoSpaces wrapper | `/tmp/tamp-protocol-20260926-r0/ledger.json` and `summary.json` |
+## Experiment results
 
-The first physical diagnostic is an implementation diagnostic, **not a matched
-baseline comparison**. Its rejected approaches exposed arm/furniture collisions
-while retaining the startup arm pose. Subsequent changes add a collision-checked
-profile navigation posture, bounded joint-limit IK, continued placement-pose search,
-correct wrist command ordering, and exact live-model provenance. No collision margin
-or unknown-space rule was relaxed. The MolmoSpaces environment binding is repaired
-for subsequent oracle trials; the failed infrastructure attempt is retained.
-
-The overview image for the first trial was generated after the run from its archived
-model and measured initial state using the revised visualization helper. It is a
-geometry diagnostic, not a contemporaneous execution image.
-
-## Frozen experiment revision and submissions
-
-Source: `f4bbc3741847a7307fb2fce26a6c8f9a30443bc6` in
-`/tmp/emet-physical-tamp-20260926-r2`. Installed Python environments are bound into
-this worktree; the MolmoSpaces package is also placed on its explicit Python path
-for the oracle suites. Source changes are not made in a running worktree.
-
-All jobs use `emet jobs --cpu-safe --gpu-exclusive`, one numerical thread per
-library, and the shared GPU lock. Other agents' jobs are left untouched. Physical
-trials have a 600-second wall budget; registry rows have 900 seconds, with four
-such budgets per protocol process. A timed-out registry run stops for cleanup
-inspection and retains pending rows for explicit resume.
-
-| Submission | Job ID | Artifact root | Latest recorded state |
+| Suite | Source | Result | Artifact root |
 | --- | --- | --- | --- |
-| Molmo physical, seed 0 | `20260926_095526_87bd04` | `/tmp/physical-tamp-molmo-20260926-r2` | Timeout; no complete witness |
-| RoboCasa physical, seed 0 | `20260926_095529_bbe280` | `/tmp/physical-tamp-robocasa-20260926-r2` | No plan within budget; no physical pickup |
-| 24-case oracle protocol | `20260926_095623_46f75a` | `/tmp/tamp-protocol-20260926-r2` | Cancelled before execution to prioritize fixture repairs |
-| Seven-row small registry | `20260926_095804_73c06c` | `/tmp/tamp-small-20260926-r2` | Cancelled before execution to prioritize fixture repairs |
-| Four GT floor rows | `20260926_095807_b4c7a6` | `/tmp/tamp-floor-20260926-r2` | Cancelled before execution to prioritize fixture repairs; find-only row is deferred |
-| Full 200-row registry | `20260926_095810_983359` | `/tmp/tamp-full-20260926-r2` | Cancelled before execution to prioritize fixture repairs |
-| Three scripted tool controls | `20260926_095907_ffcfa4` | `/tmp/tamp-tools-20260926-r2` | Cancelled before execution to prioritize fixture repairs |
+| Protocol battery | `7b6ad51d` | 17/24 tests passed; all six groups terminal | `/tmp/tamp-protocol-20260926-r5` |
+| Small registry | `7b6ad51d` | 4/7 task successes; all rows terminal | `/tmp/tamp-small-20260926-r5` |
+| Scripted tool controls | `7b6ad51d` | 3/3 passed; scripted JSON, no learned model | `/tmp/tamp-tools-20260926-r5` |
+| GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
+| Full registry | `dbe0f4da` | Running; 200 terminal rows required | `/tmp/tamp-full-20260926-r14` |
+| Physical RoboCasa can → counter | `dbe0f4da` | Failed before closure: measured telescoping joint exceeded nominal limit | `/tmp/physical-tamp-robocasa-20260926-r14` |
+| Physical Molmo tomato → bowl | `dbe0f4da` | Failed approach, unconfirmed stop after 431 s | `/tmp/physical-tamp-molmo-20260926-r14` |
 
-Submission is not completion or acceptance. Read each terminal `result.json` or
-`summary.json` together with its ledger. Protocol/registry labels distinguish
-`oracle_teleport` and `kinematic_latch`; neither establishes physical grasping.
-The physical adapter currently requires the supported telescoping-arm client
-interface. Other interfaces must report unsupported capability until implemented.
+The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
+Neither mode establishes contact-based grasping. All results above are newly run;
+the historical 24/24 battery is not carried forward as a current result.
 
-Three earlier revision-1 submissions were cancelled while still queued to repair
-the physical wrist binding and put fixture diagnostics first. They executed no
-trial and are not counted as successes or failures: `20260926_094735_98ce0f`,
-`20260926_095011_ee8874`, and `20260926_094936_3da2e7`.
+Protocol failures: Nori scene 1 cleared 8/8 obstacles but failed final navigation;
+Mars scene 0 passed manipulation and failed both navigation cases; Mars scene 1
+had four startup timeouts while searching for a collision-free spawn. RBY1 passed
+both scenes, 8/8. Small-registry failures: one latch cleanup placed 5/6 objects
+(the potato failed attachment verification), and two named-navigation rows lacked
+the requested landmark. The paired teleport cleanup passed 6/6. Floor: RBY1
+picked but failed independently verified placement despite successful controller
+returns; Sourccey and Stretch oracle controls passed.
 
-## Acceptance still required
+Full job: `20260926_125932_8d0984`. Physical jobs: `20260926_125430_da88fd` (RoboCasa),
+`20260926_125430_146377` (Molmo), frozen in
+`/tmp/emet-physical-tamp-20260926-r14`. Full jobs r12 and r13 were canceled before
+execution to repair the command race and protocol boundary; they produced no
+registry rows. Submission is not completion. Read each terminal result with its
+manifest, trace, audit, and stage events.
 
-The three-seed controlled physical gate, broader layout positives/negatives,
-partial-observation execution, and a matched baseline are not yet established.
-Partial-map adoption must preserve observed-space rejection and measured arrival
-checks. The full suite requires terminal accounting for all 200 rows, including
-unsupported robots, invalid fixtures, timeouts, and crashes. Publication claims
-and promotion to shared live defaults remain gated on that evidence.
+## Implemented motion contracts
 
+- Raw obstacles, uncertainty, and footprint are separate. Continuous-pose SAT
+  rasterization fixes fractional-cell over-inflation without marking unknown cells
+  free. The archived handoff start covers 24 cells with no unknown or occupied cells.
+  The 0.22 m planner clearance remains unchanged; physical-map mode remains opt-in.
+- Bounded candidate search requires orientation-aware arm IK, collision-checked
+  approach and arm segments, payload-aware transport, and support release/retreat.
+  Exhaustion reports `no_plan_within_budget`, not geometric impossibility.
+- IK rejects nonfinite/out-of-limit targets and weights position/orientation errors
+  by their existing tolerances. Coupled telescoping joints preserve their actuator
+  relationship. Support candidates use real collision surfaces and bounded interior
+  alternatives, avoiding parked fixture geometry and occupied surface centers.
+- Execution uses shared wheel, arm, and gripper APIs. Measured arrival triggers
+  fresh IK/path validation; arm convergence, base drift, actual lift, and payload
+  retention are checked. Missing collision support and failed motion remain failures.
+- A live actuation guard prohibits pose writes, teleport, latch/attachment, reset,
+  and kinematic base holding during the scored physical interval. Independent
+  every-tick scoring checks contacts, lift, retention, release, and stable support.
+- Manifests archive source/config/model hashes, initial states, tolerances, seeds,
+  budgets, candidates, rejected contacts, controller residuals, and execution mode.
+  Physical trials save head/depth/side views, route maps, exact MJBs, and traces.
+  Registry accounting retains errors, invalid fixtures, crashes, timeouts, and skips.
 
-## Revision 3 fixture diagnostic
+## Demonstrated faults and repairs
 
-Revision `f7ea8921` is frozen in `/tmp/emet-physical-tamp-20260926-r3`. It generates
-40 approach candidates from five actual arm-extension fractions and eight base
-yaws, plus the measured stationary pose. It tries both nominal and transit wrist
-orientations, bounds each base-route search to 10 seconds, and avoids dynamics
-solves in offline kinematic updates. Measured height/tilt are retained. The arm
-planner can try raise/orient/extend group orders when a simultaneous coupled-joint
-move collides. Arrival triggers fresh world-pose IK; lost payload or invalid feedback
-stops subsequent motion.
+| Fault | Evidence and repair |
+| --- | --- |
+| Disabled visualization consumed a CPU core | Stretch treated its null visualizer as enabled and ran an unthrottled loop. Checking enabled state and limiting update rate reduced RoboCasa planning from 548 s to 13.7 s. |
+| Arm acknowledgment preceded measured convergence | Client tolerances admitted the previous wrist target. The physical executor now checks measured convergence within the declared tolerance and bounded settling window. |
+| Coarse navigation did not establish manipulation reach | Precision policy uses 20 mm XY / 0.03 rad yaw; fresh IK is still required at the measured arrival. |
+| Mixed meter/radian IK residuals rejected reachable arrivals | Exact archived RoboCasa replay changed from 160-iteration failure at 26.3 mm to an 11-iteration solution at 5.7 mm / 0.0977 rad, retaining 10 mm / 0.1 rad acceptance. |
+| Wall time misclassified slow simulated progress | Progress and low-level motion budgets now account for advancing simulation time. Stale-data checks and overall wall deadlines remain active. |
+| Arm commands restored a stale manipulation base pose | RoboCasa r11 missed the can because the base turned back toward the pre-navigation reference. Navigation now explicitly changes mode; arm paths refuse measured base drift. |
+| Physics acknowledgements erased new arm targets | RoboCasa r12 acknowledged −0.502 rad while the wrist remained at −0.407 rad. Producer and physics consumer now share an interprocess lock around command read/modify/acknowledgement. |
+| A trial timeout became an ordinary approach failure | The whole-trial deadline now escapes controller/task recovery handlers and records a timeout before cleanup. |
 
-- Molmo seed 0: `20260926_101911_c23092`, `/tmp/physical-tamp-molmo-20260926-r3`.
-- RoboCasa seed 0: `20260926_101915_21ea6a`, `/tmp/physical-tamp-robocasa-20260926-r3`.
+RoboCasa r11 failed lift-start collision revalidation after closing an empty gripper.
+The scorer recorded opposing finger/pad contacts. Those contacts were not waived;
+the stale base frame was repaired. Molmo r11 timed out at 606 s before grasp.
+RoboCasa r12 stopped safely in preparation on measured wrist tracking failure.
+R13 completed preparation on both fixtures but rejected navigation because a mode
+field violated the standalone-command wire contract. Revision `dbe0f4da` moves
+the mode transition inside the accepted server command and adds a regression.
+All failed trials remain archived under `/tmp/physical-tamp-{scene}-20260926-r*`.
 
-These submissions are diagnostics, not evidence of a passed gate. The revision-2
-bulk jobs were cancelled before execution so fixture debugging would not wait
-behind the long registry sweep; they need new submissions after this diagnostic.
+Subsequent physical-only candidate `04cc4960` reserves 5 mm at each telescoping
+joint limit during pose IK. The measured 0.4 mm overshoot remains a rejection;
+commanded poses must now leave tracking room, and search may choose a closer base.
+It also uses position hysteresis for precision navigation: translation targets
+10 mm, final turning remains active within 20 mm, and leaving that outer limit
+requires returning to the inner target. Yaw control targets 0.015 rad; independent
+arrival acceptance remains 20 mm / 0.03 rad. Molmo r14 took 199 s for its second
+small waypoint while repeatedly crossing the translation/turn threshold. No
+clearance, hard joint limit, contact, or scoring threshold was relaxed.
 
-## Revision 4 and regression submissions
+The r17 physical pair (`014b6ab4`) is queued behind the full r14 control registry:
+`20260926_131239_4220c6` (RoboCasa), `20260926_131240_49836d` (Molmo). R15/r16 jobs
+were canceled before execution as the coupled precision/cancellation repairs were
+completed. The new interprocess lock exposed cancellation waiting for an
+acknowledgement while holding the consumer's lock; r17 releases it before waiting
+and still requires consumed stop plus fresh measured rest. Timeouts also retain
+independent trace scoring. This interaction explains the unconfirmed stop in
+Molmo r14; it is not counted as successful navigation.
 
-Both revision-3 physical trials timed out without a complete witness (Molmo
-653.2 seconds including cleanup; RoboCasa 621.4 seconds). Revision 4 at
-`0fab5a0e` adds geometry-based support heights, verifies the rigid collision
-kernel against the full position pass, records actual gripper-opening commands,
-and holds the measured head pose during arm execution.
+A separate 30-row Stretch recheck at `b1c4400c` is queued after the physical pair:
+job `20260926_131456_47c2bb`, artifacts `/tmp/tamp-stretch-recheck-20260926-r18`.
+The explicit `--robot stretch` subset preserves original registry case definitions.
+It will revalidate the affected backend without overwriting the full r14 ledger. The full registry remains frozen at `dbe0f4da`; later physical-only results
+must carry their own source revision and may not replace those control results.
 
-- Molmo: `20260926_104222_c774d8`, `/tmp/physical-tamp-molmo-20260926-r4`.
-- RoboCasa: `20260926_104225_b9df40`, `/tmp/physical-tamp-robocasa-20260926-r4`.
+## Validation and remaining gates
 
-The Molmo collision-kernel comparison matched 189 contacts across 2178 geoms.
-Full position took 0.0052 seconds and collision-only took 0.0063 seconds at the
-measured initial state; this does **not** establish a performance improvement.
-A bounded archived-route profile is queued as `20260926_105125_c4bed4` with
-output in `/tmp/tamp-route-profile-job-20260926`. Revision 5 adds route-level
-query counts/timing and prevents process failures from inheriting task success
-from a written artifact. Signal crashes stop the serial runner for cleanup.
+The combined targeted suite passed **232 tests at `b1c4400c`**, including command
+snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
+explicit-subset regressions. Tests cover collision and unknown
+space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
+tracking, payload slip/drop, forbidden actuation, and full-registry accounting.
+They do not establish live physical acceptance.
 
-Frozen regression source: `7b6ad51d`, `/tmp/emet-physical-tamp-20260926-r5`.
-All submissions below are pending until their terminal ledgers are inspected.
+| Plan gate | State |
+| --- | --- |
+| A: frozen fixtures and reproduced failures | Established for the two exact Stretch fixtures; initial diagnostics are not a matched baseline comparison. |
+| B: complete GT static witnesses | Demonstrated on both fixtures, with unit-level blocked/alternate/unknown negatives; broader live layout coverage remains outstanding. |
+| C: physical pick, carry, release, stable support | Not established. Three matched seeds per fixture and baseline/candidate comparison remain outstanding. |
+| D: partial-observation physical execution | Not established; depends on C. GT has not been injected into observed maps. Learned comparisons excluded by the user’s scope. |
+| Full TAMP control accounting | Pending all 200 terminal rows on the frozen final submission. |
 
-| Suite | Job ID | Artifact root |
-| --- | --- | --- |
-| Protocol, 24 tests | `20260926_105141_134946` | `/tmp/tamp-protocol-20260926-r5` |
-| Small, 7 rows | `20260926_105235_29c089` | `/tmp/tamp-small-20260926-r5` |
-| GT floor, 4 rows | `20260926_105236_f9f497` | `/tmp/tamp-floor-20260926-r5` |
-| Full, 200 rows | `20260926_105236_43eed7` | `/tmp/tamp-full-20260926-r5` |
-| Scripted tool controls, 3 items | `20260926_105251_7b1af8` | `/tmp/tamp-tools-20260926-r5` |
-
-## Revision 4 terminal outcomes and follow-up
-
-Molmo timed out without a full witness (657.2 seconds including cleanup).
-RoboCasa exhausted its search without a full witness (617.9 seconds including
-cleanup). Two RoboCasa candidates passed the offline approach/grasp/lift sequence,
-but each rejected all 40 transport alternatives. Many endpoint contacts involved
-the toaster at the selected counter center. No physical pickup or placement ran.
-
-Revision `0d08387a` searches nine interior release positions per support level,
-retaining payload-sized edge clearance and full geometry validation. Its focused
-16 tests pass. It is frozen in `/tmp/emet-physical-tamp-20260926-r6`; RoboCasa
-job `20260926_110716_7c4a47` was cancelled before execution to add a live
-planning profile. Replacement revision `9893261c` is frozen in
-`/tmp/emet-physical-tamp-20260926-r7`; job `20260926_111629_106b81` is queued
-with output `/tmp/physical-tamp-robocasa-20260926-r7`.
-
-The archived-route profile completed two routes in 1.035 seconds (798 validity
-calls). A separate symbolic candidate profile took 0.058 seconds. Neither
-reproduces the live route delays; these are diagnostic timings, not a speedup
-claim or an execution witness. A moved-pose contact-count probe matched the full
-position pass, but this alone is not broad collision-kernel validation.
-
-The revision-5 protocol has completed Nori scene 0 with all four oracle tests
-passing. The remaining protocol, registry, floor, and tool results are pending.
-
-Protocol interim result: 9/12 tests passed across Nori scenes 0/1 and Mars scene 0.
-Nori scene 1 cleared 8/8 objects and found an open route but did not report final
-navigation arrival. Mars scene 0 passed manipulation and failed both navigation
-checks, including an explicit no-route rejection. These are preserved failures,
-not evidence of fixture invalidity or a matched regression attribution. The
-historical 24/24 result predates current navigation guards.
-
-The Mars scene-1 protocol failures were all startup failures: the server logs
-stopped at collision-free spawn search before the client's 60-second observation
-wait expired. Planning never started. RBY1 scene 0 subsequently passed 4/4;
-completed groups total 13/20, with RBY1 scene 1 still in progress.
-
-## Completed regression suites
-
-The revision-5 protocol is complete: **17/24 tests passed**, with all six process
-ledgers terminal. Four failures were Mars scene-1 startup timeouts; three were
-navigation failures (Nori scene 1 blocked-navigation, Mars scene 0 both navigation
-checks). RBY1 passed 8/8. Evidence: `/tmp/tamp-protocol-20260926-r5`.
-
-The small registry is complete: **4/7 tasks succeeded**. The six-object latch
-row cleared 5/6 and failed potato attachment verification; its teleport control
-cleared 6/6. Two navigation rows failed with `missing_landmark` for their named
-sofa/fridge. The eight-object latch/navigation row and final Stretch row passed.
-All seven rows remain in `/tmp/tamp-small-20260926-r5/ledger.json`.
-
-The unstarted full job `20260926_105236_43eed7` was cancelled only to reorder our
-queue. Its unchanged source, commands, output root, and budgets were resubmitted
-as **`20260926_114041_1123fe`**, job log
-`/tmp/tamp-full-job-20260926-r5-final/job.log`. It follows the floor, scripted tool,
-and profiled physical diagnostic jobs, so the 200-row sweep is the final run.
-It contains 110 kinematic-latch and 90 oracle-teleport rows.
+All heavy jobs run serially through `emet jobs --cpu-safe --gpu-exclusive`, with
+OMP/OpenBLAS/MKL threads set to one. Physical trials have a 600 s wall budget;
+registry rows have 900 s. A crash/timeout stops registry execution for cleanup
+inspection and explicit resume; earlier failures are never overwritten.
+Other agents’ checkouts and jobs are untouched. Physical controller support is
+currently limited to the supported Stretch telescoping-arm interface; the wider
+robot control batteries do not imply physical support for every robot.
