@@ -200,3 +200,141 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
     result = executor.prepare_for_navigation(path)
     assert not result.success and result.message == "arm_tracking_failed"
     assert calls
+
+
+@pytest.mark.parametrize("pose", [[0, 0], [np.nan, 0, 0]])
+def test_invalid_measured_base_pose_never_reaches_planner_or_controller(pose):
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    result = execute_measured_route(
+        SimpleNamespace(),
+        goal=[1, 0, 0],
+        measure=lambda: np.asarray(pose),
+        plan_route=lambda *args: pytest.fail("planning from invalid measurement"),
+        space=SimpleNamespace(),
+    )
+    assert not result.success and result.reason == "invalid_measured_pose"
+    assert result.position_residual_m is None
+
+
+def test_invalid_base_feedback_cancels_motion_and_never_replans():
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    measurements = iter([np.zeros(3), np.zeros(3), np.array([np.nan, 0, 0])])
+    cancels = []
+    robot = SimpleNamespace(
+        move_base_to=lambda *args, **kwargs: True, cancel_navigation=lambda: cancels.append(True) or True
+    )
+    result = execute_measured_route(
+        robot,
+        goal=[1, 0, 0],
+        measure=lambda: next(measurements),
+        plan_route=lambda start, goal: [goal],
+        space=SimpleNamespace(is_valid=lambda p: True),
+    )
+    assert not result.success and result.reason == "invalid_measured_pose" and cancels == [True]
+
+
+def test_structured_false_controller_response_is_not_truthy_navigation_success():
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    state = np.zeros(3)
+
+    def move(waypoint, **kwargs):
+        state[:] = waypoint
+        return {"success": False}
+
+    robot = SimpleNamespace(move_base_to=move, cancel_navigation=lambda: True)
+    result = execute_measured_route(
+        robot,
+        goal=[1, 0, 0],
+        measure=lambda: state.copy(),
+        plan_route=lambda start, goal: [goal],
+        space=SimpleNamespace(is_valid=lambda p: True),
+        max_replans=0,
+    )
+    assert not result.success and result.reason == "base_tracking_failed"
+
+
+def test_grasp_rechecks_pose_ik_after_measured_arrival_before_actuation():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = model()
+    d = mujoco.MjData(m)
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(open_gripper=lambda **kwargs: pytest.fail("grasp despite infeasible measured pose")),
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["yaw"],
+        collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
+        synchronize=lambda state: mujoco.mj_kinematics(m, state),
+        command_joints=lambda q: True,
+    )
+    executor.grasp_paths = [[np.zeros(1)]] * 3
+    executor.grasp_targets = [([0, 0, 0], np.eye(3))] * 3
+    executor.plan_pose = lambda *args: (None, "unreachable_after_arrival")
+    result = executor.grasp_only("target", object_gt_body="target")
+    assert not result.success and result.phase == "pregrasp"
+    assert "unreachable_after_arrival" in result.message
+
+
+def test_missing_payload_stops_arm_before_next_command():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+    <body name="robot"><joint name="x" type="slide" axis="1 0 0" range="-2 2"/><geom size=".02"/>
+    <body name="ee" pos="0 .3 0"><geom size=".02"/></body></body>
+    <body name="payload" pos="0 .4 0"><freejoint/><geom size=".02"/></body>
+    </worldbody></mujoco>""")
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body="robot")
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(),
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["x"],
+        collision=checker,
+        synchronize=lambda state: mujoco.mj_kinematics(m, state),
+        command_joints=lambda q: pytest.fail("motion with lost payload"),
+    )
+    checker.set_payload(m, d, "payload", "ee")
+    executor.payload_body = "payload"
+    assert executor.payload_retained()
+    d.qpos[2] += 0.1
+    result = executor._execute_path("lift", [np.zeros(1), np.array([0.2])])
+    assert not result.success and result.message == "payload_not_retained"
+
+
+def test_coupled_arm_can_raise_then_extend_around_blocked_diagonal():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+    <body name="ee"><joint name="z" type="slide" axis="0 0 1" range="0 1"/>
+    <joint name="x1" type="slide" axis="1 0 0" range="0 .5"/>
+    <joint name="x2" type="slide" axis="1 0 0" range="0 .5"/><geom size=".05"/></body>
+    <geom pos=".5 0 .5" size=".15"/>
+    </worldbody></mujoco>""")
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body="ee")
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(),
+        model=m,
+        data=d,
+        ee_body="ee",
+        joint_names=["z", "x1", "x2"],
+        collision=checker,
+        synchronize=lambda state: None,
+        command_joints=lambda q: True,
+        coupled_groups=(("x1", "x2"),),
+    )
+    goal = np.array([1.0, 0.5, 0.5])
+    path, error = executor.plan_joint_target(goal)
+    assert error is None
+    assert any(q[0] > 0.8 and q[1] + q[2] < 0.1 for q in path)
+    for q in path:
+        assert q[1] == q[2]
+        d.qpos[:] = q
+        assert not checker.configuration_collides(m, d)
+    np.testing.assert_allclose(path[-1], goal)

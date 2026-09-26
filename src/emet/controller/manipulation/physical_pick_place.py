@@ -10,7 +10,7 @@ through the same ``execute_task_plan`` seam as symbolic and latch controls.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import mujoco
 import numpy as np
@@ -57,6 +57,8 @@ class PhysicalPickPlaceExecutor:
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.grasp_paths: list = []
         self.place_paths: list = []
+        self.grasp_targets: list = []
+        self.place_targets: list = []
         self.transport: Callable | None = None
         self.payload_body: str | None = None
 
@@ -99,24 +101,110 @@ class PhysicalPickPlaceExecutor:
             linear_fallback=True,
             planner="linear" if self.coupled_groups else "rrt_connect",
         )
+        # Coupled actuators cannot use independent-joint RRT samples. When a
+        # simultaneous move cuts through furniture, try two bounded group orders
+        # using the same segment checker (e.g. raise/orient, then extend).
+        if self.coupled_groups and not path.success and path.reason not in ("invalid_start", "invalid_goal"):
+            coupled = {name for group in self.coupled_groups for name in group}
+            groups = [[name] for name in self.joint_names if name not in coupled] + list(self.coupled_groups)
+            for order in (groups, list(reversed(groups))):
+                self.data.qpos[:] = start
+                current = q0.copy()
+                waypoints = [current.copy()]
+                for group in order:
+                    target = current.copy()
+                    for name in group:
+                        index = self.joint_names.index(name)
+                        target[index] = goal[index]
+                    segment = plan_arm_joint_path(
+                        self.model,
+                        self.data,
+                        joint_names=self.joint_names,
+                        q_start=current,
+                        q_goal=target,
+                        collision=self.collision,
+                        planner="linear",
+                        step_size=0.025,
+                    )
+                    if not segment.success:
+                        break
+                    waypoints.extend(segment.waypoints[1:])
+                    current = target
+                else:
+                    path = replace(path, success=True, waypoints=waypoints, planner="linear_group_order", reason=None)
+                    break
         self.data.qpos[:] = start
         if path.success:
             self.data.qpos[self.qadr] = goal
-            mujoco.mj_forward(self.model, self.data)
+            mujoco.mj_fwdPosition(self.model, self.data)
             return path.waypoints, None
         return None, f"arm_path_failed:{path.reason}"
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
 
-    def _execute_path(self, phase, path):
+    def payload_retained(self):
+        """Check the freshly synchronized payload pose, before hypothetical attachment."""
+        if self.payload_body is None:
+            return True
+        expected = self.collision.payload_transform
+        if expected is None:
+            return False
+        ee, obj = self.data.body(self.ee_body), self.data.body(self.payload_body)
+        rotation = ee.xmat.reshape(3, 3).T
+        position = rotation @ (obj.xpos - ee.xpos)
+        relative_rotation = rotation @ obj.xmat.reshape(3, 3)
+        angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
+        return bool(np.linalg.norm(position - expected[:3, 3]) <= 0.02 and angle <= 0.1)
+
+    def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp):
+        """Arrival tolerance is not an IK certificate: rebuild world-pose paths."""
         self.synchronize(self.data)
-        residual = float(np.max(np.abs(self.data.qpos[self.qadr] - path[0])))
+        before = self.data.qpos.copy()
+        previous_payload = (
+            self.collision.payload_body,
+            self.collision.payload_parent,
+            None if self.collision.payload_transform is None else self.collision.payload_transform.copy(),
+        )
+        paths = []
+        try:
+            for phase, (point, rotation) in zip(phases, targets, strict=True):
+                if grasp and phase == "lift":
+                    self.collision.set_payload(self.model, self.data, object_body, self.ee_body)
+                elif not grasp and phase == "retreat":
+                    self.collision.set_payload(self.model, self.data, None)
+                path, error = self.plan_pose(np.asarray(point), np.asarray(rotation))
+                if error:
+                    return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
+                paths.append(path)
+            return paths, None
+        finally:
+            self.data.qpos[:] = before
+            self.collision.payload_body, self.collision.payload_parent, self.collision.payload_transform = (
+                previous_payload
+            )
+            mujoco.mj_fwdPosition(self.model, self.data)
+
+    def _execute_path(self, phase, path):
+        def joint_residual(target):
+            delta = self.data.qpos[self.qadr] - target
+            errors = [float(np.max(np.abs(delta)))]
+            errors.extend(
+                abs(float(sum(delta[self.joint_names.index(n)] for n in group))) for group in self.coupled_groups
+            )
+            return max(errors)
+
+        self.synchronize(self.data)
+        if not self.payload_retained():
+            return PhysicalMotionResult(False, "payload_not_retained", phase)
+        residual = joint_residual(path[0])
         if residual > self.joint_tolerance:
             return PhysicalMotionResult(False, "stale_arm_plan", phase, residual)
         for target in path[1:]:
             # Recheck the next segment against fresh state, including the payload.
             self.synchronize(self.data)
+            if not self.payload_retained():
+                return PhysicalMotionResult(False, "payload_not_retained", phase)
             current = self.data.qpos[self.qadr].copy()
             check = plan_arm_joint_path(
                 self.model,
@@ -131,9 +219,12 @@ class PhysicalPickPlaceExecutor:
             )
             if not check.success:
                 return PhysicalMotionResult(False, f"revalidation_failed:{check.reason}", phase)
-            ok = self.command_joints(np.asarray(target))
+            response = self.command_joints(np.asarray(target))
+            ok = isinstance(response, (bool, np.bool_)) and bool(response)
             self.synchronize(self.data)
-            residual = float(np.max(np.abs(self.data.qpos[self.qadr] - target)))
+            if not self.payload_retained():
+                return PhysicalMotionResult(False, "payload_not_retained", phase)
+            residual = joint_residual(target)
             self.event(
                 phase=phase,
                 command=np.asarray(target).tolist(),
@@ -147,8 +238,17 @@ class PhysicalPickPlaceExecutor:
         return PhysicalMotionResult(True, "ok", phase, residual)
 
     def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
-        if len(self.grasp_paths) != 3 or object_gt_body is None:
+        if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
+        paths, error = self._replan_at_measured_pose(
+            ("pregrasp", "grasp", "lift"),
+            self.grasp_targets,
+            object_body=object_gt_body,
+            grasp=True,
+        )
+        if error is not None:
+            return error
+        self.grasp_paths = paths
         if not self.robot.open_gripper(blocking=True):
             return PhysicalMotionResult(False, "gripper_open_failed", "pregrasp")
         for phase, path in zip(("pregrasp", "grasp"), self.grasp_paths[:2], strict=True):
@@ -158,17 +258,34 @@ class PhysicalPickPlaceExecutor:
         if not self.robot.close_gripper(blocking=True):
             return PhysicalMotionResult(False, "gripper_close_failed", "grasp")
         self.synchronize(self.data)
+        initial_object_height = float(self.data.body(object_gt_body).xpos[2])
         self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
+        if result.success and self.data.body(object_gt_body).xpos[2] - initial_object_height < 0.05:
+            return PhysicalMotionResult(False, "object_not_lifted", "lift")
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):
-        if self.payload_body != object_gt_body or len(self.place_paths) != 3 or self.transport is None:
+        if (
+            self.payload_body != object_gt_body
+            or len(self.place_paths) != 3
+            or len(self.place_targets) != 3
+            or self.transport is None
+        ):
             return PhysicalMotionResult(False, "missing_validated_place", "place")
         result = self.transport()
         if not result.success:
             return PhysicalMotionResult(False, getattr(result, "reason", "transport_failed"), "transport")
+        paths, error = self._replan_at_measured_pose(
+            ("preplace", "place", "retreat"),
+            self.place_targets,
+            object_body=object_gt_body,
+            grasp=False,
+        )
+        if error is not None:
+            return error
+        self.place_paths = paths
         for phase, path in zip(("preplace", "place"), self.place_paths[:2], strict=True):
             result = self._execute_path(phase, path)
             if not result.success:

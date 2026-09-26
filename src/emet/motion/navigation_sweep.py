@@ -43,8 +43,8 @@ class RouteExecutionResult:
     reason: str
     current_pose: list[float]
     goal_pose: list[float]
-    position_residual_m: float
-    yaw_residual_rad: float
+    position_residual_m: float | None
+    yaw_residual_rad: float | None
     replans: int
 
 
@@ -69,12 +69,40 @@ def execute_measured_route(
     target = np.asarray(goal, dtype=float)
     if target.shape != (3,) or not np.isfinite(target).all() or max_replans < 0:
         raise ValueError("Finite XYT goal and nonnegative replan budget required")
-    current = np.asarray(measure(), dtype=float)
+    tolerances = [position_tolerance_m, yaw_tolerance_rad, waypoint_timeout_s]
+    if not np.isfinite(tolerances).all() or min(tolerances) <= 0:
+        raise ValueError("Finite positive execution tolerances and timeout required")
+
+    def valid_measurement(pose):
+        return pose.shape == (3,) and np.isfinite(pose).all()
+
+    def succeeded(value):
+        return isinstance(value, (bool, np.bool_)) and bool(value)
+
+    def read_measurement():
+        try:
+            return np.asarray(measure(), dtype=float)
+        except (RuntimeError, ValueError) as exc:
+            event(phase="navigation_state", reason=str(exc))
+            return np.array([])
+
+    def invalid_measurement(attempt, *, cancel_motion):
+        reason = "invalid_measured_pose"
+        if cancel_motion:
+            cancel = getattr(robot, "cancel_navigation", None)
+            if cancel is None or not succeeded(cancel()):
+                reason += ":navigation_cancellation_unconfirmed"
+        return RouteExecutionResult(False, reason, [], target.tolist(), None, None, attempt)
+
+    current = read_measurement()
+    if not valid_measurement(current):
+        return invalid_measurement(0, cancel_motion=False)
     reason = "no_plan_within_budget"
     for attempt in range(max_replans + 1):
         route = plan_route(current.copy(), target.copy())
         if not route:
-            reason = "no_plan_within_budget"
+            detail = getattr(space, "last_validity", {}).get("reason")
+            reason = f"no_plan_within_budget:{detail}" if detail and detail != "ok" else "no_plan_within_budget"
             break
         accepted, rejected = validate_navigation_sweep(space, current, route)
         if not accepted:
@@ -83,14 +111,18 @@ def execute_measured_route(
         diverged = False
         for waypoint in route:
             waypoint = np.asarray(waypoint, dtype=float)
-            current = np.asarray(measure(), dtype=float)
+            current = read_measurement()
+            if not valid_measurement(current):
+                return invalid_measurement(attempt, cancel_motion=True)
             accepted, rejected = validate_navigation_sweep(space, current, [waypoint])
             if not accepted:
                 reason = f"rejected_swept_footprint:{rejected}"
                 diverged = True
                 break
-            ok = robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s)
-            current = np.asarray(measure(), dtype=float)
+            ok = succeeded(robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s))
+            current = read_measurement()
+            if not valid_measurement(current):
+                return invalid_measurement(attempt, cancel_motion=True)
             xy = float(np.linalg.norm(current[:2] - waypoint[:2]))
             yaw = float(abs(np.arctan2(np.sin(current[2] - waypoint[2]), np.cos(current[2] - waypoint[2]))))
             event(
@@ -114,10 +146,12 @@ def execute_measured_route(
             reason = "route_did_not_reach_goal"
         # Stop the controller before observing/replanning after divergence.
         cancel = getattr(robot, "cancel_navigation", None)
-        if cancel is None or not cancel():
+        if cancel is None or not succeeded(cancel()):
             reason = "navigation_cancellation_unconfirmed"
             break
-        current = np.asarray(measure(), dtype=float)
+        current = read_measurement()
+        if not valid_measurement(current):
+            return invalid_measurement(attempt, cancel_motion=False)
     xy = float(np.linalg.norm(current[:2] - target[:2]))
     yaw = float(abs(np.arctan2(np.sin(current[2] - target[2]), np.cos(current[2] - target[2]))))
     return RouteExecutionResult(False, reason, current.tolist(), target.tolist(), xy, yaw, attempt)

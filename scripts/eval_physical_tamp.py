@@ -59,13 +59,14 @@ def run(args):
         SceneNavigationSpace,
         base_pose,
         freeze_fixture,
+        kinematic_base_candidates,
         make_scene_checker,
         save_motion_overview,
         score_physical_acceptance,
+        write_offline_base_pose,
     )
     from emet.motion.mujoco_collision import body_subtree
     from emet.motion.navigation_sweep import execute_measured_route
-    from emet.simulation.molmospaces_mobile_autoplace import write_base_freejoint_xyt
 
     output = Path(args.output_dir).expanduser().resolve()
     model, data, scorer, manifest = freeze_fixture(args.sim, args.scorer, output, seed=args.seed)
@@ -109,7 +110,7 @@ def run(args):
             target.qvel[:] = row["qvel"]
             target.ctrl[:] = row["ctrl"]
             target.time = row["sim_time"]
-        mujoco.mj_forward(model, target)
+        mujoco.mj_fwdPosition(model, target)
 
     def capture(stage):
         if robot is None:
@@ -202,7 +203,7 @@ def run(args):
             if args.initial_state:
                 state = np.load(args.initial_state)
                 data.qpos[:] = state["qpos"]
-                mujoco.mj_forward(model, data)
+                mujoco.mj_fwdPosition(model, data)
 
         checker = make_scene_checker(model, scorer)
         collision_links = [model.body(int(model.joint(name).bodyid[0])).name for name in joints]
@@ -212,8 +213,7 @@ def run(args):
         space = SceneNavigationSpace(model, data, checker, seed=args.seed)
         initial = data.qpos.copy()
         initial_base = base_pose(model, data)
-        initial_ee = data.body(scorer["ee_body"]).xpos.copy()
-        approach_axis = np.arctan2(initial_ee[1] - initial_base[1], initial_ee[0] - initial_base[0]) - initial_base[2]
+        initial_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
         object_pos = data.body(scorer["object_body"]).xpos.copy()
         support_pos = data.body(scorer["support_body"]).xpos.copy()
         placements = {
@@ -254,11 +254,15 @@ def run(args):
         candidates = []
         # First preserve a stationary witness; then explore a fixed ring order.
         poses = [initial_base.copy()]
-        for radius in (0.45, 0.6, 0.75):
-            for angle in np.linspace(-np.pi, np.pi, 8, endpoint=False):
-                xy = object_pos[:2] + radius * np.array([np.cos(angle), np.sin(angle)])
-                yaw = np.arctan2(object_pos[1] - xy[1], object_pos[0] - xy[0]) - approach_axis
-                poses.append(np.r_[xy, np.arctan2(np.sin(yaw), np.cos(yaw))])
+        poses.extend(
+            kinematic_base_candidates(
+                model,
+                data,
+                target_xy=object_pos[:2],
+                ee_body=scorer["ee_body"],
+                extension_joints=tuple(f"joint_arm_l{i}" for i in range(4)),
+            )
+        )
         for pose in poses:
             candidates.append(
                 {
@@ -289,31 +293,48 @@ def run(args):
             if not route:
                 plan.message = "approach_route_invalid"
                 item["contacts"] = list(checker.last_contacts)
+                item["validity"] = dict(space.last_validity)
                 event(**item)
                 return False
-            write_base_freejoint_xyt(
+            write_offline_base_pose(
                 model, data, base_body_name="base_link", x=approach[0], y=approach[1], theta=approach[2]
             )
-            mujoco.mj_forward(model, data)
-            rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
-            direction = object_pos - data.body(scorer["ee_body"]).xpos
-            direction /= max(np.linalg.norm(direction), 1e-9)
-            # Preserve a robot-reachable orientation; pose IK must enforce it.
+            mujoco.mj_fwdPosition(model, data)
+            navigation_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
+            yaw_delta = approach[2] - initial_base[2]
+            c, sn = np.cos(yaw_delta), np.sin(yaw_delta)
+            base_rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]])
+            rotations = [base_rotation @ initial_rotation, navigation_rotation]
+            approach_state = data.qpos.copy()
             grasp_paths = []
-            for phase, point in [
-                ("pregrasp", object_pos - 0.08 * direction),
-                ("grasp", object_pos),
-                ("lift", object_pos + [0, 0, 0.12]),
-            ]:
-                if phase == "lift":
-                    checker.set_payload(model, data, scorer["object_body"], scorer["ee_body"])
-                path, error = executor.plan_pose(point, rotation)
-                if error:
-                    plan.message = error
-                    item.update(phase=phase, reason=error)
-                    event(**item)
-                    return False
-                grasp_paths.append(path)
+            item["grasp_rejections"] = []
+            # Transit posture need not be the grasp orientation. Try both the
+            # nominal initial wrist frame and the tucked navigation frame.
+            for rotation in rotations:
+                data.qpos[:] = approach_state
+                checker.set_payload(model, data, None)
+                grasp_paths = []
+                for phase, point in [
+                    ("pregrasp", object_pos + [0, 0, 0.12]),
+                    ("grasp", object_pos),
+                    ("lift", object_pos + [0, 0, 0.12]),
+                ]:
+                    if phase == "lift":
+                        checker.set_payload(model, data, scorer["object_body"], scorer["ee_body"])
+                    path, error = executor.plan_pose(point, rotation)
+                    if error:
+                        item["grasp_rejections"].append(
+                            {"phase": phase, "reason": error, "rotation": rotation.tolist()}
+                        )
+                        break
+                    grasp_paths.append(path)
+                if len(grasp_paths) == 3:
+                    break
+            if len(grasp_paths) != 3:
+                plan.message = "no_grasp_witness_within_budget"
+                item.update(phase="grasp", reason=plan.message)
+                event(**item)
+                return False
             # Named support geometry defines candidate release points, never a semantic guess.
             support_ids = body_subtree(model, scorer["support_body"])
             support_geoms = [
@@ -337,10 +358,15 @@ def run(args):
             place_pose = None
             place_paths = []
             place_goals = [approach.copy()]
-            for angle in np.linspace(-np.pi, np.pi, 8, endpoint=False):
-                xy = release[:2] + 0.55 * np.array([np.cos(angle), np.sin(angle)])
-                yaw = np.arctan2(release[1] - xy[1], release[0] - xy[0]) - approach_axis
-                place_goals.append(np.r_[xy, np.arctan2(np.sin(yaw), np.cos(yaw))])
+            place_goals.extend(
+                kinematic_base_candidates(
+                    model,
+                    data,
+                    target_xy=release[:2],
+                    ee_body=scorer["ee_body"],
+                    extension_joints=tuple(f"joint_arm_l{i}" for i in range(4)),
+                )
+            )
             # A navigable place pose is insufficient: try the next pose when its
             # arm witness fails, preserving the grasp-relative payload transform.
             payload_transform = checker.payload_transform.copy()
@@ -355,8 +381,8 @@ def run(args):
                     place_rejections.append({"pose": goal.tolist(), "phase": "transport"})
                     continue
                 data.qpos[:] = lift_state
-                write_base_freejoint_xyt(model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2])
-                mujoco.mj_forward(model, data)
+                write_offline_base_pose(model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2])
+                mujoco.mj_fwdPosition(model, data)
                 place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
                 paths = []
                 for phase, point in [
@@ -387,13 +413,21 @@ def run(args):
                 place_pose=place_pose.tolist(),
                 grasp_paths=[[q.tolist() for q in p] for p in grasp_paths],
                 place_paths=[[q.tolist() for q in p] for p in place_paths],
+                grasp_targets=[
+                    [point.tolist(), rotation.tolist()]
+                    for point in (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])
+                ],
+                place_targets=[
+                    [point.tolist(), place_rotation.tolist()]
+                    for point in (release + [0, 0, 0.12], release, release + [0, 0, 0.12])
+                ],
                 preparation_path=[q.tolist() for q in preparation_path] if prepare and preparation_path else [],
             )
             event(**item)
             return True
 
         plan = plan_pick_place_mcts(
-            oracle, candidates=candidates, executor=None, plan_validator=validate, seed=args.seed, max_candidates=32
+            oracle, candidates=candidates, executor=None, plan_validator=validate, seed=args.seed, max_candidates=48
         )
         (output / "candidates.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
         (output / "witness.json").write_text(json.dumps(selected, indent=2) + "\n")
@@ -406,11 +440,15 @@ def run(args):
         if args.tier == "physical" and plan.success:
             executor.grasp_paths = [list(map(np.asarray, path)) for path in selected["grasp_paths"]]
             executor.place_paths = [list(map(np.asarray, path)) for path in selected["place_paths"]]
+            executor.grasp_targets = selected["grasp_targets"]
+            executor.place_targets = selected["place_targets"]
             checker.set_payload(model, data, None)
             preparation_pending = bool(selected["preparation_path"])
 
             def measure():
                 synchronize(data)
+                if not executor.payload_retained():
+                    raise RuntimeError("payload_not_retained")
                 return base_pose(model, data)
 
             def navigate(goal):

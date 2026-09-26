@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import mujoco
@@ -15,7 +16,7 @@ import yaml
 from emet.motion.base import XYT
 from emet.motion.mujoco_collision import MujocoSceneCollisionChecker, body_subtree
 from emet.motion.navigation_sweep import validate_navigation_sweep
-from emet.simulation.molmospaces_mobile_autoplace import write_base_freejoint_xyt
+from emet.simulation.molmospaces_mobile_autoplace import base_body_free_joint_qposadr
 
 
 def sha256(path):
@@ -34,7 +35,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
         model.body(name)  # Fail on missing identity; no category fallback.
     mujoco.mj_saveModel(model, str(output / "model.mjb"))
     data = mujoco.MjData(model)
-    mujoco.mj_forward(model, data)
+    mujoco.mj_fwdPosition(model, data)
     np.savez(output / "initial_state.npz", qpos=data.qpos, qvel=data.qvel, ctrl=data.ctrl, act=data.act)
     (output / "scene.xml").write_bytes(scene.read_bytes())
     config.update(seed=int(seed), scene_path=str(scene), headless=True)
@@ -54,9 +55,10 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
         "task": scorer,
         "initial_state_kind": "model_default_before_controller_startup",
         "budgets": {
-            "candidates": 32,
+            "candidates": 48,
             "mcts_iterations": 120,
             "base_rrt_iterations": 400,
+            "base_route_wall_s": 10,
             "arm_rrt_iterations": 400,
             "replans": 2,
             "wall_timeout_s": 600,
@@ -75,22 +77,89 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
 
 
 def base_pose(model, data, body="base_link"):
-    mujoco.mj_forward(model, data)
+    mujoco.mj_kinematics(model, data)
     pose = data.body(body)
     rotation = pose.xmat.reshape(3, 3)
     return np.array([*pose.xpos[:2], np.arctan2(rotation[1, 0], rotation[0, 0])])
 
 
+def write_offline_base_pose(model, data, *, base_body_name, x, y, theta):
+    """Set an offline planning pose, retaining measured height and base tilt.
+
+    This does not advance dynamics or write a live simulator. Callers run the
+    scene collision checker after transforming the candidate configuration.
+    """
+    address = base_body_free_joint_qposadr(model, base_body_name)
+    if address is None:
+        return False
+    rotation = np.empty(9)
+    mujoco.mju_quat2Mat(rotation, data.qpos[address + 3 : address + 7])
+    rotation = rotation.reshape(3, 3)
+    delta = theta - np.arctan2(rotation[1, 0], rotation[0, 0])
+    yaw_quaternion = np.array([np.cos(delta / 2), 0.0, 0.0, np.sin(delta / 2)])
+    quaternion = np.empty(4)
+    mujoco.mju_mulQuat(quaternion, yaw_quaternion, data.qpos[address + 3 : address + 7])
+    data.qpos[address : address + 2] = [x, y]
+    data.qpos[address + 3 : address + 7] = quaternion
+    mujoco.mj_kinematics(model, data)
+    return True
+
+
+def kinematic_base_candidates(model, data, *, target_xy, ee_body, extension_joints, base_body="base_link"):
+    """Ground base candidates from actual FK reach, then let route/pose IK certify them.
+
+    Five fixed actuator fractions and eight yaws form a deterministic bounded set.
+    This avoids inferring the arm's extension line from the stowed EE-to-base angle.
+    No reach threshold, joint limit, obstacle, or observed-space rule is relaxed.
+    """
+    before = data.qpos.copy()
+    mujoco.mj_kinematics(model, data)
+    base = data.body(base_body)
+    origin = base.xpos[:2].copy()
+    matrix = base.xmat.reshape(3, 3)
+    yaw0 = np.arctan2(matrix[1, 0], matrix[0, 0])
+    candidates = []
+    try:
+        for fraction in (0.25, 0.5, 0.75, 0.9, 0.98):
+            for name in extension_joints:
+                joint = model.joint(name)
+                if not model.jnt_limited[joint.id]:
+                    raise ValueError("Approach generation requires bounded extension joints")
+                lo, hi = model.jnt_range[joint.id]
+                data.qpos[joint.qposadr[0]] = lo + fraction * (hi - lo)
+            mujoco.mj_kinematics(model, data)
+            offset = data.body(ee_body).xpos[:2] - origin
+            for delta in np.linspace(-np.pi, np.pi, 8, endpoint=False):
+                c, sn = np.cos(delta), np.sin(delta)
+                xy = np.asarray(target_xy) - np.array([[c, -sn], [sn, c]]) @ offset
+                yaw = np.arctan2(np.sin(yaw0 + delta), np.cos(yaw0 + delta))
+                candidates.append(np.r_[xy, yaw])
+        candidates.sort(
+            key=lambda p: (
+                float(np.linalg.norm(p[:2] - origin)),
+                float(abs(np.arctan2(np.sin(p[2] - yaw0), np.cos(p[2] - yaw0)))),
+            )
+        )
+        return candidates
+    finally:
+        data.qpos[:] = before
+        mujoco.mj_kinematics(model, data)
+
+
 class SceneNavigationSpace(XYT):
     """GT scene collision adapter for the existing RRT-Connect base planner."""
 
-    def __init__(self, model, data, checker, *, base_body="base_link", seed=0):
+    def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0):
         self.model, self.data, self.checker, self.base_body = model, data, checker, base_body
         start = base_pose(model, data, base_body)
         super().__init__(mins=np.r_[start[:2] - 6, -np.pi], maxs=np.r_[start[:2] + 6, np.pi])
         self.step_size = 0.025
         self.rng = np.random.default_rng(seed)
         self.last_validity = {}
+        if not np.isfinite(route_timeout_s) or route_timeout_s <= 0:
+            raise ValueError("Positive finite route planning timeout required")
+        self.route_timeout_s = float(route_timeout_s)
+        self._route_deadline = None
         self.min_clearance_m = 0.22
         self.environment_geoms = np.array(
             [
@@ -114,11 +183,13 @@ class SceneNavigationSpace(XYT):
             yield np.r_[start[:2] + t * (goal[:2] - start[:2]), start[2] + t * delta]
 
     def is_valid(self, pose):
+        if self._route_deadline is not None and time.monotonic() >= self._route_deadline:
+            raise TimeoutError("route_planning_budget_exhausted")
         pose = np.asarray(pose)
         if pose.shape != (3,) or not np.isfinite(pose).all():
             self.last_validity = {"reason": "invalid_navigation_pose"}
             return False
-        if not write_base_freejoint_xyt(
+        if not write_offline_base_pose(
             self.model,
             self.data,
             base_body_name=self.base_body,
@@ -156,6 +227,7 @@ class SceneNavigationSpace(XYT):
         from emet.motion.algo import get_planner
 
         before = self.data.qpos.copy()
+        self._route_deadline = time.monotonic() + self.route_timeout_s
         try:
             # Reject invalid endpoints before an expensive mesh sweep. This
             # preserves the same validity contract while reserving search time
@@ -175,9 +247,15 @@ class SceneNavigationSpace(XYT):
             if not validate_navigation_sweep(self, start, route)[0]:
                 return []
             return [np.asarray(q).tolist() for q in route]
+        except TimeoutError as exc:
+            if str(exc) != "route_planning_budget_exhausted":
+                raise
+            self.last_validity = {"reason": "route_planning_budget_exhausted"}
+            return []
         finally:
+            self._route_deadline = None
             self.data.qpos[:] = before
-            mujoco.mj_forward(self.model, self.data)
+            mujoco.mj_fwdPosition(self.model, self.data)
 
 
 def make_scene_checker(model, scorer):
@@ -262,7 +340,7 @@ def save_motion_overview(path, model, data, *, scorer, footprint, initial_pose, 
     figure = Figure(figsize=(9, 8))
     FigureCanvasAgg(figure)
     ax = figure.subplots()
-    mujoco.mj_forward(model, data)
+    mujoco.mj_kinematics(model, data)
     robot_ids = body_subtree(model, "base_link")
     z = data.body("base_link").xpos[2]
     for g in range(model.ngeom):
