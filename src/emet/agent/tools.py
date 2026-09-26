@@ -1103,13 +1103,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def observe_floor(pan_rad: float | None = None) -> ToolOutcome:
+    def observe_floor(pan_rad: float | None = None, tilt_rad: float = -1.0) -> ToolOutcome:
         from emet.controller.dynamem.look import observe_floor as capture_floor
 
         agent = _agent_from_context(context)
         if agent is None:
             return ToolOutcome(False, status="unavailable", note="Robot not connected.")
-        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent, pan_rad=pan_rad))
+        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad))
 
     tools.append(
         Tool(
@@ -1128,6 +1128,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                         "minimum": -1.0,
                         "maximum": 1.0,
                         "description": "Absolute head pan in radians; omit to retain measured pan.",
+                    },
+                    "tilt_rad": {
+                        "type": "number",
+                        "minimum": -1.4,
+                        "maximum": -0.7,
+                        "description": (
+                            "Absolute downward tilt; default -1.0. More negative looks nearer the base. "
+                            "Occluded floor may remain unseen; a capture does not authorize movement."
+                        ),
                     },
                 },
                 "required": [],

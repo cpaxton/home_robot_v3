@@ -31,7 +31,7 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
-def observe_floor(agent, pan_rad: float | None = None) -> dict:
+def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A
@@ -44,6 +44,13 @@ def observe_floor(agent, pan_rad: float | None = None) -> dict:
         or abs(pan_rad) > 1.0
     ):
         return {"ok": False, "status": "invalid_head_pan"}
+    if (
+        isinstance(tilt_rad, bool)
+        or not isinstance(tilt_rad, (int, float))
+        or not np.isfinite(tilt_rad)
+        or not -1.4 <= tilt_rad <= -0.7
+    ):
+        return {"ok": False, "status": "invalid_head_tilt"}
     robot = agent.robot
     if not all(callable(getattr(robot, method, None)) for method in ("head_to", "get_pan_tilt")):
         return {"ok": False, "status": "unsupported_head_observation"}
@@ -54,7 +61,7 @@ def observe_floor(agent, pan_rad: float | None = None) -> dict:
         pan = float(pan_rad)
     if not np.isfinite(pan):
         return {"ok": False, "status": "head_pose_unconfirmed"}
-    tilt = -1.0
+    tilt = float(tilt_rad)
     moved = robot.head_to(float(pan), tilt, blocking=True)
     if moved is False:
         return {"ok": False, "status": "head_motion_failed"}
