@@ -805,6 +805,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         jn = self._planar_base_joint_names()
         if snap is None or jn is None or int(snap.shape[0]) != 3:
             return
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action({"stationary_base_pose_hold": True}, source="RobosuiteZmqServer.planar_hold")
         for i, name in enumerate(jn):
             jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, name)
             if jid < 0:
@@ -837,6 +840,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is None:
             return
         qadr, vadr = addrs
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action({"stationary_base_pose_hold": True}, source="RobosuiteZmqServer.freejoint_hold")
         if not self._passive_base_support:
             self._mjdata.qpos[qadr : qadr + 7] = snap
             if vadr >= 0:
@@ -2216,6 +2222,12 @@ class RobosuiteZmqServer(BaseZmqServer):
             return True
 
     def handle_action(self, action: dict[str, Any]):
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action(
+            action, source=type(self).__name__,
+            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+        )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
                 action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]

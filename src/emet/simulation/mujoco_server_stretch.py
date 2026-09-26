@@ -824,6 +824,12 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def handle_action(self, action: dict[str, Any]):
         """Handle the action received from the client."""
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action(
+            action, source=type(self).__name__,
+            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+        )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
                 action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]

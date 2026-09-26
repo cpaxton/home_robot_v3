@@ -397,8 +397,9 @@ def _launch_server(
     log_dir = Path(tempfile.mkdtemp(prefix="emet_tamp_clutter_sim_"))
     server_log = log_dir / "mujoco_server.stderr"
     fh = server_log.open("w", encoding="utf-8")
+    proc = None
     try:
-        proc = popen_session(server_cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh)
+        proc = popen_session(server_cmd, env=env, stdout=fh, stderr=fh)
         recv_port = 4401 + port_offset
         if not _wait_port(recv_port, 180.0, proc=proc):
             try:
@@ -410,6 +411,9 @@ def _launch_server(
         time.sleep(25.0)
         return proc, server_log, fh
     except Exception:
+        from emet.utils.process_tree import terminate_process_tree
+
+        terminate_process_tree(proc)
         try:
             fh.close()
         except Exception:
@@ -445,7 +449,6 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             start_immediately=True,
             allow_missing_depth=True,
         )
-        robot.set_velocity(v=30.0, w=15.0)
 
         placements = _read_placements(robot)
         if not placements:
@@ -607,7 +610,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             }
 
         executor = None
-        if manip in ("latch", "attempt"):
+        if manip == "latch":
             executor = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
         metrics = plan_clear_clutter(
             robot,
