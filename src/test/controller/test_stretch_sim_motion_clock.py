@@ -31,8 +31,27 @@ def test_controller_timeout_uses_simulation_time(monkeypatch):
     assert not server.is_done and server.active
 
 
+def test_precision_position_hysteresis_preserves_final_turn(monkeypatch):
+    monkeypatch.setattr("emet.simulation.mujoco_server_stretch.timeit.default_timer", lambda: 1.)
+    controller = Mock()
+    controller.compute_control.return_value = (0., .2)
+    controller.is_done.return_value = False
+    controller.timeout.return_value = False
+    server = SimpleNamespace(
+        _status=Status(time=1., base=SimpleNamespace(x_vel=0., theta_vel=.2)),
+        debug_control_loop=False, get_base_pose=lambda: np.zeros(3), controller=controller,
+        active=True, xyt_goal=np.ones(3), goal_set_t=0., goal_set_sim_t=0.,
+        controller_finished=False, robot_sim=Mock(),
+        _precision_xy_tolerances=(.01, .02), _precision_xy_acquired=False,
+    )
+    for distance, tolerance in [(.015, .01), (.009, .02), (.015, .02), (.021, .01)]:
+        controller.compute_current_error.return_value = np.array([distance, 0., .7])
+        MujocoZmqServer._control_loop_callback(server)
+        controller.control.set_linear_error_tolerance.assert_called_with(tolerance)
+
+
 def test_accepted_navigation_transitions_mode_inside_adapter():
-    server = SimpleNamespace()
+    server = SimpleNamespace(controller=Mock())
     received = []
 
     def handle(action):
@@ -40,8 +59,10 @@ def test_accepted_navigation_transitions_mode_inside_adapter():
         server._contract_navigation_context = {"resolved_goal": action["xyt"]}
 
     server.handle_action = handle
-    action = {"xyt": [1., 0., .5]}
+    action = {"xyt": [1., 0., .5], "nav_policy": "precision"}
     context = MujocoZmqServer.start_navigation_command(server, action)
     assert context["resolved_goal"] == action["xyt"]
     assert received[0]["control_mode"] == "navigation"
     assert "control_mode" not in action
+    server.controller.control.set_linear_error_tolerance.assert_called_once_with(.01)
+    server.controller.control.set_angular_error_tolerance.assert_called_once_with(.015)

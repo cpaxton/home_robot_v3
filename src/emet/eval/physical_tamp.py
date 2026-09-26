@@ -73,6 +73,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "navigation_policy": "precision",
             "base_position_m": 0.02,
             "base_yaw_rad": 0.03,
+            "base_controller_target_fraction": 0.5,
             "ik_position_m": 0.01,
             "ik_orientation_rad": 0.1,
             "joint_tracking": 0.03,
