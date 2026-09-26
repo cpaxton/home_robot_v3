@@ -368,7 +368,11 @@ def run(args):
             place_targets = []
             payload_transform = checker.payload_transform.copy()
             place_rejections = []
+            # Keep partial search evidence if the wall budget interrupts a
+            # support/base candidate before the full placement loop finishes.
+            item["place_rejections"] = place_rejections
             for release in releases:
+                event(phase="release_candidate", approach=approach.tolist(), release=release.tolist())
                 data.qpos[:] = lift_state
                 place_goals = [approach.copy()]
                 place_goals.extend(
@@ -387,7 +391,7 @@ def run(args):
                     possible = space.plan_route(approach, goal)
                     if not possible:
                         place_rejections.append(
-                            {"pose": goal.tolist(), "phase": "transport", "validity": dict(space.last_validity)}
+                            {"pose": goal.tolist(), "release": release.tolist(), "phase": "transport", "validity": dict(space.last_validity)}
                         )
                         continue
                     # Extra preplace height is a path candidate, not a task
