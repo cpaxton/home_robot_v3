@@ -84,7 +84,7 @@ def test_route_budget_restores_state_and_leaves_execution_validation_enabled(mon
     space = module.SceneNavigationSpace(model, data, MujocoSceneCollisionChecker(model, robot_body="base_link"))
     before = data.qpos.copy()
     clock = iter([0.0, 11.0])
-    monkeypatch.setattr(module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(module.time, "monotonic", lambda: next(clock, 11.0))
     assert space.plan_route(np.zeros(3), np.ones(3)) == []
     assert space.last_validity["reason"] == "route_planning_budget_exhausted"
     np.testing.assert_array_equal(data.qpos, before)
