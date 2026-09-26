@@ -821,7 +821,12 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
         # Absolute episode pose (idempotent under reliable resend). ``nav_world`` only when asked.
         use_world = bool(world_frame) and not relative
-        next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": False}
+        # Navigation must leave manipulation mode so the next arm command
+        # captures the newly reached base pose, rather than restoring its old
+        # manipulation reference. Keep this atomic with the navigation command.
+        next_action: dict[str, Any] = {
+            "xyt": action_xyt, "nav_relative": False, "nav_blocking": False, "control_mode": "navigation"
+        }
         if navigation_policy is not None:
             next_action["nav_policy"] = navigation_policy
         if use_world:

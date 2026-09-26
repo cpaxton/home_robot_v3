@@ -48,6 +48,7 @@ class PhysicalPickPlaceExecutor:
         joint_settle_timeout_s: float = 5.0,
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
+        base_body: str | None = None,
     ):
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
@@ -60,6 +61,7 @@ class PhysicalPickPlaceExecutor:
         self.joint_settle_timeout_s = float(joint_settle_timeout_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
+        self.base_body = base_body
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -234,6 +236,22 @@ class PhysicalPickPlaceExecutor:
             return max(errors)
 
         self.synchronize(self.data)
+        base_reference = None
+        if self.base_body is not None:
+            base = self.data.body(self.base_body)
+            base_reference = (base.xpos.copy(), base.xmat.copy())
+
+        def base_drifted():
+            if base_reference is None:
+                return False
+            base = self.data.body(self.base_body)
+            distance = float(np.linalg.norm(base.xpos - base_reference[0]))
+            angle = float(np.arccos(np.clip((np.sum(base.xmat * base_reference[1]) - 1) / 2, -1, 1)))
+            if not np.isfinite([distance, angle]).all() or distance > 0.01 or angle > 0.02:
+                self.event(phase=phase, reason="base_drift_during_arm", base_distance_m=distance, base_angle_rad=angle)
+                return True
+            return False
+
         if not self.payload_retained():
             return PhysicalMotionResult(False, "payload_not_retained", phase)
         residual = joint_residual(path[0])
@@ -242,6 +260,8 @@ class PhysicalPickPlaceExecutor:
         for target in path[1:]:
             # Recheck the next segment against fresh state, including the payload.
             self.synchronize(self.data)
+            if base_drifted():
+                return PhysicalMotionResult(False, "base_drift_during_arm", phase)
             if not self.payload_retained():
                 return PhysicalMotionResult(False, "payload_not_retained", phase)
             current = self.data.qpos[self.qadr].copy()
@@ -261,6 +281,8 @@ class PhysicalPickPlaceExecutor:
             response = self.command_joints(np.asarray(target))
             ok = isinstance(response, (bool, np.bool_)) and bool(response)
             self.synchronize(self.data)
+            if base_drifted():
+                return PhysicalMotionResult(False, "base_drift_during_arm", phase)
             if not self.payload_retained():
                 return PhysicalMotionResult(False, "payload_not_retained", phase)
             residual = joint_residual(target)
@@ -271,6 +293,8 @@ class PhysicalPickPlaceExecutor:
             while ok and np.isfinite(residual) and residual > self.joint_tolerance and time.monotonic() < settle_deadline:
                 time.sleep(0.05)
                 self.synchronize(self.data)
+                if base_drifted():
+                    return PhysicalMotionResult(False, "base_drift_during_arm", phase)
                 if not self.payload_retained():
                     return PhysicalMotionResult(False, "payload_not_retained", phase)
                 residual = joint_residual(target)

@@ -254,6 +254,7 @@ def run(args):
             command_joints=command,
             coupled_groups=(tuple(f"joint_arm_l{i}" for i in range(4)),),
             event=event,
+            base_body="base_link",
         )
         preparation_path = None
         preparation_state = initial.copy()

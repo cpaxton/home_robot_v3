@@ -42,3 +42,4 @@ def test_move_base_to_relative_sends_absolute_episode_xyt():
     wait.assert_called_once()
     assert wait.call_args.args[1]["step"] == 7
     assert sent["nav_blocking"] is False
+    assert sent["control_mode"] == "navigation"

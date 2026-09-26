@@ -349,6 +349,7 @@ class MujocoZmqServer(BaseZmqServer):
 
         self.is_done = False
         self.goal_set_t = timeit.default_timer()
+        self.goal_set_sim_t = None if self._status is None else float(self._status.time)
         self.controller_finished = False
         self._base_controller_at_goal = False
 
@@ -389,6 +390,10 @@ class MujocoZmqServer(BaseZmqServer):
             # self.get_logger().info(f"veclocities {v_cmd} and {w_cmd}")
             # Compute timeout
             time_since_goal_set = timeit.default_timer() - self.goal_set_t
+            # Physical integration may be slower than wall time. The command
+            # runtime separately enforces its wall deadline and stale telemetry.
+            if self._status is not None and self.goal_set_sim_t is not None:
+                time_since_goal_set = float(self._status.time) - self.goal_set_sim_t
             if self.controller.timeout(time_since_goal_set):
                 done = True
                 v_cmd, w_cmd = 0, 0
@@ -625,6 +630,7 @@ class MujocoZmqServer(BaseZmqServer):
                         continue
                     elif self._manip_xyt is None:
                         logger.error("Manipulation mode not set up correctly")
+                        continue
                     # Send an xyt goal: x, y, theta
                     # This is computed based on self._manip_xyt
                     xyt_delta = [q[i], 0, 0]

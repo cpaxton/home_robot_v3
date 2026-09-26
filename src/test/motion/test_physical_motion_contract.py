@@ -437,6 +437,37 @@ def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
     assert sleeps == [0.05]
 
 
+def test_arm_stops_after_unplanned_base_motion():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base"><freejoint/><geom size=".1"/>
+        <body name="ee" pos="0 0 .4"><joint name="arm" type="slide" range="0 1"/>
+          <geom size=".04"/></body></body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    measured = d.qpos.copy()
+    commands = []
+
+    def sync(state):
+        state.qpos[:] = measured
+        mujoco.mj_kinematics(m, state)
+
+    def command(q):
+        commands.append(q.copy())
+        measured[-1] = q[0]
+        measured[0] += .03  # Arm tracks, but an unintended base command moves it.
+        return True
+
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(), model=m, data=d, ee_body="ee", joint_names=["arm"],
+        collision=MujocoSceneCollisionChecker(m, robot_body="base"),
+        synchronize=sync, command_joints=command, base_body="base",
+    )
+    result = executor._execute_path("grasp", [np.array([0.]), np.array([.1]), np.array([.2])])
+    assert not result.success and result.message == "base_drift_during_arm"
+    assert len(commands) == 1
+
+
 @pytest.mark.parametrize('yaw_error,success', [(0.02, True), (0.04, False)])
 def test_precision_route_uses_policy_and_checks_measured_arrival(yaw_error, success):
     from emet.motion.navigation_sweep import execute_measured_route
