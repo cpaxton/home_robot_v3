@@ -423,7 +423,13 @@ class LazyGraphController(DynagraphController):
             if r.instance_id is not None and r.grounded_revision is not None and not r.invalidation_reason
         ]
         if grounded:
-            records = grounded
+            # Repeated observations/search attempts can refer to the same
+            # stable object identity. Count identities, not query handles;
+            # reacquire geometry even for the sole remaining identity.
+            identities = {}
+            for record in grounded:
+                identities[record.instance_id] = record
+            records = list(identities.values())
         if not records:
             before = len(self.voxel_map.observations)
             self.update(full_perception=True)
@@ -436,7 +442,10 @@ class LazyGraphController(DynagraphController):
                 raise ValueError(result["reason"])
             return self._grounded_query_target
         if len(records) != 1:
-            raise ValueError("Manipulation requires a unique query candidate")
+            raise ValueError(
+                "Manipulation requires a unique query candidate "
+                f"(candidates={len(records)}, grounded_instances={[r.instance_id for r in records]})"
+            )
         before = len(self.voxel_map.observations)
         self.update(full_perception=True)
         result = self.ground_query_candidate(records[0].handle, after_observation=before, purpose=purpose)

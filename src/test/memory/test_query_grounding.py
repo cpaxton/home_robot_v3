@@ -273,6 +273,29 @@ def test_manipulation_does_not_arbitrarily_choose_among_unresolved_candidates(st
     agent.update.assert_not_called()
 
 
+@pytest.mark.parametrize("fresh", [True, False])
+def test_manipulation_counts_grounded_identities_not_duplicate_query_handles(fresh):
+    agent = controller()
+    first = agent.propose_query_candidate("mug", [9, 9, 9], {"source_obs_id": 1})
+    second = agent.propose_query_candidate("mug", [8, 8, 8], {"source_obs_id": 1})
+    agent.query_candidates.ground(first.handle, instance_id=10, observation_revision=2)
+    agent.query_candidates.ground(second.handle, instance_id=10, observation_revision=2)
+    agent.update = Mock(
+        side_effect=(lambda **kw: agent.voxel_map.observations.append(agent.voxel_map.observations[-1]))
+        if fresh
+        else None
+    )
+    if fresh:
+        target = agent.prepare_query_target("mug")
+        assert target.observation_revision == 3
+        assert len(agent.query_candidates.records) == 2
+        agent.detection_model.predict.assert_called_once()
+    else:
+        with pytest.raises(ValueError, match="fresh"):
+            agent.prepare_query_target("mug")
+        agent.detection_model.predict.assert_not_called()
+
+
 def test_confirmed_view_transition_keeps_geometry_separate_and_runs_once():
     from emet.memory.graph_eqa.agentic.views import CapturedView, ground_confirmed_view
 
