@@ -219,6 +219,22 @@ class DynamemTaskExecutor:
         # `filename` = None means write to default log path (the datetime you started to run the process)
         self.agent.voxel_map.write_to_pickle(filename=None)
         if point is None:
+            if getattr(self.agent, "query_driven_memory", False):
+                # Navigation can fail before the manipulation adapter runs.
+                # Preserve its rejection instead of returning a generic failure
+                # (or leaking a previous manipulation's recovery permission).
+                navigation = dict(getattr(self.agent, "_last_nav_plan", None) or {})
+                reason = navigation.get("outcome") or "navigation_failed"
+                self.last_query_manipulation = {
+                    "ok": False,
+                    "query": target_object,
+                    "phase": "navigation",
+                    "status": reason,
+                    "reason": f"Navigation failed: {reason}",
+                    "navigation": navigation,
+                    "payload_state": "unknown",
+                    "physical_success_verified": False,
+                }
             logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])
