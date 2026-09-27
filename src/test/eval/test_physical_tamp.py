@@ -166,7 +166,8 @@ def test_measured_placement_search_tries_alternatives_and_restores_payload(monke
         data.qpos[0] += .1
         return [np.zeros(1)], None
 
-    executor = SimpleNamespace(model=model, data=data, collision=checker, coupled_groups=(), plan_pose=plan_pose)
+    executor = SimpleNamespace(model=model, data=data, collision=checker, coupled_groups=(), plan_pose=plan_pose,
+                               gripper_open_configuration=())
     space = SimpleNamespace(base_body="base_link", plan_route=route, is_valid=lambda pose: pose[0] != 1,
                             last_validity={"reason": "scene_collision"})
     rejections, events = [], []

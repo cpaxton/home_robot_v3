@@ -644,3 +644,49 @@ def test_open_gripper_geometry_is_checked_before_actuation(obstacle_x):
     assert not result.success
     assert result.phase == ('gripper_open' if obstacle_x == 0 else 'grasp')
     np.testing.assert_array_equal(d.qpos, before)
+
+
+@pytest.mark.parametrize('obstacle_x', [.5, .3, 2.])
+def test_release_and_retreat_check_open_fingers_and_preserve_payload(obstacle_x):
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string(f'''<mujoco><worldbody>
+      <body name="robot"><joint name="x" type="slide" axis="1 0 0" range="0 1"/>
+        <geom size=".02"/><body name="ee"/>
+        <body name="finger" pos="0 .1 0"><joint name="opening" type="slide" axis="0 1 0" range="0 .2"/>
+          <geom size=".02"/></body>
+      </body>
+      <body name="obstacle" pos="{obstacle_x} .3 0"><geom size=".04"/></body>
+      <body name="target"><freejoint/><geom size=".01"/></body>
+    </worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(open_gripper=lambda **kw: pytest.fail('unsafe release commanded')),
+        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
+        gripper_open_configuration=(('opening', .2),),
+    )
+    checker.set_payload(m, d, 'target', 'ee')
+    executor.payload_body = 'target'
+    before, transform = d.qpos.copy(), checker.payload_transform.copy()
+    # Closed fingers clear both the placement and retreat, even in unsafe cases.
+    for x in (.3, .5, .3):
+        path, error = executor.plan_pose([x, 0, 0], np.eye(3))
+        assert path is not None and error is None
+    d.qpos[:] = before
+    executor.place_paths = [[np.zeros(1)]] * 3
+    executor.place_targets = [(np.array([x, 0, 0]), np.eye(3)) for x in (.3, .5, .3)]
+    executor.transport = lambda: PhysicalMotionResult(True, 'ok')
+    if obstacle_x < 1:
+        result = executor.place_only('support', object_gt_body='target')
+        assert not result.success
+        assert result.phase == ('release' if obstacle_x == .5 else 'retreat')
+    else:
+        paths, error = executor._replan_at_measured_pose(
+            ('preplace', 'place', 'retreat'), executor.place_targets, object_body='target', grasp=False,
+        )
+        assert error is None and len(paths) == 3
+    np.testing.assert_array_equal(d.qpos, before)
+    np.testing.assert_array_equal(checker.payload_transform, transform)
+    assert checker.payload_body == 'target' and executor.payload_body == 'target'

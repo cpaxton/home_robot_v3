@@ -664,6 +664,12 @@ def plan_payload_placement(executor, space, scorer, *, approach, rejections, eve
                     for phase, point in zip(("preplace", "place", "retreat"), targets, strict=True):
                         if phase == "retreat":
                             checker.set_payload(model, data, None)
+                            if executor.gripper_open_configuration:
+                                _, error = executor.plan_gripper_open()
+                                if error:
+                                    rejections.append({"pose": goal.tolist(), "phase": "release", "reason": error,
+                                                       "clearance_m": clearance})
+                                    break
                         path, error = executor.plan_pose(point, rotation)
                         if error:
                             rejections.append({"pose": goal.tolist(), "phase": phase, "reason": error,

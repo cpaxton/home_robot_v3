@@ -252,6 +252,10 @@ class PhysicalPickPlaceExecutor:
                     self.collision.set_payload(self.model, self.data, object_body, self.ee_body)
                 elif not grasp and phase == "retreat":
                     self.collision.set_payload(self.model, self.data, None)
+                    if self.gripper_open_configuration:
+                        _, error = self.plan_gripper_open()
+                        if error:
+                            return None, PhysicalMotionResult(False, error, "release")
                 path, error = self.plan_pose(np.asarray(point), np.asarray(rotation))
                 if error:
                     return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
@@ -433,9 +437,22 @@ class PhysicalPickPlaceExecutor:
             result = self._execute_path(phase, path)
             if not result.success:
                 return result
+        # Certify release and open-finger retreat from the actual placement pose.
+        # Planning preserves measured state and the retention reference on failure.
+        paths, error = self._replan_at_measured_pose(
+            ("retreat",), self.place_targets[2:], object_body=object_gt_body, grasp=False,
+        )
+        if error is not None:
+            return error
         if not self.robot.open_gripper(blocking=True):
             return PhysicalMotionResult(False, "gripper_open_failed", "release")
         self.event(phase="release", controller_success=True)
         self.collision.set_payload(self.model, self.data, None)
         self.payload_body = None
-        return self._execute_path("retreat", self.place_paths[2])
+        paths, error = self._replan_at_measured_pose(
+            ("retreat",), self.place_targets[2:], object_body=object_gt_body, grasp=False,
+        )
+        if error is not None:
+            return error
+        self.place_paths[2] = paths[0]
+        return self._execute_path("retreat", paths[0])

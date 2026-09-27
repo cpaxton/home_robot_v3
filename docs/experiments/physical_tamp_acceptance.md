@@ -156,5 +156,9 @@ checks the grasp with open geometry, then rebuilds paths from the measured open
 state after the normal gripper command. Closed-finger paths cannot certify an
 open-finger descent. Actual grasp width and carried geometry still require the
 measured lift/placement replan. Missing opening metadata is unsupported in the
-physical GT driver. Review cameras now use a nearby oblique view relative to the
+physical GT driver. Placement certificates also check opening at release and
+retreat with open fingers. Runtime repeats those checks at the measured placement
+pose before opening, then replans retreat after the gripper command. Failed release
+checks preserve the measured payload reference and issue no opening command.
+Review cameras now use a nearby oblique view relative to the
 robot and target, rather than a fixed distant room-exterior viewpoint.
