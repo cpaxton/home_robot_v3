@@ -8,7 +8,7 @@
 Writes ``configs/ovmm/clutter_episodes_large.yaml`` with **200** deterministic
 episode templates (offline — no sim, no scatter, no validity probe):
 
-  * robots: rby1 over iTHOR train indices 0..N-1 (default N=22, latch), plus
+  * robots: rby1 over iTHOR FloorPlans 1..N (default N=22, latch), plus
     stretch / innate_mars / nori over indices 0..5.
   * cleanup: n_objects in {3, 6} at 0.8 / 1.1 m (open ring).
   * nav_goal: n_objects=8 at 0.5 m with ``tight_ring`` (closed blocking ring),
@@ -95,6 +95,11 @@ def generate(robots: dict[str, tuple[str, int]], templates: tuple[tuple, ...]) -
                     "tight_ring": bool(tight_ring),
                     "manip_mode": manip,
                 }
+                # MolmoSpaces assigns FloorPlans 1..12 to train, 13..24 to
+                # validation, and 25..30 to test. Preserve the exact house ID
+                # while explicitly overriding the base YAML's training split.
+                if scene_index >= 12:
+                    ep["scene_split"] = "val" if scene_index < 24 else "test"
                 if mode == "cleanup":
                     ep["bin_query"] = "GarbageCan"
                 else:
@@ -107,7 +112,7 @@ def generate(robots: dict[str, tuple[str, int]], templates: tuple[tuple, ...]) -
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", type=str, default=str(DEFAULT_OUTPUT))
-    p.add_argument("--rby1-scenes", type=int, default=22, help="iTHOR train indices for rby1 (1..30)")
+    p.add_argument("--rby1-scenes", type=int, default=22, choices=range(1, 31), help="Number of iTHOR FloorPlans for rby1 (1..30)")
     args = p.parse_args()
 
     robots = dict(ROBOT_SCENES)

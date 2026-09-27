@@ -103,12 +103,15 @@ class ClutterEpisode:
     tight_ring: bool = False
     # Scene index override (MolmoSpaces iTHOR FloorPlan index; replaces sim_cfg.index).
     scene_index: int | None = None
+    scene_split: str | None = None
     clutter: tuple[dict[str, Any], ...] = ()
     robot_start_xy: tuple[float, float] | None = None
     goal_xy: tuple[float, float] | None = None
     episode_valid: bool | None = None
 
     def __post_init__(self) -> None:
+        if self.scene_split not in (None, "train", "val", "test"):
+            raise ValueError(f"invalid scene_split={self.scene_split!r} in {self.id}")
         if self.mode not in CLUTTER_MODES:
             raise ValueError(f"invalid mode={self.mode!r} in {self.id} (expected {CLUTTER_MODES})")
         if int(self.n_objects) < 0:
@@ -159,6 +162,7 @@ def load_clutter_episodes(path: str | Path) -> list[ClutterEpisode]:
                 seed=(int(row["seed"]) if row.get("seed") is not None else None),
                 tight_ring=bool(row.get("tight_ring", False)),
                 scene_index=(int(row["scene_index"]) if row.get("scene_index") is not None else None),
+                scene_split=row.get("scene_split"),
                 clutter=clutter,
                 robot_start_xy=tuple(float(x) for x in row["robot_start_xy"]) if row.get("robot_start_xy") else None,
                 goal_xy=tuple(float(x) for x in row["goal_xy"]) if row.get("goal_xy") else None,

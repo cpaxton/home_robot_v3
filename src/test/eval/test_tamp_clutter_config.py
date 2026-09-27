@@ -497,3 +497,32 @@ def test_nav_path_open_around_disks_routes_around_furniture():
     # No disks -> trivially open; a disk collocated with the goal is relaxed.
     open2, _ = nav_path_open_around_disks(robot, goal, [], clearance_m=0.22)
     assert open2 is True
+
+
+def test_registry_uses_exact_ithor_house_with_declared_split():
+    from generate_tamp_clutter_registry import EPISODE_TEMPLATES, generate
+
+    rows = generate({'rby1': ('configs/sim/molmospaces_ithor_train_0.yaml',29)}, EPISODE_TEMPLATES)
+    assert len(rows) == 150
+    for row in rows:
+        index = row['scene_index']
+        assert row.get('scene_split', 'train') == ('train' if index < 12 else 'val' if index < 24 else 'test')
+    loaded = load_clutter_episodes(REPO/'configs/ovmm/clutter_episodes_large.yaml')
+    assert len(loaded) == 200
+    assert sum(e.scene_split == 'val' for e in loaded) == 50
+
+
+def test_episode_split_reaches_server_config_without_changing_house(monkeypatch):
+    from eval_tamp_clutter import _launch_server
+
+    def capture(config):
+        assert config.split == 'val'
+        assert config.index == 12
+        assert config.robot == 'rby1'
+        raise RuntimeError('captured config')
+
+    monkeypatch.setattr('emet.simulation.mujoco_serve_argv.prepare_mujoco_server_argv', capture)
+    with pytest.raises(RuntimeError, match='captured config'):
+        _launch_server('configs/sim/molmospaces_ithor_train_0.yaml',123,cpu_only=False,scene_index=12,scene_split='val',robot='rby1')
+    with pytest.raises(ValueError, match='invalid scene_split'):
+        ClutterEpisode(id='bad',tier='S1',sim='s',robot='rby1',mode='cleanup',n_objects=3,scene_split='typo')

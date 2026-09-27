@@ -369,6 +369,7 @@ def _launch_server(
     *,
     cpu_only: bool,
     scene_index: int | None = None,
+    scene_split: str | None = None,
     robot: str | None = None,
 ) -> tuple[Any, Path, Any]:
     """Launch the MuJoCo server subprocess; returns ``(proc, stderr_log_path, stderr_fh)``.
@@ -384,6 +385,8 @@ def _launch_server(
     sim_cfg = load_sim_launch_config_from_path(sim)
     if scene_index is not None:
         sim_cfg = replace(sim_cfg, index=int(scene_index))
+    if scene_split is not None:
+        sim_cfg = replace(sim_cfg, split=scene_split)
     if robot:
         sim_cfg = replace(sim_cfg, robot=str(robot))
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
@@ -439,6 +442,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             port_offset,
             cpu_only=args.cpu_only,
             scene_index=ep.scene_index,
+            scene_split=ep.scene_split,
             robot=ep.robot,
         )
         robot = create_robot_client_from_cli(

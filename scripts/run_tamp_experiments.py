@@ -64,6 +64,7 @@ def build_cases(suite, python=sys.executable, *, robot=None):
                     "id": row["id"],
                     "robot": row["robot"],
                     "scene_index": row.get("scene_index", 0),
+                    "scene_split": row.get("scene_split"),
                     "execution_mode": {
                         "sim": "oracle_teleport",
                         "latch": "kinematic_latch",
