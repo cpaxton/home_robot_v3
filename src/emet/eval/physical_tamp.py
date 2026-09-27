@@ -515,7 +515,9 @@ def save_motion_overview(path, model, data, *, scorer, footprint, initial_pose, 
             continue
         ax.add_patch(Rectangle(center[:2] - half[:2], *(2 * half[:2]), color="0.5", alpha=0.08))
     for row in candidates:
-        pose = row["approach"]
+        pose = row.get("approach", row.get("place_pose"))
+        if pose is None:
+            continue
         color = "green" if row.get("accepted") else "crimson"
         ax.plot(*pose[:2], marker="x", color=color)
         ax.arrow(*pose[:2], 0.1 * np.cos(pose[2]), 0.1 * np.sin(pose[2]), color=color, head_width=0.025)

@@ -29,7 +29,7 @@ a copied `server.log`. Active runs are moved only after completion.
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
-| Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; payload lost during transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
+| Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; rotational slip stopped transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
 | Latest completed physical Molmo tomato → bowl | `cc44da56` | Static placement search timed out at 1802.5 s; no execution | `/tmp/physical-tamp-molmo-20260927-r25` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
@@ -88,11 +88,15 @@ to the same IK, joint-margin, and fresh collision-path checks. Offline RoboCasa
 replay passed all 16 sampled arrivals using these alternatives. This is bounded
 sampling, not a continuous robustness proof or an executed task success.
 
-RoboCasa r26 and Molmo r25 are terminal. R26 verified pickup but lost the
-payload during transport. R25 exhausted its 1800 s trial deadline during static
+RoboCasa r26 and Molmo r25 are terminal. R26 verified pickup but stopped on rotational slip during transport. The trace
+retains gripper contact and records no scene contact: relative translation drift
+was about 4.5 mm, but relative rotation reached approximately 0.106 rad versus
+the declared 0.1 rad retention bound. This is not a physical drop; the bound was
+not relaxed. R25 exhausted its 1800 s trial deadline during static
 placement search, so it did not exercise the final-turn controller repair.
 
-The next Molmo diagnostic (r27, seed 0) declares 1800 s overall and 60 s per
+Molmo diagnostic r27, seed 0 (`8e9d3189`, job `20260927_120832_8191e6`,
+`/tmp/physical-tamp-molmo-20260927-r27`) is running and declares 1800 s overall and 60 s per
 base route before execution. The nominal/measured base retains the 22 cm
 center-clearance gate; tracking offsets check full robot/payload geometry without
 applying that center margin a second time. Placement rejects endpoint and arm-path
