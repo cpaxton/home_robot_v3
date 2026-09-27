@@ -9,6 +9,36 @@ from emet.motion.algo.a_star import AStar
 from emet.robots.footprint import Footprint
 
 
+def test_fractional_start_repair_preserves_unknown_and_obstacle_guards():
+    from types import SimpleNamespace
+
+    obstacles = torch.zeros((1024, 1024), dtype=torch.bool)
+    explored = torch.ones_like(obstacles)
+    for cell in [(498, 507), (498, 508), (498, 510), (498, 511)]:
+        explored[cell] = False
+    original = explored.clone()
+    space = object.__new__(SparseVoxelMapNavigationSpace)
+    space.obstacle_map_mode = "physical"
+    space._footprint = Footprint(length=0.33, width=0.34, length_offset=-0.1)
+    space.voxel_map = SimpleNamespace(
+        grid_resolution=0.1,
+        grid=SimpleNamespace(grid_origin=torch.tensor([512, 512, 0])),
+        get_navigation_map=lambda: (obstacles, explored),
+    )
+    pose = np.array([-1.0023702383, -0.2798024416, 0.0185558926])
+    assert space.is_valid(pose)
+    assert torch.equal(explored, original)
+    cells = space._footprint.grid_cells(0.1, pose, [512, 512])
+    cell = tuple(cells[0])
+    explored[cell] = False
+    assert not space.is_valid(pose)
+    assert space.last_validity["unknown_footprint_cells"] == 1
+    assert space.last_validity["reason"] == "unobserved_footprint"
+    obstacles[cell] = True
+    assert not space.is_valid(pose)
+    assert space.last_validity["reason"] == "occupied_footprint"
+
+
 def test_physical_map_keeps_raw_geometry_and_shared_cache(tmp_path):
     vm = SparseVoxelMap(
         grid_size=[40, 40],

@@ -66,6 +66,47 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             return self.voxel_map.get_navigation_map()
         return self.voxel_map.get_2d_map()
 
+    def is_valid(self, state, is_safe_threshold=1.0, debug=False, verbose=False, obstacles=None, explored=None):
+        if self.obstacle_map_mode != "physical":
+            return super().is_valid(state, is_safe_threshold, debug, verbose, obstacles, explored)
+        # Physical mode always requires the entire measured footprint to be known.
+        self.last_validity = {"reason": "invalid_navigation_pose"}
+        try:
+            origin = self.voxel_map.grid.grid_origin
+            if hasattr(origin, "cpu"):
+                origin = origin.cpu().numpy()
+            pose = state.detach().cpu().numpy() if hasattr(state, "detach") else state
+            cells = self._footprint.grid_cells(self.voxel_map.grid_resolution, pose, origin)
+        except (TypeError, ValueError):
+            return False
+        if obstacles is None or explored is None:
+            obstacles, explored = self.get_navigation_map()
+        if hasattr(obstacles, "cpu"):
+            obstacles = obstacles.cpu().numpy()
+        if hasattr(explored, "cpu"):
+            explored = explored.cpu().numpy()
+        if not len(cells) or np.any(cells < 0) or np.any(cells >= np.asarray(obstacles.shape)):
+            self.last_validity = {"reason": "footprint_out_of_map"}
+            return False
+        occupied = np.asarray(obstacles)[cells[:, 0], cells[:, 1]].astype(bool)
+        observed = np.asarray(explored)[cells[:, 0], cells[:, 1]].astype(bool)
+        self.last_validity = {
+            "reason": "occupied_footprint"
+            if occupied.any()
+            else ("unobserved_footprint" if not observed.all() else "ok"),
+            "coverage": float(observed.mean()),
+            "unknown_cells": cells[~observed].tolist(),
+            "occupied_cells": cells[occupied].tolist(),
+            "checked_pose": np.asarray(pose).tolist(),
+            "footprint_cells": len(cells),
+            "unknown_footprint_cells": int((~observed).sum()),
+            "unknown_cell_offsets_frame": "world_xy_from_checked_pose",
+            "unknown_cell_offsets_m": (
+                (cells[~observed][:16] - np.asarray(origin)[:2]) * self.voxel_map.grid_resolution - np.asarray(pose)[:2]
+            ).tolist(),
+        }
+        return bool(not occupied.any() and observed.all())
+
     def get_oriented_mask(self, theta):
         if self.obstacle_map_mode == "physical":
             return torch.from_numpy(

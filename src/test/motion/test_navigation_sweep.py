@@ -8,6 +8,33 @@ from emet.motion.navigation_sweep import validate_navigation_sweep
 from emet.robots.footprint import Footprint
 
 
+def test_fractional_base_pose_does_not_shift_footprint_rearward():
+    fp = Footprint(length=0.33, width=0.34, length_offset=-0.1)
+    pose = np.array([-1.0023702383, -0.2798024416, 0.0185558926])
+    cells = fp.grid_cells(0.1, pose, [512, 512])
+    assert cells[:, 0].min() == 499
+    assert not any(tuple(cell) in {(498, 507), (498, 508), (498, 510), (498, 511)} for cell in cells)
+    # A sub-cell shift changes occupied cells even when int(grid coordinate) does not.
+    moved = fp.grid_cells(0.1, pose + [0.06, 0, 0], [512, 512])
+    assert {tuple(c) for c in moved} != {tuple(c) for c in cells}
+
+
+def test_fractional_raster_is_translation_equivariant_and_conservative():
+    fp = Footprint(length=0.67, width=0.31, length_offset=-0.19, width_offset=0.04)
+    origin = np.array([20, 30])
+    for yaw in np.linspace(-np.pi, np.pi, 17):
+        pose = np.array([-0.023, 0.076, yaw])
+        cells = {tuple(c) for c in fp.grid_cells(0.1, pose, origin)}
+        shifted = {tuple(c - [3, -2]) for c in fp.grid_cells(0.1, pose + [0.3, -0.2, 0], origin)}
+        assert cells == shifted
+        for x in np.linspace(-fp.length / 2, fp.length / 2, 11):
+            for y in np.linspace(-fp.width / 2, fp.width / 2, 11):
+                bx, by = x + fp.length_offset, y + fp.width_offset
+                point = pose[:2] + [np.cos(yaw) * bx - np.sin(yaw) * by, np.sin(yaw) * bx + np.cos(yaw) * by]
+                index = tuple(np.floor(point / 0.1 + origin + 0.5).astype(int))
+                assert index in cells
+
+
 def test_sweep_rejects_obstacle_between_safe_endpoints():
     space = SimpleNamespace(is_valid=lambda p: not 0.45 < p[0] < 0.55, last_validity={"reason": "obstacle"})
     assert validate_navigation_sweep(space, [0, 0, 0], [[1, 0, 0]]) == (False, "obstacle")
