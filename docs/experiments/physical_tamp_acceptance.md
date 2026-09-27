@@ -24,6 +24,12 @@ The physical executor uses the normal base, arm and gripper client methods; it
 never attaches objects or writes live object poses. Coupled-joint arm paths use
 validated linear interpolation; alternate base approaches provide search diversity.
 
+The physical GT base planner searches controller-compatible turns and forward/reverse
+translations, bounded to 0.2 m per command. Grasp candidate screening tests 16
+samples at the manipulation policy’s declared 10 mm / 0.015 rad arrival bounds and
+reserves 5 mm at each telescoping joint limit. Sampling does not certify every
+possible arrival: measured arrival still triggers fresh IK and arm collision checks.
+
 ## Commands
 
 Use a clean frozen checkout. Set OMP/OpenBLAS/MKL threads to 1 and run heavy trials
@@ -59,6 +65,14 @@ preceding gate. `--resume` preserves terminal rows; it does not overwrite failur
 After a timeout the runner stops, leaving unrun cases explicitly pending. Inspect
 simulator/process cleanup before resuming. Repairs and reattempts use fresh output
 roots, so original failures remain evidence.
+
+Use `--robot stretch` for an explicit robot subset, or repeat `--case-id ID` to
+revalidate exact cases after a fixture or implementation repair. Unknown IDs fail
+before execution. These filters preserve registry definitions and ordering; the
+manifest and separate ledger record the selected cases. Subset results never
+replace the original full-suite denominator. The generated registry explicitly
+sets `scene_split: val` for FloorPlans 13–22; their original `train` split did
+not resolve in MolmoSpaces. The house numbers and task definitions are retained.
 
 `eval_tamp_floor.py --gt-only` runs the declared manipulation controls with GT task
 inputs. The find-only exploration row is explicitly deferred, not scored as a GT

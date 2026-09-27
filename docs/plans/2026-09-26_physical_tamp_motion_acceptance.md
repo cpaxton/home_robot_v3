@@ -3,6 +3,10 @@
 Status: requirements and proposed execution plan, 2026-09-26. No new experiment
 was launched to prepare this handoff. This is not a claim of task acceptance.
 
+Implementation and measured results are tracked in the
+[acceptance report](../experiments/physical_tamp_acceptance_20260926_results.md).
+The original handoff and navigation-agent notes below are retained.
+
 ### Navigation-agent update, September 26, 09:08
 
 Please inspect start-pose rasterization in the motion work. A fresh learned run

@@ -1,7 +1,8 @@
 # Physical motion and full TAMP acceptance — September 26, 2026
 
-**Physical acceptance remains unestablished.** Both matched Stretch fixtures now
-produce complete static navigation/grasp/lift/transport/release witnesses, but no
+**Physical acceptance remains unestablished.** Earlier revisions produced static witnesses for both matched Stretch fixtures,
+but controller-aware replay exposed missing travel turns in Molmo’s transport
+route. No
 contact-based pickup and placement has passed the independent scorer. Static
 feasibility and controller acknowledgements are not task success.
 
@@ -58,10 +59,18 @@ manifest, trace, audit, and stage events.
 | Innate Mars | Oracle teleport | 4 | 2 | 24 | 0 | 30 |
 | Nori | Oracle teleport | 15 | 1 | 13 | 1 | 30 |
 
-The 127 error/invalid rows comprise 50 missing-scene merge failures (RBY1
-scenes 12–21), 45 missing landmarks, 12 missing receptacles, and 20 Mars startup
+The 127 error/invalid rows comprise 50 scene-resolution failures (RBY1
+scenes 12–21; the requested training split was incorrect), 45 missing landmarks, 12 missing receptacles, and 20 Mars startup
 timeouts. These remain in the denominator. The final matrix and row-level CSV
 are in `/tmp/tamp-acceptance-report-20260926/{full_matrix.png,full_results.csv}`.
+
+Of the 19 executed failures, seven were cleanup failures (RBY1), eleven were
+navigation cases whose path remained blocked (nine RBY1, two Mars), and one
+Nori navigation case had an open path but failed to reach the goal. Several
+blocked cases had cleared all eight designated objects, so clearing the selected
+clutter alone did not certify a usable base route. Mars startup logs stop in
+collision-free spawn search after binding the transport ports; these are not
+successful motion tests.
 
 R17 RoboCasa failed fresh arrival IK at 15.7 mm position / 0.066 rad orientation;
 its measured base arrival was 12.0 mm / 0.0149 rad from the planned endpoint.
@@ -73,14 +82,19 @@ turn/drive/turn routes, keeping translations at most 0.2 m and checking the
 travel heading even when it lies outside the endpoint-yaw interval. The focused
 navigation/evaluation suite passed 25 tests. Physical r19 jobs
 `20260927_074239_7a500c` (RoboCasa) and `20260927_074239_3ed41a` (Molmo) are queued
-serially; no new physical outcome is claimed from submission.
+serially. RoboCasa r19 finished in 114.5 s but failed fresh arrival IK at
+23.7 mm / 0.0588 rad, with no pickup or placement. Molmo r19 timed out in placement search without executing pickup.
 
 The exact missing scenes 12–21 and their object dependencies were installed on
 September 27. The first installer process crashed after scene 14; the remaining
 assets completed with safe CPU affinity. A separate 50-row recheck, frozen at
 `b48b8898`, retains the original case definitions and runs under job
-`20260927_074941_39ce43`, root `/tmp/tamp-fixture-recheck-20260927-r20`.
-It does not replace the original 50 fixture errors; results are pending.
+`20260927_075453_e06bcd`, root `/tmp/tamp-fixture-recheck-20260927-r20`.
+It finished with 50/50 scene-resolution errors. Installed FloorPlans 13–22
+belong to the validation split in MolmoSpaces, so the inherited training split
+still could not resolve them. The original 50 fixture errors are retained. The first
+submission `20260927_074941_39ce43` was canceled before execution to place physical
+validation first; the replacement explicitly waits for both r21 jobs.
 
 A subsequent bounded grasp-candidate filter checks IK at 16 base-pose samples
 (eight directions at the existing 20 mm arrival radius, each at ±0.03 rad yaw).
@@ -88,7 +102,33 @@ It retains the original IK tolerances and 5 mm joint reserves. Exact r17 replay
 rejects the selected candidate at a sampled arrival with 13.7 mm position error.
 This is sampled candidate screening, not a continuous robustness proof;
 execution still requires fresh measured-state IK and collision-checked paths.
-The combined targeted suite now passes **236 tests**. Live validation is pending.
+The combined targeted suite now passes **236 tests**. Candidate `0425e4aa` is
+frozen in r21, with jobs `20260927_075238_66924f` (RoboCasa) and
+`20260927_075238_2b2a3e` (Molmo). Both returned `no_plan_within_budget`
+before execution (65.2 s RoboCasa, 100.9 s Molmo).
+
+## Next candidate after controller-aware replay
+
+The archived Molmo transport witness contains 132 pose samples. Required travel
+turns collide with the island when those samples are executed by a differential
+drive. Controller-aware RRT steering, followed by compression of collinear drives
+and in-place turns, found an 18-waypoint route in 1.83 s under the same 10 s / 400
+iteration budget. A separate full resweep passed with the original collision and
+0.22 m clearance checks. Measured-state steering is also checked before each
+command; this replay remains an offline result.
+
+R21’s 20 mm / 0.03 rad arrival envelope rejected every grasp candidate. A closer
+RoboCasa candidate passes the same IK checks at 10 mm / 0.015 rad. The next
+candidate uses an explicit `manipulation` navigation policy enforcing those
+stricter measured bounds; controller targets are 5 mm / 0.0075 rad with XY
+hysteresis out to 10 mm. The original precision policy remains available. No arm
+reach, joint limit, collision, or physical task-scoring criterion was relaxed.
+
+The registry generator now records `scene_split: val` for the 50 affected rows.
+A comparison confirmed this is their only definition change; the other 150 rows
+are identical. Exact FloorPlan13–22 files and dependencies are installed and all
+ten resolve in preflight. A fresh 50-row recheck is required; failed attempts are
+not overwritten or treated as successes.
 
 ## Implemented motion contracts
 
