@@ -27,8 +27,8 @@ a copied `server.log`. Active runs are moved only after completion.
 | Scripted tool controls | `7b6ad51d` | 3/3 passed; scripted JSON, no learned model | `/tmp/tamp-tools-20260926-r5` |
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
-| Physical RoboCasa can → counter | `dbe0f4da` | Failed before closure: measured telescoping joint exceeded nominal limit | `/tmp/physical-tamp-robocasa-20260926-r14` |
-| Physical Molmo tomato → bowl | `dbe0f4da` | Failed approach, unconfirmed stop after 431 s | `/tmp/physical-tamp-molmo-20260926-r14` |
+| Latest completed physical RoboCasa can → counter | `fb817dcc` | Failed approach: navigation stalled, 426.6 s | `/tmp/physical-tamp-robocasa-20260926-r22` |
+| Latest completed physical Molmo tomato → bowl | `fb817dcc` | Timed out during approach, 602.3 s | `/tmp/physical-tamp-molmo-20260926-r22` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -43,7 +43,7 @@ the requested landmark. The paired teleport cleanup passed 6/6. Floor: RBY1
 picked but failed independently verified placement despite successful controller
 returns; Sourccey and Stretch oracle controls passed.
 
-Full job: `20260926_125932_8d0984`. Physical jobs: `20260926_125430_da88fd` (RoboCasa),
+Full job: `20260926_125932_8d0984`. Earlier r14 physical jobs: `20260926_125430_da88fd` (RoboCasa),
 `20260926_125430_146377` (Molmo), frozen in
 `/tmp/emet-physical-tamp-20260926-r14`. Full jobs r12 and r13 were canceled before
 execution to repair the command race and protocol boundary; they produced no
@@ -72,84 +72,39 @@ clutter alone did not certify a usable base route. Mars startup logs stop in
 collision-free spawn search after binding the transport ports; these are not
 successful motion tests.
 
-R17 RoboCasa failed fresh arrival IK at 15.7 mm position / 0.066 rad orientation;
-its measured base arrival was 12.0 mm / 0.0149 rad from the planned endpoint.
-R17 Molmo timed out at 603 s during approach. Neither trial picked or placed.
-Independent scoring found no forbidden actuation or audited robot collision.
+## Current physical candidate and fixture recheck
 
-Revision `8c3b91b6` replaces interpolated-yaw waypoints with collision-validated
-turn/drive/turn routes, keeping translations at most 0.2 m and checking the
-travel heading even when it lies outside the endpoint-yaw interval. The focused
-navigation/evaluation suite passed 25 tests. Physical r19 jobs
-`20260927_074239_7a500c` (RoboCasa) and `20260927_074239_3ed41a` (Molmo) are queued
-serially. RoboCasa r19 finished in 114.5 s but failed fresh arrival IK at
-23.7 mm / 0.0588 rad, with no pickup or placement. Molmo r19 timed out in placement search without executing pickup.
+The latest completed pair, r22 (`fb817dcc`), failed before pickup. RoboCasa
+stalled during its final approach turn after 426.6 s. Molmo found a complete
+static witness and executed approach segments, then hit its wall deadline at
+602.3 s. Neither result passes physical acceptance.
 
-The exact missing scenes 12–21 and their object dependencies were installed on
-September 27. The first installer process crashed after scene 14; the remaining
-assets completed with safe CPU affinity. A separate 50-row recheck, frozen at
-`b48b8898`, retains the original case definitions and runs under job
-`20260927_075453_e06bcd`, root `/tmp/tamp-fixture-recheck-20260927-r20`.
-It finished with 50/50 scene-resolution errors. Installed FloorPlans 13–22
-belong to the validation split in MolmoSpaces, so the inherited training split
-still could not resolve them. The original 50 fixture errors are retained. The first
-submission `20260927_074941_39ce43` was canceled before execution to place physical
-validation first; the replacement explicitly waits for both r21 jobs.
+The current candidate, r23 (`1b3f57bf`), retains collision-checked differential-drive
+RRT steering and returns to the original precision arrival bounds of 20 mm /
+0.03 rad. It declares three grasp yaw alternatives (0 and ±0.08 rad), each subject
+to the same IK, joint-margin, and fresh collision-path checks. Offline RoboCasa
+replay passed all 16 sampled arrivals using these alternatives. This is bounded
+sampling, not a continuous robustness proof or an executed task success.
 
-A subsequent bounded grasp-candidate filter checks IK at 16 base-pose samples
-(eight directions at the existing 20 mm arrival radius, each at ±0.03 rad yaw).
-It retains the original IK tolerances and 5 mm joint reserves. Exact r17 replay
-rejects the selected candidate at a sampled arrival with 13.7 mm position error.
-This is sampled candidate screening, not a continuous robustness proof;
-execution still requires fresh measured-state IK and collision-checked paths.
-The combined targeted suite now passes **236 tests**. Candidate `0425e4aa` is
-frozen in r21, with jobs `20260927_075238_66924f` (RoboCasa) and
-`20260927_075238_2b2a3e` (Molmo). Both returned `no_plan_within_budget`
-before execution (65.2 s RoboCasa, 100.9 s Molmo).
+| Pending experiment | Job | Budget | Artifact root |
+| --- | --- | --- | --- |
+| RoboCasa physical r23, seed 0 | `20260927_083457_d7d269` | 600 s | `/tmp/physical-tamp-robocasa-20260926-r23` |
+| Molmo physical r23-long, seed 0 | `20260927_083844_3b2889` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
+| Corrected 50-case fixture recheck, r22 | `20260927_082035_9a7218` | 900 s per row | `/tmp/tamp-fixture-recheck-20260927-r22` |
 
-## Next candidate after controller-aware replay
+The corrected registry currently holds the exclusive GPU lock; the physical pair
+is queued behind it. The Molmo budget was declared before execution because r22
+measured approximately 64–68 wall seconds per 17 cm approach segment. Per-command
+timeouts, retries, and scoring remain unchanged. This diagnostic is not a matched-
+budget comparison with earlier 600 s trials.
 
-The archived Molmo transport witness contains 132 pose samples. Required travel
-turns collide with the island when those samples are executed by a differential
-drive. Controller-aware RRT steering, followed by compression of collinear drives
-and in-place turns, found an 18-waypoint route in 1.83 s under the same 10 s / 400
-iteration budget. A separate full resweep passed with the original collision and
-0.22 m clearance checks. Measured-state steering is also checked before each
-command; this replay remains an offline result.
-
-R21’s 20 mm / 0.03 rad arrival envelope rejected every grasp candidate. A closer
-RoboCasa candidate passes the same IK checks at 10 mm / 0.015 rad. The next
-candidate uses an explicit `manipulation` navigation policy enforcing those
-stricter measured bounds; controller targets are 5 mm / 0.0075 rad with XY
-hysteresis out to 10 mm. The original precision policy remains available. No arm
-reach, joint limit, collision, or physical task-scoring criterion was relaxed.
-
-The registry generator now records `scene_split: val` for the 50 affected rows.
-A comparison confirmed this is their only definition change; the other 150 rows
-are identical. Exact FloorPlan13–22 files and dependencies are installed and all
-ten resolve in preflight. A fresh 50-row recheck is required; failed attempts are
-not overwritten or treated as successes.
-
-The combined targeted suite passes **244 tests** for this candidate. Source
-`fb817dcc` is frozen in r22. Physical jobs are `20260927_081943_2853a1`
-(RoboCasa) and `20260927_081943_d2934c` (Molmo). The corrected 50-row registry
-job `20260927_082035_9a7218` explicitly waits for both; output is
-`/tmp/tamp-fixture-recheck-20260927-r22`. These results are pending.
-
-R22 RoboCasa failed approach after 426.6 s with `navigation stalled`; bounded
-replanning could not satisfy the tighter policy during final turns. Molmo r22
-remains in planning. The next candidate retains the controller-aware route search
-but returns the physical driver to the original 20 mm / 0.03 rad precision policy.
-
-Instead of requiring one fixed grasp frame at every possible arrival, the driver
-now declares three yaw alternatives (0, −0.08, +0.08 rad). Offline replay of the
-closer RoboCasa candidate passes all 16 original arrival samples using those
-frames. The generic executor only tries caller-provided alternatives and validates
-all three grasp/lift paths before any gripper command; every attempt and selected
-world-frame target is logged. Individual pose IK tolerances, joint reserves,
-collision checks, and physical scoring remain unchanged. The combined targeted
-suite passes **246 tests**. The tighter policy remains opt-in and its failed live
-result is retained; it is not the current physical driver's default.
+The first asset-only 50-case recheck (`b48b8898`, job
+`20260927_075453_e06bcd`) retained 50 scene-resolution errors. Installing the assets
+was insufficient: FloorPlans 13–22 belong to MolmoSpaces' validation split. The
+corrected registry adds only `scene_split: val` to those 50 definitions; the other
+150 rows are unchanged. Original results and the failed asset-only attempt remain
+archived. The corrected subset must be reported separately from the original
+full 200-case run.
 
 ## Implemented motion contracts
 
@@ -224,7 +179,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **232 tests at `b1c4400c`**, including command
+The combined targeted suite passed **246 tests at `1b3f57bf`**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
@@ -240,8 +195,9 @@ They do not establish live physical acceptance.
 | Full TAMP control accounting | Complete: all 200 rows terminal. 54 successes, 19 executed task failures, 126 errors, one invalid fixture. |
 
 All heavy jobs run serially through `emet jobs --cpu-safe --gpu-exclusive`, with
-OMP/OpenBLAS/MKL threads set to one. Physical trials have a 600 s wall budget;
-registry rows have 900 s. A crash/timeout stops registry execution for cleanup
+OMP/OpenBLAS/MKL threads set to one. Physical trials have a 600 s wall budget,
+except the explicitly declared 1800 s Molmo r23-long diagnostic; registry rows
+have 900 s. A crash/timeout stops registry execution for cleanup
 inspection and explicit resume; earlier failures are never overwritten.
 Other agents’ checkouts and jobs are untouched. Physical controller support is
 currently limited to the supported Stretch telescoping-arm interface; the wider

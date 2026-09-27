@@ -252,3 +252,96 @@ tests passed. Navigation stage events now retain controller-result details.
 Both changes are frozen in `/tmp/emet-physical-tamp-20260926-r11`; fresh physical
 trials are pending. The final full registry must use the final candidate revision,
 not silently reuse earlier pre-repair control scores.
+
+
+## September 27 controller and fixture diagnostics
+
+R17 RoboCasa failed fresh arrival IK at 15.7 mm position / 0.066 rad orientation;
+its measured base arrival was 12.0 mm / 0.0149 rad from the planned endpoint.
+R17 Molmo timed out at 603 s during approach. Neither trial picked or placed.
+Independent scoring found no forbidden actuation or audited robot collision.
+
+Revision `8c3b91b6` replaces interpolated-yaw waypoints with collision-validated
+turn/drive/turn routes, keeping translations at most 0.2 m and checking the
+travel heading even when it lies outside the endpoint-yaw interval. The focused
+navigation/evaluation suite passed 25 tests. Physical r19 jobs
+`20260927_074239_7a500c` (RoboCasa) and `20260927_074239_3ed41a` (Molmo) ran
+serially. RoboCasa r19 finished in 114.5 s but failed fresh arrival IK at
+23.7 mm / 0.0588 rad, with no pickup or placement. Molmo r19 timed out in placement search without executing pickup.
+
+The exact missing scenes 12–21 and their object dependencies were installed on
+September 27. The first installer process crashed after scene 14; the remaining
+assets completed with safe CPU affinity. A separate 50-row recheck, frozen at
+`b48b8898`, retains the original case definitions and runs under job
+`20260927_075453_e06bcd`, root `/tmp/tamp-fixture-recheck-20260927-r20`.
+It finished with 50/50 scene-resolution errors. Installed FloorPlans 13–22
+belong to the validation split in MolmoSpaces, so the inherited training split
+still could not resolve them. The original 50 fixture errors are retained. The first
+submission `20260927_074941_39ce43` was canceled before execution to place physical
+validation first; the replacement explicitly waits for both r21 jobs.
+
+A subsequent bounded grasp-candidate filter checks IK at 16 base-pose samples
+(eight directions at the existing 20 mm arrival radius, each at ±0.03 rad yaw).
+It retains the original IK tolerances and 5 mm joint reserves. Exact r17 replay
+rejects the selected candidate at a sampled arrival with 13.7 mm position error.
+This is sampled candidate screening, not a continuous robustness proof;
+execution still requires fresh measured-state IK and collision-checked paths.
+The combined targeted suite now passes **236 tests**. Candidate `0425e4aa` is
+frozen in r21, with jobs `20260927_075238_66924f` (RoboCasa) and
+`20260927_075238_2b2a3e` (Molmo). Both returned `no_plan_within_budget`
+before execution (65.2 s RoboCasa, 100.9 s Molmo).
+
+## Next candidate after controller-aware replay
+
+The archived Molmo transport witness contains 132 pose samples. Required travel
+turns collide with the island when those samples are executed by a differential
+drive. Controller-aware RRT steering, followed by compression of collinear drives
+and in-place turns, found an 18-waypoint route in 1.83 s under the same 10 s / 400
+iteration budget. A separate full resweep passed with the original collision and
+0.22 m clearance checks. Measured-state steering is also checked before each
+command; this replay remains an offline result.
+
+R21’s 20 mm / 0.03 rad arrival envelope rejected every grasp candidate. A closer
+RoboCasa candidate passes the same IK checks at 10 mm / 0.015 rad. The next
+candidate uses an explicit `manipulation` navigation policy enforcing those
+stricter measured bounds; controller targets are 5 mm / 0.0075 rad with XY
+hysteresis out to 10 mm. The original precision policy remains available. No arm
+reach, joint limit, collision, or physical task-scoring criterion was relaxed.
+
+The registry generator now records `scene_split: val` for the 50 affected rows.
+A comparison confirmed this is their only definition change; the other 150 rows
+are identical. Exact FloorPlan13–22 files and dependencies are installed and all
+ten resolve in preflight. A fresh 50-row recheck is required; failed attempts are
+not overwritten or treated as successes.
+
+The combined targeted suite passes **244 tests** for this candidate. Source
+`fb817dcc` is frozen in r22. Physical jobs are `20260927_081943_2853a1`
+(RoboCasa) and `20260927_081943_d2934c` (Molmo). The corrected 50-row registry
+job `20260927_082035_9a7218` explicitly waits for both; output is
+`/tmp/tamp-fixture-recheck-20260927-r22`. The physical pair is terminal; the
+corrected registry recheck is running.
+
+R22 RoboCasa failed approach after 426.6 s with `navigation stalled`; bounded
+replanning could not satisfy the tighter policy during final turns. Molmo r22 found a complete witness at 230.2 s and executed successful
+approach segments, then timed out at 602.3 s before pickup. The next candidate retains the controller-aware route search
+but returns the physical driver to the original 20 mm / 0.03 rad precision policy.
+
+Instead of requiring one fixed grasp frame at every possible arrival, the driver
+now declares three yaw alternatives (0, −0.08, +0.08 rad). Offline replay of the
+closer RoboCasa candidate passes all 16 original arrival samples using those
+frames. The generic executor only tries caller-provided alternatives and validates
+all three grasp/lift paths before any gripper command; every attempt and selected
+world-frame target is logged. Individual pose IK tolerances, joint reserves,
+collision checks, and physical scoring remain unchanged. The combined targeted
+suite passes **246 tests**. The tighter policy remains opt-in and its failed live
+result is retained; it is not the current physical driver's default.
+
+The grasp-alternative candidate is frozen at `1b3f57bf` (r23). RoboCasa job
+`20260927_083457_d7d269` retains the 600 s budget. Molmo job
+`20260927_083844_3b2889`, root `/tmp/physical-tamp-molmo-20260927-r23-long`, uses
+an explicitly declared 1800 s wall budget: r22 measured approximately 64–68 s
+per 17 cm approach segment, leaving insufficient time for a complete task in
+600 s. Per-command timeouts and bounded retries remain unchanged. The original
+unstarted Molmo r23 job `20260927_083457_1cc47f` was canceled before execution;
+it contributes no trial. This budget change is a diagnostic condition and must
+not be described as a matched-budget improvement over earlier trials.
