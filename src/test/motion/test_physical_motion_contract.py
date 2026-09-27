@@ -609,3 +609,38 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     assert result.message == 'gripper_open_failed'
     assert calls == [-1., 1., 1., 1., 'open']
     assert executor.grasp_targets is alternative
+
+
+@pytest.mark.parametrize('obstacle_x', [0., .5])
+def test_open_gripper_geometry_is_checked_before_actuation(obstacle_x):
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = mujoco.MjModel.from_xml_string(f'''<mujoco><worldbody>
+      <body name="robot"><joint name="x" type="slide" axis="1 0 0" range="0 1"/>
+        <geom size=".02"/><body name="ee"/>
+        <body name="finger" pos="0 .1 0"><joint name="opening" type="slide" axis="0 1 0" range="0 .2"/>
+          <geom size=".02"/></body>
+      </body>
+      <body name="obstacle" pos="{obstacle_x} .3 0"><geom size=".04"/></body>
+      <body name="target" pos=".5 0 0"><freejoint/><geom size=".01"/></body>
+    </worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(open_gripper=lambda **kw: pytest.fail('opened before a valid grasp certificate')),
+        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
+        gripper_open_configuration=(('opening', .2),),
+    )
+    before = d.qpos.copy()
+    if obstacle_x == .5:
+        # The old closed-finger planning state would incorrectly accept this grasp.
+        path, error = executor.plan_pose([.5, 0, 0], np.eye(3))
+        assert path is not None and error is None
+        d.qpos[:] = before
+    executor.grasp_paths = [[np.zeros(1)]] * 3
+    executor.grasp_targets = [(np.array([x, 0, 0]), np.eye(3)) for x in (.3, .5, .3)]
+    result = executor.grasp_only('target', object_gt_body='target')
+    assert not result.success
+    assert result.phase == ('gripper_open' if obstacle_x == 0 else 'grasp')
+    np.testing.assert_array_equal(d.qpos, before)

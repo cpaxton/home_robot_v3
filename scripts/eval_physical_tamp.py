@@ -140,8 +140,17 @@ def run(args):
             np.save(output / f"{stage}_depth.npy", observation.depth)
             synchronize(data)
             camera = mujoco.MjvCamera()
-            camera.lookat[:] = (data.body("base_link").xpos + data.body(scorer["object_body"]).xpos) / 2
-            camera.distance, camera.azimuth, camera.elevation = 2.5, 135, -25
+            base = data.body("base_link").xpos
+            target = data.body(scorer["object_body"]).xpos
+            delta = target[:2] - base[:2]
+            horizontal = np.linalg.norm(delta) / 2 + 0.75
+            camera.lookat[:] = (base + target) / 2
+            camera.lookat[2] = max(target[2], base[2] + 0.8)
+            # A nearby oblique view from behind the approach is less likely to
+            # sit outside the room or hide the gripper behind the robot mast.
+            camera.distance = np.hypot(horizontal, 0.5)
+            camera.azimuth = np.degrees(np.arctan2(delta[1], delta[0])) + 30
+            camera.elevation = -np.degrees(np.arctan2(0.5, horizontal))
             with mujoco.Renderer(model, height=480, width=640) as renderer:
                 renderer.update_scene(data, camera=camera)
                 Image.fromarray(renderer.render()).save(output / f"{stage}_side.png")
@@ -166,6 +175,10 @@ def run(args):
         )
         if chain is None or not set(required).issubset(chain.joint_names):
             raise RuntimeError("unsupported_physical_arm_adapter")
+        if not chain.gripper_open_configuration:
+            raise RuntimeError("unsupported_gripper_open_geometry")
+        manifest["gripper_open_configuration"] = dict(chain.gripper_open_configuration)
+        (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         joints = tuple(name for name in chain.joint_names if name in required)
         if args.tier == "physical":
             if not os.environ.get("EMET_JOB_ID"):
@@ -271,6 +284,7 @@ def run(args):
             collision=checker,
             synchronize=synchronize,
             command_joints=command,
+            gripper_open_configuration=chain.gripper_open_configuration,
             coupled_groups=(tuple(f"joint_arm_l{i}" for i in range(4)),),
             event=event,
             base_body="base_link",
@@ -336,6 +350,12 @@ def run(args):
             )
             mujoco.mj_kinematics(model, data)
             navigation_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
+            _, opening_error = executor.plan_gripper_open()
+            if opening_error:
+                item.update(phase="gripper_open", reason=opening_error, contacts=list(checker.last_contacts))
+                plan.message = opening_error
+                event(**item)
+                return False
             yaw_delta = approach[2] - initial_base[2]
             c, sn = np.cos(yaw_delta), np.sin(yaw_delta)
             base_rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]])

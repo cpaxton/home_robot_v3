@@ -49,6 +49,8 @@ class ArmChain:
     navigation_arm_q: tuple[float, ...] = ()
     """Optional collision-checked navigation posture, aligned with joint_names."""
     base_freejoint_name: str = "base_freejoint"
+    gripper_open_configuration: tuple[tuple[str, float], ...] = ()
+    """Open-gripper MJCF coordinates, including dependent finger joints."""
 
 
 @dataclass

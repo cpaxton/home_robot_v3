@@ -51,6 +51,14 @@ def test_precision_position_hysteresis_preserves_final_turn(monkeypatch):
         controller.compute_current_error.return_value = np.array([distance, 0., .7])
         MujocoZmqServer._control_loop_callback(server)
         controller.control.set_linear_error_tolerance.assert_called_with(tolerance)
+    controller.control.v_max = .005
+    controller.compute_current_error.return_value = np.array([-.009, 0., .7])
+    controller.cfg.max_rev_dist = 0.
+    MujocoZmqServer._control_loop_callback(server)
+    assert server.robot_sim.set_base_velocity.call_args.kwargs["v_linear"] == 0.
+    controller.cfg.max_rev_dist = 1.
+    MujocoZmqServer._control_loop_callback(server)
+    assert server.robot_sim.set_base_velocity.call_args.kwargs["v_linear"] == -.005
 
 
 @pytest.mark.parametrize("policy,xy,yaw", [("precision", .01, .015), ("manipulation", .005, .0075)])

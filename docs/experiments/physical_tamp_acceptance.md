@@ -148,3 +148,13 @@ second (2 cm/s for precision) and configured linear speed. Reverse correction
 respects the controller's reverse-distance setting. This addresses measured
 wheel/contact creep before it leaves the existing XY bound; outer-bound escape
 still triggers reacquisition, and measured arrival criteria are unchanged.
+
+The robot profile declares the fully open gripper coordinates, including dependent
+finger joints. Static search checks opening at the approach pose and plans the
+nominal grasp/lift with this geometry. Runtime checks opening before actuation,
+checks the grasp with open geometry, then rebuilds paths from the measured open
+state after the normal gripper command. Closed-finger paths cannot certify an
+open-finger descent. Actual grasp width and carried geometry still require the
+measured lift/placement replan. Missing opening metadata is unsupported in the
+physical GT driver. Review cameras now use a nearby oblique view relative to the
+robot and target, rather than a fixed distant room-exterior viewpoint.

@@ -50,6 +50,7 @@ class PhysicalPickPlaceExecutor:
         orientation_tolerance_rad: float = 0.1,
         base_body: str | None = None,
         joint_limit_margins=None,
+        gripper_open_configuration=(),
     ):
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
@@ -64,6 +65,7 @@ class PhysicalPickPlaceExecutor:
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
+        self.gripper_open_configuration = dict(gripper_open_configuration)
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -156,6 +158,28 @@ class PhysicalPickPlaceExecutor:
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
 
+    def plan_gripper_open(self):
+        """Certify opening at the current arm pose; leave private data open on success."""
+        if not self.gripper_open_configuration:
+            return None, "unsupported_gripper_open_geometry"
+        names = tuple(self.gripper_open_configuration)
+        addresses = joint_qpos_addrs(self.model, names)
+        before = self.data.qpos.copy()
+        goal = np.array(list(self.gripper_open_configuration.values()))
+        try:
+            result = plan_arm_joint_path(
+                self.model, self.data, joint_names=names, q_start=before[addresses], q_goal=goal,
+                collision=self.collision, planner="linear", step_size=0.025, goal_tolerance=0.001,
+            )
+        finally:
+            self.data.qpos[:] = before
+            mujoco.mj_kinematics(self.model, self.data)
+        if not result.success:
+            return None, f"gripper_open_path_failed:{result.reason}"
+        self.data.qpos[addresses] = goal
+        mujoco.mj_kinematics(self.model, self.data)
+        return result.waypoints, None
+
     def payload_retained(self):
         """Check the freshly synchronized payload pose, before hypothetical attachment."""
         if self.payload_body is None:
@@ -209,7 +233,7 @@ class PhysicalPickPlaceExecutor:
             previous = current
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 
-    def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp):
+    def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp, open_gripper_geometry=True):
         """Arrival tolerance is not an IK certificate: rebuild world-pose paths."""
         self.synchronize(self.data)
         before = self.data.qpos.copy()
@@ -220,6 +244,9 @@ class PhysicalPickPlaceExecutor:
         )
         paths = []
         try:
+            if grasp and open_gripper_geometry and self.gripper_open_configuration:
+                addresses = joint_qpos_addrs(self.model, tuple(self.gripper_open_configuration))
+                self.data.qpos[addresses] = list(self.gripper_open_configuration.values())
             for phase, (point, rotation) in zip(phases, targets, strict=True):
                 if grasp and phase == "lift":
                     self.collision.set_payload(self.model, self.data, object_body, self.ee_body)
@@ -329,21 +356,42 @@ class PhysicalPickPlaceExecutor:
     def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
         if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
-        for option, targets in enumerate(self.grasp_target_options or [self.grasp_targets]):
-            paths, error = self._replan_at_measured_pose(
-                ("pregrasp", "grasp", "lift"), targets, object_body=object_gt_body, grasp=True,
-            )
-            self.event(phase="grasp_replan", option=option, accepted=error is None,
-                       reason=None if error is None else error.message,
-                       targets=[[np.asarray(p).tolist(), np.asarray(r).tolist()] for p, r in targets])
-            if error is None:
-                self.grasp_targets = targets
-                break
+        if self.gripper_open_configuration:
+            self.synchronize(self.data)
+            before = self.data.qpos.copy()
+            try:
+                _, error = self.plan_gripper_open()
+            finally:
+                self.data.qpos[:] = before
+                mujoco.mj_kinematics(self.model, self.data)
+            if error:
+                return PhysicalMotionResult(False, error, "gripper_open")
+
+        def replan(phase, *, open_geometry):
+            for option, targets in enumerate(self.grasp_target_options or [self.grasp_targets]):
+                paths, error = self._replan_at_measured_pose(
+                    ("pregrasp", "grasp", "lift"), targets, object_body=object_gt_body, grasp=True,
+                    open_gripper_geometry=open_geometry,
+                )
+                self.event(phase=phase, option=option, accepted=error is None,
+                           reason=None if error is None else error.message,
+                           targets=[[np.asarray(p).tolist(), np.asarray(r).tolist()] for p, r in targets])
+                if error is None:
+                    self.grasp_targets = targets
+                    break
+            return paths, error
+
+        paths, error = replan("grasp_replan", open_geometry=True)
+        if error is not None:
+            return error
+        if not self.robot.open_gripper(blocking=True):
+            return PhysicalMotionResult(False, "gripper_open_failed", "pregrasp")
+        # Opening changes collision geometry and may slightly disturb the arm.
+        # Rebuild paths from the measured open state before any arm motion.
+        paths, error = replan("grasp_replan_after_open", open_geometry=False)
         if error is not None:
             return error
         self.grasp_paths = paths
-        if not self.robot.open_gripper(blocking=True):
-            return PhysicalMotionResult(False, "gripper_open_failed", "pregrasp")
         for phase, path in zip(("pregrasp", "grasp"), self.grasp_paths[:2], strict=True):
             result = self._execute_path(phase, path)
             if not result.success:

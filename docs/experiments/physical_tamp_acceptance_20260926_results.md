@@ -30,7 +30,7 @@ a copied `server.log`. Active runs are moved only after completion.
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
 | Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; rotational slip stopped transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
-| Latest completed physical Molmo tomato → bowl | `71ba084d` | Full tracking-envelope witness; final approach turn stalled after bounded retries, 942.1 s | `/tmp/physical-tamp-molmo-20260927-r28` |
+| Latest completed physical Molmo tomato → bowl | `82441047` | Approach passed; grasp stopped before predicted fingertip/egg collision, 644.7 s | `/tmp/physical-tamp-molmo-20260927-r29` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -260,7 +260,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **255 tests for the subsequent contact-filter/profiling candidate**, including command
+The combined targeted suite passed **261 tests for the open-gripper planning candidate**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
@@ -273,7 +273,7 @@ r26 plotting repair was verified by regenerating and inspecting its archived
 | Plan gate | State |
 | --- | --- |
 | A: frozen fixtures and reproduced failures | Established for the two exact Stretch fixtures; initial diagnostics are not a matched baseline comparison. |
-| B: complete GT static witnesses | Demonstrated on both fixtures, with unit-level blocked/alternate/unknown negatives; broader live layout coverage remains outstanding. |
+| B: complete GT static witnesses | Earlier nominal witnesses and tracking-qualified carried routes exist, but r29 exposed closed-versus-open gripper geometry missing from grasp certification. Corrected search is being revalidated; broader live layout coverage remains outstanding. |
 | C: physical pick, carry, release, stable support | Not established. Three matched seeds per fixture and baseline/candidate comparison remain outstanding. |
 | D: partial-observation physical execution | Not established; depends on C. GT has not been injected into observed maps. Learned comparisons excluded by the user’s scope. |
 | Full TAMP control accounting | Complete: all 200 rows terminal. 54 successes, 19 executed task failures, 126 errors, one invalid fixture. |
@@ -336,3 +336,28 @@ during final turns; it retains the same outer bound, deadline and scorer. Four
 rollouts covering both turn directions and ±4 mm/s creep stayed within 20 mm and
 converged in yaw. Related navigation/executor tests passed; live validation is
 required. No fixture, contact threshold or grasp-retention bound was changed.
+
+Molmo r29 is frozen at `82441047`, job `20260927_130049_85fab3`, seed 0,
+with 1800 s total / 60 s route budgets and profiling disabled. Artifacts:
+`/tmp/physical-tamp-molmo-20260927-r29`. This trial added only the precision-turn
+position correction to the r28 runtime. It completed approach without retries at
+551.67 s, with 8.75 mm / 0.01496 rad residuals, then stopped at 644.65 s during
+grasp-path revalidation. The next waypoint would penetrate a neighboring egg;
+the actual trace records no forbidden contact.
+
+The r29 replay exposed a missing gripper state transition: planning used slide
+position near zero, while execution opened it to approximately 0.0385 m with
+finger hinges near 0.385 rad. Full-open replay rejects the nominal grasp and its
+±0.08 rad alternatives, with roughly 18 mm egg overlap at the final target. Wider
+yaw probes fail IK at that base pose. The new candidate declares opening geometry
+through the robot profile, checks its path, rejects unsafe open-finger grasps
+before arm motion, and rechecks measured geometry after opening. It retains the
+existing base-candidate search and all contact thresholds. The combined targeted
+suite passed 261 tests; corrected static feasibility is pending.
+
+The two private RoboCasa yaw-alignment replays (±0.16 rad initial object yaw)
+reached 0.18690 and 0.17464 rad relative drift over 20 simulated seconds. Neither
+resolved the 0.1 rad bound, so no alignment change was adopted. They are archived
+under `hold_yaw_replay/`, separate from scored physical trials. The r29 review
+camera has been regenerated separately as `tamp-molmo-r29-side-camera.png`; the
+original trial images and result remain unchanged.
