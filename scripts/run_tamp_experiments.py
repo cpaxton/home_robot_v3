@@ -136,9 +136,16 @@ def main():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--robot", help="Optional small/full registry subset for explicit robot revalidation")
+    parser.add_argument("--case-id", action="append", help="Explicit case subset for revalidation; repeat for multiple cases")
     args = parser.parse_args()
     try:
         cases = build_cases(args.suite, robot=args.robot)
+        if args.case_id:
+            selected = set(args.case_id)
+            unknown = selected - {case["id"] for case in cases}
+            if unknown:
+                raise ValueError(f"Unknown case IDs: {sorted(unknown)}")
+            cases = [case for case in cases if case["id"] in selected]
     except ValueError as exc:
         parser.error(str(exc))
     if args.dry_run:

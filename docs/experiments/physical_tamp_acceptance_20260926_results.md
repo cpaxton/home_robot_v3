@@ -11,6 +11,12 @@ The requested plan is [the motion acceptance handoff](../plans/2026-09-26_physic
 Earlier raw findings and canceled submissions are preserved in
 [the diagnostic history](physical_tamp_acceptance_20260926_diagnostics.md).
 
+Completed physical and control roots are durably archived under
+`/home/cpaxton/runs/emet/physical-tamp-acceptance-20260926/`, retaining their directory
+basenames. The original `/tmp` paths below are symlinks for completed runs.
+`physical_index.json` indexes the archived physical diagnostics; each includes
+a copied `server.log`. Active runs are moved only after completion.
+
 ## Experiment results
 
 | Suite | Source | Result | Artifact root |
@@ -19,7 +25,7 @@ Earlier raw findings and canceled submissions are preserved in
 | Small registry | `7b6ad51d` | 4/7 task successes; all rows terminal | `/tmp/tamp-small-20260926-r5` |
 | Scripted tool controls | `7b6ad51d` | 3/3 passed; scripted JSON, no learned model | `/tmp/tamp-tools-20260926-r5` |
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
-| Full registry | `dbe0f4da` | Running; 200 terminal rows required | `/tmp/tamp-full-20260926-r14` |
+| Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Physical RoboCasa can → counter | `dbe0f4da` | Failed before closure: measured telescoping joint exceeded nominal limit | `/tmp/physical-tamp-robocasa-20260926-r14` |
 | Physical Molmo tomato → bowl | `dbe0f4da` | Failed approach, unconfirmed stop after 431 s | `/tmp/physical-tamp-molmo-20260926-r14` |
 
@@ -42,6 +48,32 @@ Full job: `20260926_125932_8d0984`. Physical jobs: `20260926_125430_da88fd` (Rob
 execution to repair the command race and protocol boundary; they produced no
 registry rows. Submission is not completion. Read each terminal result with its
 manifest, trace, audit, and stage events.
+
+## September 27 completed registry analysis
+
+| Robot | Mode | Success | Executed failure | Error | Invalid | Total |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| RBY1 | Kinematic latch | 19 | 16 | 75 | 0 | 110 |
+| Stretch | Oracle teleport | 16 | 0 | 14 | 0 | 30 |
+| Innate Mars | Oracle teleport | 4 | 2 | 24 | 0 | 30 |
+| Nori | Oracle teleport | 15 | 1 | 13 | 1 | 30 |
+
+The 127 error/invalid rows comprise 50 missing-scene merge failures (RBY1
+scenes 12–21), 45 missing landmarks, 12 missing receptacles, and 20 Mars startup
+timeouts. These remain in the denominator. The final matrix and row-level CSV
+are in `/tmp/tamp-acceptance-report-20260926/{full_matrix.png,full_results.csv}`.
+
+R17 RoboCasa failed fresh arrival IK at 15.7 mm position / 0.066 rad orientation;
+its measured base arrival was 12.0 mm / 0.0149 rad from the planned endpoint.
+R17 Molmo timed out at 603 s during approach. Neither trial picked or placed.
+Independent scoring found no forbidden actuation or audited robot collision.
+
+Revision `8c3b91b6` replaces interpolated-yaw waypoints with collision-validated
+turn/drive/turn routes, keeping translations at most 0.2 m and checking the
+travel heading even when it lies outside the endpoint-yaw interval. The focused
+navigation/evaluation suite passed 25 tests. Physical r19 jobs
+`20260927_074239_7a500c` (RoboCasa) and `20260927_074239_3ed41a` (Molmo) are queued
+serially; no new physical outcome is claimed from submission.
 
 ## Implemented motion contracts
 
@@ -99,7 +131,7 @@ arrival acceptance remains 20 mm / 0.03 rad. Molmo r14 took 199 s for its second
 small waypoint while repeatedly crossing the translation/turn threshold. No
 clearance, hard joint limit, contact, or scoring threshold was relaxed.
 
-The r17 physical pair (`014b6ab4`) is queued behind the full r14 control registry:
+The r17 physical pair (`014b6ab4`) finished after the full r14 control registry:
 `20260926_131239_4220c6` (RoboCasa), `20260926_131240_49836d` (Molmo). R15/r16 jobs
 were canceled before execution as the coupled precision/cancellation repairs were
 completed. The new interprocess lock exposed cancellation waiting for an
@@ -108,10 +140,10 @@ and still requires consumed stop plus fresh measured rest. Timeouts also retain
 independent trace scoring. This interaction explains the unconfirmed stop in
 Molmo r14; it is not counted as successful navigation.
 
-A separate 30-row Stretch recheck at `b1c4400c` is queued after the physical pair:
+A separate 30-row Stretch recheck at `b1c4400c` finished after the physical pair:
 job `20260926_131456_47c2bb`, artifacts `/tmp/tamp-stretch-recheck-20260926-r18`.
 The explicit `--robot stretch` subset preserves original registry case definitions.
-It will revalidate the affected backend without overwriting the full r14 ledger. The full registry remains frozen at `dbe0f4da`; later physical-only results
+It produced 16 successes and 14 fixture errors, exactly matching the original Stretch outcomes, without overwriting the full r14 ledger. The full registry remains frozen at `dbe0f4da`; later physical-only results
 must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
@@ -129,7 +161,7 @@ They do not establish live physical acceptance.
 | B: complete GT static witnesses | Demonstrated on both fixtures, with unit-level blocked/alternate/unknown negatives; broader live layout coverage remains outstanding. |
 | C: physical pick, carry, release, stable support | Not established. Three matched seeds per fixture and baseline/candidate comparison remain outstanding. |
 | D: partial-observation physical execution | Not established; depends on C. GT has not been injected into observed maps. Learned comparisons excluded by the user’s scope. |
-| Full TAMP control accounting | Pending all 200 terminal rows on the frozen final submission. |
+| Full TAMP control accounting | Complete: all 200 rows terminal. 54 successes, 19 executed task failures, 126 errors, one invalid fixture. |
 
 All heavy jobs run serially through `emet jobs --cpu-safe --gpu-exclusive`, with
 OMP/OpenBLAS/MKL threads set to one. Physical trials have a 600 s wall budget;

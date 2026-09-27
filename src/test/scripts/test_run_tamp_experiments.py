@@ -66,3 +66,23 @@ def test_crash_overrides_success_artifact_and_missing_artifact(tmp_path):
     assert result['status'] == 'crashed' and not result['task_success']
     assert result['evidence'] and result['exit_code'] == -11
     assert not module.summarize_case(case, tmp_path, 1)['task_success']
+
+
+def test_explicit_case_subset_keeps_order_and_rejects_unknown(monkeypatch, capsys):
+    import sys
+
+    module = runner()
+    cases = module.build_cases('full')
+    selected = [cases[2]['id'], cases[0]['id']]
+    argv = ['runner', '--suite', 'full', '--output-dir', '/unused', '--dry-run']
+    for name in selected:
+        argv.extend(['--case-id', name])
+    monkeypatch.setattr(sys, 'argv', argv)
+    assert module.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result['cases'] == [cases[0], cases[2]]
+    assert result['expected_episodes'] == 2
+    monkeypatch.setattr(sys, 'argv', argv + ['--case-id', 'typo'])
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 2
