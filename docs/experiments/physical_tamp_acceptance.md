@@ -39,6 +39,9 @@ at the same 20 mm / 0.03 rad arrival bounds. This catches nominal paths that los
 clearance when the extended payload moves with small base yaw errors. It is
 sampled screening, not a continuous tracking or payload-slip certificate; fresh
 measured-state checks and the independent contact scorer remain mandatory.
+Precision command startup now acquires XY from fresh measured feedback when it
+already meets the declared bound, allowing a following yaw command to turn.
+Drift outside that bound still requires translation to the tighter inner target.
 
 ## Commands
 

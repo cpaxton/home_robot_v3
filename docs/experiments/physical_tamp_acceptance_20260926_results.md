@@ -90,7 +90,7 @@ sampling, not a continuous robustness proof or an executed task success.
 
 | Pending experiment | Job | Budget | Artifact root |
 | --- | --- | --- | --- |
-| RoboCasa physical r23, seed 0 | `20260927_083457_d7d269` | 600 s | `/tmp/physical-tamp-robocasa-20260926-r23` |
+| RoboCasa physical r24, seed 0 | `20260927_111453_79d184` | 600 s | `/tmp/physical-tamp-robocasa-20260927-r24` |
 | Molmo physical r23-long, seed 0 | `20260927_083844_3b2889` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
 
 The corrected registry has completed and released the exclusive GPU lock.
@@ -139,8 +139,23 @@ bounds, with no relaxation of contact or IK criteria. It rejects that segment an
 the original placement endpoint, whose envelope also intersects the knife block.
 The bounded search must select another candidate; this rejection is not a live
 success. Navigation failure results now retain the measurement exception reason.
-The combined targeted suite passes **248 tests**; these changes require a new
-frozen physical trial. Molmo r23-long continues on its original frozen revision.
+The combined targeted suite passes **248 tests**. The repair is frozen at
+`4a821be1` in r24, queued under job `20260927_111453_79d184` with the same 600 s
+RoboCasa budget. Molmo r23-long continues on its original frozen revision.
+
+## Fresh position acquisition for final turns
+
+Molmo r23-long passed its approach translations but stalled on final-turn attempts
+at 612.6 s and 757.5 s, with XY errors already inside the declared 20 mm bound.
+Command startup reset XY acquisition and required another tiny translation before
+turning; the controller and arrival monitor disagreed about useful progress in
+that interval. The next repair initializes XY acquisition from fresh measured
+feedback when it already meets the declared bound. It does not reuse cached
+success or change arrival tolerances. The existing hysteresis still requires
+returning to the inner target after drift outside the outer bound. Execution-path
+screening uses the same startup rule. A real-controller regression verifies
+immediate turning inside the bound and required translation with fresh feedback
+outside it, even when cached feedback was inside.
 
 ## Implemented motion contracts
 

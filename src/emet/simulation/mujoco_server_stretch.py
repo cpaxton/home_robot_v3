@@ -459,9 +459,21 @@ class MujocoZmqServer(BaseZmqServer):
             # translation and yaw correction indefinitely on physical floors.
             fine_arrival = action["nav_policy"] in ("precision", "manipulation")
             fraction = 0.5 if fine_arrival else 1.0
+            linear_tolerance = fraction * policy.xy_tolerance
             if fine_arrival:
                 self._precision_xy_tolerances = (fraction * policy.xy_tolerance, policy.xy_tolerance)
-            self.controller.control.set_linear_error_tolerance(fraction * policy.xy_tolerance)
+                # A fresh command may only change yaw after the preceding
+                # translation arrived. Reacquiring the inner XY threshold can
+                # stall that turn despite already satisfying the declared XY
+                # bound. Initialize from fresh feedback, never cached success.
+                pose = self.get_base_pose()
+                if pose is not None:
+                    self.controller.update_pose_feedback(pose)
+                    distance = np.linalg.norm(self.controller.compute_current_error()[:2])
+                    self._precision_xy_acquired = bool(np.isfinite(distance) and distance <= policy.xy_tolerance)
+                    if self._precision_xy_acquired:
+                        linear_tolerance = policy.xy_tolerance
+            self.controller.control.set_linear_error_tolerance(linear_tolerance)
             self.controller.control.set_angular_error_tolerance(fraction * policy.yaw_tolerance)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")

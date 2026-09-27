@@ -244,8 +244,7 @@ class SceneNavigationSpace(XYT):
         self.allow_reverse = allow_reverse
         from emet.core.navigation_result import NAVIGATION_POLICIES
 
-        fraction = 0.5 if navigation_policy in ("precision", "manipulation") else 1.0
-        self.controller_position_tolerance_m = fraction * NAVIGATION_POLICIES[navigation_policy].xy_tolerance
+        self.controller_position_tolerance_m = NAVIGATION_POLICIES[navigation_policy].xy_tolerance
         policy = NAVIGATION_POLICIES[navigation_policy]
         self.payload_tracking_offsets = []
         if check_payload_tracking_envelope:
@@ -274,7 +273,7 @@ class SceneNavigationSpace(XYT):
         return self.rng.uniform(self.mins, self.maxs)
 
     def execution_waypoints(self, start, goal):
-        # Match the selected controller policy's inner position target. Inside it
+        # Match command startup's fresh measured position acceptance. Inside it
         # the controller only acquires final yaw; outside it check travel yaw too.
         if np.linalg.norm(np.asarray(goal)[:2] - np.asarray(start)[:2]) <= self.controller_position_tolerance_m:
             return [np.asarray(goal).tolist()]

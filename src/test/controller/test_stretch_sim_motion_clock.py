@@ -53,7 +53,8 @@ def test_precision_position_hysteresis_preserves_final_turn(monkeypatch):
 
 @pytest.mark.parametrize("policy,xy,yaw", [("precision", .01, .015), ("manipulation", .005, .0075)])
 def test_accepted_navigation_transitions_mode_inside_adapter(policy, xy, yaw):
-    server = SimpleNamespace(controller=Mock())
+    server = SimpleNamespace(controller=Mock(), get_base_pose=lambda: np.zeros(3))
+    server.controller.compute_current_error.return_value = np.array([1., 0., .5])
     received = []
 
     def handle(action):
@@ -69,3 +70,26 @@ def test_accepted_navigation_transitions_mode_inside_adapter(policy, xy, yaw):
     server.controller.control.set_linear_error_tolerance.assert_called_once_with(xy)
     server.controller.control.set_angular_error_tolerance.assert_called_once_with(yaw)
     assert server._precision_xy_tolerances == (xy, 2 * xy)
+
+
+@pytest.mark.parametrize("fresh_x,acquired", [(0., True), (-.1, False)])
+def test_final_turn_uses_fresh_position_acceptance_without_cached_success(fresh_x, acquired):
+    from emet.motion.control.goto_controller import GotoVelocityController
+
+    controller = GotoVelocityController()
+    controller.update_pose_feedback(np.zeros(3))  # Deliberately stale in the second case.
+    server = SimpleNamespace(controller=controller, get_base_pose=lambda: np.array([fresh_x, 0., 0.]))
+
+    def handle(action):
+        controller.update_goal(np.asarray(action["xyt"]))
+        server._contract_navigation_context = {"resolved_goal": action["xyt"]}
+
+    server.handle_action = handle
+    MujocoZmqServer.start_navigation_command(server, {"xyt": [.012, 0., 2.6], "nav_policy": "precision"})
+    assert server._precision_xy_acquired is acquired
+    linear, angular = controller.compute_control()
+    if acquired:
+        assert linear == 0 and angular > 0  # Turn now, inside the unchanged 20 mm bound.
+    else:
+        assert linear > 0  # Fresh feedback outside the bound still requires translation.
+    assert not controller.is_done()
