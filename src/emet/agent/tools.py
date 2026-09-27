@@ -153,12 +153,12 @@ def format_base_clearance_hint(agent: Any | None) -> str:
     if robot is None or not hasattr(robot, "get_base_pose"):
         return ""
     try:
-        pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
-        if pose.size < 2:
+        xy = _robot_base_xy(robot, agent=agent)
+        if xy is None:
             return ""
         if getattr(planner, "_clearance_m", None) is None:
             planner.reset()
-        c = float(planner.clearance_at_xy(pose[:2]))
+        c = float(planner.clearance_at_xy(xy))
         req = float(getattr(agent, "_min_clearance_m", getattr(planner, "min_clearance_m", 0.0)) or 0.0)
         if req > 0 and c < req:
             return f"Base clearance {c:.2f}m is below min_clearance_m={req:.2f}m (near obstacle)."
@@ -251,7 +251,7 @@ class Tool:
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 
-def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, float] | None:
+def _robot_base_xy(robot: Any, executor: Any | None = None, *, agent: Any | None = None) -> tuple[float, float] | None:
     """Base XY in the voxel-map world frame (matches visited / explored stamps).
 
     Prefer the controller's ``world_base_xy`` (gps → world via ``navigation_origin_xyt``).
@@ -259,6 +259,7 @@ def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, floa
     """
     if executor is not None:
         agent = getattr(executor, "agent", None)
+    if agent is not None:
         if agent is not None and hasattr(agent, "world_base_xy"):
             try:
                 xy = agent.world_base_xy()
@@ -274,6 +275,13 @@ def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, floa
                     return float(wxyt[0]), float(wxyt[1])
             except Exception:
                 pass
+    if robot is not None and callable(getattr(robot, "get_base_pose_world", None)):
+        try:
+            pose = np.asarray(robot.get_base_pose_world(), dtype=float).reshape(-1)
+            if pose.size >= 2 and np.isfinite(pose[:2]).all():
+                return float(pose[0]), float(pose[1])
+        except (TypeError, ValueError, RuntimeError):
+            pass
     if robot is None or not hasattr(robot, "get_base_pose"):
         return None
     try:
@@ -427,7 +435,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         result = _exec("explore")
         ok = result.ok
         agent = _agent_from_context(context)
-        robot_xy = _robot_base_xy(robot)
+        robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=ok)

@@ -6,13 +6,28 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import numpy as np
 
 from emet.agent.tools import (
+    _robot_base_xy,
+    format_base_clearance_hint,
     format_last_nav_plan_summary,
     format_nav_outcome_head,
     get_tools,
 )
+
+
+def test_clearance_and_map_marker_use_world_pose_not_local_odometry():
+    robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3), get_base_pose_world=lambda: np.array([-1, -0.3, 0]))
+    planner = SimpleNamespace(_clearance_m=True, min_clearance_m=0.22, clearance_at_xy=Mock(return_value=0.3))
+    agent = SimpleNamespace(robot=robot, planner=planner, world_base_xy=lambda: (-1, -0.3))
+    assert _robot_base_xy(robot, SimpleNamespace(agent=agent)) == (-1, -0.3)
+    assert _robot_base_xy(robot) == (-1, -0.3)
+    assert "0.30m" in format_base_clearance_hint(agent)
+    planner.clearance_at_xy.assert_called_once_with((-1, -0.3))
 
 
 def test_format_nav_outcome_heads():

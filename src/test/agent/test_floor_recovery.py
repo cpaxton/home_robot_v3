@@ -73,6 +73,28 @@ def test_final_tool_schema_exposes_floor_tilt_and_feedback():
     assert "footprint_before/after" in tool.description
 
 
+def test_successful_recovery_capture_does_not_unlock_raw_motion():
+    from emet.agent.loop import _recovery_dispatch_tools
+
+    names = [
+        "observe_floor",
+        "find_objects",
+        "explore",
+        "scan_environment",
+        "rotate_base",
+        "move_forward",
+        "aim_arm_at",
+    ]
+    tools = {name: Tool(name, name, {}, Mock()) for name in names}
+    assert set(_recovery_dispatch_tools(tools, ["observe_floor"], True)) == {"observe_floor"}
+    after_capture = _recovery_dispatch_tools(tools, [], True)
+    assert set(after_capture) == {"observe_floor", "find_objects", "explore"}
+    ok, results, failed = _dispatch_tool_calls([{"name": "scan_environment", "arguments": {}}], after_capture, Mock())
+    assert ok and failed
+    tools["scan_environment"].func.assert_not_called()
+    assert _recovery_dispatch_tools(tools, [], False) is tools
+
+
 @pytest.mark.parametrize("payload_uncertain", [False, True])
 @pytest.mark.parametrize("reason", ["unobserved_footprint", "obstacle"])
 def test_find_dispatch_preserves_navigation_details_and_safe_recovery(payload_uncertain, reason):

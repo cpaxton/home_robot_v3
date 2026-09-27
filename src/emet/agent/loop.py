@@ -181,6 +181,25 @@ class ChatLog:
 # ---------------------------------------------------------------------------
 
 
+def _recovery_dispatch_tools(tools, pending_recovery, recovery_active):
+    """A captured image never unlocks unplanned base/arm movement."""
+    if pending_recovery:
+        allowed = set(pending_recovery)
+    elif recovery_active:
+        allowed = {
+            "observe_floor",
+            "navigation_diagnostics",
+            "send_map_snapshot",
+            "describe_scene",
+            "find_objects",
+            "explore",
+            "pick_place",
+        }
+    else:
+        return tools
+    return {name: tool for name, tool in tools.items() if name in allowed}
+
+
 def _dispatch_tool_calls(
     tool_calls: list[dict],
     tools_by_name: dict[str, Tool],
@@ -1131,6 +1150,7 @@ def run_agent_with_robot(
             current_input = user_text
             turn_t0 = timeit.default_timer()
             pending_recovery: list[str] = []
+            recovery_active = False
             for _round in range(_MAX_TOOL_ROUNDS):
                 cam_image = None
                 followup_round = _round > 0
@@ -1258,11 +1278,8 @@ def run_agent_with_robot(
 
                 # Execute tool calls
                 tools_t0 = timeit.default_timer()
-                dispatch_tools = (
-                    {name: tools_by_name[name] for name in pending_recovery if name in tools_by_name}
-                    if pending_recovery
-                    else tools_by_name
-                )
+                recovery_active = recovery_active or bool(pending_recovery)
+                dispatch_tools = _recovery_dispatch_tools(tools_by_name, pending_recovery, recovery_active)
                 pending_recovery = []
                 # Caption/grounding tools may share the same loaded VLM. Their
                 # private prompts must not replace the high-level task dialogue.
@@ -1338,6 +1355,13 @@ def run_agent_with_robot(
                     "If the request is complete, reply without tools. "
                     "Controller completion is not independent verification of physical success."
                 )
+                if recovery_active:
+                    current_input += (
+                        " Recovery remains active: use head-only observe_floor or read-only diagnostics; "
+                        "movement may only be replanned through find_objects, explore, or pick_place for the "
+                        "unfinished request. scan_environment, direct base turns/drives and arm commands "
+                        "remain unavailable; a successful capture did not establish a safe motion."
+                    )
                 if debug_llm or verbose_tools:
                     print(colored("[→ LLM follow-up user message]", "magenta"), current_input, sep="\n", flush=True)
             if ok:
