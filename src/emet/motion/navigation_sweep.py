@@ -117,12 +117,15 @@ def execute_measured_route(
     yaw_tolerance_rad=0.1,
     waypoint_timeout_s=30.0,
     navigation_policy=None,
+    initial_route=None,
     event=lambda **kwargs: None,
 ):
     """Follow validated waypoints with shared base control and bounded replans.
 
     ``measure`` and ``goal`` use the same world frame. ``plan_route`` must use
     current geometry and return XYT waypoints, never a mere reachability bool.
+    An optional route proposal is swept against fresh state before reuse; an
+    invalid proposal falls back to planning and is never reused after divergence.
     """
     target = np.asarray(goal, dtype=float)
     if target.shape != (3,) or not np.isfinite(target).all() or max_replans < 0:
@@ -164,12 +167,25 @@ def execute_measured_route(
         return invalid_measurement(0, cancel_motion=False)
     reason = "no_plan_within_budget"
     for attempt in range(max_replans + 1):
-        route = plan_route(current.copy(), target.copy())
+        route = initial_route if attempt == 0 and initial_route is not None else None
+        accepted = False
+        if route is not None and len(route):
+            accepted, rejected = validate_navigation_sweep(space, current, route)
+            if accepted:
+                endpoint = np.asarray(route[-1], dtype=float)
+                xy = float(np.linalg.norm(endpoint[:2] - target[:2]))
+                yaw = float(abs(np.arctan2(np.sin(endpoint[2] - target[2]), np.cos(endpoint[2] - target[2]))))
+                if xy > position_tolerance_m or yaw > yaw_tolerance_rad:
+                    accepted, rejected = False, "route_did_not_reach_goal"
+            event(phase="navigation_route_reuse", accepted=accepted, reason=rejected)
+        if not accepted:
+            route = plan_route(current.copy(), target.copy())
         if not route:
             detail = getattr(space, "last_validity", {}).get("reason")
             reason = f"no_plan_within_budget:{detail}" if detail and detail != "ok" else "no_plan_within_budget"
             break
-        accepted, rejected = validate_navigation_sweep(space, current, route)
+        if not accepted:
+            accepted, rejected = validate_navigation_sweep(space, current, route)
         if not accepted:
             reason = f"rejected_swept_footprint:{rejected}"
             break

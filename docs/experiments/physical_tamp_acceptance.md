@@ -162,3 +162,10 @@ pose before opening, then replans retreat after the gripper command. Failed rele
 checks preserve the measured payload reference and issue no opening command.
 Review cameras now use a nearby oblique view relative to the
 robot and target, rather than a fixed distant room-exterior viewpoint.
+
+Physical execution reuses the selected approach and measured placement routes as
+proposals. Every proposal must reach the requested goal and pass a fresh full
+sweep, including carried geometry and tracking offsets where required. Invalid
+proposals fall back to bounded search. Per-command measured steering checks remain
+mandatory, and any divergence discards the proposal before replanning. This avoids
+discarding a newly certified carried route only to repeat the same RRT search.

@@ -465,7 +465,7 @@ def run(args):
                     raise RuntimeError("payload_not_retained")
                 return base_pose(model, data)
 
-            def navigate(goal):
+            def navigate(goal, *, initial_route=None):
                 nonlocal preparation_pending
                 if preparation_pending:
                     prepared = executor.prepare_for_navigation(list(map(np.asarray, selected["preparation_path"])))
@@ -475,6 +475,7 @@ def run(args):
                 outcome = execute_measured_route(
                     robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event,
                     navigation_policy="precision", position_tolerance_m=0.02, yaw_tolerance_rad=0.03,
+                    initial_route=selected["approach_route"] if initial_route is None else initial_route,
                 )
                 capture("navigation")
                 return outcome
@@ -498,7 +499,7 @@ def run(args):
                 executor.place_paths = [list(map(np.asarray, path)) for path in placement["place_paths"]]
                 executor.place_targets = placement["place_targets"]
                 event(**item, place_pose=placement["place_pose"], place_targets=placement["place_targets"])
-                return navigate(placement["place_pose"])
+                return navigate(placement["place_pose"], initial_route=placement["place_route"])
 
             executor.transport = transport
             out = execute_task_plan(

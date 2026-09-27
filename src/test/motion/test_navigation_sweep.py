@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from emet.motion.navigation_sweep import validate_navigation_sweep
 from emet.robots.footprint import Footprint
@@ -118,3 +119,60 @@ def test_drive_compression_keeps_corner_and_bounds_translation():
     assert len(compressed) == 5
     np.testing.assert_allclose(compressed[2], [.4,0,np.pi/2])
     assert np.linalg.norm(np.diff(np.vstack(([0,0,0],compressed))[:,:2], axis=0),axis=1).max() <= .2 + 1e-8
+
+
+@pytest.mark.parametrize('proposal', [[[.2, 0, 0]], [[.2, .2, 0], [.2, 0, 0]], [[.1, 0, 0]]])
+def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
+    from types import SimpleNamespace
+
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    state = np.zeros(3)
+    plans, events, commands = [], [], []
+    space = SimpleNamespace(is_valid=lambda p: p[1] < .1, last_validity={'reason': 'new_obstacle'})
+
+    def move(p, **kwargs):
+        commands.append(list(p))
+        state[:] = p
+        return True
+
+    def plan(start, goal):
+        np.testing.assert_array_equal(start, np.zeros(3))
+        plans.append(True)
+        return [goal.tolist()]
+
+    result = execute_measured_route(
+        SimpleNamespace(move_base_to=move), goal=[.2, 0, 0], measure=lambda: state.copy(),
+        plan_route=plan, space=space, initial_route=proposal, event=lambda **row: events.append(row),
+    )
+    assert result.success and commands == [[.2, 0, 0]]
+    valid_proposal = proposal == [[.2, 0, 0]]
+    assert plans == ([] if valid_proposal else [True])
+    assert events[0]['phase'] == 'navigation_route_reuse'
+    assert events[0]['accepted'] == valid_proposal
+
+
+def test_route_proposal_is_not_reused_after_measured_divergence():
+    from types import SimpleNamespace
+
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    state = np.zeros(3)
+    calls, plans, cancels = [], [], []
+
+    def move(p, **kwargs):
+        calls.append(list(p))
+        state[:] = [.1, 0, 0] if len(calls) == 1 else p
+        return len(calls) > 1
+
+    def plan(start, goal):
+        plans.append(start.tolist())
+        return [goal.tolist()]
+
+    result = execute_measured_route(
+        SimpleNamespace(move_base_to=move, cancel_navigation=lambda: cancels.append(True) or True),
+        goal=[.2, 0, 0], measure=lambda: state.copy(), plan_route=plan,
+        space=SimpleNamespace(is_valid=lambda p: True), initial_route=[[.2, 0, 0]],
+    )
+    assert result.success and result.replans == 1
+    assert plans == [[.1, 0, 0]] and cancels == [True]
