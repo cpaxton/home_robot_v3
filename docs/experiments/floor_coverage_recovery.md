@@ -1085,3 +1085,46 @@ At this checkpoint they are waiting for the shared GPU lock behind physical
 TAMP work. Pending results are not navigation acceptance; score tool choices,
 blocking-cell change, measured motion and target verification separately from
 process exit status. No new EQA or RoboCasa result is claimed here.
+
+### September 27: continuous-pose footprint and guarded recovery recheck
+
+The September 26 pilots both failed navigation acceptance. Find remained
+blocked after a floor observation. Explore remained blocked, then performed a
+direct base scan because successful capture accidentally lifted the recovery
+tool restriction. `5d2adfde` keeps recovery restricted to observation/diagnostics
+and guarded task replanning for the rest of the turn; it also fixes world/local
+pose confusion in map and clearance reports. This is not a universal safety
+guarantee for direct motion tools outside recovery.
+
+`fa89ecdf` integrates only continuous-pose footprint rasterization from the
+motion branch's `00a66645`. It removes false rear-cell overlap caused by grid
+truncation, without marking unknown cells free or relaxing occupied-cell checks.
+Other controller, IK and carry changes remain separate. Scoped tests: **456
+passed** before these frozen pilots; same scene, seed 1, Qwen3-VL-8B int4,
+physical-map opt-in and serial GPU-exclusive execution as the previous pilots.
+
+| Job | Navigation result | Evidence and limits |
+| --- | --- | --- |
+| Find `20260927_074121_a6e3ca` | Target verified after physical approach | Initial sweep rejected one unknown cell. Qwen selected stationary observe_floor (measured tilt -0.936 rad, +52 observed cells), then guarded find. The original rejected pose still had one unknown cell; the new route passed the sweep. Fresh arrival RGB visibly shows the tomato with a matching region; base XY (-0.7401, -0.2968), approximately 0.268 m from the earlier measured pose. No pickup/place requested or established. |
+| Explore `20260927_074156_f5ce8c` | Failed: exploration_no_progress | Selected frontier XY (-1.3, -0.2), sampled base goal (-1.1, -0.3), but planned only one base waypoint. Execution commanded a turn at the starting XY; measured translation 0.01696 m. The harness reported failure and stopped, without an unguarded scan. |
+
+Artifacts: `~/runs/emet/navigation-info-pilot-20260927/{find,explore}/`;
+source frozen at `/tmp/emet-navigation-info-fa89ecdf`. Process exits do not score
+the tasks. Both runs still have simulator shutdown manager connection errors.
+These are single diagnostic trials, not a paired accuracy improvement claim.
+
+The find report's `min_clearance=0.00m` was a reporting defect: post-plan summary
+recomputed clearance over the trailing object XYZ marker as if it were a base
+waypoint. The accepted route's safety-filter clearance was 0.25185 m. The repair
+preserves that filter result in both visualizer paths; it does not change route
+acceptance. A separate initial `Base clearance=10.00m` can be the planner's
+fallback sentinel, not measured evidence of ten meters of clear space; its
+provenance remains to be exposed before relying on that hint.
+
+Next: replay the exploration start/goal snapping and candidate ranking to
+explain why the chosen frontier degenerates into a turn-only route. AStar can
+snap a goal to the start cell, and multi-goal search prefers that zero-cost
+endpoint; verify this against the saved map before changing selection. Keep
+the no-progress guard. Then repeat find/explore and validate measured grasp
+workspace, followed by small paired manipulation/EQA checks. No fresh EQA,
+RoboCasa, full physical TAMP or merge acceptance is claimed.

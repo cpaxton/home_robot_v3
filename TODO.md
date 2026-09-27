@@ -10,12 +10,32 @@ Strike through or move to a PR when done.
       route find through structured results instead of executor-only dispatch,
       propagate exploration no-progress, and render before/after checks of the
       rejected footprint. Latest scoped regression suite: 451 passed.
-- [ ] Score navigation-only, unassisted-view-choice pilots at frozen
+- [x] Score navigation-only, unassisted-view-choice pilots at frozen
       `/tmp/emet-navigation-info-59703152`: find job `20260926_093901_435cf0`
       and exploration job `20260926_094153_3d5a62`. Artifacts under
       `~/runs/emet/navigation-info-pilot-20260926/`. Both queued behind the
       physical-TAMP lock at launch; do not label process exit 0 as task success.
       No head angle or manipulation is prescribed in either request.
+- [x] Review September 26 pilots: find remained blocked after a floor look;
+      exploration also remained blocked, then performed a base scan after the
+      recovery restriction was inadvertently lifted. Neither is navigation
+      acceptance. Repair recovery-turn tool permissions and world/local pose
+      confusion (`5d2adfde`); integrate only continuous-pose rasterization from
+      motion/TAMP `00a66645` as `fa89ecdf`, keeping real unknown/occupied guards.
+- [x] Score the frozen September 27 rechecks: find
+      `20260927_074121_a6e3ca`, explore `20260927_074156_f5ce8c`, artifact root
+      `~/runs/emet/navigation-info-pilot-20260927/`. Current scoped tests: 456
+      passed. No controller/IK/carry fixes from the motion branch included yet.
+      Find physically approached ~0.268 m and verified a fresh tomato view;
+      explore failed with 0.01696 m translation after a turn-only route.
+      Neither establishes manipulation acceptance. See floor-coverage report.
+- [ ] Replay exploration goal snapping/ranking: sampled goal (-1.1,-0.3)
+      produced one start-XY waypoint and a turn, not frontier translation.
+      Preserve no-progress failure; test nondegenerate alternative selection.
+- [x] Repair route-clearance summary: reuse safety-filter clearance, excluding
+      the trailing object-XYZ marker; both visualizer paths regression-tested.
+- [ ] Distinguish planner clearance fallback (10 m sentinel) from measured
+      map clearance in tool feedback; do not interpret it as observed free space.
 - [x] Diagnose compounded navigation padding and add an opt-in physical-map
       pilot (`query_navigation_physical_pilot.yaml`). Saved-map replay recovers
       an approach without reducing the 0.22 m clearance or 0.85 m reach limit;
