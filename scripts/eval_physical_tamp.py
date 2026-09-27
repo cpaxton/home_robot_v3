@@ -83,10 +83,12 @@ def run(args):
         source_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
     )
     manifest["budgets"]["wall_timeout_s"] = args.timeout
+    manifest["budgets"]["base_route_wall_s"] = args.route_timeout
     manifest["placement_replan_after_lift"] = True
     manifest["payload_tracking_envelope"] = {
         "position_radius_m": 0.02, "yaw_radius_rad": 0.03, "offset_samples": 26,
         "scope": "carried-object routes; sampled screening, not a continuous certificate",
+        "center_clearance": "22 cm at nominal planned/measured poses; offset samples check full geometry",
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     server = robot = server_fh = None
@@ -235,6 +237,7 @@ def run(args):
         # segments leave room for measured arrival error within that threshold.
         space = SceneNavigationSpace(
             model, data, checker, seed=args.seed, allow_reverse=True, check_payload_tracking_envelope=True,
+            route_timeout_s=args.route_timeout,
         )
         initial = data.qpos.copy()
         initial_base = base_pose(model, data)
@@ -552,9 +555,13 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--port-offset", type=int, default=920)
     parser.add_argument("--timeout", type=float, default=600)
+    parser.add_argument("--route-timeout", type=float, default=10,
+                        help="Wall budget per base route, including tracking-envelope verification")
     parser.add_argument("--initial-state")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    if not np.isfinite([args.timeout, args.route_timeout]).all() or min(args.timeout, args.route_timeout) <= 0:
+        parser.error("trial and route timeouts must be positive and finite")
     if args.dry_run:
         import yaml
 
@@ -571,6 +578,7 @@ def main():
                     "seed": args.seed,
                     "output_dir": args.output_dir,
                     "timeout_s": args.timeout,
+                    "route_timeout_s": args.route_timeout,
                 },
                 indent=2,
             )

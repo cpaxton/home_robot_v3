@@ -91,19 +91,22 @@ def test_route_budget_restores_state_and_leaves_execution_validation_enabled(mon
     assert space.is_valid(np.zeros(3))  # No lingering planning deadline in execution.
 
 
-def test_payload_tracking_envelope_rejects_nominally_clear_extended_load():
+@pytest.mark.parametrize("explicit_pair", [False, True])
+def test_payload_tracking_envelope_rejects_nominally_clear_extended_load(explicit_pair):
     import mujoco
 
     from emet.eval.physical_tamp import SceneNavigationSpace
     from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
 
-    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+    masks = 'contype="0" conaffinity="0"' if explicit_pair else ''
+    pair = '<contact><pair geom1="load_geom" geom2="obstacle_geom"/></contact>' if explicit_pair else ''
+    model = mujoco.MjModel.from_xml_string(f'''<mujoco><worldbody>
       <body name="base_link" pos="0 0 .3"><freejoint/><geom size=".05"/>
         <body name="hand" pos="1 0 .5"/>
       </body>
-      <body name="load" pos="1 0 .8"><freejoint/><geom size=".02"/></body>
-      <body name="obstacle" pos="1 .06 .8"><geom size=".02"/></body>
-    </worldbody></mujoco>''')
+      <body name="load" pos="1 0 .8"><freejoint/><geom name="load_geom" size=".02" {masks}/></body>
+      <body name="obstacle" pos="1 .06 .8"><geom name="obstacle_geom" size=".02" {masks}/></body>
+    </worldbody>{pair}</mujoco>''')
     data = mujoco.MjData(model)
     checker = MujocoSceneCollisionChecker(model, robot_body="base_link")
     checker.set_payload(model, data, "load", "hand")
@@ -117,6 +120,15 @@ def test_payload_tracking_envelope_rejects_nominally_clear_extended_load():
     assert checker.payload_body == "load"
     # The same extended load has sufficient room when moved away from the wall.
     assert robust.is_valid([0, -.2, 0])
+    if not explicit_pair:
+        # The existing center margin is applied once, at the nominal pose.
+        # Perturbed geometry is clear here; requiring another 22 cm at each
+        # offset would silently inflate the nominal gate to 24 cm.
+        model.body("obstacle").pos[:] = [.25, 0, .4]
+        assert nominal.is_valid([0, 0, 0])
+        assert robust.is_valid([0, 0, 0])
+        assert not robust.is_valid([.02, 0, 0])
+        assert robust.last_validity["reason"] == "below_clearance"
 
 
 @pytest.mark.parametrize("reachable", [False, True])
@@ -148,18 +160,22 @@ def test_measured_placement_search_tries_alternatives_and_restores_payload(monke
         return [goal.tolist()] if reachable and goal[0] == 2 else []
 
     def plan_pose(point, rotation):
+        if data.qpos[0] < 1.5:
+            return None, "pose_ik_failed"
         arm_payloads.append(checker.payload_body)
         data.qpos[0] += .1
         return [np.zeros(1)], None
 
     executor = SimpleNamespace(model=model, data=data, collision=checker, coupled_groups=(), plan_pose=plan_pose)
-    space = SimpleNamespace(base_body="base_link", plan_route=route, last_validity={"reason": "scene_collision"})
+    space = SimpleNamespace(base_body="base_link", plan_route=route, is_valid=lambda pose: pose[0] != 1,
+                            last_validity={"reason": "scene_collision"})
     rejections = []
     result, error = module.plan_payload_placement(
         executor, space, {"object_body": "load", "ee_body": "hand", "support_body": "support"},
         approach=np.zeros(3), preferred_pose=[1., 0., 0.], rejections=rejections,
     )
-    assert attempts == [1, 0, 2]
+    assert attempts == [2]  # Endpoint collision and failed arm IK never spend RRT budget.
+    assert {row["phase"] for row in rejections} >= {"transport", "preplace"}
     np.testing.assert_array_equal(data.qpos, before)
     np.testing.assert_array_equal(checker.payload_transform, transform)
     assert checker.payload_body == "load" and checker.payload_parent == "hand"

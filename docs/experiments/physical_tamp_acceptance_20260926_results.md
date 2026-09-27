@@ -29,8 +29,8 @@ a copied `server.log`. Active runs are moved only after completion.
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
-| Latest completed physical RoboCasa can → counter | `4a821be1` | Verified pickup; safely refused measured transport envelope, failed at 253.8 s | `/tmp/physical-tamp-robocasa-20260927-r24` |
-| Latest completed physical Molmo tomato → bowl | `1b3f57bf` | Failed approach after bounded final-turn retries, 921.3 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
+| Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; payload lost during transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
+| Latest completed physical Molmo tomato → bowl | `cc44da56` | Static placement search timed out at 1802.5 s; no execution | `/tmp/physical-tamp-molmo-20260927-r25` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -88,16 +88,20 @@ to the same IK, joint-margin, and fresh collision-path checks. Offline RoboCasa
 replay passed all 16 sampled arrivals using these alternatives. This is bounded
 sampling, not a continuous robustness proof or an executed task success.
 
-| Pending experiment | Job | Budget | Artifact root |
-| --- | --- | --- | --- |
-| RoboCasa physical r24, seed 0 | `20260927_111453_79d184` | 600 s | `/tmp/physical-tamp-robocasa-20260927-r24` |
-| Molmo physical r25, seed 0 | `20260927_112354_b401b7` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r25` |
+RoboCasa r26 and Molmo r25 are terminal. R26 verified pickup but lost the
+payload during transport. R25 exhausted its 1800 s trial deadline during static
+placement search, so it did not exercise the final-turn controller repair.
 
-The corrected registry has completed and released the exclusive GPU lock.
-Both r23 trials and RoboCasa r24 are terminal. Molmo r25 holds the lock. The Molmo budget was declared before execution because r22
-measured approximately 64–68 wall seconds per 17 cm approach segment. Per-command
-timeouts, retries, and scoring remain unchanged. This diagnostic is not a matched-
-budget comparison with earlier 600 s trials.
+The next Molmo diagnostic (r27, seed 0) declares 1800 s overall and 60 s per
+base route before execution. The nominal/measured base retains the 22 cm
+center-clearance gate; tracking offsets check full robot/payload geometry without
+applying that center margin a second time. Placement rejects endpoint and arm-path
+failures before spending the carried-route budget. Exact archived Molmo replay
+passed the full previous route's 26-offset checks in 16.17 s; route search plus
+verification found 18 waypoints in 33.71 s. Thus the prior 10 s route budget could
+not even verify this valid route. This is static evidence, not physical success.
+The longer budget is not a matched-budget comparison with earlier diagnostics.
+
 
 The first asset-only 50-case recheck (`b48b8898`, job
 `20260927_075453_e06bcd`) retained 50 scene-resolution errors. Installing the assets
@@ -251,7 +255,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **250 tests at `cc44da56`**, including command
+The combined targeted suite passed **254 tests for the r27 candidate**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
@@ -268,7 +272,7 @@ They do not establish live physical acceptance.
 
 All heavy jobs run serially through `emet jobs --cpu-safe --gpu-exclusive`, with
 OMP/OpenBLAS/MKL threads set to one. Physical trials have a 600 s wall budget,
-except the explicitly declared 1800 s Molmo r23-long diagnostic; registry rows
+except the explicitly declared 1800 s Molmo r23-long/r25/r27 diagnostics; registry rows
 have 900 s. A crash/timeout stops registry execution for cleanup
 inspection and explicit resume; earlier failures are never overwritten.
 Other agents’ checkouts and jobs are untouched. Physical controller support is

@@ -302,7 +302,10 @@ class SceneNavigationSpace(XYT):
             try:
                 for offset in self.payload_tracking_offsets:
                     self.data.qpos[:] = nominal
-                    if not self._is_valid(np.asarray(pose) + offset):
+                    # The nominal 22 cm center gate already owns its clearance
+                    # margin. Tracking uncertainty expands actual geometry, not
+                    # that padded center gate a second time.
+                    if not self._is_valid(np.asarray(pose) + offset, check_center_clearance=False):
                         self.last_validity = {
                             **self.last_validity,
                             "reason": "payload_tracking_envelope:" + self.last_validity["reason"],
@@ -318,7 +321,7 @@ class SceneNavigationSpace(XYT):
             self.route_stats["validity_calls"] = self.route_stats.get("validity_calls", 0) + 1
             self.route_stats["validity_wall_s"] = self.route_stats.get("validity_wall_s", 0.0) + time.monotonic() - started
 
-    def _is_valid(self, pose):
+    def _is_valid(self, pose, *, check_center_clearance=True):
         if self._route_deadline is not None and time.monotonic() >= self._route_deadline:
             raise TimeoutError("route_planning_budget_exhausted")
         pose = np.asarray(pose)
@@ -339,6 +342,8 @@ class SceneNavigationSpace(XYT):
         self.last_validity = {"reason": "scene_collision" if hit else "ok", "contacts": self.checker.last_contacts}
         if hit:
             return False
+        if not check_center_clearance:
+            return True
         # Keep the existing 22 cm center-clearance gate separate from full-body
         # contact checks. AABBs are conservative measured geometry, not dilated maps.
         geoms = self.environment_geoms
@@ -616,6 +621,10 @@ def plan_payload_placement(executor, space, scorer, *, approach, rejections, eve
         return None, "missing_measured_payload"
     transform = payload[2].copy()
     try:
+        if not space.is_valid(approach):
+            rejections.append({"phase": "transport_start", "validity": dict(space.last_validity)})
+            return None, "invalid_payload_transport_start:" + space.last_validity.get("reason", "invalid_state")
+        data.qpos[:] = state
         releases = support_release_points(
             model, data, support_body=scorer["support_body"], payload_body=scorer["object_body"],
             ee_body=scorer["ee_body"],
@@ -635,11 +644,12 @@ def plan_payload_placement(executor, space, scorer, *, approach, rejections, eve
                 data.qpos[:] = state
                 checker.payload_body, checker.payload_parent = payload[:2]
                 checker.payload_transform = transform.copy()
-                route = space.plan_route(approach, goal)
-                if not route:
+                if not space.is_valid(goal):
                     rejections.append({"pose": goal.tolist(), "release": release.tolist(), "phase": "transport",
                                        "validity": dict(space.last_validity)})
                     continue
+                # Reject impossible placement arm paths before spending the
+                # carried-route search budget. Both certificates remain required.
                 for clearance in (0.12, 0.06, 0.03):
                     data.qpos[:] = state
                     checker.payload_body, checker.payload_parent = payload[:2]
@@ -659,11 +669,22 @@ def plan_payload_placement(executor, space, scorer, *, approach, rejections, eve
                             break
                         paths.append(path)
                     if len(paths) == 3:
-                        return {
-                            "place_pose": goal.tolist(), "place_route": route,
-                            "place_paths": [[q.tolist() for q in path] for path in paths],
-                            "place_targets": [[point.tolist(), rotation.tolist()] for point in targets],
-                        }, None
+                        break
+                if len(paths) != 3:
+                    continue
+                data.qpos[:] = state
+                checker.payload_body, checker.payload_parent = payload[:2]
+                checker.payload_transform = transform.copy()
+                route = space.plan_route(approach, goal)
+                if not route:
+                    rejections.append({"pose": goal.tolist(), "release": release.tolist(), "phase": "transport",
+                                       "validity": dict(space.last_validity)})
+                    continue
+                return {
+                    "place_pose": goal.tolist(), "place_route": route,
+                    "place_paths": [[q.tolist() for q in path] for path in paths],
+                    "place_targets": [[point.tolist(), rotation.tolist()] for point in targets],
+                }, None
         return None, "no_place_witness_within_budget"
     finally:
         data.qpos[:] = state

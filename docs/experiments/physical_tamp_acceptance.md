@@ -126,3 +126,11 @@ Dated submissions and measured outcomes are tracked in
 server now archives its compiled model and physics settings; physical planning
 uses that exact model. A profile navigation posture is itself collision-checked
 and measured before base motion. This does not bypass failed posture transitions.
+
+The physical CLI exposes `--route-timeout` (default 10 seconds) separately from
+`--timeout`; both must be positive and finite and are recorded in the manifest.
+Carried-route envelope checks can exceed ten seconds even for a valid route;
+Molmo r27 explicitly uses `--timeout 1800 --route-timeout 60`. The nominal and
+measured base center retain 22 cm clearance. Tracking offsets test full geometry
+without adding a second center-clearance margin. Placement checks arm feasibility
+before searching a carried route; both checks are required for acceptance.
