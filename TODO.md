@@ -16,9 +16,11 @@ registry. Oracle teleport and kinematic latch remain separately labeled controls
       and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
       Full registry: 54/200 successes; corrected 50-row subset: 18 successes, kept separate.
       See the [results report](docs/experiments/physical_tamp_acceptance_20260926_results.md).
-- [ ] Resolve RoboCasa rotational grip slip under the frozen physics and retention bounds.
+- [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
+      and retention bounds; both now have independently verified physical pickups.
 - [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.
-- [ ] Complete Molmo retained transport and placement using revalidated route proposals.
+- [ ] Complete Molmo retained transport and placement. Revalidated route reuse now
+      executes carry, but rotational grip drift exceeds 0.1 rad before release.
       Release and open-finger retreat have static certificates; physical acceptance is pending.
 - [ ] Add physical adapters and collision coverage for deferred robots before claiming
       multi-robot physical acceptance. Habitat-OVMM, long-horizon tasks, learned-agent

@@ -450,3 +450,16 @@ The original body origin is already within 1 mm of its center of mass.
 The probes move private initial object state relative to fingertip contacts;
 no grasp-policy or physics change was adopted. They are archived separately
 under `hold_center_replay/` and do not count as physical task trials.
+
+
+Molmo r32 completed with verified pickup and a retention failure at 1733.6 s.
+Its approach reused the fresh-swept proposal and passed all 16 commands without
+retries. Measured placement search passed in 35.5 s; the route reuse sweep passed
+in 14.8 s. Eleven carry commands passed before retention stopped navigation.
+The executor reported 9.195 mm / 0.10912 rad drift. Relative to independent
+`pick_time`, the final trace reaches 9.561 mm / 0.11082 rad over 78 simulated
+seconds, with continuous gripper contact, no other-object contact, no forbidden
+robot contact and no forbidden actuation. No release occurred. Plot, JSON metrics
+and analysis scripts are archived with the original trace. The full ledger now
+contains 41 terminal physical diagnostics and five verified pickups; none is a
+complete physical task success. All jobs from this continuation are terminal.

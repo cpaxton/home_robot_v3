@@ -2,9 +2,9 @@
 
 **The full TAMP control experiments are complete. Physical task acceptance is not
 established.** Both original fixtures now have independently verified physical
-pickups. Molmo r30 stopped before carry because execution discarded its measured
-placement route and a redundant search exhausted its budget. RoboCasa has
-rotational grip slip. Retained transport and placement remain unsuccessful.
+pickups. Molmo r32 reused its measured placement route and completed eleven carry
+commands before rotational slip exceeded the unchanged retention bound. RoboCasa
+has the same failure category. Retained transport and placement remain unsuccessful.
 
 Scope: GT/MCTS, simulated robots, full control registries, and separately scored
 physical diagnostics. No learned-model comparison, real-robot trial, or main push.
@@ -59,6 +59,7 @@ navigation goals. Detailed row accounting is retained in:
 | --- | --- | --- |
 | RoboCasa can → counter, r26 | `013a8bf1` | Pickup verified; transport stopped on rotational slip. Failed at 362.1 s; no placement. |
 | Molmo tomato → bowl, r29 | `82441047` | Approach passed without retries at 551.7 s, with 8.75 mm XY / 0.01496 rad yaw residuals. Grasp stopped before a predicted fingertip/egg collision; failed at 644.7 s. No forbidden contact recorded. |
+| Molmo physical r32 | `f5c34fe4` | Pickup verified; 16 approach and 11 carry commands passed. Stopped on rotational slip at 1733.6 s; no forbidden actuation or robot contacts. No release. |
 | Molmo physical r30 | `57df3d74` | Pickup independently verified; approach passed, measured placement route passed, redundant navigation search exhausted 60 s. Failed at 1247.6 s; no forbidden actuation or robot contacts. |
 | Molmo corrected static r30 | `57df3d74` | Complete open-gripper grasp/lift and carried-route witness found in 64.8 s from the archived measured initial state. Static evidence only. |
 | Molmo release-checked static r31 | `1440d034` | Complete witness found in 64.9 s, including open-finger release and retreat. Static evidence only. |
@@ -66,11 +67,12 @@ navigation goals. Detailed row accounting is retained in:
 
 Artifacts: `/tmp/physical-tamp-robocasa-20260927-r26`,
 `/tmp/physical-tamp-molmo-20260927-r29`, `/tmp/physical-tamp-molmo-20260927-r30`,
+`/tmp/physical-tamp-molmo-20260927-r32`,
 `/tmp/static-tamp-molmo-20260927-r30`, `/tmp/static-tamp-molmo-20260927-r31`,
 and `/tmp/static-tamp-robocasa-20260927-r31`.
 
-RoboCasa r23, r24, r26 and Molmo r30 independently passed pickup. None completed
-physical placement. The 40 completed physical diagnostics span changing implementations;
+RoboCasa r23, r24, r26 and Molmo r30/r32 independently passed pickup. None completed
+physical placement. The 41 completed physical diagnostics span changing implementations;
 they are **not a matched reliability sweep**. The machine-readable
 [physical ledger](/home/cpaxton/runs/emet/physical-tamp-acceptance-20260926/physical_trials.csv)
 retains each source, seed, stage outcome, timeout, and failure reason.
@@ -141,16 +143,34 @@ R31 also certifies opening at release and retreat with open fingers, repeating
 those checks at the measured placement pose before the opening command. Both
 fixtures still have static witnesses. Runtime release acceptance remains unproven.
 
-## Active validation
+## Final candidate execution
 
-| Experiment | Job | Predeclared budget | Artifact root |
-| --- | --- | --- | --- |
-| Molmo physical r32, seed 0 | `20260927_135954_c01dee` | 3600 s total / 60 s per route; profiling off | `/tmp/physical-tamp-molmo-20260927-r32` |
+Molmo r32 (`f5c34fe4`, job `20260927_135954_c01dee`) is terminal. It declared
+3600 s total / 60 s per route, with profiling off; the larger total budget is
+not a matched-budget improvement claim. The approach route passed a fresh sweep,
+all 16 approach commands passed without retries, and both measured grasp replans
+passed. The independent scorer verified pickup.
 
-Submission is not acceptance. Physical r32 uses frozen
-`f5c34fe4`. The longer physical total budget reflects
-the observed alternate route and is not a matched-budget improvement claim.
+Measured placement planning found a carried route in 35.5 s. Its fresh reuse
+sweep passed in 14.8 s, eliminating r30's redundant-search failure. Eleven carry
+commands passed before a later measurement rejected retention. The executor
+recorded 9.195 mm / 0.10912 rad drift relative to its original grasp reference.
+Across the independent scorer's 78-s pickup-to-stop interval, maximum drift was
+9.561 mm / 0.11082 rad. Gripper contact was continuous; no other-object contact,
+forbidden robot contact, or forbidden actuation was recorded. The robot stopped
+before release. This is rotational slip, not an observed payload drop.
 
+[Retention plot](/tmp/physical-tamp-molmo-20260927-r32/molmo-r32-retention.png),
+[metrics and reference](/tmp/physical-tamp-molmo-20260927-r32/molmo-r32-retention.json),
+and [final review image](/tmp/physical-tamp-molmo-20260927-r32/final_1_side.png).
+The original trace, result, images and analysis scripts are archived together.
+
+All jobs submitted for this continuation are terminal. No experiment is left
+running or queued. The new route reuse and release checks are implemented and
+unit-tested; complete physical release remains untested because retention fails
+first. The next physical work is stable grasp selection/control under the frozen
+physics and bounds, followed by the matched pilot. Broader layouts and partial-map
+execution must not be claimed from these two seed-0 diagnostics.
 
 ## Validation and acceptance gates
 
