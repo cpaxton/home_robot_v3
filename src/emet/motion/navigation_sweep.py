@@ -7,6 +7,37 @@ from dataclasses import dataclass
 import numpy as np
 
 
+def differential_drive_waypoints(start, goal, *, max_translation_m=0.2):
+    """Turn toward travel, drive in bounded segments, then acquire final yaw.
+
+    Interpolating goal yaw during translation makes a differential drive turn
+    away from its next waypoint after every short segment. These waypoints must
+    still pass the caller's full footprint/payload sweep before execution.
+    """
+    start, goal = np.asarray(start, dtype=float), np.asarray(goal, dtype=float)
+    if start.shape != (3,) or goal.shape != (3,) or not np.isfinite([start, goal]).all():
+        raise ValueError("Finite XYT endpoints required")
+    if not np.isfinite(max_translation_m) or max_translation_m <= 0:
+        raise ValueError("Positive finite translation bound required")
+    delta = goal[:2] - start[:2]
+    distance = float(np.linalg.norm(delta))
+    if distance < 1e-8:
+        return [goal.tolist()]
+    heading = float(np.arctan2(delta[1], delta[0]))
+    route = [np.r_[start[:2], heading].tolist()]
+    count = max(1, int(np.ceil(distance / max_translation_m)))
+    route.extend(np.r_[start[:2] + delta * t, heading].tolist() for t in np.linspace(0, 1, count + 1)[1:])
+    route.append(goal.tolist())
+    distinct = []
+    previous = start
+    for pose in route:
+        yaw_delta = np.arctan2(np.sin(pose[2] - previous[2]), np.cos(pose[2] - previous[2]))
+        if np.linalg.norm(np.asarray(pose)[:2] - previous[:2]) > 1e-8 or abs(yaw_delta) > 1e-8:
+            distinct.append(pose)
+            previous = np.asarray(pose)
+    return distinct or [goal.tolist()]
+
+
 def validate_navigation_sweep(space, start, waypoints, *, linear_step_m=0.025, angular_step_rad=0.05):
     """Check translation and the shortest yaw sweep, including the measured start.
 

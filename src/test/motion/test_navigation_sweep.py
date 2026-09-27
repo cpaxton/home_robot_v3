@@ -72,3 +72,28 @@ def test_fractional_raster_is_translation_equivariant_and_conservative():
                 point = pose[:2] + [np.cos(yaw)*bx-np.sin(yaw)*by,np.sin(yaw)*bx+np.cos(yaw)*by]
                 index = tuple(np.floor(point/.1+origin+.5).astype(int))
                 assert index in cells
+
+
+def test_differential_route_checks_travel_heading_outside_endpoint_yaws():
+    from emet.motion.navigation_sweep import differential_drive_waypoints
+
+    start, goal = np.array([0., 0., 0.]), np.array([0., .5, 0.])
+    route = differential_drive_waypoints(start, goal)
+    np.testing.assert_allclose(route[0], [0, 0, np.pi / 2])
+    np.testing.assert_allclose(route[-1], goal)
+    steps = np.diff(np.array([start, *route])[:, :2], axis=0)
+    assert np.linalg.norm(steps, axis=1).max() <= .2
+
+    class Space:
+        def is_valid(self, pose):
+            return abs(pose[2]) < .5
+
+    # Endpoint interpolation missed the turn needed to drive sideways.
+    assert validate_navigation_sweep(Space(), start, [goal])[0]
+    assert not validate_navigation_sweep(Space(), start, route)[0]
+
+
+def test_differential_route_turn_in_place_has_single_goal():
+    from emet.motion.navigation_sweep import differential_drive_waypoints
+
+    assert differential_drive_waypoints([1, 2, 0], [1, 2, 1]) == [[1., 2., 1.]]

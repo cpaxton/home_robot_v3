@@ -15,7 +15,7 @@ import yaml
 
 from emet.motion.base import XYT
 from emet.motion.mujoco_collision import MujocoSceneCollisionChecker, body_subtree
-from emet.motion.navigation_sweep import validate_navigation_sweep
+from emet.motion.navigation_sweep import differential_drive_waypoints, validate_navigation_sweep
 from emet.simulation.molmospaces_mobile_autoplace import base_body_free_joint_qposadr
 
 
@@ -257,17 +257,19 @@ class SceneNavigationSpace(XYT):
             if not self.is_valid(start) or not self.is_valid(goal):
                 return []
             self.route_stats["phase"] = "direct_sweep"
-            if validate_navigation_sweep(self, start, [goal])[0]:
-                # Short waypoints bound unobserved tracking divergence.
-                points = list(self.extend(start, goal))
-                return [q.tolist() for q in points[7:-1:8]] + [np.asarray(goal).tolist()]
+            direct = differential_drive_waypoints(start, goal)
+            if validate_navigation_sweep(self, start, direct)[0]:
+                return direct
             self.route_stats["phase"] = "rrt"
             planner = get_planner("rrt_connect", self, self.is_valid, max_iter=400, goal_tolerance=0.025)
             result = planner.plan(np.asarray(start), np.asarray(goal))
             if not result.success:
                 return []
-            route = [node.state for node in result.trajectory]
-            route.append(np.asarray(goal))
+            route = []
+            previous = start
+            for endpoint in [node.state for node in result.trajectory] + [np.asarray(goal)]:
+                route.extend(differential_drive_waypoints(previous, endpoint))
+                previous = endpoint
             self.route_stats["phase"] = "rrt_sweep"
             if not validate_navigation_sweep(self, start, route)[0]:
                 return []
