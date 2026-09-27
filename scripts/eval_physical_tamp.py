@@ -64,6 +64,7 @@ def run(args):
         base_pose,
         check_arrival_ik_samples,
         freeze_fixture,
+        grasp_yaw_options,
         kinematic_base_candidates,
         make_scene_checker,
         save_motion_overview,
@@ -352,11 +353,12 @@ def run(args):
                         break
                     grasp_paths.append(path)
                 if len(grasp_paths) == 3:
-                    error = check_arrival_ik_samples(
-                        executor, approach_state,
+                    grasp_options = grasp_yaw_options(
                         [(point, rotation) for point in
-                         (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])],
-                        position_radius_m=0.01, yaw_radius_rad=0.015,
+                         (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])]
+                    )
+                    error = check_arrival_ik_samples(
+                        executor, approach_state, grasp_options[0], target_options=grasp_options,
                     )
                     if error is None:
                         break
@@ -454,6 +456,7 @@ def run(args):
                 place_route=place_route,
                 place_pose=place_pose.tolist(),
                 grasp_paths=[[q.tolist() for q in p] for p in grasp_paths],
+                grasp_target_options=grasp_options,
                 place_paths=[[q.tolist() for q in p] for p in place_paths],
                 grasp_targets=[
                     [point.tolist(), rotation.tolist()]
@@ -493,6 +496,7 @@ def run(args):
             executor.grasp_paths = [list(map(np.asarray, path)) for path in selected["grasp_paths"]]
             executor.place_paths = [list(map(np.asarray, path)) for path in selected["place_paths"]]
             executor.grasp_targets = selected["grasp_targets"]
+            executor.grasp_target_options = selected["grasp_target_options"]
             executor.place_targets = selected["place_targets"]
             checker.set_payload(model, data, None)
             preparation_pending = bool(selected["preparation_path"])
@@ -512,7 +516,7 @@ def run(args):
                     preparation_pending = False
                 outcome = execute_measured_route(
                     robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event,
-                    navigation_policy="manipulation", position_tolerance_m=0.01, yaw_tolerance_rad=0.015,
+                    navigation_policy="precision", position_tolerance_m=0.02, yaw_tolerance_rad=0.03,
                 )
                 capture("navigation")
                 return outcome

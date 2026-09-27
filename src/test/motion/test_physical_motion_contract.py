@@ -534,3 +534,31 @@ def test_measured_route_rejects_required_steering_turn_before_command():
                                     plan_route=lambda *a: [[0,.2,0]], space=space, max_replans=0)
     assert not result.success
     assert result.reason.startswith('rejected_swept_footprint')
+
+
+def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    m = model()
+    d = mujoco.MjData(m)
+    calls = []
+    checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
+                              set_payload=lambda *args: None)
+    robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
+    executor = PhysicalPickPlaceExecutor(robot, model=m, data=d, ee_body='ee', joint_names=['yaw'],
+                                         collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)
+    nominal = [([-1,0,0], np.eye(3))] * 3
+    alternative = [([1,0,0], np.eye(3))] * 3
+    executor.grasp_paths = [[np.zeros(1)]] * 3
+    executor.grasp_targets = nominal
+    executor.grasp_target_options = [nominal, alternative]
+
+    def plan(point, rotation):
+        calls.append(float(point[0]))
+        return (None, 'unreachable') if point[0] < 0 else ([np.zeros(1)], None)
+
+    executor.plan_pose = plan
+    result = executor.grasp_only('target', object_gt_body='target')
+    assert result.message == 'gripper_open_failed'
+    assert calls == [-1., 1., 1., 1., 'open']
+    assert executor.grasp_targets is alternative

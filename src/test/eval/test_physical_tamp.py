@@ -209,6 +209,14 @@ def test_arrival_samples_reject_reach_boundary_and_restore_nominal_state():
     assert failure['reason'] == 'arrival_sample_ik_failed'
     assert failure['position_error_m'] > .01
     np.testing.assert_array_equal(d.qpos, before)
+    # This arm cannot rotate its wrist. Only the explicitly supplied alternate
+    # frame can satisfy orientation at the sampled arrivals.
+    c, sn = np.cos(.3), np.sin(.3)
+    unreachable = [([.5,0,0], [[c,-sn,0],[sn,c,0],[0,0,1]])]
+    assert check_arrival_ik_samples(e, before, unreachable) is not None
+    assert check_arrival_ik_samples(e, before, unreachable,
+                                   target_options=[unreachable, [([.5,0,0], np.eye(3))]]) is None
+    np.testing.assert_array_equal(d.qpos, before)
 
 
 def test_rrt_steering_never_translates_sideways():
@@ -229,3 +237,16 @@ def test_rrt_steering_never_translates_sideways():
             assert abs(pose[2]-previous[2]) < 1e-8
         previous = pose
     np.testing.assert_allclose(previous, [-.4,.3,1.])
+
+
+def test_grasp_yaw_options_preserve_positions_and_bound_orientation_family():
+    from emet.eval.physical_tamp import grasp_yaw_options
+
+    target = [([1,2,3], np.eye(3))]
+    options = grasp_yaw_options(target)
+    assert len(options) == 3
+    for expected, option in zip([0.,-.08,.08], options, strict=True):
+        point, rotation = option[0]
+        np.testing.assert_array_equal(point, target[0][0])
+        assert np.arctan2(rotation[1][0],rotation[0][0]) == pytest.approx(expected)
+        np.testing.assert_allclose(np.array(rotation).T @ rotation, np.eye(3), atol=1e-12)

@@ -67,6 +67,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "base_reverse_motion": True,
             "grasp_rotations": 2,
             "grasp_arrival_ik_samples": 16,
+            "grasp_yaw_offsets_rad": [0.0, -0.08, 0.08],
             "place_base_candidates": 41,
             "support_surfaces": 4,
             "release_points_per_surface": 9,
@@ -77,9 +78,9 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "wall_timeout_s": 600,
         },
         "tolerances": {
-            "navigation_policy": "manipulation",
-            "base_position_m": 0.01,
-            "base_yaw_rad": 0.015,
+            "navigation_policy": "precision",
+            "base_position_m": 0.02,
+            "base_yaw_rad": 0.03,
             "base_controller_target_fraction": 0.5,
             "ik_position_m": 0.01,
             "ik_orientation_rad": 0.1,
@@ -164,7 +165,19 @@ def kinematic_base_candidates(model, data, *, target_xy, ee_body, extension_join
         mujoco.mj_kinematics(model, data)
 
 
-def check_arrival_ik_samples(executor, approach_state, targets, *, position_radius_m=0.02, yaw_radius_rad=0.03):
+def grasp_yaw_options(targets, offsets=(0.0, -0.08, 0.08)):
+    """Explicit bounded grasp frames; the executor may only choose from these."""
+    options = []
+    for yaw in offsets:
+        c, sn = np.cos(yaw), np.sin(yaw)
+        rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]])
+        options.append([[np.asarray(point).tolist(), (rotation @ np.asarray(frame)).tolist()]
+                        for point, frame in targets])
+    return options
+
+
+def check_arrival_ik_samples(executor, approach_state, targets, *, position_radius_m=0.02, yaw_radius_rad=0.03,
+                             target_options=None):
     """Reject fragile witnesses at fixed samples of the declared arrival bounds.
 
     This is a bounded candidate filter, not a continuous robustness certificate.
@@ -172,6 +185,9 @@ def check_arrival_ik_samples(executor, approach_state, targets, *, position_radi
     """
     from emet.motion.mujoco_arm_ik import solve_pose_ik
 
+    options = target_options or [targets]
+    if not targets or any(len(option) != len(targets) for option in options):
+        raise ValueError("Nonempty matching grasp target sequences required")
     model, data = executor.model, executor.data
     saved = data.qpos.copy()
     try:
@@ -180,22 +196,29 @@ def check_arrival_ik_samples(executor, approach_state, targets, *, position_radi
         for angle in np.linspace(0, 2 * np.pi, 8, endpoint=False):
             xy = base[:2] + position_radius_m * np.array([np.cos(angle), np.sin(angle)])
             for dyaw in (-yaw_radius_rad, yaw_radius_rad):
-                data.qpos[:] = approach_state
                 pose = [*xy, base[2] + dyaw]
-                if not write_offline_base_pose(model, data, base_body_name=executor.base_body,
-                                               x=pose[0], y=pose[1], theta=pose[2]):
-                    return {"reason": "unsupported_base_model"}
-                for index, (position, rotation) in enumerate(targets):
-                    result = solve_pose_ik(
-                        model, data, ee_body=executor.ee_body, joint_names=executor.joint_names,
-                        target_pos=position, target_rotation=rotation, coupled_groups=executor.coupled_groups,
-                        joint_limit_margins=executor.joint_limit_margins,
-                        tol_m=executor.position_tolerance_m, tol_rad=executor.orientation_tolerance_rad,
-                    )
-                    if not result.success:
-                        return {"reason": "arrival_sample_ik_failed", "base_pose": pose, "target_index": index,
-                                "position_error_m": result.pos_error_m,
-                                "orientation_error_rad": result.orientation_error_rad}
+                solved = False
+                for option in options:
+                    data.qpos[:] = approach_state
+                    if not write_offline_base_pose(model, data, base_body_name=executor.base_body,
+                                                   x=pose[0], y=pose[1], theta=pose[2]):
+                        return {"reason": "unsupported_base_model"}
+                    for _index, (position, rotation) in enumerate(option):
+                        result = solve_pose_ik(
+                            model, data, ee_body=executor.ee_body, joint_names=executor.joint_names,
+                            target_pos=position, target_rotation=rotation, coupled_groups=executor.coupled_groups,
+                            joint_limit_margins=executor.joint_limit_margins,
+                            tol_m=executor.position_tolerance_m, tol_rad=executor.orientation_tolerance_rad,
+                        )
+                        if not result.success:
+                            break
+                    else:
+                        solved = True
+                        break
+                if not solved:
+                    return {"reason": "arrival_sample_ik_failed", "base_pose": pose, "target_index": _index,
+                            "position_error_m": result.pos_error_m,
+                            "orientation_error_rad": result.orientation_error_rad}
         return None
     finally:
         data.qpos[:] = saved
@@ -205,7 +228,8 @@ def check_arrival_ik_samples(executor, approach_state, targets, *, position_radi
 class SceneNavigationSpace(XYT):
     """GT scene collision adapter for the existing RRT-Connect base planner."""
 
-    def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0, allow_reverse=False):
+    def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0, allow_reverse=False,
+                 navigation_policy="precision"):
         self.model, self.data, self.checker, self.base_body = model, data, checker, base_body
         start = base_pose(model, data, base_body)
         super().__init__(mins=np.r_[start[:2] - 6, -np.pi], maxs=np.r_[start[:2] + 6, np.pi])
@@ -218,6 +242,10 @@ class SceneNavigationSpace(XYT):
         self._route_deadline = None
         self.route_stats = {}
         self.allow_reverse = allow_reverse
+        from emet.core.navigation_result import NAVIGATION_POLICIES
+
+        fraction = 0.5 if navigation_policy in ("precision", "manipulation") else 1.0
+        self.controller_position_tolerance_m = fraction * NAVIGATION_POLICIES[navigation_policy].xy_tolerance
         self.min_clearance_m = 0.22
         self.environment_geoms = np.array(
             [
@@ -234,9 +262,9 @@ class SceneNavigationSpace(XYT):
         return self.rng.uniform(self.mins, self.maxs)
 
     def execution_waypoints(self, start, goal):
-        # Match the manipulation controller's inner position target. Inside it
+        # Match the selected controller policy's inner position target. Inside it
         # the controller only acquires final yaw; outside it check travel yaw too.
-        if np.linalg.norm(np.asarray(goal)[:2] - np.asarray(start)[:2]) <= 0.005:
+        if np.linalg.norm(np.asarray(goal)[:2] - np.asarray(start)[:2]) <= self.controller_position_tolerance_m:
             return [np.asarray(goal).tolist()]
         return differential_drive_waypoints(start, goal, allow_reverse=self.allow_reverse)
 

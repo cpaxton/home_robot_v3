@@ -1,9 +1,9 @@
 # Physical motion and full TAMP acceptance — September 26, 2026
 
-**Physical acceptance remains unestablished.** Earlier revisions produced static witnesses for both matched Stretch fixtures,
+**Physical acceptance remains unestablished.** Earlier revisions produced static
+witnesses for both matched Stretch fixtures,
 but controller-aware replay exposed missing travel turns in Molmo’s transport
-route. No
-contact-based pickup and placement has passed the independent scorer. Static
+route. No contact-based pickup and placement has passed the independent scorer. Static
 feasibility and controller acknowledgements are not task success.
 
 Scope: GT/MCTS, simulated robots, the existing full TAMP registries, and a separately
@@ -129,6 +129,27 @@ A comparison confirmed this is their only definition change; the other 150 rows
 are identical. Exact FloorPlan13–22 files and dependencies are installed and all
 ten resolve in preflight. A fresh 50-row recheck is required; failed attempts are
 not overwritten or treated as successes.
+
+The combined targeted suite passes **244 tests** for this candidate. Source
+`fb817dcc` is frozen in r22. Physical jobs are `20260927_081943_2853a1`
+(RoboCasa) and `20260927_081943_d2934c` (Molmo). The corrected 50-row registry
+job `20260927_082035_9a7218` explicitly waits for both; output is
+`/tmp/tamp-fixture-recheck-20260927-r22`. These results are pending.
+
+R22 RoboCasa failed approach after 426.6 s with `navigation stalled`; bounded
+replanning could not satisfy the tighter policy during final turns. Molmo r22
+remains in planning. The next candidate retains the controller-aware route search
+but returns the physical driver to the original 20 mm / 0.03 rad precision policy.
+
+Instead of requiring one fixed grasp frame at every possible arrival, the driver
+now declares three yaw alternatives (0, −0.08, +0.08 rad). Offline replay of the
+closer RoboCasa candidate passes all 16 original arrival samples using those
+frames. The generic executor only tries caller-provided alternatives and validates
+all three grasp/lift paths before any gripper command; every attempt and selected
+world-frame target is logged. Individual pose IK tolerances, joint reserves,
+collision checks, and physical scoring remain unchanged. The combined targeted
+suite passes **246 tests**. The tighter policy remains opt-in and its failed live
+result is retained; it is not the current physical driver's default.
 
 ## Implemented motion contracts
 

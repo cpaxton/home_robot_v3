@@ -26,9 +26,13 @@ validated linear interpolation; alternate base approaches provide search diversi
 
 The physical GT base planner searches controller-compatible turns and forward/reverse
 translations, bounded to 0.2 m per command. Grasp candidate screening tests 16
-samples at the manipulation policy’s declared 10 mm / 0.015 rad arrival bounds and
+samples at the precision policy’s declared 20 mm / 0.03 rad arrival bounds and
 reserves 5 mm at each telescoping joint limit. Sampling does not certify every
 possible arrival: measured arrival still triggers fresh IK and arm collision checks.
+The GT driver declares three grasp yaw choices (0 and ±0.08 rad). At arrival the
+executor validates a complete grasp/lift sequence for each choice before any
+gripper command; it records the selected world-frame targets. Other callers
+retain a single fixed frame unless they explicitly provide alternatives.
 
 ## Commands
 

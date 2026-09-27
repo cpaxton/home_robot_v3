@@ -67,6 +67,7 @@ class PhysicalPickPlaceExecutor:
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
+        self.grasp_target_options: list = []
         self.place_targets: list = []
         self.transport: Callable | None = None
         self.payload_body: str | None = None
@@ -319,12 +320,16 @@ class PhysicalPickPlaceExecutor:
     def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
         if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
-        paths, error = self._replan_at_measured_pose(
-            ("pregrasp", "grasp", "lift"),
-            self.grasp_targets,
-            object_body=object_gt_body,
-            grasp=True,
-        )
+        for option, targets in enumerate(self.grasp_target_options or [self.grasp_targets]):
+            paths, error = self._replan_at_measured_pose(
+                ("pregrasp", "grasp", "lift"), targets, object_body=object_gt_body, grasp=True,
+            )
+            self.event(phase="grasp_replan", option=option, accepted=error is None,
+                       reason=None if error is None else error.message,
+                       targets=[[np.asarray(p).tolist(), np.asarray(r).tolist()] for p, r in targets])
+            if error is None:
+                self.grasp_targets = targets
+                break
         if error is not None:
             return error
         self.grasp_paths = paths
