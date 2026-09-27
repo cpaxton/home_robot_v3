@@ -391,3 +391,62 @@ The hold replay used 20 simulated seconds per condition. Recorded close target:
 navigation commands. The stronger-close command was not adopted. Results are
 archived under `stationary_hold_replay/`; this is diagnostic dynamics evidence,
 not a physical task trial or proof of robust grip retention.
+
+
+### September 27: precision turns and gripper transitions
+
+Molmo r28 (`71ba084d`, job `20260927_124015_c08510`) found a witness in
+154.7 s, then failed its final approach turn at 942.1 s. Wheel/contact creep
+repeatedly exceeded the 20 mm XY bound and reversed yaw progress during
+reacquisition. The wheel midpoint is aligned with the base origin. R29
+(`82441047`, job `20260927_130049_85fab3`) added bounded forward-position
+feedback during precision turns. Its approach passed without retries at 551.7 s,
+with 8.75 mm XY and 0.01496 rad yaw residuals.
+
+R29 subsequently stopped at 644.7 s before an invalid grasp waypoint: the open
+left fingertip would contact the neighboring egg. The nominal grasp had been
+planned with closed fingers. Full-open replay rejects that grasp and its small
+yaw alternatives; the final nominal grasp overlaps the egg by about 18 mm.
+No forbidden contact was recorded in the physical trial. R30 (`57df3d74`)
+checks opening and plans grasp/lift with profile-specified open geometry, then
+replans after the actual opening command. It selects an alternate approach.
+The corrected static Molmo witness took 64.8 s, including 58.2 s for its first
+carried route. That static artifact is indexed separately from physical trials.
+
+Two private 20-s RoboCasa hold replays with initial relative yaw offsets
+of −0.16 and +0.16 rad produced maximum relative rotations of 0.18690 and
+0.17464 rad. Job `20260927_130810_3f67b0` preserved the original model and
+commands. These restored-state dynamics probes are not physical task trials;
+no alignment or scoring change was adopted.
+
+Review also found closed-finger retreat planning at release. R31 (`1440d034`)
+checks opening at the placement pose and plans retreat with open fingers.
+Runtime repeats the certificate from the measured placement pose before opening,
+then replans after opening. Synthetic blocked-opening, blocked-retreat and clear
+cases pass, preserving private state and payload references. The combined
+suite passes 264 tests. Static fixture rechecks are queued separately; this
+repair has not yet established physical release acceptance.
+
+
+R31 static witnesses passed for both fixtures: Molmo 64.93 s, RoboCasa 5.28 s.
+Jobs `20260927_134610_c4aa8a` and `20260927_134620_da17db` are archived in the
+separate static index. Molmo physical r30 (`20260927_133332_19a0a3`) completed
+its alternate approach and independently verified pickup. A measured placement
+route passed in 58.5 s, but execution discarded it and exhausted another 60-s
+route search. The trial failed at 1247.6 s before carry, with no forbidden
+actuation or robot contacts. All 40 completed physical diagnostics are retained.
+
+R32 (`f5c34fe4`) accepts optional route proposals in shared navigation execution.
+It requires a fresh full sweep and correct endpoint, falls back to bounded search
+for stale proposals, and never reuses a proposal after measured divergence.
+The full targeted suite passes 268 tests. Physical Molmo job
+`20260927_135954_c01dee` declares 3600 s total / 60 s per route; the larger total
+budget reflects the longer alternate route and is not a matched-budget claim.
+
+The two 20-s private RoboCasa contact-centering probes
+(`20260927_135218_af170f`) also exceeded the 0.1 rad retention bound:
+half offset 0.162586 rad / 7.130 mm, full offset 0.119525 rad / 7.285 mm.
+The original body origin is already within 1 mm of its center of mass.
+The probes move private initial object state relative to fingertip contacts;
+no grasp-policy or physics change was adopted. They are archived separately
+under `hold_center_replay/` and do not count as physical task trials.
