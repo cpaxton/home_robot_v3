@@ -345,3 +345,38 @@ per 17 cm approach segment, leaving insufficient time for a complete task in
 unstarted Molmo r23 job `20260927_083457_1cc47f` was canceled before execution;
 it contributes no trial. This budget change is a diagnostic condition and must
 not be described as a matched-budget improvement over earlier trials.
+
+### September 27: tracking budget and retention follow-up
+
+R27 (`8e9d3189`) applies the nominal 22 cm center-clearance gate once and retains
+full robot/payload geometry checks at all 26 tracking offsets. Placement checks
+endpoint and arm feasibility before RRT. Exact archived Molmo route replay passed
+in 16.17 s; a 60 s route-search replay found 18 waypoints in 33.71 s. The physical
+Molmo seed-0 diagnostic declares 1800 s total / 60 s per route, job
+`20260927_120832_8191e6`. It is distinct from the earlier 10 s route budgets.
+
+RoboCasa r26 (`013a8bf1`, job `20260927_113809_c1c0b1`) verified pickup and selected
+a new placement from measured lift state. It stopped after 362.1 s on retention
+failure. Relative to the independent pickup-window start, the archived trace
+shows 4.505 mm maximum translation drift and 0.106087 rad rotation. Gripper
+contact is continuous, with no scene/support contact in that interval. This is
+rotational slip, not an observed drop or obstacle collision. The unchanged
+retention limits are 20 mm / 0.1 rad. A standalone plot and JSON analysis are
+archived in the r26 directory as `robocasa-r26-retention.*`.
+
+The r26 overview initially failed because the placement-replan diagnostic lacks
+an `approach` field. The renderer now handles placement poses and skips rows
+without a pose. Its regenerated overview is archived separately; the original
+trial result remains unchanged. Subsequent executor diagnostics emit translation
+and rotation residuals when retention fails; 67 executor/evaluation tests passed.
+
+A private nominal-route-proposal experiment on the archived Molmo lift state
+then applied the full tracking-envelope sweep to every proposal. It exhausted
+60 s with no accepted placement: three nominal paths failed full verification,
+and another exhausted the nominal search budget. This experiment was not adopted.
+It did not modify live simulator state or supply a physical success result.
+
+A stationary-hold dynamics replay of archived r26 state is queued serially as
+`20260927_121239_32ff01`. It compares the recorded close command with the actuator's
+existing closed limit, retaining the exact model and physics. It is a diagnostic
+of private restored state, not a scored task trial or a controller acceptance run.

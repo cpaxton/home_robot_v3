@@ -169,12 +169,14 @@ def test_measured_placement_search_tries_alternatives_and_restores_payload(monke
     executor = SimpleNamespace(model=model, data=data, collision=checker, coupled_groups=(), plan_pose=plan_pose)
     space = SimpleNamespace(base_body="base_link", plan_route=route, is_valid=lambda pose: pose[0] != 1,
                             last_validity={"reason": "scene_collision"})
-    rejections = []
+    rejections, events = [], []
     result, error = module.plan_payload_placement(
         executor, space, {"object_body": "load", "ee_body": "hand", "support_body": "support"},
         approach=np.zeros(3), preferred_pose=[1., 0., 0.], rejections=rejections,
+        event=lambda **row: events.append(row),
     )
     assert attempts == [2]  # Endpoint collision and failed arm IK never spend RRT budget.
+    assert events[-1]["phase"] == "placement_route" and events[-1]["accepted"] == reachable
     assert {row["phase"] for row in rejections} >= {"transport", "preplace"}
     np.testing.assert_array_equal(data.qpos, before)
     np.testing.assert_array_equal(checker.payload_transform, transform)

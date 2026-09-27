@@ -678,6 +678,8 @@ def plan_payload_placement(executor, space, scorer, *, approach, rejections, eve
                 checker.payload_body, checker.payload_parent = payload[:2]
                 checker.payload_transform = transform.copy()
                 route = space.plan_route(approach, goal)
+                event(phase="placement_route", pose=goal.tolist(), release=release.tolist(),
+                      accepted=bool(route), validity=dict(space.last_validity))
                 if not route:
                     rejections.append({"pose": goal.tolist(), "release": release.tolist(), "phase": "transport",
                                        "validity": dict(space.last_validity)})
