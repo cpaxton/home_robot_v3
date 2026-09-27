@@ -34,6 +34,12 @@ executor validates a complete grasp/lift sequence for each choice before any
 gripper command; it records the selected world-frame targets. Other callers
 retain a single fixed frame unless they explicitly provide alternatives.
 
+Carried-object route validation additionally screens 26 fixed base-pose offsets
+at the same 20 mm / 0.03 rad arrival bounds. This catches nominal paths that lose
+clearance when the extended payload moves with small base yaw errors. It is
+sampled screening, not a continuous tracking or payload-slip certificate; fresh
+measured-state checks and the independent contact scorer remain mandatory.
+
 ## Commands
 
 Use a clean frozen checkout. Set OMP/OpenBLAS/MKL threads to 1 and run heavy trials

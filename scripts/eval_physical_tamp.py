@@ -83,6 +83,10 @@ def run(args):
         source_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
     )
     manifest["budgets"]["wall_timeout_s"] = args.timeout
+    manifest["payload_tracking_envelope"] = {
+        "position_radius_m": 0.02, "yaw_radius_rad": 0.03, "offset_samples": 26,
+        "scope": "carried-object routes; sampled screening, not a continuous certificate",
+    }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     server = robot = server_fh = None
     trace = output / "physical_trace.jsonl"
@@ -228,7 +232,9 @@ def run(args):
             raise RuntimeError("unsupported_arm_collision_geometry")
         # Normal simulated base control allows reverse below 0.5 m. Our 0.2 m
         # segments leave room for measured arrival error within that threshold.
-        space = SceneNavigationSpace(model, data, checker, seed=args.seed, allow_reverse=True)
+        space = SceneNavigationSpace(
+            model, data, checker, seed=args.seed, allow_reverse=True, check_payload_tracking_envelope=True,
+        )
         initial = data.qpos.copy()
         initial_base = base_pose(model, data)
         initial_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()

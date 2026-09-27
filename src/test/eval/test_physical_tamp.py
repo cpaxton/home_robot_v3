@@ -91,6 +91,34 @@ def test_route_budget_restores_state_and_leaves_execution_validation_enabled(mon
     assert space.is_valid(np.zeros(3))  # No lingering planning deadline in execution.
 
 
+def test_payload_tracking_envelope_rejects_nominally_clear_extended_load():
+    import mujoco
+
+    from emet.eval.physical_tamp import SceneNavigationSpace
+    from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base_link" pos="0 0 .3"><freejoint/><geom size=".05"/>
+        <body name="hand" pos="1 0 .5"/>
+      </body>
+      <body name="load" pos="1 0 .8"><freejoint/><geom size=".02"/></body>
+      <body name="obstacle" pos="1 .06 .8"><geom size=".02"/></body>
+    </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    checker = MujocoSceneCollisionChecker(model, robot_body="base_link")
+    checker.set_payload(model, data, "load", "hand")
+    nominal = SceneNavigationSpace(model, data, checker)
+    robust = SceneNavigationSpace(model, data, checker, check_payload_tracking_envelope=True)
+    assert nominal.is_valid([0, 0, 0])
+    before = data.qpos.copy()
+    assert not robust.is_valid([0, 0, 0])
+    assert robust.last_validity["reason"] == "payload_tracking_envelope:scene_collision"
+    np.testing.assert_array_equal(data.qpos, before)
+    assert checker.payload_body == "load"
+    # The same extended load has sufficient room when moved away from the wall.
+    assert robust.is_valid([0, -.2, 0])
+
+
 def test_approach_candidates_follow_actual_extension_line_and_preserve_state():
     import mujoco
 

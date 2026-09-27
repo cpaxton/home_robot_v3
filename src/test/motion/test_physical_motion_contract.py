@@ -250,6 +250,32 @@ def test_invalid_base_feedback_cancels_motion_and_never_replans():
     assert not result.success and result.reason == "invalid_measured_pose" and cancels == [True]
 
 
+def test_payload_loss_reason_survives_navigation_failure_and_cancellation():
+    from emet.motion.navigation_sweep import execute_measured_route
+
+    moving = False
+    cancelled = []
+
+    def measure():
+        if moving:
+            raise RuntimeError("payload_not_retained")
+        return np.zeros(3)
+
+    def move(*args, **kwargs):
+        nonlocal moving
+        moving = True
+        return True
+
+    result = execute_measured_route(
+        SimpleNamespace(move_base_to=move, cancel_navigation=lambda: cancelled.append(True) or True),
+        goal=[1, 0, 0], measure=measure, plan_route=lambda start, goal: [goal],
+        space=SimpleNamespace(is_valid=lambda pose: True),
+    )
+    assert not result.success
+    assert result.reason == "invalid_measured_pose:payload_not_retained"
+    assert cancelled == [True]
+
+
 def test_structured_false_controller_response_is_not_truthy_navigation_success():
     from emet.motion.navigation_sweep import execute_measured_route
 

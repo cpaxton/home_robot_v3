@@ -229,7 +229,7 @@ class SceneNavigationSpace(XYT):
     """GT scene collision adapter for the existing RRT-Connect base planner."""
 
     def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0, allow_reverse=False,
-                 navigation_policy="precision"):
+                 navigation_policy="precision", check_payload_tracking_envelope=False):
         self.model, self.data, self.checker, self.base_body = model, data, checker, base_body
         start = base_pose(model, data, base_body)
         super().__init__(mins=np.r_[start[:2] - 6, -np.pi], maxs=np.r_[start[:2] + 6, np.pi])
@@ -246,6 +246,18 @@ class SceneNavigationSpace(XYT):
 
         fraction = 0.5 if navigation_policy in ("precision", "manipulation") else 1.0
         self.controller_position_tolerance_m = fraction * NAVIGATION_POLICIES[navigation_policy].xy_tolerance
+        policy = NAVIGATION_POLICIES[navigation_policy]
+        self.payload_tracking_offsets = []
+        if check_payload_tracking_envelope:
+            # Bounded screening of the controller's declared arrival envelope,
+            # not a continuous or dynamic tracking certificate. Pure yaw comes
+            # first: a small yaw error moves an extended payload substantially.
+            self.payload_tracking_offsets = [np.array([0, 0, yaw]) for yaw in (-policy.yaw_tolerance, policy.yaw_tolerance)]
+            for angle in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+                xy = policy.xy_tolerance * np.array([np.cos(angle), np.sin(angle)])
+                self.payload_tracking_offsets.extend(
+                    np.r_[xy, yaw] for yaw in (-policy.yaw_tolerance, 0, policy.yaw_tolerance)
+                )
         self.min_clearance_m = 0.22
         self.environment_geoms = np.array(
             [
@@ -282,7 +294,27 @@ class SceneNavigationSpace(XYT):
     def is_valid(self, pose):
         started = time.monotonic()
         try:
-            return self._is_valid(pose)
+            if not self._is_valid(pose):
+                return False
+            if self.checker.payload_body is None or not self.payload_tracking_offsets:
+                return True
+            nominal = self.data.qpos.copy()
+            nominal_validity = dict(self.last_validity)
+            try:
+                for offset in self.payload_tracking_offsets:
+                    self.data.qpos[:] = nominal
+                    if not self._is_valid(np.asarray(pose) + offset):
+                        self.last_validity = {
+                            **self.last_validity,
+                            "reason": "payload_tracking_envelope:" + self.last_validity["reason"],
+                            "tracking_offset": offset.tolist(),
+                        }
+                        return False
+                self.last_validity = nominal_validity
+                return True
+            finally:
+                self.data.qpos[:] = nominal
+                mujoco.mj_kinematics(self.model, self.data)
         finally:
             self.route_stats["validity_calls"] = self.route_stats.get("validity_calls", 0) + 1
             self.route_stats["validity_wall_s"] = self.route_stats.get("validity_wall_s", 0.0) + time.monotonic() - started

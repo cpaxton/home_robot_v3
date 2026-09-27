@@ -3,7 +3,8 @@
 **Physical acceptance remains unestablished.** Earlier revisions produced static
 witnesses for both matched Stretch fixtures,
 but controller-aware replay exposed missing travel turns in Molmo’s transport
-route. No contact-based pickup and placement has passed the independent scorer. Static
+route. RoboCasa r23 passed independently scored pickup but lost the can during transport.
+No complete contact-based pickup and placement has passed the independent scorer. Static
 feasibility and controller acknowledgements are not task success.
 
 Scope: GT/MCTS, simulated robots, the existing full TAMP registries, and a separately
@@ -27,7 +28,8 @@ a copied `server.log`. Active runs are moved only after completion.
 | Scripted tool controls | `7b6ad51d` | 3/3 passed; scripted JSON, no learned model | `/tmp/tamp-tools-20260926-r5` |
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
-| Latest completed physical RoboCasa can → counter | `fb817dcc` | Failed approach: navigation stalled, 426.6 s | `/tmp/physical-tamp-robocasa-20260926-r22` |
+| Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
+| Latest completed physical RoboCasa can → counter | `1b3f57bf` | Verified pickup; payload hit stove during transport, task failed at 383.1 s | `/tmp/physical-tamp-robocasa-20260926-r23` |
 | Latest completed physical Molmo tomato → bowl | `fb817dcc` | Timed out during approach, 602.3 s | `/tmp/physical-tamp-molmo-20260926-r22` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
@@ -90,10 +92,9 @@ sampling, not a continuous robustness proof or an executed task success.
 | --- | --- | --- | --- |
 | RoboCasa physical r23, seed 0 | `20260927_083457_d7d269` | 600 s | `/tmp/physical-tamp-robocasa-20260926-r23` |
 | Molmo physical r23-long, seed 0 | `20260927_083844_3b2889` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
-| Corrected 50-case fixture recheck, r22 | `20260927_082035_9a7218` | 900 s per row | `/tmp/tamp-fixture-recheck-20260927-r22` |
 
-The corrected registry currently holds the exclusive GPU lock; the physical pair
-is queued behind it. The Molmo budget was declared before execution because r22
+The corrected registry has completed and released the exclusive GPU lock.
+RoboCasa r23 is terminal; Molmo r23-long is running. The Molmo budget was declared before execution because r22
 measured approximately 64–68 wall seconds per 17 cm approach segment. Per-command
 timeouts, retries, and scoring remain unchanged. This diagnostic is not a matched-
 budget comparison with earlier 600 s trials.
@@ -105,6 +106,41 @@ corrected registry adds only `scene_split: val` to those 50 definitions; the oth
 150 rows are unchanged. Original results and the failed asset-only attempt remain
 archived. The corrected subset must be reported separately from the original
 full 200-case run.
+
+The corrected subset finished all 50 cases: **18 successes, 15 executed task
+failures, 16 missing-landmark errors, and one invalid fixture**. No scene-resolution
+errors remained. Seven executed failures were cleanup placement failures; eight
+were navigation cases whose final route remained blocked. Clearing the selected
+objects did not guarantee a usable route: two failed navigation cases cleared all
+8/8 selected objects. The invalid case (`ithor_nav_goal_19_rby1_n8_counter_3`)
+had an open initial route and therefore failed the intended blocked-route fixture
+condition. Its retained execution record shows 7/8 relocations and a blocked final
+route; it is not a success. All 50 cases use kinematic latch.
+
+The corrected matrix and row-level CSV are in
+`/tmp/tamp-fixture-recheck-report-20260927/{full_matrix.png,full_results.csv}`.
+The original full run and the corrected subset have different frozen sources and
+must not be presented as one 200-case rerun.
+
+## Transport tracking-envelope repair
+
+RoboCasa r23 (`1b3f57bf`) passed measured approach arrival and fresh grasp-path
+validation. Its pickup passed the independent scorer. During transport the can
+contacted the stove at approximately 65.8 s simulation time and left the gripper
+at 66.53 s. The task failed at 383.1 s wall time, with forbidden gripper
+self-contacts also recorded after payload loss. The stage event correctly recorded
+`payload_not_retained`; the terminal message reduced it to `invalid_measured_pose`.
+
+Exact-state replay reproduces the contact using both the optimized collision pass
+and full MuJoCo position pipeline. The last nominal segment passes, but a −0.015
+rad yaw deviation, inside the existing acceptance bounds, hits the stove. A new
+opt-in carried-route check samples 26 offsets around the existing 20 mm / 0.03 rad
+bounds, with no relaxation of contact or IK criteria. It rejects that segment and
+the original placement endpoint, whose envelope also intersects the knife block.
+The bounded search must select another candidate; this rejection is not a live
+success. Navigation failure results now retain the measurement exception reason.
+The combined targeted suite passes **248 tests**; these changes require a new
+frozen physical trial. Molmo r23-long continues on its original frozen revision.
 
 ## Implemented motion contracts
 
@@ -179,7 +215,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **246 tests at `1b3f57bf`**, including command
+The combined targeted suite passed **248 tests for the transport-envelope repair**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base

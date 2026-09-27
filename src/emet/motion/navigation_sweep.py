@@ -137,15 +137,22 @@ def execute_measured_route(
     def succeeded(value):
         return isinstance(value, (bool, np.bool_)) and bool(value)
 
+    measurement_error = None
+
     def read_measurement():
+        nonlocal measurement_error
+        measurement_error = None
         try:
             return np.asarray(measure(), dtype=float)
         except (RuntimeError, ValueError) as exc:
-            event(phase="navigation_state", reason=str(exc))
+            measurement_error = str(exc)
+            event(phase="navigation_state", reason=measurement_error)
             return np.array([])
 
     def invalid_measurement(attempt, *, cancel_motion):
         reason = "invalid_measured_pose"
+        if measurement_error:
+            reason += ":" + measurement_error
         if cancel_motion:
             cancel = getattr(robot, "cancel_navigation", None)
             if cancel is None or not succeeded(cancel()):
