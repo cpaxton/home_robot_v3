@@ -401,6 +401,17 @@ class MujocoZmqServer(BaseZmqServer):
             self.is_done = False
             v_cmd, w_cmd = self.controller.compute_control()
             done = self.controller.is_done()
+            if thresholds is not None and self._precision_xy_acquired and not done and v_cmd == 0 and w_cmd != 0:
+                # Wheel/contact asymmetry can translate the base during a turn.
+                # Correct the forward component of position error continuously
+                # instead of waiting to leave the arrival envelope and restart
+                # translation. One-second proportional response, capped at the
+                # outer position tolerance per second (2 cm/s for precision).
+                # Final acceptance still uses the unchanged measured XY/yaw bounds.
+                forward_error = float(self.controller.compute_current_error()[0])
+                speed_limit = min(outer, self.controller.control.v_max)
+                minimum_speed = -speed_limit if distance < self.controller.cfg.max_rev_dist else 0.0
+                v_cmd = float(np.clip(forward_error, minimum_speed, speed_limit))
 
             # self.get_logger().info(f"veclocities {v_cmd} and {w_cmd}")
             # Compute timeout

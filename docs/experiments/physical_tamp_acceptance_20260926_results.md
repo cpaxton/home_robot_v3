@@ -30,7 +30,7 @@ a copied `server.log`. Active runs are moved only after completion.
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
 | Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; rotational slip stopped transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
-| Latest completed physical Molmo tomato → bowl | `8e9d3189` | Static placement search timed out at 1803.2 s; no execution | `/tmp/physical-tamp-molmo-20260927-r27` |
+| Latest completed physical Molmo tomato → bowl | `71ba084d` | Full tracking-envelope witness; final approach turn stalled after bounded retries, 942.1 s | `/tmp/physical-tamp-molmo-20260927-r28` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -314,10 +314,10 @@ is now opt-in and recorded in the manifest; ordinary route timing remains active
 The combined targeted suite passed 255 tests. Any subsequent physical trial must
 retain a separate source revision and manifest from the profiled r27 trial. The unprofiled r28 candidate is frozen at `71ba084d`,
 job `20260927_124015_c08510`, seed 0, with the same 1800/60 s budgets and output
-`/tmp/physical-tamp-molmo-20260927-r28`. It is executing after the completed hold diagnostic. R28 found a complete
+`/tmp/physical-tamp-molmo-20260927-r28`. It completed after the hold diagnostic. R28 found a complete
 tracking-envelope-qualified witness at 154.69 s: its first carried-route search
 exhausted 60 s, and its second passed in 47.04 s with 1111 validity calls.
-This is static feasibility; physical scoring remains pending.
+Physical execution failed at 942.1 s after final-turn retries; no pickup occurred.
 
 The private fixed-command r26 dynamics replay (`20260927_121239_32ff01`) held
 wheel velocity commands at zero and retained arm targets for 20 simulated seconds.
@@ -327,3 +327,12 @@ Relative rotation reached 0.16196 rad with the recorded gripper target and
 0.1 rad retention failure. Neither a stronger-close change nor altered physics
 was adopted. This restored-state diagnostic is not a task acceptance trial;
 results and script are archived under `stationary_hold_replay/`.
+
+R28 completed all approach translations, but turning induced base drift across
+the 20 mm outer XY bound, repeatedly switching back to position acquisition.
+The wheel midpoint is aligned with the base origin in the model. A subsequent
+precision-only controller candidate adds a capped forward-position correction
+during final turns; it retains the same outer bound, deadline and scorer. Four
+rollouts covering both turn directions and ±4 mm/s creep stayed within 20 mm and
+converged in yaw. Related navigation/executor tests passed; live validation is
+required. No fixture, contact threshold or grasp-retention bound was changed.

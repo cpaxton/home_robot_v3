@@ -35,6 +35,8 @@ def test_controller_timeout_uses_simulation_time(monkeypatch):
 def test_precision_position_hysteresis_preserves_final_turn(monkeypatch):
     monkeypatch.setattr("emet.simulation.mujoco_server_stretch.timeit.default_timer", lambda: 1.)
     controller = Mock()
+    controller.control.v_max = .2
+    controller.cfg.max_rev_dist = 1.
     controller.compute_control.return_value = (0., .2)
     controller.is_done.return_value = False
     controller.timeout.return_value = False
@@ -93,3 +95,51 @@ def test_final_turn_uses_fresh_position_acceptance_without_cached_success(fresh_
     else:
         assert linear > 0  # Fresh feedback outside the bound still requires translation.
     assert not controller.is_done()
+
+
+@pytest.mark.parametrize("turn_sign", [-1, 1])
+@pytest.mark.parametrize("creep", [-.004, .004])
+def test_precision_turn_corrects_creep_without_relaxing_arrival(monkeypatch, turn_sign, creep):
+    """A small wheel-induced drift must not trigger repeated turn/translate cycles."""
+    from emet.motion.control.goto_controller import GotoVelocityController
+
+    pose = np.array([-.012, .006 * turn_sign, -.62 * turn_sign])
+    goal = np.array([0., 0., 2.368 * turn_sign])
+    elapsed = [0.]
+    commanded = [0., 0.]
+    monkeypatch.setattr("emet.simulation.mujoco_server_stretch.timeit.default_timer", lambda: elapsed[0])
+    controller = GotoVelocityController()
+    controller.update_pose_feedback(pose.copy())
+    controller.update_goal(goal)
+    controller.control.set_angular_error_tolerance(.015)
+
+    def velocity(v_linear, omega):
+        commanded[:] = [v_linear, omega]
+
+    server = SimpleNamespace(
+        _status=Status(time=0., base=SimpleNamespace(x_vel=0., theta_vel=0.)),
+        debug_control_loop=False, get_base_pose=lambda: pose.copy(), controller=controller,
+        active=True, xyt_goal=goal.copy(), goal_set_t=0., goal_set_sim_t=0.,
+        controller_finished=False, done_since=0., done_t=0., robot_sim=SimpleNamespace(set_base_velocity=velocity),
+        _precision_xy_tolerances=(.01, .02), _precision_xy_acquired=True,
+    )
+    errors = []
+    for _ in range(1500):
+        MujocoZmqServer._control_loop_callback(server)
+        linear, angular = commanded
+        assert abs(linear) <= min(.02, controller.control.v_max)
+        # Fixed 4 mm/s creep whenever the wheel pair is turning.
+        actual_linear = linear + (creep if abs(angular) > 0 else 0)
+        dt = .02
+        pose[:2] += dt * actual_linear * np.array([np.cos(pose[2]), np.sin(pose[2])])
+        pose[2] += dt * angular
+        elapsed[0] += dt
+        server._status.time = elapsed[0]
+        server._status.base.x_vel = actual_linear
+        server._status.base.theta_vel = angular
+        errors.append(np.linalg.norm(pose[:2] - goal[:2]))
+        if not server.active:
+            break
+    assert not server.active, "Precision turn never converged under bounded creep"
+    assert max(errors) <= .02  # No expanded position acceptance or excursion.
+    assert abs(np.arctan2(np.sin(pose[2] - goal[2]), np.cos(pose[2] - goal[2]))) <= .03

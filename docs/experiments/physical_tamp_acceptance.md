@@ -141,3 +141,10 @@ Per-stage and per-route timing/rejection events remain enabled without it.
 Scene collision checks filter contact body IDs and penetration depths in bulk
 before resolving allowed pairs; full MuJoCo geometry and contact exclusions remain
 unchanged, including explicit contact pairs.
+
+Precision final turns apply a bounded forward-position correction while turning:
+one-second proportional response, capped by both the outer XY tolerance per
+second (2 cm/s for precision) and configured linear speed. Reverse correction
+respects the controller's reverse-distance setting. This addresses measured
+wheel/contact creep before it leaves the existing XY bound; outer-bound escape
+still triggers reacquisition, and measured arrival criteria are unchanged.
