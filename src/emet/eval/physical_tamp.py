@@ -60,6 +60,7 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "base_rrt_iterations": 400,
             "base_route_wall_s": 10,
             "grasp_rotations": 2,
+            "grasp_arrival_ik_samples": 16,
             "place_base_candidates": 41,
             "support_surfaces": 4,
             "release_points_per_surface": 9,
@@ -154,6 +155,44 @@ def kinematic_base_candidates(model, data, *, target_xy, ee_body, extension_join
         return candidates
     finally:
         data.qpos[:] = before
+        mujoco.mj_kinematics(model, data)
+
+
+def check_arrival_ik_samples(executor, approach_state, targets, *, position_radius_m=0.02, yaw_radius_rad=0.03):
+    """Reject fragile witnesses at fixed samples of the declared arrival bounds.
+
+    This is a bounded candidate filter, not a continuous robustness certificate.
+    Execution still replans all collision-checked arm paths from measured state.
+    """
+    from emet.motion.mujoco_arm_ik import solve_pose_ik
+
+    model, data = executor.model, executor.data
+    saved = data.qpos.copy()
+    try:
+        data.qpos[:] = approach_state
+        base = base_pose(model, data, executor.base_body)
+        for angle in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+            xy = base[:2] + position_radius_m * np.array([np.cos(angle), np.sin(angle)])
+            for dyaw in (-yaw_radius_rad, yaw_radius_rad):
+                data.qpos[:] = approach_state
+                pose = [*xy, base[2] + dyaw]
+                if not write_offline_base_pose(model, data, base_body_name=executor.base_body,
+                                               x=pose[0], y=pose[1], theta=pose[2]):
+                    return {"reason": "unsupported_base_model"}
+                for index, (position, rotation) in enumerate(targets):
+                    result = solve_pose_ik(
+                        model, data, ee_body=executor.ee_body, joint_names=executor.joint_names,
+                        target_pos=position, target_rotation=rotation, coupled_groups=executor.coupled_groups,
+                        joint_limit_margins=executor.joint_limit_margins,
+                        tol_m=executor.position_tolerance_m, tol_rad=executor.orientation_tolerance_rad,
+                    )
+                    if not result.success:
+                        return {"reason": "arrival_sample_ik_failed", "base_pose": pose, "target_index": index,
+                                "position_error_m": result.pos_error_m,
+                                "orientation_error_rad": result.orientation_error_rad}
+        return None
+    finally:
+        data.qpos[:] = saved
         mujoco.mj_kinematics(model, data)
 
 

@@ -75,6 +75,21 @@ navigation/evaluation suite passed 25 tests. Physical r19 jobs
 `20260927_074239_7a500c` (RoboCasa) and `20260927_074239_3ed41a` (Molmo) are queued
 serially; no new physical outcome is claimed from submission.
 
+The exact missing scenes 12–21 and their object dependencies were installed on
+September 27. The first installer process crashed after scene 14; the remaining
+assets completed with safe CPU affinity. A separate 50-row recheck, frozen at
+`b48b8898`, retains the original case definitions and runs under job
+`20260927_074941_39ce43`, root `/tmp/tamp-fixture-recheck-20260927-r20`.
+It does not replace the original 50 fixture errors; results are pending.
+
+A subsequent bounded grasp-candidate filter checks IK at 16 base-pose samples
+(eight directions at the existing 20 mm arrival radius, each at ±0.03 rad yaw).
+It retains the original IK tolerances and 5 mm joint reserves. Exact r17 replay
+rejects the selected candidate at a sampled arrival with 13.7 mm position error.
+This is sampled candidate screening, not a continuous robustness proof;
+execution still requires fresh measured-state IK and collision-checked paths.
+The combined targeted suite now passes **236 tests**. Live validation is pending.
+
 ## Implemented motion contracts
 
 - Raw obstacles, uncertainty, and footprint are separate. Continuous-pose SAT

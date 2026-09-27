@@ -183,3 +183,29 @@ def test_direct_route_does_not_command_duplicate_final_pose():
     assert len(route) == 4
     assert np.all(np.linalg.norm(np.diff(route, axis=0), axis=1) > 0)
     np.testing.assert_allclose(route[-1], [.8, 0, 0])
+
+
+def test_arrival_samples_reject_reach_boundary_and_restore_nominal_state():
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.eval.physical_tamp import check_arrival_ik_samples
+
+    m = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base"><freejoint/><geom size=".1"/>
+        <body><joint name="x" type="slide" axis="1 0 0" range="0 1"/><geom size=".02"/>
+          <body name="ee"><joint name="y" type="slide" axis="0 1 0" range="-1 1"/>
+          <geom size=".02"/></body>
+        </body>
+      </body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    e = SimpleNamespace(model=m, data=d, base_body='base', ee_body='ee',
+                        joint_names=('x','y'), coupled_groups=(), joint_limit_margins={},
+                        position_tolerance_m=.01, orientation_tolerance_rad=.1)
+    before = d.qpos.copy()
+    assert check_arrival_ik_samples(e, before, [([.5,0,0], np.eye(3))]) is None
+    failure = check_arrival_ik_samples(e, before, [([.995,0,0], np.eye(3))])
+    assert failure['reason'] == 'arrival_sample_ik_failed'
+    assert failure['position_error_m'] > .01
+    np.testing.assert_array_equal(d.qpos, before)

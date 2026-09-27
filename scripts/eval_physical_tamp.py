@@ -62,6 +62,7 @@ def run(args):
     from emet.eval.physical_tamp import (
         SceneNavigationSpace,
         base_pose,
+        check_arrival_ik_samples,
         freeze_fixture,
         kinematic_base_candidates,
         make_scene_checker,
@@ -349,7 +350,15 @@ def run(args):
                         break
                     grasp_paths.append(path)
                 if len(grasp_paths) == 3:
-                    break
+                    error = check_arrival_ik_samples(
+                        executor, approach_state,
+                        [(point, rotation) for point in
+                         (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])],
+                    )
+                    if error is None:
+                        break
+                    item["grasp_rejections"].append({"phase": "arrival_margin", **error})
+                    grasp_paths = []
             if len(grasp_paths) != 3:
                 plan.message = "no_grasp_witness_within_budget"
                 item.update(phase="grasp", reason=plan.message)
