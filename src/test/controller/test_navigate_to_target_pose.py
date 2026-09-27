@@ -306,7 +306,7 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
     assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
 
 
-@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None])
+@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None, lambda *a, **k: {}])
 def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch, log_plan):
     def _boom(*_a, **_k):
         raise AssertionError("empty-text explore must not pick a new frontier while leftover exists")
@@ -334,7 +334,11 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
         log_arrow3D=MagicMock(),
     )
     nav_agent._rerun_refresh_monologue_panel = lambda: None  # type: ignore[method-assign]
+    # Surface XYZ after the NaN marker is not a driven base waypoint. Preserve
+    # the safety filter's clearance instead of recomputing over that marker.
+    nav_agent._filter_unsafe_nav_traj = lambda traj, **kw: (traj, None, 0.37)
     traj = nav_agent.process_text("", np.array([0.0, 0.0, 0.0]))
+    assert nav_agent._last_nav_plan["min_clearance_m"] == 0.37
     assert len(traj) >= 2
     assert np.isnan(np.asarray(traj[-2], dtype=np.float64)).all()
     goal = np.asarray(traj[-1], dtype=np.float64).reshape(-1)

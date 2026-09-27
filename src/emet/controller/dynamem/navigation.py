@@ -753,13 +753,10 @@ def process_text(self, text, start_pose):
         # Attach clearance / safety fields for agent tools.
         try:
             clr = self.planner.clearance_at_xy(start_pose[:2])
-            path_clrs = [
-                self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
-                for p in traj
-                if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
-            ]
             self._record_nav_plan_fields(
-                min_clearance_m=float(min(path_clrs)) if path_clrs else None,
+                # The safety filter excludes the trailing object-XYZ marker.
+                # It is not a base waypoint (and can be inside an obstacle).
+                min_clearance_m=min_clr,
                 base_clearance_m=float(clr),
                 min_clearance_required_m=float(getattr(self, "_min_clearance_m", 0.0)),
                 traj=list(traj),
@@ -779,18 +776,13 @@ def process_text(self, text, start_pose):
             vectors.append([float(b[0] - a[0]), float(b[1] - a[1]), 0.0])
         if origins:
             self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
-        path_clrs = [
-            self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
-            for p in traj
-            if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
-        ]
         self._last_nav_plan = {
             "mode": mode,
             "localize_source": localize_source,
             "n_planned": n_planned,
             "chunked": chunked,
             "path_m": 0.0,
-            "min_clearance_m": float(min(path_clrs)) if path_clrs else None,
+            "min_clearance_m": min_clr,
             "min_clearance_required_m": float(getattr(self, "_min_clearance_m", 0.0)),
             "announce": f"Navigating via {localize_source or mode}: {n_planned} wps",
             "traj": list(traj),
