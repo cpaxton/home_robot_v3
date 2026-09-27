@@ -116,18 +116,23 @@ class MujocoSceneCollisionChecker:
         else:
             mujoco.mj_collision(model, data)
         self.last_contacts = []
-        for contact in data.contact[: data.ncon]:
-            a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
-            if not ({a, b} & watched):
-                continue
+        # Furnished scenes have many environment/environment contacts. Filter
+        # their body IDs and penetration depths in bulk; only relevant contacts
+        # need Python name/pair resolution. The geometry and exclusions are
+        # unchanged, including explicit MuJoCo contact pairs.
+        body_pairs = model.geom_bodyid[data.contact.geom[: data.ncon]]
+        relevant = np.isin(body_pairs, list(watched)).any(axis=1)
+        relevant &= data.contact.dist[: data.ncon] < -self.penetration_tolerance_m
+        for index in np.flatnonzero(relevant):
+            contact = data.contact[int(index)]
+            a, b = map(int, body_pairs[index])
             pair = [model.body(a).name, model.body(b).name]
             if (
                 frozenset(pair) in self.allowed_pairs
                 or frozenset(int(g) for g in contact.geom) in self.allowed_geom_pairs
             ):
                 continue
-            if contact.dist < -self.penetration_tolerance_m:
-                self.last_contacts.append({"bodies": pair, "distance_m": float(contact.dist)})
+            self.last_contacts.append({"bodies": pair, "distance_m": float(contact.dist)})
         return bool(self.last_contacts)
 
     def trajectory_collides(self, model, data, *, joint_names, arm_waypoints):

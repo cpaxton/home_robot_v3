@@ -134,3 +134,10 @@ Molmo r27 explicitly uses `--timeout 1800 --route-timeout 60`. The nominal and
 measured base center retain 22 cm clearance. Tracking offsets test full geometry
 without adding a second center-clearance margin. Placement checks arm feasibility
 before searching a carried route; both checks are required for acceptance.
+
+Detailed Python profiling is opt-in with `--profile-planning`; the manifest records
+whether it is enabled. Profiling overhead consumes the declared wall budget.
+Per-stage and per-route timing/rejection events remain enabled without it.
+Scene collision checks filter contact body IDs and penetration depths in bulk
+before resolving allowed pairs; full MuJoCo geometry and contact exclusions remain
+unchanged, including explicit contact pairs.

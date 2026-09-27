@@ -259,7 +259,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **254 tests for the r27 candidate**, including command
+The combined targeted suite passed **255 tests for the subsequent contact-filter/profiling candidate**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
@@ -302,3 +302,13 @@ accounting, not physical reliability across robot types. The contact-based track
 has verified RoboCasa pickups but no complete task success. Promotion of the
 physical-map default, broader robot claims, and partial-observation execution must
 wait for the outstanding physical gates. No learned comparison was run.
+
+The next performance candidate retains the same collision criteria but filters
+irrelevant contacts in NumPy before Python pair resolution. All 63 sampled
+archived RoboCasa checks returned identical contact lists; the archived stove
+collision remains rejected. The same valid Molmo route replay used 807 validity
+calls and completed in 26.80 s (earlier implementation: 33.71 s). These are offline
+diagnostic timings, not a controlled speedup estimate. Detailed Python profiling
+is now opt-in and recorded in the manifest; ordinary route timing remains active.
+The combined targeted suite passed 255 tests. Any subsequent physical trial must
+retain a separate source revision and manifest from the still-profiled r27 trial.

@@ -84,6 +84,7 @@ def run(args):
     )
     manifest["budgets"]["wall_timeout_s"] = args.timeout
     manifest["budgets"]["base_route_wall_s"] = args.route_timeout
+    manifest["planning_profiler_enabled"] = args.profile_planning
     manifest["placement_replan_after_lift"] = True
     manifest["payload_tracking_envelope"] = {
         "position_radius_m": 0.02, "yaw_radius_rad": 0.03, "offset_samples": 26,
@@ -403,22 +404,24 @@ def run(args):
             event(**item)
             return True
 
-        # Keep a main-thread profile of live planning: an offline replay does
-        # not include observation-thread contention or the same settled state.
+        # Profiling is opt-in: its Python-call overhead consumes the same wall
+        # budget as search. Stage timings remain enabled in ordinary trials.
         import cProfile
         import pstats
 
-        profile = cProfile.Profile()
-        profile.enable()
+        profile = cProfile.Profile() if args.profile_planning else None
+        if profile is not None:
+            profile.enable()
         try:
             plan = plan_pick_place_mcts(
                 oracle, candidates=candidates, executor=None, plan_validator=validate, seed=args.seed, max_candidates=48
             )
         finally:
-            profile.disable()
-            profile.dump_stats(str(output / "planning.prof"))
-            with (output / "planning_profile.txt").open("w") as stream:
-                pstats.Stats(profile, stream=stream).sort_stats("cumulative").print_stats(50)
+            if profile is not None:
+                profile.disable()
+                profile.dump_stats(str(output / "planning.prof"))
+                with (output / "planning_profile.txt").open("w") as stream:
+                    pstats.Stats(profile, stream=stream).sort_stats("cumulative").print_stats(50)
         (output / "candidates.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
         (output / "witness.json").write_text(json.dumps(selected, indent=2) + "\n")
         result.update(
@@ -557,6 +560,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=600)
     parser.add_argument("--route-timeout", type=float, default=10,
                         help="Wall budget per base route, including tracking-envelope verification")
+    parser.add_argument("--profile-planning", action="store_true",
+                        help="Record a detailed Python profile; overhead counts against planning budgets")
     parser.add_argument("--initial-state")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -579,6 +584,7 @@ def main():
                     "output_dir": args.output_dir,
                     "timeout_s": args.timeout,
                     "route_timeout_s": args.route_timeout,
+                    "planning_profiler_enabled": args.profile_planning,
                 },
                 indent=2,
             )
