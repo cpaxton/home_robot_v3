@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
+import pytest
 
 from emet.simulation.mujoco_server_stretch import MujocoZmqServer
 
@@ -50,7 +51,8 @@ def test_precision_position_hysteresis_preserves_final_turn(monkeypatch):
         controller.control.set_linear_error_tolerance.assert_called_with(tolerance)
 
 
-def test_accepted_navigation_transitions_mode_inside_adapter():
+@pytest.mark.parametrize("policy,xy,yaw", [("precision", .01, .015), ("manipulation", .005, .0075)])
+def test_accepted_navigation_transitions_mode_inside_adapter(policy, xy, yaw):
     server = SimpleNamespace(controller=Mock())
     received = []
 
@@ -59,10 +61,11 @@ def test_accepted_navigation_transitions_mode_inside_adapter():
         server._contract_navigation_context = {"resolved_goal": action["xyt"]}
 
     server.handle_action = handle
-    action = {"xyt": [1., 0., .5], "nav_policy": "precision"}
+    action = {"xyt": [1., 0., .5], "nav_policy": policy}
     context = MujocoZmqServer.start_navigation_command(server, action)
     assert context["resolved_goal"] == action["xyt"]
     assert received[0]["control_mode"] == "navigation"
     assert "control_mode" not in action
-    server.controller.control.set_linear_error_tolerance.assert_called_once_with(.01)
-    server.controller.control.set_angular_error_tolerance.assert_called_once_with(.015)
+    server.controller.control.set_linear_error_tolerance.assert_called_once_with(xy)
+    server.controller.control.set_angular_error_tolerance.assert_called_once_with(yaw)
+    assert server._precision_xy_tolerances == (xy, 2 * xy)

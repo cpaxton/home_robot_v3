@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 
-def differential_drive_waypoints(start, goal, *, max_translation_m=0.2):
+def differential_drive_waypoints(start, goal, *, max_translation_m=0.2, allow_reverse=False):
     """Turn toward travel, drive in bounded segments, then acquire final yaw.
 
     Interpolating goal yaw during translation makes a differential drive turn
@@ -24,6 +24,8 @@ def differential_drive_waypoints(start, goal, *, max_translation_m=0.2):
     if distance < 1e-8:
         return [goal.tolist()]
     heading = float(np.arctan2(delta[1], delta[0]))
+    if allow_reverse and abs(np.arctan2(np.sin(heading - start[2]), np.cos(heading - start[2]))) > np.pi / 2:
+        heading = float(np.arctan2(np.sin(heading + np.pi), np.cos(heading + np.pi)))
     route = [np.r_[start[:2], heading].tolist()]
     count = max(1, int(np.ceil(distance / max_translation_m)))
     route.extend(np.r_[start[:2] + delta * t, heading].tolist() for t in np.linspace(0, 1, count + 1)[1:])
@@ -36,6 +38,30 @@ def differential_drive_waypoints(start, goal, *, max_translation_m=0.2):
             distinct.append(pose)
             previous = np.asarray(pose)
     return distinct or [goal.tolist()]
+
+
+def compress_drive_waypoints(start, waypoints, *, max_translation_m=0.2):
+    """Combine collinear drive samples and consecutive in-place turn samples.
+
+    Corners and direction changes remain explicit. The caller must sweep the
+    resulting path again, including the shortest yaw arc of each combined turn.
+    """
+    result = [np.asarray(start, dtype=float)]
+    for pose in waypoints:
+        result.append(np.asarray(pose, dtype=float))
+        while len(result) >= 3:
+            a, b, c = result[-3:]
+            ab, bc = b[:2] - a[:2], c[:2] - b[:2]
+            same_xy = max(np.linalg.norm(ab), np.linalg.norm(bc)) < 1e-8
+            yaw = np.array([b[2] - a[2], c[2] - b[2]])
+            same_yaw = np.max(np.abs(np.arctan2(np.sin(yaw), np.cos(yaw)))) < 1e-8
+            straight = (abs(ab[0] * bc[1] - ab[1] * bc[0]) < 1e-10 and np.dot(ab, bc) >= 0
+                        and np.linalg.norm(c[:2] - a[:2]) <= max_translation_m + 1e-8)
+            if same_xy or (same_yaw and straight):
+                result.pop(-2)
+            else:
+                break
+    return [pose.tolist() for pose in result[1:]]
 
 
 def validate_navigation_sweep(space, start, waypoints, *, linear_step_m=0.025, angular_step_rad=0.05):
@@ -146,7 +172,9 @@ def execute_measured_route(
             current = read_measurement()
             if not valid_measurement(current):
                 return invalid_measurement(attempt, cancel_motion=True)
-            accepted, rejected = validate_navigation_sweep(space, current, [waypoint])
+            steering = getattr(space, "execution_waypoints", None)
+            measured_route = steering(current, waypoint) if steering is not None else [waypoint]
+            accepted, rejected = validate_navigation_sweep(space, current, measured_route)
             if not accepted:
                 reason = f"rejected_swept_footprint:{rejected}"
                 diverged = True

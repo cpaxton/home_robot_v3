@@ -225,7 +225,9 @@ def run(args):
         result["unsupported_collision_links"] = checker.unsupported_links(model, collision_links)
         if result["unsupported_collision_links"]:
             raise RuntimeError("unsupported_arm_collision_geometry")
-        space = SceneNavigationSpace(model, data, checker, seed=args.seed)
+        # Normal simulated base control allows reverse below 0.5 m. Our 0.2 m
+        # segments leave room for measured arrival error within that threshold.
+        space = SceneNavigationSpace(model, data, checker, seed=args.seed, allow_reverse=True)
         initial = data.qpos.copy()
         initial_base = base_pose(model, data)
         initial_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
@@ -354,6 +356,7 @@ def run(args):
                         executor, approach_state,
                         [(point, rotation) for point in
                          (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])],
+                        position_radius_m=0.01, yaw_radius_rad=0.015,
                     )
                     if error is None:
                         break
@@ -509,7 +512,7 @@ def run(args):
                     preparation_pending = False
                 outcome = execute_measured_route(
                     robot, goal=goal, measure=measure, plan_route=space.plan_route, space=space, event=event,
-                    navigation_policy="precision", position_tolerance_m=0.02, yaw_tolerance_rad=0.03,
+                    navigation_policy="manipulation", position_tolerance_m=0.01, yaw_tolerance_rad=0.015,
                 )
                 capture("navigation")
                 return outcome

@@ -82,3 +82,13 @@ def test_slow_simulation_still_rejects_a_real_stall():
     for tick in range(50):
         assert m.update([1, 0, 0], sample_time=.1 * tick, now=tick, stopped=False) is None
     assert m.update([1, 0, 0], sample_time=5, now=50, stopped=False)[1]['reason'] == 'navigation stalled'
+
+
+def test_manipulation_policy_requires_tighter_measured_arrival():
+    m = ArrivalMonitor({'resolved_goal': [0,0,0]}, 'manipulation', now=0)
+    for t in [0, .3, .6]:
+        result = update(m,t,pose=(.015,0,.02))
+        assert result is None or result[0] == "correct"
+    for t in [.8,1.1]:
+        assert update(m,t,pose=(.008,0,.01)) is None
+    assert update(m,1.4,pose=(.008,0,.01))[0] == 'succeeded'

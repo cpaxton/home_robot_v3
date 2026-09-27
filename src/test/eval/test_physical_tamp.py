@@ -209,3 +209,23 @@ def test_arrival_samples_reject_reach_boundary_and_restore_nominal_state():
     assert failure['reason'] == 'arrival_sample_ik_failed'
     assert failure['position_error_m'] > .01
     np.testing.assert_array_equal(d.qpos, before)
+
+
+def test_rrt_steering_never_translates_sideways():
+    import mujoco
+
+    from emet.eval.physical_tamp import SceneNavigationSpace
+    from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
+
+    m = mujoco.MjModel.from_xml_string('<mujoco><worldbody><body name="base_link"><freejoint/><geom size=".1"/></body></worldbody></mujoco>')
+    d = mujoco.MjData(m)
+    space = SceneNavigationSpace(m, d, MujocoSceneCollisionChecker(m, robot_body='base_link'), allow_reverse=True)
+    previous = np.zeros(3)
+    for pose in space.extend(previous, [-.4,.3,1.]):
+        delta = pose[:2] - previous[:2]
+        if np.linalg.norm(delta) > 1e-8:
+            forward = np.array([np.cos(pose[2]),np.sin(pose[2])])
+            assert abs(delta[0]*forward[1]-delta[1]*forward[0]) < 1e-8
+            assert abs(pose[2]-previous[2]) < 1e-8
+        previous = pose
+    np.testing.assert_allclose(previous, [-.4,.3,1.])

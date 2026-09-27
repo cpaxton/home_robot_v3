@@ -22,6 +22,7 @@ class NavigationPolicy:
 NAVIGATION_POLICIES = {
     "exploration": NavigationPolicy(0.07, 0.15),
     "precision": NavigationPolicy(0.02, 0.03),
+    "manipulation": NavigationPolicy(0.01, 0.015),
 }
 
 

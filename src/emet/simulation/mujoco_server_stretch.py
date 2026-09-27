@@ -457,8 +457,9 @@ class MujocoZmqServer(BaseZmqServer):
             # Leave tracking margin for the final turn. Stopping translation on
             # the arrival boundary makes small wheel/caster drift alternate
             # translation and yaw correction indefinitely on physical floors.
-            fraction = 0.5 if action["nav_policy"] == "precision" else 1.0
-            if action["nav_policy"] == "precision":
+            fine_arrival = action["nav_policy"] in ("precision", "manipulation")
+            fraction = 0.5 if fine_arrival else 1.0
+            if fine_arrival:
                 self._precision_xy_tolerances = (fraction * policy.xy_tolerance, policy.xy_tolerance)
             self.controller.control.set_linear_error_tolerance(fraction * policy.xy_tolerance)
             self.controller.control.set_angular_error_tolerance(fraction * policy.yaw_tolerance)
@@ -467,7 +468,7 @@ class MujocoZmqServer(BaseZmqServer):
         return self._contract_navigation_context
 
     def navigation_policy_names(self):
-        return ("exploration", "precision")
+        return ("exploration", "precision", "manipulation")
 
     def navigation_policy_measurement(self):
         status = self._status

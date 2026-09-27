@@ -519,3 +519,18 @@ def test_pose_ik_uses_orientation_slack_without_relaxing_tolerances():
         tol_m=.01, tol_rad=.1,
     )
     assert result.success and result.pos_error_m <= .01 and result.orientation_error_rad <= .1
+
+
+def test_measured_route_rejects_required_steering_turn_before_command():
+    from emet.motion.navigation_sweep import differential_drive_waypoints, execute_measured_route
+
+    space = SimpleNamespace(
+        is_valid=lambda pose: abs(pose[2]) < .5,
+        execution_waypoints=differential_drive_waypoints,
+    )
+    robot = SimpleNamespace(move_base_to=lambda *a, **kw: pytest.fail('uncertified steering executed'),
+                            cancel_navigation=lambda: True)
+    result = execute_measured_route(robot, goal=[0,.2,0], measure=lambda: np.zeros(3),
+                                    plan_route=lambda *a: [[0,.2,0]], space=space, max_replans=0)
+    assert not result.success
+    assert result.reason.startswith('rejected_swept_footprint')

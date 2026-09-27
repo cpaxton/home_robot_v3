@@ -15,7 +15,11 @@ import yaml
 
 from emet.motion.base import XYT
 from emet.motion.mujoco_collision import MujocoSceneCollisionChecker, body_subtree
-from emet.motion.navigation_sweep import differential_drive_waypoints, validate_navigation_sweep
+from emet.motion.navigation_sweep import (
+    compress_drive_waypoints,
+    differential_drive_waypoints,
+    validate_navigation_sweep,
+)
 from emet.simulation.molmospaces_mobile_autoplace import base_body_free_joint_qposadr
 
 
@@ -59,6 +63,8 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "mcts_iterations": 120,
             "base_rrt_iterations": 400,
             "base_route_wall_s": 10,
+            "base_max_translation_segment_m": 0.2,
+            "base_reverse_motion": True,
             "grasp_rotations": 2,
             "grasp_arrival_ik_samples": 16,
             "place_base_candidates": 41,
@@ -71,9 +77,9 @@ def freeze_fixture(sim_path, scorer_path, output, *, seed):
             "wall_timeout_s": 600,
         },
         "tolerances": {
-            "navigation_policy": "precision",
-            "base_position_m": 0.02,
-            "base_yaw_rad": 0.03,
+            "navigation_policy": "manipulation",
+            "base_position_m": 0.01,
+            "base_yaw_rad": 0.015,
             "base_controller_target_fraction": 0.5,
             "ik_position_m": 0.01,
             "ik_orientation_rad": 0.1,
@@ -199,7 +205,7 @@ def check_arrival_ik_samples(executor, approach_state, targets, *, position_radi
 class SceneNavigationSpace(XYT):
     """GT scene collision adapter for the existing RRT-Connect base planner."""
 
-    def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0):
+    def __init__(self, model, data, checker, *, base_body="base_link", seed=0, route_timeout_s=10.0, allow_reverse=False):
         self.model, self.data, self.checker, self.base_body = model, data, checker, base_body
         start = base_pose(model, data, base_body)
         super().__init__(mins=np.r_[start[:2] - 6, -np.pi], maxs=np.r_[start[:2] + 6, np.pi])
@@ -211,6 +217,7 @@ class SceneNavigationSpace(XYT):
         self.route_timeout_s = float(route_timeout_s)
         self._route_deadline = None
         self.route_stats = {}
+        self.allow_reverse = allow_reverse
         self.min_clearance_m = 0.22
         self.environment_geoms = np.array(
             [
@@ -226,12 +233,23 @@ class SceneNavigationSpace(XYT):
     def sample(self):
         return self.rng.uniform(self.mins, self.maxs)
 
+    def execution_waypoints(self, start, goal):
+        # Match the manipulation controller's inner position target. Inside it
+        # the controller only acquires final yaw; outside it check travel yaw too.
+        if np.linalg.norm(np.asarray(goal)[:2] - np.asarray(start)[:2]) <= 0.005:
+            return [np.asarray(goal).tolist()]
+        return differential_drive_waypoints(start, goal, allow_reverse=self.allow_reverse)
+
     def extend(self, start, goal):
-        start, goal = np.asarray(start), np.asarray(goal)
-        delta = np.arctan2(np.sin(goal[2] - start[2]), np.cos(goal[2] - start[2]))
-        count = max(1, int(np.ceil(np.linalg.norm(goal[:2] - start[:2]) / 0.025)), int(np.ceil(abs(delta) / 0.05)))
-        for t in np.linspace(0, 1, count + 1)[1:]:
-            yield np.r_[start[:2] + t * (goal[:2] - start[:2]), start[2] + t * delta]
+        previous = np.asarray(start)
+        for endpoint in differential_drive_waypoints(start, goal, max_translation_m=0.025,
+                                                      allow_reverse=self.allow_reverse):
+            endpoint = np.asarray(endpoint)
+            delta = np.arctan2(np.sin(endpoint[2] - previous[2]), np.cos(endpoint[2] - previous[2]))
+            count = max(1, int(np.ceil(abs(delta) / 0.05)))
+            for t in np.linspace(0, 1, count + 1)[1:]:
+                yield np.r_[previous[:2] + t * (endpoint[:2] - previous[:2]), previous[2] + t * delta]
+            previous = endpoint
 
     def is_valid(self, pose):
         started = time.monotonic()
@@ -296,18 +314,22 @@ class SceneNavigationSpace(XYT):
             if not self.is_valid(start) or not self.is_valid(goal):
                 return []
             self.route_stats["phase"] = "direct_sweep"
-            direct = differential_drive_waypoints(start, goal)
+            direct = differential_drive_waypoints(start, goal, allow_reverse=self.allow_reverse)
             if validate_navigation_sweep(self, start, direct)[0]:
                 return direct
             self.route_stats["phase"] = "rrt"
-            planner = get_planner("rrt_connect", self, self.is_valid, max_iter=400, goal_tolerance=0.025)
+            # Reverse-tree edges require a controller that can traverse them in
+            # reverse. Otherwise use the existing unidirectional RRT.
+            planner = get_planner("rrt_connect" if self.allow_reverse else "rrt", self, self.is_valid,
+                                  max_iter=400, goal_tolerance=1e-6)
             result = planner.plan(np.asarray(start), np.asarray(goal))
             if not result.success:
                 return []
+            sparse = compress_drive_waypoints(start, [node.state for node in result.trajectory] + [np.asarray(goal)])
             route = []
             previous = start
-            for endpoint in [node.state for node in result.trajectory] + [np.asarray(goal)]:
-                route.extend(differential_drive_waypoints(previous, endpoint))
+            for endpoint in sparse:
+                route.extend(differential_drive_waypoints(previous, endpoint, allow_reverse=self.allow_reverse))
                 previous = endpoint
             self.route_stats["phase"] = "rrt_sweep"
             if not validate_navigation_sweep(self, start, route)[0]:

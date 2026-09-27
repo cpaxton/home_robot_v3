@@ -97,3 +97,24 @@ def test_differential_route_turn_in_place_has_single_goal():
     from emet.motion.navigation_sweep import differential_drive_waypoints
 
     assert differential_drive_waypoints([1, 2, 0], [1, 2, 1]) == [[1., 2., 1.]]
+
+
+def test_reverse_drive_avoids_unnecessary_half_turn_with_short_segments():
+    from emet.motion.navigation_sweep import differential_drive_waypoints
+
+    route = np.array(differential_drive_waypoints([0,0,0], [-.6,0,0], allow_reverse=True))
+    assert np.all(np.abs(route[:,2]) < 1e-8)
+    assert np.linalg.norm(np.diff(np.vstack(([0,0,0], route))[:,:2],axis=0),axis=1).max() <= .2 + 1e-8
+    np.testing.assert_allclose(route[-1], [-.6,0,0], atol=1e-12)
+
+
+def test_drive_compression_keeps_corner_and_bounds_translation():
+    from emet.motion.navigation_sweep import compress_drive_waypoints
+
+    route = [[x,0,0] for x in np.linspace(.025,.4,16)]
+    route += [[.4,0,yaw] for yaw in np.linspace(.05,np.pi/2,32)]
+    route += [[.4,y,np.pi/2] for y in np.linspace(.025,.4,16)]
+    compressed = np.array(compress_drive_waypoints([0,0,0], route))
+    assert len(compressed) == 5
+    np.testing.assert_allclose(compressed[2], [.4,0,np.pi/2])
+    assert np.linalg.norm(np.diff(np.vstack(([0,0,0],compressed))[:,:2], axis=0),axis=1).max() <= .2 + 1e-8
