@@ -57,7 +57,7 @@ def run(args):
     os.environ.setdefault("MUJOCO_GL", "egl")
     import mujoco
 
-    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place_mcts
     from emet.eval.physical_tamp import (
         SceneNavigationSpace,
@@ -67,9 +67,9 @@ def run(args):
         grasp_yaw_options,
         kinematic_base_candidates,
         make_scene_checker,
+        plan_payload_placement,
         save_motion_overview,
         score_physical_acceptance,
-        support_release_points,
         write_offline_base_pose,
     )
     from emet.motion.mujoco_collision import verify_collision_kernel
@@ -83,6 +83,7 @@ def run(args):
         source_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
     )
     manifest["budgets"]["wall_timeout_s"] = args.timeout
+    manifest["placement_replan_after_lift"] = True
     manifest["payload_tracking_envelope"] = {
         "position_radius_m": 0.02, "yaw_radius_rad": 0.03, "offset_samples": 26,
         "scope": "carried-object routes; sampled screening, not a continuous certificate",
@@ -375,100 +376,25 @@ def run(args):
                 item.update(phase="grasp", reason=plan.message)
                 event(**item)
                 return False
-            releases = support_release_points(
-                model,
-                data,
-                support_body=scorer["support_body"],
-                payload_body=scorer["object_body"],
-                ee_body=scorer["ee_body"],
+            item["place_rejections"] = []
+            placement, error = plan_payload_placement(
+                executor, space, scorer, approach=approach, rejections=item["place_rejections"], event=event,
             )
-            if not releases:
-                plan.message = "unsupported_support_surface"
-                item.update(phase="place", reason=plan.message)
-                event(**item)
-                return False
-            lift_state = data.qpos.copy()
-            place_route = None
-            place_pose = None
-            place_paths = []
-            place_targets = []
-            payload_transform = checker.payload_transform.copy()
-            place_rejections = []
-            # Keep partial search evidence if the wall budget interrupts a
-            # support/base candidate before the full placement loop finishes.
-            item["place_rejections"] = place_rejections
-            for release in releases:
-                event(phase="release_candidate", approach=approach.tolist(), release=release.tolist())
-                data.qpos[:] = lift_state
-                place_goals = [approach.copy()]
-                place_goals.extend(
-                    kinematic_base_candidates(
-                        model,
-                        data,
-                        target_xy=release[:2],
-                        ee_body=scorer["ee_body"],
-                        extension_joints=tuple(f"joint_arm_l{i}" for i in range(4)),
-                    )
-                )
-                for goal in place_goals:
-                    data.qpos[:] = lift_state
-                    checker.payload_body, checker.payload_parent = scorer["object_body"], scorer["ee_body"]
-                    checker.payload_transform = payload_transform.copy()
-                    possible = space.plan_route(approach, goal)
-                    if not possible:
-                        place_rejections.append(
-                            {"pose": goal.tolist(), "release": release.tolist(), "phase": "transport", "validity": dict(space.last_validity)}
-                        )
-                        continue
-                    # Extra preplace height is a path candidate, not a task
-                    # requirement. Try smaller clearances if the first exceeds reach.
-                    for clearance in (0.12, 0.06, 0.03):
-                        data.qpos[:] = lift_state
-                        checker.payload_body, checker.payload_parent = scorer["object_body"], scorer["ee_body"]
-                        checker.payload_transform = payload_transform.copy()
-                        write_offline_base_pose(
-                            model, data, base_body_name="base_link", x=goal[0], y=goal[1], theta=goal[2]
-                        )
-                        place_rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
-                        targets = [release + [0, 0, clearance], release, release + [0, 0, clearance]]
-                        paths = []
-                        for phase, point in zip(("preplace", "place", "retreat"), targets, strict=True):
-                            if phase == "retreat":
-                                checker.set_payload(model, data, None)
-                            path, error = executor.plan_pose(point, place_rotation)
-                            if error:
-                                place_rejections.append(
-                                    {"pose": goal.tolist(), "phase": phase, "reason": error, "clearance_m": clearance}
-                                )
-                                break
-                            paths.append(path)
-                        if len(paths) == 3:
-                            place_pose, place_route, place_paths = goal, possible, paths
-                            place_targets = [[point.tolist(), place_rotation.tolist()] for point in targets]
-                            break
-                    if place_route is not None:
-                        break
-                if place_route is not None:
-                    break
-            item["place_rejections"] = place_rejections
-            if place_route is None:
-                plan.message = "no_place_witness_within_budget"
-                item.update(phase="place", reason=plan.message)
+            if error:
+                plan.message = error
+                item.update(phase="place", reason=error)
                 event(**item)
                 return False
             item.update(phase="witness", accepted=True)
             selected.update(
                 approach_route=route,
-                place_route=place_route,
-                place_pose=place_pose.tolist(),
+                **placement,
                 grasp_paths=[[q.tolist() for q in p] for p in grasp_paths],
                 grasp_target_options=grasp_options,
-                place_paths=[[q.tolist() for q in p] for p in place_paths],
                 grasp_targets=[
                     [point.tolist(), rotation.tolist()]
                     for point in (object_pos + [0, 0, 0.12], object_pos, object_pos + [0, 0, 0.12])
                 ],
-                place_targets=place_targets,
                 preparation_path=[q.tolist() for q in preparation_path] if prepare and preparation_path else [],
             )
             event(**item)
@@ -527,7 +453,28 @@ def run(args):
                 capture("navigation")
                 return outcome
 
-            executor.transport = lambda: navigate(selected["place_pose"])
+            def transport():
+                synchronize(data)
+                if not executor.payload_retained():
+                    return PhysicalMotionResult(False, "payload_not_retained", "transport")
+                item = {"phase": "placement_replan", "place_rejections": []}
+                diagnostics.append(item)
+                placement, error = plan_payload_placement(
+                    executor, space, scorer, approach=base_pose(model, data),
+                    preferred_pose=selected["place_pose"], rejections=item["place_rejections"], event=event,
+                )
+                item.update(accepted=error is None, reason=error)
+                if error:
+                    event(**item)
+                    return PhysicalMotionResult(False, error, "transport")
+                selected["initial_placement"] = {key: selected[key] for key in placement}
+                selected.update(placement)
+                executor.place_paths = [list(map(np.asarray, path)) for path in placement["place_paths"]]
+                executor.place_targets = placement["place_targets"]
+                event(**item, place_pose=placement["place_pose"], place_targets=placement["place_targets"])
+                return navigate(placement["place_pose"])
+
+            executor.transport = transport
             out = execute_task_plan(
                 robot,
                 plan,

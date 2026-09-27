@@ -42,6 +42,11 @@ measured-state checks and the independent contact scorer remain mandatory.
 Precision command startup now acquires XY from fresh measured feedback when it
 already meets the declared bound, allowing a following yaw command to turn.
 Drift outside that bound still requires translation to the tighter inner target.
+After lift, the GT driver reruns the same bounded placement search from measured
+arm/base/payload state, trying the original placement first. A replacement must
+pass the same carried route and preplace/release/retreat checks before transport.
+Both original and executed placement witnesses are retained. This changes only
+private planning state; live actuation remains through the shared controllers.
 
 ## Commands
 

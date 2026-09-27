@@ -276,6 +276,18 @@ def test_payload_loss_reason_survives_navigation_failure_and_cancellation():
     assert cancelled == [True]
 
 
+def test_failed_placement_replan_reason_survives_transport_adapter():
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
+
+    executor = SimpleNamespace(
+        payload_body="load", place_paths=[[], [], []], place_targets=[[], [], []],
+        transport=lambda: PhysicalMotionResult(False, "no_place_witness_within_budget", "transport"),
+    )
+    result = PhysicalPickPlaceExecutor.place_only(executor, "support", object_gt_body="load")
+    assert not result.success and result.phase == "transport"
+    assert result.message == "no_place_witness_within_budget"
+
+
 def test_structured_false_controller_response_is_not_truthy_navigation_success():
     from emet.motion.navigation_sweep import execute_measured_route
 

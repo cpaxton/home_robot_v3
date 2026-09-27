@@ -29,8 +29,8 @@ a copied `server.log`. Active runs are moved only after completion.
 | GT floor registry | `88f8c48e` | 2/3 executed tasks passed; one find-only row deferred under GT-only scope | `/tmp/tamp-floor-20260926-r8` |
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
-| Latest completed physical RoboCasa can → counter | `1b3f57bf` | Verified pickup; payload hit stove during transport, task failed at 383.1 s | `/tmp/physical-tamp-robocasa-20260926-r23` |
-| Latest completed physical Molmo tomato → bowl | `fb817dcc` | Timed out during approach, 602.3 s | `/tmp/physical-tamp-molmo-20260926-r22` |
+| Latest completed physical RoboCasa can → counter | `4a821be1` | Verified pickup; safely refused measured transport envelope, failed at 253.8 s | `/tmp/physical-tamp-robocasa-20260927-r24` |
+| Latest completed physical Molmo tomato → bowl | `1b3f57bf` | Failed approach after bounded final-turn retries, 921.3 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -91,10 +91,10 @@ sampling, not a continuous robustness proof or an executed task success.
 | Pending experiment | Job | Budget | Artifact root |
 | --- | --- | --- | --- |
 | RoboCasa physical r24, seed 0 | `20260927_111453_79d184` | 600 s | `/tmp/physical-tamp-robocasa-20260927-r24` |
-| Molmo physical r23-long, seed 0 | `20260927_083844_3b2889` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r23-long` |
+| Molmo physical r25, seed 0 | `20260927_112354_b401b7` | 1800 s | `/tmp/physical-tamp-molmo-20260927-r25` |
 
 The corrected registry has completed and released the exclusive GPU lock.
-RoboCasa r23 is terminal; Molmo r23-long is running. The Molmo budget was declared before execution because r22
+Both r23 trials and RoboCasa r24 are terminal. Molmo r25 holds the lock. The Molmo budget was declared before execution because r22
 measured approximately 64–68 wall seconds per 17 cm approach segment. Per-command
 timeouts, retries, and scoring remain unchanged. This diagnostic is not a matched-
 budget comparison with earlier 600 s trials.
@@ -141,7 +141,8 @@ The bounded search must select another candidate; this rejection is not a live
 success. Navigation failure results now retain the measurement exception reason.
 The combined targeted suite passes **248 tests**. The repair is frozen at
 `4a821be1` in r24, queued under job `20260927_111453_79d184` with the same 600 s
-RoboCasa budget. Molmo r23-long continues on its original frozen revision.
+RoboCasa budget. Molmo r23-long retained its original frozen revision and failed
+approach at 921.3 s after bounded final-turn retries, with no pickup.
 
 ## Fresh position acquisition for final turns
 
@@ -155,7 +156,27 @@ success or change arrival tolerances. The existing hysteresis still requires
 returning to the inner target after drift outside the outer bound. Execution-path
 screening uses the same startup rule. A real-controller regression verifies
 immediate turning inside the bound and required translation with fresh feedback
-outside it, even when cached feedback was inside.
+outside it, even when cached feedback was inside. The combined suite passes
+**250 tests**. Source `cc44da56` is frozen in r25; Molmo job
+`20260927_112354_b401b7` uses the same 1800 s budget as r23-long.
+
+## Placement alternatives after measured lift
+
+RoboCasa r24 (`4a821be1`) found an envelope-checked static alternative and again
+passed independent pickup. It refused transport at 253.8 s because the measured
+carried configuration made the planned placement endpoint intersect the knife
+block within the tracking envelope. This is a safe rejection, not task acceptance;
+no forbidden actuation or robot contacts were recorded.
+
+The next repair extracts the existing bounded placement loop into a shared helper
+and reruns it after measured lift, trying the original placement before the same
+ordered alternatives. A replacement must pass transport and all placement/retreat
+paths; no live motion begins on search failure. Private planning state and the
+original grasp transform are restored, preserving retention checks. Original and
+executed placement witnesses remain in the artifact. Exact r24 replay finds a
+replacement at approximately (3.242, −1.175, 2.358) in 30.9 s after 143 rejections.
+The targeted set now covers **253 passing tests**, including alternative selection,
+exhaustion, state restoration, and propagation of placement-replan failures.
 
 ## Implemented motion contracts
 
@@ -230,7 +251,7 @@ must carry their own source revision and may not replace those control results.
 
 ## Validation and remaining gates
 
-The combined targeted suite passed **248 tests for the transport-envelope repair**, including command
+The combined targeted suite passed **250 tests at `cc44da56`**, including command
 snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base

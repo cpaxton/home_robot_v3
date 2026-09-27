@@ -600,3 +600,72 @@ def support_release_points(model, data, *, support_body, payload_body, ee_body, 
         if surfaces >= max_surfaces:
             break
     return points
+
+
+def plan_payload_placement(executor, space, scorer, *, approach, rejections, event=lambda **kwargs: None,
+                           preferred_pose=None):
+    """Reuse the bounded placement search from nominal or measured lift state.
+
+    Only private planning state is changed. The caller owns live execution and
+    must retain the original measured grasp transform for retention monitoring.
+    """
+    model, data, checker = executor.model, executor.data, executor.collision
+    state = data.qpos.copy()
+    payload = (checker.payload_body, checker.payload_parent, checker.payload_transform)
+    if payload[0] != scorer["object_body"] or payload[2] is None:
+        return None, "missing_measured_payload"
+    transform = payload[2].copy()
+    try:
+        releases = support_release_points(
+            model, data, support_body=scorer["support_body"], payload_body=scorer["object_body"],
+            ee_body=scorer["ee_body"],
+        )
+        if not releases:
+            return None, "unsupported_support_surface"
+        for release in releases:
+            event(phase="release_candidate", approach=np.asarray(approach).tolist(), release=release.tolist())
+            data.qpos[:] = state
+            goals = [] if preferred_pose is None else [np.asarray(preferred_pose)]
+            goals.append(np.asarray(approach))
+            goals.extend(kinematic_base_candidates(
+                model, data, target_xy=release[:2], ee_body=scorer["ee_body"],
+                extension_joints=tuple(name for group in executor.coupled_groups for name in group),
+            ))
+            for goal in goals:
+                data.qpos[:] = state
+                checker.payload_body, checker.payload_parent = payload[:2]
+                checker.payload_transform = transform.copy()
+                route = space.plan_route(approach, goal)
+                if not route:
+                    rejections.append({"pose": goal.tolist(), "release": release.tolist(), "phase": "transport",
+                                       "validity": dict(space.last_validity)})
+                    continue
+                for clearance in (0.12, 0.06, 0.03):
+                    data.qpos[:] = state
+                    checker.payload_body, checker.payload_parent = payload[:2]
+                    checker.payload_transform = transform.copy()
+                    write_offline_base_pose(model, data, base_body_name=space.base_body,
+                                            x=goal[0], y=goal[1], theta=goal[2])
+                    rotation = data.body(scorer["ee_body"]).xmat.reshape(3, 3).copy()
+                    targets = [release + [0, 0, clearance], release, release + [0, 0, clearance]]
+                    paths = []
+                    for phase, point in zip(("preplace", "place", "retreat"), targets, strict=True):
+                        if phase == "retreat":
+                            checker.set_payload(model, data, None)
+                        path, error = executor.plan_pose(point, rotation)
+                        if error:
+                            rejections.append({"pose": goal.tolist(), "phase": phase, "reason": error,
+                                               "clearance_m": clearance})
+                            break
+                        paths.append(path)
+                    if len(paths) == 3:
+                        return {
+                            "place_pose": goal.tolist(), "place_route": route,
+                            "place_paths": [[q.tolist() for q in path] for path in paths],
+                            "place_targets": [[point.tolist(), rotation.tolist()] for point in targets],
+                        }, None
+        return None, "no_place_witness_within_budget"
+    finally:
+        data.qpos[:] = state
+        checker.payload_body, checker.payload_parent, checker.payload_transform = payload
+        mujoco.mj_kinematics(model, data)

@@ -119,6 +119,58 @@ def test_payload_tracking_envelope_rejects_nominally_clear_extended_load():
     assert robust.is_valid([0, -.2, 0])
 
 
+@pytest.mark.parametrize("reachable", [False, True])
+def test_measured_placement_search_tries_alternatives_and_restores_payload(monkeypatch, reachable):
+    from types import SimpleNamespace
+
+    import mujoco
+
+    import emet.eval.physical_tamp as module
+    from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base_link"><freejoint/><geom size=".05"/><body name="hand" pos="0 0 1"/></body>
+      <body name="load" pos="0 0 1"><freejoint/><geom size=".02"/></body>
+    </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    checker = MujocoSceneCollisionChecker(model, robot_body="base_link")
+    checker.set_payload(model, data, "load", "hand")
+    before, transform = data.qpos.copy(), checker.payload_transform.copy()
+    monkeypatch.setattr(module, "support_release_points", lambda *args, **kwargs: [np.array([3., 0., 1.])])
+    monkeypatch.setattr(module, "kinematic_base_candidates", lambda *args, **kwargs: [np.array([2., 0., 0.])])
+    attempts, arm_payloads = [], []
+
+    def route(start, goal):
+        np.testing.assert_array_equal(data.qpos, before)
+        assert checker.payload_body == "load"
+        attempts.append(goal[0])
+        data.qpos[0] = 9.  # Hypothetical search state must not leak into another candidate.
+        return [goal.tolist()] if reachable and goal[0] == 2 else []
+
+    def plan_pose(point, rotation):
+        arm_payloads.append(checker.payload_body)
+        data.qpos[0] += .1
+        return [np.zeros(1)], None
+
+    executor = SimpleNamespace(model=model, data=data, collision=checker, coupled_groups=(), plan_pose=plan_pose)
+    space = SimpleNamespace(base_body="base_link", plan_route=route, last_validity={"reason": "scene_collision"})
+    rejections = []
+    result, error = module.plan_payload_placement(
+        executor, space, {"object_body": "load", "ee_body": "hand", "support_body": "support"},
+        approach=np.zeros(3), preferred_pose=[1., 0., 0.], rejections=rejections,
+    )
+    assert attempts == [1, 0, 2]
+    np.testing.assert_array_equal(data.qpos, before)
+    np.testing.assert_array_equal(checker.payload_transform, transform)
+    assert checker.payload_body == "load" and checker.payload_parent == "hand"
+    if reachable:
+        assert error is None and result["place_pose"] == [2, 0, 0]
+        assert len(result["place_paths"]) == 3
+        assert arm_payloads == ["load", "load", None]
+    else:
+        assert result is None and error == "no_place_witness_within_budget"
+
+
 def test_approach_candidates_follow_actual_extension_line_and_preserve_state():
     import mujoco
 

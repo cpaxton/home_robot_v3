@@ -361,7 +361,8 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, "missing_validated_place", "place")
         result = self.transport()
         if not result.success:
-            return PhysicalMotionResult(False, getattr(result, "reason", "transport_failed"), "transport")
+            reason = getattr(result, "reason", None) or getattr(result, "message", "transport_failed")
+            return PhysicalMotionResult(False, reason, "transport")
         paths, error = self._replan_at_measured_pose(
             ("preplace", "place", "retreat"),
             self.place_targets,
