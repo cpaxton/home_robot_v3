@@ -332,7 +332,8 @@ def test_grasp_rechecks_pose_ik_after_measured_arrival_before_actuation():
     assert "unreachable_after_arrival" in result.message
 
 
-def test_missing_payload_stops_arm_before_next_command():
+@pytest.mark.parametrize("slip", ["translation", "rotation"])
+def test_missing_payload_stops_arm_before_next_command(slip):
     from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
 
     m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
@@ -342,6 +343,7 @@ def test_missing_payload_stops_arm_before_next_command():
     </worldbody></mujoco>""")
     d = mujoco.MjData(m)
     checker = MujocoSceneCollisionChecker(m, robot_body="robot")
+    events = []
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
         model=m,
@@ -351,13 +353,20 @@ def test_missing_payload_stops_arm_before_next_command():
         collision=checker,
         synchronize=lambda state: mujoco.mj_kinematics(m, state),
         command_joints=lambda q: pytest.fail("motion with lost payload"),
+        event=lambda **row: events.append(row),
     )
     checker.set_payload(m, d, "payload", "ee")
     executor.payload_body = "payload"
     assert executor.payload_retained()
-    d.qpos[2] += 0.1
+    if slip == "translation":
+        d.qpos[2] += 0.1
+    else:
+        d.qpos[4:8] = [np.cos(0.1), 0, 0, np.sin(0.1)]
     result = executor._execute_path("lift", [np.zeros(1), np.array([0.2])])
     assert not result.success and result.message == "payload_not_retained"
+    assert events[-1]["phase"] == "payload_retention"
+    assert events[-1]["translation_residual_m"] == pytest.approx(0.1 if slip == "translation" else 0)
+    assert events[-1]["rotation_residual_rad"] == pytest.approx(0.2 if slip == "rotation" else 0)
 
 
 def test_coupled_arm_can_raise_then_extend_around_blocked_diagonal():

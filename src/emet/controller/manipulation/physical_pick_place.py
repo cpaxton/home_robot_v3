@@ -162,13 +162,22 @@ class PhysicalPickPlaceExecutor:
             return True
         expected = self.collision.payload_transform
         if expected is None:
+            self.event(phase="payload_retention", accepted=False, reason="missing_payload_reference")
             return False
         ee, obj = self.data.body(self.ee_body), self.data.body(self.payload_body)
         rotation = ee.xmat.reshape(3, 3).T
         position = rotation @ (obj.xpos - ee.xpos)
         relative_rotation = rotation @ obj.xmat.reshape(3, 3)
         angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
-        return bool(np.linalg.norm(position - expected[:3, 3]) <= 0.02 and angle <= 0.1)
+        displacement = float(np.linalg.norm(position - expected[:3, 3]))
+        retained = bool(displacement <= 0.02 and angle <= 0.1)
+        if not retained:
+            self.event(
+                phase="payload_retention", accepted=False, reason="payload_not_retained",
+                translation_residual_m=displacement, rotation_residual_rad=float(angle),
+                translation_tolerance_m=0.02, rotation_tolerance_rad=0.1,
+            )
+        return retained
 
     def _close_gripper_until_still(self, timeout_s=10.0):
         """A grasp stops short of the empty-jaw endpoint; verify motor settling.

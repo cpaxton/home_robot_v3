@@ -76,12 +76,12 @@ successful motion tests.
 
 ## Current physical candidate and fixture recheck
 
-The latest completed pair, r22 (`fb817dcc`), failed before pickup. RoboCasa
+The earlier r22 pair (`fb817dcc`) failed before pickup. RoboCasa
 stalled during its final approach turn after 426.6 s. Molmo found a complete
 static witness and executed approach segments, then hit its wall deadline at
 602.3 s. Neither result passes physical acceptance.
 
-The current candidate, r23 (`1b3f57bf`), retains collision-checked differential-drive
+R23 (`1b3f57bf`) introduced the current grasp alternatives and retains collision-checked differential-drive
 RRT steering and returns to the original precision arrival bounds of 20 mm /
 0.03 rad. It declares three grasp yaw alternatives (0 and ±0.08 rad), each subject
 to the same IK, joint-margin, and fresh collision-path checks. Offline RoboCasa
@@ -264,7 +264,10 @@ snapshot, deadline, adapter-mode, joint-margin, hysteresis, cancellation, and
 explicit-subset regressions. Tests cover collision and unknown
 space rejection, coupled/pose IK, alternative search, measured arrival, arm/base
 tracking, payload slip/drop, forbidden actuation, and full-registry accounting.
-They do not establish live physical acceptance.
+They do not establish live physical acceptance. A subsequent 67-test executor/evaluation
+run also passed, including translation-versus-rotation retention diagnostics. The
+r26 plotting repair was verified by regenerating and inspecting its archived
+`motion_overview_regenerated.png`; the original result remains unchanged.
 
 | Plan gate | State |
 | --- | --- |
@@ -282,3 +285,20 @@ inspection and explicit resume; earlier failures are never overwritten.
 Other agents’ checkouts and jobs are untouched. Physical controller support is
 currently limited to the supported Stretch telescoping-arm interface; the wider
 robot control batteries do not imply physical support for every robot.
+
+## Review summary
+
+The opt-in physical-map path removes duplicated obstacle inflation and rasterizes
+robot footprints at continuous poses while retaining unknown-space rejection.
+The GT physical driver combines the existing bounded candidate/MCTS search with
+base sweeps, pose IK, arm paths, measured execution, and independent contact/actuation
+scoring. Shared controller repairs address frame consistency, command races,
+precision arrival, and bounded cancellation. No live object-pose writes or latches
+are permitted in this physical tier.
+
+The full control experiment and corrected subset are complete, with failures and
+fixture errors retained in separate ledgers. These results support control-path
+accounting, not physical reliability across robot types. The contact-based track
+has verified RoboCasa pickups but no complete task success. Promotion of the
+physical-map default, broader robot claims, and partial-observation execution must
+wait for the outstanding physical gates. No learned comparison was run.
