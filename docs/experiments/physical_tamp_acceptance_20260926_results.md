@@ -30,7 +30,7 @@ a copied `server.log`. Active runs are moved only after completion.
 | Full registry | `dbe0f4da` | 54/200 task successes; all 200 terminal | `/tmp/tamp-full-20260926-r14` |
 | Corrected 50-case subset | `fb817dcc` | 18 successes, 15 executed failures, 16 errors, 1 invalid fixture; all terminal | `/tmp/tamp-fixture-recheck-20260927-r22` |
 | Latest completed physical RoboCasa can → counter | `013a8bf1` | Verified pickup; rotational slip stopped transport, failed at 362.1 s | `/tmp/physical-tamp-robocasa-20260927-r26` |
-| Latest completed physical Molmo tomato → bowl | `cc44da56` | Static placement search timed out at 1802.5 s; no execution | `/tmp/physical-tamp-molmo-20260927-r25` |
+| Latest completed physical Molmo tomato → bowl | `8e9d3189` | Static placement search timed out at 1803.2 s; no execution | `/tmp/physical-tamp-molmo-20260927-r27` |
 
 The full registry contains **110 kinematic-latch and 90 oracle-teleport cases**.
 Neither mode establishes contact-based grasping. All results above are newly run;
@@ -96,8 +96,9 @@ not relaxed. R25 exhausted its 1800 s trial deadline during static
 placement search, so it did not exercise the final-turn controller repair.
 
 Molmo diagnostic r27, seed 0 (`8e9d3189`, job `20260927_120832_8191e6`,
-`/tmp/physical-tamp-molmo-20260927-r27`) is running and declares 1800 s overall and 60 s per
-base route before execution. The nominal/measured base retains the 22 cm
+`/tmp/physical-tamp-molmo-20260927-r27`) timed out at 1803.2 s during placement
+search, with 28 route-budget rejections and no execution. It declared 1800 s
+overall and 60 s per base route before execution. The nominal/measured base retains the 22 cm
 center-clearance gate; tracking offsets check full robot/payload geometry without
 applying that center margin a second time. Placement rejects endpoint and arm-path
 failures before spending the carried-route budget. Exact archived Molmo replay
@@ -311,4 +312,18 @@ calls and completed in 26.80 s (earlier implementation: 33.71 s). These are offl
 diagnostic timings, not a controlled speedup estimate. Detailed Python profiling
 is now opt-in and recorded in the manifest; ordinary route timing remains active.
 The combined targeted suite passed 255 tests. Any subsequent physical trial must
-retain a separate source revision and manifest from the still-profiled r27 trial.
+retain a separate source revision and manifest from the profiled r27 trial. The unprofiled r28 candidate is frozen at `71ba084d`,
+job `20260927_124015_c08510`, seed 0, with the same 1800/60 s budgets and output
+`/tmp/physical-tamp-molmo-20260927-r28`. It is executing after the completed hold diagnostic. R28 found a complete
+tracking-envelope-qualified witness at 154.69 s: its first carried-route search
+exhausted 60 s, and its second passed in 47.04 s with 1111 validity calls.
+This is static feasibility; physical scoring remains pending.
+
+The private fixed-command r26 dynamics replay (`20260927_121239_32ff01`) held
+wheel velocity commands at zero and retained arm targets for 20 simulated seconds.
+Relative rotation reached 0.16196 rad with the recorded gripper target and
+0.14475 rad with the existing actuator closed limit; translation stayed below
+6.18 mm and 4.21 mm respectively. Thus additional closing did not resolve the
+0.1 rad retention failure. Neither a stronger-close change nor altered physics
+was adopted. This restored-state diagnostic is not a task acceptance trial;
+results and script are archived under `stationary_hold_replay/`.

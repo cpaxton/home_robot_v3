@@ -353,7 +353,11 @@ full robot/payload geometry checks at all 26 tracking offsets. Placement checks
 endpoint and arm feasibility before RRT. Exact archived Molmo route replay passed
 in 16.17 s; a 60 s route-search replay found 18 waypoints in 33.71 s. The physical
 Molmo seed-0 diagnostic declares 1800 s total / 60 s per route, job
-`20260927_120832_8191e6`. It is distinct from the earlier 10 s route budgets.
+`20260927_120832_8191e6`. It is distinct from the earlier 10 s route budgets. R27 ended in a 1803.2 s
+timeout during placement search, with 28 route-budget failures and no motion.
+The subsequent r28 performance candidate is `71ba084d`, job
+`20260927_124015_c08510`, with the same overall/per-route budgets but profiling
+disabled and equivalent vectorized contact filtering.
 
 RoboCasa r26 (`013a8bf1`, job `20260927_113809_c1c0b1`) verified pickup and selected
 a new placement from measured lift state. It stopped after 362.1 s on retention
@@ -376,7 +380,14 @@ then applied the full tracking-envelope sweep to every proposal. It exhausted
 and another exhausted the nominal search budget. This experiment was not adopted.
 It did not modify live simulator state or supply a physical success result.
 
-A stationary-hold dynamics replay of archived r26 state is queued serially as
+A fixed-command dynamics replay of archived r26 state completed serially as
 `20260927_121239_32ff01`. It compares the recorded close command with the actuator's
 existing closed limit, retaining the exact model and physics. It is a diagnostic
 of private restored state, not a scored task trial or a controller acceptance run.
+
+The hold replay used 20 simulated seconds per condition. Recorded close target:
+0.161963 rad / 6.177 mm maximum relative drift. Existing actuator closed limit:
+0.144754 rad / 4.205 mm. Both exceed the unchanged 0.1 rad bound even without
+navigation commands. The stronger-close command was not adopted. Results are
+archived under `stationary_hold_replay/`; this is diagnostic dynamics evidence,
+not a physical task trial or proof of robust grip retention.
