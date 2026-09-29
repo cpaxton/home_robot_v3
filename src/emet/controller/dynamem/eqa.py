@@ -281,6 +281,10 @@ def _log_nav_attempt(
         if recent is not None:
             recent.append(key)
             del recent[:-8]
+    elif str(nav_res.note or "") == "rejected_swept_footprint:unobserved_footprint":
+        # The safety filter already invalidated the route. Missing coverage
+        # must not become an episode-long blacklist in this reporting path.
+        return
     elif (
         str(nav_res.note or "").startswith("already_at_goal")
         or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
