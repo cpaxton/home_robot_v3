@@ -561,6 +561,11 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         """
         # # type: ignore to bypass mypy checking
         xy = np.array([xy[0], xy[1]], dtype=float)  # type: ignore
+        if self.obstacle_map_mode == "physical":
+            cell = self.voxel_map.grid.xy_to_grid_cell(xy)
+            # A* treats an out-of-bounds index as occupied. Do not snap a pose
+            # outside the allocated map into a seemingly reachable edge cell.
+            return cell if cell is not None else (-1, -1)
         pt = self.voxel_map.xy_to_grid_coords(xy)  # type: ignore
         if pt is None:
             # Base pose can be outside the allocated grid (world vs map frame); snap for planning.

@@ -92,6 +92,30 @@ def test_unwrap_yaw_shortest_turn():
     assert abs(math.atan2(math.sin(raw - prev), math.cos(raw - prev)) - delta) < 1e-6
 
 
+@pytest.mark.parametrize("multi", [False, True])
+def test_same_cell_short_move_preserves_continuous_endpoint(multi):
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    start, goal = (0.21, 0.21, 0), (0.29, 0.29, 1.2)
+    assert planner.to_pt(start) == planner.to_pt(goal)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert result.success
+    states = [n.state for n in result.trajectory]
+    cleaned = planner.clean_path_for_xy(states, start_yaw=start[2])
+    np.testing.assert_allclose(cleaned[0][:2], start[:2])
+    np.testing.assert_allclose(cleaned[-1], goal)
+    assert len(cleaned) >= 2
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_does_not_snap_off_map_goal_inside(multi):
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    goal = (-0.2, 0.2, 0)
+    result = planner.plan((0.2, 0.2, 0), goal, goals=[goal] if multi else None, verbose=False)
+    assert not result.success
+
+
 def test_clean_path_for_xy_yaw_consecutive_delta_le_pi():
     obs, exp = _corridor_map()
     space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))

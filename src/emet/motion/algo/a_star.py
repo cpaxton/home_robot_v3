@@ -338,6 +338,9 @@ class AStar(Planner):
         # round-tripping moves it to the cell center, which can make the
         # execution filter stop recognizing a tight-clearance start.
         waypoints_xy[0] = (float(start[0]), float(start[1]))
+        # Search already resolved any unsafe goal to a safe grid endpoint.
+        # Preserve that continuous endpoint rather than round-tripping it again.
+        waypoints_xy[-1] = (float(goal[0]), float(goal[1]))
         traj = []
         prev_yaw = float(start_yaw)
         for i in range(len(waypoints_xy) - 1):
@@ -383,11 +386,13 @@ class AStar(Planner):
         return cleaned_path
 
     def get_unoccupied_neighbor(self, pt: tuple[int, int], goal_pt=None, max_ring: int = 4) -> tuple[int, int] | None:
+        h, w = self._navigable.shape
+        if not (0 <= pt[0] < h and 0 <= pt[1] < w):
+            return None
         if not self.point_is_occupied(*pt):
             return pt
 
         # If the start cell is marked occupied (pose noise / dilation), search outward by Chebyshev ring.
-        h, w = self._navigable.shape
         for ring in range(1, max_ring + 1):
             ring_pts: list[tuple[int, int]] = []
             for di in range(-ring, ring + 1):
@@ -514,7 +519,10 @@ class AStar(Planner):
         # Preserve the clearance-safe start escape cell when the measured base
         # pose had to be snapped out of a non-navigable grid cell.
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
-        return [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
+        path_xy = [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
+        if end_pt == self.to_pt(end_xy) and not np.allclose(path_xy[-1], end_xy, rtol=0, atol=1e-9):
+            path_xy.append(tuple(end_xy))
+        return path_xy
 
     def run_astar_multi_goal(
         self,
@@ -554,6 +562,9 @@ class AStar(Planner):
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
         path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[offset:]]
         gi = int(result.goal_index)
+        goal_xy = goals_xy[gi]
+        if goal_ijs[gi] == self.to_pt(goal_xy) and not np.allclose(path_xy[-1], goal_xy, rtol=0, atol=1e-9):
+            path_xy.append(tuple(goal_xy))
         return path_xy, gi
 
     def plan(self, start, goal, verbose: bool = True, goals=None, **kwargs) -> PlanResult:
