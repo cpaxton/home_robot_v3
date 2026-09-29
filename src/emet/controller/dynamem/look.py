@@ -142,7 +142,7 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
             camera_K=obs.camera_K,
             camera_pose=obs.camera_pose,
             head_pan_tilt=measured,
-            base_pose=robot.get_base_pose_world(),
+            base_pose=agent._planning_base_xyt(robot.get_base_pose()),
             obstacles_before=obstacles_before.cpu().numpy(),
             explored_before=explored_before.cpu().numpy(),
             obstacles_after=obstacles_after.cpu().numpy(),
@@ -235,33 +235,28 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
         return
     # Non-blocking; reliable=False avoids extra resends while we soft-wait.
     head_to(float(pan), float(tilt), blocking=False, reliable=False)
-    get_js = getattr(self.robot, "get_joint_state", None)
-    if not callable(get_js):
-        time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
-        return
-    try:
-        from emet.motion.kinematics import HelloStretchIdx
-    except Exception:
+    get_pan_tilt = getattr(self.robot, "get_pan_tilt", None)
+    if not callable(get_pan_tilt):
         time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
         return
 
-    t0 = time.time()
+    t0 = time.monotonic()
     stopped_since: float | None = None
     last_pan: float | None = None
     last_tilt: float | None = None
-    while time.time() - t0 < DYNAMEM_HEAD_SWEEP_MAX_WAIT_S:
+    last_time: float | None = None
+    while time.monotonic() - t0 < DYNAMEM_HEAD_SWEEP_MAX_WAIT_S:
         try:
-            joints, vels, _ = get_js()
+            measured = np.asarray(get_pan_tilt(), dtype=float)
         except Exception:
-            joints, vels = None, None
-        now = time.time()
+            measured = np.array([np.nan, np.nan])
+        now = time.monotonic()
         elapsed = now - t0
-        if joints is None or len(joints) <= HelloStretchIdx.HEAD_TILT:
+        if measured.shape != (2,) or not np.isfinite(measured).all():
             time.sleep(0.04)
             continue
 
-        cur_pan = float(joints[HelloStretchIdx.HEAD_PAN])
-        cur_tilt = float(joints[HelloStretchIdx.HEAD_TILT])
+        cur_pan, cur_tilt = measured
         pan_err = abs(cur_pan - float(pan))
         tilt_err = abs(cur_tilt - float(tilt))
         near_goal = pan_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD and tilt_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD
@@ -270,12 +265,12 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
             break
 
         speed = 0.0
-        if vels is not None and len(vels) > HelloStretchIdx.HEAD_TILT:
-            speed = abs(float(vels[HelloStretchIdx.HEAD_PAN])) + abs(float(vels[HelloStretchIdx.HEAD_TILT]))
         pos_delta = 0.0
         if last_pan is not None and last_tilt is not None:
             pos_delta = abs(cur_pan - last_pan) + abs(cur_tilt - last_tilt)
+            speed = pos_delta / max(now - last_time, 1e-6)
         last_pan, last_tilt = cur_pan, cur_tilt
+        last_time = now
 
         # Loose: slow creep counts as stopped so we do not burn max wait every pan.
         moving = speed > DYNAMEM_HEAD_SWEEP_SPEED_TOL or pos_delta > DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL

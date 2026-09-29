@@ -181,13 +181,14 @@ def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_stat
 @pytest.mark.parametrize(
     "failure", [None, "delayed", "post_arrival_stale", "stale", "pose", "depth", "map", "unsupported", "sequence"]
 )
-def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure, pan_rad, tilt_rad):
+def test_floor_observation_requires_fresh_measured_capture(monkeypatch, tmp_path, failure, pan_rad, tilt_rad):
     import itertools
 
     clock = itertools.count(step=1.0)
     monkeypatch.setattr(look.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(look.time, "sleep", lambda _: None)
     robot = SimpleNamespace(_seq_id=1, head_to=Mock(return_value=True))
+    robot.get_base_pose = lambda: np.array([1, 2, 0.3])
     expected_pan = 0.2 if pan_rad is None else pan_rad
     positions = itertools.chain(
         [(0.2, -0.5)],
@@ -199,12 +200,15 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
         return_value=SimpleNamespace(
             rgb=np.ones((2, 2, 3)),
             depth=None if failure == "depth" else np.ones((2, 2)),
+            camera_K=np.eye(3),
+            camera_pose=np.eye(4),
             get_xyz_in_world_frame=lambda: np.ones((2, 2, 3)),
         )
     )
-    monkeypatch.delenv("EMET_EQA_EPISODE_DIR", raising=False)
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
     agent = SimpleNamespace(
         robot=robot,
+        _planning_base_xyt=lambda pose: pose + [10, 20, 0],
         voxel_map=SimpleNamespace(
             observations=[],
             get_2d_map=lambda: (torch.zeros((2, 2), dtype=torch.bool), torch.ones((2, 2), dtype=torch.bool)),
@@ -237,6 +241,9 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
     if failure not in (None, "delayed", "map"):
         agent.update.assert_not_called()
     if failure in (None, "delayed"):
+        artifact = next((tmp_path / "navigation").glob("*.npz"))
+        with np.load(artifact) as saved:
+            np.testing.assert_allclose(saved["base_pose"], [11, 22, 0.3])
         robot.head_to.assert_called_once_with(expected_pan, tilt_rad, blocking=True)
         agent.update.assert_called_once_with(full_perception=True)
         feedback = result["observation"]
