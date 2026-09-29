@@ -119,6 +119,19 @@ def robot_planar_xy(robot: Any) -> tuple[float, float]:
     return float(pose[0]), float(pose[1])
 
 
+def exploration_planar_xy(agent: Any) -> tuple[float, float]:
+    """Base XY in the same planning frame as exploration candidates."""
+    robot = getattr(agent, "robot", None)
+    if robot is None:
+        return (0.0, 0.0)
+    pose = robot.get_base_pose()
+    transform = getattr(agent, "_planning_base_xyt", None)
+    if callable(transform):
+        pose = transform(pose)
+    pose = np.asarray(pose, dtype=np.float64).reshape(-1)
+    return float(pose[0]), float(pose[1])
+
+
 def _planar_dist(a: tuple[float, float] | np.ndarray, b: tuple[float, float] | np.ndarray) -> float:
     return float(math.hypot(float(a[0]) - float(b[0]), float(a[1]) - float(b[1])))
 
@@ -313,7 +326,7 @@ def pick_uncovered_explore_target(
     habitat = robot is not None and is_habitat_robot_client(robot)
     if min_travel_m <= 0.0:
         min_travel_m = explore_min_travel_m(agent)
-    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+    robot_xy = exploration_planar_xy(agent)
 
     for cand in candidates or []:
         if cand is None:
@@ -352,7 +365,7 @@ def pick_uncovered_explore_target(
     gm = getattr(agent, "graph_memory", None)
     if gm is not None:
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
-        robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+        robot_xy = exploration_planar_xy(agent)
         nodes.sort(
             key=lambda n: _frontier_explore_sort_key(
                 n,
