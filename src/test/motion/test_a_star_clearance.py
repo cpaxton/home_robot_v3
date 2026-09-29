@@ -127,6 +127,30 @@ def test_search_does_not_snap_off_map_goal_inside(multi):
     assert not result.success
 
 
+def test_shared_search_can_reject_cheapest_route_and_choose_alternative(monkeypatch):
+    from unittest.mock import Mock
+
+    from emet.motion import base_goal_rank
+
+    search = Mock(wraps=base_goal_rank.plan_grid_multi_goal)
+    monkeypatch.setattr(base_goal_rank, "plan_grid_multi_goal", search)
+    obs = np.zeros((20, 20), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    goals = [(0.2, 0.2, 0), (0.8, 0.2, 1.0), (1.2, 0.2, 0)]
+    visited = []
+
+    def evaluate(path, index):
+        visited.append(index)
+        return None if index == 0 else 10 - index
+
+    result = planner.plan((0.2, 0.2, 0), goals[0], goals=goals, candidate_evaluator=evaluate)
+    assert result.success and result.goal_index == 1
+    assert visited == [0, 1, 2]
+    search.assert_called_once()
+    np.testing.assert_allclose(result.resolved_goal, goals[1])
+    assert not planner.plan((0.2, 0.2, 0), goals[0], goals=goals, candidate_evaluator=lambda *_: None).success
+
+
 def test_clean_path_for_xy_yaw_consecutive_delta_le_pi():
     obs, exp = _corridor_map()
     space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))

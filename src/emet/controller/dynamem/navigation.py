@@ -567,6 +567,7 @@ def process_text(self, text, start_pose):
     n_planned = 0
     res = None
     point = None
+    candidate_diagnostics = []
 
     # Exploration: top-K frontiers → one multi-goal A* (skip sealed / unreachable).
     # Object nav stays single-goal. Leftover chunks keep the same frontier.
@@ -597,8 +598,14 @@ def process_text(self, text, start_pose):
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
             nav_goals.append(np.asarray(g, dtype=np.float64).reshape(-1))
 
-        if len(nav_goals) >= 2:
-            res = self.planner.plan(start_pose, nav_goals[0], goals=nav_goals)
+        physical_views = getattr(self.space, "obstacle_map_mode", None) == "physical"
+        if nav_goals and (len(nav_goals) >= 2 or physical_views):
+            evaluator = None
+            if physical_views:
+                from emet.motion.viewpoint_selection import make_frontier_evaluator
+
+                evaluator = make_frontier_evaluator(self, start_pose, nav_goals, candidate_diagnostics)
+            res = self.planner.plan(start_pose, nav_goals[0], goals=nav_goals, candidate_evaluator=evaluator)
             gi = getattr(res, "goal_index", None) if res is not None else None
             if res is not None and res.success and gi is not None and 0 <= int(gi) < len(nav_goals):
                 gi_i = int(gi)
@@ -619,6 +626,16 @@ def process_text(self, text, start_pose):
                 )
             elif res is not None and not res.success:
                 logger.warning("Multi-goal explore plan failed: %s", res.reason)
+                if physical_views:
+                    failure = next((d for d in candidate_diagnostics if d.get("footprint")), {})
+                    self._last_nav_plan = {
+                        "mode": mode,
+                        "localize_source": "frontier_view_selection",
+                        "outcome": failure.get("reason", "no_useful_executable_view"),
+                        "footprint": failure.get("footprint", {}),
+                        "view_candidates": candidate_diagnostics,
+                    }
+                    return []
                 res = None
         elif len(nav_goals) == 1:
             point = nav_goals[0]
@@ -800,6 +817,7 @@ def process_text(self, text, start_pose):
             goal_resolution=getattr(res, "goal_resolution", None),
             object_xyz=[ox, oy, oz],
             query_candidate_handle=query_candidate_handle,
+            view_candidates=candidate_diagnostics,
             traj=list(traj),
         )
     return traj

@@ -75,6 +75,7 @@ def navigation_feedback(agent: Any | None) -> dict:
         "goal_xyt",
         "requested_goal_xyt",
         "goal_resolution",
+        "view_candidates",
         "n_planned",
         "min_clearance_m",
         "min_clearance_required_m",

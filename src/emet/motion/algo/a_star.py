@@ -537,7 +537,10 @@ class AStar(Planner):
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
         path_xy = [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
         if end_pt == self.to_pt(end_xy) and not np.allclose(path_xy[-1], end_xy, rtol=0, atol=1e-9):
-            path_xy.append(tuple(end_xy))
+            if len(path_xy) == 1:
+                path_xy.append(tuple(end_xy))
+            else:
+                path_xy[-1] = tuple(end_xy)
         return path_xy
 
     def run_astar_multi_goal(
@@ -546,6 +549,7 @@ class AStar(Planner):
         goals_xy: list[tuple[float, float]],
         *,
         stop_at_first: bool = True,
+        candidate_evaluator=None,
     ):
         """One shared A*/Dijkstra search toward a set of goal XYs.
 
@@ -566,7 +570,7 @@ class AStar(Planner):
             start_pt,
             goal_ijs,
             navigable=self._navigable,
-            stop_at_first=stop_at_first,
+            stop_at_first=stop_at_first and candidate_evaluator is None,
         )
         if not result.success or result.goal_index is None:
             return None, None
@@ -576,14 +580,26 @@ class AStar(Planner):
         # into an otherwise valid path, causing the execution safety filter to
         # reject every multi-goal trajectory.
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
-        path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[offset:]]
-        gi = int(result.goal_index)
-        goal_xy = goals_xy[gi]
-        if goal_ijs[gi] == self.to_pt(goal_xy) and not np.allclose(path_xy[-1], goal_xy, rtol=0, atol=1e-9):
-            path_xy.append(tuple(goal_xy))
-        return path_xy, gi
+        candidates = []
+        for gi, reachable, cost in result.goal_scores:
+            if not reachable:
+                continue
+            path_xy = [start_xy] + [self.to_xy(pt) for pt in result.goal_paths[gi][offset:]]
+            goal_xy = goals_xy[gi]
+            if goal_ijs[gi] == self.to_pt(goal_xy) and not np.allclose(path_xy[-1], goal_xy, rtol=0, atol=1e-9):
+                if len(path_xy) == 1:
+                    path_xy.append(tuple(goal_xy))
+                else:
+                    path_xy[-1] = tuple(goal_xy)
+            score = -float(cost) if candidate_evaluator is None else candidate_evaluator(path_xy, gi)
+            if score is not None and np.isfinite(score):
+                candidates.append((float(score), -float(cost), -gi, path_xy))
+        if not candidates:
+            return None, None
+        best = max(candidates, key=lambda item: item[:3])
+        return best[3], -best[2]
 
-    def plan(self, start, goal, verbose: bool = True, goals=None, **kwargs) -> PlanResult:
+    def plan(self, start, goal, verbose: bool = True, goals=None, candidate_evaluator=None, **kwargs) -> PlanResult:
         """Plan from start to ``goal``, or to the nearest of ``goals`` (multi-goal).
 
         When ``goals`` is a non-empty sequence of XY(T) states, runs one shared grid
@@ -598,7 +614,9 @@ class AStar(Planner):
             if not goal_list:
                 return PlanResult(False, reason="no_goals")
             goals_xy = [(float(g[0]), float(g[1])) for g in goal_list]
-            waypoints, gi = self.run_astar_multi_goal(start[:2], goals_xy, stop_at_first=True)
+            waypoints, gi = self.run_astar_multi_goal(
+                start[:2], goals_xy, stop_at_first=True, candidate_evaluator=candidate_evaluator
+            )
             if waypoints is None or gi is None:
                 if verbose:
                     print("A* multi-goal fails, check obstacle map")
