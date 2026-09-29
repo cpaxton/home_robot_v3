@@ -14,9 +14,15 @@ Implementation and acceptance specification:
 - [ ] Finish physical-find recovery retest `20260929_085020_0968a4` after
       `da5d2a80` wires existing floor sensing into the internal find loop.
       Previous paired small-room OVMM: both versions 0/2 object, 0/2 receptacle.
-- [ ] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
+      Recovery-only retest also 0/2 + 0/2, but selected floor sensing cleared
+      the RoboCasa checked blocker. Final replan repair `de7aae86` is queued as
+      `20260929_090518_81c52e`; do not call this task acceptance yet.
+- [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
+      Galaxea proxy passes 42/42 with continuous contact evidence; Stretch
+      heading repair `5e092282` passes 42/42, zero unexpected contacts over
+      156,986 physics steps. This is tabletop-route, not room-scale acceptance.
 
 - [x] Planning-frame frontier distances (`ca09d8d8`); physical-map cell-center
       indexing and continuous short-move endpoints (`6c97f8c3`).

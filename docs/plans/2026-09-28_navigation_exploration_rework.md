@@ -308,3 +308,46 @@ navigation or answer accuracy improved.
 Promotion remains blocked on useful room exploration/find, controller repetition
 reliability and remaining physical safety cases. No timeout or clearance limits
 were relaxed to pass these gates.
+
+### Follow-up scores and review boundaries
+
+- Galaxea proxy tabletop route: **42/42 endpoint dwells**, 76,873 consecutive
+  physics steps, zero unexpected contacts, minimum upright dot 0.9999963.
+  This is the declared route only, not native RB-Y1 or narrow-passage acceptance.
+- Native Stretch heading-repair retest `20260929_085341_7063a8`: **42/42 endpoint
+  dwells**, 156,986 consecutive physics steps, zero unexpected contacts, minimum
+  upright dot 0.9999944. Previously failing command 29 passes with XY error
+  0.012275 m and yaw error 0.006515 rad. Tolerances remain 0.02 m / 0.03 rad.
+  `stretch-heading-fix/summary.json` records the measured command window.
+  This closes the repeated tabletop-route failure, not the separate kitchen
+  gripper collision or the rest of the physical acceptance matrix.
+- Serialized socket/navigation regression `20260929_085040_ab3963`: **45 passed**.
+  Broad controller/agent/navigation/parity suite: **766 passed**, excluding the
+  two socket-dependent agent simulation files. Those sandbox attempts failed
+  to bind ZMQ; no learned/task result can be inferred from them.
+  Final expanded suite at `de7aae86`, including agentic routing/evidence tests:
+  **841 passed**. The separate minimal TAMP suite was rerun: **48 passed**.
+- Recovery-only OVMM `da5d2a80`: still **0/2 object, 0/2 receptacle**. In RoboCasa,
+  a VLM-selected floor observation removed the checked one-cell blocker and
+  added 16 observed cells. Molmo gained 22 then 3 cells but its checked blocker
+  remained. Repeated unhelpful floor views consumed rounds. Tool availability
+  and sensing are demonstrated; successful search is not.
+- `2d92eeda` and `de7aae86` stop permanently blacklisting a destination solely
+  for missing floor coverage, both in route-abort and attempt-reporting paths.
+  Failed continuations are still invalidated; new routes must pass the full
+  safety filter. Unrelated failures and retry budgets are preserved. The
+  real abort/report-chain regression passes. `51a9656b` synchronizes both shared
+  motion controllers into standalone emet-core and adds them to parity checks;
+  14 parity/heading/translation tests pass. No hardware deployment.
+- Retest `20260929_090518_81c52e`, frozen `de7aae86`, keeps the original two-scene
+  budgets and writes `~/runs/emet/navigation-paired-ovmm-20260929/replan-v2/`.
+  Superseded job `20260929_090141_595975` was canceled **before execution**; it
+  has no result. No benchmark source worktree was edited during a run.
+
+Keep review split by responsibility: controller phase/standalone-package parity;
+physical-map planner/route contract; shared recovery-tool integration; opt-in
+evaluation instrumentation and evidence. Do not present the accumulated branch
+diff as one merge-ready PR or change defaults based on these diagnostic pilots.
+The controller slice needs the live repetition result; the exploration slice
+still needs useful room traversal and the unscored narrow/obstructed/unknown
+physical cases. TAMP repairs remain with the sibling agent.
