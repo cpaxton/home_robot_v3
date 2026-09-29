@@ -8,6 +8,16 @@ Strike through or move to a PR when done.
 Implementation and acceptance specification:
 [navigation/exploration plan](docs/plans/2026-09-28_navigation_exploration_rework.md).
 
+- [x] Paired EQA: baseline/candidate both 13/24 across two seeds, no per-question
+      correctness changes. TAMP minimal regression: 48 tests passed; separate
+      agent owns further TAMP work. Neither is physical navigation acceptance.
+- [ ] Finish physical-find recovery retest `20260929_085020_0968a4` after
+      `da5d2a80` wires existing floor sensing into the internal find loop.
+      Previous paired small-room OVMM: both versions 0/2 object, 0/2 receptacle.
+- [ ] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
+      stalls on command 29. Continuous contact window clear, but no route pass.
+      Preserve unchanged safety/arrival limits and three-repeat gate.
+
 - [x] Planning-frame frontier distances (`ca09d8d8`); physical-map cell-center
       indexing and continuous short-move endpoints (`6c97f8c3`).
 - [x] Requested/resolved A* goal provenance and distinguish map clearance from
@@ -27,8 +37,8 @@ Implementation and acceptance specification:
       Freshness guards `9e7f0864` and per-step evidence `7bf047de` need live retest.
       Prior integrated find recovered, approached ~30 cm and verified tomato;
       this is not manipulation acceptance.
-- [ ] Stretch + second-robot controller acceptance, then fixed paired small-room/EQA
-      pilots and TAMP navigation stages. No hardware or full sweeps.
+- [ ] Stretch + second-robot controller acceptance, then fixed paired small-room
+      pilots. EQA scored above; TAMP limited to regression. No hardware/full sweeps.
       `rby1` currently loads a Galaxea proxy even in MolmoSpaces. Its diagnostic
       failed unknown-footprint recovery; measured look feedback fixed in
       `af46be53`, retest pending. Native RB-Y1 support is a separate future task.
@@ -47,10 +57,9 @@ Implementation and acceptance specification:
       capture/update/evidence, but nine near-base cells remain unseen; no motion
       acceptance. Simple-table route passes 14/14 endpoint/dwell checks, not
       continuous safety. Scoped regression suite: 834 passed.
-- [ ] Score frozen EQA baseline `faebea0f` versus candidate `669d74fe`, 12 matched
-      questions × seeds 0/1 per version, serial jobs started September 29.
-      IDs/artifacts in the plan. This is independent answer-regression evidence,
-      not permission to skip the open physical controller/OVMM/TAMP gates.
+- [x] Score frozen EQA baseline `faebea0f` versus candidate `669d74fe`, 12 matched
+      questions × seeds 0/1 per version: 13/24 each, all artifacts complete.
+      IDs/artifacts in the plan; physical controller/OVMM gates remain open.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 

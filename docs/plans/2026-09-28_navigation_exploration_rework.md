@@ -257,8 +257,54 @@ Qwen3-VL-8B-Instruct int4, lazy_graph + query-driven memory, 20 planning steps a
 | candidate / 1 | `20260929_045055_bf35c2` |
 
 Output root: `~/runs/emet/navigation-paired-eqa-20260929/{baseline,candidate}/seed{0,1}/`.
-Check manifests, metrics and `failed.txt` before paired scoring; crashes and
-missing metrics are not scored answer misses. These are queued/running, not
-results. After EQA, retain per-question transitions and inspect newly failing
-views. Small-room OVMM and TAMP navigation pilots, three-repetition controller
-matrix, whole-robot clearance and useful proxy floor coverage remain open.
+Completed: all 48 metrics present, no `failed.txt`. Seed 0 is 6/12 for both
+versions; seed 1 is 7/12 for both. **13/24 each, no paired correctness changes.**
+This is a small Habitat regression check, not evidence that physical-map
+navigation or answer accuracy improved.
+
+### September 29 acceptance and recovery follow-up
+
+- User narrowed TAMP to regression only; another agent owns its repairs.
+  48 tests passed across MCTS/kinematic helpers, agent bridge, clutter config,
+  floor/clutter script smokes and agent-tool gate. No new physical TAMP success
+  is claimed.
+- Small-room OVMM baseline `faebea0f` and candidate `669d74fe` both scored
+  **0/2 object find and 0/2 receptacle find**. Episodes `robocasa_pp_s1` and
+  `molmo_ithor_s2_idx0`, seed 0, four mapping views, six agentic rounds,
+  three nav steps, physical-map pilot, lazy_graph/query-driven, fresh maps,
+  local Qwen, no manipulation. Jobs `20260929_083209_180f86` and
+  `20260929_083212_4d3021`; root
+  `~/runs/emet/navigation-paired-ovmm-20260929/{baseline,candidate}/`.
+  Navigation was safely rejected; these are failures, not capability acceptance.
+- Trace inspection found an integration gap: internal find could not call the
+  existing `observe_floor` tool, and target navigation discarded swept-footprint
+  details. `da5d2a80` adds capability-gated binding, shared recovery feedback,
+  exact rejection status and distinct bounded-view action signatures. Habitat
+  tools stay unchanged; safety checks and budgets stay unchanged. 219 targeted
+  tests pass. Fixed-budget retest `20260929_085020_0968a4` writes `recovery/`.
+- Opt-in full-physics-step contact/posture/actuator evidence in `aabf4644`
+  replaces sampled-state reconstruction for new route gates. Native Stretch
+  three-repeat route (`20260929_084039_ac2b91`) passed **28/42 expected endpoint
+  dwells**, then failed command 29 (third repetition's +10 degree turn):
+  measured yaw error 0.2104 rad, confirmed stop, navigation-stalled receipt.
+  The executed command window had 107,166 consecutive physics steps, no
+  unexpected contacts and minimum upright dot 0.9999918. Contact-clear is not
+  route success. Root `~/runs/emet/navigation-contact-gate-20260929/stretch/`.
+  A second robot run (`20260929_084101_2d1c46`) uses the explicitly identified
+  Galaxea proxy, not native RB-Y1. Narrow/obstructed/unknown-route cases remain
+  unscored physically; positive tabletop routes do not replace them.
+- Socket-dependent tests cannot run under the restricted sandbox (ZMQ bind
+  denied); serialized job `20260929_085040_ab3963` runs them with the frozen
+  recovery revision. Do not report the aborted sandbox suite as passing.
+- `5e092282` repairs new-goal XY/heading phase initialization. The saved pose
+  before command 29 was already within the 20 mm acceptance radius, but outside
+  the 10 mm approach hysteresis band. Resetting to approach made a requested
+  heading turn chase the small XY residual instead. New goals initialize from
+  measured XY acceptance; approaches from outside still acquire the inner band.
+  Recorded-pose regression plus wheel/sweep tests: 54 passed. Identical live
+  route retest `20260929_085341_7063a8`, output `stretch-heading-fix/` under the
+  contact-gate root; do not assume the live stall is resolved until this scores.
+
+Promotion remains blocked on useful room exploration/find, controller repetition
+reliability and remaining physical safety cases. No timeout or clearance limits
+were relaxed to pass these gates.
