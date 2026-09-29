@@ -201,10 +201,9 @@ class KinematicPickPlaceExecutor:
         error = None if after is None else float(np.linalg.norm(after - lift))
         dz = None if after is None or pre_pos is None else float(after[2] - pre_pos[2])
         minimum_lift = max(0.04, 0.4 * self.lift_m)
-        accepted = bool(error is not None and (
-            error <= self.grasp_lift_verify_tol_m or (dz is not None and dz >= minimum_lift)))
-        # Preserve the existing criterion while exposing the measurements behind
-        # intermittent attachment failures. A command step alone is not an
+        accepted = bool(error is not None and error <= self.grasp_lift_verify_tol_m)
+        # Height gain alone can accept an object metres from the gripper target.
+        # A command step alone is not an
         # acknowledgement that this body pose has been observed after the lift.
         self.last_grasp_verification = {
             "body": body, "target_xyz": lift.tolist(),
@@ -348,14 +347,15 @@ class KinematicPickPlaceExecutor:
                 return stem
         return None
 
-    def _sync_qpos_from_robot(self) -> None:
+    def _sync_qpos_from_robot(self) -> bool:
         assert self._model is not None and self._data is not None
         self._sync_base_freejoint()
         q, _, _ = self.robot.get_joint_state(timeout=2.0)
         names = self._actuator_names()
         if q is None or len(q) < len(names):
             mujoco.mj_forward(self._model, self._data)
-            return
+            return False
+        observed_joints = set()
         for i, aname in enumerate(names):
             jname = self._actuator_to_joint_name(aname)
             if not jname:
@@ -363,7 +363,33 @@ class KinematicPickPlaceExecutor:
             jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jname)
             if jid >= 0:
                 self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(q[i])
+                observed_joints.add(jname)
         mujoco.mj_forward(self._model, self._data)
+        return all(name in observed_joints for name in self.joint_names)
+
+    def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0) -> tuple[bool, float]:
+        """Require measured joint FK to reach the IK target before attaching."""
+        deadline = time.monotonic() + timeout_s
+        error = float('inf')
+        observed = None
+        while True:
+            if self._sync_qpos_from_robot():
+                observed = np.asarray(self._data.body(self.ee_body).xpos).copy()
+                error = float(np.linalg.norm(observed - target))
+            else:
+                observed = None
+                error = float('inf')
+            if error <= self.ik_tol_m or time.monotonic() >= deadline:
+                break
+            time.sleep(.05)
+        self.last_ee_verification = {
+            'target_xyz': np.asarray(target).tolist(),
+            'observed_xyz': None if observed is None else observed.tolist(),
+            'error_m': error if np.isfinite(error) else None,
+            'tolerance_m': self.ik_tol_m, 'accepted': bool(error <= self.ik_tol_m),
+        }
+        logger.info('KinematicPickPlace measured EE: ' + json.dumps(self.last_ee_verification))
+        return error <= self.ik_tol_m, error
 
     def _hold_actuator_dict(self) -> dict[str, float]:
         names = self._actuator_names()
@@ -508,7 +534,7 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(plan.waypoints[-1])
             self._sleep(max(0.25, self.traj_dt * 3))
         self._last_cmd_q = q1.copy()
-        return True, result.pos_error_m
+        return self._wait_measured_ee(np.asarray(target_xyz_world))
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:
         from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
