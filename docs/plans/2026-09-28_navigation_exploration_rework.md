@@ -148,6 +148,34 @@ and a 10 cm forward-then-turn alternative, while direct clockwise rotation
 crosses an unknown cell. This replay uses the **padded** saved map conservatively,
 not a ground-truth collision proof or live controller pass.
 
+![Conservative saved-map turn replay](../experiments/figures/navigation-turn-replay-20260929.png)
+
+Replay input: `navigation-views-pilot-20260929/explore/evidence/navigation/` +
+`floor_observation_1790667836952017845.npz`. Footprint width/length/offset
+0.34/0.33/−0.10 m; grid 0.10 m, origin [512,512]. Validate each route using
+`validate_navigation_sweep` on the archived padded obstacle/explored arrays.
+Do not erode archived obstacles to invent missing physical-map evidence.
+
+![Manually inspected tomato arrival view](../experiments/figures/navigation-tomato-arrival-20260929.png)
+
+Arrival RGB: `navigation-integrated-pilot-20260929/find/evidence/grounding/` +
+`grounding-d7c6d420cda244db9df1ad5387e1a145.png`; paired JSON and NPZ retain
+VLM selection and calibrated depth. This establishes visibility, not graspability.
+
+### Latest frozen checks
+
+Source `2ad84057`, worktree `/tmp/emet-navigation-acceptance-2ad84057`:
+
+- `20260929_041312_eee432`: Stretch route, one repetition as initial diagnostic,
+  existing 14-waypoint precision contract and independent endpoint dwell.
+- `20260929_041316_5a73db`: same route on labeled Galaxea/RBY1 proxy in iTHOR.
+- `20260929_041321_0ec970`: Stretch exploration with fresh-map guards and
+  per-step evidence.
+- `20260929_041324_924219`: proxy exploration with measured look feedback.
+
+All scheduled CPU-safe/GPU-exclusive. These are diagnostics, not the full
+three-repetition six-case contact/unknown-clearance controller acceptance matrix.
+
 Remaining gates: rerun latest freshness/look-feedback changes, complete the
 specified controller matrix with independent contact/stop evidence, then paired
 task pilots. Stationary coverage gain must not be mistaken for successful room
