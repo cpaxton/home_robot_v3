@@ -48,3 +48,27 @@ def test_new_goal_does_not_inherit_final_turn_phase():
     assert control.control._at_goal_xy
     control.update_goal(np.array([1, 0, 0]))
     assert not control.control._at_goal_xy
+
+
+@pytest.mark.parametrize("tolerance", [0.02, 0.07])
+def test_new_heading_goal_inside_acceptance_does_not_reacquire_xy(tolerance):
+    control = controller(tolerance).control
+    # The third repeated route starts 10.9 mm from its accepted origin.
+    # Its new +10 degree heading must not turn toward that tiny XY residual.
+    v, w, done = control(np.array([0.25 * tolerance, 0.49 * tolerance, 0.18]))
+    assert v == 0 and 0 < w < control.w_max and not done
+    assert control._at_goal_xy
+
+
+def test_recorded_repeat_boundary_tracks_requested_heading():
+    control = controller(0.02)
+    control.update_pose_feedback(np.array([-0.00486625, -0.00969954, -0.00786039]))
+    control.update_goal(np.array([0, 0, np.deg2rad(10)]))
+    control.control.set_linear_error_tolerance(0.02)
+    control.control.set_angular_error_tolerance(0.03)
+    v, w = control.compute_control()
+    assert v == 0
+    expected = control.control._velocity_feedback_control(
+        np.deg2rad(10) + 0.00786039, control.control.acc_ang, control.control.w_max
+    )
+    assert w == pytest.approx(expected)

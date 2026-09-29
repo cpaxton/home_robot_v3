@@ -83,7 +83,7 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
 
     def reset_goal(self):
         """Forget the approach/heading phase when a new target is installed."""
-        self._at_goal_xy = False
+        self._at_goal_xy = None
 
     @staticmethod
     def _velocity_feedback_control(x_err, a, v_max):
@@ -151,6 +151,12 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         # that phase until drift exceeds the *unchanged* acceptance radius.
         # A single boundary otherwise alternates approach and final-yaw turns
         # as braking/rotation moves the base a few millimeters across it.
+        # A new heading goal may start inside the accepted XY radius. Do not
+        # turn toward a millimetric residual just to acquire the tighter
+        # approach hysteresis band. Initialize from the actual acceptance
+        # radius; only an approach from outside must acquire the inner band.
+        if self._at_goal_xy is None:
+            self._at_goal_xy = lin_err_abs <= self.lin_error_tol
         if lin_err_abs > self.lin_error_tol:
             self._at_goal_xy = False
         elif lin_err_abs <= self.lin_error_tol / 2:
