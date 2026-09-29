@@ -1203,17 +1203,18 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         return np.zeros(6, dtype=float)
 
     def get_pan_tilt(self) -> tuple[float, float]:
-        """Head pan/tilt in radians (xlerobot ``head_pan_joint`` / ``head_tilt_joint``)."""
-        if self._spec.name == "xlerobot":
-            q, _, _ = self.get_joint_state(timeout=2.0)
-            if q is None:
-                return (0.0, 0.0)
-            pan_i = self._joint_index.get("head_pan_joint")
-            tilt_i = self._joint_index.get("head_tilt_joint")
-            pan = float(q[pan_i]) if pan_i is not None else 0.0
-            tilt = float(q[tilt_i]) if tilt_i is not None else 0.0
-            return (pan, tilt)
-        return (0.0, 0.0)
+        """Measured adapter look joints; never substitute a fabricated zero pose."""
+        names = self._spec.look_joint_names
+        if names is None:
+            return (float("nan"), float("nan"))
+        q, _, _ = self.get_joint_state(timeout=2.0)
+        if q is None:
+            return (float("nan"), float("nan"))
+        result = []
+        for name in names:
+            index = self._joint_index.get(name) if name is not None else None
+            result.append(0.0 if name is None else float(q[index]) if index is not None else float("nan"))
+        return tuple(result)
 
     def get_gripper_position(self, side: str = "left") -> float:
         if self._spec.name == "xlerobot":

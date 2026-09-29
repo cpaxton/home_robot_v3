@@ -107,6 +107,7 @@ class GalaxeaR1Backend(RobotBackend):
             mjcf_path=_MJCF_PATH,
             actuator_names=R1_ACTUATOR_NAMES,
             base_link_name="base_link",
+            look_joint_names=("torso_joint4", "torso_joint3"),
             footprint=Footprint(width=0.56, length=0.50, width_offset=0.0, length_offset=0.0),
             spawn=robot_spawn_spec_from_metadata("galaxea_r1"),
             advertise_kinematic_manip=True,
