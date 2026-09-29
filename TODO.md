@@ -26,6 +26,11 @@ Implementation and acceptance specification:
       a visible cube. Do not promote physical-map defaults or claim find works.
       Replay the saved blockers/view geometry before another learned sweep;
       carry sampler rejection reasons and proposal provenance into tool feedback.
+      `928b29dd` separates inspection visibility from the 2D collision ray and
+      preserves sampler evidence (799 tests pass). Same-budget three-case pilot
+      `20260929_131536_9b7b78` queued behind the sibling TAMP job. Score before
+      promotion. Offline Molmo replay puts its blocking cell below every saved
+      floor image; test a steeper bounded view, not relaxed clearance.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.

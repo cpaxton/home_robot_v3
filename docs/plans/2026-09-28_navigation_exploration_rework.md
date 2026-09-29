@@ -390,3 +390,42 @@ proposals, retain the source view and uncertainty rather than interpreting a
 voxel peak as object truth. Then retry the same S0 and two-room gates with
 unchanged model/budgets. Keep TAMP at regression scope and keep the already
 passing controller slice separate from unfinished search/coverage changes.
+
+### September 29 inspection continuation
+
+`928b29dd` repairs a remaining inconsistency: ordinary inspection still required
+a clear ground-plane line of sight to the target, while manipulation approaches
+already used camera verification for raised objects above supporting surfaces.
+Inspection now uses that same existing distinction. Footprint, connectivity,
+clearance and swept-route checks remain; exploration frontiers retain planar
+visibility. This is a reproduced contract inconsistency, **not yet proven to be
+the cause of the saved RoboCasa failure** because its sampler counts were lost.
+
+Sampler counts now survive in tool feedback and agentic state. Failed inspection
+attempts save the same replay inputs as manipulation, plus the candidate grid/XY
+mapping, visibility flag and JSON rejection summary. Physical `occupied_footprint`
+is classified as obstruction rather than an unspecified workspace failure.
+Validation: 799 controller/agent/navigation tests pass. No arrival or safety
+thresholds changed; Habitat's early navmesh path is unchanged.
+
+Frozen pilot `20260929_131536_9b7b78` (`nav-inspection-pilot-0929`) uses
+`/tmp/emet-inspection-928b29dd`, the same model/config/seed and 4 mapping views,
+6 agentic rounds, 3 nav steps on `default_table_s0_distinct_recep`,
+`robocasa_pp_s1`, and `molmo_ithor_s2_idx0`. Output:
+`~/runs/emet/navigation-inspection-20260929/`. At launch it waits behind the
+sibling TAMP job `20260929_131223_7489e3`; do not interfere with that run or
+launch a parallel simulator. No results are claimed yet.
+
+Offline Molmo floor replay identifies a separate viewing problem. The rejected
+cell is XY `(1.7, 1.3)`, derived from the trace's checked pose and world-axis
+offset. Projecting `[1.7, 1.3, 0]` through each saved optical pose/intrinsics via
+`agentic.views.target_in_view` puts it at rows **527–591**, outside a **424-row**
+image. Measured tilts stayed approximately -0.98 to -1.00; pans were 0 or -0.5.
+The floor height of zero is an explicit diagnostic assumption, supported by
+the first saved depth's world-Z median 0.002 m (1st percentile -0.0115 m for
+valid depth below 3 m). It is not an object localization or free-space inference.
+Root: `navigation-paired-ovmm-20260929/replan-v2/molmo_ithor_s2_idx0_lazy_graph/`;
+first archive `navigation/floor_observation_1790687649758707921.npz`.
+Thus repeated captures could not observe the checked region. A steeper bounded
+head view is the next controlled diagnostic; actual fresh depth must resolve
+the footprint before any route can execute. No pan/tilt limits were expanded.
