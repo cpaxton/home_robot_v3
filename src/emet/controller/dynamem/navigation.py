@@ -232,8 +232,6 @@ def _execute_validated_waypoints(self, waypoints, timeout):
     segments = [[waypoint] for waypoint in waypoints] if physical else [waypoints]
     for index, segment in enumerate(segments):
         if physical:
-            if index:
-                self.update(full_perception=False)
             self.planner.reset()
             _, reason, _ = self._filter_unsafe_nav_traj(
                 segment, start_xyt=self._current_planning_xyt(), explore_goal=True
@@ -258,9 +256,20 @@ def _execute_validated_waypoints(self, waypoints, timeout):
         if ok is None:
             return False, "ambiguous_navigation_result"
         if physical:
+            from emet.controller.dynamem.look import wait_post_motion_obs
             from emet.controller.operations.payload_verification import verify_carried_object
 
             verify_carried_object(self)
+            sequence = getattr(self.robot, "_seq_id", None)
+            if not isinstance(sequence, int):
+                return False, "navigation_observation_freshness_unavailable"
+            wait_post_motion_obs(self.robot, timeout=timeout)
+            if self.robot._seq_id <= sequence:
+                return False, "stale_navigation_observation"
+            before = len(self.voxel_map.observations)
+            self.update(full_perception=False)
+            if len(self.voxel_map.observations) <= before:
+                return False, "navigation_map_update_missing"
     return True, None
 
 

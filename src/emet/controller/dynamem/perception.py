@@ -102,7 +102,9 @@ def _resolve_depth_map(
             rgb,
             camera_K=camera_K,
             camera_pose=camera_pose,
-            force=(self.obs_count == 1),
+            force=(
+                self.obs_count == 1 or getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
+            ),
         )
         if self._lingbot_use_pose and est_lb.last_camera_pose is not None:
             self._lingbot_last_pose = est_lb.last_camera_pose
@@ -215,7 +217,10 @@ def update(self, *, full_perception: bool | None = None):
     run_infer_full = self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
     if self._depth_source == "lingbot":
         run_infer_full = self._lingbot_infer_every_n <= 1 or (self.obs_count - 1) % self._lingbot_infer_every_n == 0
-    if run_full:
+    if run_full or getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
+        # A depth image from another camera pose cannot certify current motion.
+        # Geometry-only updates need current inferred depth too, without forcing
+        # expensive semantic ingestion at every navigation segment.
         run_infer_full = True
     depth: np.ndarray | None
     if (
