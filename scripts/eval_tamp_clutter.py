@@ -373,6 +373,7 @@ def _launch_server(
     scene_index: int | None = None,
     scene_split: str | None = None,
     robot: str | None = None,
+    log_dir: Path | None = None,
 ) -> tuple[Any, Path, Any]:
     """Launch the MuJoCo server subprocess; returns ``(proc, stderr_log_path, stderr_fh)``.
 
@@ -399,7 +400,8 @@ def _launch_server(
     env["PYTHONUNBUFFERED"] = "1"
     if cpu_only:
         env["CUDA_VISIBLE_DEVICES"] = ""
-    log_dir = Path(tempfile.mkdtemp(prefix="emet_tamp_clutter_sim_"))
+    log_dir = log_dir or Path(tempfile.mkdtemp(prefix="emet_tamp_clutter_sim_"))
+    log_dir.mkdir(parents=True, exist_ok=True)
     server_log = log_dir / "mujoco_server.stderr"
     fh = server_log.open("w", encoding="utf-8")
     proc = None
@@ -586,6 +588,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             scene_index=ep.scene_index,
             scene_split=ep.scene_split,
             robot=ep.robot,
+            log_dir=Path(args.output_dir or DEFAULT_OUTPUT) / f"{ep.id}.sim",
         )
         robot = create_robot_client_from_cli(
             ep.robot,

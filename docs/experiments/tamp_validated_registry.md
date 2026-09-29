@@ -72,8 +72,8 @@ silently replace a rejected task at evaluation time.
 Fixture construction, admission and fresh replay are implemented. The final
 source (`5b619590`) passes 116 targeted tests. The eight-case pilot admits four
 fixtures and rejects four. All four admitted fixtures passed fresh MCTS replay.
-The full 200-candidate admission/replay run is active; no 200-task solvability
-claim is established.
+The full r3 admission/replay run is complete: 25/200 admitted and 21/25
+fresh MCTS successes. No 200-task solvability claim is established.
 
 The first eight-case pilot exposed certificate serialization of simulator NumPy
 arrays after successful oracle execution, RBY1 attachment verification failures,
@@ -125,4 +125,50 @@ per case, serial CPU-safe/exclusive-GPU execution. Outputs are written directly
 to the durable archive's `full-r3/`, followed by `replay-r3/`. Admission must
 finish all 200 candidates before `frozen_registry.yaml` is copied for replay.
 `admission_evaluation_summary.json` will report requested, admitted, not admitted,
-evaluated, successes, and evaluation status counts. Full results are pending.
+evaluated, successes, and evaluation status counts. Full r3 results are recorded below.
+
+
+## Full r3 results, September 29
+
+All 200 construction requests and all 25 admitted replays are terminal.
+**21/25 scored successes (84%)**, with **25/200 admission coverage (12.5%)**.
+These describe a selected oracle/latch corpus, not physical reliability or an
+improvement over the historical 54/200 result with its invalid denominator.
+
+| Robot | Candidates | Admitted | Fresh MCTS successes |
+| --- | ---: | ---: | ---: |
+| RBY1, latch | 110 | 11 | 7/11 |
+| Stretch, oracle | 30 | 7 | 7/7 |
+| Mars, oracle | 30 | 0 | Not scored |
+| Nori, oracle | 30 | 7 | 7/7 |
+
+Unadmitted candidates: 131 construction failures, 20 missing receptacles, four
+failed references, and 20 Mars startup errors. Construction failures comprised
+69 with object-overlap rejections only, 41 with scene-overlap rejections only,
+and 21 with both. The four scored failures were attachment verification on
+RBY1: scene00 cleanup slots 0 and 1 (apple), scene02 cleanup slot 0 (apple), and
+scene12 cleanup slot 1 (butter knife). A previous reference pass is evidence of
+existence, not repeatability. `completed` in the runner ledger means execution
+terminated; use `task_success` to distinguish the 21 successes from four failures.
+
+RBY1 admissions span scenes 0, 2, 6, 8, 9, 12 and 18 (ten cleanup, one navigation).
+Stretch and Nori each cover scenes 0 and 2 (four cleanup, three navigation).
+This limited coverage does not establish robustness across the requested matrix.
+
+### Follow-up work
+
+Job `20260929_032809_1e8cab` repeats the four RBY1 failures on their frozen
+certificates and separately tests one Mars startup failure with a recorded
+120-second observation timeout. Original results remain unchanged. Artifacts:
+`diagnostics-20260929/` under the same durable archive.
+
+An offline audit of the 131 failed constructions found 28 additional feasible
+layouts when selecting the smallest eligible object disks (20 RBY1, four Stretch,
+four Nori). This motivates a bounded fallback: preserve identity-order selection
+first; only after geometry construction is exhausted, try one set chosen by
+radius then body ID. Clearance, obstacle checks, object count, scoring and the
+executed-reference requirement remain unchanged. Geometry feasibility is not
+admission. Live validation must precede a new full benchmark version.
+
+Simulator logs now persist inside each case's output artifacts, including
+startup failures, instead of being available only in temporary directories.

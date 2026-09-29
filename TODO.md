@@ -19,10 +19,12 @@ registry. Oracle teleport and kinematic latch remain separately labeled controls
 - [x] Add scene-backed candidate construction, independent executed reference
       admission, immutable pose certificates, and final-scene scoring for controls.
       See [validated registry workflow](docs/experiments/tamp_validated_registry.md).
-- [ ] Complete corrected admission and fresh MCTS replay; report construction and
+- [x] Complete corrected r3 admission and fresh MCTS replay; report construction and
       reference failures separately from the scored denominator. September 28 pilot:
       4/8 admitted and 4/4 fresh MCTS replay passes. Full job `20260928_222600_2cf5c6`
-      is active; no new 200-task solvability claim is established.
+      finished: 25/200 admitted, 21/25 scored successes. No 200-task solvability claim.
+- [ ] Expand scene coverage with geometry-based object selection; verify reference
+      repeatability and diagnose Mars startup failures before broader claims.
 - [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
       and retention bounds; both now have independently verified physical pickups.
 - [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.

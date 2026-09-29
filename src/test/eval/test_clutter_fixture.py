@@ -177,3 +177,21 @@ def test_certificate_task_contract_changes_when_scoring_is_relaxed():
     assert task_contract(ep) != task_contract(replace(ep, success_radius_m=1.))
     assert task_contract(ep) != task_contract(replace(ep, mode='nav_goal'))
     assert task_contract(ep) != task_contract(replace(ep, n_objects=1))
+
+
+def test_size_fallback_recovers_geometry_without_relaxing_clearance():
+    scene = room()
+    # Alphabetically first object cannot fit in the ring. It stays a scene
+    # obstacle when the fallback chooses the eight smaller movable objects.
+    scene['A_large'] = {'pos': [5., 5., .1], 'bounds': [[4., 4., 0.], [6., 6., .2]]}
+    cats = {b: {'cat': 'bottle', 'static': False} for b in scene if b.startswith('item') or b == 'A_large'}
+    cats['table'] = {'cat': 'table', 'static': True}
+    ep = ClutterEpisode('test', 'S1', 'test.yaml', 'stretch', 'nav_goal', 8, seed=4, scatter_radius_m=.5)
+    fixture, diagnostic = resolve_fixture(ep, scene, cats, np.zeros(2), bin_body='bin', candidates=['table'])
+    assert fixture is not None and fixture['object_selection'] == 'smallest_disks'
+    assert fixture['clearance_m'] == .22 and fixture['geometry']['accepted']
+    assert {r['body'] for r in fixture['clutter']} == {f'item{i}' for i in range(8)}
+    assert any(r['reason'] == 'clutter_disks_overlap' and r['object_selection'] == 'identity'
+               for r in diagnostic['rejections'])
+    replay, _ = resolve_fixture(ep, scene, cats, np.zeros(2), bin_body='bin', candidates=['table'])
+    assert fixture == replay

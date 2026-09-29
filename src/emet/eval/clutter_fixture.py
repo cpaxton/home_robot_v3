@@ -144,8 +144,6 @@ def resolve_fixture(ep, placements, categories, start, *, bin_body, candidates, 
     requested category assumed to exist. A failure is a coverage gap, not a
     scored planner failure. No tested MCTS policy is called here.
     """
-    from emet.eval.tamp_clutter import scatter_ring_targets
-
     if bin_body is None or bin_body not in placements:
         return None, {'reason': 'missing_receptacle'}
     movable = sorted(b for b, meta in categories.items()
@@ -154,8 +152,29 @@ def resolve_fixture(ep, placements, categories, start, *, bin_body, candidates, 
     # Caller supplies only eligible movable bodies in categories.
     if len(movable) < ep.n_objects:
         return None, {'reason': 'insufficient_movable_objects', 'available': len(movable)}
-    bodies = movable[:ep.n_objects]
     object_radii = {name: radius for _, radius, name in placement_obstacle_disks(placements, max_center_z_m=float('inf'))}
+    identity = movable[:ep.n_objects]
+    smallest = sorted(sorted(movable, key=lambda b: (object_radii[b], b))[:ep.n_objects])
+    selections = [('identity', identity)]
+    if smallest != identity:
+        selections.append(('smallest_disks', smallest))
+    rejected = []
+    for policy, bodies in selections:
+        fixture, diagnostic = _construct_layout(
+            ep, placements, categories, start, bin_body=bin_body, candidates=candidates,
+            bodies=bodies, object_radii=object_radii, clearance_m=clearance_m,
+        )
+        rejected.extend({**row, 'object_selection': policy} for row in diagnostic['rejections'])
+        if fixture is not None:
+            fixture['object_selection'] = policy
+            return fixture, {'reason': 'constructed', 'rejections': rejected}
+    return None, {'reason': 'no_valid_fixture_within_budget', 'rejections': rejected}
+
+
+def _construct_layout(ep, placements, categories, start, *, bin_body, candidates, bodies, object_radii, clearance_m):
+    """Try one predetermined object set, without consulting reference or MCTS outcomes."""
+    from emet.eval.tamp_clutter import scatter_ring_targets
+
     static_disks = placement_obstacle_disks(placements, skip_bodies=bodies)
     goals = [(None, None)] if ep.mode == 'cleanup' else []
     if ep.mode == 'nav_goal':
