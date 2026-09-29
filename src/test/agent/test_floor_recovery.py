@@ -178,11 +178,23 @@ def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_stat
 
 @pytest.mark.parametrize("pan_rad", [None, -0.8, 0.8])
 @pytest.mark.parametrize("tilt_rad", [-1.0, -1.4])
-@pytest.mark.parametrize("failure", [None, "stale", "pose", "depth", "map", "unsupported", "sequence"])
+@pytest.mark.parametrize(
+    "failure", [None, "delayed", "post_arrival_stale", "stale", "pose", "depth", "map", "unsupported", "sequence"]
+)
 def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure, pan_rad, tilt_rad):
+    import itertools
+
+    clock = itertools.count(step=1.0)
+    monkeypatch.setattr(look.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(look.time, "sleep", lambda _: None)
     robot = SimpleNamespace(_seq_id=1, head_to=Mock(return_value=True))
     expected_pan = 0.2 if pan_rad is None else pan_rad
-    robot.get_pan_tilt = Mock(side_effect=[(0.2, -0.5), (expected_pan, 0 if failure == "pose" else tilt_rad)])
+    positions = itertools.chain(
+        [(0.2, -0.5)],
+        [(expected_pan, -0.5)] * (3 if failure == "delayed" else 0),
+        itertools.repeat((expected_pan, 0 if failure == "pose" else tilt_rad)),
+    )
+    robot.get_pan_tilt = Mock(side_effect=lambda: next(positions))
     robot.get_observation = Mock(
         return_value=SimpleNamespace(
             rgb=np.ones((2, 2, 3)),
@@ -212,7 +224,7 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
     agent.space.is_valid = check_footprint
 
     def receive(robot, timeout):
-        if failure != "stale":
+        if failure != "stale" and not (failure == "post_arrival_stale" and robot._seq_id > 1):
             robot._seq_id += 1
 
     monkeypatch.setattr(look, "wait_post_motion_obs", receive)
@@ -221,10 +233,10 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, failure,
     if failure == "sequence":
         robot._seq_id = None
     result = look.observe_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad)
-    assert result["ok"] is (failure is None)
-    if failure not in (None, "map"):
+    assert result["ok"] is (failure in (None, "delayed"))
+    if failure not in (None, "delayed", "map"):
         agent.update.assert_not_called()
-    if failure is None:
+    if failure in (None, "delayed"):
         robot.head_to.assert_called_once_with(expected_pan, tilt_rad, blocking=True)
         agent.update.assert_called_once_with(full_perception=True)
         feedback = result["observation"]

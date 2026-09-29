@@ -87,8 +87,29 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
     if robot._seq_id <= sequence:
         return {"ok": False, "status": "stale_observation"}
     measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+    deadline = time.monotonic() + 5.0
+    # Some adapters acknowledge head_to before the mechanism arrives. Close
+    # the observation loop on measured pose, without widening its tolerance.
+    while np.isfinite(measured).all() and np.max(np.abs(measured - [pan, tilt])) > 0.12:
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+        measured = np.asarray(robot.get_pan_tilt(), dtype=float)
     if not np.isfinite(measured).all() or np.max(np.abs(measured - [pan, tilt])) > 0.12:
-        return {"ok": False, "status": "head_pose_unconfirmed"}
+        return {
+            "ok": False,
+            "status": "head_pose_unconfirmed",
+            "observation": {
+                "requested_head_pan_tilt_rad": [pan, tilt],
+                "measured_head_pan_tilt_rad": measured.tolist(),
+            },
+        }
+    # Waiting for joint arrival may have consumed the first fresh image. Require
+    # another frame after the verified pose before mapping that view.
+    sequence = robot._seq_id
+    wait_post_motion_obs(robot, timeout=5.0)
+    if robot._seq_id <= sequence:
+        return {"ok": False, "status": "stale_observation"}
     obs = robot.get_observation()
     if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
         return {"ok": False, "status": "calibrated_depth_unavailable"}
