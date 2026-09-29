@@ -414,7 +414,7 @@ Frozen pilot `20260929_131536_9b7b78` (`nav-inspection-pilot-0929`) uses
 `robocasa_pp_s1`, and `molmo_ithor_s2_idx0`. Output:
 `~/runs/emet/navigation-inspection-20260929/`. At launch it waits behind the
 sibling TAMP job `20260929_131223_7489e3`; do not interfere with that run or
-launch a parallel simulator. No results are claimed yet.
+launch a parallel simulator. Completed results follow below.
 
 Offline Molmo floor replay identifies a separate viewing problem. The rejected
 cell is XY `(1.7, 1.3)`, derived from the trace's checked pose and world-axis
@@ -429,3 +429,33 @@ first archive `navigation/floor_observation_1790687649758707921.npz`.
 Thus repeated captures could not observe the checked region. A steeper bounded
 head view is the next controlled diagnostic; actual fresh depth must resolve
 the footprint before any route can execute. No pan/tilt limits were expanded.
+
+### Completed inspection pilot and remaining gates
+
+Job `20260929_131536_9b7b78` finished normally. All three cases
+(S0, RoboCasa, Molmo) failed object and receptacle localization: **0/3 + 0/3**.
+This is not acceptance and must not be described as a successful find battery.
+
+RoboCasa now records two reached object-inspection poses, with navigation
+distances 0.455 m and 0.500 m. Saved assessment images at rounds 2 and 4
+show a paper-towel roll rather than the requested jar; rejecting these views
+is appropriate. The two voxel proposals differ by about 5 mm but have different
+source observations. This merits retained negative/source-view evidence, not
+an arbitrary spatial blacklist: an ambiguous view is not proof that an object
+is absent from a region. These are single-seed diagnostics, not a measured
+accuracy improvement attributable solely to the visibility repair.
+
+Molmo's object trace captures four floor views at approximately -1.0 rad tilt;
+the rejected footprint remains at one unknown cell throughout. The last two
+views add zero explored cells. Existing tool results report capture success,
+so recovery feedback now separately labels checked-pose validity, reduced
+unknown footprint, unchanged/increased unknown footprint, or unavailable
+evaluation. Capture success still does not authorize motion. Targeted recovery
+tests: **285 passed**, including partial/no progress, valid checked pose,
+and newly identified obstruction. Safety limits and recovery dispatch are unchanged.
+
+Next: controlled stationary depth capture with a steeper **existing bounded**
+tilt, followed by rechecking the same rejected footprint and replanning.
+Do not spend another learned sweep repeating the current view or change
+collision padding to conceal missing observations. No new simulator or hardware
+job was launched for this feedback-only change.

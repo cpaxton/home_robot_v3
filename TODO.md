@@ -28,8 +28,10 @@ Implementation and acceptance specification:
       carry sampler rejection reasons and proposal provenance into tool feedback.
       `928b29dd` separates inspection visibility from the 2D collision ray and
       preserves sampler evidence (799 tests pass). Same-budget three-case pilot
-      `20260929_131536_9b7b78` queued behind the sibling TAMP job. Score before
-      promotion. Offline Molmo replay puts its blocking cell below every saved
+      `20260929_131536_9b7b78` finished: 0/3 objects, 0/3 receptacles.
+      RoboCasa now reaches two inspection poses but views a paper-towel roll,
+      not the jar. Molmo repeats views without resolving its unknown cell.
+      Offline Molmo replay puts its blocking cell below every saved
       floor image; test a steeper bounded view, not relaxed clearance.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
