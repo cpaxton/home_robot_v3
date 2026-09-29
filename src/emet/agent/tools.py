@@ -83,6 +83,7 @@ def navigation_feedback(agent: Any | None) -> dict:
         "min_clearance_m",
         "min_clearance_required_m",
         "footprint",
+        "approach_sampling",
     )
     result = {key: meta[key] for key in keys if key in meta}
     candidates = meta.get("view_candidates")

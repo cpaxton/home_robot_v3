@@ -357,6 +357,8 @@ def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
     """Retain the same routing state, with shared physical-recovery evidence when needed."""
+    import json
+
     from emet.agent.tools import navigation_feedback
     from emet.controller.dynamem.look import supports_floor_observation
 
@@ -365,9 +367,10 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if not supports_floor_observation(agent):
         return text
     feedback = navigation_feedback(agent)
+    if feedback.get("approach_sampling"):
+        text += "\nLast approach sampling (no motion executed): " + json.dumps(feedback["approach_sampling"])
     if feedback.get("outcome") != "rejected_swept_footprint:unobserved_footprint":
         return text
-    import json
 
     text += "\nNavigation rejection: " + json.dumps(feedback)
     text += (

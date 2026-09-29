@@ -56,6 +56,11 @@ def test_recovery_state_only_for_supported_unknown_footprint(monkeypatch):
     assert "Last floor observation" in text and "Replan before any motion" in text
     feedback["outcome"] = "arrived"
     assert tools.build_state_message(ex) == "existing state"
+    feedback.update(outcome="sample_nav_failed", approach_sampling={"rejected": {"visibility": 17}})
+    text = tools.build_state_message(ex)
+    assert '"visibility": 17' in text
+    assert "no motion executed" in text
+    assert "Stationary recovery tool" not in text
 
 
 def test_floor_views_have_distinct_action_signatures():

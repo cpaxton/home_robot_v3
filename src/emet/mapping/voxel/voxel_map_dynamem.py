@@ -298,7 +298,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         status = "no_reachable_workspace"
         if footprint_reasons and set(footprint_reasons) == {"unobserved_footprint"}:
             status = "insufficient_floor_coverage"
-        elif footprint_reasons and set(footprint_reasons) == {"obstacle"}:
+        elif footprint_reasons and set(footprint_reasons) <= {"obstacle", "occupied_footprint"}:
             status = "workspace_obstructed"
         self.last_target_sampling = {
             "status": status,
@@ -335,28 +335,35 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 f"range={distance_range} reachable_cells={len(xs)} "
                 f"nearest_reachable_m={nearest_reachable_m:.3f} rejected={rejected}"
             )
-            # Evaluation-only replay inputs; never feed private simulator state
-            # into planning. Unique files preserve repeated failed attempts.
-            import os
-            import time
-            from pathlib import Path
+        # Sensor-map replay inputs for inspection as well as manipulation.
+        # Unique files preserve repeated failures; no private simulator state.
+        import json
+        import os
+        import time
+        from pathlib import Path
 
-            evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
-            if evidence_dir:
-                directory = Path(evidence_dir) / "navigation"
-                directory.mkdir(parents=True, exist_ok=True)
-                np.savez_compressed(
-                    directory / f"failed_approach_{time.time_ns()}.npz",
-                    obstacles=obstacles.detach().cpu().numpy(),
-                    explored=explored.detach().cpu().numpy(),
-                    reachable=reachable.detach().cpu().numpy(),
-                    reachable_xy=np.asarray([planner.to_xy([int(i), int(j)]) for i, j in selected_targets]),
-                    target_xy=np.asarray([px, py]),
-                    start_xy=np.asarray([float(start[0]), float(start[1])]),
-                    distance_range=np.asarray(distance_range),
-                    clearance_m=np.asarray(getattr(planner, "_clearance_m", None), dtype=float),
-                    min_clearance_m=float(getattr(planner, "min_clearance_m", 0.0)),
-                )
+        evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
+        if evidence_dir:
+            directory = Path(evidence_dir) / "navigation"
+            directory.mkdir(parents=True, exist_ok=True)
+            stem = directory / f"failed_approach_{time.time_ns()}"
+            np.savez_compressed(
+                stem.with_suffix(".npz"),
+                obstacles=obstacles.detach().cpu().numpy(),
+                explored=explored.detach().cpu().numpy(),
+                reachable=reachable.detach().cpu().numpy(),
+                reachable_ij=selected_targets.detach().cpu().numpy(),
+                reachable_xy=np.asarray([planner.to_xy([int(i), int(j)]) for i, j in selected_targets]),
+                grid_resolution_m=float(self.voxel_map.grid_resolution),
+                target_xy=np.asarray([px, py]),
+                start_xy=np.asarray([float(start[0]), float(start[1])]),
+                distance_range=np.asarray(distance_range if distance_range is not None else [], dtype=float),
+                require_planar_visibility=bool(require_planar_visibility),
+                exploration=bool(exploration),
+                clearance_m=np.asarray(getattr(planner, "_clearance_m", None), dtype=float),
+                min_clearance_m=float(getattr(planner, "min_clearance_m", 0.0)),
+            )
+            stem.with_suffix(".json").write_text(json.dumps(self.last_target_sampling) + "\n")
         return None
 
     def sample_exploration(self, xyt, planner, text=None, debug=False, blocked=None):

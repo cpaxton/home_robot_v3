@@ -73,6 +73,24 @@ def test_manipulation_approach_bounds_reach_sampler_without_bypassing_plan_failu
     nav_agent.robot.execute_trajectory.assert_not_called()
 
 
+@pytest.mark.parametrize("explore", [False, True])
+def test_inspection_visibility_is_not_ground_plane_clearance(nav_agent, explore):
+    assert not nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0], explore_goal=explore)
+    assert nav_agent.space.sample_navigation.call_args.kwargs["require_planar_visibility"] is explore
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
+def test_failed_approach_retains_sampling_evidence_in_tool_feedback(nav_agent):
+    from emet.agent.tools import navigation_feedback
+
+    evidence = {"status": "no_reachable_workspace", "rejected": {"visibility": 17, "footprint": 4}}
+    nav_agent.space.sample_navigation.return_value = None
+    nav_agent.space.last_target_sampling = evidence
+    nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0])
+    assert navigation_feedback(nav_agent)["approach_sampling"] == evidence
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
 def test_navigate_to_target_pose_uses_navmesh_when_enabled(monkeypatch):
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)

@@ -374,7 +374,10 @@ def navigate_to_target_pose(
             return NavOutcome.PROGRESS
         return NavOutcome.STUCK
 
-    approach_options = {}
+    # A collision-free ground-plane ray is not a camera-visibility test for
+    # object inspection (e.g. a jar above its supporting counter). Retain that
+    # heuristic for free-space frontiers; inspection verifies the arrival RGB.
+    approach_options = {"require_planar_visibility": bool(explore_goal)}
     if distance_range is not None:
         # Raised targets use fresh visual reacquisition, not 2D line-of-sight
         # through the supporting counter. Footprint/path checks still apply.
@@ -581,6 +584,7 @@ def navigate_to_target_pose(
             "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), 0.0],
             "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
             "outcome": str(note),
+            "approach_sampling": dict(self._last_approach_sampling),
         }
         self._mark_nav_goal_blocked(reason=str(note))
         nav_res = NavAttemptResult(

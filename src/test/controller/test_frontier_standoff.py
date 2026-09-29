@@ -114,3 +114,44 @@ def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint(tmp_p
 def test_invalid_manipulation_distance_bounds_fail_before_planning(bounds):
     with pytest.raises(ValueError, match="distance range"):
         SparseVoxelMapNavigationSpace.sample_target_point(None, None, None, None, distance_range=bounds)
+
+
+@pytest.mark.parametrize(
+    "reason,status",
+    [("unobserved_footprint", "insufficient_floor_coverage"), ("occupied_footprint", "workspace_obstructed")],
+)
+def test_inspection_failure_retains_replay_and_physical_rejection(tmp_path, monkeypatch, reason, status):
+    import json
+
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    obstacles = torch.zeros((4, 2), dtype=torch.bool)
+    space = SimpleNamespace(
+        voxel_map=SimpleNamespace(grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="physical",
+        compute_theta=lambda *args: 0.0,
+    )
+
+    def invalid(pose):
+        space.last_validity = {"reason": reason}
+        return False
+
+    space.is_valid = invalid
+    planner = SimpleNamespace(
+        to_pt=lambda pose: (round(float(pose[0]) * 10), 0),
+        to_xy=lambda ij: (ij[0] / 10, 0),
+        get_reachable_points=lambda start: [(0, 0), (1, 0)],
+    )
+    assert (
+        SparseVoxelMapNavigationSpace.sample_target_point(
+            space, np.zeros(3), np.array([0.3, 0, 1]), planner, require_planar_visibility=False
+        )
+        is None
+    )
+    assert space.last_target_sampling["status"] == status
+    (archive,) = (tmp_path / "navigation").glob("failed_approach_*.npz")
+    with np.load(archive, allow_pickle=False) as saved:
+        assert saved["distance_range"].size == 0
+        assert not saved["require_planar_visibility"]
+        np.testing.assert_array_equal(saved["obstacles"], obstacles)
+    assert json.loads(archive.with_suffix(".json").read_text()) == space.last_target_sampling
