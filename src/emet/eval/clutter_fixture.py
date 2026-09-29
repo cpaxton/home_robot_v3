@@ -15,8 +15,31 @@ import numpy as np
 from emet.eval.tamp_clutter import nav_path_open_around_disks, placement_obstacle_disks
 
 
+def json_value(value):
+    """Normalize simulator arrays/scalars before hashing or saving certificates."""
+    def convert(item):
+        if isinstance(item, np.ndarray):
+            return item.tolist()
+        if isinstance(item, np.generic):
+            return item.item()
+        raise TypeError(f'Unsupported fixture value: {type(item).__name__}')
+    return json.loads(json.dumps(value, default=convert, allow_nan=False))
+
+
 def fingerprint(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(json_value(value), sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+
+
+def pose_reproduced(actual, expected, *, position_tolerance_m=.03, angle_tolerance_rad=.1):
+    if actual is None or np.linalg.norm(np.asarray(actual['pos']) - np.asarray(expected['pos'])) > position_tolerance_m:
+        return False
+    if expected.get('quat') is None:
+        return True
+    if actual.get('quat') is None:
+        return False
+    a, b = np.asarray(actual['quat']), np.asarray(expected['quat'])
+    norm = np.linalg.norm(a) * np.linalg.norm(b)
+    return bool(norm > 0 and 2 * np.arccos(np.clip(abs(np.dot(a, b)) / norm, 0, 1)) <= angle_tolerance_rad)
 
 
 def certificate_error(fixture, *, scene_fingerprint, execution_mode, clearance_m, start):
@@ -44,6 +67,31 @@ def moved_placements(placements, updates):
             result[body]['bounds'] = (np.asarray(result[body]['bounds']) + pos - previous).tolist()
         result[body]['pos'] = pos.tolist()
     return result
+
+
+def score_fixture_state(placements, fixture, *, mode, base_xy, success_radius_m):
+    """Score final scene state, independently of executor success/counters.
+
+    A teleport outside the initial clutter ring is not evidence of clearance.
+    Navigation must become possible from the saved original start as well.
+    """
+    destination = np.asarray(placements[fixture['bin_body']]['pos'])[:2]
+    bodies = [row['body'] for row in fixture['clutter']]
+    relocated = [b for b in bodies if b in placements and
+                 np.linalg.norm(np.asarray(placements[b]['pos'])[:2] - destination) <= success_radius_m]
+    path_open, probe = nav_path_open_around_disks(
+        fixture['robot_start_xy'], fixture['goal_xy'], placement_obstacle_disks(placements),
+        clearance_m=fixture['clearance_m'], strict_endpoints=True,
+    )
+    reached = (fixture['goal_xy'] is not None and
+               np.linalg.norm(np.asarray(base_xy)-np.asarray(fixture['goal_xy'])) <= success_radius_m)
+    success = (len(relocated) == len(bodies) and bool(bodies)) if mode == 'cleanup' else (
+        bool(relocated) and path_open and reached)
+    return {'task_success': bool(success), 'goal_reached': bool(reached),
+            'nav_path_open': bool(path_open and (bool(relocated) or mode == 'cleanup')),
+            'n_relocated': len(relocated), 'n_cleared': len(relocated),
+            'manip_success_rate': len(relocated) / len(bodies) if bodies else 0.,
+            'relocated_bodies': relocated, 'post_clear_probe': probe}
 
 
 def fixture_geometry(placements, *, start, goal, bodies, bin_body, clearance_m):
@@ -127,9 +175,11 @@ def resolve_fixture(ep, placements, categories, start, *, bin_body, candidates, 
             # Avoid constructing overlapping proxy objects or embedding them in furniture.
             if any(np.linalg.norm(a-b) < object_radii[bodies[i]] + object_radii[bodies[j]] + .02
                    for i, a in enumerate(targets) for j, b in enumerate(targets) if i < j):
+                rejected.append({'landmark': landmark, 'radius_m': radius, 'reason': 'clutter_disks_overlap'})
                 continue
             if any(np.linalg.norm(p-xy) <= r + object_radii[body] + .02
                    for body, p in zip(bodies, targets, strict=True) for xy, r, _ in static_disks):
+                rejected.append({'landmark': landmark, 'radius_m': radius, 'reason': 'clutter_embedded_in_scene'})
                 continue
             updates = {}
             for body, xy in zip(bodies, targets, strict=True):

@@ -96,3 +96,74 @@ def test_replay_rejects_changed_scene_backend_start_and_unsigned_witness():
         assert certificate_error(fixture, **{**args, key: value}) == reason
     fixture['reference_success'] = False
     assert certificate_error(fixture, **args) == 'invalid_fixture_certificate'
+
+
+def test_reference_executes_grounded_steps_without_mcts(monkeypatch):
+    from types import SimpleNamespace
+
+    import emet.controller.task.tamp.task_search as search
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt
+    from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
+
+    scene = {'item': {'pos': [0,0,.02], 'cat': 'apple'},
+             'ashcan': {'pos': [2,1,.2], 'cat': 'ashcan'}}
+    monkeypatch.setattr(gt, 'read_sim_object_placements', lambda session: scene)
+    monkeypatch.setattr(search, 'resolve_scene_grasps', lambda *a, **kw: [])
+    monkeypatch.setattr(search, 'plan_pick_place_mcts', lambda *a, **kw: (_ for _ in ()).throw(AssertionError('MCTS used for admission')))
+
+    def ground(*args, **kwargs):
+        return search.TaskPlan(steps=[search.TaskPlanStep('place', {})], object_body='item',
+                               receptacle_body='ashcan', success=True)
+
+    def execute(robot, plan, **kwargs):
+        scene['item']['pos'] = list(scene['ashcan']['pos'])
+        plan.completed_ops = ['approach','grasp','place']
+        return plan
+
+    monkeypatch.setattr(search, 'plan_pick_place', ground)
+    monkeypatch.setattr(search, 'execute_task_plan', execute)
+    result = plan_clear_clutter(SimpleNamespace(get_emet_session=lambda: {}),
+                                objects=[{'object_gt_body':'item','object_query':'apple'}],
+                                mode='cleanup', bin_query='ashcan', manip_mode='sim', reference=True)
+    assert result['reference_execution'] and result['task_success']
+    assert result['execution_trace'][0]['completed_ops'] == ['approach','grasp','place']
+
+
+def test_teleport_escape_is_not_a_clutter_solution():
+    from emet.eval.clutter_fixture import score_fixture_state
+
+    fixture = {'bin_body': 'bin', 'robot_start_xy': [0,0], 'goal_xy': [1.5,0],
+               'clearance_m': .22, 'clutter': [{'body': f'item{i}'} for i in range(8)]}
+    result = score_fixture_state(room(), fixture, mode='nav_goal', base_xy=[1.5,0], success_radius_m=.5)
+    assert result['goal_reached'] and not result['task_success'] and not result['nav_path_open']
+    cleared = moved_placements(room(), {f'item{i}': [-2,1,.02] for i in range(8)})
+    result = score_fixture_state(cleared, fixture, mode='nav_goal', base_xy=[1.5,0], success_radius_m=.5)
+    assert result['task_success'] and result['n_relocated'] == 8
+    result = score_fixture_state(cleared, fixture, mode='nav_goal', base_xy=[0,0], success_radius_m=.5)
+    assert result['nav_path_open'] and not result['task_success']
+    cleared['item0']['pos'] = [0,0,.02]
+    assert not score_fixture_state(cleared, fixture, mode='cleanup', base_xy=[0,0], success_radius_m=.5)['task_success']
+
+
+def test_simulator_arrays_round_trip_certificate_without_hash_drift():
+    import json
+
+    import pytest
+
+    from emet.eval.clutter_fixture import json_value
+    original = {'poses': np.array([[1., 2., 3.]]), 'count': np.int64(1), 'ok': np.bool_(True)}
+    saved = json.loads(json.dumps(json_value(original)))
+    assert saved == {'poses': [[1., 2., 3.]], 'count': 1, 'ok': True}
+    assert fingerprint(saved) == fingerprint(original)
+    with pytest.raises(ValueError):
+        fingerprint({'pose': np.array([np.nan])})
+
+
+def test_replay_checks_height_and_orientation_including_quaternion_sign():
+    from emet.eval.clutter_fixture import pose_reproduced
+    pose = {'pos': [0., 0., .1], 'quat': [1., 0., 0., 0.]}
+    assert pose_reproduced(pose, pose)
+    assert pose_reproduced({**pose, 'quat': [-1., 0., 0., 0.]}, pose)
+    assert not pose_reproduced({**pose, 'pos': [0., 0., .2]}, pose)
+    assert not pose_reproduced({**pose, 'quat': [0., 0., 0., 1.]}, pose)
+    assert not pose_reproduced(None, pose)

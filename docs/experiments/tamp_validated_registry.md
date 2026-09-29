@@ -72,3 +72,18 @@ silently replace a rejected task at evaluation time.
 Implementation and unit validation are in progress. A small live pilot precedes
 the full admission run. No new corpus is claimed solvable until its executed
 reference evidence and fresh replay checks have completed.
+
+The first eight-case pilot exposed certificate serialization of simulator NumPy
+arrays after successful oracle execution, RBY1 attachment verification failures,
+and layouts rejected by the disk geometry. These are pilot diagnostics, not a
+scored MCTS result. Serialization now normalizes arrays/scalars before hashing.
+Construction diagnostics distinguish object overlap from scene overlap.
+
+Certificates include hashes of the source scene XML and relevant implementation
+files. The builder saves an initial scene snapshot and freezes measured settled
+clutter poses. Replay checks XYZ within 3 cm and orientation within 0.1 rad
+(accounting for quaternion sign). Final scoring uses measured object locations;
+navigation additionally requires a route from the **original** start through the
+final scene, a verified relocation, and actual arrival at the goal. Escaping the
+clutter ring with a base teleport is insufficient. These checks remain within the
+explicit oracle/latch and disk-model scope above.

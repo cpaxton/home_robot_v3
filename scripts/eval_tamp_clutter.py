@@ -39,6 +39,7 @@ scene and writes a deterministic episode registry (no execution)::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -429,7 +430,15 @@ def _validated_case(ep, args, robot, placements, robot_xy):
     """Build or replay an admitted fixture; never silently regenerate a scored task."""
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
-    from emet.eval.clutter_fixture import certificate_error, fingerprint, fixture_geometry, resolve_fixture
+    from emet.eval.clutter_fixture import (
+        certificate_error,
+        fingerprint,
+        fixture_geometry,
+        json_value,
+        pose_reproduced,
+        resolve_fixture,
+        score_fixture_state,
+    )
     from emet.eval.scene_task_extractor import load_scene_metadata, resolve_scene_metadata_for_session
     from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
@@ -444,9 +453,27 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         return reject('missing_scene_metadata')
     metadata = load_scene_metadata(metadata_path)
     categories = _placement_category_map(placements, metadata)
+    scene_path = metadata_path.with_name(metadata_path.name.replace('_metadata.json', '.xml'))
+    if not scene_path.is_file():
+        return reject('missing_scene_source_xml')
+    implementation = fingerprint({name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in (
+        'scripts/eval_tamp_clutter.py', 'src/emet/eval/clutter_fixture.py', 'src/emet/eval/tamp_clutter.py',
+        'src/emet/controller/task/tamp/clutter_chain.py', 'src/emet/controller/task/tamp/task_search.py',
+        'src/emet/simulation/sim_manipulation.py',
+    )})
     identity = fingerprint({'metadata': metadata, 'bodies': sorted(placements),
                             'sim_config': Path(ep.sim).read_text(), 'scene_index': ep.scene_index,
-                            'scene_split': ep.scene_split, 'robot': ep.robot})
+                            'scene_split': ep.scene_split, 'robot': ep.robot,
+                            'scene_xml_sha256': hashlib.sha256(scene_path.read_bytes()).hexdigest()})
+    artifact_dir = Path(args.output_dir or DEFAULT_OUTPUT)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / f'{ep.id}.initial.json').write_text(json.dumps(json_value({
+        'placements': placements, 'categories': categories, 'robot_start_xy': robot_xy.tolist(),
+        'scene_fingerprint': identity, 'implementation_sha256': implementation,
+        'environment': robot.get_emet_session().get('environment'),
+    }), indent=2) + '\n')
+    if args.manip_mode is not None:
+        return reject('fixture_execution_mode_mismatch')
     building = bool(args.validate_fixture)
     if building:
         if ep.fixture is not None:
@@ -462,6 +489,7 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         if fixture is None:
             return reject(diagnostic['reason'], construction=diagnostic)
         fixture['scene_fingerprint'] = identity
+        fixture['implementation_sha256'] = implementation
         fixture['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
     else:
         fixture = dict(ep.fixture)
@@ -471,6 +499,8 @@ def _validated_case(ep, args, robot, placements, robot_xy):
                                   execution_mode=ep.resolved_manip_mode(), clearance_m=args.clearance_m, start=robot_xy)
         if error:
             return reject(error)
+        if fixture.get('implementation_sha256') != implementation:
+            return reject('fixture_implementation_mismatch')
 
     bodies = [row['body'] for row in fixture['clutter']]
     if fixture['bin_body'] not in placements or any(b not in placements for b in bodies):
@@ -484,6 +514,14 @@ def _validated_case(ep, args, robot, placements, robot_xy):
     if any(b not in actual or np.linalg.norm(np.asarray(actual[b]['pos'])[:2] - np.asarray(row['pos'])[:2]) > .03
            for b, row in zip(bodies, fixture['clutter'], strict=True)):
         return reject('scatter_not_reproduced')
+    if building:
+        # Freeze the measured settled pose used by the witness, including height
+        # and orientation, rather than merely the requested scatter position.
+        for row in fixture['clutter']:
+            row.update(pos=json_value(actual[row['body']]['pos']),
+                       quat=json_value(actual[row['body']].get('quat')))
+    elif any(not pose_reproduced(actual.get(row['body']), row) for row in fixture['clutter']):
+        return reject('fixture_pose_mismatch')
     geometry = fixture_geometry(actual, start=robot_xy, goal=fixture['goal_xy'], bodies=bodies,
                                 bin_body=fixture['bin_body'], clearance_m=args.clearance_m)
     if not geometry['accepted']:
@@ -498,17 +536,21 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         manip_mode=manip, executor=executor, seed=ep.seed, clearance_m=args.clearance_m,
         strict_navigation=True, reference=building,
     )
+    reference_completed = bool(metrics.get('task_success'))
+    final = _read_placements(robot)
+    metrics.update(score_fixture_state(final, fixture, mode=ep.mode, base_xy=_world_base_xy(robot),
+                                       success_radius_m=ep.success_radius_m))
     if not building:
         return {**base, **metrics, 'skipped_invalid': False, 'episode_valid': True,
                 'fixture_sha256': ep.fixture['sha256'], 'validity_probe': geometry}
-    final = _read_placements(robot)
     destination = np.asarray(final[fixture['bin_body']]['pos'])[:2]
     all_relocated = all(b in final and np.linalg.norm(np.asarray(final[b]['pos'])[:2]-destination) <= ep.success_radius_m
                         for b in bodies)
-    if not metrics.get('task_success') or not all_relocated:
+    if not reference_completed or not metrics.get('task_success') or not all_relocated:
         return reject('reference_execution_failed', reference=metrics, final_all_relocated=all_relocated)
     fixture.update(reference_success=True, geometry=geometry,
                    reference={'metrics': metrics, 'final_positions': {b: final[b]['pos'] for b in bodies}})
+    fixture = json_value(fixture)
     fixture['sha256'] = fingerprint(fixture)
     row = asdict(ep)
     row.update(fixture=fixture, goal_xy=fixture['goal_xy'], robot_start_xy=fixture['robot_start_xy'],
