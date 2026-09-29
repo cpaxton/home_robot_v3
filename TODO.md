@@ -3,6 +3,20 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## TAMP agent execution follow-up (2026-09-29)
+
+Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).
+
+- [x] Export baseline coverage/success and task-layout figures as PDF/SVG/PNG.
+- [x] Instrument lift outcomes; identify height-only false-positive acceptance and
+      metre-scale attachment offsets. Historical 21/25 is not verified grasp success.
+- [ ] Validate measured-joint arrival and target-distance guards, repair remaining
+      execution failures, then run paired trials across all original admitted tasks.
+- [ ] Complete 90-candidate oracle expansion and fresh replay; queued managed job
+      `20260929_132011_913a74` follows one guarded RBY1 trial. Latch expansion is held.
+- [ ] Measure the full shared agent on frozen valid tasks with explicit model,
+      observations and action budgets; do not label scripted/GT controls as agent results.
+
 ## Physical TAMP acceptance (2026-09-26)
 
 Evidence and commands: [physical acceptance](docs/experiments/physical_tamp_acceptance.md).

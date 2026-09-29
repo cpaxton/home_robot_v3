@@ -4,7 +4,7 @@ Work follows benchmark PR #177 on branch `feat/tamp-agent-execution`.
 Baseline remains 21/25 fresh GT/MCTS successes on 25/200 admitted controls.
 Neither learned-agent nor physical acceptance is established.
 
-## Active experiments
+## Initial experiment (cancelled; see live finding below)
 
 Managed job `20260929_131223_7489e3` executes serially:
 
@@ -24,7 +24,8 @@ Managed job `20260929_131223_7489e3` executes serially:
 
 Durable root: `~/runs/emet/tamp-validated-fixtures-20260928/`.
 Outputs: `lift-evidence-r5/`, `full-r4/`, `replay-r4/`, and
-`execution-expansion-20260929-job/`. Results are pending.
+`execution-expansion-20260929-job/`. This run was cancelled before expansion;
+the replacement job and findings are recorded below.
 
 The new diagnostics pass the controller and agent-tool regression slice
 (24 tests). An existing test mock now explicitly disables query-driven memory,
@@ -65,3 +66,36 @@ corpus measures coverage separately. Validate the shared agent tool sequence on
 these fixtures before attributing changes to model reasoning. Actual learned
 agent runs must record model, prompt, observations, action traces and budgets;
 scripted tool calls and oracle identities must remain explicitly labeled.
+
+## Live finding: invalid lift acceptance
+
+Job `20260929_131223_7489e3` was cancelled after its first completed case exposed
+an invalid success condition. The apple was 1.0166 m from its lift target but
+accepted because Z increased by 0.1870 m. Server attachment offsets were about
+1.39–1.65 m for the apple and 2.51 m for the potato. Command/session steps matched
+at verification; this alone does not establish fresh or correct physical state.
+The evidence does not yet isolate the frame, controller, or attachment race cause.
+
+Original outcomes remain historical final-state control scores. In particular,
+21/25 is not verified grasp or agent success. Paper captions have this qualification.
+The completed first case and server log are retained in `lift-evidence-r5/`;
+`termination.json` explains that remaining ledger running/pending entries are
+interrupted/unexecuted. No r4 full sweep was started by that cancelled job.
+
+Candidate guard `c428280d` requires measured-joint FK arrival within the existing
+IK tolerance before motion is declared complete, and removes height-only lift
+acceptance. This can lower the recorded score while exposing real failures.
+The controller/agent-tool slice passes 25 tests. It is not yet a demonstrated
+live reliability improvement.
+
+Replacement managed job `20260929_132011_913a74` first evaluates the guard on
+original RBY1 scene00 cleanup slot 0 using frozen variant `d245693e`, then runs
+90 oracle-backed construction requests (Stretch, Mars, Nori) and fresh replay
+from the tested r4 source. It retains the 120-second startup budget and 900-second
+case wall limit. Outputs: `measured-arrival-r6/`, `oracle-expansion-r4/`,
+`oracle-replay-r4/`, `measured-oracle-20260929-job/`. RBY1 expansion remains gated
+on fixing measured execution. New outcomes are pending.
+
+Final follow-up regression check: 95 controller, agent-tool, task-search, MCTS,
+and physical-motion contract tests passed. Live measured-arrival acceptance and
+expanded oracle results are still pending; no performance gain is claimed yet.
