@@ -167,6 +167,13 @@ def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") ->
     space = getattr(self, "space", None)
     if space is not None:
         space.traj = None
+    if reason == "rejected_swept_footprint:unobserved_footprint":
+        # Missing sensor coverage is not evidence that the destination is
+        # unreachable. Keep the failed route invalidated, but let a new plan
+        # recheck it after sensing rather than blacklisting it for the episode.
+        # Full swept-footprint validation and the caller's retry budget remain.
+        self._record_nav_plan_fields(outcome=reason, blocked_after_abort=False)
+        return
     blocked = getattr(self, "_habitat_blocked_goals", None)
     if blocked is None:
         self._habitat_blocked_goals = set()

@@ -108,3 +108,23 @@ def test_mark_nav_goal_blocked_habitat_navmesh_stuck_reason():
     key = goal_key_xy((2.0, 4.0))
     assert key in agent._habitat_blocked_goals
     assert agent._last_nav_plan.get("outcome") == "habitat_navmesh_already_at_goal"
+
+
+def test_unknown_footprint_invalidates_route_without_blacklisting_destination():
+    from types import SimpleNamespace
+
+    from emet.controller.controller_dynamem import DynamemController
+
+    agent = DynamemController.__new__(DynamemController)
+    agent.space = SimpleNamespace(traj=[[0, 0, 0], [2, 4, 0]])
+    prior = goal_key_xy((9, 9))
+    agent._habitat_blocked_goals = {prior}
+    agent._habitat_recent_goals = [prior]
+    agent._last_nav_plan = {"goal_xyt": [2, 4, 0]}
+    reason = "rejected_swept_footprint:unobserved_footprint"
+    agent._mark_nav_goal_blocked(reason=reason)
+    assert agent.space.traj is None
+    assert agent._habitat_blocked_goals == {prior}
+    assert agent._habitat_recent_goals == [prior]
+    assert agent._last_nav_plan["outcome"] == reason
+    assert agent._last_nav_plan["blocked_after_abort"] is False
