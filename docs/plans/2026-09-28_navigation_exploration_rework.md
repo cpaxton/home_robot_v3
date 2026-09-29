@@ -343,6 +343,27 @@ were relaxed to pass these gates.
   budgets and writes `~/runs/emet/navigation-paired-ovmm-20260929/replan-v2/`.
   Superseded job `20260929_090141_595975` was canceled **before execution**; it
   has no result. No benchmark source worktree was edited during a run.
+  **Completed: 0/2 objects, 0/2 receptacles.** RoboCasa selected a floor look,
+  cleared its checked blocker, then retried investigation; target sampling
+  failed. A later frontier hit another unknown cell. Molmo target attempts
+  remained unknown-footprint rejections despite floor views. Recorded
+  investigate distances were all zero: this is not useful room navigation.
+  Repeated views/graph inspections also consumed the six-round budget. Keep
+  model limits separate from missing/incorrect tool feedback; do not relax
+  geometry or silently increase budgets to make the row pass.
+- One independent S0 control (not a paired comparison), job
+  `20260929_091423_f6ff37`, uses `default_table_s0_distinct_recep` (red cylinder,
+  blue cube), the same settings, and frozen `de7aae86`; artifacts under
+  `~/runs/emet/navigation-paired-ovmm-20260929/table-control/`. Its result is
+  **0/1 object and 0/1 receptacle**, not a room-scale acceptance substitute.
+  Red-cylinder investigation stayed blocked on unknown footprint coverage.
+  Blue-cube search reached two sampled navigation goals, but verification
+  rejected the views. The first voxel proposal had score 0.1108 and XYZ
+  `[-2.1968, 1.5080, 0.0217]` (near floor height); manual inspection of
+  `images/rgb_1099511627787.png` confirms no visible cube. Do not treat a
+  low-confidence search proposal as a localized object or an arrival as task
+  success. Physical translation is working; basic useful find is still unproven
+  under this pilot configuration. All scheduled jobs in this battery finished.
 
 Keep review split by responsibility: controller phase/standalone-package parity;
 physical-map planner/route contract; shared recovery-tool integration; opt-in
@@ -351,3 +372,21 @@ diff as one merge-ready PR or change defaults based on these diagnostic pilots.
 The controller slice needs the live repetition result; the exploration slice
 still needs useful room traversal and the unscored narrow/obstructed/unknown
 physical cases. TAMP repairs remain with the sibling agent.
+
+## Resume from this checkpoint
+
+Worktree `/tmp/emet-eqa-progress`, branch `experiment/eqa-inspection-progress`;
+tested runtime `de7aae86`. Main and other agents' source worktrees were not
+modified. No defaults or hardware deployment changed. Do not launch another
+sweep to measure the same blocked attempts.
+
+Next bounded diagnostic: replay the saved unknown-cell/approach-sampling cases,
+and establish whether a stationary calibrated view can actually observe each
+blocking region before asking the VLM to choose it. Preserve unobservable
+regions as unknown; never clear them just because they block motion. Record
+why approach candidates fail (occupancy, unknown footprint, reach, connectivity)
+and carry that existing sampler evidence into tool feedback. For search
+proposals, retain the source view and uncertainty rather than interpreting a
+voxel peak as object truth. Then retry the same S0 and two-room gates with
+unchanged model/budgets. Keep TAMP at regression scope and keep the already
+passing controller slice separate from unfinished search/coverage changes.

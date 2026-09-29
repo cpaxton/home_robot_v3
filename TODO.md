@@ -11,12 +11,21 @@ Implementation and acceptance specification:
 - [x] Paired EQA: baseline/candidate both 13/24 across two seeds, no per-question
       correctness changes. TAMP minimal regression: 48 tests passed; separate
       agent owns further TAMP work. Neither is physical navigation acceptance.
-- [ ] Finish physical-find recovery retest `20260929_085020_0968a4` after
+- [x] Finish physical-find recovery retest `20260929_085020_0968a4` after
       `da5d2a80` wires existing floor sensing into the internal find loop.
       Previous paired small-room OVMM: both versions 0/2 object, 0/2 receptacle.
       Recovery-only retest also 0/2 + 0/2, but selected floor sensing cleared
-      the RoboCasa checked blocker. Final replan repair `de7aae86` is queued as
-      `20260929_090518_81c52e`; do not call this task acceptance yet.
+      the RoboCasa checked blocker. Final replan repair `de7aae86`, job
+      `20260929_090518_81c52e`, also scores 0/2 + 0/2; do not call this task
+      acceptance. RoboCasa replans after sensing but sampling then fails;
+      Molmo floor views leave its blocker unknown. Recorded target motion is zero.
+- [ ] Improve useful viewing poses/approach sampling; preserve the room-pilot
+      failures and unchanged safety checks. S0 control `20260929_091423_f6ff37`
+      finished 0/1 object + 0/1 receptacle. Two target-navigation arrivals
+      occurred, but the low-confidence near-floor voxel proposal did not yield
+      a visible cube. Do not promote physical-map defaults or claim find works.
+      Replay the saved blockers/view geometry before another learned sweep;
+      carry sampler rejection reasons and proposal provenance into tool feedback.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
