@@ -459,3 +459,25 @@ tilt, followed by rechecking the same rejected footprint and replanning.
 Do not spend another learned sweep repeating the current view or change
 collision padding to conceal missing observations. No new simulator or hardware
 job was launched for this feedback-only change.
+
+### Bounded floor-view intervention queued
+
+Job `20260929_152136_d2985b` (`nav-floor-steeper-diagnostic-0929`) is queued
+behind the sibling TAMP job, with CPU-safe/GPU-exclusive serialization.
+Frozen runtime remains `928b29dd`, identical Molmo seed/model/mapping/search
+budgets to the failed pilot. Diagnostic driver `/tmp/emet_floor_view_probe.py`
+(SHA256 `d55499e627a82f4bfbed452ffab5c67a22d88d8c5099ca84552f6ef264b80537`)
+intercepts only the first requested floor capture: capture the original view,
+then capture at -1.35 rad tilt with the same requested pan. It returns that
+second observation and leaves subsequent policy actions unchanged, allowing
+normal checked replanning. No base-motion command, collision bypass, semantic
+GT, or new head limits are introduced by the driver.
+
+Output root: `~/runs/emet/navigation-floor-steeper-20260929/`. The episode's
+`floor_view_intervention.json` records both tool results and measured base drift;
+the existing navigation directory retains RGB/depth/calibration/map snapshots.
+This is explicitly an intervention diagnostic, **not** a learned-policy score
+or a paired accuracy comparison. Check capture success, unchanged base pose,
+same-footprint validity and actual subsequent motion separately. If it fails
+to clear the blocker, inspect calibration/depth coverage instead of assuming
+steeper tilt solves it. No result available at queue time.
