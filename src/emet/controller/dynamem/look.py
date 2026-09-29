@@ -132,6 +132,22 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
     obstacles_after, explored_after = agent.voxel_map.get_2d_map()
     observed_delta = int(explored_after.sum()) - int(explored_before.sum())
     footprint_after = _rejected_footprint_status(agent, checked_pose)
+    # Capture success and recovery success are different contracts. Map growth
+    # elsewhere must not look like progress on this particular rejected pose.
+    recovery_status = "not_evaluated"
+    if footprint_before is not None and footprint_after is not None:
+        if footprint_after["pose_valid"]:
+            recovery_status = "checked_pose_valid_replan_required"
+        elif footprint_after["reason"] != "unobserved_footprint":
+            recovery_status = "checked_pose_still_invalid"
+        else:
+            old_count = footprint_before["unknown_cells"]
+            new_count = footprint_after["unknown_cells"]
+            recovery_status = (
+                "unknown_footprint_reduced"
+                if isinstance(old_count, int) and isinstance(new_count, int) and new_count < old_count
+                else "unknown_footprint_not_reduced"
+            )
     # Keep the exact captured view and map changes for offline inspection.
     # A larger observed map is not proof of clearance or successful navigation.
     evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
@@ -165,6 +181,7 @@ def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -
             "checked_pose": checked_pose,
             "footprint_before": footprint_before,
             "footprint_after": footprint_after,
+            "recovery_status": recovery_status,
             "replan_required": True,
         },
         "note": (

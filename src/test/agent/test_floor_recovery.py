@@ -179,9 +179,20 @@ def test_pick_failure_exposes_reason_and_only_safe_recovery(status, payload_stat
 @pytest.mark.parametrize("pan_rad", [None, -0.8, 0.8])
 @pytest.mark.parametrize("tilt_rad", [-1.0, -1.4])
 @pytest.mark.parametrize(
+    "remaining,reason,recovery_status",
+    [
+        (1, "unobserved_footprint", "unknown_footprint_reduced"),
+        (4, "unobserved_footprint", "unknown_footprint_not_reduced"),
+        (0, "valid", "checked_pose_valid_replan_required"),
+        (0, "occupied_footprint", "checked_pose_still_invalid"),
+    ],
+)
+@pytest.mark.parametrize(
     "failure", [None, "delayed", "post_arrival_stale", "stale", "pose", "depth", "map", "unsupported", "sequence"]
 )
-def test_floor_observation_requires_fresh_measured_capture(monkeypatch, tmp_path, failure, pan_rad, tilt_rad):
+def test_floor_observation_requires_fresh_measured_capture(
+    monkeypatch, tmp_path, failure, pan_rad, tilt_rad, remaining, reason, recovery_status
+):
     import itertools
 
     clock = itertools.count(step=1.0)
@@ -220,10 +231,10 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, tmp_path
 
     def check_footprint(pose):
         agent.space.last_validity = {
-            "reason": "unobserved_footprint",
-            "unknown_footprint_cells": 1 if agent.voxel_map.observations else 4,
+            "reason": reason if agent.voxel_map.observations else "unobserved_footprint",
+            "unknown_footprint_cells": remaining if agent.voxel_map.observations else 4,
         }
-        return False
+        return bool(agent.voxel_map.observations) and reason == "valid"
 
     agent.space.is_valid = check_footprint
 
@@ -248,13 +259,14 @@ def test_floor_observation_requires_fresh_measured_capture(monkeypatch, tmp_path
         agent.update.assert_called_once_with(full_perception=True)
         feedback = result["observation"]
         assert feedback["footprint_before"]["unknown_cells"] == 4
-        assert feedback["footprint_after"]["unknown_cells"] == 1
-        assert feedback["footprint_after"]["pose_valid"] is False
+        assert feedback["footprint_after"]["unknown_cells"] == remaining
+        assert feedback["footprint_after"]["pose_valid"] is (reason == "valid")
+        assert feedback["recovery_status"] == recovery_status
         assert feedback["replan_required"] is True
         from emet.agent.tool_outcome import ToolOutcome
 
         rendered = ToolOutcome.from_eqa_dict("observe_floor", result).render()
-        assert '"unknown_cells": 1' in rendered
+        assert recovery_status in rendered
         assert '"measured_head_pan_tilt_rad"' in rendered
 
 
