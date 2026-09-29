@@ -372,3 +372,35 @@ def test_query_find_never_uses_legacy_localization(nav_agent, visible_target):
         nav_agent.retrieve_query_candidate.assert_called_once_with("cup")
     nav_agent.voxel_map.localize_text.assert_not_called()
     nav_agent.voxel_map.verify_point.assert_not_called()
+
+
+def test_physical_frontier_offers_guarded_stationary_view(nav_agent, monkeypatch):
+    from emet.motion.algo.a_star import AStar
+
+    start = np.array([-1.002, -0.280, 0.018])
+    frontier = np.array([-1.3, -0.2, 1.0])
+    monkeypatch.setattr("emet.controller.dynamem.navigation.pick_uncovered_explore_target", lambda *a, **kw: frontier)
+    monkeypatch.setattr("emet.motion.frontier_goals.collect_explore_frontier_candidates", lambda *a, **kw: [frontier])
+    monkeypatch.setattr("emet.motion.viewpoint_selection.make_frontier_evaluator", lambda *a: lambda *args: 1.0)
+    planner = object.__new__(AStar)
+    planner.plan = MagicMock(
+        return_value=SimpleNamespace(success=True, goal_index=0, trajectory=[SimpleNamespace(state=start.copy())])
+    )
+    planner.clean_path_for_xy = lambda points, **kw: points
+    planner.clearance_at_xy = lambda xy: 0.4
+    nav_agent.planner = planner
+    nav_agent.space.traj = None
+    nav_agent.space.obstacle_map_mode = "physical"
+    nav_agent.space.sample_navigation.return_value = np.array([-1.1, -0.3, 2.678])
+    nav_agent._filter_unsafe_nav_traj = lambda path, **kw: (path, None, 0.4)
+    nav_agent.rerun_visualizer = SimpleNamespace(
+        clear_nav_plan=lambda: None, clear_identity=lambda _: None, log_arrow3D=lambda *args: None
+    )
+    nav_agent._rerun_refresh_monologue_panel = lambda: None
+    nav_agent.obs_count = 0
+    nav_agent.process_text("", start)
+    goals = planner.plan.call_args.kwargs["goals"]
+    assert len(goals) == 2
+    np.testing.assert_allclose(goals[0][:2], start[:2])
+    assert goals[0][2] > 0  # Counterclockwise view; translation initially turns clockwise.
+    np.testing.assert_allclose(goals[1][:2], [-1.1, -0.3])

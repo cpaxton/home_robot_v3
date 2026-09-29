@@ -444,7 +444,14 @@ def run_exploration(self):
         goal_xy=goal,
     )
     if status is not None and not progressed:
-        self._mark_nav_goal_blocked(reason="exploration_no_progress")
+        if physical:
+            from emet.motion.viewpoint_selection import remember_unhelpful_view
+
+            if new_cells == 0:
+                remember_unhelpful_view(self)
+            self._record_nav_plan_fields(outcome="exploration_no_progress")
+        else:
+            self._mark_nav_goal_blocked(reason="exploration_no_progress")
     if status is None:
         self.announce_action("Exploring… no valid frontier right now")
         logger.warning("Exploration failed (no valid plan or frontier).")
@@ -642,7 +649,15 @@ def process_text(self, text, start_pose):
         )
         object_xys: list[np.ndarray] = []
         nav_goals: list[np.ndarray] = []
+        physical_views = getattr(self.space, "obstacle_map_mode", None) == "physical"
         for cand in cands:
+            if physical_views:
+                # A frontier can be revealed from here without driving to its
+                # sampled approach. These are guarded SE(2) goals, not a raw scan.
+                # At most two views per each of the eight frontier candidates.
+                bearing = np.arctan2(float(cand[1]) - start_pose[1], float(cand[0]) - start_pose[0])
+                object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
+                nav_goals.append(np.array([*start_pose[:2], bearing]))
             g = self.space.sample_navigation(
                 start_pose,
                 self.planner,
@@ -655,7 +670,6 @@ def process_text(self, text, start_pose):
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
             nav_goals.append(np.asarray(g, dtype=np.float64).reshape(-1))
 
-        physical_views = getattr(self.space, "obstacle_map_mode", None) == "physical"
         if nav_goals and (len(nav_goals) >= 2 or physical_views):
             evaluator = None
             if physical_views:

@@ -3,9 +3,47 @@
 
 """Bounded camera-view estimates for frontier ranking, never collision certificates."""
 
+import hashlib
 import math
 
 import numpy as np
+
+
+def _view_key(pose):
+    return (
+        round(float(pose[0]), 6),
+        round(float(pose[1]), 6),
+        round(math.atan2(math.sin(pose[2]), math.cos(pose[2])), 6),
+    )
+
+
+def _view_map_revision(agent, pose, obstacles, explored):
+    """Fingerprint local evidence; unrelated map growth must not unlock retries."""
+    i, j = agent.planner.to_pt(pose[:2])
+    radius = int(math.ceil(agent.voxel_map.max_depth / agent.voxel_map.grid_resolution)) + 1
+    window = (
+        slice(max(0, i - radius), min(obstacles.shape[0], i + radius + 1)),
+        slice(max(0, j - radius), min(obstacles.shape[1], j + radius + 1)),
+    )
+    return hashlib.blake2b(
+        np.packbits(np.stack([obstacles[window], explored[window]])).tobytes(), digest_size=16
+    ).hexdigest()
+
+
+def remember_unhelpful_view(agent):
+    pose = (getattr(agent, "_last_nav_plan", None) or {}).get("goal_xyt")
+    if pose is None:
+        return
+    maps = agent.space.get_navigation_map()
+    obstacles, explored = (v.detach().cpu().numpy() if hasattr(v, "detach") else np.asarray(v) for v in maps)
+    history = getattr(agent, "_unhelpful_exploration_views", {})
+    key = _view_key(pose)
+    history.pop(key, None)
+    history[key] = _view_map_revision(agent, pose, obstacles, explored)
+    # Bounded per-controller diagnostic memory, not semantic object memory.
+    while len(history) > 64:
+        history.pop(next(iter(history)))
+    agent._unhelpful_exploration_views = history
 
 
 def visible_unknown_cells(obstacles, explored, *, camera_xy, heading, fov, max_range, resolution, to_cell):
@@ -82,11 +120,17 @@ def make_frontier_evaluator(agent, start, goals, diagnostics):
         ):
             record["reason"] = "already_satisfied_view"
             return None
-        key = tuple(round(float(v), 6) for v in waypoints[-1])
+        key = _view_key(waypoints[-1])
         if key in seen:
             record["reason"] = "duplicate_resolved_view"
             return None
         seen.add(key)
+        previous_revision = getattr(agent, "_unhelpful_exploration_views", {}).get(key)
+        if previous_revision is not None and previous_revision == _view_map_revision(
+            agent, waypoints[-1], obstacles, explored
+        ):
+            record["reason"] = "unchanged_unhelpful_view"
+            return None
         _, reason, clearance = agent._filter_unsafe_nav_traj(waypoints, start_xyt=start, explore_goal=True)
         if reason:
             record.update(reason=reason, footprint=dict(getattr(agent, "_last_nav_sweep_failure", {}) or {}))

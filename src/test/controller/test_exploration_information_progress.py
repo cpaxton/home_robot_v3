@@ -36,7 +36,7 @@ def test_physical_exploration_separates_motion_from_sensor_gain(distance, gain, 
         _maybe_emit_navgrid_ascii=Mock(),
     )
     assert run_exploration(agent) is expected
-    fields = agent._record_nav_plan_fields.call_args.kwargs
+    fields = agent._record_nav_plan_fields.call_args_list[0].kwargs
     assert fields["measured_distance_m"] == distance
     assert fields["motion_outcome"] == ("failed" if status is None else "reached" if status else "partial")
 

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from emet.motion.viewpoint_selection import make_frontier_evaluator, visible_unknown_cells
+from emet.motion.viewpoint_selection import make_frontier_evaluator, remember_unhelpful_view, visible_unknown_cells
 
 
 def test_sector_gain_respects_heading_and_wall_occlusion():
@@ -26,7 +26,7 @@ def test_sector_gain_respects_heading_and_wall_occlusion():
 
 
 def test_route_rejection_precedes_view_scoring_and_noop_is_not_a_view():
-    obstacles = np.zeros((30, 30), dtype=bool)
+    obstacles = np.zeros((100, 100), dtype=bool)
     explored = np.zeros_like(obstacles)
     pose = np.eye(4)
     pose[:2, 3] = [1, 1]
@@ -59,3 +59,13 @@ def test_route_rejection_precedes_view_scoring_and_noop_is_not_a_view():
     agent._filter_unsafe_nav_traj = lambda *a, **kw: ([], "rejected_swept_footprint:occupied_footprint", None)
     assert evaluate([[1, 1]], 3) is None
     assert diagnostics[-1]["reason"].endswith("occupied_footprint")
+    agent._filter_unsafe_nav_traj = lambda path, **kw: (path, None, 0.4)
+    agent._last_nav_plan = {"goal_xyt": goals[1]}
+    remember_unhelpful_view(agent)
+    explored[99, 99] = True  # Unrelated far-away evidence does not unlock retry.
+    retry = make_frontier_evaluator(agent, start, goals, diagnostics)
+    assert retry([[1, 1], [1.4, 1]], 1) is None
+    assert diagnostics[-1]["reason"] == "unchanged_unhelpful_view"
+    explored[14, 10] = True  # Local evidence changed: this view may be useful now.
+    retry = make_frontier_evaluator(agent, start, goals, diagnostics)
+    assert retry([[1, 1], [1.4, 1]], 1) > 0
