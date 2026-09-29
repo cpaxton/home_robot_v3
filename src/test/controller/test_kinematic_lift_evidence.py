@@ -50,3 +50,23 @@ def test_planned_pose_is_not_a_substitute_for_measured_joint_state():
     ex._sync_qpos_from_robot = lambda: True
     assert ex._wait_measured_ee(np.array([0., 0., .13]), timeout_s=0)[0]
     assert not ex._wait_measured_ee(np.array([1., 0., .13]), timeout_s=0)[0]
+
+
+def test_tracking_evidence_distinguishes_unapplied_command_from_joint_error():
+    import mujoco
+    ex = executor(None)
+    ex._model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="tool">
+      <joint name="arm" type="slide"/><geom type="sphere" size=".1"/>
+      </body></worldbody><actuator><position name="arm" joint="arm"/></actuator></mujoco>''')
+    ex._data = mujoco.MjData(ex._model)
+    ex._data.qpos[0] = .2
+    ex.joint_names = ('arm',)
+    ex._last_cmd_q = np.array([.8])
+    ex._actuator_names = lambda: ['arm']
+    ex.robot._state = {'actuator_targets': [.7], 'step': 42}
+    evidence = ex._joint_tracking_evidence()
+    assert evidence['planned_q'] == [.8]
+    assert evidence['server_targets'] == [.7]
+    assert evidence['observed_q'] == [.2]
+    ex._last_motion_failure = 'tracking_failed'
+    assert ex._stage_failure('pregrasp') == 'pregrasp_tracking_failed'

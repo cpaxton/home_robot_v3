@@ -388,8 +388,33 @@ class KinematicPickPlaceExecutor:
             'error_m': error if np.isfinite(error) else None,
             'tolerance_m': self.ik_tol_m, 'accepted': bool(error <= self.ik_tol_m),
         }
+        self.last_ee_verification.update(self._joint_tracking_evidence())
         logger.info('KinematicPickPlace measured EE: ' + json.dumps(self.last_ee_verification))
         return error <= self.ik_tol_m, error
+
+    def _joint_tracking_evidence(self) -> dict[str, Any]:
+        """Separate the planner target, server-held commands, and observed joints."""
+        from emet.motion.mujoco_arm_ik import joint_qpos_addrs
+
+        if getattr(self, '_model', None) is None:
+            return {}
+        observed = np.asarray([self._data.qpos[a] for a in joint_qpos_addrs(self._model, self.joint_names)])
+        command = getattr(self, '_last_cmd_q', None)
+        state = getattr(self.robot, '_state', None)
+        targets = state.get('actuator_targets') if isinstance(state, dict) else None
+        by_joint = {}
+        if targets is not None:
+            for actuator, target in zip(self._actuator_names(), targets, strict=False):
+                by_joint[self._actuator_to_joint_name(actuator)] = float(target)
+        return {
+            'joint_names': list(self.joint_names), 'observed_q': observed.tolist(),
+            'planned_q': None if command is None else np.asarray(command).tolist(),
+            'server_targets': [by_joint.get(name) for name in self.joint_names],
+            'state_step': state.get('step') if isinstance(state, dict) else None,
+        }
+
+    def _stage_failure(self, stage: str) -> str:
+        return f"{stage}_{getattr(self, '_last_motion_failure', None) or 'ik_failed'}"
 
     def _hold_actuator_dict(self) -> dict[str, float]:
         names = self._actuator_names()
@@ -441,6 +466,7 @@ class KinematicPickPlaceExecutor:
         self._last_cmd_q = home_arm_q_array(self.profile)
 
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
+        self._last_motion_failure = None
         assert self._model is not None and self._data is not None
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
@@ -502,6 +528,7 @@ class KinematicPickPlaceExecutor:
             max_iters=self.ik_max_iters,
         )
         if not result.success:
+            self._last_motion_failure = 'ik_failed'
             return False, result.pos_error_m
         q1 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         plan = plan_arm_joint_path(
@@ -517,6 +544,7 @@ class KinematicPickPlaceExecutor:
             linear_steps=self.traj_steps,
         )
         if not plan.success:
+            self._last_motion_failure = 'planning_failed'
             logger.warning(f"KinematicPickPlace: path plan failed planner={plan.planner!r} reason={plan.reason!r}")
             return False, result.pos_error_m
         logger.info(f"KinematicPickPlace: path via {plan.planner} n_waypoints={len(plan.waypoints)}")
@@ -534,7 +562,10 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(plan.waypoints[-1])
             self._sleep(max(0.25, self.traj_dt * 3))
         self._last_cmd_q = q1.copy()
-        return self._wait_measured_ee(np.asarray(target_xyz_world))
+        reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+        if not reached:
+            self._last_motion_failure = 'tracking_failed'
+        return reached, measured_error
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:
         from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
@@ -572,10 +603,10 @@ class KinematicPickPlaceExecutor:
         self.last_targets = {"pregrasp": pregrasp, "grasp": grasp, "lift": lift}
         ok, g_err = self._plan_and_execute_ee(pregrasp)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "pregrasp_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('pregrasp'))
         ok, g_err = self._plan_and_execute_ee(grasp)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "grasp_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('grasp'))
         self._sleep(0.4)
         try:
             self._set_gripper(open_=False)
@@ -586,7 +617,7 @@ class KinematicPickPlaceExecutor:
         ok, _ = self._plan_and_execute_ee(lift)
         if not ok:
             robot_zmq_detach_body(self.robot, body)
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "lift_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('lift'))
         self._sleep(0.35)
         # Re-glue at the lift pose: Molmo freejoint children can lag the EE during actuator
         # streaming even when attach was registered (seen as attach_verify_failed with ~2cm dz).
