@@ -86,3 +86,24 @@ def test_explicit_case_subset_keeps_order_and_rejects_unknown(monkeypatch, capsy
     with pytest.raises(SystemExit) as exc:
         module.main()
     assert exc.value.code == 2
+
+
+def test_unvalidated_candidates_require_admission_and_keep_rejections(tmp_path):
+    import yaml
+
+    module = runner()
+    registry = tmp_path / 'candidates.yaml'
+    row = {'id': 'candidate', 'robot': 'stretch', 'requires_fixture': True}
+    registry.write_text(yaml.safe_dump({'episodes': [row]}))
+    with pytest.raises(ValueError, match='Unvalidated candidate'):
+        module.build_cases('full', registry=registry)
+    cases = module.build_cases('full', registry=registry, validate_fixtures=True)
+    assert cases[0]['command'][-1] == '--validate-fixture'
+    assert cases[0]['stage'] == 'fixture_validation'
+    for status in ('fixture_admitted', 'fixture_rejected'):
+        (tmp_path/'candidate.json').write_text(json.dumps({'status': status, 'task_success': False}))
+        result = module.summarize_case(cases[0], tmp_path, 0)
+        assert result['status'] == status and not result['task_success']
+    registry.write_text(yaml.safe_dump({'episodes': [row, row]}))
+    with pytest.raises(ValueError, match='Duplicate'):
+        module.build_cases('full', registry=registry, validate_fixtures=True)

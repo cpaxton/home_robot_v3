@@ -108,6 +108,8 @@ class ClutterEpisode:
     robot_start_xy: tuple[float, float] | None = None
     goal_xy: tuple[float, float] | None = None
     episode_valid: bool | None = None
+    fixture: dict[str, Any] | None = None
+    requires_fixture: bool = False
 
     def __post_init__(self) -> None:
         if self.scene_split not in (None, "train", "val", "test"):
@@ -167,6 +169,8 @@ def load_clutter_episodes(path: str | Path) -> list[ClutterEpisode]:
                 robot_start_xy=tuple(float(x) for x in row["robot_start_xy"]) if row.get("robot_start_xy") else None,
                 goal_xy=tuple(float(x) for x in row["goal_xy"]) if row.get("goal_xy") else None,
                 episode_valid=(bool(row["episode_valid"]) if row.get("episode_valid") is not None else None),
+                fixture=row.get("fixture"),
+                requires_fixture=bool(row.get("requires_fixture", False)),
             )
         )
     return out
@@ -454,6 +458,7 @@ def nav_path_open_around_disks(
     grid_res_m: float = 0.05,
     clearance_m: float = 0.22,
     pad_cells: int = 4,
+    strict_endpoints: bool = False,
 ) -> tuple[bool, dict[str, Any]]:
     """8-connected path exists from robot to goal around obstacle disks.
 
@@ -504,6 +509,9 @@ def nav_path_open_around_disks(
     for cell in (start_cell, goal_cell):
         r, c = cell
         if 0 <= r < h and 0 <= c < w and not occ[r, c]:
+            if strict_endpoints:
+                return False, {"probe": "nav_path_8conn", "blocked": True,
+                               "invalid_endpoint": "start" if cell == start_cell else "goal"}
             occ[r, c] = True
 
     path_open = _path_exists(occ, start_cell, goal_cell)

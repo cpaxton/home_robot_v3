@@ -24,7 +24,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build_cases(suite, python=sys.executable, *, robot=None):
+def build_cases(suite, python=sys.executable, *, robot=None, registry=None, validate_fixtures=False):
+    if (registry is not None or validate_fixtures) and suite not in ("small", "full"):
+        raise ValueError("Custom registries and fixture validation require small/full suite")
     if robot is not None and suite not in ("small", "full"):
         raise ValueError("Robot filtering is supported only for small/full registry revalidation")
     script = str(ROOT / "scripts/eval_tamp_clutter.py")
@@ -48,7 +50,7 @@ def build_cases(suite, python=sys.executable, *, robot=None):
             for scene in (0, 1)
         ]
     if suite in ("small", "full"):
-        registry = (
+        registry = Path(registry).expanduser().resolve() if registry is not None else (
             ROOT / "configs/ovmm" / ("clutter_episodes_large.yaml" if suite == "full" else "clutter_episodes.yaml")
         )
         rows = yaml.safe_load(registry.read_text())["episodes"]
@@ -58,6 +60,8 @@ def build_cases(suite, python=sys.executable, *, robot=None):
         for row in rows:
             if robot is not None and row["robot"] != robot:
                 continue
+            if row.get("requires_fixture") and not row.get("fixture") and not validate_fixtures:
+                raise ValueError(f"Unvalidated candidate {row['id']}; run --validate-fixtures first")
             mode = row.get("manip_mode") or ROBOT_DEFAULT_MANIP_MODE[row["robot"]]
             cases.append(
                 {
@@ -72,11 +76,15 @@ def build_cases(suite, python=sys.executable, *, robot=None):
                     }[mode],
                     "expected_episodes": 1,
                     "registry_sha256": hashlib.sha256(registry.read_bytes()).hexdigest(),
-                    "command": [python, script, "--episodes", str(registry), "--episode-id", row["id"]],
+                    "command": [python, script, "--episodes", str(registry), "--episode-id", row["id"]]
+                    + (["--validate-fixture"] if validate_fixtures else []),
+                    "stage": "fixture_validation" if validate_fixtures else "evaluation",
                 }
             )
         if not cases:
             raise ValueError(f"No registry cases for robot {robot!r}")
+        if len({case["id"] for case in cases}) != len(cases):
+            raise ValueError("Duplicate registry case IDs would overwrite results")
         return cases
     if suite == "floor":
         rows = yaml.safe_load((ROOT / "configs/ovmm/full_episodes.yaml").read_text())["episodes"]
@@ -122,7 +130,7 @@ def summarize_case(case, directory, returncode):
         }
     success = bool(result.get("task_success", False)) and returncode == 0
     status = result.get("status")
-    if status not in ("unsupported_capability", "deferred_gt_only"):
+    if status not in ("unsupported_capability", "deferred_gt_only", "fixture_admitted", "fixture_rejected"):
         status = (
             "invalid_fixture" if result.get("skipped_invalid") else ("error" if result.get("error") or returncode else "completed")
         )
@@ -137,10 +145,12 @@ def main():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--robot", help="Optional small/full registry subset for explicit robot revalidation")
+    parser.add_argument("--registry", help="Explicit candidate or admitted registry; historical registry remains unchanged")
+    parser.add_argument("--validate-fixtures", action="store_true", help="Build a separate registry from executed reference witnesses")
     parser.add_argument("--case-id", action="append", help="Explicit case subset for revalidation; repeat for multiple cases")
     args = parser.parse_args()
     try:
-        cases = build_cases(args.suite, robot=args.robot)
+        cases = build_cases(args.suite, robot=args.robot, registry=args.registry, validate_fixtures=args.validate_fixtures)
         if args.case_id:
             selected = set(args.case_id)
             unknown = selected - {case["id"] for case in cases}
@@ -194,6 +204,13 @@ def main():
         temp = ledger_path.with_suffix(".tmp")
         temp.write_text(json.dumps(ledger, indent=2) + "\n")
         temp.replace(ledger_path)
+        if args.validate_fixtures:
+            admitted = [row["result"]["resolved_episode"] for row in ledger.values()
+                        if row["status"] == "fixture_admitted"]
+            registry_path = out / "validated_registry.yaml"
+            pending = registry_path.with_suffix(".tmp")
+            pending.write_text(yaml.safe_dump({"schema": 1, "source_sha": source, "episodes": admitted}, sort_keys=False))
+            pending.replace(registry_path)
 
     persist()
     from emet.utils.process_tree import popen_session, terminate_process_tree

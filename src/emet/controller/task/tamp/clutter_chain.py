@@ -98,6 +98,9 @@ def plan_clear_clutter(
     seed: int | None = None,
     robot_move_goal: Any = None,
     clearance_m: float = 0.22,
+    reference: bool = False,
+    strict_navigation: bool = False,
+    bin_body_override: str | None = None,
 ) -> dict[str, Any]:
     """Clear scattered floor objects as part of a plan; return a metrics dict.
 
@@ -138,6 +141,9 @@ def plan_clear_clutter(
         }
     pl = read_sim_object_placements(robot.get_emet_session()) or {}
     bin_body, bin_matched = _resolve_bin_body(pl, bin_query)
+    if bin_body_override is not None:
+        bin_body = bin_body_override if bin_body_override in pl else None
+        bin_matched = bin_query
     if bin_body is None:
         return {
             "mode": mode,
@@ -189,6 +195,7 @@ def plan_clear_clutter(
     motion_failures = 0
     plan_wall = 0.0
     manip_wall = 0.0
+    execution_trace = []
 
     for obj in pending:
         body = str(obj["object_gt_body"])
@@ -202,15 +209,34 @@ def plan_clear_clutter(
             }
         ]
         t_p = time.monotonic()
-        plan = plan_pick_place_mcts(
-            robot,
-            candidates=candidates,
-            grasp_poses_by_body=dict(grasp_poses_by_body) if grasp_poses_by_body else None,
-            executor=executor,
-            approach_standoff_m=approach_standoff_m,
-            mcts_iterations=mcts_iterations,
-            seed=seed,
-        )
+        if reference:
+            # Constructive reference, independent of the tested MCTS search.
+            from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+            from emet.controller.task.tamp.task_search import plan_pick_place, resolve_scene_grasps
+
+            current = read_sim_object_placements(robot.get_emet_session()) or {}
+            try:
+                grasps = resolve_scene_grasps(body, current, category=obj_query)
+            except (OSError, ValueError):
+                grasps = []
+            if not grasps:
+                grasps = [top_down_grasp_T(np.asarray(current[body]["pos"]))]
+            plan = plan_pick_place(
+                robot, object_query=obj_query, receptacle_query=bin_query,
+                object_gt_body=body, receptacle_gt_body=bin_body, grasp_poses=grasps,
+                executor=executor, approach_standoff_m=approach_standoff_m,
+            )
+            plan.grasp_poses = grasps
+        else:
+            plan = plan_pick_place_mcts(
+                robot,
+                candidates=candidates,
+                grasp_poses_by_body=dict(grasp_poses_by_body) if grasp_poses_by_body else None,
+                executor=executor,
+                approach_standoff_m=approach_standoff_m,
+                mcts_iterations=mcts_iterations,
+                seed=seed,
+            )
         plan_wall += time.monotonic() - t_p
         if not plan.success or plan.receptacle_body != bin_body:
             failed.append(body)
@@ -225,6 +251,9 @@ def plan_clear_clutter(
             manip_mode=exec_manip,
         )
         manip_wall += time.monotonic() - t_m
+        execution_trace.append({"body": body, "success": bool(plan.success), "message": plan.message,
+                                "failed_op": plan.failed_op, "completed_ops": plan.completed_ops,
+                                "steps": [{"op": step.op, "args": step.args} for step in plan.steps]})
         if not plan.success:
             failed.append(body)
             if plan.failed_op in ("grasp", "place"):
@@ -253,6 +282,7 @@ def plan_clear_clutter(
             goal_radius_m=goal_radius_m,
             clearance_m=clearance_m,
             robot_move_goal=robot_move_goal,
+            strict_geometry=strict_navigation,
         )
 
     n_total = int(len(objects))
@@ -282,6 +312,8 @@ def plan_clear_clutter(
         "bin_matched_query": bin_matched,
         "failed_bodies": failed,
         "relocated_bodies": relocated,
+        "reference_execution": reference,
+        "execution_trace": execution_trace,
     }
     if nav_probe_after is not None:
         out["nav_probe_after"] = nav_probe_after
@@ -296,6 +328,7 @@ def nav_to_landmark_if_clear(
     goal_radius_m: float,
     clearance_m: float,
     robot_move_goal: Any = None,
+    strict_geometry: bool = False,
 ) -> tuple[bool, bool, bool, dict[str, Any] | None]:
     """Snap to the landmark only if an 8-connected route around disks exists.
 
@@ -317,7 +350,7 @@ def nav_to_landmark_if_clear(
     if here is None:
         logger.warning("clutter nav refused: missing base pose")
         return False, False, False, None
-    skip = bodies_near_xy(live, target, keepout_m=0.75)
+    skip = [] if strict_geometry else bodies_near_xy(live, target, keepout_m=0.75)
     disks = placement_obstacle_disks(live, skip_bodies=skip)
     known = {name for _xy, _r, name in disks}
     for obj in objects:
@@ -331,7 +364,9 @@ def nav_to_landmark_if_clear(
     # Post-clear route: 8-connected path around furniture + leftover clutter (the
     # GT-planner analogue of the validity probe), not the straight-line teleport
     # chord — a landmark behind furniture is reachable by planning around it.
-    path_open, probe = nav_path_open_around_disks(here, target, disks, clearance_m=float(clearance_m))
+    path_open, probe = nav_path_open_around_disks(
+        here, target, disks, clearance_m=float(clearance_m), strict_endpoints=strict_geometry,
+    )
     if not path_open:
         logger.warning(
             "clutter nav refused: no 8-connected route to landmark "
