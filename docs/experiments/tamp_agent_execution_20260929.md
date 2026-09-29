@@ -99,3 +99,34 @@ on fixing measured execution. New outcomes are pending.
 Final follow-up regression check: 95 controller, agent-tool, task-search, MCTS,
 and physical-motion contract tests passed. Live measured-arrival acceptance and
 expanded oracle results are still pending; no performance gain is claimed yet.
+
+## Expansion results and tracking diagnosis
+
+The oracle expansion is terminal: **19/90 admitted; 19/19 fresh MCTS successes**.
+Stretch contributes 11 admissions, Nori eight, and Mars zero. All 14 previously
+admitted oracle case IDs remain admitted. Five new case IDs passed: Stretch and
+Nori scene01 cleanup slot 0, and Stretch scene02 navigation slots 2, 3 and 4.
+The remaining 71 candidates comprise 53 construction rejections, 15 missing
+receptacles and three reference failures. There were **zero startup errors**
+with the recorded 120-second startup allowance. This improves coverage, not
+physical or learned-agent acceptance. Do not pool this result with the 21/25
+historical mixed-backend result or describe it as an agent improvement to 100%.
+
+The guarded RBY1 trial rejected every pregrasp. Measured EE errors were 2.4084 m
+(potato), 1.9641 m (apple), and 0.05358 m (kettle), versus the unchanged 0.035 m
+IK/arrival tolerance. The guard prevents false acceptance but has not repaired
+tracking. Earlier messages classified these as `pregrasp_ik_failed`; follow-up
+code now distinguishes `pregrasp_tracking_failed` from IK/planning failure.
+
+Tracking job `20260929_152521_a077e1`, frozen source `525ec399`, records planned
+joints, server-held actuator targets, observed joints and state step, with server
+control debug enabled. It reruns the original scene00 cleanup slot 0 certificate
+and scorer. It is queued behind another managed GPU experiment; no other job is
+modified. Outputs: `joint-tracking-r7/` and `joint-tracking-r7-job/` in the durable
+root. The focused regression slice passes 26 tests. Root cause and live repair
+are still pending this trace.
+
+Updated paper figures for the terminal oracle-only expansion are stored at
+`~/runs/emet/tamp-validated-fixtures-20260928/paper-figures-oracle-r4/`, with PDF,
+SVG, PNG, counts CSV, captions and input hashes. The generator omits robot groups
+that were not requested rather than plotting absent groups as zero coverage.

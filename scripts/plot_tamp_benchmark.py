@@ -71,6 +71,8 @@ def main():
         counts[robot][bucket] += 1
         if key in replays and replays[key].get("task_success"):
             successes[robot] += 1
+    labels = [label for robot, label in zip(robots, labels, strict=True) if counts[robot]]
+    robots = [robot for robot in robots if counts[robot]]
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.3), layout="constrained")
     bottom = np.zeros(len(robots))
     colors = ["#0072B2", "#B9BDC4", "#E69F00", "#CC79A7", "#D55E00"]
@@ -79,7 +81,14 @@ def main():
         axes[0].bar(labels, values, bottom=bottom, label=bucket, color=color, width=0.65)
         bottom += values
     axes[0].set(title=f"Admission coverage: {len(admitted)}/{len(admissions)}", ylabel="Candidate tasks")
-    axes[0].legend(fontsize=8, loc="upper right", frameon=False)
+    fig.legend(
+        *axes[0].get_legend_handles_labels(),
+        fontsize=8,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.03),
+        ncol=3,
+        frameon=False,
+    )
     n = np.array([counts[r]["Admitted"] for r in robots])
     passed = np.array([successes[r] for r in robots])
     axes[1].bar(labels, passed, color="#009E73", label="Success", width=0.65)
@@ -139,7 +148,7 @@ def main():
     (args.output_dir / "captions.md").write_text(
         "Admission coverage and fresh MCTS outcomes are shown separately. Rejected candidates are not scored planner failures. "
         "Success on admitted tasks is conditional on an executed reference witness and is not a general reliability estimate. "
-        "RBY1 uses kinematic latch; other robots use oracle teleport. These are not physical or learned-agent results.\n\n"
+        "Execution modes are identified under each robot. These are not physical or learned-agent results.\n\n"
         "Layout panels depict the benchmark disk approximation, including clearance outlines; they are not renderings of collision meshes. "
         "The right panel shows measured reference object positions, not the tested MCTS rollout. Unselected scene bodies retain their initial poses.\n"
     )

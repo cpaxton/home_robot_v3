@@ -12,8 +12,10 @@ Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execut
       metre-scale attachment offsets. Historical 21/25 is not verified grasp success.
 - [ ] Validate measured-joint arrival and target-distance guards, repair remaining
       execution failures, then run paired trials across all original admitted tasks.
-- [ ] Complete 90-candidate oracle expansion and fresh replay; queued managed job
-      `20260929_132011_913a74` follows one guarded RBY1 trial. Latch expansion is held.
+- [x] Complete 90-candidate oracle expansion: 19 admitted, 19/19 fresh MCTS passes,
+      five new admitted case IDs and zero startup errors. Updated oracle-only figures saved.
+- [ ] Diagnose measured RBY1 tracking errors (2.41 m, 1.96 m, 5.4 cm); joint-target
+      trace job `20260929_152521_a077e1` is queued. Latch expansion remains held.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,
       observations and action budgets; do not label scripted/GT controls as agent results.
 
