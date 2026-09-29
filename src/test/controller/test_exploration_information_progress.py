@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from emet.controller.dynamem.navigation import _record_arrival_coverage, run_exploration
+from emet.controller.dynamem.navigation import _execute_validated_waypoints, _record_arrival_coverage, run_exploration
 from emet.core.navigation_result import NavigationRoute
 
 
@@ -59,3 +59,31 @@ def test_legacy_route_boundary_keeps_semantic_target_out_of_motion():
     assert route.target_xyz == target and route.finished
     assert NavigationRoute.from_value(route) is route
     assert not NavigationRoute.from_value([])
+
+
+def test_next_segment_is_revalidated_after_measured_arrival(monkeypatch):
+    monkeypatch.setattr("emet.controller.operations.payload_verification.verify_carried_object", lambda _: None)
+    agent = SimpleNamespace(
+        space=SimpleNamespace(obstacle_map_mode="physical"),
+        robot=SimpleNamespace(execute_trajectory=Mock(return_value=True)),
+        planner=SimpleNamespace(reset=Mock()),
+        update=Mock(),
+        _current_planning_xyt=Mock(return_value=np.zeros(3)),
+        _filter_unsafe_nav_traj=Mock(side_effect=[([[0, 0, 1]], None, 0.4), ([], "new_obstacle", None)]),
+        _record_nav_plan_fields=Mock(),
+        pos_err_threshold=0.07,
+        rot_err_threshold=0.15,
+    )
+    assert _execute_validated_waypoints(agent, [[0, 0, 1], [1, 0, 1]], 10) == (False, "new_obstacle")
+    agent.robot.execute_trajectory.assert_called_once()
+    agent.update.assert_called_once_with(full_perception=False)
+    assert agent.planner.reset.call_count == 2
+
+
+def test_ambiguous_execution_cannot_continue_to_later_waypoints():
+    agent = SimpleNamespace(
+        robot=SimpleNamespace(execute_trajectory=Mock(return_value=None)),
+        pos_err_threshold=0.07,
+        rot_err_threshold=0.15,
+    )
+    assert _execute_validated_waypoints(agent, [[0, 0, 1]], 10) == (False, "ambiguous_navigation_result")

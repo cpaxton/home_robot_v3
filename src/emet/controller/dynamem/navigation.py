@@ -226,6 +226,44 @@ def _record_arrival_coverage(self, before):
         )
 
 
+def _execute_validated_waypoints(self, waypoints, timeout):
+    """Use server-owned arrival; recheck physical segments from measured poses."""
+    physical = getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
+    segments = [[waypoint] for waypoint in waypoints] if physical else [waypoints]
+    for index, segment in enumerate(segments):
+        if physical:
+            if index:
+                self.update(full_perception=False)
+            self.planner.reset()
+            _, reason, _ = self._filter_unsafe_nav_traj(
+                segment, start_xyt=self._current_planning_xyt(), explore_goal=True
+            )
+            if reason:
+                self._record_nav_plan_fields(
+                    outcome=reason,
+                    footprint=dict(getattr(self, "_last_nav_sweep_failure", {}) or {}),
+                )
+                return False, reason
+        ok = self.robot.execute_trajectory(
+            segment,
+            pos_err_threshold=self.pos_err_threshold,
+            rot_err_threshold=self.rot_err_threshold,
+            per_waypoint_timeout=timeout,
+            final_timeout=max(timeout, 30.0) if index == len(segments) - 1 else timeout,
+            blocking=True,
+            world_frame=True,
+        )
+        if ok is False:
+            return False, "aborted_waypoint_execution"
+        if ok is None:
+            return False, "ambiguous_navigation_result"
+        if physical:
+            from emet.controller.operations.payload_verification import verify_carried_object
+
+            verify_carried_object(self)
+    return True, None
+
+
 def execute_action(
     self,
     text: str,
@@ -317,20 +355,12 @@ def execute_action(
         before_motion_coverage = _sensor_coverage(self)
         if route.finished:
             if res:
-                exec_ok = self.robot.execute_trajectory(
-                    res,
-                    pos_err_threshold=self.pos_err_threshold,
-                    rot_err_threshold=self.rot_err_threshold,
-                    per_waypoint_timeout=nav_timeout,
-                    final_timeout=max(nav_timeout, 30.0),
-                    blocking=True,
-                    world_frame=True,
-                )
+                exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
                 verify_carried_object(self)
                 if exec_ok is False:
-                    self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
-                    self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
-                    logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+                    self._record_nav_plan_fields(outcome=failure_reason)
+                    self._mark_nav_goal_blocked(reason=failure_reason)
+                    logger.warning("Navigation aborted during execute_trajectory: %s", failure_reason)
                     return None, None
 
             if text and getattr(self, "query_driven_memory", False):
@@ -359,20 +389,12 @@ def execute_action(
             self._record_nav_plan_fields(outcome="ok")
             return True, route.target_xyz
         # Chunk: execute, grow the voxel/graph at this pose, resume leftover.
-        exec_ok = self.robot.execute_trajectory(
-            res,
-            pos_err_threshold=self.pos_err_threshold,
-            rot_err_threshold=self.rot_err_threshold,
-            per_waypoint_timeout=nav_timeout,
-            final_timeout=max(nav_timeout, 30.0),
-            blocking=True,
-            world_frame=True,
-        )
+        exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
         verify_carried_object(self)
         if exec_ok is False:
-            self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
-            self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
-            logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+            self._record_nav_plan_fields(outcome=failure_reason)
+            self._mark_nav_goal_blocked(reason=failure_reason)
+            logger.warning("Navigation aborted during execute_trajectory: %s", failure_reason)
             return None, None
         self.robot.look_front()
         self.update()
