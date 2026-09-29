@@ -167,3 +167,13 @@ def test_replay_checks_height_and_orientation_including_quaternion_sign():
     assert not pose_reproduced({**pose, 'pos': [0., 0., .2]}, pose)
     assert not pose_reproduced({**pose, 'quat': [0., 0., 0., 1.]}, pose)
     assert not pose_reproduced(None, pose)
+
+
+def test_certificate_task_contract_changes_when_scoring_is_relaxed():
+    from dataclasses import replace
+
+    from emet.eval.clutter_fixture import task_contract
+    ep = ClutterEpisode('test', 'S1', 'test.yaml', 'stretch', 'cleanup', 3)
+    assert task_contract(ep) != task_contract(replace(ep, success_radius_m=1.))
+    assert task_contract(ep) != task_contract(replace(ep, mode='nav_goal'))
+    assert task_contract(ep) != task_contract(replace(ep, n_objects=1))

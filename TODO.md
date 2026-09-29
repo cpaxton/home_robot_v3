@@ -16,6 +16,12 @@ registry. Oracle teleport and kinematic latch remain separately labeled controls
       and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
       Full registry: 54/200 successes; corrected 50-row subset: 18 successes, kept separate.
       See the [results report](docs/experiments/physical_tamp_acceptance_20260926_results.md).
+- [x] Add scene-backed candidate construction, independent executed reference
+      admission, immutable pose certificates, and final-scene scoring for controls.
+      See [validated registry workflow](docs/experiments/tamp_validated_registry.md).
+- [ ] Complete corrected admission and fresh MCTS replay; report construction and
+      reference failures separately from the scored denominator. The September 28
+      pilot is diagnostic; no new 200-task solvability claim is established.
 - [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
       and retention bounds; both now have independently verified physical pickups.
 - [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.

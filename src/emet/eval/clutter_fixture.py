@@ -42,6 +42,13 @@ def pose_reproduced(actual, expected, *, position_tolerance_m=.03, angle_toleran
     return bool(norm > 0 and 2 * np.arccos(np.clip(abs(np.dot(a, b)) / norm, 0, 1)) <= angle_tolerance_rad)
 
 
+def task_contract(ep):
+    """Bind scoring and grounding settings as well as the scene to a witness."""
+    return {'mode': ep.mode, 'n_objects': ep.n_objects,
+            'success_radius_m': ep.success_radius_m, 'bin_query': ep.bin_query,
+            'backend': ep.backend, 'seed': ep.seed}
+
+
 def certificate_error(fixture, *, scene_fingerprint, execution_mode, clearance_m, start):
     saved = dict(fixture)
     expected = saved.pop('sha256', None)

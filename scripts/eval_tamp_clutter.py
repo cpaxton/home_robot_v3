@@ -438,6 +438,7 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         pose_reproduced,
         resolve_fixture,
         score_fixture_state,
+        task_contract,
     )
     from emet.eval.scene_task_extractor import load_scene_metadata, resolve_scene_metadata_for_session
     from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
@@ -490,6 +491,7 @@ def _validated_case(ep, args, robot, placements, robot_xy):
             return reject(diagnostic['reason'], construction=diagnostic)
         fixture['scene_fingerprint'] = identity
         fixture['implementation_sha256'] = implementation
+        fixture['task_contract'] = task_contract(ep)
         fixture['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
     else:
         fixture = dict(ep.fixture)
@@ -501,6 +503,8 @@ def _validated_case(ep, args, robot, placements, robot_xy):
             return reject(error)
         if fixture.get('implementation_sha256') != implementation:
             return reject('fixture_implementation_mismatch')
+        if fixture.get('task_contract') != task_contract(ep):
+            return reject('fixture_task_contract_mismatch')
 
     bodies = [row['body'] for row in fixture['clutter']]
     if fixture['bin_body'] not in placements or any(b not in placements for b in bodies):

@@ -87,3 +87,12 @@ navigation additionally requires a route from the **original** start through the
 final scene, a verified relocation, and actual arrival at the goal. Escaping the
 clutter ring with a base teleport is insufficient. These checks remain within the
 explicit oracle/latch and disk-model scope above.
+
+Pilot r1 (`a6cbcb2d`, job `20260928_215816_11d8d0`) is terminal: two
+RBY1 reference rejections, two Mars construction rejections, and four oracle
+certificate-serialization errors. Its artifacts and construction requests are
+archived at `~/runs/emet/tamp-validated-fixtures-20260928/`. Pilot r2
+(`75db7026`, job `20260928_221033_b565a2`) rechecks the same eight candidates
+and runs fresh MCTS replay only after admission terminates. The current contract
+also binds task mode, object count, success radius, backend, bin query and seed;
+changing scoring settings requires a new witness.
