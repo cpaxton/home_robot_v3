@@ -337,11 +337,12 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
     # Surface XYZ after the NaN marker is not a driven base waypoint. Preserve
     # the safety filter's clearance instead of recomputing over that marker.
     nav_agent._filter_unsafe_nav_traj = lambda traj, **kw: (traj, None, 0.37)
-    traj = nav_agent.process_text("", np.array([0.0, 0.0, 0.0]))
+    route = nav_agent.process_text("", np.array([0.0, 0.0, 0.0]))
+    traj = route.waypoints
     assert nav_agent._last_nav_plan["min_clearance_m"] == 0.37
-    assert len(traj) >= 2
-    assert np.isnan(np.asarray(traj[-2], dtype=np.float64)).all()
-    goal = np.asarray(traj[-1], dtype=np.float64).reshape(-1)
+    assert traj and np.isfinite(traj).all()
+    assert route.finished
+    goal = np.asarray(route.target_xyz, dtype=np.float64).reshape(-1)
     assert abs(float(goal[0]) - 3.0) < 1e-6
     assert abs(float(goal[1]) - 4.0) < 1e-6
     assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]

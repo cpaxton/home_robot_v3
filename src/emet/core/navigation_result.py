@@ -8,6 +8,30 @@ import math
 from dataclasses import dataclass
 
 
+@dataclass
+class NavigationRoute:
+    """Base motion only; semantic target and chunk completion are not waypoints."""
+
+    waypoints: list
+    target_xyz: object = None
+    finished: bool = False
+
+    def __bool__(self):
+        return bool(self.waypoints) or self.finished
+
+    @classmethod
+    def from_value(cls, value):
+        """Compatibility boundary for old stored routes and controller adapters."""
+        if isinstance(value, cls):
+            return value
+        import numpy as np
+
+        points = list(value)
+        if len(points) >= 2 and np.isnan(np.asarray(points[-2], dtype=float)).all():
+            return cls(points[:-2], points[-1], True)
+        return cls(points)
+
+
 @dataclass(frozen=True)
 class NavigationPolicy:
     xy_tolerance: float

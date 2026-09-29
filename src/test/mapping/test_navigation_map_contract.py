@@ -52,6 +52,7 @@ def test_physical_map_keeps_raw_geometry_and_shared_cache(tmp_path):
         image_shape=None,
     )
     vm.voxel_pcd.add(torch.tensor([[0.0, 0.0, 0.5]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    vm._visited[:] = 1
     padded, explored = vm.get_2d_map()
     raw, physical_explored = vm.get_navigation_map()
     assert raw.sum() == 1
@@ -60,6 +61,11 @@ def test_physical_map_keeps_raw_geometry_and_shared_cache(tmp_path):
     assert torch.equal(explored, physical_explored)
     assert vm.get_navigation_map()[0] is raw
     assert vm.get_2d_map()[0] is padded
+    sensor_cells = vm.get_sensor_observed_cells()
+    assert sensor_cells.sum() == 1
+    assert explored.sum() > sensor_cells.sum()
+    sensor_cells[:] = False
+    assert vm.get_sensor_observed_cells().sum() == 1  # Snapshot cannot mutate the map.
     vm._seq += 1
     assert vm.get_navigation_map()[0] is not raw
 
