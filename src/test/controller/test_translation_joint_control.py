@@ -7,6 +7,23 @@ import pytest
 from emet.motion.control.goto_controller import GotoVelocityController
 
 
+@pytest.fixture(autouse=True)
+def isolated_control_config():
+    # Perception imports initialize a separate Hydra root in combined tests.
+    # The native control server runs in its own process without that root.
+    from hydra.core.global_hydra import GlobalHydra
+
+    global_hydra = GlobalHydra.instance()
+    previous = global_hydra.hydra
+    global_hydra.clear()
+    try:
+        yield
+    finally:
+        global_hydra.clear()
+        if previous is not None:
+            global_hydra.initialize(previous)
+
+
 def controller():
     control = GotoVelocityController()
     control.update_goal(np.zeros(3))
