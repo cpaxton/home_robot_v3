@@ -43,7 +43,14 @@ Implementation and acceptance specification:
 - [x] Generic floor-view recovery: wait for measured head arrival + new frame
       (`86a05c13`), shared planning-pose artifact writing and robot-neutral sweep
       feedback (`4eb1e7f6`). Last live run got through mapping, then exposed the
-      artifact-writing issue; final live retest still required.
+      artifact-writing issue. Final live retest `20260929_044404_00efe3` passes
+      capture/update/evidence, but nine near-base cells remain unseen; no motion
+      acceptance. Simple-table route passes 14/14 endpoint/dwell checks, not
+      continuous safety. Scoped regression suite: 834 passed.
+- [ ] Score frozen EQA baseline `faebea0f` versus candidate `669d74fe`, 12 matched
+      questions × seeds 0/1 per version, serial jobs started September 29.
+      IDs/artifacts in the plan. This is independent answer-regression evidence,
+      not permission to skip the open physical controller/OVMM/TAMP gates.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 

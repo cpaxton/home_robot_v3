@@ -221,3 +221,44 @@ positive controller cases and capture continuous contact/stop evidence. Do not
 extend timeouts, remove obstacles, or enlarge/shrink padding until the particular
 geometry is understood. Only then count controller acceptance and proceed to the
 paired task promotion gates. A base-footprint map check is not whole-robot safety.
+
+### Latest frozen regression jobs (`669d74fe`)
+
+- **834 scoped tests passed**, with two existing SWIG warnings.
+- Proxy exploration `20260929_044404_00efe3` completed recovery capture, map
+  update and artifact writing successfully. Floor observation added 28 padded
+  cells, but the nine blocking footprint cells remained unknown. Calibrated
+  saved depth shows nearest floor within ±0.12 m of world Z=0 about **0.61 m**
+  from the base. That view does not cover the missing near-base region. This
+  fixes the adapter bugs, not the coverage deadlock; no navigation pass.
+  Evidence: `~/runs/emet/navigation-shared-pose-20260929/rby1/explore/`.
+- Existing simple-table fixture: `20260929_044426_fb159d` passed **14/14**
+  independent endpoint/dwell checks with unchanged precision limits, including
+  coupled position/heading. This is a different diagnostic fixture, not a paired
+  replacement for the kitchen failure. Summary correctly says
+  `incomplete_telemetry`: continuous contacts and base posture are not certified.
+  Sampled reconstruction found two fingertip/table contacts at startup sim time
+  0.102 s and no later non-floor contacts in 1,172 saved states. Startup and
+  inter-sample safety remain unscored. Root: `~/runs/emet/navigation-table-route-20260929/`.
+
+Proceeding with **independent EQA regression evidence** while physical safety
+remains open, not promotion. Four GPU-exclusive/CPU-safe jobs serialize the same
+12 questions (`2 6 12 14 15 16 25 28 31 56 65 68`), seeds 0 and 1, local
+Qwen3-VL-8B-Instruct int4, lazy_graph + query-driven memory, 20 planning steps and
+10 movement steps; no GT semantics/enriched labels. Identical existing
+`scripts/run_dev_loop.sh` on baseline `faebea0f` and candidate `669d74fe`.
+`EMET_VL_ENDPOINT`, `EMET_CONFIG` and simulator trace overrides are unset.
+
+| Version / seed | Job ID |
+| --- | --- |
+| baseline / 0 | `20260929_045029_264778` |
+| candidate / 0 | `20260929_045048_8c0fe0` |
+| baseline / 1 | `20260929_045051_0a1604` |
+| candidate / 1 | `20260929_045055_bf35c2` |
+
+Output root: `~/runs/emet/navigation-paired-eqa-20260929/{baseline,candidate}/seed{0,1}/`.
+Check manifests, metrics and `failed.txt` before paired scoring; crashes and
+missing metrics are not scored answer misses. These are queued/running, not
+results. After EQA, retain per-question transitions and inspect newly failing
+views. Small-room OVMM and TAMP navigation pilots, three-repetition controller
+matrix, whole-robot clearance and useful proxy floor coverage remain open.
