@@ -181,3 +181,43 @@ specified controller matrix with independent contact/stop evidence, then paired
 task pilots. Stationary coverage gain must not be mistaken for successful room
 traversal. Keep native RB-Y1 support separate from this navigation repair. No
 latest EQA/OVMM/complete-TAMP non-regression claim is made here.
+
+### Contact and head-recovery investigation (September 29, continued)
+
+- The `2ad84057` route diagnostics finished: Galaxea proxy **14/14** measured
+  endpoint/dwell checks; Stretch **11/14**, then a confirmed stop on command 12
+  at 0.058 m XY error. These are not collision-safety passes.
+- Fresh-map Stretch exploration passed all three guarded turns with **70, 70,
+  11** newly sensor-observed cells (0.70, 0.70, 0.11 m²). It still did not traverse
+  the room. This distinction is explicit in compact LLM tool feedback (`4dfc992b`).
+- Short coupled-route reproduction `20260929_042327_4f78b0`, same frozen source,
+  reproduced the stall. Full qpos/qvel/ctrl reconstruction reveals contact
+  between `link_SG3_gripper_body` and the kitchen island in **37 of 233** sampled
+  states, from sim time 13.322 to 23.468 s, with reconstructed normal force up to
+  **45.56 N**. Wheels remain commanded before the stop. This invalidates the
+  nominal positive route; it is not evidence that the controller merely needs
+  more time. The earlier base-only static reconstruction missed this contact.
+  A proposed simulation-clock stall extension was discarded. Existing wall-clock
+  stall/freshness limits and arrival tolerances remain unchanged, with added tests.
+- Reproduce the diagnostic with `scripts/replay_navigation_contacts.py --scene
+  <resolved scene.xml> --trace <physics.jsonl> --robot-root base_link --allow-geom
+  floor --output <new report.json>`. The trace lives under
+  `~/runs/emet/navigation-acceptance-20260929/stretch-coupled-trace/`; resolved
+  scene is `~/runs/emet/molmo-wheel-contact-20260915/fixture/scene.xml` (SHA256
+  `c41295d5f87110363b3ab9c0ce727cbbe55365ac7d8a5d7205643e49c063befc`).
+  The tool includes all robot descendants and explicit support-geometry exclusions.
+  Other floor-mesh contacts remain listed. This is **sampled reconstructed
+  evidence**, not continuous measured collision acceptance or a policy oracle.
+- Proxy floor recovery was not just a fixed-angle feedback issue: generic head
+  commands acknowledge before measured arrival. `86a05c13` waits for the existing
+  pose tolerance and another fresh frame. Retest `20260929_043746_fb5e72` at
+  `4f423ec2` reached the requested view and updated the map, then exposed a
+  Stretch-only pose call in artifact writing. `4eb1e7f6` fixes that shared-frame
+  contract, tests evidence capture, and removes Stretch-index assumptions from
+  optional head sweeps. No robot-specific recovery rule added.
+
+Next gate: retain the failed route, establish whole-robot/posture clearance for
+positive controller cases and capture continuous contact/stop evidence. Do not
+extend timeouts, remove obstacles, or enlarge/shrink padding until the particular
+geometry is understood. Only then count controller acceptance and proceed to the
+paired task promotion gates. A base-footprint map check is not whole-robot safety.

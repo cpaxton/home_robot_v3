@@ -34,6 +34,16 @@ Implementation and acceptance specification:
       `af46be53`, retest pending. Native RB-Y1 support is a separate future task.
       Expanded targeted unit suite: 618 passed; full controller contact matrix
       and paired tasks remain open. Do not promote on unit tests alone.
+- [ ] Whole-robot navigation clearance: the direct Stretch coupled-route probe
+      contacts the kitchen island with its stowed gripper, despite base-only
+      geometry reconstruction appearing clear. Saved full-state replay confirms
+      contact in 37 samples; do not fix by extending stall timeouts or call
+      endpoint/dwell passes collision-safe. Preserve this failing case, validate
+      posture/envelope and add continuous contact evidence before promotion.
+- [x] Generic floor-view recovery: wait for measured head arrival + new frame
+      (`86a05c13`), shared planning-pose artifact writing and robot-neutral sweep
+      feedback (`4eb1e7f6`). Last live run got through mapping, then exposed the
+      artifact-writing issue; final live retest still required.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
