@@ -514,6 +514,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._reassign_robot_geoms_to_dedicated_group()
         self._planar_base_actuator_ids_cache = None
         self._configure_mj_substeps_per_tick()
+        from emet.eval.navigation_safety_trace import from_environment
+
+        self._navigation_trace = from_environment(self._mjmodel)
 
     def _configure_mj_substeps_per_tick(self) -> None:
         """Run several ``mj_step`` calls per server tick so wall-clock pacing matches ``opt.timestep``.
@@ -864,6 +867,9 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _mj_step_once(self) -> None:
         """One MuJoCo step then snap kinematic attachments (if any)."""
         mujoco.mj_step(self._mjmodel, self._mjdata)
+        trace = getattr(self, "_navigation_trace", None)
+        if trace is not None:
+            trace.record(self._mjmodel, self._mjdata)
         self._physics_fps_counter.tick(sim_time=float(self._mjdata.time))
         self._snap_kinematic_attachments()
 
@@ -2977,6 +2983,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._close_renderers()
         self._running = False
         self._done = True
+        with self._mj_lock:
+            trace = getattr(self, "_navigation_trace", None)
+            self._navigation_trace = None
+            if trace is not None:
+                trace.close()
         p = self._scene_disk_path
         if p and Path(p).is_file() and Path(p).name.startswith("molmospaces_merged_"):
             try:

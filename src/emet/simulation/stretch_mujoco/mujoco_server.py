@@ -418,6 +418,9 @@ class MujocoServer:
         self._fall_monitor = FallOverMonitor(base_body_name="base_link")
 
         self._eval_trace = None
+        from emet.eval.navigation_safety_trace import from_environment
+
+        self._navigation_trace = from_environment(self.mjmodel)
         trace_config = os.environ.get("EMET_SIM_EVAL_CONFIG")
         if trace_config:
             from emet.eval.manipulation_trace import create_trace
@@ -518,6 +521,8 @@ class MujocoServer:
         self.camera_manager.close()
         if self._eval_trace is not None:
             self._eval_trace.close()
+        if self._navigation_trace is not None:
+            self._navigation_trace.close()
 
     def _run_ui_simulation(self, show_viewer_ui: bool) -> None:
         """
@@ -535,6 +540,9 @@ class MujocoServer:
 
         with lock:
             mujoco._functions.mj_step(self.mjmodel, self.mjdata)
+            trace = getattr(self, "_navigation_trace", None)
+            if trace is not None:
+                trace.record(self.mjmodel, self.mjdata)
             self._ctrl_callback(self.mjmodel, self.mjdata)
 
         time_until_next_step = self.mjmodel.opt.timestep - (time.perf_counter() - start_time)
