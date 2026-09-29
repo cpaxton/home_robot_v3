@@ -350,6 +350,15 @@ def _handle_finish(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._tool_finish(str(args.get("summary") or ""))
 
 
+def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
+    from emet.controller.dynamem.look import observe_floor
+
+    out = observe_floor(self.agent, pan_rad=args.get("pan_rad"), tilt_rad=args.get("tilt_rad", -1.0))
+    self._last_floor_observation = out
+    self._append_trace({"tool": "observe_floor", **out})
+    return out
+
+
 TOOL_HANDLERS: dict[str, Any] = {
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,
@@ -360,6 +369,7 @@ TOOL_HANDLERS: dict[str, Any] = {
     "verify_siglip": _handle_verify_siglip,
     "submit_answer": _handle_submit_answer,
     "finish": _handle_finish,
+    "observe_floor": _handle_observe_floor,
 }
 
 

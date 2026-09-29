@@ -356,6 +356,32 @@ def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
 
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
+    """Retain the same routing state, with shared physical-recovery evidence when needed."""
+    from emet.agent.tools import navigation_feedback
+    from emet.controller.dynamem.look import supports_floor_observation
+
+    text = _build_state_message(executor)
+    agent = getattr(executor, "agent", None)
+    if not supports_floor_observation(agent):
+        return text
+    feedback = navigation_feedback(agent)
+    if feedback.get("outcome") != "rejected_swept_footprint:unobserved_footprint":
+        return text
+    import json
+
+    text += "\nNavigation rejection: " + json.dumps(feedback)
+    text += (
+        "\nStationary recovery tool: observe_floor. Choose bounded pan/tilt to inspect missing floor; "
+        "compare footprint_before/after. Change view or stop if unchanged. Replan before any motion; "
+        "map growth elsewhere does not make the rejected footprint safe."
+    )
+    observation = getattr(executor, "_last_floor_observation", None)
+    if observation is not None:
+        text += "\nLast floor observation: " + json.dumps(observation)
+    return text
+
+
+def _build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
         from emet.memory.graph_eqa.agentic_state import (

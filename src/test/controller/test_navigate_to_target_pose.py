@@ -137,6 +137,23 @@ class _LongChunkPlanner:
         return 1.0
 
 
+def test_target_rejection_preserves_footprint_for_recovery(nav_agent):
+    from emet.visualization.null_visualizer import NullVisualizer
+
+    nav_agent.rerun_visualizer = NullVisualizer()
+    nav_agent.planner = _LongChunkPlanner()
+    reason = "rejected_swept_footprint:unobserved_footprint"
+    footprint = {"unobserved_cells": 9, "blocked_xyt": [0.1, 0.0, 0.0]}
+    nav_agent._last_nav_sweep_failure = footprint
+    nav_agent._filter_unsafe_nav_traj = MagicMock(return_value=([], reason, None))
+    nav_agent._mark_nav_goal_blocked = MagicMock()
+    result = nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0])
+    assert result == NavOutcome.SAFETY_REJECTED
+    assert nav_agent._last_nav_plan["footprint"] == footprint
+    assert nav_agent._last_nav_attempt.status_code == reason
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
 def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch):
     from emet.visualization.null_visualizer import NullVisualizer
 

@@ -445,6 +445,8 @@ def navigate_to_target_pose(
                 "outcome": reject_reason or "rejected_low_clearance",
             }
             reason = reject_reason or "rejected_low_clearance"
+            if reason.startswith("rejected_swept_footprint:"):
+                self._last_nav_plan["footprint"] = dict(getattr(self, "_last_nav_sweep_failure", {}) or {})
             self._mark_nav_goal_blocked(reason=reason)
             nav_res = NavAttemptResult(
                 success=False,
@@ -453,6 +455,7 @@ def navigate_to_target_pose(
                 method="voxel_astar",
                 note=reason,
                 target_obs_id=target_obs_id,
+                status_code=reason,
             )
             self._last_nav_attempt = nav_res
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
