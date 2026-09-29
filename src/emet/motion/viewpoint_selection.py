@@ -125,12 +125,18 @@ def make_frontier_evaluator(agent, start, goals, diagnostics):
             record["reason"] = "duplicate_resolved_view"
             return None
         seen.add(key)
-        previous_revision = getattr(agent, "_unhelpful_exploration_views", {}).get(key)
-        if previous_revision is not None and previous_revision == _view_map_revision(
-            agent, waypoints[-1], obstacles, explored
-        ):
-            record["reason"] = "unchanged_unhelpful_view"
-            return None
+        for previous_pose, previous_revision in getattr(agent, "_unhelpful_exploration_views", {}).items():
+            delta = key[2] - previous_pose[2]
+            if (
+                np.linalg.norm(np.asarray(key[:2]) - previous_pose[:2]) <= policy.xy_tolerance
+                and abs(math.atan2(math.sin(delta), math.cos(delta))) <= policy.yaw_tolerance
+                and previous_revision == _view_map_revision(agent, previous_pose, obstacles, explored)
+            ):
+                # Small measured drift must not turn the same unhelpful view
+                # into a new candidate. Use existing arrival tolerances, and
+                # compare the same local patch that was originally recorded.
+                record["reason"] = "unchanged_unhelpful_view"
+                return None
         _, reason, clearance = agent._filter_unsafe_nav_traj(waypoints, start_xyt=start, explore_goal=True)
         if reason:
             record.update(reason=reason, footprint=dict(getattr(agent, "_last_nav_sweep_failure", {}) or {}))

@@ -66,6 +66,10 @@ def test_route_rejection_precedes_view_scoring_and_noop_is_not_a_view():
     retry = make_frontier_evaluator(agent, start, goals, diagnostics)
     assert retry([[1, 1], [1.4, 1]], 1) is None
     assert diagnostics[-1]["reason"] == "unchanged_unhelpful_view"
+    drifted = [[1.41, 1.01, 0.01]]
+    retry = make_frontier_evaluator(agent, start, drifted, diagnostics)
+    assert retry([[1, 1], [1.41, 1.01]], 0) is None
+    assert diagnostics[-1]["reason"] == "unchanged_unhelpful_view"
     explored[14, 10] = True  # Local evidence changed: this view may be useful now.
     retry = make_frontier_evaluator(agent, start, goals, diagnostics)
     assert retry([[1, 1], [1.4, 1]], 1) > 0
