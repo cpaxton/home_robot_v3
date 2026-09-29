@@ -686,7 +686,6 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             if output is None:
                 continue
-            self._seq_id += 1
             with self._obs_lock:
                 servo_msg = self._servo
             sess = read_emet_session(output)
@@ -744,6 +743,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._obs = output
+                self._seq_id += 1
                 if "step" in output:
                     self._last_step = max(self._last_step, int(output["step"]))
                 if "gps" in output and "compass" in output:
@@ -902,6 +902,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             else:
                 decode_zmq_obs_depth_inplace(obs)
             obs = dict(self._obs)
+            sequence = self._seq_id
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")
@@ -948,6 +949,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             overhead_image=obs.get("overhead_image"),
             emet_session=read_emet_session(obs),
             image_timing=read_image_timing(obs),
+            seq_id=sequence,
         )
 
     def peek_emet_robot_id(self) -> str | None:

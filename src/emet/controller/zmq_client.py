@@ -1291,6 +1291,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Update observation internally with lock"""
         with self._obs_lock:
             self._obs = obs
+            self._seq_id += 1
             self._last_step = max(self._last_step, int(obs["step"]))
             if self._iter <= 0:
                 self._iter = max(self._last_step, self._iter)
@@ -1649,7 +1650,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             if output is None:
                 continue
 
-            self._seq_id += 1
             if not decode_zmq_obs_images_inplace(output):
                 logger.warning("Observation missing primary RGB; skipping frame.")
                 continue
