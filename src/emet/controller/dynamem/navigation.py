@@ -791,10 +791,13 @@ def process_text(self, text, start_pose):
     if traj:
         # Planner provenance must not depend on whether a visualizer returns
         # metadata (NullVisualizer deliberately returns None).
+        resolved_goal = getattr(res, "resolved_goal", None)
         self._record_nav_plan_fields(
             mode=mode,
             localize_source=localize_source,
-            goal_xyt=list(point),
+            goal_xyt=list(resolved_goal) if resolved_goal is not None else list(point),
+            requested_goal_xyt=list(point),
+            goal_resolution=getattr(res, "goal_resolution", None),
             object_xyz=[ox, oy, oz],
             query_candidate_handle=query_candidate_handle,
             traj=list(traj),

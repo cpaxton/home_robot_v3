@@ -37,6 +37,19 @@ def test_format_nav_outcome_heads():
     assert format_nav_outcome_head(None, ok=True, verb="Find") == "Find finished."
 
 
+def test_clearance_hint_does_not_expose_fallback_as_measurement():
+    robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3))
+    planner = SimpleNamespace(
+        _clearance_m=True,
+        clearance_at_xy=Mock(return_value=10.0),
+        measured_clearance_at_xy=Mock(return_value=None),
+    )
+    hint = format_base_clearance_hint(SimpleNamespace(robot=robot, planner=planner))
+    assert "unavailable" in hint
+    assert "10.00" not in hint
+    planner.clearance_at_xy.assert_not_called()
+
+
 def test_format_last_nav_plan_summary_fields():
     class A:
         _last_nav_plan = {

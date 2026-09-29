@@ -73,6 +73,8 @@ def navigation_feedback(agent: Any | None) -> dict:
         "status_code",
         "localize_source",
         "goal_xyt",
+        "requested_goal_xyt",
+        "goal_resolution",
         "n_planned",
         "min_clearance_m",
         "min_clearance_required_m",
@@ -158,7 +160,14 @@ def format_base_clearance_hint(agent: Any | None) -> str:
             return ""
         if getattr(planner, "_clearance_m", None) is None:
             planner.reset()
-        c = float(planner.clearance_at_xy(xy))
+        measured_clearance = getattr(planner, "measured_clearance_at_xy", None)
+        if callable(measured_clearance):
+            value = measured_clearance(xy)
+            if value is None:
+                return "Base clearance unavailable: map distance is unknown or uses a planning fallback; not a clearance certificate."
+            c = float(value)
+        else:
+            c = float(planner.clearance_at_xy(xy))
         req = float(getattr(agent, "_min_clearance_m", getattr(planner, "min_clearance_m", 0.0)) or 0.0)
         if req > 0 and c < req:
             return f"Base clearance {c:.2f}m is below min_clearance_m={req:.2f}m (near obstacle)."

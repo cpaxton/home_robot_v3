@@ -115,6 +115,7 @@ class AStar(Planner):
         """EDT clearance in meters from obstacles within explored free space."""
         h, w = obs.shape
         clearance = np.full((h, w), _DEFAULT_CLEARANCE_M, dtype=np.float64)
+        self._clearance_known = obs & exp
         if not np.any(exp):
             return clearance
         # Zero contour at obstacles; distance grows into free explored cells.
@@ -138,6 +139,7 @@ class AStar(Planner):
             else:
                 filled = np.asarray(dist_cells, dtype=np.float64)
             clearance = filled * res
+            self._clearance_known = exp & ~np.ma.getmaskarray(dist_cells) & np.isfinite(filled)
             clearance[obs] = 0.0
             clearance[~exp] = 0.0
         except Exception:
@@ -146,6 +148,20 @@ class AStar(Planner):
             clearance[obs] = 0.0
             clearance[~exp] = 0.0
         return clearance
+
+    def measured_clearance_at_xy(self, xy) -> float | None:
+        """Map-derived clearance, or None for unobserved/fallback cells.
+
+        The numerical planning field retains its legacy fallback; tools must not
+        present that sentinel as evidence of measured free space.
+        """
+        if self._clearance_m is None:
+            self.reset()
+        i, j = self.to_pt(xy)
+        h, w = self._clearance_known.shape
+        if not (0 <= i < h and 0 <= j < w) or not self._clearance_known[i, j]:
+            return None
+        return self.clearance_at_pt((i, j))
 
     def clearance_at_xy(self, xy: tuple[float, float] | list[float] | np.ndarray) -> float:
         """Clearance in meters at a world XY (0 if out of map / unexplored)."""
@@ -619,4 +635,13 @@ class AStar(Planner):
         # Save the nodes for this planner
         self.nodes = trajectory
 
-        return PlanResult(True, trajectory=trajectory, goal_index=chosen_index)
+        requested = [float(v) for v in chosen_goal[:2]] + [float(goal_yaw)]
+        resolved = trajectory[-1].state.tolist()
+        return PlanResult(
+            True,
+            trajectory=trajectory,
+            goal_index=chosen_index,
+            requested_goal=requested,
+            resolved_goal=resolved,
+            goal_resolution="requested" if np.allclose(requested[:2], resolved[:2], rtol=0, atol=1e-9) else "grid_snap",
+        )

@@ -56,6 +56,14 @@ def test_default_min_clearance_stretch_footprint():
     assert default_min_clearance_m(0.34) == pytest.approx(0.22)
 
 
+def test_clearance_fallback_is_not_reported_as_measured_free_space():
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    assert planner.clearance_at_xy((0.5, 0.5)) == 10.0
+    assert planner.measured_clearance_at_xy((0.5, 0.5)) is None
+    assert planner.measured_clearance_at_xy((-1, 0)) is None
+
+
 @pytest.mark.parametrize("multi", [False, True])
 def test_search_does_not_connect_free_cells_through_blocked_diagonal(multi):
     obs = np.array([[False, True], [True, False]])
@@ -105,6 +113,9 @@ def test_same_cell_short_move_preserves_continuous_endpoint(multi):
     np.testing.assert_allclose(cleaned[0][:2], start[:2])
     np.testing.assert_allclose(cleaned[-1], goal)
     assert len(cleaned) >= 2
+    np.testing.assert_allclose(result.requested_goal, goal)
+    np.testing.assert_allclose(result.resolved_goal, goal)
+    assert result.goal_resolution == "requested"
 
 
 @pytest.mark.parametrize("multi", [False, True])
@@ -184,6 +195,9 @@ def test_multi_goal_uses_clearance_safe_snapped_endpoint():
     assert result.goal_index == 0
     endpoint = np.asarray(result.trajectory[-1].state, dtype=np.float64).reshape(-1)
     assert not np.allclose(endpoint[:2], requested_goal[:2])
+    assert result.goal_resolution == "grid_snap"
+    np.testing.assert_allclose(result.requested_goal[:2], requested_goal[:2])
+    np.testing.assert_allclose(result.resolved_goal, endpoint)
     for node in result.trajectory[1:]:
         xy = np.asarray(node.state, dtype=np.float64).reshape(-1)[:2]
         assert planner.clearance_at_xy(xy) + 1e-6 >= planner.min_clearance_m
