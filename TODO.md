@@ -3,6 +3,25 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Navigation/exploration rework (2026-09-28)
+
+Implementation and acceptance specification:
+[navigation/exploration plan](docs/plans/2026-09-28_navigation_exploration_rework.md).
+
+- [x] Planning-frame frontier distances (`ca09d8d8`); physical-map cell-center
+      indexing and continuous short-move endpoints (`6c97f8c3`).
+- [x] Requested/resolved A* goal provenance and distinguish map clearance from
+      numerical fallback (`7c607d5e`). Combined regression suite: 496 passed.
+- [x] Score serial geometry-only Stretch recheck `20260928_215530_fb91dd`:
+      two planned waypoints now, but unknown-cell swept-turn rejection. Floor
+      observation added 20 cells without clearing blocker; safe stop, no pass.
+- [ ] Select useful executable viewing poses before committing to a frontier;
+      retain bounded candidates and validate full routes, not just endpoints.
+- [ ] Replace NaN/object trajectory markers; integrate measured heading/arrival
+      and separate motion, observation and task outcomes.
+- [ ] Stretch + RBY1 controller acceptance, then fixed paired small-room/EQA
+      pilots and TAMP navigation stages. No hardware or full sweeps.
+
 ## Floor-coverage recovery pilot (2026-09-24)
 
 - [x] Sanity-check the actual CHAT tool contract (`59703152`): publish tilt in
