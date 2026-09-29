@@ -17,7 +17,29 @@ from emet.agent.tools import (
     format_last_nav_plan_summary,
     format_nav_outcome_head,
     get_tools,
+    navigation_feedback,
 )
+
+
+def test_candidate_trace_is_compact_in_model_feedback_but_retained_for_debug():
+    candidates = [
+        {
+            "index": i,
+            "reason": "eligible",
+            "score": float(i),
+            "resolved_goal": [i, 0, 0],
+            "footprint": {"cells": list(range(1000))},
+        }
+        for i in range(16)
+    ]
+    agent = SimpleNamespace(_last_nav_plan={"goal_xyt": [15, 0, 0], "view_candidates": candidates})
+    result = navigation_feedback(agent)
+    assert "view_candidates" not in result
+    summary = result["view_selection"]
+    assert summary["reason_counts"] == {"eligible": 16}
+    assert [c["index"] for c in summary["top_estimated_views"]] == [15, 14, 13]
+    assert all("footprint" not in candidate for candidate in summary["top_estimated_views"])
+    assert len(agent._last_nav_plan["view_candidates"]) == 16
 
 
 def test_clearance_and_map_marker_use_world_pose_not_local_odometry():

@@ -75,7 +75,6 @@ def navigation_feedback(agent: Any | None) -> dict:
         "goal_xyt",
         "requested_goal_xyt",
         "goal_resolution",
-        "view_candidates",
         "motion_outcome",
         "new_sensor_cells",
         "new_sensor_area_m2",
@@ -85,7 +84,22 @@ def navigation_feedback(agent: Any | None) -> dict:
         "min_clearance_required_m",
         "footprint",
     )
-    return {key: meta[key] for key in keys if key in meta}
+    result = {key: meta[key] for key in keys if key in meta}
+    candidates = meta.get("view_candidates")
+    if candidates:
+        from collections import Counter
+
+        eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
+        compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
+        result["view_selection"] = {
+            "candidate_count": len(candidates),
+            "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
+            "top_estimated_views": [
+                {key: candidate[key] for key in compact_keys if key in candidate}
+                for candidate in sorted(eligible, key=lambda c: -c["score"])[:3]
+            ],
+        }
+    return result
 
 
 def format_last_nav_plan_summary(agent: Any | None) -> str:
@@ -457,6 +471,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
         head = format_nav_outcome_head(outcome, ok=ok, verb="Explore")
         parts = [head, summary]
+        parts.append("This is a bounded exploration attempt, not a certificate that the room is fully mapped.")
         if plan_line:
             parts.append(plan_line)
         gsize = _graph_size_line(context)
@@ -476,7 +491,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="explore",
             description=(
-                "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
+                "Take bounded exploration steps to build a map; each may be a useful viewing turn or a translation. "
+                "Completion does not certify full room coverage. "
                 "Use for 'explore', 'map the room', 'go look around the house'. "
                 "For a quick in-place look, prefer scan_environment. "
                 "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "

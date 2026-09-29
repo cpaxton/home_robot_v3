@@ -217,7 +217,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="explore",
         modes=frozenset({AgentMode.CHAT}),
         description=(
-            "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
+            "Take bounded exploration steps to build a map; each may be a useful viewing turn or a translation. "
+            "Completion does not certify full room coverage. "
             "Use for 'explore', 'map the room', 'go look around the house'. "
             "For a quick in-place look, prefer scan_environment. "
             "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "
