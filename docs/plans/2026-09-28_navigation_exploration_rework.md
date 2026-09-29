@@ -5,7 +5,10 @@
 One harness for exploration, find, EQA and manipulation: select a useful viewing
 pose, validate and execute its route, verify measured arrival, then score the
 fresh observation separately. Keep A* and the existing server ArrivalMonitor.
-Acceptance requires Stretch and RBY1 simulation. No hardware or full sweeps;
+Acceptance requires Stretch and a separately identified second robot in simulation.
+The current `rby1` backend is a Galaxea R1 proxy, including MolmoSpaces scenes;
+native RB-Y1 acceptance needs a separate adapter and is not claimed here.
+No hardware or full sweeps;
 heavy jobs run serially with CPU-safe/GPU-exclusive scheduling.
 
 Baseline: `faebea0f`, including September 27 navigation-only pilot evidence in
@@ -85,8 +88,68 @@ routes that the repaired XY planner genuinely cannot represent.
   Qwen chose stationary observe_floor (+20 observed cells; blocker unchanged),
   then diagnostics and a safe stop. No navigation/manipulation acceptance.
   Evidence: `~/runs/emet/navigation-geometry-pilot-20260928/explore/`.
-- Next selection work must validate executable viewing poses/routes before
-  choosing one. Current multi-goal search still selects the cheapest endpoint
-  first and only then subjects that route to the swept-footprint check.
-- Explicit route metadata, viewing-pose ranking, observation-based progress,
-  two-robot controller battery and paired pilots remain pending.
+- This checkpoint preceded the selection/execution changes below. The two-robot
+  controller battery and paired task pilots remain acceptance gates.
+
+### September 29 implementation checkpoint
+
+- `571b20f4`: shared search retains paths to every reached candidate. The
+  physical pilot checks executable full routes before ranking calibrated
+  horizontal camera sectors by unknown area / travel-and-turn cost. Duplicate
+  and already-satisfied views are rejected. The 2D view estimate is a heuristic,
+  not proof against vertical occlusion. Known head geometry comes from the
+  current observation; this version holds the forward head configuration rather
+  than searching additional head poses.
+- `af28c77e`: new routes carry semantic targets and completion separately from
+  base waypoints. Legacy input tails remain accepted at a compatibility boundary.
+  Sensor coverage is measured before visited-disk/morphology expansion, with the
+  before snapshot taken after startup scans and immediately before movement.
+  Physical exploration reports motion and arrival-view gain separately.
+- `f72777f7`: physical segments are checked again from measured poses, with map
+  updates between segments and server-owned arrival/settling unchanged. Reject
+  newly unsafe segments and ambiguous execution; verify payload between steps.
+- `96fbdf44`: stationary views toward existing frontiers plus bounded local-map
+  revision history. `fe8e7379` retains suppression across measured drift within
+  existing arrival tolerances. Head-pose search remains unimplemented; camera
+  estimates hold the measured configuration and use guarded floor recovery.
+- `4cc110c4`: existing camera route probe checks fresh measured endpoint dwell,
+  including oscillation, independently of success receipts. It explicitly does
+  not score continuous collision safety.
+- `202ede0e`, `9e7f0864`: publish frame sequences only after decoded observations
+  become available, require fresh mapped observations after physical segments,
+  and prevent old inferred depth being reprojected at a new camera pose.
+- `7bf047de`: preserve every physical exploration step's candidates, map,
+  sensor coverage, matching command receipt and post-attempt camera view.
+- `af46be53`: measured look-joint feedback replaces generic placeholder zeros.
+  No new native robot model or changed actuation. The proxy uses upper torso
+  look joints; it is not a head-only mechanism.
+- Latest expanded controller/floor-recovery/view/acceptance suite: **618 passed**,
+  two existing SWIG warnings. Fixed stale string-result test assertions and
+  isolated native control configuration from perception's Hydra singleton.
+
+### Completed diagnostic runs (not promotion gates)
+
+| Frozen source / job | Observed result |
+| --- | --- |
+| `571b20f4` / `20260929_033047_e29a8f` | All 8 translational frontier routes rejected at the same unknown cell during clockwise turn. Floor view added 16 padded-map cells; blocker remained. Subsequent `find_objects("the unknown footprint area")` is a semantic diversion, not exploration acceptance. |
+| `96fbdf44` / `20260929_034837_ce938a` | Three guarded stationary viewing turns completed. Final step added 7 raw sensor cells (0.07 m²); final candidate set included feasible translations. The run stayed near its start: not room-coverage acceptance. |
+| `96fbdf44` / `20260929_034840_2f314c` | Tomato find initially rejected unknown clearance; floor recovery added 96 padded-map cells but did not clear that exact footprint. Replan approached roughly 0.30 m and verified tomato from a fresh RGB-D view. Saved RGB manually inspected. Find pass only, no manipulation. |
+| `5a1e6279` / `20260929_035052_731d84` | **Galaxea proxy labeled rby1**, not native RB-Y1. Initial footprint had 9 unknown cells; no motion authorized. Floor recovery failed because generic measured look feedback was hardcoded zero. No acceptance. |
+
+Roots: `~/runs/emet/navigation-views-pilot-20260929/`,
+`~/runs/emet/navigation-integrated-pilot-20260929/`, and
+`~/runs/emet/navigation-multirobot-pilot-20260929/`. The older queued route job
+`20260929_033720_b08fa1` was canceled before launch in favor of the integrated
+build; it is not a failed scored episode. Some completed Stretch runs still
+emit shutdown-manager BrokenPipe errors; process exit alone is not a pass.
+
+Offline replay of the saved selection-only map permits a CCW stationary turn
+and a 10 cm forward-then-turn alternative, while direct clockwise rotation
+crosses an unknown cell. This replay uses the **padded** saved map conservatively,
+not a ground-truth collision proof or live controller pass.
+
+Remaining gates: rerun latest freshness/look-feedback changes, complete the
+specified controller matrix with independent contact/stop evidence, then paired
+task pilots. Stationary coverage gain must not be mistaken for successful room
+traversal. Keep native RB-Y1 support separate from this navigation repair. No
+latest EQA/OVMM/complete-TAMP non-regression claim is made here.

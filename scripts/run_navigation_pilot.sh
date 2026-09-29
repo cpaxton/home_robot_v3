@@ -34,6 +34,7 @@ export EMET_EQA_EPISODE_DIR="$out/evidence"
 # Never inherit a different robot's GT body names or a remote model endpoint.
 unset EMET_VL_ENDPOINT EMET_SIM_NAV_TELEPORT EMET_SIM_EVAL_CONFIG EMET_SIM_EVAL_TRACE
 git rev-parse HEAD > "$out/source.txt"
+"${EMET_PY:-$PWD/.venv/bin/python}" -c 'import json, sys; from emet.robots import get_robot_spec; s = get_robot_spec(sys.argv[1]); print(json.dumps({"robot_id": s.name, "mjcf_path": s.mjcf_path, "joint_names": s.joint_names, "camera_names": s.camera_names}))' "$robot" > "$out/robot_spec.json"
 sha256sum "$scene" configs/emet/query*pilot.yaml > "$out/config_sha256.txt"
 cp "$scene" "$out/sim.yaml"
 cp "${BASH_SOURCE[0]}" "$out/driver.sh"

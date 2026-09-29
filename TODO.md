@@ -17,10 +17,23 @@ Implementation and acceptance specification:
       observation added 20 cells without clearing blocker; safe stop, no pass.
 - [ ] Select useful executable viewing poses before committing to a frontier;
       retain bounded candidates and validate full routes, not just endpoints.
+      Selector, stationary frontier views and drift-tolerant failed-view memory
+      implemented. Integrated Stretch completed three viewing turns; final
+      gain 7 sensor cells, but stayed near start. Room traversal still unproven.
 - [ ] Replace NaN/object trajectory markers; integrate measured heading/arrival
       and separate motion, observation and task outcomes.
-- [ ] Stretch + RBY1 controller acceptance, then fixed paired small-room/EQA
+      Implemented typed generated routes and sensor-only arrival coverage in
+      `af28c77e`; segment revalidation in `f72777f7`. Legacy input adapter remains.
+      Freshness guards `9e7f0864` and per-step evidence `7bf047de` need live retest.
+      Prior integrated find recovered, approached ~30 cm and verified tomato;
+      this is not manipulation acceptance.
+- [ ] Stretch + second-robot controller acceptance, then fixed paired small-room/EQA
       pilots and TAMP navigation stages. No hardware or full sweeps.
+      `rby1` currently loads a Galaxea proxy even in MolmoSpaces. Its diagnostic
+      failed unknown-footprint recovery; measured look feedback fixed in
+      `af46be53`, retest pending. Native RB-Y1 support is a separate future task.
+      Expanded targeted unit suite: 618 passed; full controller contact matrix
+      and paired tasks remain open. Do not promote on unit tests alone.
 
 ## Floor-coverage recovery pilot (2026-09-24)
 
