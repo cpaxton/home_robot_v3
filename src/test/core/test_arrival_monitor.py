@@ -71,6 +71,25 @@ def test_stalled_motion_has_fresh_telemetry_but_no_progress():
     assert update(m, 5, (1, 0, 0), stopped=False)[1]["reason"] == "navigation stalled"
 
 
+@pytest.mark.parametrize("clock_rate", [0.1, 10])
+def test_stall_watchdog_remains_wall_clock_bounded(clock_rate):
+    m = monitor()
+    deadline = 5
+    for i in range(int(deadline * 2)):
+        wall = i * 0.5
+        assert m.update([1, 0, 0], sample_time=wall * clock_rate, now=wall, stopped=False) is None
+    result = m.update([1, 0, 0], sample_time=deadline * clock_rate, now=deadline, stopped=False)
+    assert result[1]["reason"] == "navigation stalled"
+
+
+def test_slow_simulation_still_fails_promptly_if_pose_stream_stops():
+    m = monitor()
+    assert m.update([1, 0, 0], sample_time=0, now=0, stopped=False) is None
+    assert m.update([1, 0, 0], sample_time=0.01, now=0.5, stopped=False) is None
+    result = m.update([1, 0, 0], sample_time=0.01, now=1.6, stopped=False)
+    assert result[1]["reason"] == "stale navigation pose"
+
+
 def test_approach_inside_acceptance_radius_counts_before_final_heading():
     m = ArrivalMonitor({"resolved_goal": [0, 0, 0]}, "exploration", now=0)
     # Approach toward the controller's inner XY threshold while holding the
