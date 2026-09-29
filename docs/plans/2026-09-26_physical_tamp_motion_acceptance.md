@@ -6,6 +6,8 @@ was launched to prepare this handoff. This is not a claim of task acceptance.
 Implementation and measured results are tracked in the
 [acceptance report](../experiments/physical_tamp_acceptance_20260926_results.md).
 The original handoff and navigation-agent notes below are retained.
+The September 28 [scene-validated control registry](../experiments/tamp_validated_registry.md)
+records fixture admission, fresh MCTS replay, and the corrected full-suite run.
 
 ### Navigation-agent update, September 26, 09:08
 

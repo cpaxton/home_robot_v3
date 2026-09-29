@@ -69,9 +69,11 @@ silently replace a rejected task at evaluation time.
 
 ## Status, September 28
 
-Implementation and unit validation are in progress. A small live pilot precedes
-the full admission run. No new corpus is claimed solvable until its executed
-reference evidence and fresh replay checks have completed.
+Fixture construction, admission and fresh replay are implemented. The final
+source (`5b619590`) passes 116 targeted tests. The eight-case pilot admits four
+fixtures and rejects four. All four admitted fixtures passed fresh MCTS replay.
+The full 200-candidate admission/replay run is active; no 200-task solvability
+claim is established.
 
 The first eight-case pilot exposed certificate serialization of simulator NumPy
 arrays after successful oracle execution, RBY1 attachment verification failures,
@@ -96,3 +98,31 @@ archived at `~/runs/emet/tamp-validated-fixtures-20260928/`. Pilot r2
 and runs fresh MCTS replay only after admission terminates. The current contract
 also binds task mode, object count, success radius, backend, bin query and seed;
 changing scoring settings requires a new witness.
+
+### Completed pilot and active full run
+
+Pilot r2 is terminal: **4/8 admitted; 4/4 admitted fixtures passed fresh MCTS**.
+This is one scene and two oracle-backed robots, not a robustness estimate.
+
+| Robot | Cleanup admission | Navigation admission | Fresh MCTS |
+| --- | --- | --- | --- |
+| RBY1, latch | Rejected: apple attachment verification; 2/3 relocated | Rejected: bottle/knife failures; 6/8 relocated | Not scored |
+| Stretch, oracle | Admitted | Admitted | 2/2 passed |
+| Mars, oracle | Rejected: all four layouts overlap scene disks | Rejected: all 288 layouts overlap scene disks | Not scored |
+| Nori, oracle | Admitted | Admitted | 2/2 passed |
+
+RBY1 reference failures do not prove the tasks impossible. Mars construction
+failures are specific to the bounded builder and its conservative disk model.
+No rejection was relabeled as an MCTS failure or silently replaced.
+
+Durable evidence: `~/runs/emet/tamp-validated-fixtures-20260928/` contains
+`tamp-fixture-pilot-20260928-r2/` (snapshots, reference traces, certificates,
+`fixture_topdown.png` per admitted case) and `tamp-fixture-replay-20260928-r2/`
+(fresh MCTS traces and final-state metrics). The historical r1 evidence is retained.
+
+Full run: job `20260928_222600_2cf5c6`, clean source `5b619590`, 900 seconds
+per case, serial CPU-safe/exclusive-GPU execution. Outputs are written directly
+to the durable archive's `full-r3/`, followed by `replay-r3/`. Admission must
+finish all 200 candidates before `frozen_registry.yaml` is copied for replay.
+`admission_evaluation_summary.json` will report requested, admitted, not admitted,
+evaluated, successes, and evaluation status counts. Full results are pending.
