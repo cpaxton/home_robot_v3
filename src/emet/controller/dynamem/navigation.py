@@ -206,6 +206,57 @@ def _record_nav_plan_fields(self, **fields: Any) -> None:
     self._last_nav_plan = meta
 
 
+def _save_exploration_evidence(self, before, after):
+    """Retain each bounded attempt, not only the last step shown in chat."""
+    import json
+    import os
+    from pathlib import Path
+
+    directory = os.environ.get("EMET_EQA_EPISODE_DIR")
+    if not directory:
+        return
+    from PIL import Image
+
+    def array(value):
+        return value.detach().cpu().numpy() if hasattr(value, "detach") else np.asarray(value)
+
+    root = Path(directory) / "navigation"
+    root.mkdir(parents=True, exist_ok=True)
+    stem = root / f"explore_{time.time_ns()}"
+    obs = self.robot.get_observation()
+    obstacles, explored = self.space.get_navigation_map()
+    fields = {
+        "obstacles": array(obstacles),
+        "explored": array(explored),
+        "sensor_observed": array(self.voxel_map.get_sensor_observed_cells()),
+        "grid_resolution_m": self.voxel_map.grid_resolution,
+        "grid_origin_cells": array(self.voxel_map.grid_origin),
+        "before_xyt": before,
+        "after_xyt": after,
+    }
+    if obs is not None:
+        for name in ("depth", "camera_K", "camera_pose"):
+            if getattr(obs, name, None) is not None:
+                fields[name] = array(getattr(obs, name))
+        if obs.rgb is not None:
+            Image.fromarray(array(obs.rgb).astype(np.uint8)).save(stem.with_suffix(".png"))
+    np.savez_compressed(stem.with_suffix(".npz"), **fields)
+    command = getattr(self.robot, "_last_navigation_command", None)
+    receipt = None
+    if command is not None:
+        from emet.core.command_client import command_receipt
+
+        receipt = command_receipt(self.robot, command)
+    payload = {
+        "plan": getattr(self, "_last_nav_plan", None),
+        "navigation_receipt": receipt,
+        "map_mode": self.space.obstacle_map_mode,
+        "view_capture": "after_attempt; not independently synchronized to map ingestion",
+        "image_timing": getattr(obs, "image_timing", None),
+    }
+    stem.with_suffix(".json").write_text(json.dumps(payload, default=lambda v: array(v).tolist()) + "\n")
+
+
 def _sensor_coverage(self):
     if getattr(getattr(self, "space", None), "obstacle_map_mode", None) != "physical":
         return None
@@ -427,11 +478,11 @@ def run_exploration(self):
 
     self.announce_action("Exploring…")
     # "" means the robot has not received any text query from the user and should conduct exploration just to better know the environment
-    before = np.asarray(self._current_planning_xyt(), dtype=float)[:2].copy()
+    before = np.asarray(self._current_planning_xyt(), dtype=float).copy()
     physical = getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
     status, target = self.execute_action("")
-    after = np.asarray(self._current_planning_xyt(), dtype=float)[:2]
-    distance = float(np.linalg.norm(after - before))
+    after = np.asarray(self._current_planning_xyt(), dtype=float)
+    distance = float(np.linalg.norm(after[:2] - before[:2]))
     progressed = status is not None and distance >= 0.10
     if physical:
         new_cells = (getattr(self, "_last_nav_plan", None) or {}).get("new_sensor_cells")
@@ -461,6 +512,8 @@ def run_exploration(self):
             self._record_nav_plan_fields(outcome="exploration_no_progress")
         else:
             self._mark_nav_goal_blocked(reason="exploration_no_progress")
+    if physical:
+        _save_exploration_evidence(self, before, after)
     if status is None:
         self.announce_action("Exploring… no valid frontier right now")
         logger.warning("Exploration failed (no valid plan or frontier).")

@@ -52,6 +52,33 @@ def test_coverage_uses_pre_motion_snapshot_not_startup_growth():
     assert agent._record_nav_plan_fields.call_args.kwargs["new_sensor_cells"] == 0
 
 
+def test_each_exploration_step_retains_replayable_physical_map_and_outcome(tmp_path, monkeypatch):
+    import json
+
+    from emet.controller.dynamem.navigation import _save_exploration_evidence
+
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    obs = SimpleNamespace(rgb=np.zeros((2, 2, 3), dtype=np.uint8), depth=np.ones((2, 2)))
+    cells = np.ones((3, 3), dtype=bool)
+    agent = SimpleNamespace(
+        robot=SimpleNamespace(get_observation=lambda: obs),
+        space=SimpleNamespace(obstacle_map_mode="physical", get_navigation_map=lambda: (cells, cells)),
+        voxel_map=SimpleNamespace(
+            get_sensor_observed_cells=lambda: cells, grid_resolution=0.1, grid_origin=np.array([1, 1])
+        ),
+        _last_nav_plan={"motion_outcome": "reached", "new_sensor_cells": 7},
+    )
+    for _ in range(2):
+        _save_exploration_evidence(agent, [0, 0, 0], [0, 0, 1])
+    records = list((tmp_path / "navigation").glob("*.json"))
+    assert len(records) == 2
+    assert json.loads(records[0].read_text())["plan"]["new_sensor_cells"] == 7
+    with np.load(records[0].with_suffix(".npz")) as saved:
+        np.testing.assert_array_equal(saved["after_xyt"], [0, 0, 1])
+        np.testing.assert_array_equal(saved["obstacles"], cells)
+    assert records[0].with_suffix(".png").is_file()
+
+
 def test_legacy_route_boundary_keeps_semantic_target_out_of_motion():
     target = [1, 2, 3]
     route = NavigationRoute.from_value([[0, 0, 0], [np.nan] * 3, target])
