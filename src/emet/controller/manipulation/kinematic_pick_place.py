@@ -13,6 +13,7 @@ approach standoff but not enforced at the EE.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -196,16 +197,27 @@ class KinematicPickPlaceExecutor:
 
     def _verify_grasp_lift(self, body: str, lift_xyz: np.ndarray, *, pre_pos: np.ndarray | None) -> bool:
         after = self._body_pos(body)
-        if after is None:
-            return False
         lift = np.asarray(lift_xyz, dtype=np.float64).reshape(3)
-        if float(np.linalg.norm(after - lift)) <= self.grasp_lift_verify_tol_m:
-            return True
-        if pre_pos is not None:
-            dz = float(after[2] - pre_pos[2])
-            if dz >= max(0.04, 0.4 * self.lift_m):
-                return True
-        return False
+        error = None if after is None else float(np.linalg.norm(after - lift))
+        dz = None if after is None or pre_pos is None else float(after[2] - pre_pos[2])
+        minimum_lift = max(0.04, 0.4 * self.lift_m)
+        accepted = bool(error is not None and (
+            error <= self.grasp_lift_verify_tol_m or (dz is not None and dz >= minimum_lift)))
+        # Preserve the existing criterion while exposing the measurements behind
+        # intermittent attachment failures. A command step alone is not an
+        # acknowledgement that this body pose has been observed after the lift.
+        self.last_grasp_verification = {
+            "body": body, "target_xyz": lift.tolist(),
+            "observed_xyz": None if after is None else after.tolist(),
+            "before_xyz": None if pre_pos is None else np.asarray(pre_pos).tolist(),
+            "target_error_m": error, "lift_dz_m": dz,
+            "target_tolerance_m": self.grasp_lift_verify_tol_m, "minimum_lift_m": minimum_lift,
+            "command_step": getattr(self.robot, "_last_step", None),
+            "session_step": getattr(self.robot, "_emet_session_cache_step", None),
+            "accepted": accepted,
+        }
+        logger.info("KinematicPickPlace lift verification: " + json.dumps(self.last_grasp_verification))
+        return accepted
 
     def _verify_place_xy(self, body: str, recep_xy: np.ndarray) -> tuple[bool, float]:
         after = self._body_pos(body)

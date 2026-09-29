@@ -91,6 +91,7 @@ def _make_kinematic_dynamem_executor():
     robot.switch_to_navigation_mode = MagicMock()
 
     agent = MagicMock()
+    agent.query_driven_memory = False
     agent.robot_say = MagicMock(return_value=None)
     agent.get_voxel_map = MagicMock(return_value=None)
 
