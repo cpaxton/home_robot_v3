@@ -172,3 +172,13 @@ admission. Live validation must precede a new full benchmark version.
 
 Simulator logs now persist inside each case's output artifacts, including
 startup failures, instead of being available only in temporary directories.
+
+The fallback implementation is frozen at `1b5b2da6` with 117 targeted tests
+passing. Live pilot job `20260929_033132_85cf0e` is queued under the same exclusive
+GPU lock, after the repeat/startup diagnostics. It tests RBY1 scene01 cleanup,
+Stretch scene02 navigation, and Nori scene02 navigation, plus the existing
+Stretch scene00 navigation positive. Admitted fixtures are then replayed fresh.
+Artifacts: `fallback-pilot-r4/`, `fallback-replay-r4/`, and `fallback-pilot-r4-job/`.
+This is a separate benchmark version; r3 certificates/results are not overwritten
+or mixed with fixtures built by the new implementation. Another full sweep awaits
+this live validation and the startup diagnosis.
