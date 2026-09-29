@@ -157,7 +157,7 @@ This limited coverage does not establish robustness across the requested matrix.
 
 ### Follow-up work
 
-Job `20260929_032809_1e8cab` repeats the four RBY1 failures on their frozen
+Completed job `20260929_032809_1e8cab` repeated the four RBY1 failures on their frozen
 certificates and separately tests one Mars startup failure with a recorded
 120-second observation timeout. Original results remain unchanged. Artifacts:
 `diagnostics-20260929/` under the same durable archive.
@@ -174,7 +174,7 @@ Simulator logs now persist inside each case's output artifacts, including
 startup failures, instead of being available only in temporary directories.
 
 The fallback implementation is frozen at `1b5b2da6` with 117 targeted tests
-passing. Live pilot job `20260929_033132_85cf0e` is queued under the same exclusive
+passing. Live pilot job `20260929_033132_85cf0e` completed under the same exclusive
 GPU lock, after the repeat/startup diagnostics. It tests RBY1 scene01 cleanup,
 Stretch scene02 navigation, and Nori scene02 navigation, plus the existing
 Stretch scene00 navigation positive. Admitted fixtures are then replayed fresh.
@@ -182,3 +182,34 @@ Artifacts: `fallback-pilot-r4/`, `fallback-replay-r4/`, and `fallback-pilot-r4-j
 This is a separate benchmark version; r3 certificates/results are not overwritten
 or mixed with fixtures built by the new implementation. Another full sweep awaits
 this live validation and the startup diagnosis.
+
+## Final follow-up results and agent handoff
+
+Both September 29 follow-up jobs are terminal. Of the four original RBY1
+failures, scene00 cleanup slot 1 and scene02 cleanup slot 0 passed on repeat;
+scene00 cleanup slot 0 and scene12 cleanup slot 1 failed again. Keep the original
+21/25 result. This targeted repeat is not an unbiased reliability estimate.
+The 120-second Mars startup diagnostic reached observations successfully, then
+rejected the layout under the unchanged geometry checks. This establishes that
+at least one earlier startup error was recoverable with a longer wait; it does
+not establish a valid Mars task.
+
+The size-selection pilot admitted 3/4 fixtures and all three passed fresh MCTS
+replay: RBY1 scene01 cleanup, Stretch scene00 navigation (existing positive), and
+Stretch scene02 navigation (new coverage). Nori scene02 navigation was rejected
+because the toaster grasp timed out: seven of eight objects were relocated.
+Although its navigation goal was achieved, admission correctly required the full
+reference sequence. No expanded full sweep has been run.
+
+Next agent milestone: use the frozen admitted fixtures as a fixed evaluation
+set; retain the original failures and measure repeatability before changing
+execution. Separate grounding/search failure, action timeout, stale observation,
+and grasp verification. Then run the shared agent tools on the same fixtures
+with explicit observation/model provenance. GT/MCTS and oracle/latch results
+must remain separate from learned-agent and contact-based physical results.
+Physical carry still fails the unchanged retention bound; benchmark completion
+is not physical acceptance. Do not admit fixtures based on the agent's success.
+
+Final PR validation: all 215 tests in changed test modules passed; Ruff passed
+for all changed Python files and `git diff --check` was clean. The earlier
+117-test construction slice and 268-test physical slice have different scopes.
