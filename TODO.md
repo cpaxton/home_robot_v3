@@ -14,8 +14,11 @@ Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execut
       execution failures, then run paired trials across all original admitted tasks.
 - [x] Complete 90-candidate oracle expansion: 19 admitted, 19/19 fresh MCTS passes,
       five new admitted case IDs and zero startup errors. Updated oracle-only figures saved.
-- [ ] Diagnose measured RBY1 tracking errors (2.41 m, 1.96 m, 5.4 cm); joint-target
-      trace job `20260929_152521_a077e1` is queued. Latch expansion remains held.
+- [x] Diagnose RBY1 tracking: wall-intersecting approaches and floating-base pose
+      reset artifact; endpoint rejection and solver support validated by 102 tests.
+      See `docs/experiments/tamp_contact_tracking_20260930.md`.
+- [ ] Search collision-free alternative approaches; verify arm collision geometry
+      and payload sweeps, then rerun full tasks before resuming latch expansion.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,
       observations and action budgets; do not label scripted/GT controls as agent results.
 

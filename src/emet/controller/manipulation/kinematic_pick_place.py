@@ -470,52 +470,16 @@ class KinematicPickPlaceExecutor:
         assert self._model is not None and self._data is not None
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
-        self._sync_base_freejoint()
         qadr = joint_qpos_addrs(self._model, self.joint_names)
-        live_seed: np.ndarray | None = None
-        q_live, _, _ = self.robot.get_joint_state(timeout=2.0)
-        names = self._actuator_names()
-        if q_live is not None and len(q_live) >= len(names):
-            live_map: dict[str, float] = {}
-            for i, aname in enumerate(names):
-                jname = self._actuator_to_joint_name(aname)
-                if jname:
-                    live_map[jname] = float(q_live[i])
-            if all(n in live_map for n in self.joint_names):
-                live_seed = np.array([live_map[n] for n in self.joint_names], dtype=np.float64)
-
-        if self._last_cmd_q is not None and len(self._last_cmd_q) == len(qadr):
-            for a, v in zip(qadr, self._last_cmd_q, strict=True):
-                self._data.qpos[a] = float(v)
-        elif live_seed is not None:
-            for a, v in zip(qadr, live_seed, strict=True):
-                self._data.qpos[a] = float(v)
-        else:
-            self._sync_qpos_from_robot()
-
-        ee_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, self.ee_body)
-        spec = getattr(self.robot, "_spec", None)
-        base_name = str(getattr(spec, "base_link_name", None) or "base_link")
-        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, base_name)
-        if base_id < 0:
-            base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
-        if ee_id >= 0 and base_id >= 0:
-            mujoco.mj_forward(self._model, self._data)
-            ee_z = float(self._data.body(ee_id).xpos[2])
-            base_z = float(self._data.body(base_id).xpos[2])
-            if ee_z < base_z - 0.2:
-                for name in self.joint_names:
-                    jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name)
-                    if jid >= 0 and self._model.jnt_limited[jid]:
-                        lo, hi = float(self._model.jnt_range[jid][0]), float(self._model.jnt_range[jid][1])
-                        self._data.qpos[int(self._model.jnt_qposadr[jid])] = 0.5 * (lo + hi)
-
-        mujoco.mj_forward(self._model, self._data)
+        # A previous command is an IK seed, never evidence of the path start.
+        # Contact may have prevented that posture from being reached.
+        if not self._sync_qpos_from_robot():
+            self._last_motion_failure = 'missing_joint_state'
+            return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         seeds = []
-        for s in (live_seed, self._last_cmd_q):
-            if s is not None and np.linalg.norm(np.asarray(s, dtype=np.float64).reshape(-1) - q0) > 1e-3:
-                seeds.append(s)
+        if self._last_cmd_q is not None and np.linalg.norm(self._last_cmd_q - q0) > 1e-3:
+            seeds.append(self._last_cmd_q)
         result = solve_position_ik_multiseed(
             self._model,
             self._data,

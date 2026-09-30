@@ -823,15 +823,18 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.ctrl[aid] = 0.0
 
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
-        """Legacy full-pose hold, or opt-in planar hold with passive support dynamics.
+        """Stationary oracle support, or opt-in planar hold with passive dynamics.
 
-        Pinning all six base coordinates repeatedly cancels suspension/contact
-        response. Microscopic floor penetration then loads articulated joints
-        even with unchanged position targets and gravity compensation.
+        A declared world/base weld makes the solver account for support forces.
+        Repeatedly resetting a floating base leaves its within-step acceleration
+        coupled to the arm. Older models retain the legacy pose hold.
         """
-        if self._nav_goal_world is not None:
-            return
         if self._mjmodel is None or self._mjdata is None:
+            return
+        weld = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_EQUALITY, "emet_stationary_base")
+        if weld >= 0:
+            self._mjdata.eq_active[weld] = False
+        if self._nav_goal_world is not None:
             return
         snap = self._stationary_base_freejoint_qpos
         if snap is None or int(snap.shape[0]) != 7:
@@ -844,6 +847,15 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         audit_physical_action({"stationary_base_pose_hold": True}, source="RobosuiteZmqServer.freejoint_hold")
         if not self._passive_base_support:
+            if weld >= 0:
+                base_id = self._mjmodel.body(self._spec.base_link_name).id
+                if (self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
+                        or self._mjmodel.eq_obj1id[weld] != 0
+                        or self._mjmodel.eq_obj2id[weld] != base_id):
+                    raise ValueError("emet_stationary_base must weld world to the robot base")
+                self._mjmodel.eq_data[weld, 3:10] = snap
+                self._mjdata.eq_active[weld] = True
+                return
             self._mjdata.qpos[qadr : qadr + 7] = snap
             if vadr >= 0:
                 self._mjdata.qvel[vadr : vadr + 6] = 0.0
@@ -2399,6 +2411,20 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._start_planar_yaw_slew(wx, wy, wt)
                         self._log_nav_action(nav_meta, applied="yaw_slew")
                     elif nav_teleport:
+                        # Teleporting an anchored chassis into a wall can drive
+                        # the articulated joints against their limits through
+                        # contact constraints. Reject on private data, before
+                        # changing base/attachment poses or reporting arrival.
+                        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+                        contacts = teleport_endpoint_contacts(
+                            self._mjmodel, self._mjdata, self._spec, (wx, wy, wt)
+                        )
+                        if contacts:
+                            self._nav_goal_world = None
+                            self._contract_navigation_context["endpoint_contacts"] = contacts
+                            self._log_nav_action(nav_meta, applied="teleport_collision_rejected")
+                            raise RuntimeError(f"teleport_endpoint_collision: {contacts}")
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(
                                 f"Navigation xyt={action['xyt']!r}: no free joint on base_link "

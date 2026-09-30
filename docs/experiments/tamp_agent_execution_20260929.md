@@ -121,8 +121,8 @@ code now distinguishes `pregrasp_tracking_failed` from IK/planning failure.
 Tracking job `20260929_152521_a077e1`, frozen source `525ec399`, records planned
 joints, server-held actuator targets, observed joints and state step, with server
 control debug enabled. It reruns the original scene00 cleanup slot 0 certificate
-and scorer. It is queued behind another managed GPU experiment; no other job is
-modified. Outputs: `joint-tracking-r7/` and `joint-tracking-r7-job/` in the durable
+and scorer. The job is now terminal. Its planned commands and server-held targets match;
+measured joints differ. See the completed contact diagnosis below. Outputs: `joint-tracking-r7/` and `joint-tracking-r7-job/` in the durable
 root. The focused regression slice passes 26 tests. Root cause and live repair
 are still pending this trace.
 
@@ -130,3 +130,12 @@ Updated paper figures for the terminal oracle-only expansion are stored at
 `~/runs/emet/tamp-validated-fixtures-20260928/paper-figures-oracle-r4/`, with PDF,
 SVG, PNG, counts CSV, captions and input hashes. The generator omits robot groups
 that were not requested rather than plotting absent groups as zero coverage.
+
+## Contact diagnosis and controller repair (September 30)
+
+[Paired contact tests and repairs](tamp_contact_tracking_20260930.md) identify
+wall-intersecting base approaches plus the floating-base pose-reset artifact.
+The endpoint guard rejects both invalid poses, and solver-based stationary
+support reduces the clear kettle tracking error from 34.10 mm to 3.49 mm in a
+reconstructed scene. The 102-test regression slice passes. Alternative approach
+search and fresh full-task/agent runs remain outstanding; scores are unchanged.
