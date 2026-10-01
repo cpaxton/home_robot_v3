@@ -488,7 +488,9 @@ class KinematicPickPlaceExecutor:
             target_pos=target_xyz_world,
             seeds=seeds,
             try_midrange=True,
-            tol_m=self.ik_tol_m,
+            # Reserve most of the measured-arrival budget for execution error.
+            # Solving only to that full tolerance can fail after ordinary PD lag.
+            tol_m=min(0.01, self.ik_tol_m * 0.25),
             max_iters=self.ik_max_iters,
         )
         if not result.success:

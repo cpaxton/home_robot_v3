@@ -95,6 +95,7 @@ def test_contact_deviation_is_the_next_planning_start(monkeypatch):
         return True
     ex._sync_qpos_from_robot = measured
     def ik(*args, **kwargs):
+        assert kwargs['tol_m'] <= ex.ik_tol_m * .25
         data.qpos[0] = .6
         return SimpleNamespace(success=True, pos_error_m=0)
     def plan(*args, **kwargs):
