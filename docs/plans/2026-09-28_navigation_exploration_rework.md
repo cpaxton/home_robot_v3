@@ -481,3 +481,53 @@ or a paired accuracy comparison. Check capture success, unchanged base pose,
 same-footprint validity and actual subsequent motion separately. If it fails
 to clear the blocker, inspect calibration/depth coverage instead of assuming
 steeper tilt solves it. No result available at queue time.
+
+### September 30: recovery and completion contracts
+
+The September 29 intervention completed, but did **not** isolate a steeper-tilt
+benefit: the original -1.0 rad capture already cleared its checked blocker at
+a different rejected pose from the earlier failure. Additional -1.35 rad sensing
+kept it valid, with measured base translation 0.0000039 m. The bowl policy then
+wasted two more floor captures; the microwave policy wasted three after its
+own blocker cleared. Both localization results failed. The bowl assessment
+claimed presence despite region grounding returning zero detections; the loop
+stopped with viewpoint-coordinate prose. The final localization evaluator
+correctly rejected that as missing object geometry.
+
+Runtime `be38c83f` addresses two specific contracts:
+
+- Recovery output is associated with the exact navigation-plan object. For
+  that attempt, a newly valid checked footprint supersedes the old warning
+  and requests ordinary checked replanning, not more floor captures. A new
+  attempt cannot inherit the previous attempt's recovery result.
+- Query-driven OVMM explicitly requests `require_grounded_object`. Existing
+  grounding must admit an object before visual presence can confirm completion.
+  No new verifier, detector dependency, model call or automatic recovery policy
+  was added. Ordinary EQA retains visual answerability; other localization
+  backends retain their existing contracts. Per-run grounded identity resets.
+
+Validation: 469 agentic/recovery tests, 62 OVMM routing/localization tests,
+and 9 minimal TAMP regression tests pass; pre-commit checks pass. A separate
+71-test focused run includes the new completion truth table and stale-attempt
+recovery test (overlaps the broader suites; do not add counts). No new live EQA
+accuracy run was performed, so earlier paired EQA numbers are not evidence
+for this revision.
+
+Frozen pilot `20260930_232606_c35512` (`nav-recovery-contract-0930`) at
+`/tmp/emet-recovery-be38c83f` completed serially with the previous model, seed,
+config, four mapping views, six rounds and three navigation steps. No scripted
+head intervention. Output: `~/runs/emet/navigation-recovery-contract-20260930/`.
+Configured order was S0, RoboCasa, Molmo. **0/3 objects, 0/3 receptacles**:
+
+- RoboCasa object round 0 rejects unknown floor; round 1 clears the checked
+  footprint; round 2 immediately retries investigate and reaches (0.644 m
+  recorded navigation distance). Further views do not verify the jar/cab target.
+- S0 and Molmo retain an unknown footprint cell despite repeated captures.
+  Neither exercises the resolved-blocker branch. Receptacle search repeats
+  floor recovery on the remaining blocker without a new target approach.
+- No live `object_localization_required` deferral occurred: the relevant
+  presence/grounding conflict remains unit-tested, not live-reproduced here.
+
+No task-accuracy gain or physical-find acceptance is claimed. Next isolate the
+missing-floor visibility failure using calibrated views of the actual blocked
+region; do not relax clearance or launch another identical learned sweep.

@@ -33,6 +33,12 @@ Implementation and acceptance specification:
       not the jar. Molmo repeats views without resolving its unknown cell.
       Offline Molmo replay puts its blocking cell below every saved
       floor image; test a steeper bounded view, not relaxed clearance.
+      Follow-up `be38c83f` binds recovery evidence to its navigation attempt and
+      requires admitted object grounding for query-driven find completion (EQA
+      keeps visual answerability). Pilot `20260930_232606_c35512`: 0/3 objects,
+      0/3 receptacles. RoboCasa clears floor then immediately replans/reaches;
+      Molmo/S0 blockers remain unknown. No live grounding-conflict case occurred.
+      Next: targeted missing-floor visibility, not another unchanged sweep.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
