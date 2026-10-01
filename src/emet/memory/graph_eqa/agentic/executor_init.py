@@ -356,7 +356,10 @@ def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
     from emet.controller.dynamem.look import observe_floor
 
     plan = getattr(self.agent, "_last_nav_plan", None)
-    out = observe_floor(self.agent, pan_rad=args.get("pan_rad"), tilt_rad=args.get("tilt_rad", -1.0))
+    options = {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
+    if args.get("target_blocker"):
+        options["target_blocker"] = True
+    out = observe_floor(self.agent, **options)
     self._last_floor_observation = out
     self._floor_observation_nav_plan = plan
     self._append_trace({"tool": "observe_floor", **out})

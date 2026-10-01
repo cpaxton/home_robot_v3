@@ -16,6 +16,62 @@ from emet.agent.tools import Tool, get_tools
 from emet.controller.dynamem import look
 
 
+@pytest.mark.parametrize("in_frame", [False, True])
+def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeypatch, in_frame):
+    pose = np.eye(4)
+    pose[2, 3] = -1
+    obs = SimpleNamespace(
+        rgb=np.zeros((100, 100, 3)),
+        depth=np.full((100, 100), 0.4),
+        camera_pose=pose,
+        camera_K=np.array(
+            [
+                [100, 0, 50],
+                [0, 100, 50],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    robot = SimpleNamespace(
+        _seq_id=1,
+        head_to=Mock(),
+        get_pan_tilt=lambda: (0, -1),
+        get_observation=lambda: obs,
+    )
+    detail = {
+        "reason": "unobserved_footprint",
+        "unknown_footprint_cells": 1,
+        "unknown_cell_offsets_frame": "world_xy_from_checked_pose",
+        "unknown_cell_offsets_m": [[0, 1]],
+    }
+    agent = SimpleNamespace(
+        robot=robot,
+        space=SimpleNamespace(is_valid=lambda p: False, last_validity=detail),
+        _last_nav_plan={"footprint": {"checked_pose": [0, 0, 0]}},
+    )
+
+    def capture(agent, pan_rad, tilt_rad):
+        assert -1 <= pan_rad <= 1
+        assert -1.4 <= tilt_rad <= -0.7
+        if in_frame:
+            obs.camera_pose = pose.copy()
+            obs.camera_pose[1, 3] = 1
+        return {"ok": True, "observation": {"footprint_after": {"pose_valid": False}}}
+
+    capture_mock = Mock(side_effect=capture)
+    monkeypatch.setattr(look, "observe_floor", capture_mock)
+    result = look.observe_blocked_floor(agent)
+    assert capture_mock.call_count == (1 if in_frame else 2)
+    assert result["observation"]["footprint_after"]["pose_valid"] is False
+    attempt = result["observation"]["targeted_floor"]["attempts"][-1]
+    assert attempt["after"]["target_in_frame"] is in_frame
+    if in_frame:
+        assert attempt["after"]["measured_depth_m"] == 0.4
+        assert attempt["after"]["reference_optical_depth_m"] == 1.0
+    assert "not clearance" in result["note"]
+    robot.head_to.assert_not_called()  # Only the existing capture primitive commands head motion.
+
+
 @pytest.mark.parametrize(
     "raw",
     [

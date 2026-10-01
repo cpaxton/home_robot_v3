@@ -1191,13 +1191,17 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def observe_floor(pan_rad: float | None = None, tilt_rad: float = -1.0) -> ToolOutcome:
+    def observe_floor(
+        pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False
+    ) -> ToolOutcome:
         from emet.controller.dynamem.look import observe_floor as capture_floor
 
         agent = _agent_from_context(context)
         if agent is None:
             return ToolOutcome(False, status="unavailable", note="Robot not connected.")
-        return ToolOutcome.from_eqa_dict("observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad))
+        return ToolOutcome.from_eqa_dict(
+            "observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker)
+        )
 
     tools.append(
         Tool(

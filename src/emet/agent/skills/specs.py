@@ -435,6 +435,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="observe_floor",
         modes=frozenset({AgentMode.CHAT}),
         description=(
+            "For a rejected unknown footprint, set target_blocker=true to aim at its missing region "
+            "with at most two bounded head captures (overrides pan/tilt). "
             "Look downward with the head without moving the base; update the map from fresh RGB-D. "
             "Use for insufficient_floor_coverage, or to check nearby floor after no_reachable_workspace. "
             "This does not guarantee clearance: replan after observing. Requires a movable head, "
@@ -447,6 +449,10 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         parameters={
             "type": "object",
             "properties": {
+                "target_blocker": {
+                    "type": "boolean",
+                    "description": "Aim at a currently unknown rejected-footprint cell.",
+                },
                 "pan_rad": {
                     "type": "number",
                     "minimum": -1.0,

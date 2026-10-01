@@ -56,12 +56,98 @@ def _rejected_footprint_status(agent, pose):
     }
 
 
-def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0) -> dict:
+def observe_blocked_floor(agent) -> dict:
+    """At most two bounded head captures aimed at one currently unknown cell.
+
+    The navigation grid uses a Z=0 floor reference. Projection is an aiming
+    hypothesis only: it never marks the cell free or certifies a route.
+    """
+    from emet.memory.graph_eqa.agentic.views import CapturedView, target_in_view
+
+    if not supports_floor_observation(agent):
+        return {"ok": False, "status": "unsupported_head_observation"}
+    plan = getattr(agent, "_last_nav_plan", None) or {}
+    pose = plan.get("footprint", {}).get("checked_pose")
+    checked = _rejected_footprint_status(agent, pose)
+    if checked is None:
+        return {"ok": False, "status": "missing_rejected_footprint"}
+    if checked["pose_valid"]:
+        return {
+            "ok": True,
+            "status": "checked_pose_valid_replan_required",
+            "observation": {
+                "checked_pose": pose,
+                "footprint_before": checked,
+                "footprint_after": checked,
+                "replan_required": True,
+            },
+            "note": "No new capture needed. Replan; route is not certified.",
+        }
+    detail = agent.space.last_validity
+    offsets = detail.get("unknown_cell_offsets_m", [])
+    if detail.get("reason") != "unobserved_footprint" or not offsets:
+        return {"ok": False, "status": "no_unknown_floor_target"}
+    if detail.get("unknown_cell_offsets_frame") != "world_xy_from_checked_pose":
+        return {"ok": False, "status": "unsupported_floor_target_frame"}
+    target = [pose[0] + offsets[0][0], pose[1] + offsets[0][1], 0.0]
+    if not np.isfinite(target).all():
+        return {"ok": False, "status": "invalid_floor_target"}
+    attempts = []
+    result = {"ok": False, "status": "floor_target_unobservable"}
+    for _ in range(2):
+        obs = agent.robot.get_observation()
+        if obs is None or obs.rgb is None:
+            break
+        view = CapturedView(0, 0, obs.rgb, obs.camera_pose, obs.camera_K)
+        projection = target_in_view(view, target)
+        if projection["status"] in {"missing_geometry", "behind_camera"}:
+            attempts.append(projection)
+            break
+        x, y, z = projection["target_camera_xyz"]
+        pan, tilt = agent.robot.get_pan_tilt()
+        pan = float(np.clip(pan + np.arctan2(-x, z), -1.0, 1.0))
+        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), -1.4, -0.7))
+        result = observe_floor(agent, pan_rad=pan, tilt_rad=tilt)
+        if not result.get("ok"):
+            break
+        obs = agent.robot.get_observation()
+        if obs is None or obs.rgb is None:
+            result["ok"] = False
+            result["status"] = "floor_target_projection_unavailable"
+            break
+        view = CapturedView(0, 0, obs.rgb, obs.camera_pose, obs.camera_K)
+        after = target_in_view(view, target)
+        depth = getattr(obs, "depth", None)
+        if after.get("target_in_frame") and depth is not None:
+            u, v = after["target_pixel_xy"]
+            sample = float(depth[int(v), int(u)])
+            after["measured_depth_m"] = sample if np.isfinite(sample) and sample > 0 else None
+            # A nearer return may be an occluder; the assumed floor height can
+            # also be wrong. Expose the measurement, not a free-space claim.
+            after["reference_optical_depth_m"] = float(after["target_camera_xyz"][2])
+        attempts.append({"requested_pan_tilt": [pan, tilt], "before": projection, "after": after})
+        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid") or after.get("target_in_frame"):
+            break
+    result.setdefault("observation", {})["targeted_floor"] = {
+        "target_world_xyz": target,
+        "floor_height_source": "navigation_zero_height_reference_not_measured_free_space",
+        "attempts": attempts,
+    }
+    result["note"] = (
+        result.get("note", "") + " Target projection is not clearance. If the footprint remains invalid, "
+        "choose another already-safe viewing pose or stop; do not repeat the same unhelpful view."
+    )
+    return result
+
+
+def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A
     successful capture updates the map, but does not guarantee a safe approach.
     """
+    if target_blocker:
+        return observe_blocked_floor(agent)
     if pan_rad is not None and (
         isinstance(pan_rad, bool)
         or not isinstance(pan_rad, (int, float))

@@ -392,7 +392,8 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         return text + "\nCurrent recovery observation: " + json.dumps(observation)
     text += "\nNavigation rejection: " + json.dumps(feedback)
     text += (
-        "\nStationary recovery tool: observe_floor. Choose bounded pan/tilt to inspect missing floor; "
+        "\nStationary recovery tool: observe_floor(target_blocker=true) aims at the missing footprint region. "
+        "Use this rather than guessing head angles; "
         "compare footprint_before/after. Change view or stop if unchanged. Replan before any motion; "
         "map growth elsewhere does not make the rejected footprint safe."
     )
