@@ -363,6 +363,12 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     from emet.controller.dynamem.look import supports_floor_observation
 
     text = _build_state_message(executor)
+    if getattr(executor, "_require_grounded_object", False):
+        text += (
+            "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
+            "an admitted object position is required. If grounding fails, inspect another view or explore. "
+            "A camera/viewpoint position is not an object position."
+        )
     agent = getattr(executor, "agent", None)
     if not supports_floor_observation(agent):
         return text
@@ -372,14 +378,25 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if feedback.get("outcome") != "rejected_swept_footprint:unobserved_footprint":
         return text
 
+    observation = getattr(executor, "_last_floor_observation", None)
+    same_attempt = getattr(
+        executor, "_floor_observation_nav_plan", None
+    ) is not None and executor._floor_observation_nav_plan is getattr(agent, "_last_nav_plan", None)
+    current = (observation or {}).get("observation", {}) if same_attempt else {}
+    if (observation or {}).get("ok") and current.get("footprint_after", {}).get("pose_valid"):
+        text += (
+            "\nPrevious navigation attempt was rejected for unknown floor. Fresh sensing has now made "
+            "that checked footprint valid. Retry investigate or explore through the normal planner; "
+            "do not repeat floor captures to resolve this old rejection. The route is NOT certified."
+        )
+        return text + "\nCurrent recovery observation: " + json.dumps(observation)
     text += "\nNavigation rejection: " + json.dumps(feedback)
     text += (
         "\nStationary recovery tool: observe_floor. Choose bounded pan/tilt to inspect missing floor; "
         "compare footprint_before/after. Change view or stop if unchanged. Replan before any motion; "
         "map growth elsewhere does not make the rejected footprint safe."
     )
-    observation = getattr(executor, "_last_floor_observation", None)
-    if observation is not None:
+    if observation is not None and same_attempt:
         text += "\nLast floor observation: " + json.dumps(observation)
     return text
 

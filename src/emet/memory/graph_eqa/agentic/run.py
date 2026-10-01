@@ -75,6 +75,7 @@ def run(self) -> AgenticEQAResult:
     self._pending_answerable = None
     self._verified = False
     self._verified_obs_id = None
+    self._grounded_obs_id = None
     self._voxel_score_xyz = None
     self._voxel_score_phrase = None
     self._voxel_score_from_pin = None

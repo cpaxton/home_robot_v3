@@ -52,6 +52,7 @@ def init_executor(
     collect_trace: bool | None = None,
     router: bool | None = None,
     require_verified: bool | None = None,
+    require_grounded_object: bool = False,
     mcq_debias: bool | None = None,
     close_look: bool | None = None,
     no_early_unverified: bool | None = None,
@@ -59,6 +60,7 @@ def init_executor(
     evidence_image: bool | None = None,
 ):
     self.agent = agent
+    self._require_grounded_object = bool(require_grounded_object)
     self.mode = "answer" if question else "explore"
     self.question = question or ""
     self.goal = goal or "explore the environment and update the map"
@@ -353,8 +355,10 @@ def _handle_finish(self, args: dict[str, Any]) -> dict[str, Any]:
 def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
     from emet.controller.dynamem.look import observe_floor
 
+    plan = getattr(self.agent, "_last_nav_plan", None)
     out = observe_floor(self.agent, pan_rad=args.get("pan_rad"), tilt_rad=args.get("tilt_rad", -1.0))
     self._last_floor_observation = out
+    self._floor_observation_nav_plan = plan
     self._append_trace({"tool": "observe_floor", **out})
     return out
 

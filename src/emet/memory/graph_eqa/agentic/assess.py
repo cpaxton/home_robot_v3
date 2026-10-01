@@ -535,6 +535,13 @@ def _run_vlm_view_assess(
             suggested_answer=assessment.suggested_answer,
             phrase=phrase,
         )
+    if confirmed and getattr(self, "_require_grounded_object", False):
+        from emet.memory.graph_eqa.agentic.views import ground_confirmed_view
+
+        ground_confirmed_view(self, oid, str(self._target_phrase or phrase or ""))
+        if getattr(self, "_grounded_obs_id", None) is None:
+            confirmed = False
+            confirm_reason = "object_localization_required"
     if confirmed:
         supporting_event_ids = tuple(
             item

@@ -50,6 +50,8 @@ def test_recovery_state_only_for_supported_unknown_footprint(monkeypatch):
     monkeypatch.setattr("emet.agent.tools.navigation_feedback", lambda agent: feedback)
     assert tools.build_state_message(executor(physical=False)) == "existing state"
     ex = executor()
+    ex.agent._last_nav_plan = {}
+    ex._floor_observation_nav_plan = ex.agent._last_nav_plan
     ex._last_floor_observation = {"footprint_after": {"unobserved_cells": 9}}
     text = tools.build_state_message(ex)
     assert "observe_floor" in text and '"missing_cells": 9' in text
@@ -61,6 +63,28 @@ def test_recovery_state_only_for_supported_unknown_footprint(monkeypatch):
     assert '"visibility": 17' in text
     assert "no motion executed" in text
     assert "Stationary recovery tool" not in text
+
+
+def test_resolved_rejection_is_historical_and_cannot_clear_new_attempt(monkeypatch):
+    monkeypatch.setattr(tools, "_build_state_message", lambda ex: "existing state")
+    feedback = {"outcome": "rejected_swept_footprint:unobserved_footprint"}
+    monkeypatch.setattr("emet.agent.tools.navigation_feedback", lambda agent: feedback)
+    ex = executor()
+    ex.agent._last_nav_plan = {"attempt": 1}
+    ex._floor_observation_nav_plan = ex.agent._last_nav_plan
+    ex._last_floor_observation = {
+        "ok": True,
+        "observation": {"footprint_after": {"pose_valid": True}},
+    }
+    text = tools.build_state_message(ex)
+    assert "Retry investigate or explore" in text
+    assert "route is NOT certified" in text
+    assert "Stationary recovery tool" not in text
+    ex.agent._last_nav_plan = {"attempt": 2}
+    text = tools.build_state_message(ex)
+    assert "Stationary recovery tool" in text
+    assert "Current recovery observation" not in text
+    assert "Last floor observation" not in text
 
 
 def test_floor_views_have_distinct_action_signatures():
