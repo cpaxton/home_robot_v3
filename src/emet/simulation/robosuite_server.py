@@ -2233,6 +2233,21 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._at_goal = False
             return True
 
+    def check_base_poses(self, poses):
+        """Check current-scene geometry on private data without moving the robot."""
+        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+        poses = np.asarray(poses, dtype=float)
+        if poses.ndim != 2 or poses.shape[1] != 3 or not 1 <= len(poses) <= 32 or not np.isfinite(poses).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        with self._mj_lock:
+            if self._mjmodel is None or self._mjdata is None:
+                raise RuntimeError("scene not ready")
+            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose)
+                        for pose in poses]
+            return {"poses": poses.tolist(), "clear": [not c for c in contacts], "contacts": contacts,
+                    "sim_time": float(self._mjdata.time), "scope": "base_endpoint_only"}
+
     def handle_action(self, action: dict[str, Any]):
         from emet.simulation.physical_execution import audit_physical_action
 
@@ -2530,6 +2545,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self._at_goal,
             "is_simulation": True,
+            "sim_base_pose_query": True,
             "lidar_points": None,
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
@@ -2627,6 +2643,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "is_homed": True,
             "is_runstopped": False,
             "is_simulation": True,
+            "sim_base_pose_query": True,
             "step": self._last_step,
             EMET_ZMQ_SIM_TIME_RATIO_KEY: self._physics_fps_counter.sim_to_real_ratio,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,

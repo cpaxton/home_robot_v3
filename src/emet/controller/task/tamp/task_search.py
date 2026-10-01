@@ -78,6 +78,20 @@ def approach_pose_for_object_xy(
     return np.array([float(xy[0]), float(xy[1]) + float(standoff), yaw], dtype=np.float64)
 
 
+def approach_candidates_for_object_xy(obj_xy, *, standoff=.55, mode="front", arm="left", count=16):
+    """Deterministic ring, starting at the historical +Y standoff; no scene-specific poses."""
+    xy = np.asarray(obj_xy, dtype=float).reshape(2)
+    if not np.isfinite(xy).all() or not np.isfinite(standoff) or standoff <= 0 or not 1 <= count <= 32:
+        raise ValueError("invalid approach candidate budget or geometry")
+    yaw0 = approach_yaw_for_mode(mode, arm)
+    poses = []
+    for offset in np.arange(count) * (2 * np.pi / count):
+        angle = np.pi / 2 + offset
+        yaw = np.arctan2(np.sin(yaw0 + offset), np.cos(yaw0 + offset))
+        poses.append(np.r_[xy + standoff * np.array([np.cos(angle), np.sin(angle)]), yaw])
+    return poses
+
+
 def _tamp_approach_mode_and_arm(robot: Any, executor: Any | None) -> tuple[str, str]:
     spec = getattr(robot, "_spec", None)
     if spec is None and executor is not None:
@@ -215,50 +229,60 @@ def plan_pick_place(
         approach = np.asarray(approach_pose, dtype=float)
         if approach.shape != (3,) or not np.isfinite(approach).all():
             raise ValueError("Approach pose must be finite XYT")
-    expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
-    if approach_validator is not None and not approach_validator(approach.copy()):
-        return TaskPlan(
-            steps=[],
-            object_body=object_gt_body,
-            receptacle_body=receptacle_gt_body,
-            expanded_nodes=expanded,
-            success=False,
-            message="approach_route_invalid",
-        )
+    poses = [approach]
+    state = getattr(robot, '_state', None)
+    use_scene_query = isinstance(state, dict) and state.get('sim_base_pose_query') is True
+    if use_scene_query and approach_pose is None:
+        poses = approach_candidates_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+    clear = [True] * len(poses)
+    if use_scene_query:
+        try:
+            evidence = robot.check_base_poses(poses)
+            clear = evidence['clear']
+            if len(clear) != len(poses) or any(type(value) is not bool for value in clear):
+                raise ValueError('invalid clearance response')
+        except (RuntimeError, TimeoutError, ValueError, KeyError) as exc:
+            return TaskPlan([], object_gt_body, receptacle_gt_body, success=False,
+                            message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
-    if executor is not None and executor._ensure_model():
-        _sync_executor_base_to_xyt(executor, approach)
-        scores = rank_grasps_by_ik(
-            executor._model,
-            executor._data,
-            ee_body=executor.ee_body,
-            joint_names=executor.joint_names,
-            grasp_poses=grasp_poses,
-            top_k=top_k_grasps,
-        )
-        for idx, err, ok in scores:
-            expanded.append(f"grasp[{idx}] err={err:.3f} reachable={ok}")
-        for idx, _err, ok in scores:
-            if ok:
-                chosen = idx
-                break
-        if chosen is None:
-            return TaskPlan(
-                steps=[],
-                object_body=object_gt_body,
-                receptacle_body=receptacle_gt_body,
-                grasp_scores=scores,
-                chosen_grasp_index=None,
-                expanded_nodes=expanded,
-                success=False,
-                message="no_reachable_grasp",
+    have_model = executor is not None and executor._ensure_model()
+    if have_model:
+        sync = getattr(executor, '_sync_base_freejoint', None)
+        if callable(sync):
+            sync()  # retain measured base height while probing world XYT
+    failure_reason = "no_grasp_candidates"
+    for candidate_index, (candidate, is_clear) in enumerate(zip(poses, clear, strict=True)):
+        if not is_clear:
+            failure_reason = 'approach_collision'
+            expanded.append(f'approach[{candidate_index}] collision')
+            continue
+        if approach_validator is not None and not approach_validator(candidate.copy()):
+            failure_reason = 'approach_route_invalid'
+            expanded.append(f'approach[{candidate_index}] route_invalid')
+            continue
+        approach = candidate
+        if have_model:
+            _sync_executor_base_to_xyt(executor, approach)
+            scores = rank_grasps_by_ik(
+                executor._model, executor._data, ee_body=executor.ee_body,
+                joint_names=executor.joint_names, grasp_poses=grasp_poses, top_k=top_k_grasps,
             )
-    elif grasp_poses:
-        chosen = 0
-        scores = [(i, float("inf"), True) for i in range(min(len(grasp_poses), top_k_grasps))]
-        expanded.append("ik_rank_skipped")
+            chosen = next((idx for idx, _err, ok in scores if ok), None)
+        elif grasp_poses:
+            chosen = 0
+            scores = [(i, float('inf'), True) for i in range(min(len(grasp_poses), top_k_grasps))]
+            expanded.append('ik_rank_skipped')
+        if chosen is not None:
+            expanded.append(f'approach[{candidate_index}] selected@{approach.tolist()} mode={mode} arm={arm}')
+            if use_scene_query:
+                logger.info(f'TAMP approach selection: candidate={candidate_index}/{len(poses)} '
+                            f'body={object_gt_body!r} pose={approach.tolist()} '
+                            f'collision_rejections={sum(not value for value in clear)}')
+            break
+        failure_reason = 'no_reachable_grasp' if grasp_poses else 'no_grasp_candidates'
+        expanded.append(f'approach[{candidate_index}] {failure_reason}')
 
     if chosen is None:
         return TaskPlan(
@@ -267,7 +291,7 @@ def plan_pick_place(
             receptacle_body=receptacle_gt_body,
             grasp_scores=scores,
             success=False,
-            message="no_grasp_candidates",
+            message=failure_reason,
             expanded_nodes=expanded,
         )
 
