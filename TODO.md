@@ -22,8 +22,11 @@ Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execut
 - [x] Execute preselected alternative approaches: three fresh-process repeats
       pass (3/3 full cleanups, 9/9 relocations, 54/54 arm arrivals), assisted latch
       only. See `docs/experiments/tamp_approach_validation_20261001.md`.
-- [ ] Integrate autonomous alternative-approach selection; verify arm collision geometry
-      and payload sweeps, then rerun full tasks before resuming latch expansion.
+- [x] Integrate online alternative-approach selection with read-only collision queries:
+      139 regression tests pass; three fresh MCTS repeats score 2/3 full tasks and
+      7/9 relocations. See `docs/experiments/tamp_auto_approaches_20261001.md`.
+- [ ] Diagnose residual apple tracking and kettle invalid-start failures; verify arm
+      collision geometry and payload sweeps before resuming broader latch expansion.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,
       observations and action budgets; do not label scripted/GT controls as agent results.
 
