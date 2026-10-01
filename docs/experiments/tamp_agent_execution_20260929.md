@@ -146,3 +146,9 @@ IK accuracy (`a2394a2b`, replay source `6665220e`) while retaining 35 mm measure
 acceptance completes the kettle relocation: **1/3 objects, 0/1 full tasks**.
 Alternative-approach selection remains the next gate. See the contact report
 for both managed jobs and the static candidate audit.
+
+October 1: [executed alternative approaches](tamp_approach_validation_20261001.md)
+passed three predeclared fresh-process repeats of scene00 cleanup: **3/3 full
+tasks, 9/9 relocations, 54/54 measured arm motions**. This uses preselected GT
+approaches through an explicit adapter; autonomous approach selection and
+physical grasp acceptance remain unproven. Historical corpus scores are unchanged.

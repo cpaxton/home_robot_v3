@@ -19,7 +19,10 @@ Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execut
       See `docs/experiments/tamp_contact_tracking_20260930.md`.
 - [x] Retry repaired execution: kettle relocation passes after reserving IK
       tracking margin; latest case is 1/3 objects, 0/1 full tasks (latch control).
-- [ ] Search collision-free alternative approaches; verify arm collision geometry
+- [x] Execute preselected alternative approaches: three fresh-process repeats
+      pass (3/3 full cleanups, 9/9 relocations, 54/54 arm arrivals), assisted latch
+      only. See `docs/experiments/tamp_approach_validation_20261001.md`.
+- [ ] Integrate autonomous alternative-approach selection; verify arm collision geometry
       and payload sweeps, then rerun full tasks before resuming latch expansion.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,
       observations and action budgets; do not label scripted/GT controls as agent results.
