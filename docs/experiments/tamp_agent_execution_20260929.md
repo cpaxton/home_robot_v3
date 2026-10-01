@@ -139,3 +139,10 @@ The endpoint guard rejects both invalid poses, and solver-based stationary
 support reduces the clear kettle tracking error from 34.10 mm to 3.49 mm in a
 reconstructed scene. The 102-test regression slice passes. Alternative approach
 search and fresh full-task/agent runs remain outstanding; scores are unchanged.
+
+Live paired replay update: `4b512ffe` safely rejects the two wall approaches and
+reaches the kettle grasp, but misses lift arrival by 1.1 mm. Tightening internal
+IK accuracy (`a2394a2b`, replay source `6665220e`) while retaining 35 mm measured
+acceptance completes the kettle relocation: **1/3 objects, 0/1 full tasks**.
+Alternative-approach selection remains the next gate. See the contact report
+for both managed jobs and the static candidate audit.

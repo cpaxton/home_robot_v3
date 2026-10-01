@@ -17,6 +17,8 @@ Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execut
 - [x] Diagnose RBY1 tracking: wall-intersecting approaches and floating-base pose
       reset artifact; endpoint rejection and solver support validated by 102 tests.
       See `docs/experiments/tamp_contact_tracking_20260930.md`.
+- [x] Retry repaired execution: kettle relocation passes after reserving IK
+      tracking margin; latest case is 1/3 objects, 0/1 full tasks (latch control).
 - [ ] Search collision-free alternative approaches; verify arm collision geometry
       and payload sweeps, then rerun full tasks before resuming latch expansion.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,

@@ -101,3 +101,32 @@ not full robot arm collision coverage. Full TAMP acceptance still requires
 appropriate arm geometry, swept paths, payload checks, a complete shared-agent
 rollout, and fresh full-task trials. No physical or learned-agent success gain
 is claimed by this diagnostic.
+
+## Live replay after repair
+
+Job `20260930_231839_57fd7c`, immutable source `4b512ffe`, replayed original
+scene00 cleanup slot 0 on the original r3 harness. Outputs are in
+`contact-replay-r8/` under the same durable root. It completed with **0/1 full
+tasks**. Both wall-intersecting approaches now fail before movement, with the
+same 6.90 cm / 27.21 cm penetration evidence. The kettle advances through
+pregrasp (30.75 mm measured error) and grasp (34.88 mm), then rejects lift at
+36.07 mm versus the unchanged 35 mm limit.
+
+FK of the three commanded targets has residuals 29.23, 28.59 and 29.58 mm.
+The lift plan therefore left only about 5.4 mm for execution error. Follow-up
+`a2394a2b` tightens the internal IK tolerance to `min(10 mm, arrival_tol / 4)`
+while preserving measured acceptance. The 40-test affected regression slice
+passes. Paired job `20260930_232300_561b86`, source `6665220e`, is testing this
+change in `ik-margin-r9/`; it is terminal with **1/3 objects relocated and
+0/1 full tasks**. The kettle completed approach, grasp, lift and placement with
+measured arrival checks. Potato and apple failed only at their rejected
+wall-intersecting approaches. This is kinematic-latch control success for one
+object, not a physical grasp or full-agent success.
+
+A static audit of sixteen 55 cm standoff directions found seven clear and
+position-IK-reachable potato approaches, nine apple approaches, and eleven
+kettle approaches. These are possibilities for alternative approach search,
+not executed or fully collision-certified solutions. The audit and source are
+archived as `contact-replay-r8/alternative_approaches.json` and
+`audit_alternative_approaches.py`. Neither replay changes historical scores or
+establishes renewed fixture admission under the stricter controller.
