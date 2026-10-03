@@ -122,16 +122,23 @@ def decide_close_look(
     attempts: int,
     is_chat: bool = False,
     max_attempts: int | None = None,
+    confirmed: bool = True,
 ) -> CloseLookDecision:
     """Policy: stay while unresolved and reachable; escape when stuck.
 
     Chat / agent mode uses a tighter attempt cap so the robot can leave
     unreachable furniture instead of orbiting forever.
+
+    ``confirmed`` gates the geometric ``resolved`` state on the target actually
+    being located/verified this approach. An imprecise retrieval proposal can
+    land the robot close to a hit cell while the object itself is still out of
+    range, so without confirmation we keep approaching (or escape) rather than
+    mark the place resolved.
     """
     cap = close_map_escape_attempts(is_chat=is_chat, override=max_attempts)
     if query is None:
         return CloseLookDecision(stay=False, escape=False, reason="no_map")
-    if query.resolved:
+    if query.resolved and confirmed:
         return CloseLookDecision(stay=False, escape=False, reason="resolved", query=query)
     if nav_blocked:
         return CloseLookDecision(stay=False, escape=True, reason="escape_unreachable", query=query)

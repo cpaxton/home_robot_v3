@@ -73,6 +73,27 @@ def test_decide_close_look_stays_until_resolved_or_exhausted() -> None:
     assert done.reason == "resolved"
 
 
+def test_decide_close_look_requires_confirmation_to_resolve() -> None:
+    q = CloseLookQuery(
+        x=0.0,
+        y=0.0,
+        radius_m=0.35,
+        n_hit_cells=2,
+        n_resolved_cells=1,
+        min_cam_dist_m=0.4,
+        aimed_hit=True,
+        resolved=True,
+    )
+    # Geometrically resolved but the target was not located this approach:
+    # keep approaching instead of marking the place done.
+    unconfirmed = decide_close_look(q, approaches_left=3, nav_blocked=False, attempts=0, confirmed=False)
+    assert unconfirmed.stay is True and unconfirmed.escape is False
+
+    # Once approaches are exhausted, still escape even when unconfirmed.
+    exhausted = decide_close_look(q, approaches_left=0, nav_blocked=False, attempts=4, confirmed=False)
+    assert exhausted.escape is True
+
+
 def test_close_distance_map_aimed_near_hit_is_resolved() -> None:
     cm = _map()
     pose = _pose_looking_plus_x()

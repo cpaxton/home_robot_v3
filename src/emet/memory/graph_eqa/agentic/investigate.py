@@ -51,6 +51,7 @@ def _decide_close_look(
     nav_blocked: bool,
     increment: bool = False,
     hyp: NavHypothesis | None = None,
+    confirmed: bool = True,
 ) -> CloseLookDecision:
     oid = int(obs_id)
     if increment:
@@ -63,6 +64,7 @@ def _decide_close_look(
         nav_blocked=bool(nav_blocked),
         attempts=int(self._close_map_attempts.get(oid, 0)),
         is_chat=False,
+        confirmed=confirmed,
     )
 
 
@@ -102,10 +104,11 @@ def _apply_close_map_after_approach(
     *,
     hyp: NavHypothesis | None,
     nav_blocked: bool,
+    confirmed: bool = True,
 ) -> CloseLookDecision:
     """Increment approach count, stay/escape, and write a close_map trace row."""
     oid = int(obs_id)
-    decision = self._decide_close_look(oid, nav_blocked=nav_blocked, increment=True, hyp=hyp)
+    decision = self._decide_close_look(oid, nav_blocked=nav_blocked, increment=True, hyp=hyp, confirmed=confirmed)
     rec = self._place_inspect.get(oid) or PlaceInspectRecord()
     rec.close_map_reason = str(decision.reason)
     rec.close_map_resolved = bool(decision.query.resolved) if decision.query is not None else None
@@ -501,7 +504,11 @@ def _tool_investigate(
         approach_index=next_ap,
     )
     rec = self._refresh_place_coverage(oid)
-    close_map = self._apply_close_map_after_approach(oid, hyp=hyp, nav_blocked=False)
+    # A voxel close-map "resolved" only counts when the query candidate was
+    # actually located this approach; otherwise keep approaching so the region
+    # selector gets a closer view instead of forcing an absence answer.
+    confirmed = (not query_candidate) or (bool(grounding) and bool(grounding.get("ok")))
+    close_map = self._apply_close_map_after_approach(oid, hyp=hyp, nav_blocked=False, confirmed=confirmed)
     rec = self._place_inspect.get(oid) or rec
     self._maybe_retract_claim_after_station(
         oid,
