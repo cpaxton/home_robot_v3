@@ -453,3 +453,58 @@ def test_target_boost_phrases_expand_fixture_labels():
     assert "cab" in low
     assert "cabinet" in low
     assert "toaster" not in low
+
+
+def test_target_boost_phrases_drop_narrative_ngrams_for_extracted_target():
+    """EQA q25: the VLM target is 'towels'; heuristic n-grams must not resurrect
+    first-person narrative phrases ('going shower now', 'now need grab') as
+    voxel proposals."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.get_nodes = MagicMock(return_value=[])
+
+    question = (
+        "I am going to shower now. I need to grab some towels. "
+        "A) There are none in the bathroom B) There is only one in the bathroom "
+        "C) There are already some in the bathroom D) There are some in the bedroom. Answer:"
+    )
+    ex = AgenticEQAExecutor(agent, question=question, max_rounds=4, max_nav_steps=4, router=False)
+    ex._target_phrase = "towels"
+    low = {p.lower() for p in ex._target_boost_phrases()}
+    assert "towels" in low
+    assert "going shower now" not in low
+    assert "now need grab" not in low
+
+
+def test_target_boost_phrases_drop_room_context_glue():
+    """EQA q2/q12: object+room n-grams ('rug shower bathroom', 'many bedside
+    tables') are location context, not the object; the heuristic must not emit
+    them as retrieval phrases while keeping attribute compounds like
+    'large wall clock'."""
+    from unittest.mock import MagicMock
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    def boost(target, question):
+        agent = MagicMock()
+        agent.graph_memory = MagicMock()
+        agent.graph_memory.get_nodes = MagicMock(return_value=[])
+        ex = AgenticEQAExecutor(agent, question=question, max_rounds=4, max_nav_steps=4, router=False)
+        ex._target_phrase = target
+        return {p.lower() for p in ex._target_boost_phrases()}
+
+    rug = boost(
+        "rug",
+        "Which rug is at the shower in the bathroom, one in the bedroom? A) Dark blue B) Black C) Gray D) White. Answer:",
+    )
+    assert "rug" in rug
+    assert "rug shower bathroom" not in rug
+    assert "shower bathroom" not in rug
+
+    clock = boost("large wall clock", "I'm trying to remember where I placed the large wall clock. Where is it?")
+    assert "large wall clock" in clock
+    assert "wall clock" in clock

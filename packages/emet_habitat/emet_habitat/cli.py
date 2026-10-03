@@ -247,6 +247,7 @@ def _ovmm_find_cli_options(fn):
 
 @main.command("run-episode")
 @click.option("--query-driven-memory", is_flag=True, help="Experimental lazy query grounding; enables agentic EQA.")
+@click.option("--seed", type=int, default=None, help="Seed Python, NumPy and Torch for a paired EQA run.")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
 @click.option(
@@ -299,6 +300,7 @@ def _ovmm_find_cli_options(fn):
 @_diagnostics_cli_options
 def run_episode(
     query_driven_memory: bool,
+    seed: int | None,
     dataset: str,
     question_id: int,
     method: str,
@@ -346,6 +348,7 @@ def run_episode(
     try:
         metrics = run_hmeqa_episode(
             query_driven_memory=query_driven_memory,
+            seed=seed,
             question_id=question_id,
             method=method,
             mock_llm=mock_llm,

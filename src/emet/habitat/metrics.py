@@ -54,6 +54,7 @@ class EpisodeMetrics:
     success: bool
     parsed_answer_letter: str = ""
     query_driven_memory: bool = False
+    seed: int | None = None
     model_confident: bool = False
     raw_eqa_output: str = ""
     # Debug / reproducibility (full raw EQA also in per-episode bundle ``raw_eqa.txt``).

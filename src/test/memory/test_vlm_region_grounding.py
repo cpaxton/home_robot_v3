@@ -74,6 +74,49 @@ def test_missing_client_is_not_semantic_absence():
         select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "mug", "mug", client=None)
 
 
+def test_grounding_prompt_locates_query_only_not_question():
+    from emet.memory.vlm_region_grounding import select_vlm_region
+
+    question = "Which of the following is in the bathroom? A) towels B) toilet C) shower D) sink"
+    client = Mock(return_value='{"verified":true,"box":[200,200,800,800],"point":[500,500]}')
+    _, audit = select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "towels", question, client=client)
+    prompt = audit["prompt"]
+    assert "Locate the visible object 'towels'" in prompt
+    assert question not in prompt
+    assert "Verification context" not in prompt
+    assert "relationship" not in prompt
+
+
+def test_box_only_grounding_prompt_locates_query_only_not_question():
+    from emet.memory.vlm_region_grounding import select_vlm_region
+
+    question = "Which of the following is in the bathroom? A) towels B) toilet C) shower D) sink"
+    client = Mock(return_value='{"verified":true,"box":[200,200,800,800]}')
+    _, audit = select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "towels", question, client=client, box_only=True)
+    prompt = audit["prompt"]
+    assert "Locate the visible object 'towels'" in prompt
+    assert question not in prompt
+    assert "Verification context" not in prompt
+    assert "Do not predict a 3D position" in prompt
+
+
+def test_grounding_prompt_ignores_description():
+    from emet.memory.vlm_region_grounding import select_vlm_region
+
+    client = Mock(return_value='{"verified":true,"box":[200,200,800,800],"point":[500,500]}')
+    _, audit = select_vlm_region(np.zeros((8, 8, 3), dtype=np.uint8), "mug", "mug on the bed", client=client)
+    assert "Locate the visible object 'mug'" in audit["prompt"]
+    assert "on the bed" not in audit["prompt"]
+
+
+def test_grounding_target_returns_query_only():
+    from emet.memory.vlm_region_grounding import _grounding_target
+
+    assert _grounding_target("towels", "Which of the following is in the bathroom? A) towels B) toilet") == "towels"
+    assert _grounding_target("mug", "mug") == "mug"
+    assert _grounding_target("", "fallback phrase") == "fallback phrase"
+
+
 def test_shared_vlm_uses_explicit_grounding_prompt_and_budget():
     from unittest.mock import Mock
 

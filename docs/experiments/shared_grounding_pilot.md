@@ -1,5 +1,150 @@
 # Shared grounding: bounded cross-task pilot
 
+## EQA startup restoration (September 15)
+
+All six `staged-pregrasp-eqa-20260915` cases abort with exit 134 before answering:
+`GL::Context: cannot retrieve OpenGL version`. These are infrastructure failures,
+not 0/6 accuracy. A bare Habitat probe passes, while importing MuJoCo first or
+importing the full EQA runner reproduces the native abort. OpenCV, Torch and
+Open3D individually do not reproduce it (serial import-isolation job
+`20260915_153108_5a8419`). The September 13 A* change `89581c70` imports shared
+grid helpers through `base_goal_rank` → `voxel_arm_collision`, unintentionally
+initializing MuJoCo's GL backend inside Habitat.
+
+`5d299c9d` defers MuJoCo to the actual FK call; grid/navigation imports no longer
+initialize it. `fdb441a9` adds a full-runner-import plus real-scene rendering
+preflight before the batch's model checks and episodes. Import-boundary and
+on-demand MuJoCo FK regressions pass; broad suite **607 passed / 4 skipped**.
+Full-stack rendering passes in `20260915_153330_611847` without package, driver,
+model, or renderer-configuration changes.
+
+EQA retry `20260915_153507_23eb03` freezes `fdb441a9` in `/tmp/emet-reach-eval`,
+writing `~/runs/emet/eqa-restored-20260915`. Same q15/16/25, hybrid/Qwen-box
+presets, Qwen int4, 20 planning/10 movement steps, no semantic/enriched hints,
+and map/video exports. All six processes finish with exit zero:
+
+| Preset | q15 / q16 / q25 | Correct | Wall seconds |
+| --- | --- | --- | --- |
+| Hybrid | correct / correct / wrong | 2/3 | 70 / 39 / 94 |
+| Qwen-box | correct / correct / wrong | 2/3 | 34 / 45 / 39 |
+
+Both match the September 11 aggregate 2/3, but Qwen-box changes which answers
+are correct (q15 improves, q25 worsens). These are matched questions/settings,
+not seeded causal pairs; do not claim per-question no regression. Runtime
+restoration is established, not a complete answer-quality gate. Manual inspection
+of hybrid q16's cited `eqa_decisions/iter_001/image_4.png` shows the blue item on
+the sofa beside the painting. Both q15 answers score correctly but infer "No"
+from not seeing the requested objects. Both current q25 outputs lack confirmed
+bathroom evidence and still submit an answer; preserve this exploration/evidence
+limitation separately from the repaired native startup crash. The two commits are separate
+from manipulation changes so the merge-critical startup repair can be reviewed
+independently.
+
+## September 15 staged pregrasp and forward reacquisition pilot (running)
+
+Frozen `0ecc0aa9` combines `31d1002b` (complete an upward pregrasp lift before
+extension; hold base/wrist/extension during that stage and stop if it fails)
+with forward-view arrival verification before the existing fallback sweep.
+Candidate identity and fresh visual acceptance remain required. Neither change
+introduces a scene-specific clearance, weaker success threshold, or larger
+timeout. Broad checks: **598 passed / 4 skipped**. Review: PR #169, stacked on
+#167. This is not general collision planning or completed cross-task acceptance.
+
+All jobs share the exclusive GPU lock and safe CPU affinity, with a frozen
+evaluation checkout and new output directories:
+
+| Case | Job | Artifacts under `~/runs/emet/` |
+| --- | --- | --- |
+| Molmo same wheel-priority fixture | `20260915_084618_0fc1f5` | `staged-pregrasp-20260915/molmo` |
+| Original tabletop control | `20260915_084622_88d93c` | `staged-pregrasp-20260915/tabletop` |
+| Native RoboCasa can | `20260915_084626_fc3604` | `staged-pregrasp-20260915/can-native` |
+| Explicit RoboCasa NoSlip=10 control | `20260915_084630_7e774e` | `staged-pregrasp-20260915/can-noslip` |
+| EQA q15/16/25, hybrid and Qwen-box presets | `20260915_084704_ce9c77` | `staged-pregrasp-eqa-20260915` |
+
+Results are pending. Simulator cases use the existing tracked-narrow preset;
+the EQA rerun retains the earlier comparison's two presets, int4 Qwen, budgets,
+and semantic-label exclusions. It is a matched-question historical comparison,
+not a same-seed causal test or the complete four-row acceptance matrix. Maps,
+videos and grounding evidence are enabled. Learned TAMP remains gated on the
+room manipulation checks; no oracle battery result substitutes for that gate.
+
+First result: Molmo on `0ecc0aa9` completes the staged pregrasp and reaches
+visual servoing, clearing the earlier counter-front obstruction. It still
+fails pickup/place (verified F/F, 356 wall seconds): the end effector remains
+about 0.28 m short of the tomato while the arm approaches its extension limit.
+The last-state audit finds no fingertip contacts; arm joints are about
+0.123 m each against 0.13 m limits. The viewing pose is beyond the existing
+grasp workspace's upper radial bound, but the handoff previously checked only
+minimum distance. This is not permission to enlarge arm limits or skip motion
+confirmation.
+
+Follow-up `6a1579e4` checks both workspace bounds and uses the existing
+collision-checked relocation planner, retaining the low-target feasible-IK
+exception and rejecting measured arrivals still outside the workspace. Broad
+checks: **600 passed / 4 skipped**. Frozen independently in
+`/tmp/emet-reach-eval`; queued exact Molmo `20260915_085532_ac9ef2` and tabletop
+`20260915_085536_b4353a` write under `~/runs/emet/workspace-handoff-20260915`.
+Their live results are pending. The earlier queue, including EQA, remains on
+`0ecc0aa9` without this manipulation-only follow-up; no running source changes.
+
+## Wheel-contact candidate: first turn repaired; approach-monitor bug exposed
+
+`52bebc6d` on `fix/room-wheel-contact-profile` gives only Stretch's drive-wheel
+collision shapes material priority 1, consistent with the existing caster and
+pad profiles. Four compiled contact tests cover both wheels on tabletop and
+high-torsion room floors; broad checks pass **593 / 4 skipped**. This changes
+contact parameter mixing, not just one friction coefficient. No floor geometry,
+solver setting, policy parameter, or success threshold changes.
+
+Exact Molmo retry `20260914_235619_0e73b1` uses a separately archived fixture
+under `~/runs/emet/molmo-wheel-contact-20260915/fixture`; its manifest and freezer
+verify two changed wheel priorities and unchanged masses, inertias, poses,
+friction arrays, and NoSlip=4. Original artifacts remain intact. Tabletop control
+`20260914_235634_4df8bf` queues on the same exclusive GPU lock and retains its
+explicit NoSlip=10. Both run frozen source `52bebc6d`, Qwen int4, tracked-narrow,
+and lazy graph. The room retry fails physical pickup/place (verified): it passes
+the formerly blocked first turn, then stops at waypoint 2 with XY error 0.024 m
+and yaw error 0.730 rad. The trace shows continued translation into the inner
+approach radius, not an immobile robot. The monitor ignores XY improvement
+once the previous error is within its outer 0.07 m tolerance. `4c08782d` removes
+that progress gate without changing arrival tolerances, stall windows, or
+deadlines; valid inner-approach and stationary wrong-heading tests pass, with
+**595 broad tests passed / 4 skipped**.
+The wheel-only tabletop control **passes verified physical pickup/place**; its
+final reconstruction shows the cylinder upright on the block with the gripper
+withdrawn. This is one positive control, not a new six-case panel. Same-fixture
+room retry `20260915_000525_17f117` runs `4c08782d` under
+`~/runs/emet/molmo-wheel-contact-20260915/progress-fix-policy`.
+
+Explicit RoboCasa solver control `20260915_000550_b5b250` queues behind it on
+the same exclusive lock, using `4c08782d` and an archived fixture under
+`~/runs/emet/room-can-noslip-control-20260915`. Only NoSlip iterations change
+from 0 to 10; the native frozen wheel priorities and all object parameters are
+retained. This tests the recorded-control retention hypothesis with the learned
+agent; it is **not native-physics room acceptance**.
+
+The progress-fix room retry completes navigation and arm-facing alignment,
+then fails the separated pregrasp approach (237 wall seconds, verified F/F).
+The arm's commanded lift/extension are 0.885/0.333 m; the final measured values
+are about 0.786/0.099 m. A non-integrating frozen-state contact audit finds both
+finger pads pressing against the island front (individual recomputed normal
+forces up to about 35 N). This is a real obstructed simultaneous raise/extend
+motion, not grounds for increasing timeouts or force limits. The audit script
+and output are retained in `progress-fix-policy/replay/arm_contact_audit.*`;
+forces are recomputed diagnostics, not recorded force telemetry. Next test is
+staged pregrasp motion before considering general clearance planning. Navigation
+completion is not room-task acceptance; no pickup occurred.
+
+The explicit RoboCasa solver control stops before grasping (77 wall seconds,
+verified F/F): after navigation, head-sweep reacquisition selects the other can
+in the sink, then the target-ambiguity gate rejects pickup. Saved images confirm
+that the sink view is not the originally selected counter can. The generic
+instruction "can" is also underspecified in this multi-can fixture. Thus this
+rollout is **inconclusive about retention**, not evidence that NoSlip=10 repairs
+or fails physical grasp. Preserve it and audit target-directed reacquisition
+and task identity before another learned retention comparison. Shutdown EGL
+and manager errors remain visible in the log and are not task-success evidence.
+
 ## Room follow-up: retention handoff repaired; room acceptance still pending
 
 The native-physics RoboCasa can case fails physical pickup and times out on

@@ -15,23 +15,50 @@ from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 
 @pytest.mark.parametrize("fresh,accepted", [(True, True), (True, False), (False, True)])
-def test_query_arrival_requires_new_frame_and_verifier_acceptance(fresh, accepted):
+def test_query_arrival_requires_new_frame_and_verifier_acceptance(fresh, accepted, monkeypatch):
     agent = object.__new__(LazyGraphController)
+    agent.robot = Mock()
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", Mock())
     agent.voxel_map = SimpleNamespace(observations=[object()])
     agent.ground_query_view = Mock(return_value={"ok": accepted, "xyz": [1, 2, 3]})
 
-    def scan(*, on_observation):
+    def update(**kwargs):
         if fresh:
             agent.voxel_map.observations.append(object())
-        return on_observation()
 
-    agent.look_around = scan
+    agent.update = update
+    agent.look_around = Mock(side_effect=lambda *, on_observation: on_observation())
     result = agent.verify_query_arrival("cup")
+    assert agent.look_around.call_count == (0 if fresh and accepted else 1)
     assert (result is not None) is (fresh and accepted)
     if fresh:
         agent.ground_query_view.assert_called_once_with("cup", source_obs_id=2, target_description="cup")
     else:
         agent.ground_query_view.assert_not_called()
+
+
+def test_arrival_checks_forward_view_before_sweep_and_preserves_candidate(monkeypatch):
+    agent = object.__new__(LazyGraphController)
+    agent.robot = Mock()
+    agent.voxel_map = SimpleNamespace(observations=[object()])
+    agent.graph_memory = SimpleNamespace(query_candidates=SimpleNamespace(records={7: SimpleNamespace(query="cup")}))
+    agent.ground_query_candidate = Mock(side_effect=[{"ok": False}, {"ok": True, "xyz": [1, 2, 3]}])
+    events = []
+    agent.robot.look_front.side_effect = lambda: events.append("front")
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **kw: events.append("fresh"))
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(object()))
+
+    def sweep(*, on_observation):
+        events.append("sweep")
+        assert agent.ground_query_candidate.call_count == 1
+        agent.update(full_perception=True)
+        return on_observation()
+
+    agent.look_around = sweep
+    np.testing.assert_array_equal(agent.verify_query_arrival("cup", candidate_handle=7), [1, 2, 3])
+    assert events == ["front", "fresh", "sweep"]
+    assert [call.args for call in agent.ground_query_candidate.call_args_list] == [(7,), (7,)]
+    assert [call.kwargs["after_observation"] for call in agent.ground_query_candidate.call_args_list] == [1, 2]
 
 
 def controller():

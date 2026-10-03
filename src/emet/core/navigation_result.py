@@ -107,9 +107,10 @@ class ArrivalMonitor:
             self.progress = (now, xy, yaw)
         elif now - self.progress[0] >= policy.progress_seconds:
             _, old_xy, old_yaw = self.progress
-            improved = (old_xy > policy.xy_tolerance and old_xy - xy >= 0.01) or (
-                old_yaw > policy.yaw_tolerance and old_yaw - yaw >= 0.02
-            )
+            # Controllers may approach inside the acceptance radius before
+            # switching to final heading. That motion is still progress;
+            # gating it on old_xy being outside rejects valid phase handoffs.
+            improved = old_xy - xy >= 0.01 or old_yaw - yaw >= 0.02
             if not improved and not inside:
                 return "failed", {**result, "reason": "navigation stalled"}
             self.progress = (now, xy, yaw)

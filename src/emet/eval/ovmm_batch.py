@@ -70,6 +70,7 @@ class OvmmBatchOptions:
     agentic_max_rounds: int | None = None
     agentic_max_nav_steps: int | None = None
     mapping_rotate_steps: int | None = None
+    seed: int | None = None
     manip_mode: str | None = None
     full: bool = False
     # TAMP floor suite: run only episodes with floor_object=True.
@@ -230,6 +231,7 @@ def run_ovmm_batch(opts: OvmmBatchOptions, *, repo_root: Path | None = None) -> 
                 explore_steps_override=mapping_override,
                 use_scene_cache=not opts.no_scene_cache,
                 manip_mode=manip,
+                seed=opts.seed,
             )
             tag = f"{ep.id}_{backend}"
             ep_dir = output_dir / tag

@@ -69,3 +69,23 @@ def test_stalled_motion_has_fresh_telemetry_but_no_progress():
     for i in range(10):
         assert update(m, i * 0.5, (1, 0, 0), stopped=False) is None
     assert update(m, 5, (1, 0, 0), stopped=False)[1]["reason"] == "navigation stalled"
+
+
+def test_approach_inside_acceptance_radius_counts_before_final_heading():
+    m = ArrivalMonitor({"resolved_goal": [0, 0, 0]}, "exploration", now=0)
+    # Approach toward the controller's inner XY threshold while holding the
+    # travel heading, which need not improve final-yaw error yet.
+    for i in range(11):
+        assert update(m, i * 0.5, (0.065 - i * 0.004, 0, 0.7), stopped=False) is None
+    for i in range(1, 11):
+        assert update(m, 5 + i * 0.5, (0.025, 0, 0.7 - i * 0.06), stopped=False) is None
+    for t in (10.1, 10.4):
+        assert update(m, t, (0.025, 0, 0.1)) is None
+    assert update(m, 10.7, (0.025, 0, 0.1))[0] == "succeeded"
+
+
+def test_stationary_inside_xy_radius_with_wrong_heading_still_stalls():
+    m = ArrivalMonitor({"resolved_goal": [0, 0, 0]}, "exploration", now=0)
+    for i in range(10):
+        assert update(m, i * 0.5, (0.025, 0, 0.7), stopped=False) is None
+    assert update(m, 5, (0.025, 0, 0.7), stopped=False)[1]["reason"] == "navigation stalled"

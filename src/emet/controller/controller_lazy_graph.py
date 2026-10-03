@@ -460,7 +460,16 @@ class LazyGraphController(DynagraphController):
             before = revision
             return bool(result["ok"])
 
-        self.look_around(on_observation=verify)
+        # The navigation endpoint already faces the approach target. Inspect
+        # that view before a sweep can turn toward a same-category distractor.
+        # This is still fresh visual grounding, never acceptance of the anchor.
+        from emet.controller.dynamem.look import wait_post_motion_obs
+
+        self.robot.look_front()
+        wait_post_motion_obs(self.robot, timeout=3.0)
+        self.update(full_perception=True)
+        if not verify():
+            self.look_around(on_observation=verify)
         self._last_query_find_verification = result
         if result["ok"]:
             return np.asarray(result["xyz"], dtype=float)
