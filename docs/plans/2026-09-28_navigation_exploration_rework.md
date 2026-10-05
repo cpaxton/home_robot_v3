@@ -604,3 +604,48 @@ the detector solely to fit these two hypotheses.
 PR status checked October 5: #167/#168/#169/#176/#177 remain open; #178 is
 additional TAMP work owned separately. Experiment source is published on
 `experiment/eqa-inspection-progress`; it is not added wholesale to those PRs.
+
+### October 5: measured aiming loop and acceptance jobs
+
+`b1840598` extends existing arrival aiming: at most two head commands total,
+including one horizontal-forward reset for a behind-camera proposal. Existing
+adapter clipping remains authoritative; measured arrival must match the
+requested pose within the existing floor-tool 0.12 rad tolerance. Clipped or
+stalled requests fail rather than falsely succeeding. After measured arrival,
+require a newer received frame before retaining/reprojecting the capture.
+Missing physical calibration, unsupported control, stale camera frames/captures,
+or an exhausted aim budget return `TARGET_OUTSIDE_VIEW` with a specific reason.
+Nonphysical missing-geometry compatibility remains unchanged. No base motion,
+new verifier, detector dependency, expanded head limits or collision relaxation.
+
+Tests: 297 focused camera/floor tests and a separate 288-test agentic/OVMM/
+grounding/minimal-TAMP suite passed. Two additional tests bring the view-quality
+file to 12 passing tests (overlap, not additive): forward reset plus correction
+share the command budget; physical missing geometry cannot pass inspection.
+
+Stationary diagnostic `20261005_182928_024a2e` passed on frozen runtime
+`/tmp/emet-aim-b1840598`. Driver `/tmp/emet_stationary_aim_probe.py` takes the
+initial horizontal camera's center-pixel sensor XYZ, commands downward tilt,
+and runs ordinary arrival aiming with no semantic GT. Target starts in front
+of the optical camera but outside frame (pixel 123,-1026), ends at 120,221;
+measured base translation 0.00000145 m. This exercises fresh measured aiming,
+not the behind-camera reset or semantic localization. Artifact:
+`~/runs/emet/navigation-stationary-aim-20261005/molmo_ithor_s2_idx0_lazy_graph/stationary_aim.json`.
+
+Follow-up jobs, all CPU-safe/GPU-exclusive and fresh processes:
+
+- `20261005_183231_5c54a0`: S0, RoboCasa and Molmo, unchanged seed/model/config
+  and 4 mapping views / 6 rounds / 3 nav steps. Launch is gated on the passing
+  stationary artifact. Root `~/runs/emet/navigation-aim-pilot-20261005/`.
+- `20261005_183235_4313af`: paired EQA q2/15/25, seed 0, baseline `26245fd7`
+  versus candidate `b1840598`, existing dev-loop budgets. Root
+  `~/runs/emet/navigation-aim-eqa-20261005/`. Small smoke, not general accuracy.
+
+At this checkpoint the room pilot has started and EQA is queued. Score saved
+results/failed.txt before claiming either gate passed. Preserve failed views.
+
+Disk: confirmed pip cache path `/home/cpaxton/.cache/pip`; ran the approved
+pip cache purge, which reported zero package files. Free space subsequently
+measured about 23 GB versus 435 MB initially; do not attribute all reclaimed
+space to that command. No experiment bundles, datasets, model weights, uv
+cache or worktrees were deleted by this agent. New simulation cleared 10 GB gate.

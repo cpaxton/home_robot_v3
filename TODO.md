@@ -47,6 +47,12 @@ Implementation and acceptance specification:
       object/receptacle localization both fail. This validates a sensing
       primitive in one run, not task acceptance. Automatic
       selection of an alternative safe sensing pose remains unimplemented.
+      `b1840598` closes arrival aiming on measured head pose and a post-motion
+      frame; one forward reset shares the existing two-command budget. Stationary
+      Molmo sensor-target check passes (`20261005_182928_024a2e`), but its target
+      began outside/in-front, not behind; behind-camera reset is unit-tested.
+      Room pilot `20261005_183231_5c54a0` and paired EQA q2/15/25
+      `20261005_183235_4313af` are pending. Do not claim task acceptance yet.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
