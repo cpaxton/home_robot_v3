@@ -44,3 +44,24 @@ Readiness requires a passing API smoke, three admitted cases, and 9/9 successful
 full cleanup tasks. Final machine-readable output is `readiness.json`. Historical
 scores remain unchanged. The shared GPU queue already contains another agent's
 running simulator and queued evaluation; those jobs must not be interrupted.
+
+## Queued validation
+
+Implementation source: `c9832c1e`.
+Immutable checkout: `/tmp/emet-tamp-api-20261005` (shared environments are linked;
+tracked source is frozen).
+Managed job: `20261005_183936_f4b352`, submitted after the regression suite.
+Artifacts: `~/runs/emet/tamp-api-readiness-20261005/`.
+At handoff the job is **waiting for the shared GPU**, behind existing work. There
+are no new live scores yet; 2/3 remains the last measured repeat result.
+
+```bash
+EMET_UV_RUN=1 .venv/bin/emet jobs status 20261005_183936_f4b352
+EMET_UV_RUN=1 .venv/bin/emet jobs logs 20261005_183936_f4b352 --tail 60
+cat ~/runs/emet/tamp-api-readiness-20261005/results/readiness.json
+```
+
+Read the terminal job state and `readiness.json` together. Missing readiness
+output is not a pass. Inspect each phase's ledger and per-case evidence before
+updating claims. Root-cause fixes for residual motion failures remain general
+controller/planner work; object names identify test fixtures only.

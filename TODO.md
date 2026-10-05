@@ -3,6 +3,16 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## TAMP simulator API readiness (2026-10-05)
+
+- [x] Reclaim disposable pip caches; preserve source worktrees, datasets and run evidence.
+- [x] Consistent JSON across all four TAMP tools; boot/pose/clearance guards,
+      partial execution evidence and stale-state checks. Full regression pack: 206 passed.
+- [x] Correct unsupported shoulder-stall diagnosis; retain object-independent failures.
+- [ ] Finish managed live gate `20261005_183936_f4b352` (queued): CHAT smoke,
+      three new admissions, nine fresh MCTS repeats. No readiness claim until all pass.
+      See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
+
 ## TAMP agent execution follow-up (2026-09-29)
 
 Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).
