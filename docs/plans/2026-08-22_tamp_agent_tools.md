@@ -1,7 +1,8 @@
 # TAMP agent tools
 
 **Date:** 2026-08-22
-**Status:** Offline gate green; managed simulator gate partially green (see below).
+**Status:** Historical gates below predate the current execution guards. Current
+contracts and readiness requirements: [TAMP API](../apis/tamp.md).
 
 ## Scope
 
@@ -51,8 +52,8 @@ offline episode generation.
 - A task reference whose grounded body disappears is rejected rather than
   remapped to another instance.
 - Before executing a stored plan, the adapter rechecks capability flags,
-  object/receptacle existence, and both saved poses. A pose change greater than
-  0.20 m returns `scene_changed_replan`.
+  object/receptacle existence, and both saved poses. A translation change greater than
+  0.01 m or rotation greater than 5 degrees returns `scene_changed_replan`.
 - Stored plans are one-shot, including failed or stale execution attempts.
 - The selected receptacle remains attached to the plan and is used for both
   execution and benchmark scoring. Invalid explicit scoring groundings fail

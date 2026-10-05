@@ -98,10 +98,17 @@ def run_scripted_tool_calls(
         if tool.func is not None:
             result = tool.func(**args) if args else tool.func()
             print(f"    -> {result}")
-            # CHAT tools return user-facing strings; any failure wording is a
-            # gate failure regardless of which plan/execute stage emitted it.
-            if isinstance(result, str) and "fail" in result.lower():
+            from emet.controller.task.tamp.api import TAMP_TOOLS
+            if name in TAMP_TOOLS:
+                try:
+                    outcome = json.loads(result)
+                    if outcome['schema_version'] != 1 or outcome['status'] != 'ok':
+                        ok_all = False
+                except (TypeError, ValueError, KeyError):
+                    ok_all = False
+            elif isinstance(result, str) and "fail" in result.lower():
                 ok_all = False
+
         else:
             print(f"[{i}] tool {name!r} has no callable implementation", file=sys.stderr)
             ok_all = False

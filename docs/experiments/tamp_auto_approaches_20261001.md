@@ -54,21 +54,21 @@ generic error alone does not identify which predicate failed.
 
 Replay 2's `process.log` gives concrete signals for both failures:
 
-- **Apple (pregrasp).** The failed measurement shows `left_arm_joint1` at
-  `1.625 rad` against a `0.632 rad` target (~1.0 rad error) while every other
-  joint tracked within ~0.02 rad and `server_targets` matched `planned_q`. The
-  shoulder is stalling while the torso/rest of the arm tracks — consistent with
-  contact or a joint limit, not IK or command delivery. The selected apple
-  approach is `candidate 4/16` (yaw `0`, a side approach), the same pose that
-  passed the assisted run.
+- **Apple (pregrasp).** The archived measurement reports `left_arm_joint1`
+  at -1.025518 rad against -1.033738 rad (0.008220 rad error), and
+  `left_arm_joint2` at 1.624856 rad against 1.632452 rad (0.007597 rad error).
+  The largest joint error is 0.035933 rad at `torso_joint1`. The prior claim of
+  a roughly 1 rad shoulder stall was a transcription error. Cartesian error
+  remains 86.026 mm; these joint values alone do not establish contact or a
+  joint-limit cause. Server targets match the planned commands.
 - **Kettle (`invalid_start`).** Pregrasp arrival was accepted (33.7 mm), then the
   grasp plan failed on `invalid_start`. This harness runs `manip_collision="none"`,
   so the collision predicate is absent and `invalid_start` can only be a joint-bounds
   violation on the measured start posture. `dec3e26e` adds an `ArmRrtPlanResult.detail`
   field so a replay names the offending joint instead of the generic reason.
 
-Neither failure is an approach-selection error; both reproduce a chosen, collision-clear
-endpoint. Re-diagnosis (contact reconstruction for the apple, joint-bound detail for the
+Both trials selected a collision-clear base endpoint; this does not establish
+whole-arm feasibility or exclude approach-dependent execution failures. Re-diagnosis (contact reconstruction for the apple, joint-bound detail for the
 kettle) and a fresh frozen-registry replay are the next steps.
 
 ## Scope

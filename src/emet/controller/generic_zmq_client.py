@@ -767,6 +767,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._state = msg
+                self._state_received_monotonic = time.monotonic()
                 if "step" in msg:
                     self._last_step = max(self._last_step, int(msg["step"]))
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(

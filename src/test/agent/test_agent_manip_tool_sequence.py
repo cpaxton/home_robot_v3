@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 from emet.agent.loop import _dispatch_tool_calls
@@ -51,7 +52,8 @@ def test_canned_find_then_pick_place_dispatch_order():
         [("find", "bowl")],
         [("pickup", "bowl"), ("place", "table")],
     ]
-    assert "[pick_place] Pick and place (bowl -> table) done." in results
+    outcome = json.loads(next(r.removeprefix("[pick_place] ") for r in results if r.startswith("[pick_place] ")))
+    assert outcome["status"] == "ok"
 
 
 def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
@@ -70,7 +72,8 @@ def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     )
     assert ok  # keep going
     assert exe.calls == [[("pickup", "bowl"), ("place", "table")]]
-    assert "[pick_place] Pick/place failed or interrupted." in results
+    outcome = json.loads(next(r.removeprefix("[pick_place] ") for r in results if r.startswith("[pick_place] ")))
+    assert outcome["code"] == "controller_failed"
 
 
 def _make_kinematic_dynamem_executor():
@@ -163,7 +166,8 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
     ]
     assert teleport_calls == []
     assert planners == ["rrt_connect", "rrt_connect"]
-    assert "[pick_place] Pick and place (bowl -> table) done." in results
+    outcome = json.loads(next(r.removeprefix("[pick_place] ") for r in results if r.startswith("[pick_place] ")))
+    assert outcome["status"] == "ok"
     # find_objects, then a nav attempt each for pickup and place.
     assert exe._find.call_count == 3
 
@@ -186,7 +190,7 @@ def test_scene_tasks_does_not_use_stale_ithor_metadata_for_live_robocasa(monkeyp
 
     result = tools["scene_tasks"].func()
 
-    assert result == "No MolmoSpaces metadata matches the active simulation scene."
+    assert json.loads(result)["code"] == "metadata_unavailable"
 
 
 def test_scene_tasks_object_filter_matches_pick_object_not_receptacle(monkeypatch, tmp_path):
@@ -225,5 +229,5 @@ def test_scene_tasks_object_filter_matches_pick_object_not_receptacle(monkeypatc
     tools = {t.name: t for t in get_tools({"robot": _Robot()})}
     result = tools["scene_tasks"].func(object_filter="bowl")
 
-    assert "Tasks matching 'bowl' (1):" in result
+    assert json.loads(result)["status"] == "ok"
     assert "bottle" not in result

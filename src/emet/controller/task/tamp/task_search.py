@@ -47,6 +47,7 @@ class TaskPlan:
     failed_op: str | None = None
     execution_mode: str | None = None
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    measurements: list[dict[str, Any]] = field(default_factory=list)
 
 
 def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
@@ -348,6 +349,7 @@ def execute_task_plan(
     plan.completed_ops.clear()
     plan.failed_op = None
     plan.diagnostics.clear()
+    plan.measurements.clear()
     mode = str(manip_mode).lower()
     plan.execution_mode = mode
     if mode not in ("kinematic", "latch", "teleport", "sim", "physical", "attempt"):
@@ -373,9 +375,26 @@ def execute_task_plan(
             goal = f"{plan.object_body} → {plan.receptacle_body}"
         video_recorder.set_status(action, goal=goal, detail=detail)
 
+    def _measure(op: str) -> None:
+        if executor is None:
+            return
+        evidence = {"stage": op}
+        for name, fields in {
+            'last_ee_verification': ('error_m', 'tolerance_m', 'accepted', 'state_step'),
+            'last_grasp_verification': ('target_error_m', 'lift_dz_m', 'target_tolerance_m', 'accepted'),
+        }.items():
+            if name == "last_grasp_verification" and op != "grasp":
+                continue
+            value = getattr(executor, name, None)
+            if isinstance(value, dict):
+                evidence[name] = {k: value.get(k) for k in fields}
+        if len(evidence) > 1:
+            plan.measurements.append(evidence)
+
     def _fail(op: str, code: str) -> TaskPlan:
         plan.success = False
         plan.failed_op = op
+        _measure(op)
         plan.message = code
         logger.warning(f"TAMP execute failed op={op}: {code}")
         return plan
@@ -461,6 +480,7 @@ def execute_task_plan(
                     return _fail(op, "teleport_place_failed")
         else:
             return _fail(op, f"unknown_op:{op}")
+        _measure(op)
         plan.completed_ops.append(op)
         if video_recorder is not None:
             video_recorder.capture_once()

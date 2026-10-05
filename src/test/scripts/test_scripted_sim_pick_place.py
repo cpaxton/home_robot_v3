@@ -35,7 +35,7 @@ def test_explicit_kinematic_calls_use_live_chat_tools(monkeypatch):
 
     def plan_pick_place(*, task_ref: str) -> str:
         args_seen["task_ref"] = task_ref
-        return "TAMP plan plan:1: mode=kinematic."
+        return '{"schema_version": 1, "status": "ok"}'
 
     def get_tools(context):
         context_seen.update(context)

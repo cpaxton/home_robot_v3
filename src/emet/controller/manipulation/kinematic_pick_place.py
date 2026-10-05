@@ -349,6 +349,10 @@ class KinematicPickPlaceExecutor:
 
     def _sync_qpos_from_robot(self) -> bool:
         assert self._model is not None and self._data is not None
+        received = getattr(self.robot, "_state_received_monotonic", None)
+        if isinstance(received, (int, float)) and (not np.isfinite(received) or time.monotonic() - received > 2.0):
+            self._last_motion_failure = "stale_observation"
+            return False
         self._sync_base_freejoint()
         q, _, _ = self.robot.get_joint_state(timeout=2.0)
         names = self._actuator_names()
@@ -467,6 +471,7 @@ class KinematicPickPlaceExecutor:
 
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
         self._last_motion_failure = None
+        self.last_ee_verification = None
         assert self._model is not None and self._data is not None
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
@@ -474,7 +479,7 @@ class KinematicPickPlaceExecutor:
         # A previous command is an IK seed, never evidence of the path start.
         # Contact may have prevented that posture from being reached.
         if not self._sync_qpos_from_robot():
-            self._last_motion_failure = 'missing_joint_state'
+            self._last_motion_failure = self._last_motion_failure or 'missing_joint_state'
             return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         seeds = []
@@ -510,7 +515,9 @@ class KinematicPickPlaceExecutor:
             linear_steps=self.traj_steps,
         )
         if not plan.success:
-            self._last_motion_failure = 'planning_failed'
+            detail = getattr(plan, 'detail', None) or ''
+            self._last_motion_failure = (detail.split(':')[0] if detail.startswith(('joint_bounds:', 'collision'))
+                                         else 'planning_failed')
             logger.warning(
                 f"KinematicPickPlace: path plan failed planner={plan.planner!r} "
                 f"reason={plan.reason!r} detail={getattr(plan, 'detail', None)!r}"
@@ -533,7 +540,7 @@ class KinematicPickPlaceExecutor:
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
         if not reached:
-            self._last_motion_failure = 'tracking_failed'
+            self._last_motion_failure = self._last_motion_failure or 'tracking_failed'
         return reached, measured_error
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:
@@ -603,7 +610,7 @@ class KinematicPickPlaceExecutor:
         *,
         standoff_m: float = 0.55,
         yaw: float | None = None,
-    ) -> None:
+    ) -> bool:
         """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
 
         ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
@@ -634,8 +641,12 @@ class KinematicPickPlaceExecutor:
                 th = float(yaw)
             approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
         logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
-        self.robot.move_base_to(approach, blocking=True, world_frame=True)
+        result = self.robot.move_base_to(approach, blocking=True, world_frame=True)
+        success = getattr(result, "success", result)
+        if not isinstance(success, (bool, np.bool_)) or not success:
+            return False
         self._sleep(0.4)
+        return True
 
     def place_only(
         self,
@@ -655,7 +666,9 @@ class KinematicPickPlaceExecutor:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "object_not_in_gt")
         from emet.eval.ovmm_find_phase import bodies_matching_category
 
-        if receptacle_gt_body and receptacle_gt_body in pl:
+        if receptacle_gt_body:
+            if receptacle_gt_body not in pl:
+                return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "recep_not_in_gt")
             receps = [receptacle_gt_body]
         else:
             receps = bodies_matching_category(pl, receptacle_query)
@@ -677,7 +690,8 @@ class KinematicPickPlaceExecutor:
             f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} (n_receps={len(receps)})"
         )
         if approach_base:
-            self._approach_xy(recep_pos[:2])
+            if not self._approach_xy(recep_pos[:2]):
+                return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "place_approach_failed")
             # Re-register attach after base teleport so offset matches the live EE.
             robot_zmq_attach_body(self.robot, body, self.ee_body)
             self._sleep(0.15)
@@ -686,10 +700,10 @@ class KinematicPickPlaceExecutor:
         self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure("preplace"))
         ok, p_err = self._plan_and_execute_ee(place)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure("place"))
         # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         robot_zmq_detach_body(self.robot, body)
@@ -703,12 +717,15 @@ class KinematicPickPlaceExecutor:
             ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         try:
             self._set_gripper(open_=True)
-        except Exception as e:
-            logger.warning(f"KinematicPickPlace: open gripper after place failed: {e}")
+        except Exception:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "release_execution_error")
         try:
-            self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
-        except Exception as e:
-            logger.warning(f"KinematicPickPlace: retract after place failed: {e}")
+            retracted, retract_error = self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
+        except Exception:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "retract_execution_error")
+        if not retracted:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, retract_error,
+                                            self._stage_failure("retract"))
         if not ok_place:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, None, p_err, "ok")

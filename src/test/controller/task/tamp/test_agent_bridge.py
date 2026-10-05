@@ -15,6 +15,7 @@ from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep, execut
 
 class _Robot:
     def __init__(self, placements: dict, *, capabilities: dict | None = None, is_simulation: bool = True):
+        self._state = {"command_protocol": {"version": 2, "server_boot_id": "test-boot"}}
         self.placements = placements
         self.capabilities = capabilities or {"sim_set_body_pose": True}
         self.is_simulation = is_simulation
@@ -29,8 +30,8 @@ class _Robot:
 
 def _placements() -> dict:
     return {
-        "bowl_hash_1_0_0": {"cat": "bowl", "pos": [0.1, 0.2, 0.8]},
-        "table_main": {"cat": "table", "pos": [1.0, 0.2, 0.9]},
+        "bowl_hash_1_0_0": {"cat": "bowl", "pos": [0.1, 0.2, 0.8], "quat": [1, 0, 0, 0]},
+        "table_main": {"cat": "table", "pos": [1.0, 0.2, 0.9], "quat": [1, 0, 0, 0]},
     }
 
 
