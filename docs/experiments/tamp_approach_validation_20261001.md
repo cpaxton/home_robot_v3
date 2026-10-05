@@ -5,6 +5,11 @@ relocations.** This validates the preselected approaches on the original scene00
 cleanup fixture. It is assisted GT/MCTS kinematic-latch execution, not autonomous
 approach selection, physical grasp acceptance, or an expanded benchmark score.
 
+> **Superseded.** The preselected-approach adapter
+> (`scripts/validate_tamp_approaches.py`) is now replaced by online approach
+> selection with read-only collision queries (`check_base_poses`). See
+> [automatic approach selection](tamp_auto_approaches_20261001.md).
+
 ## Fixed intervention
 
 The preceding [contact diagnosis](tamp_contact_tracking_20260930.md) identified

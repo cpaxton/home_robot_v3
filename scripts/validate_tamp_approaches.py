@@ -4,6 +4,12 @@
 This is assisted approach validation, not autonomous planning or new fixture
 admission. The adapter supplies the existing MCTS candidate `approach_pose`
 argument in memory, leaving the frozen registry and scorer unchanged.
+
+Superseded: the shared planner now selects approaches online from read-only
+collision queries (`check_base_poses`) and IK. This adapter is retained only to
+reproduce the historical assisted-validation lineage in
+`docs/experiments/tamp_approach_validation_20261001.md`; new runs should use the
+unassisted planner path in `docs/experiments/tamp_auto_approaches_20261001.md`.
 """
 from __future__ import annotations
 

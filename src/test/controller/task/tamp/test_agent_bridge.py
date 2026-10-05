@@ -169,6 +169,45 @@ def test_stored_plan_revalidates_pose_and_is_one_shot():
     assert plan_ref not in context["_tamp_plans"]
 
 
+def test_bridge_grounds_auto_approach_selection():
+    """build_agent_pick_place_plan drives the shared planner's online approach search.
+
+    The agent path never supplies ``approach_pose``, so when the live simulator
+    advertises ``sim_base_pose_query`` the planner must consult ``check_base_poses``
+    and skip collision-blocked candidates instead of using the fixed +Y standoff.
+    """
+    import numpy as np
+
+    from emet.controller.task.tamp.task_search import approach_candidates_for_object_xy
+
+    placements = _placements()
+    queries: list[list[list[float]]] = []
+
+    class _QueryRobot(_Robot):
+        def __init__(self):
+            super().__init__(placements, capabilities={"sim_set_body_pose": True})
+            self._state = {"sim_base_pose_query": True}
+
+        def check_base_poses(self, poses):
+            queries.append([np.asarray(p).tolist() for p in poses])
+            return {
+                "poses": [np.asarray(p).tolist() for p in poses],
+                "clear": [False] + [True] * (len(poses) - 1),
+            }
+
+    robot = _QueryRobot()
+
+    build = agent_bridge.build_agent_pick_place_plan(robot, "bowl", "table")
+
+    assert build.mode == "teleport"
+    assert build.plan is not None and build.plan.success, build.reason
+    assert queries, "agent bridge must consult the read-only base-pose query"
+    assert len(queries[0]) == 16
+    obj_xy = np.asarray(placements["bowl_hash_1_0_0"]["pos"], dtype=np.float64)[:2]
+    expected = approach_candidates_for_object_xy(obj_xy)[1]
+    np.testing.assert_allclose(build.plan.steps[0].args["xyt"], expected)
+
+
 def test_task_plan_reports_partial_execution_failure():
     class _MotionRobot:
         def move_base_to(self, *_args, **_kwargs):
