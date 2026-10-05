@@ -511,7 +511,10 @@ class KinematicPickPlaceExecutor:
         )
         if not plan.success:
             self._last_motion_failure = 'planning_failed'
-            logger.warning(f"KinematicPickPlace: path plan failed planner={plan.planner!r} reason={plan.reason!r}")
+            logger.warning(
+                f"KinematicPickPlace: path plan failed planner={plan.planner!r} "
+                f"reason={plan.reason!r} detail={getattr(plan, 'detail', None)!r}"
+            )
             return False, result.pos_error_m
         logger.info(f"KinematicPickPlace: path via {plan.planner} n_waypoints={len(plan.waypoints)}")
         self.last_plan_waypoints = [np.asarray(w, dtype=np.float64).copy() for w in plan.waypoints]
