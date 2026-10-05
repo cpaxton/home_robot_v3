@@ -50,6 +50,27 @@ caused by contact, settling time, or another dynamics issue. The invalid-start
 predicate checks both joint bounds and any configured collision checker; the
 generic error alone does not identify which predicate failed.
 
+## Residual failure diagnosis
+
+Replay 2's `process.log` gives concrete signals for both failures:
+
+- **Apple (pregrasp).** The failed measurement shows `left_arm_joint1` at
+  `1.625 rad` against a `0.632 rad` target (~1.0 rad error) while every other
+  joint tracked within ~0.02 rad and `server_targets` matched `planned_q`. The
+  shoulder is stalling while the torso/rest of the arm tracks — consistent with
+  contact or a joint limit, not IK or command delivery. The selected apple
+  approach is `candidate 4/16` (yaw `0`, a side approach), the same pose that
+  passed the assisted run.
+- **Kettle (`invalid_start`).** Pregrasp arrival was accepted (33.7 mm), then the
+  grasp plan failed on `invalid_start`. This harness runs `manip_collision="none"`,
+  so the collision predicate is absent and `invalid_start` can only be a joint-bounds
+  violation on the measured start posture. `dec3e26e` adds an `ArmRrtPlanResult.detail`
+  field so a replay names the offending joint instead of the generic reason.
+
+Neither failure is an approach-selection error; both reproduce a chosen, collision-clear
+endpoint. Re-diagnosis (contact reconstruction for the apple, joint-bound detail for the
+kettle) and a fresh frozen-registry replay are the next steps.
+
 ## Scope
 
 This is one fixture with three process repeats, using GT/MCTS, base teleportation
