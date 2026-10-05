@@ -531,3 +531,76 @@ Configured order was S0, RoboCasa, Molmo. **0/3 objects, 0/3 receptacles**:
 No task-accuracy gain or physical-find acceptance is claimed. Next isolate the
 missing-floor visibility failure using calibrated views of the actual blocked
 region; do not relax clearance or launch another identical learned sweep.
+
+### October 1: targeted stationary floor observation
+
+`26245fd7` adds `target_blocker=true` to the existing shared `observe_floor`
+tool (chat and internal find). The opt-in mode overrides manually specified
+head angles, rechecks the rejected pose, selects a currently unknown cell,
+and uses calibrated optical projection for at most two head-only corrections.
+Existing absolute pan [-1,1] and tilt [-1.4,-0.7] limits and fresh-frame/measured
+head checks remain unchanged. Every capture uses normal map integration and
+footprint rechecking. Already-valid footprints request replanning without moving.
+
+The aim point uses the navigation grid's explicit zero-height floor reference,
+not inferred free space. Results retain projected target coordinates and, when
+in frame, measured optical depth versus reference depth. In-frame is not proof
+of unoccluded floor, and valid footprint is not a certified route. Missing
+geometry, behind-camera targets, unsupported adapters or exhausted head bounds
+do not authorize base motion. The loop exposes failure to the agent; automatic
+selection of a different safe sensing pose is still a separate, unimplemented
+extension. No changes to A*, collision padding or motion limits in this slice.
+
+292 focused recovery/schema/camera tests pass. `720d4239` retains the measured
+Molmo calibration regression: target cell projects below all earlier captures;
+an ideal re-aim is geometry only, not proof of physical head reachability.
+
+Frozen runtime `/tmp/emet-target-floor-26245fd7`, job
+`20261001_083133_a9a622` (`nav-targeted-floor-1001`), output
+`~/runs/emet/navigation-targeted-floor-20261001/`. One Molmo seed-0 episode,
+unchanged model/config, four mapping views, six rounds, three navigation steps;
+CPU-safe and GPU-exclusive. No scripted forced tool call. At launch no live
+result is claimed: verify that the model selects the mode, measured projection
+changes, fresh depth reaches the blocked region, and replanning actually moves.
+
+Review organization: #167 is the grounding parent; #169 remains its stacked
+navigation/pregrasp PR; #168 is the integration PR. #176 owns shared VLM dialogue
+and #177 owns the separate TAMP work. Do not fold the experiment branch wholesale
+into #169: the local comparison reports 353 commits beyond cached origin/main,
+so review should extract the targeted recovery/completion commits with their
+tests after reconciling current main. No existing PR base/head was changed.
+
+### October 5: targeted-floor result reviewed
+
+Job `20261001_083133_a9a622` completed. The model chose
+`observe_floor(target_blocker=true)` in object round 3. Its current blocked
+cell was world XY (1.0, 2.2), not the earlier (1.7, 1.3) replay case. One bounded
+capture at requested pan -0.4564 / tilt -1.4 (measured -0.4561 / -1.3986)
+moved the target projection from (268, 1439), outside the 240x424 image, to
+(192, 328), inside it. Measured optical depth was 1.2060 m versus 1.2040 m
+reference depth; the checked footprint changed from one unknown cell to valid.
+This is sensor/map evidence for this region, not blanket route certification.
+
+The next object action selected exploration, but the trace does not establish
+a completed post-recovery object approach. Receptacle search first rechecked
+the already-valid footprint without another capture, then reached three
+inspection poses (recorded navigation distances 0.634, 0.640, 0.365 m).
+Both object and receptacle localization still failed. No task-accuracy gain,
+physical-find acceptance, or controlled replication of the earlier blocked
+cell is claimed. Investigate the resulting views/proposals next; do not relax
+clearance or expand head limits based on this result.
+
+Saved receptacle views identify the next concrete issue. Round 1's proposed
+microwave XYZ is (2.0669, 0.5890, -0.0121); its projection is in frame, but manual
+RGB inspection shows floor and cabinet, consistent with grounding abstention.
+Rounds 3/4 use a new proposal at (1.9689, -0.2324, 2.5376). Both project behind
+the optical camera (camera Z -1.204/-1.161 m), and `aim_arrival_view` immediately
+returns without a head correction for behind-camera targets. This does not
+establish that either proposal is a microwave. Next isolate head-state handoff
+from downward floor inspection to object viewing, using known camera/target
+geometry and bounded measured head control. Do not blacklist heights or change
+the detector solely to fit these two hypotheses.
+
+PR status checked October 5: #167/#168/#169/#176/#177 remain open; #178 is
+additional TAMP work owned separately. Experiment source is published on
+`experiment/eqa-inspection-progress`; it is not added wholesale to those PRs.

@@ -39,6 +39,14 @@ Implementation and acceptance specification:
       0/3 receptacles. RoboCasa clears floor then immediately replans/reaches;
       Molmo/S0 blockers remain unknown. No live grounding-conflict case occurred.
       Next: targeted missing-floor visibility, not another unchanged sweep.
+      `26245fd7` adds shared `observe_floor(target_blocker=true)`: recheck one
+      unknown cell, at most two bounded head captures, report projection/depth
+      without certifying free space. 292 focused tests pass. Molmo diagnostic
+      `20261001_083133_a9a622` finished: targeted capture clears its blocked
+      cell; subsequent receptacle search reaches three inspection poses, but
+      object/receptacle localization both fail. This validates a sensing
+      primitive in one run, not task acceptance. Automatic
+      selection of an alternative safe sensing pose remains unimplemented.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
