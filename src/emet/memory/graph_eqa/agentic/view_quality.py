@@ -5,6 +5,7 @@
 """Bounded head-only recovery for obstructed exploration arrival views."""
 
 import math
+import time
 
 import numpy as np
 
@@ -19,19 +20,31 @@ def aim_arrival_view(executor, capture, target_xyz):
     geometry must not be passed to target verification as negative evidence.
     """
     robot = getattr(executor.agent, "robot", None)
+    reset_used = False
+    reason = "target_outside_view"
     for attempt in range(3):
         view = captured_view(executor, capture.get("obs_id"))
         if not capture.get("ok") or view is None:
             return capture
         projection = target_in_view(view, target_xyz)
         executor._append_trace({"event": "arrival_view_aim", "attempt": attempt, "obs_id": view.obs_id, **projection})
-        if projection.get("target_in_frame") is not False:
+        if projection.get("target_in_frame") is True:
             return capture
-        if attempt == 2 or projection["status"] == "behind_camera":
+        if projection.get("target_in_frame") is None:
+            # Preserve nonphysical adapters; physical inspection must have geometry.
+            if not isinstance(getattr(robot, "_seq_id", None), int):
+                return capture
+            reason = "missing_geometry"
+            break
+        if attempt == 2:
             break
         head_to = getattr(robot, "head_to", None)
         get_angles = getattr(robot, "get_pan_tilt", None)
         if not callable(head_to) or not callable(get_angles):
+            reason = "unsupported_head_control"
+            break
+        if not isinstance(getattr(robot, "_seq_id", None), int):
+            reason = "observation_freshness_unavailable"
             break
         try:
             x, y, z = projection["target_camera_xyz"]
@@ -39,20 +52,57 @@ def aim_arrival_view(executor, capture, target_xyz):
             delta_pan = np.clip(math.atan2(-x, z), -math.pi / 4, math.pi / 4)
             delta_tilt = np.clip(math.atan2(-y, math.hypot(x, z)), -math.pi / 4, math.pi / 4)
             if not np.isfinite([pan, tilt, delta_pan, delta_tilt]).all():
+                reason = "head_pose_unconfirmed"
                 break
-            if head_to(float(pan + delta_pan), float(tilt + delta_tilt), blocking=True) is False:
+            if projection["status"] == "behind_camera":
+                if reset_used:
+                    reason = "target_behind_camera_after_reset"
+                    break
+                # Existing horizontal forward convention; no base motion.
+                commanded = np.array([0.0, 0.0])
+                reset_used = True
+            else:
+                commanded = np.array([pan + delta_pan, tilt + delta_tilt])
+            # The adapter owns safety clipping. Require measured arrival at the
+            # requested pose; never mistake a clipped/stalled motion for success.
+            if head_to(*map(float, commanded), blocking=True) is False:
+                reason = "head_motion_failed"
                 break
-            wait = getattr(robot, "wait_for_obs", None)
-            if callable(wait) and wait(timeout=5.0) is False:
+            deadline = time.monotonic() + 5.0
+            measured = np.asarray(get_angles(), dtype=float)
+            while np.isfinite(measured).all() and np.max(np.abs(measured - commanded)) > 0.12:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(0.05)
+                measured = np.asarray(get_angles(), dtype=float)
+            executor._append_trace(
+                {
+                    "event": "arrival_head_motion",
+                    "requested": commanded.tolist(),
+                    "measured": measured.tolist(),
+                    "forward_reset": reset_used,
+                }
+            )
+            if not np.isfinite(measured).all() or np.max(np.abs(measured - commanded)) > 0.12:
+                reason = "head_pose_unconfirmed"
+                break
+            from emet.controller.dynamem.look import wait_post_motion_obs
+
+            sequence = robot._seq_id
+            wait_post_motion_obs(robot, timeout=5.0)
+            if robot._seq_id <= sequence:
+                reason = "stale_observation"
                 break
             previous_id = capture.get("obs_id")
             capture = executor._tool_capture_and_update()
             if not capture.get("ok") or capture.get("obs_id") == previous_id:
+                reason = "stale_capture"
                 break
         except (RuntimeError, ValueError, TypeError, TimeoutError) as exc:
             executor._append_trace({"event": "arrival_view_aim_failed", "error": str(exc)})
+            reason = "head_control_error"
             break
-    return {**capture, "ok": False, "status": "TARGET_OUTSIDE_VIEW"}
+    return {**capture, "ok": False, "status": "TARGET_OUTSIDE_VIEW", "reason": reason}
 
 
 def exploration_view_quality(depth):
