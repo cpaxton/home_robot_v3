@@ -137,3 +137,26 @@ def test_clipped_head_does_not_authorize_capture(monkeypatch):
     result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 2, 1])
     assert result["reason"] == "head_pose_unconfirmed"
     ex._tool_capture_and_update.assert_not_called()
+
+
+def test_forward_reset_and_correction_share_two_command_budget():
+    ex = arrival_executor()
+    old = ex._captured_views[1]
+    forward = np.diag([-1.0, 1.0, -1.0, 1.0])
+    aimed = forward.copy()
+    aimed[1, 3] = 2
+    ex._captured_views[2] = CapturedView(2, 2, old.rgb, forward, old.camera_K)
+    ex._captured_views[3] = CapturedView(3, 3, old.rgb, aimed, old.camera_K)
+    ex._tool_capture_and_update.side_effect = [{"ok": True, "obs_id": 2}, {"ok": True, "obs_id": 3}]
+    result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 2, -1])
+    assert result["ok"] and result["obs_id"] == 3
+    assert ex.agent.robot.head_to.call_count == 2
+
+
+def test_physical_inspection_rejects_missing_camera_geometry():
+    ex = arrival_executor()
+    old = ex._captured_views[1]
+    ex._captured_views[1] = CapturedView(1, 1, old.rgb, None, None)
+    result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 0, 1])
+    assert not result["ok"] and result["reason"] == "missing_geometry"
+    ex.agent.robot.head_to.assert_not_called()
