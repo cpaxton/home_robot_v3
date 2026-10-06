@@ -38,7 +38,10 @@ def setup_plan():
         task.receptacle_body,
         success=True,
     )
-    build = bridge.AgentPlanBuild(task, plan, "kinematic", True)
+    snapshot = bridge.PlanningSnapshot(
+        "boot", bridge.robot_session_key(robot), json.dumps(robot.caps, sort_keys=True), json.dumps(robot.placements)
+    )
+    build = bridge.AgentPlanBuild(task, plan, "kinematic", True, snapshot=snapshot)
     context = {"robot": robot}
     return robot, plan, build, context
 
@@ -147,7 +150,7 @@ def test_nonfinite_measurement_is_null_and_exception_is_private():
 def test_missing_pose_or_server_identity_cannot_be_stored():
     robot, _, build, context = setup_plan()
     robot._state.clear()
-    with pytest.raises(ValueError, match="server_identity_missing"):
+    with pytest.raises(ValueError, match="scene_changed_replan"):
         bridge.store_agent_plan(context, robot, build)
     assert "_tamp_plans" not in context
 
@@ -220,3 +223,125 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     assert not result.success
     if failure in {"approach", "missing_receptacle"}:
         assert not attach.called
+
+
+@pytest.mark.parametrize("change", ["position", "rotation", "boot", "capability", "nan"])
+def test_change_between_planning_and_storage_refuses_handle(change):
+    robot, _, build, context = setup_plan()
+    if change == "position":
+        robot.placements["object_private"]["pos"][0] += 0.5
+    elif change == "rotation":
+        robot.placements["receptacle_private"]["quat"] = [0.0, 0.0, 0.0, 1.0]
+    elif change == "boot":
+        robot._state["command_protocol"]["server_boot_id"] = "new"
+    elif change == "capability":
+        robot.caps["sim_set_body_pose"] = True
+    else:
+        robot.placements["object_private"]["pos"][0] = float("nan")
+    with pytest.raises(ValueError, match="scene_changed_replan|invalid_plan"):
+        bridge.store_agent_plan(context, robot, build)
+    assert "_tamp_plans" not in context
+
+
+def test_planner_uses_captured_inputs_and_rejects_change_during_grounding(monkeypatch):
+    robot, plan, _, _ = setup_plan()
+    robot.caps = {"sim_set_body_pose": True}
+    seen = []
+
+    def changing_planner(*args, **kwargs):
+        robot.placements["object_private"]["pos"][0] += 0.5
+        seen.append(kwargs["placements"]["object_private"]["pos"][0])
+        return plan
+
+    monkeypatch.setattr(bridge, "plan_pick_place_mcts", changing_planner)
+    result = bridge.build_agent_pick_place_plan(robot, "bowl", "table")
+    assert seen == [0.0]
+    assert result.reason == "scene_changed_replan"
+    assert result.plan is None
+
+
+def test_snapshot_copies_are_independent_and_quaternion_sign_is_equivalent():
+    robot, _, build, context = setup_plan()
+    decoded = build.snapshot.placements()
+    decoded["object_private"]["pos"][0] = 50
+    robot.placements["object_private"]["quat"] = [-1.0, 0.0, 0.0, 0.0]
+    assert bridge.store_agent_plan(context, robot, build)
+    assert build.snapshot.placements()["object_private"]["pos"][0] == 0.0
+
+
+def test_handles_never_recycle_across_sessions_or_contexts():
+    from types import SimpleNamespace
+
+    robot, _, build, context = setup_plan()
+    task = SimpleNamespace(object="bowl", goal_recep="table", start_recep="counter", object_gt_body="object_private")
+    old = bridge.stable_scene_task_refs(context, [task], robot.placements, session_key=("old",))[0].ref
+    new = bridge.stable_scene_task_refs(context, [task], robot.placements, session_key=("new",))[0].ref
+    assert old != new
+    assert old not in context["_tamp_task_refs"]
+    assert bridge.store_agent_plan({}, robot, build) != bridge.store_agent_plan({}, robot, build)
+
+
+def test_place_exception_cannot_inherit_grasp_evidence():
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.task_search import execute_task_plan
+
+    class Executor:
+        begin_operation = KinematicPickPlaceExecutor.begin_operation
+
+        def grasp_only(self, *_args, **_kwargs):
+            from types import SimpleNamespace
+
+            self.last_ee_verification = {"error_m": 0.02, "accepted": True}
+            self.last_grasp_verification = {"target_error_m": 0.003, "accepted": True}
+            return SimpleNamespace(success=True)
+
+        def place_only(self, *_args, **_kwargs):
+            raise RuntimeError("base approach rejected")
+
+    ex = Executor()
+    robot, plan, _, _ = setup_plan()
+    robot.move_base_to = lambda *a, **k: True
+    plan.steps[1] = TaskPlanStep("grasp", {"grasp_index": 0, "object_query": "bowl"})
+    plan.steps[2] = TaskPlanStep("place", {"receptacle_query": "table"})
+    result = execute_task_plan(robot, plan, executor=ex, grasp_poses=[np.eye(4)], manip_mode="kinematic")
+    assert result.completed_ops == ["approach", "grasp"]
+    assert result.failed_op == "place"
+    assert [m["stage"] for m in result.measurements] == ["grasp"]
+    saved = result.measurements[0]["last_ee_verification"]["error_m"]
+    ex.begin_operation("next-task")
+    assert saved == 0.02 and result.measurements[0]["last_ee_verification"]["error_m"] == 0.02
+
+
+def test_mcts_and_approach_grounding_share_supplied_placements(monkeypatch):
+    from emet.controller.task.tamp import task_search
+    from emet.controller.task.tamp.task_search import plan_pick_place_mcts
+
+    seen = []
+
+    def synthetic_grasps(body, placements, **kwargs):
+        seen.append(placements[body]["pos"][0])
+        return []
+
+    monkeypatch.setattr(task_search, "resolve_scene_grasps", synthetic_grasps)
+
+    robot = Robot()
+    captured = json.loads(json.dumps(robot.placements))
+    robot.placements["object_private"]["pos"][0] = 5.0
+    plan = plan_pick_place_mcts(
+        robot,
+        candidates=[
+            {
+                "object_query": "bowl",
+                "receptacle_query": "table",
+                "object_gt_body": "object_private",
+                "receptacle_gt_body": "receptacle_private",
+            }
+        ],
+        placements=captured,
+        seed=0,
+    )
+    assert plan.success
+    assert abs(plan.steps[0].args["xyt"][0]) < 1e-6
+    pose = getattr(plan.grasp_poses[0], "T_world", plan.grasp_poses[0])
+    assert abs(pose[0, 3]) < 1e-6
+    assert seen == [0.0]

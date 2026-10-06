@@ -69,7 +69,7 @@ def json_tool(func):
                 raise ValueError("invalid tool result")
             return json.dumps(_finite(result), allow_nan=False)
         except ValueError as exc:
-            code = str(exc) if str(exc) in {"server_identity_missing", "invalid pose"} else "invalid_input"
+            code = str(exc) if str(exc) in {"server_identity_missing", "invalid pose", "invalid_plan", "scene_changed_replan"} else "invalid_input"
             return json.dumps(response(func.__name__, code=code.replace(" ", "_")))
         except Exception:
             # Exceptions may contain private body IDs or paths. Keep them out of tool results.

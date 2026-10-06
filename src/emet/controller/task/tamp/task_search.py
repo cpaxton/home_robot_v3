@@ -12,6 +12,8 @@ Grasp branches are ranked by offline position-IK feasibility before execution.
 
 from __future__ import annotations
 
+import copy
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -204,6 +206,7 @@ def plan_pick_place(
     executor: Any | None = None,
     approach_pose: Sequence[float] | None = None,
     approach_validator: Callable[[np.ndarray], bool] | None = None,
+    placements: dict | None = None,
 ) -> TaskPlan:
     """Build a grounded approach → grasp → place plan with IK-ranked grasps.
 
@@ -213,7 +216,7 @@ def plan_pick_place(
     expanded: list[str] = [f"goal:on({object_gt_body},{receptacle_query})"]
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 
-    pl = read_sim_object_placements(robot.get_emet_session()) or {}
+    pl = (read_sim_object_placements(robot.get_emet_session()) or {}) if placements is None else placements
     if object_gt_body not in pl:
         return TaskPlan(
             steps=[],
@@ -375,8 +378,10 @@ def execute_task_plan(
             goal = f"{plan.object_body} → {plan.receptacle_body}"
         video_recorder.set_status(action, goal=goal, detail=detail)
 
+    operation_id = None
+
     def _measure(op: str) -> None:
-        if executor is None:
+        if operation_id is None or getattr(executor, "operation_id", None) != operation_id:
             return
         evidence = {"stage": op}
         for name, fields in {
@@ -389,7 +394,7 @@ def execute_task_plan(
             if isinstance(value, dict):
                 evidence[name] = {k: value.get(k) for k in fields}
         if len(evidence) > 1:
-            plan.measurements.append(evidence)
+            plan.measurements.append(copy.deepcopy(evidence))
 
     def _fail(op: str, code: str) -> TaskPlan:
         plan.success = False
@@ -402,6 +407,11 @@ def execute_task_plan(
     for step in plan.steps:
         op = step.op
         args = step.args
+        operation_id = None
+        begin = getattr(executor, "begin_operation", None)
+        if callable(begin):
+            operation_id = uuid.uuid4().hex
+            begin(operation_id)
         logger.info(f"TAMP execute: {op} {args}")
         if op == "approach":
             _status("approach", detail=f"xyt={args.get('xyt')}")
@@ -514,6 +524,7 @@ def plan_pick_place_mcts(
     approach_validator: Callable[[np.ndarray], bool] | None = None,
     plan_validator: Callable[[TaskPlan], bool] | None = None,
     max_candidates: int = 64,
+    placements: dict | None = None,
 ) -> TaskPlan:
     """MCTS over candidate (object, receptacle) task assignments.
 
@@ -542,7 +553,7 @@ def plan_pick_place_mcts(
 
     if max_candidates < 1 or mcts_iterations < 1:
         raise ValueError("Search budgets must be positive")
-    pl = read_sim_object_placements(robot.get_emet_session()) or {}
+    pl = (read_sim_object_placements(robot.get_emet_session()) or {}) if placements is None else placements
     cands = [
         c
         for c in candidates
@@ -637,6 +648,7 @@ def plan_pick_place_mcts(
             executor=executor,
             approach_pose=cand.get("approach_pose"),
             approach_validator=approach_validator,
+            placements=pl,
         )
         plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())

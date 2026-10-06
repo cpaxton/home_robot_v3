@@ -52,8 +52,14 @@ Immutable checkout: `/tmp/emet-tamp-api-20261005` (shared environments are linke
 tracked source is frozen).
 Managed job: `20261005_183936_f4b352`, submitted after the regression suite.
 Artifacts: `~/runs/emet/tamp-api-readiness-20261005/`.
-At handoff the job is **waiting for the shared GPU**, behind existing work. There
-are no new live scores yet; 2/3 remains the last measured repeat result.
+The job finished **failed**. CHAT completed approach and grasp, then placement
+raised a RuntimeError during its base approach. Only scene00 passed reference
+admission (1/3); scene02 and scene12 failed reference execution. Scene00 repeats
+scored 2/3 full cleanups and 8/9 relocated objects. `readiness.json` reports
+`ready: false`. These are new trials, separate from the earlier 2/3 result.
+The October 6 review identified stale snapshot binding, recycled task handles,
+and grasp measurements copied into the failed placement record. See the
+[API correctness repair](tamp_api_correctness_20261006.md).
 
 ```bash
 EMET_UV_RUN=1 .venv/bin/emet jobs status 20261005_183936_f4b352

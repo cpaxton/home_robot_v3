@@ -12,6 +12,9 @@ tools.
 
 from __future__ import annotations
 
+import copy
+import json
+import uuid
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -36,6 +39,19 @@ class AgentTaskRef:
 
 
 @dataclass(frozen=True)
+class PlanningSnapshot:
+    """Immutable grounding inputs; decoding always returns a private copy."""
+
+    server_boot_id: str
+    session_key: tuple[str, ...]
+    capabilities_json: str
+    placements_json: str
+
+    def placements(self) -> dict:
+        return json.loads(self.placements_json)
+
+
+@dataclass(frozen=True)
 class AgentPlanBuild:
     """Result of resolving and grounding an agent task."""
 
@@ -44,6 +60,7 @@ class AgentPlanBuild:
     mode: str | None
     live_sim: bool
     reason: str = ""
+    snapshot: PlanningSnapshot | None = None
 
 
 def robot_session_key(robot: Any) -> tuple[str, ...]:
@@ -52,6 +69,10 @@ def robot_session_key(robot: Any) -> tuple[str, ...]:
     session = robot.get_emet_session()
     if not isinstance(session, dict) or not session.get("is_simulation"):
         return ()
+    return _session_key(session, _server_boot(robot))
+
+
+def _session_key(session: dict, boot: str | None) -> tuple[str, ...]:
     environment = session.get("environment") or {}
     if not isinstance(environment, dict):
         environment = {}
@@ -60,7 +81,7 @@ def robot_session_key(robot: Any) -> tuple[str, ...]:
         str(environment.get("scene") or ""),
         str(environment.get("index") if environment.get("index") is not None else ""),
         str(session.get("scene_source_basename") or ""),
-        str(_server_boot(robot) or ""),
+        str(boot or ""),
     )
 
 
@@ -148,6 +169,7 @@ def stable_scene_task_refs(
         context["_tamp_task_refs"] = {}
         context["_tamp_task_ref_keys"] = {}
         context["_tamp_task_counter"] = 0
+        context["_tamp_task_namespace"] = uuid.uuid4().hex
     by_key = context.setdefault("_tamp_task_ref_keys", {})
     refs_by_name = context.setdefault("_tamp_task_refs", {})
     out: list[AgentTaskRef] = []
@@ -163,7 +185,8 @@ def stable_scene_task_refs(
         if not isinstance(handle, str) or not handle:
             counter = int(context.get("_tamp_task_counter", 0)) + 1
             context["_tamp_task_counter"] = counter
-            handle = f"task:{counter}"
+            namespace = context.setdefault("_tamp_task_namespace", uuid.uuid4().hex)
+            handle = f"task:{namespace}:{counter}"
             by_key[key] = handle
         registered = replace(ref, ref=handle)
         refs_by_name[handle] = registered
@@ -178,12 +201,13 @@ def resolve_agent_task(
     *,
     object_body: str | None = None,
     receptacle_body: str | None = None,
+    placements: dict | None = None,
 ) -> tuple[AgentTaskRef | None, str, bool]:
     """Resolve semantic queries against the live sim without exposing body IDs."""
 
     from emet.eval.ovmm_find_phase import bodies_matching_category
 
-    placements = _read_placements(robot)
+    placements = _read_placements(robot) if placements is None else placements
     if not placements:
         return None, "no_live_scene", False
 
@@ -236,12 +260,31 @@ def build_agent_pick_place_plan(
 ) -> AgentPlanBuild:
     """Resolve a semantic task and ground it with the available sim manipulator."""
 
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+    session = copy.deepcopy(robot.get_emet_session()) if robot is not None and hasattr(robot, 'get_emet_session') else None
+    if not isinstance(session, dict) or not session.get('is_simulation'):
+        return AgentPlanBuild(None, None, None, False, 'no_live_scene')
+    # Capture a fresh session between boot checks, not after grounding.
+    boot = _server_boot(robot)
+    session = copy.deepcopy(robot.get_emet_session())
+    placements = read_sim_object_placements(session) or {}
+    if not placements:
+        return AgentPlanBuild(None, None, None, False, 'no_live_scene')
+    if not boot:
+        return AgentPlanBuild(None, None, None, True, 'server_identity_missing')
+    snapshot = PlanningSnapshot(boot, _session_key(session, boot),
+                                json.dumps(session.get('capabilities') or {}, sort_keys=True),
+                                json.dumps(placements, default=lambda v: v.tolist()))
+    if snapshot.session_key != robot_session_key(robot):
+        return AgentPlanBuild(None, None, None, True, 'scene_changed_replan')
     task, reason, live_sim = resolve_agent_task(
         robot,
         object_query,
         receptacle_query,
         object_body=object_body,
         receptacle_body=receptacle_body,
+        placements=snapshot.placements(),
     )
     if task is None:
         return AgentPlanBuild(task=None, plan=None, mode=None, live_sim=live_sim, reason=reason)
@@ -253,6 +296,9 @@ def build_agent_pick_place_plan(
     except (RuntimeError, ValueError):
         return AgentPlanBuild(task=task, plan=None, mode=None, live_sim=True, reason="manipulation_unavailable")
 
+    reason = _validate_snapshot(robot, snapshot, task)
+    if reason:
+        return AgentPlanBuild(task, None, mode, True, reason)
     grounding_executor = None
     if mode == "kinematic":
         from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
@@ -273,10 +319,14 @@ def build_agent_pick_place_plan(
             executor=grounding_executor,
             mcts_iterations=64,
             seed=seed,
+            placements=snapshot.placements(),
         )
     except Exception:
         return AgentPlanBuild(task=task, plan=None, mode=mode, live_sim=True, reason="planner_error")
-    return AgentPlanBuild(task=task, plan=plan, mode=mode, live_sim=True, reason=plan.message)
+    reason = _validate_snapshot(robot, snapshot, task)
+    if reason:
+        return AgentPlanBuild(task, None, mode, True, reason)
+    return AgentPlanBuild(task=task, plan=plan, mode=mode, live_sim=True, reason=plan.message, snapshot=snapshot)
 
 
 def _server_boot(robot: Any) -> str | None:
@@ -295,26 +345,53 @@ def _pose(info: dict) -> tuple[np.ndarray, np.ndarray]:
     return pos.copy(), quat / np.linalg.norm(quat)
 
 
+def _validate_snapshot(robot: Any, snapshot: PlanningSnapshot, task: AgentTaskRef) -> str | None:
+    if snapshot.session_key != robot_session_key(robot):
+        return 'scene_changed_replan'
+    session = robot.get_emet_session()
+    if json.dumps(session.get('capabilities') or {}, sort_keys=True) != snapshot.capabilities_json:
+        return 'scene_changed_replan'
+    expected = snapshot.placements()
+    current = _read_placements(robot)
+    for body in (task.object_body, task.receptacle_body):
+        try:
+            p0, q0 = _pose(expected[body])
+            p1, q1 = _pose(current[body])
+        except (KeyError, TypeError, ValueError):
+            return 'invalid_plan'
+        angle = 2 * np.arccos(np.clip(abs(float(np.dot(q0, q1))), 0, 1))
+        if np.linalg.norm(p1 - p0) > .01 or angle > np.deg2rad(5):
+            return 'scene_changed_replan'
+    if snapshot.session_key != robot_session_key(robot):
+        return 'scene_changed_replan'
+    return None
+
+
 def store_agent_plan(context: dict[str, Any], robot: Any, build: AgentPlanBuild) -> str:
     """Store a grounded plan under an opaque, one-shot session handle."""
 
     if build.task is None or build.plan is None or not build.plan.success or build.mode is None:
         raise ValueError("cannot store an incomplete TAMP plan")
-    placements = _read_placements(robot)
-    boot = _server_boot(robot)
-    if boot is None:
-        raise ValueError('server_identity_missing')
+    if build.snapshot is None:
+        raise ValueError('invalid_plan')
+    reason = _validate_snapshot(robot, build.snapshot, build.task)
+    if reason:
+        raise ValueError(reason)
+    placements = build.snapshot.placements()
+    boot = build.snapshot.server_boot_id
     object_pos, object_quat = _pose(placements[build.task.object_body])
     receptacle_pos, receptacle_quat = _pose(placements[build.task.receptacle_body])
     plans = context.setdefault("_tamp_plans", {})
     counter = int(context.get("_tamp_plan_counter", 0)) + 1
     context["_tamp_plan_counter"] = counter
-    plan_ref = f"plan:{counter}"
+    namespace = context.setdefault("_tamp_plan_namespace", uuid.uuid4().hex)
+    plan_ref = f"plan:{namespace}:{counter}"
     plans[plan_ref] = {
         "task": build.task,
         "plan": build.plan,
         "mode": build.mode,
-        "session_key": robot_session_key(robot),
+        "session_key": build.snapshot.session_key,
+        "snapshot": build.snapshot,
         "server_boot_id": boot,
         "object_quat": object_quat,
         "receptacle_quat": receptacle_quat,
@@ -347,23 +424,12 @@ def _validate_stored_plan(robot: Any, record: dict[str, Any]) -> str | None:
         return "invalid_plan"
     if task.object_body not in placements or task.receptacle_body not in placements:
         return "scene_changed_replan"
-    for body, key in (
-        (task.object_body, "object_pos"),
-        (task.receptacle_body, "receptacle_pos"),
-    ):
-        if key not in record or placements[body].get("pos") is None:
-            return "invalid_plan"
-        try:
-            expected = np.asarray(record[key], dtype=np.float64).reshape(3)
-            current, current_quat = _pose(placements[body])
-            expected_quat = np.asarray(record[key.replace('_pos', '_quat')], dtype=float).reshape(4)
-            if not np.isfinite(expected).all() or not np.isfinite(expected_quat).all():
-                return "invalid_plan"
-        except (KeyError, TypeError, ValueError):
-            return "invalid_plan"
-        angle = 2 * np.arccos(np.clip(abs(float(np.dot(current_quat, expected_quat))), 0, 1))
-        if float(np.linalg.norm(current - expected)) > 0.01 or angle > np.deg2rad(5):
-            return "scene_changed_replan"
+    snapshot = record.get('snapshot')
+    if not isinstance(snapshot, PlanningSnapshot):
+        return 'invalid_plan'
+    reason = _validate_snapshot(robot, snapshot, task)
+    if reason:
+        return reason
     try:
         poses = [step.args['xyt'] for step in record['plan'].steps if step.op == 'approach']
         if not poses:

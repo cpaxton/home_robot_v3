@@ -347,6 +347,12 @@ class KinematicPickPlaceExecutor:
                 return stem
         return None
 
+    def begin_operation(self, operation_id: str) -> None:
+        """Start a new task operator; previous measurements cannot attest to it."""
+        self.operation_id = operation_id
+        self.last_ee_verification = None
+        self.last_grasp_verification = None
+
     def _sync_qpos_from_robot(self) -> bool:
         assert self._model is not None and self._data is not None
         received = getattr(self.robot, "_state_received_monotonic", None)

@@ -9,7 +9,7 @@ helper remains available; tool callers use the structured bridge result.
 ## Common response, schema version 1
 
 ```json
-{"schema_version":1,"tool":"execute_pick_place_plan","status":"partial","code":"tracking_timeout","message":"tracking timeout","data":{"plan_ref":"plan:1","mode":"kinematic","assistance":["object_latch","object_placement"],"collision_scope":"base_endpoint_only","planned_ops":["approach","grasp","place"],"completed_ops":["approach"],"failed_stage":"grasp","measurements":[]},"recovery":"inspect"}
+{"schema_version":1,"tool":"execute_pick_place_plan","status":"partial","code":"tracking_timeout","message":"tracking timeout","data":{"plan_ref":"plan:example-namespace:1","mode":"kinematic","assistance":["object_latch","object_placement"],"collision_scope":"base_endpoint_only","planned_ops":["approach","grasp","place"],"completed_ops":["approach"],"failed_stage":"grasp","measurements":[]},"recovery":"inspect"}
 ```
 
 The same seven fields appear on successes and failures, including controller
@@ -48,19 +48,30 @@ Example sequence:
 
 ```json
 {"name":"scene_tasks","arguments":{"object_filter":"bowl"}}
-{"name":"plan_pick_place","arguments":{"task_ref":"task:1"}}
-{"name":"execute_pick_place_plan","arguments":{"plan_ref":"plan:1"}}
+{"name":"plan_pick_place","arguments":{"task_ref":"task:example-namespace:1"}}
+{"name":"execute_pick_place_plan","arguments":{"plan_ref":"plan:example-namespace:1"}}
 ```
 
 Use handles returned by preceding responses, not assumed counter values.
+Task handles have a random registry namespace and remain stable within a session,
+including filtered discovery. Scene/server changes create a new namespace. Plan
+handles also have a random context namespace; neither handle type is reusable
+across contexts. These opaque strings do not expose server boot IDs.
+The scripted smoke runner supports `$task_ref` (first task in the preceding
+successful discovery) and `$plan_ref` (preceding successful plan). These are
+runner substitutions, not arguments understood by the public tools. Failed
+planning stops dependent execution; scoring uses the resolved task reference.
 `scene_tasks` requires matching scene metadata; missing metadata returns
 `metadata_unavailable`. Reachability priors are advisory and identify whether
 live placements or a zero-pose proxy supplied their inputs.
 
 ## Preconditions and execution guarantees
 
-Plans bind to the command-protocol server boot, scene, selected capability, and
-finite object/receptacle poses. Quaternion signs are equivalent. Translation
+Before grounding, the bridge captures an immutable snapshot of command-protocol
+server boot, scene, capabilities and placements. Semantic resolution, grasp
+resolution and approach grounding share those copied placements. The original
+snapshot is revalidated after planning, before storage and before execution;
+storage never replaces it with newer poses. Unbound builds cannot be stored. Quaternion signs are equivalent. Translation
 changes over 0.01 m or rotation over 5 degrees require replanning. Restarted
 servers invalidate stored plans. The executor queries base endpoint clearance
 again immediately before motion; failed, malformed or unsupported queries stop
@@ -73,7 +84,11 @@ Common errors include `ambiguous_object`, `ambiguous_receptacle`, `unknown_plan`
 `joint_bounds`, `collision`, `ik_failed`, `planning_failed`, `tracking_timeout`,
 `stale_observation`, and `verification_failed`. A tracking timeout does not imply
 contact: contact causation requires separate measured evidence. Public results
-expose safe measurement summaries; detailed joint/contact diagnostics remain in
+expose safe measurement summaries. Each operation starts with cleared verification
+fields and a unique internal operation ID; results copy only evidence belonging
+to that operation. Early failure produces no new measurements, while completed
+operations retain their evidence. Executors without this evidence interface
+report no measurements. Detailed joint/contact diagnostics remain in
 experiment logs. Release or retraction failure must not report full success.
 
 ## Scope and validation

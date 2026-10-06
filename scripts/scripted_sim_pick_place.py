@@ -86,9 +86,18 @@ def run_scripted_tool_calls(
     print("Scripted tool_calls:")
     print(json.dumps(tool_calls, indent=2))
     ok_all = True
+    handles: dict[str, str] = {}
+    resolved_calls = []
     for i, call in enumerate(tool_calls):
         name = str(call.get("name") or "")
         args = dict(call.get("arguments") or {})
+        for key in ("task_ref", "plan_ref"):
+            if args.get(key) == f"${key}":
+                if key not in handles:
+                    print(f"[{i}] missing prior successful {key}", file=sys.stderr)
+                    return False
+                args[key] = handles[key]
+        resolved_calls.append({"name": name, "arguments": args})
         tool = tools_by_name.get(name)
         if tool is None:
             print(f"[{i}] unknown tool {name!r}", file=sys.stderr)
@@ -104,14 +113,24 @@ def run_scripted_tool_calls(
                     outcome = json.loads(result)
                     if outcome['schema_version'] != 1 or outcome['status'] != 'ok':
                         ok_all = False
+                        break
+                    if name == 'scene_tasks':
+                        handles.pop('task_ref', None)
+                        tasks = outcome['data'].get('tasks') or []
+                        if tasks:
+                            handles['task_ref'] = tasks[0]['task_ref']
+                    elif name == 'plan_pick_place':
+                        handles['plan_ref'] = outcome['data']['plan_ref']
                 except (TypeError, ValueError, KeyError):
                     ok_all = False
+                    break
             elif isinstance(result, str) and "fail" in result.lower():
                 ok_all = False
 
         else:
             print(f"[{i}] tool {name!r} has no callable implementation", file=sys.stderr)
             ok_all = False
+    context["_scripted_resolved_calls"] = resolved_calls
     if context_out is not None:
         context_out.update(context)
     return ok_all
@@ -122,7 +141,7 @@ def _planned_receptacle_body(tool_calls: list[dict[str, Any]], context: dict[str
     refs = context.get("_tamp_task_refs")
     if not isinstance(refs, dict):
         return None
-    for call in tool_calls:
+    for call in context.get("_scripted_resolved_calls", tool_calls):
         if str(call.get("name")) != "plan_pick_place":
             continue
         args = call.get("arguments") or {}

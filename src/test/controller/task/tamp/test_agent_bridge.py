@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -81,8 +82,8 @@ def test_scene_task_refs_are_stable_until_session_changes():
         session_key=("molmospaces", "ithor", "1", "FloorPlan2.xml"),
     )
 
-    assert first[0].ref == repeated[0].ref == "task:1"
-    assert changed[0].ref == "task:1"
+    assert first[0].ref == repeated[0].ref
+    assert changed[0].ref != first[0].ref
 
 
 def test_semantic_plan_build_keeps_grounding_inside_adapter(monkeypatch):
@@ -156,7 +157,9 @@ def test_stored_plan_revalidates_pose_and_is_one_shot():
         success=True,
         message="planned",
     )
-    build = agent_bridge.AgentPlanBuild(task=task, plan=plan, mode="kinematic", live_sim=True)
+    snapshot = agent_bridge.PlanningSnapshot('test-boot', agent_bridge.robot_session_key(robot),
+                                             json.dumps(robot.capabilities, sort_keys=True), json.dumps(placements))
+    build = agent_bridge.AgentPlanBuild(task=task, plan=plan, mode="kinematic", live_sim=True, snapshot=snapshot)
     context: dict = {}
     plan_ref = agent_bridge.store_agent_plan(context, robot, build)
 
@@ -187,7 +190,7 @@ def test_bridge_grounds_auto_approach_selection():
     class _QueryRobot(_Robot):
         def __init__(self):
             super().__init__(placements, capabilities={"sim_set_body_pose": True})
-            self._state = {"sim_base_pose_query": True}
+            self._state["sim_base_pose_query"] = True
 
         def check_base_poses(self, poses):
             queries.append([np.asarray(p).tolist() for p in poses])
