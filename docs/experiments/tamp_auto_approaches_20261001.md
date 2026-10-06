@@ -54,18 +54,23 @@ generic error alone does not identify which predicate failed.
 
 Replay 2's `process.log` gives concrete signals for both failures:
 
-- **Apple (pregrasp).** The archived measurement reports `left_arm_joint1`
-  at -1.025518 rad against -1.033738 rad (0.008220 rad error), and
-  `left_arm_joint2` at 1.624856 rad against 1.632452 rad (0.007597 rad error).
-  The largest joint error is 0.035933 rad at `torso_joint1`. The prior claim of
-  a roughly 1 rad shoulder stall was a transcription error. Cartesian error
-  remains 86.026 mm; these joint values alone do not establish contact or a
-  joint-limit cause. Server targets match the planned commands.
+- **Apple (pregrasp).** FK attribution (`scripts/diagnose_tamp_ee_error.py`)
+  reconstructs the plan at 6.3 mm from the target — the IK plan is correct — while
+  the executed EE is 86.0 mm from target. The gap is tracking lag on the torso,
+  whose long lever arms turn ~0.03 rad errors into ~89 mm: `torso_joint1` 0.036 rad
+  → 31.6 mm, `torso_joint3` -0.032 rad → 27.3 mm, `torso_joint2` 0.021 rad →
+  23.8 mm, `torso_joint4` 0.012 rad → 6.2 mm; every arm joint contributes ≤3.1 mm.
+  This is torso settling lag, not contact, a joint limit, or a plan error. Server
+  targets match the planned commands.
 - **Kettle (`invalid_start`).** Pregrasp arrival was accepted (33.7 mm), then the
-  grasp plan failed on `invalid_start`. This harness runs `manip_collision="none"`,
-  so the collision predicate is absent and `invalid_start` can only be a joint-bounds
-  violation on the measured start posture. `dec3e26e` adds an `ArmRrtPlanResult.detail`
-  field so a replay names the offending joint instead of the generic reason.
+  grasp plan failed on `invalid_start`. FK attribution shows the accepted pregrasp
+  posture pins `torso_joint2` at 2.53077 rad against the offline model's 2.5307 rad
+  upper limit, and `left_arm_joint2` at its 0 rad lower limit. The measured start
+  exceeds the model bound by ~7e-5 rad, so the next plan's start predicate
+  (`qq > hi + 1e-6`) rejects it as out-of-bounds. This is a limit-margin mismatch,
+  not collision (the harness runs `manip_collision="none"`). `dec3e26e` adds an
+  `ArmRrtPlanResult.detail` field so the replay names `joint_bounds:torso_joint2`
+  directly.
 
 Both trials selected a collision-clear base endpoint; this does not establish
 whole-arm feasibility or exclude approach-dependent execution failures. Re-diagnosis (contact reconstruction for the apple, joint-bound detail for the
