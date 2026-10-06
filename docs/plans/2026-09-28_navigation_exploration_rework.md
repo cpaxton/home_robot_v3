@@ -649,3 +649,54 @@ pip cache purge, which reported zero package files. Free space subsequently
 measured about 23 GB versus 435 MB initially; do not attribute all reclaimed
 space to that command. No experiment bundles, datasets, model weights, uv
 cache or worktrees were deleted by this agent. New simulation cleared 10 GB gate.
+
+### October 6: pilot results and shared head capability
+
+The October 5 room pilot finished with **0/3 object and 0/3 receptacle
+localizations**. S0 reached two object inspection poses; Molmo reached two
+object and three receptacle poses; RoboCasa reached three object poses.
+Arrival alone is not useful-view or task acceptance. The paired EQA smoke
+finished **1/3 for both revisions**, with q15 correct and q2/q25 wrong on each.
+All six EQA records are present. This is unchanged correctness on a small
+smoke, not evidence of general non-regression or an accuracy improvement.
+
+Molmo exposed an interface inconsistency: an elevated voxel hypothesis at
+world Z 2.538 m requested tilt +0.756 rad, but the client silently clipped it
+to zero despite the active simulator joint allowing upward tilt. Measured
+tilt stayed near zero. The hypothesis is not a verified microwave; repairing
+control does not certify its semantic identity. The next round repeated the
+same request, while router state omitted the limit/pose failure details.
+
+Runtime `eb1e0890` introduces one effective `HeadCapability` consumed by head
+commands and arrival-inspection preflight. Simulation advertises the
+intersection of active joint and direct position-actuator limits; unsupported
+actuator mappings abstain. Stretch simulation retains its established pan
+envelope, but can use advertised model tilt bounds. Real Stretch and old
+bridges retain the conservative legacy limits. No hardware range expansion,
+base reversal, collision relaxation, or new semantic verifier is introduced.
+
+An infeasible look now returns `TARGET_OUTSIDE_VIEW` / `HEAD_LIMIT` before
+sending the head command, including requested angles, effective limits and
+guidance to select another collision-checked viewpoint. The failure reaches
+agent state explicitly as an inspection limitation, not evidence of object
+absence. Measured head arrival and fresh-frame checks remain required after
+feasible commands. Automatic selection of an alternate reachable viewing
+pose is still open; this change supplies the contract for it.
+
+Validation: 239 broader agentic/OVMM/session/head-spec tests and 25 focused
+head-capability/inspection-feedback tests pass (overlapping suites). Frozen
+runtime `/tmp/emet-head-eb1e0890`, stationary diagnostic
+`20261006_160307_45da38`, requests the exact +0.756-rad tilt and measures head
+arrival/base drift. Output root:
+`~/runs/emet/navigation-head-capability-20261006/`. It passed: advertised tilt
+[-1.53, +0.79], measured tilt +0.686 rad versus +0.756 requested, within the
+existing 0.12-rad tolerance; base drift 0.00000294 m. This diagnostic is not
+semantic localization or full collision acceptance. Driver is preserved as
+`~/runs/emet/jobs_runs/nav-head-capability-1006/driver.py`.
+
+Fresh learned Molmo search `20261006_160636_2837e8` uses the same frozen runtime,
+model/config/seed and 4 mapping views / 6 rounds / 3 navigation steps, with
+teleports disabled. It is CPU-safe/GPU-exclusive and starts after the diagnostic
+finished. Results pending at `~/runs/emet/navigation-head-molmo-20261006/`.
+Inspect requested/measured head state, failure feedback and resulting RGB
+before claiming useful inspection or semantic success.

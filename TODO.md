@@ -51,8 +51,18 @@ Implementation and acceptance specification:
       frame; one forward reset shares the existing two-command budget. Stationary
       Molmo sensor-target check passes (`20261005_182928_024a2e`), but its target
       began outside/in-front, not behind; behind-camera reset is unit-tested.
-      Room pilot `20261005_183231_5c54a0` and paired EQA q2/15/25
-      `20261005_183235_4313af` are pending. Do not claim task acceptance yet.
+      Room pilot `20261005_183231_5c54a0` finished 0/3 objects + 0/3
+      receptacles. Paired EQA q2/15/25 `20261005_183235_4313af` matched
+      baseline at 1/3 (only q15 correct); small smoke, not general acceptance.
+      `eb1e0890` unifies adapter/head-inspection limits and exposes `HEAD_LIMIT`
+      with requested angles, effective limits and alternate-viewpoint guidance.
+      Active simulator limits replace the stale zero-upward-tilt clamp only
+      for advertised Stretch simulation; real Stretch retains its safety bounds.
+      Stationary +0.756-rad check `20261006_160307_45da38` passes: measured
+      +0.686 rad, within existing 0.12-rad tolerance; base drift 0.00000294 m.
+      Fresh Molmo search `20261006_160636_2837e8` is pending; do not conflate
+      command-range validation with object localization or task acceptance.
+      Automatic collision-checked alternative-viewpoint selection remains open.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
       Preserve unchanged safety/arrival limits and three-repeat gate.
