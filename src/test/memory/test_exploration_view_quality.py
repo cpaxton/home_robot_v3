@@ -160,3 +160,16 @@ def test_physical_inspection_rejects_missing_camera_geometry():
     result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 0, 1])
     assert not result["ok"] and result["reason"] == "missing_geometry"
     ex.agent.robot.head_to.assert_not_called()
+
+
+def test_head_limit_is_exposed_before_sending_impossible_command():
+    from emet.robots.head_capability import STRETCH_LEGACY_HEAD
+
+    ex = arrival_executor()
+    ex.agent.robot.get_head_capability = lambda: STRETCH_LEGACY_HEAD
+    result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, -2, 1])
+    assert result["reason"] == "HEAD_LIMIT"
+    assert result["look_at"]["requested_pan_tilt"][1] > 0
+    assert result["look_at"]["limits"]["tilt"][1] == 0
+    assert result["look_at"]["recovery"] == "choose_another_collision_checked_viewpoint"
+    ex.agent.robot.head_to.assert_not_called()

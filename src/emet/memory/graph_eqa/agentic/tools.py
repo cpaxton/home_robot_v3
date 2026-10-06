@@ -363,6 +363,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     from emet.controller.dynamem.look import supports_floor_observation
 
     text = _build_state_message(executor)
+    failure = getattr(executor, "_last_inspection_failure", None)
+    if failure:
+        text += "\nLast inspection failure (not object absence): " + json.dumps(failure)
+        if failure.get("reason") == "HEAD_LIMIT":
+            text += "\nDo not repeat this look from the same pose; choose another collision-checked viewing location."
     if getattr(executor, "_require_grounded_object", False):
         text += (
             "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "

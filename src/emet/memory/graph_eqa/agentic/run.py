@@ -59,6 +59,7 @@ def run(self) -> AgenticEQAResult:
     self._router_path_world = []
     self._router_path_m = 0.0
     self._recent_actions = []
+    self._last_inspection_failure = None
     self._action_history = []
     self._tool_dispatch_depth = 0
     self._action_selected_by = "internal"

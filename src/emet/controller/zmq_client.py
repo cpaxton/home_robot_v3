@@ -79,11 +79,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
 
-    _head_pan_min = -np.pi
-    _head_pan_max = np.pi / 4
-    _head_tilt_min = -np.pi
-    _head_tilt_max = 0
-
     def _create_recv_socket(
         self,
         port: int,
@@ -560,6 +555,19 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         next_action = {"joint": joint_angles, "manip_blocking": blocking}
         self.send_action(next_action=next_action, timeout=timeout)
 
+    def get_head_capability(self):
+        from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability
+
+        session = self.get_emet_session()
+        # Only the explicit simulator advertisement can expand legacy limits.
+        if (
+            isinstance(session, dict)
+            and session.get("runtime_kind") == "stretch_mujoco_sim"
+            and session.get("is_simulation") is True
+        ):
+            return HeadCapability.from_session(session) or STRETCH_LEGACY_HEAD
+        return STRETCH_LEGACY_HEAD
+
     def head_to(
         self,
         head_pan: float,
@@ -577,16 +585,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             timeout: How long to wait for the motion to complete
             reliable: Whether to resend the action if it is not received
         """
-        if head_pan < self._head_pan_min or head_pan > self._head_pan_max:
-            logger.warning(
-                f"Head pan is restricted to be between {self._head_pan_min} and {self._head_pan_max} for safety: was {head_pan}"
-            )
-        if head_tilt > self._head_tilt_max or head_tilt < self._head_tilt_min:
-            logger.warning(
-                f"Head tilt is restricted to be between {self._head_tilt_min} and {self._head_tilt_max} for safety: was{head_tilt}"
-            )
-        head_pan = np.clip(head_pan, self._head_pan_min, self._head_pan_max)
-        head_tilt = np.clip(head_tilt, -np.pi / 2, 0)
+        capability = self.get_head_capability()
+        if not capability.contains([head_pan, head_tilt]):
+            logger.warning(f"Head request exceeds effective limits: {capability.as_dict()}")
+        head_pan = np.clip(head_pan, *capability.pan)
+        head_tilt = np.clip(head_tilt, *capability.tilt)
         next_action = {"head_to": [float(head_pan), float(head_tilt)], "manip_blocking": blocking}
         sent = self.send_action(next_action, timeout=timeout, reliable=reliable)
 

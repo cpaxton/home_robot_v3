@@ -92,3 +92,17 @@ def test_floor_views_have_distinct_action_signatures():
     first = _action_signature(ex, "observe_floor", {"tilt_rad": -1.0})
     second = _action_signature(ex, "observe_floor", {"tilt_rad": -1.3})
     assert first != second
+
+
+def test_head_limit_is_visible_to_router_not_just_nested_capture(monkeypatch):
+    monkeypatch.setattr(tools, "_build_state_message", lambda ex: "existing state")
+    ex = executor(physical=False)
+    ex._last_inspection_failure = {
+        "candidate_id": -1,
+        "reason": "HEAD_LIMIT",
+        "look_at": {"requested_pan_tilt": [0, 0.75], "limits": {"tilt": [-1.57, 0]}},
+    }
+    text = tools.build_state_message(ex)
+    assert "HEAD_LIMIT" in text and "requested_pan_tilt" in text
+    assert "Do not repeat this look" in text
+    assert "not object absence" in text

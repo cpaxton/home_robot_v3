@@ -427,9 +427,15 @@ def _tool_investigate(
 
     cap = aim_arrival_view(self, cap, self._hypothesis_nav_anchor_xyz(oid))
     if cap.get("status") == "TARGET_OUTSIDE_VIEW":
+        self._last_inspection_failure = {
+            "candidate_id": oid,
+            "reason": cap.get("reason"),
+            "look_at": cap.get("look_at"),
+        }
         return {
             "ok": False,
             "status": "TARGET_OUTSIDE_VIEW",
+            "reason": cap.get("reason"),
             "obs_id": oid,
             "nav_outcome": nav_outcome_str,
             "nav_progress": nav_progress,
@@ -437,6 +443,7 @@ def _tool_investigate(
             "verify": None,
         }
     grounding = None
+    self._last_inspection_failure = None
     if query_candidate:
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
         self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})

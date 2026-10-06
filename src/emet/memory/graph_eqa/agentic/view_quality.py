@@ -65,6 +65,21 @@ def aim_arrival_view(executor, capture, target_xyz):
                 commanded = np.array([pan + delta_pan, tilt + delta_tilt])
             # The adapter owns safety clipping. Require measured arrival at the
             # requested pose; never mistake a clipped/stalled motion for success.
+            get_capability = getattr(robot, "get_head_capability", None)
+            capability = get_capability() if callable(get_capability) else None
+            if capability is not None and not capability.contains(commanded):
+                return {
+                    **capture,
+                    "ok": False,
+                    "status": "TARGET_OUTSIDE_VIEW",
+                    "reason": "HEAD_LIMIT",
+                    "look_at": {
+                        "target_world_xyz": list(map(float, target_xyz)),
+                        "requested_pan_tilt": commanded.tolist(),
+                        "limits": capability.as_dict(),
+                        "recovery": "choose_another_collision_checked_viewpoint",
+                    },
+                }
             if head_to(*map(float, commanded), blocking=True) is False:
                 reason = "head_motion_failed"
                 break
