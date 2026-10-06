@@ -9,8 +9,12 @@ Strike through or move to a PR when done.
 - [x] Consistent JSON across all four TAMP tools; boot/pose/clearance guards,
       partial execution evidence and stale-state checks. Full regression pack: 206 passed.
 - [x] Correct unsupported shoulder-stall diagnosis; retain object-independent failures.
-- [ ] Finish managed live gate `20261005_183936_f4b352` (queued): CHAT smoke,
-      three new admissions, nine fresh MCTS repeats. No readiness claim until all pass.
+- [x] Complete gate `20261005_183936_f4b352`: failed CHAT smoke, 1/3 admitted,
+      2/3 scored replays passed. Simulator readiness remains failed.
+- [x] Repair planning snapshots, handle namespaces, and operation-scoped evidence;
+      218 regression tests pass. See `docs/experiments/tamp_api_correctness_20261006.md`.
+- [ ] Inspect fresh CHAT smoke `20261006_160739_730b9a` (queued behind GPU work).
+      Resolve general motion failures before repeating the nine-trial readiness matrix.
       See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
 
 ## TAMP agent execution follow-up (2026-09-29)

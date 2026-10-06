@@ -36,3 +36,22 @@ measured grasp. Detailed live source/job provenance follows after submission.
 Only the actual CHAT smoke is rerun for this API repair. The nine-trial matrix
 remains deferred until motion changes justify repeating it. A failed motion smoke
 with correct JSON and evidence remains a failed readiness gate.
+
+## Frozen source and smoke submission
+
+- Repair commit: `290a8147`; immutable checkout `/tmp/emet-tamp-api-fixes-20261006`.
+- Full regression suite: **218 passed**. Ruff, shell syntax, and whitespace checks pass.
+- Managed CHAT smoke: `20261006_160739_730b9a`.
+- Artifacts: `~/runs/emet/tamp-api-correctness-20261006/`.
+- At handoff, the smoke is **waiting for the shared GPU lock**, behind another
+  agent's navigation evaluation. It has not produced a live result yet.
+
+```bash
+EMET_UV_RUN=1 .venv/bin/emet jobs status 20261006_160739_730b9a
+EMET_UV_RUN=1 .venv/bin/emet jobs logs 20261006_160739_730b9a --tail 60
+cat ~/runs/emet/tamp-api-correctness-20261006/results/gate_summary.txt
+```
+
+When terminal, inspect the JSON response and final-scene score separately. For an
+early placement-approach failure, completed grasp evidence must remain, and no
+placement EE record may reuse it. No new motion-success claim is made at handoff.
