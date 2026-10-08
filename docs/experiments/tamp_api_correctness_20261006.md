@@ -83,3 +83,9 @@ An initial static reconstruction (`20261008_174338_e34ba5`, artifacts under
 and base height zero. Its collision results **cannot attribute the live failure**:
 the supported live base height and joint state were not reconstructed. Keep this
 artifact as preliminary evidence, not a collision or reachability verdict.
+
+Diagnostic replay submitted October 8 as `20261008_174720_1cbb35`, frozen at
+`4f16f27a` in `/tmp/emet-tamp-place-diagnosis-20261008`. It acquired the shared GPU
+lock; results are pending. Artifacts:
+`~/runs/emet/tamp-place-diagnosis-20261008/live-results/` and `live-job/job.log`.
+This repeats the same actual CHAT smoke without changing task selection or bounds.
