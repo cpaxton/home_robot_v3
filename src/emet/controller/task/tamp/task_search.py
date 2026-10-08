@@ -471,6 +471,9 @@ def execute_task_plan(
                         receptacle_gt_body=args.get("receptacle_gt_body"),
                     )
                 except Exception as exc:
+                    # Preserve private command/receipt detail for diagnosis without
+                    # leaking simulator identities into the agent-facing response.
+                    logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not result.success:
                     return _fail(op, f"place_failed:{result.message}")
@@ -485,6 +488,9 @@ def execute_task_plan(
                         receptacle_gt_body=args.get("receptacle_gt_body"),
                     )
                 except Exception as exc:
+                    # Preserve private command/receipt detail for diagnosis without
+                    # leaking simulator identities into the agent-facing response.
+                    logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not ok:
                     return _fail(op, "teleport_place_failed")

@@ -13,7 +13,9 @@ Strike through or move to a PR when done.
       2/3 scored replays passed. Simulator readiness remains failed.
 - [x] Repair planning snapshots, handle namespaces, and operation-scoped evidence;
       218 regression tests pass. See `docs/experiments/tamp_api_correctness_20261006.md`.
-- [ ] Inspect fresh CHAT smoke `20261006_160739_730b9a` (queued behind GPU work).
+- [x] Inspect CHAT smoke `20261006_160739_730b9a`: pickup passed, placement failed;
+      returned handles and operation-scoped partial evidence behaved correctly.
+- [ ] Capture the placement command failure reason with private diagnostic logging.
       Resolve general motion failures before repeating the nine-trial readiness matrix.
       See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
 

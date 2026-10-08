@@ -281,9 +281,12 @@ def test_handles_never_recycle_across_sessions_or_contexts():
     assert bridge.store_agent_plan({}, robot, build) != bridge.store_agent_plan({}, robot, build)
 
 
-def test_place_exception_cannot_inherit_grasp_evidence():
+def test_place_exception_cannot_inherit_grasp_evidence(monkeypatch):
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp import task_search
     from emet.controller.task.tamp.task_search import execute_task_plan
+    messages = []
+    monkeypatch.setattr(task_search.logger, 'warning', messages.append)
 
     class Executor:
         begin_operation = KinematicPickPlaceExecutor.begin_operation
@@ -306,6 +309,8 @@ def test_place_exception_cannot_inherit_grasp_evidence():
     result = execute_task_plan(robot, plan, executor=ex, grasp_poses=[np.eye(4)], manip_mode="kinematic")
     assert result.completed_ops == ["approach", "grasp"]
     assert result.failed_op == "place"
+    assert any("base approach rejected" in message for message in messages)
+    assert "base approach rejected" not in result.message
     assert [m["stage"] for m in result.measurements] == ["grasp"]
     saved = result.measurements[0]["last_ee_verification"]["error_m"]
     ex.begin_operation("next-task")

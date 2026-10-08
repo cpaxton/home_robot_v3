@@ -43,8 +43,7 @@ with correct JSON and evidence remains a failed readiness gate.
 - Full regression suite: **218 passed**. Ruff, shell syntax, and whitespace checks pass.
 - Managed CHAT smoke: `20261006_160739_730b9a`.
 - Artifacts: `~/runs/emet/tamp-api-correctness-20261006/`.
-- At handoff, the smoke is **waiting for the shared GPU lock**, behind another
-  agent's navigation evaluation. It has not produced a live result yet.
+- Terminal result inspected October 8: **failed (exit 1)** during placement.
 
 ```bash
 EMET_UV_RUN=1 .venv/bin/emet jobs status 20261006_160739_730b9a
@@ -52,6 +51,35 @@ EMET_UV_RUN=1 .venv/bin/emet jobs logs 20261006_160739_730b9a --tail 60
 cat ~/runs/emet/tamp-api-correctness-20261006/results/gate_summary.txt
 ```
 
-When terminal, inspect the JSON response and final-scene score separately. For an
-early placement-approach failure, completed grasp evidence must remain, and no
-placement EE record may reuse it. No new motion-success claim is made at handoff.
+## Terminal result and diagnostic follow-up (2026-10-08)
+
+The selected task was a bowl relocation to the discovered dishwasher. Pickup
+completed; the three measured arm arrivals were accepted with errors 34.21,
+33.83, and 34.38 mm against the unchanged 35 mm bound. Lift verification measured
+4.82 mm target error and 160.43 mm upward displacement. These passes are close to
+the arm tolerance and do not establish broad motion robustness.
+
+Placement failed immediately after commanding base pose
+`[-1.3003053344777857, -0.8677246613042688, 2.8715410047128485]`.
+The captured exception was only `place_execution_error:RuntimeError`; its reason
+was discarded. The final object-to-selected-receptacle error was 2.2018 m.
+The live log alone cannot distinguish collision rejection from another command
+failure.
+
+Returned opaque handles worked, and JSON reported `partial`, completed approach
+and grasp, and failure at place. Measurements contained grasp evidence only,
+confirming that this early placement failure did not inherit grasp evidence as
+placement evidence. This is a failed readiness gate despite correct API behavior
+on the exercised path.
+
+Private exception logging now retains the command failure reason without adding
+simulator details to the public JSON. The focused TAMP and MCTS regression suite
+passes **46 tests**, including a check that the private exception detail stays
+out of the public result. A diagnostic rerun is needed to attribute the live
+failure before changing placement approach selection.
+
+An initial static reconstruction (`20261008_174338_e34ba5`, artifacts under
+`~/runs/emet/tamp-place-diagnosis-20261008/`) used default model joint positions
+and base height zero. Its collision results **cannot attribute the live failure**:
+the supported live base height and joint state were not reconstructed. Keep this
+artifact as preliminary evidence, not a collision or reachability verdict.
