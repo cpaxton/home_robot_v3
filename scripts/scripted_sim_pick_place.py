@@ -72,6 +72,7 @@ def run_scripted_tool_calls(
     *,
     manip_mode: str,
     context_out: dict[str, Any] | None = None,
+    video_recorder: Any = None,
 ) -> bool:
     """Run agent-shaped tool calls through the live CHAT tool implementation."""
     from emet.agent.tools import get_tools
@@ -88,6 +89,7 @@ def run_scripted_tool_calls(
     ok_all = True
     handles: dict[str, str] = {}
     resolved_calls = []
+    media_events = []
     for i, call in enumerate(tool_calls):
         name = str(call.get("name") or "")
         args = dict(call.get("arguments") or {})
@@ -103,10 +105,27 @@ def run_scripted_tool_calls(
             print(f"[{i}] unknown tool {name!r}", file=sys.stderr)
             ok_all = False
             continue
+        if video_recorder is not None:
+            video_recorder.set_status(name, detail=f"requested state: {args.get('state', '')}")
+            time.sleep(1.0)  # Recording-only dwell; do not interpolate joint teleports.
+            video_recorder.dump_paper_stills(f"{i:02d}_before_{name}")
         print(f"[{i}] {name}({args})")
         if tool.func is not None:
             result = tool.func(**args) if args else tool.func()
             print(f"    -> {result}")
+            if video_recorder is not None:
+                time.sleep(1.0)  # Allow a rendered observation after the measured receipt.
+                stills = video_recorder.dump_paper_stills(f"{i:02d}_after_{name}_{args.get('state', '')}")
+                try:
+                    public_result = json.loads(result)
+                except (TypeError, ValueError):
+                    public_result = None
+                media_events.append({"tool": name, "requested_state": args.get("state"),
+                                     "result": public_result,
+                                     "stills": {k: str(v) for k, v in stills.items()}})
+                video_recorder.out_path.with_suffix(".json").write_text(
+                    json.dumps({"schema_version": 1, "recording_dwell_s": 1.0,
+                                "events": media_events}, indent=2) + "\n")
             from emet.controller.task.tamp.api import TAMP_TOOLS
             if name in TAMP_TOOLS:
                 try:
@@ -386,7 +405,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
-                    title=f"{manip_mode} CHAT pick-place",
+                    title="ASSISTED joint teleport (no door-sweep check)" if args.articulation_cycle else f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
                 video.start()
@@ -399,6 +418,7 @@ def main() -> int:
                 tool_calls,
                 manip_mode=manip_mode,
                 context_out=tool_context,
+                video_recorder=video,
             )
             if video is not None:
                 video.set_status("done")
