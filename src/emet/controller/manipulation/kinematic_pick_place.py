@@ -14,8 +14,10 @@ approach standoff but not enforced at the EE.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -687,6 +689,17 @@ class KinematicPickPlaceExecutor:
                 planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name)
 
         contacts = (self.ee_body, *self.profile.gripper_contact_bodies())
+        snapshot_root = os.environ.get("EMET_PLACEMENT_DIAGNOSTICS_DIR")
+        if snapshot_root:
+            from emet.motion.placement_replay import save_snapshot
+
+            snapshot = save_snapshot(Path(snapshot_root) / uuid.uuid4().hex, self._model, self._data,
+                scene=scene, payload=payload, object_centers=centers, base_candidates=poses,
+                joint_names=self.joint_names, ee_body=self.ee_body, robot_body=spec.base_link_name,
+                contact_bodies=contacts, rrt_max_iter=self.rrt_max_iter,
+                base_writer={"planar_joint_names": self._planar_joint_names(),
+                             "freejoint_name": self.profile.base_freejoint_name})
+            logger.info(f"Placement snapshot: {snapshot}")
         result = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,
             ee_body=self.ee_body, robot_body=spec.base_link_name, scene=scene, payload=payload,
             object_centers=centers, base_candidates=poses, set_base=set_base, contact_bodies=contacts,

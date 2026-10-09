@@ -176,3 +176,23 @@ This is a Python API used by the existing TAMP tools, not an additional CHAT
 tool. The [agent API](tamp.md) describes the public JSON interface. The
 [integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks current
 acceptance blockers; the latest full simulator gate failed.
+
+## Exact private search replay
+
+Set `EMET_PLACEMENT_DIAGNOSTICS_DIR` to a writable artifact directory before a
+simulator run. Before each placement search, the executor writes a unique
+snapshot containing the standalone compiled model, full integration state,
+scene boxes, held-object vertices, targets, already-filtered base candidates,
+seed, base writer settings, source commit, runtime versions and checksums.
+These artifacts contain private simulator geometry; public tool output does not.
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/replay_placement.py /path/to/snapshot
+```
+
+The replay never actuates. It checks artifact hashes and MuJoCo version, then
+prints JSON with solutions, rejections, private stage/path failures and timing.
+Zero paths exits 1; a native crash remains a process failure, with faulthandler
+enabled. Archive stderr and exit status as well as JSON. Arbitrary `known_free`
+callbacks are marked non-replayable and refused rather than silently discarded.
+Snapshots preserve the planning input, not a complete dynamic simulator episode.

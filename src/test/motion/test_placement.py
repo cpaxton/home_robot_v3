@@ -334,3 +334,36 @@ def test_distant_start_does_not_starve_reachable_alternative_base(rig):
     assert len(result.paths) == 1, result.rejections
     assert result.rejections["base_ik_budget_reached"] == 1
     np.testing.assert_allclose(result.paths[0].base_xyt, [2, 0, 0])
+
+
+def test_snapshot_replays_exact_search_and_rejects_tampering(rig, tmp_path):
+    from emet.motion.placement_replay import replay_snapshot, save_snapshot
+
+    model, data, payload = rig
+    path = save_snapshot(tmp_path / "snapshot", model, data,
+        scene=PlacementScene([], source="ground_truth"), payload=payload,
+        object_centers=[[.4, 0, 0]], base_candidates=[[0, 0, 0]], joint_names=("x", "y", "z"),
+        ee_body="tool", robot_body="base", contact_bodies=("tool",),
+        base_writer={"freejoint_name": "base_pose"})
+    first, second = replay_snapshot(path), replay_snapshot(path)
+    assert first.pop("planning_wall_s") >= 0
+    second.pop("planning_wall_s")
+    assert first == second
+    assert first["solutions"] == 1
+    with (path / "inputs.npz").open("ab") as stream:
+        stream.write(b"changed")
+    with pytest.raises(ValueError, match="checksum"):
+        replay_snapshot(path)
+
+
+def test_snapshot_never_drops_unknown_space_predicate(rig, tmp_path):
+    from emet.motion.placement_replay import replay_snapshot, save_snapshot
+
+    model, data, payload = rig
+    path = save_snapshot(tmp_path / "snapshot", model, data,
+        scene=PlacementScene([], source="observed_voxels", known_free=lambda _: False),
+        payload=payload, object_centers=[[.4, 0, 0]], base_candidates=[[0, 0, 0]],
+        joint_names=("x", "y", "z"), ee_body="tool", robot_body="base", contact_bodies=("tool",),
+        base_writer={"freejoint_name": "base_pose"})
+    with pytest.raises(ValueError, match="Unsupported"):
+        replay_snapshot(path)
