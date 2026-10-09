@@ -164,7 +164,7 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "reason": "target description required"}
         return self._ground_query_frame(query, target_description, source_obs_id)
 
-    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None):
+    def _ground_query_frame(self, query, target_description, source_obs_id, *, handle=None, purpose="object"):
         """Shared mask, semantic verification and instance-admission boundary."""
         from emet.memory.graph_eqa.graph_object_fusion.attach import fusion_config_from_sources
         from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
@@ -177,6 +177,9 @@ class LazyGraphController(DynagraphController):
         record = self.query_candidates.records.get(handle)
         vm = self.voxel_map
         frame = vm.observations[-1]
+        # Detection backends may return a reduced frame without calibration.
+        # Retain geometry from the actual captured observation for offline review.
+        observation_frame = frame
         rgb = frame_rgb_hwc_uint8(frame)
         if rgb is None or frame.depth is None:
             return {"ok": False, "reason": "RGB-D required"}
@@ -185,18 +188,25 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        # Always condition fresh masks on the target, not streaming ScanNet labels.
-        frame, detections = self._detect_query_frame(frame, query)
-        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         from emet.memory.query_grounding import cache_grounding_record, select_query_detections
 
-        matching_ids, verification = select_query_detections(
-            query,
-            target_description,
-            detections,
-            rgb,
-            client=getattr(self.graph_memory, "eqa_client", None),
-        )
+        backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "yoloe")
+        client = getattr(self.graph_memory, "eqa_client", None)
+        if backend == "vlm":
+            try:
+                frame, detections, matching_ids, verification = self.ground_vlm_frame(
+                    frame, query, target_description, purpose=purpose
+                )
+            except ValueError as exc:
+                return {"ok": False, "reason": str(exc)}
+        elif backend == "yoloe":
+            frame, detections = self._detect_query_frame(frame, query)
+            matching_ids, verification = select_query_detections(
+                query, target_description, detections, rgb, client=client
+            )
+        else:
+            raise ValueError(f"Unknown query grounding backend: {backend}")
+        admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         import os
         from dataclasses import asdict
         from pathlib import Path
@@ -218,12 +228,34 @@ class LazyGraphController(DynagraphController):
             depth=frame.depth,
             masks=frame.instance,
             metadata={
+                **{
+                    name: None
+                    if getattr(observation_frame, name, None) is None
+                    else getattr(observation_frame, name).tolist()
+                    for name in ("camera_K", "camera_pose", "base_pose")
+                },
+                "xyz_frame": getattr(observation_frame, "xyz_frame", None),
                 "target_description": target_description,
-                "detector_vocabulary": [query],
+                "grounding_backend": backend,
+                "detector_vocabulary": [query]
+                if backend == "yoloe" or verification.get("mask_backend") == "yoloe_sam2"
+                else [],
                 "retrieval_score": record.retrieval_score if record is not None else None,
                 "admission_config": asdict(fusion.config),
                 "min_depth": vm.min_depth,
                 "max_depth": vm.max_depth,
+                "vlm_config": {
+                    key: (self.parameters.get("eqa", {}) or {}).get(key)
+                    for key in (
+                        "backend",
+                        "vl_family",
+                        "vl_hf_model_id",
+                        "vl_quantization",
+                        "vl_image_max_side",
+                        "vl_image_max_pixels",
+                        "vl_max_tokens",
+                    )
+                },
             },
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]
@@ -291,8 +323,103 @@ class LazyGraphController(DynagraphController):
             depth = depth.detach().cpu().numpy()
         valid = (mask == det["instance_id"]) & (depth > vm.min_depth) & (depth < vm.max_depth)
         valid &= np.isfinite(world).all(axis=-1) & np.isfinite(depth)
-        self._grounded_query_target = GroundedTarget(handle, obs_id, len(vm.observations), world[valid])
+        self._grounded_query_target = GroundedTarget(
+            handle,
+            obs_id,
+            len(vm.observations),
+            world[valid],
+            geometry_source=verification.get("geometry_source", "detector_mask"),
+        )
         return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
+
+    def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None, purpose="object"):
+        """Shared head/wrist perception without admitting a new memory instance."""
+        from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
+        from emet.memory.vlm_region_grounding import ground_vlm_region
+
+        client = getattr(self.graph_memory, "eqa_client", None) or getattr(self.voxel_map, "eqa_client", None)
+        if client is None:
+            self.graph_memory._ensure_llm_clients()
+            client = self.graph_memory.eqa_client
+        config = self.parameters.get("query_memory", {}) or {}
+        backend = config.get("mask_backend", "rgbd")
+        if backend not in ("rgbd", "sam2", "yoloe_sam2"):
+            raise ValueError(f"Unknown query mask backend: {backend}")
+        options = {}
+        tracking_proposal = None
+        if backend in ("sam2", "yoloe_sam2"):
+            from emet.perception.detection.sam2 import SAM2Perception
+
+            if getattr(self, "_query_segmenter", None) is None:
+                self._query_segmenter = SAM2Perception(configuration="s")
+            options["segmenter"] = self._query_segmenter
+        if tracking_target is not None and config.get("track_grounded_box", False):
+            if backend not in ("sam2", "yoloe_sam2"):
+                raise ValueError("Projected target tracking requires a box segmenter")
+            rgb = frame_rgb_hwc_uint8(frame)
+            box = tracking_target.project_box(frame.camera_K, frame.camera_pose, rgb.shape[:2])
+            options["proposal_masks"] = options.pop("segmenter").segment(rgb, box[None])
+
+            def associated_surface(mask):
+                from emet.memory.graph_eqa.ingest.instance_observations import frame_world_xyz_hw3
+
+                world = frame_world_xyz_hw3(frame)
+                if world is None:
+                    raise ValueError("Target tracking requires world-aligned depth")
+                world = world.detach().cpu().numpy()
+                try:
+                    tracking_target.select_mask(np.where(mask, 0, -1), mask, world)
+                except ValueError:
+                    return False
+                return True
+
+            options["candidate_filter"] = associated_surface
+            tracking_proposal = {
+                "source": "projected_observed_bounds",
+                "candidate_id": tracking_target.candidate_id,
+                "observation_revision": tracking_target.observation_revision,
+                "prompt_box_xyxy": box.tolist(),
+                "association_before_selection": True,
+            }
+        elif backend == "yoloe_sam2":
+            from emet.perception.detection.query_mask_proposals import refine_instance_proposals
+            from emet.perception.detection.yoloe import get_shared_yoloe_perception
+
+            rgb = frame_rgb_hwc_uint8(frame)
+            detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
+            _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
+            options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if "surface_presentation" in config:
+            options["presentation"] = config["surface_presentation"]
+        if "whole_object_box" in config:
+            options["whole_object"] = config["whole_object_box"]
+        options.update(
+            purpose=purpose,
+            client=client,
+            min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
+            max_depth=self.voxel_map.max_depth,
+            strategy=config.get("region_strategy", "point"),
+        )
+        result = ground_vlm_region(frame, query, description, **options)
+        if (
+            backend == "yoloe_sam2"
+            and tracking_proposal is None
+            and config.get("recover_proposals_with_vlm", False)
+            and result[3].get("failure_kind") in {"candidate_overflow", "no_supported_surfaces"}
+        ):
+            # One alternative proposal source on the SAME observation. Never
+            # override a semantic abstention, relax the surface budget, or use
+            # detector labels as acceptance. Qwen boxes remain untrusted until
+            # SAM depth support passes the ordinary final VLM verification.
+            initial_audit = result[3]
+            options.pop("proposal_masks")
+            options["segmenter"] = self._query_segmenter
+            result = ground_vlm_region(frame, query, description, **options)
+            result[3]["proposal_recovery"] = {"backend": "sam2", "initial_attempt": initial_audit}
+        result[3]["mask_backend"] = backend
+        if tracking_proposal is not None:
+            result[3]["tracking_proposal"] = tracking_proposal
+        return result
 
     def prepare_query_target(self, query: str):
         """Reacquire a unique query reference immediately before manipulation."""

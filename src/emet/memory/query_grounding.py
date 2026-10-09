@@ -14,6 +14,17 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
+def numbered_detection_image(rgb, detections):
+    """The exact numbered image sent to the verifier and retained for review."""
+    annotated = Image.fromarray(rgb).copy()
+    draw = ImageDraw.Draw(annotated)
+    for detection in detections:
+        box = tuple(detection["bbox_xyxy"])
+        draw.rectangle(box, outline="yellow", width=2)
+        draw.text(box[:2], str(detection["instance_id"]), fill="yellow")
+    return annotated
+
+
 def select_query_detections(query, description, detections, rgb, client=None):
     """Return explicitly verified detection IDs, not approximate label matches.
 
@@ -27,12 +38,7 @@ def select_query_detections(query, description, detections, rgb, client=None):
         return [], {"source": "unverified", "reason": "semantic verification unavailable"}
     from emet.eval.agentic_vlm_assess import _call_eqa_client, _parse_json_object
 
-    annotated = Image.fromarray(rgb).copy()
-    draw = ImageDraw.Draw(annotated)
-    for d in detections:
-        box = tuple(d["bbox_xyxy"])
-        draw.rectangle(box, outline="yellow", width=2)
-        draw.text(box[:2], str(d["instance_id"]), fill="yellow")
+    annotated = numbered_detection_image(rgb, detections)
     catalog = [{"id": d["instance_id"], "class": d["label_short"]} for d in detections]
     prompt = (
         f"Find the object referred to by: {description or query!r}. Retrieval hint: {query!r}. "
@@ -44,10 +50,11 @@ def select_query_detections(query, description, detections, rgb, client=None):
         "List ALL matching regions; ambiguity must not be resolved by arbitrarily picking one. "
         "If the referent or any required constraint cannot be verified, return false and an empty list."
     )
+    system = "Verify a robot target against fresh visual evidence. Reply only with JSON."
     raw = _call_eqa_client(
         client,
         [prompt, Image.fromarray(rgb), annotated],
-        system_prompt="Verify a robot target against fresh visual evidence. Reply only with JSON.",
+        system_prompt=system,
     )
     parsed = _parse_json_object(raw)
     ids = parsed.get("matching_ids")
@@ -58,7 +65,14 @@ def select_query_detections(query, description, detections, rgb, client=None):
         and all(type(i) is int and i in allowed for i in ids)
         and len(set(ids)) == len(ids)
     )
-    return (ids if valid else []), {"source": "fresh_vlm", "raw": raw, "valid": valid}
+    return (ids if valid else []), {
+        "source": "fresh_vlm",
+        "raw": raw,
+        "valid": valid,
+        "prompt": prompt,
+        "system_prompt": system,
+        "image_order": ["rgb_file", "numbered_rgb_file"],
+    }
 
 
 def cache_grounding_record(
@@ -94,6 +108,32 @@ def cache_grounding_record(
     if rgb is not None:
         Image.fromarray(rgb).save(path / f"{prefix}.png")
         record["rgb_file"] = f"{prefix}.png"
+        numbered_detection_image(rgb, detections).save(path / f"{prefix}-numbered.png")
+        record["numbered_rgb_file"] = f"{prefix}-numbered.png"
+        if verification.get("surface_candidates"):
+            from emet.memory.surface_candidates import surface_candidate_image, surface_candidate_panels
+
+            surface_candidate_image(rgb, verification["surface_candidates"]).save(path / f"{prefix}-surfaces.png")
+            record["surface_candidates_rgb_file"] = f"{prefix}-surfaces.png"
+            for region, panel in zip(
+                verification["surface_candidates"],
+                surface_candidate_panels(rgb, verification["surface_candidates"]),
+                strict=True,
+            ):
+                filename = f"{prefix}-surface-{region['id']}.png"
+                panel.save(path / filename)
+                record[f"surface_candidate_{region['id']}_rgb_file"] = filename
+                if verification.get("surface_selection", {}).get("presentation") == "context":
+                    from emet.memory.surface_candidates import context_panel
+
+                    context_filename = f"{prefix}-surface-{region['id']}-context.png"
+                    context_panel(rgb, region).save(path / context_filename)
+                    record[f"surface_candidate_{region['id']}_context_rgb_file"] = context_filename
+        if verification.get("correction"):
+            from emet.memory.vlm_region_grounding import region_annotation
+
+            region_annotation(rgb, verification["correction"]["region"]).save(path / f"{prefix}-correction.png")
+            record["correction_rgb_file"] = f"{prefix}-correction.png"
     arrays = {}
     for name, value in (("depth", depth), ("masks", masks)):
         if value is not None:

@@ -177,6 +177,52 @@ def test_confirmed_view_transition_keeps_geometry_separate_and_runs_once():
     agent.detection_model.predict.assert_called_once()
 
 
+def test_query_grounding_reuses_deferred_shared_voxel_client():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm"}
+    agent.voxel_map.eqa_client = Mock(return_value='{"verified":true,"box":[0,0,1000,1000],"point":[500,500]}')
+    agent.graph_memory._ensure_llm_clients = Mock(side_effect=AssertionError("must not load another model"))
+    assert agent.ground_query_view("mug", source_obs_id=2, target_description="mug")["ok"]
+    agent.voxel_map.eqa_client.assert_called_once()
+    agent.graph_memory._ensure_llm_clients.assert_not_called()
+
+
+def test_query_grounding_initializes_graph_client_without_shared_voxel_client():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm"}
+
+    def initialize():
+        agent.graph_memory.eqa_client = Mock(return_value='{"verified":false,"reason":"absent"}')
+
+    agent.graph_memory._ensure_llm_clients = Mock(side_effect=initialize)
+    assert not agent.ground_query_view("mug", source_obs_id=2, target_description="mug")["ok"]
+    agent.graph_memory._ensure_llm_clients.assert_called_once()
+    agent.graph_memory.eqa_client.assert_called_once()
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_surface_strategy_uses_the_shared_promotion_boundary(accepted):
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "depth_candidates"}
+    agent.graph_memory.eqa_client = Mock(
+        side_effect=[
+            '{"verified":true,"box":[0,0,1000,1000]}',
+            '{"selected_id":0,"target_unambiguous":true}'
+            if accepted
+            else '{"selected_id":null,"target_unambiguous":false}',
+        ]
+    )
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["ok"] is accepted
+    agent.detection_model.predict.assert_not_called()
+    if accepted:
+        assert np.allclose(result["xyz"], [1, 1, 1])
+        assert agent._grounded_query_target.observation_revision == 2
+    else:
+        assert not agent.query_candidates.records
+        assert not agent.graph_memory.get_nodes()
+
+
 def test_failed_new_view_clears_previous_grounded_result():
     from emet.memory.graph_eqa.agentic.views import CapturedView, ground_confirmed_view
 
