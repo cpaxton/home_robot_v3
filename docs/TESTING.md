@@ -8,6 +8,18 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 #### Repaired-head pilot and review handoff (2026-10-09)
 
+- **Merged with explicit user approval:** #176 (`cee9b093`) and #180 (`2ad47882`).
+  The isolated #180 EQA job remains queued and is now post-merge evidence, not a
+  passed prerequisite. Prior approval/gate notes below describe the earlier state.
+- Staged current-main reconciliation branches (not extra PRs or merged changes):
+  `review/providers-current-main` at `e1fadc97` passes 100 provider/dialogue tests;
+  `review/navigation-current-main` at `f69006d6` passes 213 navigation/TAMP tests;
+  `review/inspection-current-main` at `10de62a9` passes 334 recovery/API tests.
+  Navigation conflict resolution retains main's measured-time progress window,
+  finite-pose guards, differential-drive execution, conservative footprint and
+  existing diagnostic reason names, while adding phase-handoff progress and
+  unknown-floor diagnostic metadata. Running pilot heads remain frozen. Reconcile
+  acceptance/telemetry next, then update public dependent heads after validation.
 - User-supplied review of **#176** found no blocking issues: restoring conversation
   history and iteration count in `finally` covers current serialized reset-based
   perception calls, including failure and nested contexts. Independent merge
