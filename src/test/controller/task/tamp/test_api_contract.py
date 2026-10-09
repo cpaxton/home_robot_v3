@@ -194,7 +194,8 @@ def test_stale_joint_observation_cannot_pass_arrival():
     assert ex._last_motion_failure == "stale_observation"
 
 
-@pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle"])
+@pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle",
+                                     "no_path", "invalidated", "preplace", "place"])
 def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     from emet.controller.manipulation import kinematic_pick_place as module
 
@@ -204,16 +205,36 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     ex.place_z_offset_m = 0.0
     ex._ensure_model = lambda: True
     ex._placements = lambda: ex.robot.placements
-    ex._approach_xy = lambda *a: failure != "approach"
+    from types import SimpleNamespace
+
+    from emet.motion.placement_geometry import HeldObject
+
+    selected = SimpleNamespace(base_xyt=np.zeros(3), object_center=np.ones(3),
+        ee_targets=(np.ones(3), np.ones(3)), ee_rotation=np.eye(3), segments=([np.zeros(3)], [np.zeros(3)]))
+    checker = SimpleNamespace(payload=HeldObject(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])),
+                              margin=0., released_bounds=None)
+    calls = []
+
+    def search(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(paths=[] if failure == "no_path" or (failure == "invalidated" and len(calls) > 1)
+                               else [selected]), checker
+
+    ex._search_placement = search
+    ex._refresh_placement_checker = lambda *args: checker
+    ex.robot.move_base_to = Mock(return_value=failure != "approach")
+    ex._collision = None
     ex._sleep = lambda *a: None
     ex._verify_place_xy = lambda *a: (True, 0.001)
-    motions = iter([(True, 0.001), (True, 0.001), (failure != "retract", 0.08)])
-    ex._plan_and_execute_ee = lambda *a: next(motions)
+    motions = iter([(failure != "preplace", 0.001), (failure != "place", 0.001)])
+    ex._execute_placement_segment = lambda *a: next(motions)
+    ex._plan_and_execute_ee = lambda *a: (failure != "retract", 0.08)
     ex._last_motion_failure = "tracking_failed"
     ex._set_gripper = Mock(side_effect=RuntimeError() if failure == "release" else None)
     attach = Mock()
     monkeypatch.setattr(module, "robot_zmq_attach_body", attach)
-    monkeypatch.setattr(module, "robot_zmq_detach_body", Mock())
+    detach = Mock()
+    monkeypatch.setattr(module, "robot_zmq_detach_body", detach)
     monkeypatch.setattr(module, "robot_zmq_set_body_pose", Mock())
     result = ex.place_only(
         "table",
@@ -221,8 +242,10 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
         receptacle_gt_body="missing" if failure == "missing_receptacle" else "receptacle_private",
     )
     assert not result.success
-    if failure in {"approach", "missing_receptacle"}:
-        assert not attach.called
+    if failure in {"approach", "missing_receptacle", "no_path", "invalidated", "preplace", "place"}:
+        assert not detach.called
+    if failure in {"no_path", "missing_receptacle"}:
+        ex.robot.move_base_to.assert_not_called()
 
 
 @pytest.mark.parametrize("change", ["position", "rotation", "boot", "capability", "nan"])

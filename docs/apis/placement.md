@@ -1,0 +1,111 @@
+# Placement planning
+
+`emet.motion.placement.plan_placement_paths` searches multiple base endpoints,
+object-center targets, pose-IK seeds and arm paths. It plans on a private MuJoCo
+state and returns alternatives without commanding the robot. The arm retains the
+measured EE orientation, so an offset held object has an explicit, consistent
+attachment transform throughout each path.
+
+## Geometry contract
+
+All scene geometry, support bounds and base poses are in the same world frame, in
+metres. `HeldObject.vertices_ee` is expressed in the end-effector frame.
+
+- **Observed geometry:** `PlacementScene.from_voxels(centers, resolution=...,
+  workspace=..., known_free=...)` uses occupied **3D** cell volumes. The resolution
+  is the cell width. `from_pointcloud(voxel_map, ...)` adapts `SparseVoxelMap` and
+  expands centroids conservatively using its 3D `voxel_resolution`.
+- **Ground truth:** `PlacementScene.from_placements(placements,
+  held_object=...)` uses conservative world AABBs. It requires bounds and excludes
+  only the explicitly identified held object. It does not exempt the receptacle.
+- **Held object:** use `HeldObject.from_world_bounds(...)` with observed object
+  bounds and the measured EE pose, or supply conservative EE-local vertices
+  directly. Include uncertainty in the supplied volume. Missing geometry fails;
+  it is not replaced by a point or a guessed category-specific size.
+- **Support:** supply an explicitly selected horizontal support region to
+  `surface_placement_centers`. Candidates fit the object's full footprint and
+  stay above the support. A receptacle's center is not an interior shelf.
+
+Observed occupancy must have robot and held-object points segmented out by the
+caller. The planner does **not** erase a box around the gripper, since that can
+also erase furniture. Unobserved surfaces remain uncertain: occupied voxels alone
+are not a free-space certificate. Supply `known_free(bounds) -> bool` to reject
+volumes outside observed free space; out-of-workspace volumes always fail.
+The callback must account for the full queried volume, not just its center.
+Snapshots must be coherent and refreshed from perception before execution.
+
+```python
+from emet.motion.placement import plan_placement_paths, surface_placement_centers
+from emet.motion.placement_geometry import HeldObject, PlacementScene
+
+scene = PlacementScene.from_voxels(
+    scene_voxel_centers, resolution=0.02,
+    workspace=observed_workspace_bounds, known_free=is_known_free_volume,
+)
+payload = HeldObject.from_world_bounds(
+    observed_object_bounds, ee_position=measured_ee_position,
+    ee_rotation=measured_ee_rotation,
+)
+centers = surface_placement_centers(
+    observed_support_bounds, payload=payload, ee_rotation=measured_ee_rotation,
+)
+result = plan_placement_paths(
+    robot_model, measured_data, joint_names=joint_names,
+    robot_body=base_body, ee_body=ee_body, scene=scene, payload=payload,
+    object_centers=centers, base_candidates=candidate_base_poses,
+    set_base=write_private_model_base_pose, contact_bodies=grasp_contact_bodies,
+    max_solutions=3,
+)
+```
+
+The base writer receives `(model, private_data, xyt)`, preserves measured base
+height, and returns `True` only on success. No callback should command live motion.
+
+## Checks and result
+
+Each alternative contains a base endpoint, desired object center, preplace/place
+EE targets and rotation, and two densely sampled joint paths. `rejections`
+records why candidates failed. `geometry_source` records observed voxels or GT.
+Search budgets bound base candidates, IK attempts, total IK calls and RRT work.
+No path means failure, with no unchecked fallback.
+
+Collision checks use conservative world boxes enclosing complete declared robot
+geoms (including meshes), transformed payload volume, and MuJoCo robot self
+collision. Payload/robot intersections are permitted only at explicitly supplied
+grasp-contact body subtrees. Every accepted arm edge is checked at joint-space
+intervals no larger than 0.025 in Euclidean joint-coordinate distance, including
+its exact endpoints. The result is **sampled**, not continuous collision detection;
+mixed revolute/prismatic units and small obstacles require appropriate refinement.
+Conservative boxes can reject feasible motions, especially in tight shelves.
+The current RRT integration rejects coupled-joint groups; those need planning in
+actuator coordinates before use with this entry point.
+
+`collision_scope` is `sampled_arm_and_payload;base_endpoint_only`.
+A collision-free base endpoint does **not** certify transport to it. The navigation
+controller must separately validate the swept robot and payload along its route.
+This API does not certify support stability, release dynamics, gripper opening,
+post-release retreat, or real hardware readiness.
+
+## Simulator integration
+
+`KinematicPickPlaceExecutor.place_only` uses this search before base movement,
+then searches again from measured state and fresh geometry after transport.
+Before each arm segment it refreshes obstacles, rejects changed support or
+attachment, and validates the connector from measured joints to the planned path.
+Measured position and orientation arrival are required before continuing.
+
+The existing assisted release remains explicit: this executor attaches and snaps
+objects in simulation. Retraction uses a static placed-object volume rather than
+moving the released object with the arm. Verification targets the selected
+placement point, which can be offset from the receptacle center.
+
+For observed geometry, inject `placement_geometry_provider(executor, object_id,
+receptacle_id) -> (scene, payload, support_bounds)`. The provider is called after
+state synchronization. Selecting `manip_collision="voxel"` without this provider
+fails instead of falling back to GT. The kinematic task-grounding/release wrapper
+still requires simulator placements; the reusable planner above does not.
+
+The default simulator adapter treats the top face of the selected receptacle's
+bounds as a support candidate. This is a top-surface control, not an inference
+about accessible interior shelves. Use an explicit provider for those surfaces.
+Full-scene GT meshes and physical release execution remain separate integrations.
