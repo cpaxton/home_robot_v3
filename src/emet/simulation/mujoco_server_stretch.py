@@ -301,6 +301,8 @@ class MujocoZmqServer(BaseZmqServer):
         self.goal_set_t: float | None = None
         self.xyt_goal: np.ndarray | None = None
         self._base_controller_at_goal = False
+        self._precision_xy_tolerances = None
+        self._precision_xy_acquired = False
         self.control_mode = "navigation"
         self.controller_finished = True
         self.active = False
@@ -349,8 +351,11 @@ class MujocoZmqServer(BaseZmqServer):
 
         self.is_done = False
         self.goal_set_t = timeit.default_timer()
+        self.goal_set_sim_t = None if self._status is None else float(self._status.time)
         self.controller_finished = False
         self._base_controller_at_goal = False
+        self._precision_xy_tolerances = None
+        self._precision_xy_acquired = False
 
     def _control_loop_thread(self):
         """Control loop thread for the velocity controller"""
@@ -381,14 +386,40 @@ class MujocoZmqServer(BaseZmqServer):
         self.controller.update_pose_feedback(base_xyt)
 
         if self.active and self.xyt_goal is not None:
+            thresholds = getattr(self, "_precision_xy_tolerances", None)
+            if thresholds is not None:
+                inner, outer = thresholds
+                distance = np.linalg.norm(self.controller.compute_current_error()[:2])
+                if distance <= inner:
+                    self._precision_xy_acquired = True
+                elif distance > outer:
+                    self._precision_xy_acquired = False
+                self.controller.control.set_linear_error_tolerance(
+                    outer if self._precision_xy_acquired else inner
+                )
             # Compute control
             self.is_done = False
             v_cmd, w_cmd = self.controller.compute_control()
             done = self.controller.is_done()
+            if thresholds is not None and self._precision_xy_acquired and not done and v_cmd == 0 and w_cmd != 0:
+                # Wheel/contact asymmetry can translate the base during a turn.
+                # Correct the forward component of position error continuously
+                # instead of waiting to leave the arrival envelope and restart
+                # translation. One-second proportional response, capped at the
+                # outer position tolerance per second (2 cm/s for precision).
+                # Final acceptance still uses the unchanged measured XY/yaw bounds.
+                forward_error = float(self.controller.compute_current_error()[0])
+                speed_limit = min(outer, self.controller.control.v_max)
+                minimum_speed = -speed_limit if distance < self.controller.cfg.max_rev_dist else 0.0
+                v_cmd = float(np.clip(forward_error, minimum_speed, speed_limit))
 
             # self.get_logger().info(f"veclocities {v_cmd} and {w_cmd}")
             # Compute timeout
             time_since_goal_set = timeit.default_timer() - self.goal_set_t
+            # Physical integration may be slower than wall time. The command
+            # runtime separately enforces its wall deadline and stale telemetry.
+            if self._status is not None and self.goal_set_sim_t is not None:
+                time_since_goal_set = float(self._status.time) - self.goal_set_sim_t
             if self.controller.timeout(time_since_goal_set):
                 done = True
                 v_cmd, w_cmd = 0, 0
@@ -424,19 +455,43 @@ class MujocoZmqServer(BaseZmqServer):
 
     def start_navigation_command(self, action):
         self._contract_navigation_context = None
-        self.handle_action(action)
+        self._precision_xy_tolerances = None
+        self._precision_xy_acquired = False
+        # The wire protocol requires standalone navigation. Perform the mode
+        # transition inside the accepted command, atomically with goal dispatch.
+        # The next manipulation transition then records the fresh arrival pose.
+        self.handle_action({**action, "control_mode": "navigation"})
         if action.get("nav_policy"):
             from emet.core.navigation_result import NAVIGATION_POLICIES
 
             policy = NAVIGATION_POLICIES[action["nav_policy"]]
-            self.controller.control.set_linear_error_tolerance(policy.xy_tolerance)
-            self.controller.control.set_angular_error_tolerance(policy.yaw_tolerance)
+            # Leave tracking margin for the final turn. Stopping translation on
+            # the arrival boundary makes small wheel/caster drift alternate
+            # translation and yaw correction indefinitely on physical floors.
+            fine_arrival = action["nav_policy"] in ("precision", "manipulation")
+            fraction = 0.5 if fine_arrival else 1.0
+            linear_tolerance = fraction * policy.xy_tolerance
+            if fine_arrival:
+                self._precision_xy_tolerances = (fraction * policy.xy_tolerance, policy.xy_tolerance)
+                # A fresh command may only change yaw after the preceding
+                # translation arrived. Reacquiring the inner XY threshold can
+                # stall that turn despite already satisfying the declared XY
+                # bound. Initialize from fresh feedback, never cached success.
+                pose = self.get_base_pose()
+                if pose is not None:
+                    self.controller.update_pose_feedback(pose)
+                    distance = np.linalg.norm(self.controller.compute_current_error()[:2])
+                    self._precision_xy_acquired = bool(np.isfinite(distance) and distance <= policy.xy_tolerance)
+                    if self._precision_xy_acquired:
+                        linear_tolerance = policy.xy_tolerance
+            self.controller.control.set_linear_error_tolerance(linear_tolerance)
+            self.controller.control.set_angular_error_tolerance(fraction * policy.yaw_tolerance)
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")
         return self._contract_navigation_context
 
     def navigation_policy_names(self):
-        return ("exploration", "precision")
+        return ("exploration", "precision", "manipulation")
 
     def navigation_policy_measurement(self):
         status = self._status
@@ -625,6 +680,7 @@ class MujocoZmqServer(BaseZmqServer):
                         continue
                     elif self._manip_xyt is None:
                         logger.error("Manipulation mode not set up correctly")
+                        continue
                     # Send an xyt goal: x, y, theta
                     # This is computed based on self._manip_xyt
                     xyt_delta = [q[i], 0, 0]
@@ -824,6 +880,12 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def handle_action(self, action: dict[str, Any]):
         """Handle the action received from the client."""
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action(
+            action, source=type(self).__name__,
+            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+        )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
                 action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]

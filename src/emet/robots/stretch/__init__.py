@@ -61,6 +61,13 @@ STRETCH_ARM_CHAIN = ArmChain(
     ),
     ee_body="link_grasp_center",
     gripper_bodies=("link_gripper_finger_left", "link_gripper_finger_right"),
+    # Same arm targets as STRETCH_NAVIGATION_Q; telescope entries sum to .01 m.
+    navigation_arm_q=(0.6, 0.0025, 0.0025, 0.0025, 0.0025, 0.0, -1.5, 0.0, 0.0),
+    gripper_open_configuration=(
+        ("joint_gripper_slide", 0.04),
+        ("joint_gripper_finger_left_open", 0.4),
+        ("joint_gripper_finger_right_open", 0.4),
+    ),
 )
 
 

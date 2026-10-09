@@ -28,6 +28,113 @@ class MujocoArmIkResult:
     qpos: np.ndarray
     pos_error_m: float
     iterations: int
+    orientation_error_rad: float | None = None
+
+
+def solve_pose_ik(
+    model,
+    data,
+    *,
+    ee_body: str,
+    joint_names,
+    target_pos,
+    target_rotation,
+    max_iters: int = 160,
+    tol_m: float = 0.01,
+    tol_rad: float = 0.1,
+    damping: float = 0.02,
+    step: float = 0.5,
+    coupled_groups=(),
+    joint_limit_margins=None,
+) -> MujocoArmIkResult:
+    """Pose IK on an offline model, with optional equal-motion joint groups.
+
+    Coupled groups describe one actuator driving several joints (e.g. a
+    telescoping arm). They are not independent IK degrees of freedom.
+    Does not certify collision or change simulator state.
+    """
+    from scipy.optimize import lsq_linear
+    from scipy.spatial.transform import Rotation
+
+    target = np.asarray(target_pos, dtype=float).reshape(3)
+    rotation = np.asarray(target_rotation, dtype=float).reshape(3, 3)
+    if (
+        not np.isfinite(target).all()
+        or not np.isfinite(rotation).all()
+        or not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-6)
+        or not np.isclose(np.linalg.det(rotation), 1, atol=1e-6)
+        or min(tol_m, tol_rad, damping, step) <= 0
+        or max_iters < 1
+    ):
+        raise ValueError("Pose IK requires a finite rigid target and positive solver parameters")
+    body_id = model.body(ee_body).id
+    names = list(joint_names)
+    margins = dict(joint_limit_margins or {})
+    if not set(margins).issubset(names) or any(not np.isfinite(v) or v < 0 for v in margins.values()):
+        raise ValueError("Joint limit margins must be finite nonnegative values for controlled joints")
+    qadr, dadr = joint_qpos_addrs(model, names), joint_dof_addrs(model, names)
+    bounds = {}
+    for name in names:
+        joint = model.joint(name)
+        if model.jnt_limited[joint.id]:
+            lo, hi = model.jnt_range[joint.id]
+            margin = margins.get(name, 0.0)
+            if lo + margin >= hi - margin:
+                raise ValueError("Joint limit margin leaves no usable range")
+            bounds[name] = (lo + margin, hi - margin)
+    groups = [list(group) for group in coupled_groups]
+    grouped = [name for group in groups for name in group]
+    if len(grouped) != len(set(grouped)) or not set(grouped).issubset(names) or any(not g for g in groups):
+        raise ValueError("Coupled groups must contain distinct controlled joints")
+    groups.extend([[name] for name in names if name not in grouped])
+    coupling = np.zeros((len(names), len(groups)))
+    for column, group in enumerate(groups):
+        for name in group:
+            coupling[names.index(name), column] = 1.0 / len(group)
+    jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
+    # Meters and radians have different acceptance scales. Otherwise a small
+    # orientation improvement can outweigh a position error several times its
+    # tolerance, despite a feasible solution inside both declared tolerances.
+    weights = np.r_[np.full(3, 1.0 / tol_m), np.full(3, 1.0 / tol_rad)]
+    for iteration in range(max_iters + 1):
+        # IK needs transforms and motion axes, not full-scene contact solving.
+        # Collision certification remains a separate mandatory path check.
+        mujoco.mj_kinematics(model, data)
+        mujoco.mj_comPos(model, data)
+        delta = target - data.body(body_id).xpos
+        angular = Rotation.from_matrix(rotation @ data.body(body_id).xmat.reshape(3, 3).T).as_rotvec()
+        pos_error, rot_error = float(np.linalg.norm(delta)), float(np.linalg.norm(angular))
+        inside = all(lo - 1e-9 <= data.qpos[model.joint(name).qposadr[0]] <= hi + 1e-9 for name, (lo, hi) in bounds.items())
+        success = pos_error <= tol_m and rot_error <= tol_rad and inside
+        if success or iteration == max_iters:
+            mujoco.mj_kinematics(model, data)
+            return MujocoArmIkResult(success, data.qpos.copy(), pos_error, iteration, rot_error)
+        mujoco.mj_jacBody(model, data, jacp, jacr, body_id)
+        jacobian = (np.vstack((jacp[:, dadr], jacr[:, dadr])) @ coupling) * weights[:, None]
+        error = np.r_[delta, angular] * weights
+        # Solve bounded increments in actuator coordinates. Scaling every joint
+        # by the first saturated joint freezes otherwise usable degrees of freedom.
+        lower, upper = np.empty(len(groups)), np.empty(len(groups))
+        for column, group in enumerate(groups):
+            lower[column], upper[column] = -0.15 * len(group), 0.15 * len(group)
+            for name in group:
+                index = names.index(name)
+                joint = model.joint(name)
+                if model.jnt_limited[joint.id]:
+                    lo, hi = bounds[name]
+                    lower[column] = max(lower[column], (lo - data.qpos[qadr[index]]) * len(group))
+                    upper[column] = min(upper[column], (hi - data.qpos[qadr[index]]) * len(group))
+        if np.any(lower > upper):
+            return MujocoArmIkResult(False, data.qpos.copy(), pos_error, iteration, rot_error)
+        free = upper - lower > 1e-12
+        delta_q = lower.copy()
+        if free.any():
+            fixed_error = jacobian[:, ~free] @ delta_q[~free]
+            matrix = np.vstack((jacobian[:, free], damping * np.eye(int(free.sum()))))
+            rhs = np.r_[step * error - fixed_error, np.zeros(int(free.sum()))]
+            delta_q[free] = lsq_linear(matrix, rhs, bounds=(lower[free], upper[free])).x
+        data.qpos[qadr] += coupling @ delta_q
+    raise AssertionError("unreachable")
 
 
 def joint_qpos_addrs(model: mujoco.MjModel, joint_names: list[str] | tuple[str, ...]) -> list[int]:

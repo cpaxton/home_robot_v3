@@ -40,7 +40,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         dilate_frontier_size: int = 12,
         dilate_obstacle_size: int = 2,
         extend_mode: str = "separate",
+        obstacle_map_mode: str = "legacy_padded",
+        footprint: Footprint | None = None,
     ):
+        if obstacle_map_mode not in {"legacy_padded", "physical"}:
+            raise ValueError("obstacle_map_mode must be legacy_padded or physical")
+        self.obstacle_map_mode = obstacle_map_mode
+        self._navigation_footprint = footprint
         super().__init__(
             voxel_map=voxel_map,
             robot=None,
@@ -55,19 +61,72 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         self.create_collision_masks(orientation_resolution)
         self.traj = None
 
+    def get_navigation_map(self):
+        if self.obstacle_map_mode == "physical":
+            return self.voxel_map.get_navigation_map()
+        return self.voxel_map.get_2d_map()
+
+    def is_valid(self, state, is_safe_threshold=1.0, debug=False, verbose=False, obstacles=None, explored=None):
+        if self.obstacle_map_mode != "physical":
+            return super().is_valid(state, is_safe_threshold, debug, verbose, obstacles, explored)
+        # Physical mode always requires the entire measured footprint to be known.
+        self.last_validity = {"reason": "invalid_navigation_pose"}
+        try:
+            origin = self.voxel_map.grid.grid_origin
+            if hasattr(origin, "cpu"):
+                origin = origin.cpu().numpy()
+            pose = state.detach().cpu().numpy() if hasattr(state, "detach") else state
+            cells = self._footprint.grid_cells(self.voxel_map.grid_resolution, pose, origin)
+        except (TypeError, ValueError):
+            return False
+        if obstacles is None or explored is None:
+            obstacles, explored = self.get_navigation_map()
+        if hasattr(obstacles, "cpu"):
+            obstacles = obstacles.cpu().numpy()
+        if hasattr(explored, "cpu"):
+            explored = explored.cpu().numpy()
+        if not len(cells) or np.any(cells < 0) or np.any(cells >= np.asarray(obstacles.shape)):
+            self.last_validity = {"reason": "footprint_out_of_map"}
+            return False
+        occupied = np.asarray(obstacles)[cells[:, 0], cells[:, 1]].astype(bool)
+        observed = np.asarray(explored)[cells[:, 0], cells[:, 1]].astype(bool)
+        self.last_validity = {
+            "reason": "occupied_footprint"
+            if occupied.any()
+            else ("unobserved_footprint" if not observed.all() else "ok"),
+            "coverage": float(observed.mean()),
+            "unknown_cells": cells[~observed].tolist(),
+            "occupied_cells": cells[occupied].tolist(),
+        }
+        return bool(not occupied.any() and observed.all())
+
+    def get_oriented_mask(self, theta):
+        if self.obstacle_map_mode == "physical":
+            return torch.from_numpy(
+                self._footprint.get_conservative_rotated_mask(self.voxel_map.grid_resolution, float(theta))
+            )
+        return super().get_oriented_mask(theta)
+
     def create_collision_masks(self, orientation_resolution: int):
         """Create a set of orientation masks
 
         Args:
             orientation_resolution: number of bins to break it into
         """
-        self._footprint = Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1)
-        self._orientation_resolution = 64
+        self._footprint = self._navigation_footprint or Footprint(
+            width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1
+        )
+        self._orientation_resolution = orientation_resolution
         self._oriented_masks = []
 
         for i in range(orientation_resolution):
             theta = i * 2 * np.pi / orientation_resolution
-            mask = self._footprint.get_rotated_mask(self.voxel_map.grid_resolution, angle_radians=theta)
+            rasterize = (
+                self._footprint.get_conservative_rotated_mask
+                if self.obstacle_map_mode == "physical"
+                else self._footprint.get_rotated_mask
+            )
+            mask = rasterize(self.voxel_map.grid_resolution, angle_radians=theta)
             # Footprint returns numpy; store as tensor for get_oriented_mask / collision checks
             mask_t = torch.from_numpy(np.asarray(mask)).bool() if not hasattr(mask, "cuda") else mask
             self._oriented_masks.append(mask_t)
@@ -117,7 +176,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             look_at_any_point(bool): robot should look at the closest point on target mask instead of average pt
         """
 
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
 
         # Extract edges from our explored mask
         start_pt = planner.to_pt(start)
@@ -132,7 +191,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         reachable = torch.empty(obstacles.shape, dtype=torch.bool).fill_(False)
         reachable[reachable_xs, reachable_ys] = True
 
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         reachable = reachable & ~obstacles
 
         target_x, target_y = planner.to_pt(point)
@@ -194,6 +253,8 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         Sample an exploration target
         """
         obstacles, explored, history_soft = self.voxel_map.get_2d_map(return_history_id=True, kernel=5)
+        if self.obstacle_map_mode == "physical":
+            obstacles, explored = self.get_navigation_map()
         outside_frontier = self.voxel_map.get_outside_frontier(xyt, planner)
 
         time_heuristics = self._time_heuristic(history_soft, outside_frontier, debug=debug)
@@ -419,7 +480,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             return None
         goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation", blocked=blocked)
         logger.debug("sample_navigation point=%s goal=%s", point, goal)
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         plt.imshow(obstacles)
         start_pt = self.to_pt(start)
         plt.scatter(start_pt[1], start_pt[0], s=15, c="b")
@@ -449,5 +510,5 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
         if index is None:
             return None
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         return self.voxel_map.grid_coords_to_xyt(torch.tensor([index[0], index[1]]))

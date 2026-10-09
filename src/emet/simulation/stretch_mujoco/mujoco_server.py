@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import contextlib
+import json
 import os
 import platform
 import signal
@@ -66,6 +67,7 @@ logger = Logger(__name__)
 
 @dataclass
 class MujocoServerProxies:
+    command_lock: object
     _command: "DictProxy[str, StatusCommand]"
     _status: "DictProxy[str, StatusStretchJoints]"
     _cameras: "DictProxy[str, StatusStretchCameras]"
@@ -114,6 +116,7 @@ class MujocoServerProxies:
     @staticmethod
     def default(manager: SyncManager) -> "MujocoServerProxies":
         return MujocoServerProxies(
+            command_lock=manager.RLock(),
             _command=manager.dict({"val": StatusCommand.default()}),
             _status=manager.dict({"val": StatusStretchJoints.default()}),
             _cameras=manager.dict({"val": StatusStretchCameras.default()}),
@@ -366,6 +369,16 @@ class MujocoServer:
             mujoco_server=self,
         )
 
+        self._eval_trace = None
+        trace_config = os.environ.get("EMET_SIM_EVAL_CONFIG")
+        if trace_config:
+            from emet.eval.manipulation_trace import create_trace
+
+            self._eval_trace = create_trace(
+                self.mjmodel, json.loads(Path(trace_config).read_text()),
+                Path(os.environ["EMET_SIM_EVAL_TRACE"]),
+            )
+
         self.update_joint_limits()
 
         signal.signal(signal.SIGTERM, lambda num, h: self.request_to_stop())
@@ -448,6 +461,8 @@ class MujocoServer:
             self.sensor_manager.sensors_thread.join()
 
         self.camera_manager.close()
+        if getattr(self, "_eval_trace", None) is not None:
+            self._eval_trace.close()
 
     def _run_ui_simulation(self, show_viewer_ui: bool) -> None:
         """
@@ -545,10 +560,20 @@ class MujocoServer:
 
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()
-        self.push_command(self.data_proxies.get_command())
+        self._consume_commands()
+        trace = getattr(self, "_eval_trace", None)
+        if trace is not None:
+            trace.record(model, data)
         monitor = getattr(self, "_fall_monitor", None)
         if monitor is not None:
             monitor.maybe_report(model, data)
+
+    def _consume_commands(self):
+        # The producer and consumer both update the whole command snapshot.
+        # Hold the same interprocess lock through read, actuation, and trigger
+        # acknowledgement, or an older acknowledgement can erase a new target.
+        with self.data_proxies.command_lock:
+            self.push_command(self.data_proxies.get_command())
 
     def pull_status(self):
         """
@@ -648,6 +673,9 @@ class MujocoServer:
             self.base_controller.push_command(command_status.base_velocity)
 
         if command_status.teleport_base is not None and command_status.teleport_base.trigger:
+            from emet.simulation.physical_execution import audit_physical_action
+
+            audit_physical_action({"teleport_base": True}, source="MujocoServer.push_command")
             command_status.teleport_base.trigger = False
             tb = command_status.teleport_base
             if write_base_freejoint_xyt(
@@ -666,6 +694,9 @@ class MujocoServer:
                 )
 
         if command_status.teleport_body is not None and command_status.teleport_body.trigger:
+            from emet.simulation.physical_execution import audit_physical_action
+
+            audit_physical_action({"teleport_body": True}, source="MujocoServer.push_command")
             tb = command_status.teleport_body
             command_status.teleport_body.trigger = False
             quat = None
@@ -689,6 +720,9 @@ class MujocoServer:
                 )
 
         if command_status.set_joint is not None and command_status.set_joint.trigger:
+            from emet.simulation.physical_execution import audit_physical_action
+
+            audit_physical_action({"set_joint": True}, source="MujocoServer.push_command")
             sj = command_status.set_joint
             command_status.set_joint.trigger = False
             ok = set_named_joint_qpos(self.mjmodel, self.mjdata, sj.joint, sj.value)

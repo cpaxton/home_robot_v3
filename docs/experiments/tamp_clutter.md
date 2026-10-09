@@ -1,5 +1,11 @@
 # TAMP clutter-clearance benchmark
 
+For corrected experiments, use the [scene-validated registry workflow](tamp_validated_registry.md).
+The historical registry and legacy `--generate` output below do not establish
+solvability. New scored tasks require an executed reference witness and exact
+fixture replay; construction failures are reported separately.
+
+
 Assess **task & motion planning** (TAMP): the ability of the robot to interact with the
 world as part of a plan. Each episode starts the robot **surrounded by small floor
 objects** that must be moved (picked up and relocated to a drop receptacle / bin) to

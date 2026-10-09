@@ -39,6 +39,7 @@ scene and writes a deterministic episode registry (no execution)::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -46,7 +47,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -178,6 +179,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--generate", action="store_true", help="resolve scatter+validity probe and write YAML (no exec)")
+    p.add_argument("--validate-fixture", action="store_true", help="Construct and execute a reference witness; do not score MCTS")
     p.add_argument("--clearance-m", type=float, default=0.22, help="nav min-clearance for the GT validity probe")
     p.add_argument(
         "--test-battery",
@@ -369,7 +371,9 @@ def _launch_server(
     *,
     cpu_only: bool,
     scene_index: int | None = None,
+    scene_split: str | None = None,
     robot: str | None = None,
+    log_dir: Path | None = None,
 ) -> tuple[Any, Path, Any]:
     """Launch the MuJoCo server subprocess; returns ``(proc, stderr_log_path, stderr_fh)``.
 
@@ -384,6 +388,8 @@ def _launch_server(
     sim_cfg = load_sim_launch_config_from_path(sim)
     if scene_index is not None:
         sim_cfg = replace(sim_cfg, index=int(scene_index))
+    if scene_split is not None:
+        sim_cfg = replace(sim_cfg, split=scene_split)
     if robot:
         sim_cfg = replace(sim_cfg, robot=str(robot))
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
@@ -394,11 +400,13 @@ def _launch_server(
     env["PYTHONUNBUFFERED"] = "1"
     if cpu_only:
         env["CUDA_VISIBLE_DEVICES"] = ""
-    log_dir = Path(tempfile.mkdtemp(prefix="emet_tamp_clutter_sim_"))
+    log_dir = log_dir or Path(tempfile.mkdtemp(prefix="emet_tamp_clutter_sim_"))
+    log_dir.mkdir(parents=True, exist_ok=True)
     server_log = log_dir / "mujoco_server.stderr"
     fh = server_log.open("w", encoding="utf-8")
+    proc = None
     try:
-        proc = popen_session(server_cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh)
+        proc = popen_session(server_cmd, env=env, stdout=fh, stderr=fh)
         recv_port = 4401 + port_offset
         if not _wait_port(recv_port, 180.0, proc=proc):
             try:
@@ -410,6 +418,9 @@ def _launch_server(
         time.sleep(25.0)
         return proc, server_log, fh
     except Exception:
+        from emet.utils.process_tree import terminate_process_tree
+
+        terminate_process_tree(proc)
         try:
             fh.close()
         except Exception:
@@ -417,7 +428,147 @@ def _launch_server(
         raise
 
 
+def _validated_case(ep, args, robot, placements, robot_xy):
+    """Build or replay an admitted fixture; never silently regenerate a scored task."""
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
+    from emet.eval.clutter_fixture import (
+        certificate_error,
+        fingerprint,
+        fixture_geometry,
+        json_value,
+        pose_reproduced,
+        resolve_fixture,
+        score_fixture_state,
+        task_contract,
+    )
+    from emet.eval.scene_task_extractor import load_scene_metadata, resolve_scene_metadata_for_session
+    from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
+
+    base = {"episode_id": ep.id, "mode": ep.mode, "robot": ep.robot, "n_objects": ep.n_objects,
+            "task_success": False, "skipped_invalid": True}
+
+    def reject(reason, **details):
+        return {**base, 'status': 'fixture_rejected', 'error': reason, **details}
+
+    metadata_path = resolve_scene_metadata_for_session(robot.get_emet_session())
+    if metadata_path is None:
+        return reject('missing_scene_metadata')
+    metadata = load_scene_metadata(metadata_path)
+    categories = _placement_category_map(placements, metadata)
+    scene_path = metadata_path.with_name(metadata_path.name.replace('_metadata.json', '.xml'))
+    if not scene_path.is_file():
+        return reject('missing_scene_source_xml')
+    implementation = fingerprint({name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in (
+        'scripts/eval_tamp_clutter.py', 'src/emet/eval/clutter_fixture.py', 'src/emet/eval/tamp_clutter.py',
+        'src/emet/controller/task/tamp/clutter_chain.py', 'src/emet/controller/task/tamp/task_search.py',
+        'src/emet/simulation/sim_manipulation.py',
+    )})
+    identity = fingerprint({'metadata': metadata, 'bodies': sorted(placements),
+                            'sim_config': Path(ep.sim).read_text(), 'scene_index': ep.scene_index,
+                            'scene_split': ep.scene_split, 'robot': ep.robot,
+                            'scene_xml_sha256': hashlib.sha256(scene_path.read_bytes()).hexdigest()})
+    artifact_dir = Path(args.output_dir or DEFAULT_OUTPUT)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / f'{ep.id}.initial.json').write_text(json.dumps(json_value({
+        'placements': placements, 'categories': categories, 'robot_start_xy': robot_xy.tolist(),
+        'scene_fingerprint': identity, 'implementation_sha256': implementation,
+        'environment': robot.get_emet_session().get('environment'),
+    }), indent=2) + '\n')
+    if args.manip_mode is not None:
+        return reject('fixture_execution_mode_mismatch')
+    building = bool(args.validate_fixture)
+    if building:
+        if ep.fixture is not None:
+            return reject('reference_requires_unresolved_candidate')
+        bin_body = _resolve_bin(placements, ep.bin_query or 'GarbageCan')
+        movable = _pickable_bodies(placements, len(placements), cat_map=categories,
+                                   exclude_bodies={bin_body} if bin_body else None)
+        candidates = [b for b, meta in categories.items() if meta.get('static')
+                      and _matches_furniture(meta.get('cat', ''))]
+        eligible = {b: meta for b, meta in categories.items() if b in movable or b in candidates}
+        fixture, diagnostic = resolve_fixture(ep, placements, eligible, robot_xy, bin_body=bin_body,
+                                               candidates=candidates, clearance_m=args.clearance_m)
+        if fixture is None:
+            return reject(diagnostic['reason'], construction=diagnostic)
+        fixture['scene_fingerprint'] = identity
+        fixture['implementation_sha256'] = implementation
+        fixture['task_contract'] = task_contract(ep)
+        fixture['source_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
+    else:
+        fixture = dict(ep.fixture)
+        if args.manip_mode is not None:
+            return reject('fixture_execution_mode_mismatch')
+        error = certificate_error(fixture, scene_fingerprint=identity,
+                                  execution_mode=ep.resolved_manip_mode(), clearance_m=args.clearance_m, start=robot_xy)
+        if error:
+            return reject(error)
+        if fixture.get('implementation_sha256') != implementation:
+            return reject('fixture_implementation_mismatch')
+        if fixture.get('task_contract') != task_contract(ep):
+            return reject('fixture_task_contract_mismatch')
+
+    bodies = [row['body'] for row in fixture['clutter']]
+    if fixture['bin_body'] not in placements or any(b not in placements for b in bodies):
+        return reject('fixture_body_missing')
+    if fixture['landmark_body'] is not None and fixture['landmark_body'] not in placements:
+        return reject('fixture_destination_missing')
+    for row in fixture['clutter']:
+        robot_zmq_set_body_pose(robot, row['body'], row['pos'], quat=row.get('quat'))
+    time.sleep(.5)
+    actual = _read_placements(robot)
+    if any(b not in actual or np.linalg.norm(np.asarray(actual[b]['pos'])[:2] - np.asarray(row['pos'])[:2]) > .03
+           for b, row in zip(bodies, fixture['clutter'], strict=True)):
+        return reject('scatter_not_reproduced')
+    if building:
+        # Freeze the measured settled pose used by the witness, including height
+        # and orientation, rather than merely the requested scatter position.
+        for row in fixture['clutter']:
+            row.update(pos=json_value(actual[row['body']]['pos']),
+                       quat=json_value(actual[row['body']].get('quat')))
+    elif any(not pose_reproduced(actual.get(row['body']), row) for row in fixture['clutter']):
+        return reject('fixture_pose_mismatch')
+    geometry = fixture_geometry(actual, start=robot_xy, goal=fixture['goal_xy'], bodies=bodies,
+                                bin_body=fixture['bin_body'], clearance_m=args.clearance_m)
+    if not geometry['accepted']:
+        return reject('measured_fixture:' + geometry['reason'], validity_probe=geometry)
+    objects = [{'object_gt_body': row['body'], 'object_query': row['cat']} for row in fixture['clutter']]
+    manip = ep.resolved_manip_mode()
+    executor = KinematicPickPlaceExecutor(robot, manip_collision='none', traj_dt=.05) if manip == 'latch' else None
+    metrics = plan_clear_clutter(
+        robot, objects=objects, mode=ep.mode, bin_query=ep.bin_query or 'GarbageCan',
+        bin_body_override=fixture['bin_body'], goal_xy=fixture['goal_xy'],
+        goal_radius_m=ep.success_radius_m, drop_radius_m=ep.success_radius_m,
+        manip_mode=manip, executor=executor, seed=ep.seed, clearance_m=args.clearance_m,
+        strict_navigation=True, reference=building,
+    )
+    reference_completed = bool(metrics.get('task_success'))
+    final = _read_placements(robot)
+    metrics.update(score_fixture_state(final, fixture, mode=ep.mode, base_xy=_world_base_xy(robot),
+                                       success_radius_m=ep.success_radius_m))
+    if not building:
+        return {**base, **metrics, 'skipped_invalid': False, 'episode_valid': True,
+                'fixture_sha256': ep.fixture['sha256'], 'validity_probe': geometry}
+    destination = np.asarray(final[fixture['bin_body']]['pos'])[:2]
+    all_relocated = all(b in final and np.linalg.norm(np.asarray(final[b]['pos'])[:2]-destination) <= ep.success_radius_m
+                        for b in bodies)
+    if not reference_completed or not metrics.get('task_success') or not all_relocated:
+        return reject('reference_execution_failed', reference=metrics, final_all_relocated=all_relocated)
+    fixture.update(reference_success=True, geometry=geometry,
+                   reference={'metrics': metrics, 'final_positions': {b: final[b]['pos'] for b in bodies}})
+    fixture = json_value(fixture)
+    fixture['sha256'] = fingerprint(fixture)
+    row = asdict(ep)
+    row.update(fixture=fixture, goal_xy=fixture['goal_xy'], robot_start_xy=fixture['robot_start_xy'],
+               clutter=fixture['clutter'], episode_valid=True)
+    return {**base, 'status': 'fixture_admitted', 'skipped_invalid': False,
+            'reference_success': True, 'resolved_episode': row}
+
+
 def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, Any]:
+    if ep.requires_fixture and ep.fixture is None and not getattr(args, "validate_fixture", False):
+        return {"episode_id": ep.id, "mode": ep.mode, "status": "fixture_rejected",
+                "skipped_invalid": True, "task_success": False, "error": "unvalidated_candidate"}
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
@@ -435,7 +586,9 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             port_offset,
             cpu_only=args.cpu_only,
             scene_index=ep.scene_index,
+            scene_split=ep.scene_split,
             robot=ep.robot,
+            log_dir=Path(args.output_dir or DEFAULT_OUTPUT) / f"{ep.id}.sim",
         )
         robot = create_robot_client_from_cli(
             ep.robot,
@@ -445,12 +598,14 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             start_immediately=True,
             allow_missing_depth=True,
         )
-        robot.set_velocity(v=30.0, w=15.0)
 
         placements = _read_placements(robot)
         if not placements:
             raise RuntimeError("no sim_object_placements in session")
         robot_xy = _world_base_xy(robot)
+
+        if getattr(args, 'validate_fixture', False) or ep.fixture is not None:
+            return _validated_case(ep, args, robot, placements, robot_xy)
 
         # Resolve goal landmark (nav_goal) + approach goal.
         goal_xy = None
@@ -607,7 +762,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             }
 
         executor = None
-        if manip in ("latch", "attempt"):
+        if manip == "latch":
             executor = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
         metrics = plan_clear_clutter(
             robot,
@@ -792,14 +947,17 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"FAIL {ep.id}: {exc}", file=sys.stderr)
             metrics = {"episode_id": ep.id, "tier": ep.tier, "mode": ep.mode, "error": str(exc)}
-        if args.generate:
+        if args.validate_fixture:
+            if metrics.get('resolved_episode'):
+                resolved.append(metrics['resolved_episode'])
+        elif args.generate:
             resolved.append(metrics)
         else:
             metrics.update(clutter_success_flags(metrics))
         rows.append(metrics)
         (output_dir / f"{ep.id}.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
-    if args.generate:
+    if args.generate or args.validate_fixture:
         out_yaml = output_dir / "resolved_clutter_episodes.yaml"
         out_yaml.write_text(yaml.safe_dump({"episodes": resolved}, sort_keys=False), encoding="utf-8")
         print(f"Wrote resolved registry to {out_yaml}", file=sys.stderr)

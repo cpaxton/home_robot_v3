@@ -3,6 +3,38 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Physical TAMP acceptance (2026-09-26)
+
+Evidence and commands: [physical acceptance](docs/experiments/physical_tamp_acceptance.md).
+The user-selected experiment scope is GT/MCTS only, including the full 200-row
+registry. Oracle teleport and kinematic latch remain separately labeled controls.
+
+- [ ] Pass three matched physical pick/place trials on each original Molmo and
+      RoboCasa fixture, with independent retention, support, contact and actuation audits.
+- [ ] After that gate, validate broader layouts and bounded partial-map observation/replanning.
+- [x] Complete the 24-case protocol, seven small-registry rows, GT floor/tool controls,
+      and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
+      Full registry: 54/200 successes; corrected 50-row subset: 18 successes, kept separate.
+      See the [results report](docs/experiments/physical_tamp_acceptance_20260926_results.md).
+- [x] Add scene-backed candidate construction, independent executed reference
+      admission, immutable pose certificates, and final-scene scoring for controls.
+      See [validated registry workflow](docs/experiments/tamp_validated_registry.md).
+- [x] Complete corrected r3 admission and fresh MCTS replay; report construction and
+      reference failures separately from the scored denominator. September 28 pilot:
+      4/8 admitted and 4/4 fresh MCTS replay passes. Full job `20260928_222600_2cf5c6`
+      finished: 25/200 admitted, 21/25 scored successes. No 200-task solvability claim.
+- [ ] Expand scene coverage with geometry-based object selection; verify reference
+      repeatability and diagnose Mars startup failures before broader claims.
+- [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
+      and retention bounds; both now have independently verified physical pickups.
+- [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.
+- [ ] Complete Molmo retained transport and placement. Revalidated route reuse now
+      executes carry, but rotational grip drift exceeds 0.1 rad before release.
+      Release and open-finger retreat have static certificates; physical acceptance is pending.
+- [ ] Add physical adapters and collision coverage for deferred robots before claiming
+      multi-robot physical acceptance. Habitat-OVMM, long-horizon tasks, learned-agent
+      comparisons and hardware remain deferred. Update paper claims only from scored artifacts.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).

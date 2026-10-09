@@ -172,7 +172,7 @@ def test_stored_plan_revalidates_pose_and_is_one_shot():
 def test_task_plan_reports_partial_execution_failure():
     class _MotionRobot:
         def move_base_to(self, *_args, **_kwargs):
-            return None
+            return True
 
     class _FailingExecutor:
         def grasp_only(self, *_args, **_kwargs):

@@ -74,6 +74,17 @@ def _filter_unsafe_nav_traj(
     """
     if not traj:
         return [], "no_plan", None
+    if getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
+        from emet.motion.navigation_sweep import validate_navigation_sweep
+
+        poses = list(traj)
+        if len(poses) >= 2 and np.isnan(np.asarray(poses[-2]).reshape(-1)[:2]).all():
+            poses = poses[:-2]
+        if start_xyt is None:
+            return [], "missing_measured_start", None
+        valid, reason = validate_navigation_sweep(self.space, start_xyt, poses)
+        if not valid:
+            return [], f"rejected_swept_footprint:{reason}", None
     planner = getattr(self, "planner", None)
     if planner is None:
         return list(traj), None, None
