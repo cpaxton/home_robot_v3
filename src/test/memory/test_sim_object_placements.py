@@ -361,3 +361,34 @@ def test_box_support_tolerates_small_tilt_and_stays_inside_rotated_face():
         assert patch[0, 2] == patch[1, 2]
     tilted = Rotation.from_euler("x", .01).as_matrix()
     assert _box_support_patch([0, 0, 1], tilted, half) is None
+
+
+def test_command_refresh_moves_geometry_for_welded_children_and_rotates_bounds():
+    import threading
+
+    import mujoco
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+    from emet.simulation.sim_manipulation import set_free_body_pose
+    from emet.simulation.sim_object_placements import (
+        placements_from_mujoco_model,
+    )
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="object_root"><freejoint/><geom type="box" size=".2 .1 .05"/>
+        <body name="object_child" pos=".5 0 0"><geom type="box" size=".1 .1 .05"/></body>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    placements = placements_from_mujoco_model(model, data)
+    old = np.array(placements["object_root"]["bounds"])
+    assert set_free_body_pose(model, data, "object_root", [1, 2, 3], [2**-.5, 0, 0, 2**-.5])
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
+    server._emet_session = {"sim_object_placements": placements}
+    server._patch_emet_session_body_pos("object_root", [999, 999, 999])
+    # The supplied command target must not replace actual measured geometry.
+    expected = placements_from_mujoco_model(model, data)
+    for body in ("object_root", "object_child"):
+        for field in ("pos", "quat", "bounds", "collision_bounds", "support_surfaces"):
+            np.testing.assert_allclose(placements[body][field], expected[body][field])
+    assert not np.allclose(placements["object_root"]["bounds"], old)

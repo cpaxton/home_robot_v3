@@ -159,3 +159,13 @@ rectangle in a box face's XY projection, with arbitrary yaw and at most 1 mrad
 tilt. Sloped/mesh faces remain unsupported. Tests check every rectangle corner
 against the oriented face and reject larger tilt; 18 metadata tests pass. This
 repairs support availability, not a claim of successful live placement.
+
+The exact live CHAT snapshot from job `20261009_121359_46c309` exposed stale
+held-object geometry: EE Z was 1.291729 m, while cached payload bounds still
+spanned Z 1.101594–1.190639 m at the original tabletop position. The simulator
+attachment callback patched `pos` only. It now recomputes pose, bounds, collision
+components and support patches from live MuJoCo state for all cached bodies
+sharing the moved freejoint ancestor. A regression exercises the actual server
+callback, parent/child motion, rotation and an intentionally wrong command target.
+Metadata/contact suites: 34 passed. This identifies a stale-volume bug; a fresh
+full gate is still required to establish its effect on placement success.

@@ -136,9 +136,10 @@ all requested objects in the denominator. These body IDs are not public tool
 output. Planning failures before execution can still proceed to another object.
 
 Per-place `release` evidence records `detach_command` as `not_attempted`,
-`unknown` (command attempted but completion unavailable), or `completed`, plus
+`unknown` (command attempted but completion unavailable), or `returned` (the helper returned without error; terminal completion is not
+independently checked), plus
 `placement_verified` as a boolean or null. `held_state` remains `unknown`: a
-successful detach command and XY placement check do not provide a current
+returned detach helper and XY placement check do not provide a current
 attachment observation. These fields help distinguish partial effects, but do
 not authorize blind replay. Evidence resets at each operation and does not leak
 arbitrary planner messages, internal body identities or previous search results.
