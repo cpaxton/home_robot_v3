@@ -943,6 +943,12 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 ## Shared-agent review gates (2026-10-09)
 
+- [x] Assemble current-main acceptance sandbox; 801 tests passed plus known main
+      failure. Fix prerequisite-before-GPU lock ordering; 28 queue tests pass.
+- [ ] Run five-repeat navigation gate on the reconciled sandbox; retain measured
+      poses/head state and verify visibility separately from telemetry completion.
+- [ ] Diagnose S0 scan coverage and ignored motion outcomes before treating
+      horizon-only views as grounding failures; keep frozen outcomes intact.
 - [x] Address #180 review: explicit missing-verifier failure, budget cleanup,
       once-per-view/query caller contract, added tests and current-main API checks.
 - [x] Merge #176 and #180 on explicit user direction; isolated #180 paired EQA

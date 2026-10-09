@@ -8,6 +8,19 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 #### Repaired-head pilot and review handoff (2026-10-09)
 
+- Current-main acceptance sandbox incorporates the reconciled slices, #190's
+  telemetry repair and isolated evidence output. Combined checks: **801 passed,
+  one previously reproduced main missing-RGB failure**. Queue/registry checks:
+  **28 passed** after correcting dependency waits to precede GPU-lock acquisition.
+  Requeued waiting jobs use this ordering; the active pilot was not interrupted.
+- Old-main S0 completed with object and receptacle find both false (valid metrics,
+  about 22 minutes). Candidate S0 is ongoing. Its saved assessment image contains
+  sky and floor rather than the table. A passive state sample shows an upright
+  base (up dot Z about 0.999994), level head and camera forward near +X. The table
+  is toward -Y; four mapping views request only three +45-degree increments, and
+  the scan currently ignores motion return values. Coverage/heading must be
+  checked before blaming object grounding. Do not claim the earlier stationary
+  telemetry probe validated object visibility: its image is also horizon-only.
 - **Merged with explicit user approval:** #176 (`cee9b093`) and #180 (`2ad47882`).
   The isolated #180 EQA job remains queued and is now post-merge evidence, not a
   passed prerequisite. Prior approval/gate notes below describe the earlier state.
