@@ -72,11 +72,11 @@ ARM_MOUNT_Z = 0.66  # shoulder height above the carriage floor (upper body)
 ARM_MOUNT_QUAT = {"left": "0.7071068 0 0 -0.7071068", "right": "0.7071068 0 0 0.7071068"}
 
 # Default "home" pose for navigation: arms tucked at their own sides (uncrossed),
-# collision-free. Matches the arm joint order: shoulder_pan, shoulder_lift, elbow_flex,
+# compact under corrected URDF pivots (not collision-certified). Joint order: shoulder_pan, shoulder_lift, elbow_flex,
 # wrist_flex, wrist_roll, gripper. The left arm is the canonical fragment; the right is
 # its X-mirror, so the left/right joint values must be OPPOSITE sign for mirror poses.
 # (Tuned for the new ArmLeft URDF arm; see assemble_sourccey home-keyframe smoke.)
-ARM_HOME = (0.6, -0.6, 1.0, 0.0, 0.0, 0.8)
+ARM_HOME = (0.6, 0.6, 1.0, 0.0, 0.0, 0.8)
 LIFT_HOME = 0.05
 
 
@@ -130,6 +130,15 @@ def prefix_arm_fragment(fragment: str, side: str) -> str:
             line = f"{line[: m.start(1)]}{m.group(1)}{side}_{m.group(2)}{m.group(3)}{line[m.end(3) :]}"
         if side == "right":
             line = _mirror_x_attrs(line)
+            # Reflect mesh vertices as well as frame origins. Mirroring only
+            # geom.pos leaves the original off-origin CAD mesh floating away.
+            line = re.sub(r'mesh="(arm_l_[^"]+)"', r'mesh="\1_mirror_x"', line)
+            inertia = re.search(r'fullinertia="([^"]+)"', line)
+            if inertia:
+                values = [float(v) for v in inertia.group(1).split()]
+                values[3] *= -1  # Ixy
+                values[4] *= -1  # Ixz
+                line = line[:inertia.start(1)] + " ".join(f"{v:.8g}" for v in values) + line[inertia.end(1):]
         out.append(line)
     return "\n".join(out)
 
@@ -217,6 +226,7 @@ def build() -> str:
     # arm meshes (new official ArmLeft URDF; STLs vendored as arm_l_*.stl)
     for name in sorted(p.stem for p in (SRC_ASSETS / "meshes").glob("arm_l_*.stl")):
         a(f'    <mesh name="{name}" file="{name}.stl" scale="0.001 0.001 0.001"/>')
+        a(f'    <mesh name="{name}_mirror_x" file="{name}.stl" scale="-0.001 0.001 0.001"/>')
     a("  </asset>")
     a("")
     a("  <default>")
@@ -225,10 +235,10 @@ def build() -> str:
     # hint is accepted instantly). Spawn safety comes from the planar clip guards + footprint;
     # motion-planning collision is delegated to external planners (RobotModel / pinocchio).
     a('    <default class="robot_collision">')
-    a('      <geom type="mesh" density="80" friction="0.9" group="1" contype="0" conaffinity="0"/>')
+    a('      <geom type="mesh" density="80" friction="0.9" group="3" contype="0" conaffinity="0"/>')
     a("    </default>")
     a('    <default class="arm_collision">')
-    a('      <geom type="mesh" density="100" friction="0.9" group="1" contype="0" conaffinity="0"/>')
+    a('      <geom type="mesh" density="100" friction="0.9" group="3" contype="0" conaffinity="0"/>')
     a("    </default>")
     a('    <default class="robot_visual">')
     a('      <geom type="mesh" material="plastic_white" group="2" contype="0" conaffinity="0" density="0"/>')

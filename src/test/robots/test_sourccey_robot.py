@@ -339,3 +339,28 @@ def test_sourccey_merged_table_home_keeps_object_freejoints():
     pan_after = float(data.qpos[pan_adr])
     assert abs(pan_after - pan_before) > 0.2
     assert abs(pan_after - 0.6) < 0.05
+
+
+def test_mirrored_arm_meshes_follow_mirrored_link_frames():
+    """Reflect CAD vertices too: mirrored origins alone create a detached arm."""
+    from scipy.spatial import cKDTree
+
+    _, model = _load()
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+
+    def vertices(body_name):
+        body = model.body(body_name).id
+        gid = next(g for g in range(model.ngeom) if model.geom_bodyid[g] == body
+                   and model.geom_type[g] == mujoco.mjtGeom.mjGEOM_MESH and model.geom_group[g] == 2)
+        mesh = model.geom_dataid[gid]
+        start, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+        return model.mesh_vert[start:start + count] @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+
+    for link in ("Arm-Base-Shoulder", "Arm-Bicep", "Arm-Forearm", "Gripper-Finger"):
+        left = vertices("left_" + link)
+        left[:, 0] *= -1
+        right = vertices("right_" + link)
+        distances, _ = cKDTree(left).query(right)
+        assert distances.max() < 1e-5, (link, distances.max())

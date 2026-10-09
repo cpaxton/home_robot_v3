@@ -51,6 +51,7 @@ def _load_default_scene_with_robot(robot_key: str):
     """Merge scene_environment.xml (canonical table room, Stretch materials) with robot MJCF; return MjModel or None."""
     import os
     import tempfile
+    import xml.etree.ElementTree as ET
 
     import mujoco
 
@@ -61,6 +62,20 @@ def _load_default_scene_with_robot(robot_key: str):
         return None
     scene_abs = str(scene_path.resolve())
     robot_abs = str(robot_path.resolve())
+    # Robot MJCFs may contain a standalone preview floor. The environment owns
+    # the actual floor: two coplanar planes cause z-fighting and duplicate contacts.
+    robot_tree = ET.parse(robot_path)
+    preview_planes = [(world, geom) for world in robot_tree.getroot().findall("worldbody")
+                      for geom in world.findall("geom") if geom.get("type") == "plane"]
+    robot_preview_path = None
+    if preview_planes:
+        for world, geom in preview_planes:
+            world.remove(geom)
+        fd_robot, robot_preview_path = tempfile.mkstemp(suffix=".xml", prefix="robot_no_preview_floor_",
+                                                       dir=str(robot_path.parent))
+        os.close(fd_robot)
+        robot_tree.write(robot_preview_path, encoding="unicode")
+        robot_abs = robot_preview_path
     # When a vendored model uses relative meshdir/asset paths, resolving meshes via an absolute directory in the
     # merge wrapper avoids ambiguous resolution across MuJoCo versions and symlinked/editable installs (parent include
     # directory vs. included-file directory). Only inject when that folder exists (robot shipped without meshes omits it).
@@ -89,6 +104,8 @@ def _load_default_scene_with_robot(robot_key: str):
     finally:
         try:
             Path(path).unlink(missing_ok=True)
+            if robot_preview_path:
+                Path(robot_preview_path).unlink(missing_ok=True)
         except Exception:
             pass
 
