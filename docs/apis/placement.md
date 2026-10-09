@@ -201,3 +201,7 @@ For the in-process MuJoCo server, attachment/teleport updates refresh actual
 geometry for every cached body sharing the moved freejoint root. Commanded
 positions alone must not be combined with old bounds. Subprocess geometry
 providers still need coherent observed pose/volume snapshots.
+
+Geometry refresh runs at telemetry publication after attachment/teleport marks
+its freejoint subtree dirty. It uses kinematics only, preserving contact and
+acceleration buffers and avoiding geometry reconstruction on every physics tick.

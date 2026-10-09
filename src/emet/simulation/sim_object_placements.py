@@ -465,7 +465,9 @@ def refresh_moved_body_placements(placements, model, data, body):
     root = freejoint_ancestor_body_id(model, bid)
     if root is None:
         return
-    _mj_forward(model, data)
+    # Only transforms are needed. Metadata publication must not rerun the
+    # dynamics/constraint solver or overwrite its warm-start/contact buffers.
+    mujoco.mj_kinematics(model, data)
     updated = {}
     for name, entry in placements.items():
         if not isinstance(entry, dict):
