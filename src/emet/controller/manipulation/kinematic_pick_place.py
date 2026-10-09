@@ -13,6 +13,7 @@ approach standoff but not enforced at the EE.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -195,17 +196,28 @@ class KinematicPickPlaceExecutor:
         return np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)
 
     def _verify_grasp_lift(self, body: str, lift_xyz: np.ndarray, *, pre_pos: np.ndarray | None) -> bool:
+        """Accept target proximity only; height gain and threshold are diagnostics."""
         after = self._body_pos(body)
-        if after is None:
-            return False
         lift = np.asarray(lift_xyz, dtype=np.float64).reshape(3)
-        if float(np.linalg.norm(after - lift)) <= self.grasp_lift_verify_tol_m:
-            return True
-        if pre_pos is not None:
-            dz = float(after[2] - pre_pos[2])
-            if dz >= max(0.04, 0.4 * self.lift_m):
-                return True
-        return False
+        error = None if after is None else float(np.linalg.norm(after - lift))
+        dz = None if after is None or pre_pos is None else float(after[2] - pre_pos[2])
+        minimum_lift = max(0.04, 0.4 * self.lift_m)
+        accepted = bool(error is not None and error <= self.grasp_lift_verify_tol_m)
+        # Height gain alone can accept an object metres from the gripper target.
+        # A command step alone is not an
+        # acknowledgement that this body pose has been observed after the lift.
+        self.last_grasp_verification = {
+            "body": body, "target_xyz": lift.tolist(),
+            "observed_xyz": None if after is None else after.tolist(),
+            "before_xyz": None if pre_pos is None else np.asarray(pre_pos).tolist(),
+            "target_error_m": error, "lift_dz_m": dz,
+            "target_tolerance_m": self.grasp_lift_verify_tol_m, "minimum_lift_m": minimum_lift,
+            "command_step": getattr(self.robot, "_last_step", None),
+            "session_step": getattr(self.robot, "_emet_session_cache_step", None),
+            "accepted": accepted,
+        }
+        logger.info("KinematicPickPlace lift verification: " + json.dumps(self.last_grasp_verification))
+        return accepted
 
     def _verify_place_xy(self, body: str, recep_xy: np.ndarray) -> tuple[bool, float]:
         after = self._body_pos(body)
@@ -336,14 +348,25 @@ class KinematicPickPlaceExecutor:
                 return stem
         return None
 
-    def _sync_qpos_from_robot(self) -> None:
+    def begin_operation(self, operation_id: str) -> None:
+        """Start a new task operator; previous measurements cannot attest to it."""
+        self.operation_id = operation_id
+        self.last_ee_verification = None
+        self.last_grasp_verification = None
+
+    def _sync_qpos_from_robot(self) -> bool:
         assert self._model is not None and self._data is not None
+        received = getattr(self.robot, "_state_received_monotonic", None)
+        if isinstance(received, (int, float)) and (not np.isfinite(received) or time.monotonic() - received > 2.0):
+            self._last_motion_failure = "stale_observation"
+            return False
         self._sync_base_freejoint()
         q, _, _ = self.robot.get_joint_state(timeout=2.0)
         names = self._actuator_names()
         if q is None or len(q) < len(names):
             mujoco.mj_forward(self._model, self._data)
-            return
+            return False
+        observed_joints = set()
         for i, aname in enumerate(names):
             jname = self._actuator_to_joint_name(aname)
             if not jname:
@@ -351,7 +374,58 @@ class KinematicPickPlaceExecutor:
             jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jname)
             if jid >= 0:
                 self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(q[i])
+                observed_joints.add(jname)
         mujoco.mj_forward(self._model, self._data)
+        return all(name in observed_joints for name in self.joint_names)
+
+    def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0) -> tuple[bool, float]:
+        """Require measured joint FK to reach the IK target before attaching."""
+        deadline = time.monotonic() + timeout_s
+        error = float('inf')
+        observed = None
+        while True:
+            if self._sync_qpos_from_robot():
+                observed = np.asarray(self._data.body(self.ee_body).xpos).copy()
+                error = float(np.linalg.norm(observed - target))
+            else:
+                observed = None
+                error = float('inf')
+            if error <= self.ik_tol_m or time.monotonic() >= deadline:
+                break
+            time.sleep(.05)
+        self.last_ee_verification = {
+            'target_xyz': np.asarray(target).tolist(),
+            'observed_xyz': None if observed is None else observed.tolist(),
+            'error_m': error if np.isfinite(error) else None,
+            'tolerance_m': self.ik_tol_m, 'accepted': bool(error <= self.ik_tol_m),
+        }
+        self.last_ee_verification.update(self._joint_tracking_evidence())
+        logger.info('KinematicPickPlace measured EE: ' + json.dumps(self.last_ee_verification))
+        return error <= self.ik_tol_m, error
+
+    def _joint_tracking_evidence(self) -> dict[str, Any]:
+        """Separate the planner target, server-held commands, and observed joints."""
+        from emet.motion.mujoco_arm_ik import joint_qpos_addrs
+
+        if getattr(self, '_model', None) is None:
+            return {}
+        observed = np.asarray([self._data.qpos[a] for a in joint_qpos_addrs(self._model, self.joint_names)])
+        command = getattr(self, '_last_cmd_q', None)
+        state = getattr(self.robot, '_state', None)
+        targets = state.get('actuator_targets') if isinstance(state, dict) else None
+        by_joint = {}
+        if targets is not None:
+            for actuator, target in zip(self._actuator_names(), targets, strict=False):
+                by_joint[self._actuator_to_joint_name(actuator)] = float(target)
+        return {
+            'joint_names': list(self.joint_names), 'observed_q': observed.tolist(),
+            'planned_q': None if command is None else np.asarray(command).tolist(),
+            'server_targets': [by_joint.get(name) for name in self.joint_names],
+            'state_step': state.get('step') if isinstance(state, dict) else None,
+        }
+
+    def _stage_failure(self, stage: str) -> str:
+        return f"{stage}_{getattr(self, '_last_motion_failure', None) or 'ik_failed'}"
 
     def _hold_actuator_dict(self) -> dict[str, float]:
         names = self._actuator_names()
@@ -403,55 +477,21 @@ class KinematicPickPlaceExecutor:
         self._last_cmd_q = home_arm_q_array(self.profile)
 
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
+        self._last_motion_failure = None
+        self.last_ee_verification = None
         assert self._model is not None and self._data is not None
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
-        self._sync_base_freejoint()
         qadr = joint_qpos_addrs(self._model, self.joint_names)
-        live_seed: np.ndarray | None = None
-        q_live, _, _ = self.robot.get_joint_state(timeout=2.0)
-        names = self._actuator_names()
-        if q_live is not None and len(q_live) >= len(names):
-            live_map: dict[str, float] = {}
-            for i, aname in enumerate(names):
-                jname = self._actuator_to_joint_name(aname)
-                if jname:
-                    live_map[jname] = float(q_live[i])
-            if all(n in live_map for n in self.joint_names):
-                live_seed = np.array([live_map[n] for n in self.joint_names], dtype=np.float64)
-
-        if self._last_cmd_q is not None and len(self._last_cmd_q) == len(qadr):
-            for a, v in zip(qadr, self._last_cmd_q, strict=True):
-                self._data.qpos[a] = float(v)
-        elif live_seed is not None:
-            for a, v in zip(qadr, live_seed, strict=True):
-                self._data.qpos[a] = float(v)
-        else:
-            self._sync_qpos_from_robot()
-
-        ee_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, self.ee_body)
-        spec = getattr(self.robot, "_spec", None)
-        base_name = str(getattr(spec, "base_link_name", None) or "base_link")
-        base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, base_name)
-        if base_id < 0:
-            base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
-        if ee_id >= 0 and base_id >= 0:
-            mujoco.mj_forward(self._model, self._data)
-            ee_z = float(self._data.body(ee_id).xpos[2])
-            base_z = float(self._data.body(base_id).xpos[2])
-            if ee_z < base_z - 0.2:
-                for name in self.joint_names:
-                    jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name)
-                    if jid >= 0 and self._model.jnt_limited[jid]:
-                        lo, hi = float(self._model.jnt_range[jid][0]), float(self._model.jnt_range[jid][1])
-                        self._data.qpos[int(self._model.jnt_qposadr[jid])] = 0.5 * (lo + hi)
-
-        mujoco.mj_forward(self._model, self._data)
+        # A previous command is an IK seed, never evidence of the path start.
+        # Contact may have prevented that posture from being reached.
+        if not self._sync_qpos_from_robot():
+            self._last_motion_failure = self._last_motion_failure or 'missing_joint_state'
+            return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         seeds = []
-        for s in (live_seed, self._last_cmd_q):
-            if s is not None and np.linalg.norm(np.asarray(s, dtype=np.float64).reshape(-1) - q0) > 1e-3:
-                seeds.append(s)
+        if self._last_cmd_q is not None and np.linalg.norm(self._last_cmd_q - q0) > 1e-3:
+            seeds.append(self._last_cmd_q)
         result = solve_position_ik_multiseed(
             self._model,
             self._data,
@@ -460,10 +500,13 @@ class KinematicPickPlaceExecutor:
             target_pos=target_xyz_world,
             seeds=seeds,
             try_midrange=True,
-            tol_m=self.ik_tol_m,
+            # Reserve most of the measured-arrival budget for execution error.
+            # Solving only to that full tolerance can fail after ordinary PD lag.
+            tol_m=min(0.01, self.ik_tol_m * 0.25),
             max_iters=self.ik_max_iters,
         )
         if not result.success:
+            self._last_motion_failure = 'ik_failed'
             return False, result.pos_error_m
         q1 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         plan = plan_arm_joint_path(
@@ -479,7 +522,13 @@ class KinematicPickPlaceExecutor:
             linear_steps=self.traj_steps,
         )
         if not plan.success:
-            logger.warning(f"KinematicPickPlace: path plan failed planner={plan.planner!r} reason={plan.reason!r}")
+            detail = getattr(plan, 'detail', None) or ''
+            self._last_motion_failure = (detail.split(':')[0] if detail.startswith(('joint_bounds:', 'collision'))
+                                         else 'planning_failed')
+            logger.warning(
+                f"KinematicPickPlace: path plan failed planner={plan.planner!r} "
+                f"reason={plan.reason!r} detail={getattr(plan, 'detail', None)!r}"
+            )
             return False, result.pos_error_m
         logger.info(f"KinematicPickPlace: path via {plan.planner} n_waypoints={len(plan.waypoints)}")
         self.last_plan_waypoints = [np.asarray(w, dtype=np.float64).copy() for w in plan.waypoints]
@@ -496,7 +545,10 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(plan.waypoints[-1])
             self._sleep(max(0.25, self.traj_dt * 3))
         self._last_cmd_q = q1.copy()
-        return True, result.pos_error_m
+        reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+        if not reached:
+            self._last_motion_failure = self._last_motion_failure or 'tracking_failed'
+        return reached, measured_error
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:
         from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
@@ -534,10 +586,10 @@ class KinematicPickPlaceExecutor:
         self.last_targets = {"pregrasp": pregrasp, "grasp": grasp, "lift": lift}
         ok, g_err = self._plan_and_execute_ee(pregrasp)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "pregrasp_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('pregrasp'))
         ok, g_err = self._plan_and_execute_ee(grasp)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "grasp_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('grasp'))
         self._sleep(0.4)
         try:
             self._set_gripper(open_=False)
@@ -548,7 +600,7 @@ class KinematicPickPlaceExecutor:
         ok, _ = self._plan_and_execute_ee(lift)
         if not ok:
             robot_zmq_detach_body(self.robot, body)
-            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "lift_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, self._stage_failure('lift'))
         self._sleep(0.35)
         # Re-glue at the lift pose: Molmo freejoint children can lag the EE during actuator
         # streaming even when attach was registered (seen as attach_verify_failed with ~2cm dz).
@@ -565,7 +617,7 @@ class KinematicPickPlaceExecutor:
         *,
         standoff_m: float = 0.55,
         yaw: float | None = None,
-    ) -> None:
+    ) -> bool:
         """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
 
         ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
@@ -596,8 +648,12 @@ class KinematicPickPlaceExecutor:
                 th = float(yaw)
             approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
         logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
-        self.robot.move_base_to(approach, blocking=True, world_frame=True)
+        result = self.robot.move_base_to(approach, blocking=True, world_frame=True)
+        success = getattr(result, "success", result)
+        if not isinstance(success, (bool, np.bool_)) or not success:
+            return False
         self._sleep(0.4)
+        return True
 
     def place_only(
         self,
@@ -617,7 +673,9 @@ class KinematicPickPlaceExecutor:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "object_not_in_gt")
         from emet.eval.ovmm_find_phase import bodies_matching_category
 
-        if receptacle_gt_body and receptacle_gt_body in pl:
+        if receptacle_gt_body:
+            if receptacle_gt_body not in pl:
+                return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "recep_not_in_gt")
             receps = [receptacle_gt_body]
         else:
             receps = bodies_matching_category(pl, receptacle_query)
@@ -639,7 +697,8 @@ class KinematicPickPlaceExecutor:
             f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} (n_receps={len(receps)})"
         )
         if approach_base:
-            self._approach_xy(recep_pos[:2])
+            if not self._approach_xy(recep_pos[:2]):
+                return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "place_approach_failed")
             # Re-register attach after base teleport so offset matches the live EE.
             robot_zmq_attach_body(self.robot, body, self.ee_body)
             self._sleep(0.15)
@@ -648,10 +707,10 @@ class KinematicPickPlaceExecutor:
         self.last_targets = {"preplace": preplace, "place": place, "recep": recep_pos}
         ok, p_err = self._plan_and_execute_ee(preplace)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "preplace_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure("preplace"))
         ok, p_err = self._plan_and_execute_ee(place)
         if not ok:
-            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_ik_failed")
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure("place"))
         # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         robot_zmq_detach_body(self.robot, body)
@@ -665,12 +724,15 @@ class KinematicPickPlaceExecutor:
             ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         try:
             self._set_gripper(open_=True)
-        except Exception as e:
-            logger.warning(f"KinematicPickPlace: open gripper after place failed: {e}")
+        except Exception:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "release_execution_error")
         try:
-            self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
-        except Exception as e:
-            logger.warning(f"KinematicPickPlace: retract after place failed: {e}")
+            retracted, retract_error = self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
+        except Exception:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "retract_execution_error")
+        if not retracted:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, retract_error,
+                                            self._stage_failure("retract"))
         if not ok_place:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, "place_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, None, p_err, "ok")

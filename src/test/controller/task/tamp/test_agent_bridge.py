@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -15,9 +16,13 @@ from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep, execut
 
 class _Robot:
     def __init__(self, placements: dict, *, capabilities: dict | None = None, is_simulation: bool = True):
+        self._state = {"sim_base_pose_query": True, "command_protocol": {"version": 2, "server_boot_id": "test-boot"}}
         self.placements = placements
         self.capabilities = capabilities or {"sim_set_body_pose": True}
         self.is_simulation = is_simulation
+
+    def check_base_poses(self, poses):
+        return {"poses": poses, "clear": [True] * len(poses)}
 
     def get_emet_session(self):
         return {
@@ -29,8 +34,8 @@ class _Robot:
 
 def _placements() -> dict:
     return {
-        "bowl_hash_1_0_0": {"cat": "bowl", "pos": [0.1, 0.2, 0.8]},
-        "table_main": {"cat": "table", "pos": [1.0, 0.2, 0.9]},
+        "bowl_hash_1_0_0": {"cat": "bowl", "pos": [0.1, 0.2, 0.8], "quat": [1, 0, 0, 0]},
+        "table_main": {"cat": "table", "pos": [1.0, 0.2, 0.9], "quat": [1, 0, 0, 0]},
     }
 
 
@@ -80,8 +85,8 @@ def test_scene_task_refs_are_stable_until_session_changes():
         session_key=("molmospaces", "ithor", "1", "FloorPlan2.xml"),
     )
 
-    assert first[0].ref == repeated[0].ref == "task:1"
-    assert changed[0].ref == "task:1"
+    assert first[0].ref == repeated[0].ref
+    assert changed[0].ref != first[0].ref
 
 
 def test_semantic_plan_build_keeps_grounding_inside_adapter(monkeypatch):
@@ -155,7 +160,9 @@ def test_stored_plan_revalidates_pose_and_is_one_shot():
         success=True,
         message="planned",
     )
-    build = agent_bridge.AgentPlanBuild(task=task, plan=plan, mode="kinematic", live_sim=True)
+    snapshot = agent_bridge.PlanningSnapshot('test-boot', agent_bridge.robot_session_key(robot),
+                                             json.dumps(robot.capabilities, sort_keys=True), json.dumps(placements))
+    build = agent_bridge.AgentPlanBuild(task=task, plan=plan, mode="kinematic", live_sim=True, snapshot=snapshot)
     context: dict = {}
     plan_ref = agent_bridge.store_agent_plan(context, robot, build)
 
@@ -167,6 +174,45 @@ def test_stored_plan_revalidates_pose_and_is_one_shot():
     assert message == "scene_changed_replan"
     assert execute.called is False
     assert plan_ref not in context["_tamp_plans"]
+
+
+def test_bridge_grounds_auto_approach_selection():
+    """build_agent_pick_place_plan drives the shared planner's online approach search.
+
+    The agent path never supplies ``approach_pose``, so when the live simulator
+    advertises ``sim_base_pose_query`` the planner must consult ``check_base_poses``
+    and skip collision-blocked candidates instead of using the fixed +Y standoff.
+    """
+    import numpy as np
+
+    from emet.controller.task.tamp.task_search import approach_candidates_for_object_xy
+
+    placements = _placements()
+    queries: list[list[list[float]]] = []
+
+    class _QueryRobot(_Robot):
+        def __init__(self):
+            super().__init__(placements, capabilities={"sim_set_body_pose": True})
+            self._state["sim_base_pose_query"] = True
+
+        def check_base_poses(self, poses):
+            queries.append([np.asarray(p).tolist() for p in poses])
+            return {
+                "poses": [np.asarray(p).tolist() for p in poses],
+                "clear": [False] + [True] * (len(poses) - 1),
+            }
+
+    robot = _QueryRobot()
+
+    build = agent_bridge.build_agent_pick_place_plan(robot, "bowl", "table")
+
+    assert build.mode == "teleport"
+    assert build.plan is not None and build.plan.success, build.reason
+    assert queries, "agent bridge must consult the read-only base-pose query"
+    assert len(queries[0]) == 16
+    obj_xy = np.asarray(placements["bowl_hash_1_0_0"]["pos"], dtype=np.float64)[:2]
+    expected = approach_candidates_for_object_xy(obj_xy)[1]
+    np.testing.assert_allclose(build.plan.steps[0].args["xyt"], expected)
 
 
 def test_task_plan_reports_partial_execution_failure():

@@ -767,6 +767,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._state = msg
+                self._state_received_monotonic = time.monotonic()
                 if "step" in msg:
                     self._last_step = max(self._last_step, int(msg["step"]))
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
@@ -985,6 +986,32 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         from emet.core.command_client import send_command
 
         return send_command(self, action, timeout=timeout, reliable=reliable)
+
+    def check_base_poses(self, poses, *, timeout: float = 10.0) -> dict:
+        """Read-only GT endpoint validation, available only on advertising simulators."""
+        from emet.core.command_client import command_receipt
+
+        if not isinstance(self._state, dict) or self._state.get("sim_base_pose_query") is not True:
+            raise RuntimeError("simulator does not advertise base pose validation")
+        points = np.asarray(poses, dtype=float)
+        if points.ndim != 2 or points.shape[1] != 3 or not 1 <= len(points) <= 32 or not np.isfinite(points).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        if not np.isfinite(timeout) or timeout <= 0:
+            raise ValueError("query timeout must be positive and finite")
+        deadline = time.monotonic() + timeout
+        action = self.send_action({"sim_check_base_poses": points.tolist()}, timeout=timeout)
+        while time.monotonic() < deadline:
+            receipt = command_receipt(self, action)
+            if receipt and receipt["status"] == "succeeded":
+                result = receipt.get("result", {})
+                if (result.get("poses") != points.tolist() or len(result.get("clear", [])) != len(points)
+                        or any(type(v) is not bool for v in result["clear"])):
+                    raise RuntimeError("invalid base pose validation response")
+                return result
+            if receipt and receipt["status"] in {"failed", "rejected", "cancelled"}:
+                raise RuntimeError(f"base pose query failed: {receipt.get('reason')}")
+            time.sleep(.02)
+        raise TimeoutError("base pose query did not complete")
 
     def set_velocity(self, v: float, w: float) -> None:
         """Set base translational (v) and rotational (w) velocity setpoints."""

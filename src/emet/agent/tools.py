@@ -543,6 +543,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    from emet.controller.task.tamp.api import failure_code, json_tool, plan_data, response
+
     # -- pick_place / plan_pick_place ----------------------------------------
     def _tamp_robot() -> Any | None:
         robot = context.get("robot")
@@ -555,14 +557,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
-    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> str:
+    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
-        return (
-            f"Pick and place ({object_name} -> {receptacle_name}) done."
-            if task_ok
-            else "Pick/place failed or interrupted."
-        )
+        return response("pick_place", code="ok" if task_ok else "controller_failed",
+                        data={"mode": "configured_controller", "assistance": None,
+                              "completed_ops": None, "measurements": None})
+
 
     def _build_tamp_plan(
         *,
@@ -574,11 +575,14 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             AgentPlanBuild,
             AgentTaskRef,
             build_agent_pick_place_plan,
+            robot_session_key,
         )
 
         requested_ref = str(task_ref).strip()
         selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
         if selected is not None and not isinstance(selected, AgentTaskRef):
+            selected = None
+        if requested_ref and context.get("_tamp_scene_key") != robot_session_key(_tamp_robot()):
             selected = None
         if requested_ref and selected is None:
             return AgentPlanBuild(
@@ -612,22 +616,19 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             manip_mode=_tamp_manip_mode(),
         )
 
-    def _format_tamp_plan(plan_ref: str, build: Any) -> str:
+    def _format_tamp_plan(plan_ref: str, build: Any) -> dict:
         plan = build.plan
         if plan is None or not plan.success or build.task is None:
-            return f"TAMP plan failed: {build.reason or getattr(plan, 'message', 'unknown_error')}."
-        ops = " -> ".join(step.op for step in plan.steps)
-        return (
-            f"TAMP plan {plan_ref}: {build.task.object_query} -> {build.task.receptacle_query}; "
-            f"mode={build.mode}; steps={ops}; chosen_grasp={plan.chosen_grasp_index}. "
-            "No motion executed; call execute_pick_place_plan with this plan_ref."
-        )
+            return response("plan_pick_place", code=failure_code(build.reason or "planner_error"))
+        return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
+
+    @json_tool
 
     def plan_pick_place(
         task_ref: str = "",
         object_name: str = "",
         receptacle_name: str = "",
-    ) -> str:
+    ) -> dict:
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
         build = _build_tamp_plan(
@@ -640,19 +641,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         plan_ref = store_agent_plan(context, _tamp_robot(), build)
         return _format_tamp_plan(plan_ref, build)
 
-    def execute_pick_place_plan(plan_ref: str) -> str:
-        from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan
+    @json_tool
+    def execute_pick_place_plan(plan_ref: str) -> dict:
+        from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result
 
         robot = _tamp_robot()
         if robot is None:
-            return "TAMP execution failed: robot not connected."
-        ok, message = execute_stored_agent_plan(robot, context, str(plan_ref))
-        return f"TAMP execution {'succeeded' if ok else 'failed'}: {message}."
+            return response("execute_pick_place_plan", code="robot_not_connected")
+        return execute_stored_agent_plan_result(robot, context, str(plan_ref))
 
-    def pick_place(object_name: str, receptacle_name: str) -> str:
+    @json_tool
+    def pick_place(object_name: str, receptacle_name: str) -> dict:
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
-            return "Robot not connected."
+            return response("pick_place", code="robot_not_connected")
         if executor is not None and (
             bool(getattr(executor, "visual_servo", False))
             or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
@@ -660,20 +662,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return _fallback_pick_place(executor, object_name, receptacle_name)
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
         if build.plan is not None and build.plan.success:
-            from emet.controller.task.tamp.agent_bridge import (
-                execute_stored_agent_plan,
-                store_agent_plan,
-            )
-
+            from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result, store_agent_plan
             plan_ref = store_agent_plan(context, _tamp_robot(), build)
-            ok, message = execute_stored_agent_plan(_tamp_robot(), context, plan_ref)
-            return (
-                f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else f"Pick/place failed: {message}."
-            )
+            result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
+            result["tool"] = "pick_place"
+            return result
         if build.live_sim:
-            return f"Pick/place not run: {build.reason or 'TAMP planning failed'}."
+            return response("pick_place", code=failure_code(build.reason or "planner_error"))
         if executor is None:
-            return "Pick/place not run: no configured manipulation controller."
+            return response("pick_place", code="controller_unavailable")
         return _fallback_pick_place(executor, object_name, receptacle_name)
 
     tools.append(
@@ -740,10 +737,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- scene_tasks ----------------------------------------------------------
-    def scene_tasks(object_filter: str = "", robot: str = "") -> str:
+    @json_tool
+    def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
-        from collections import Counter
-
         from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
@@ -769,15 +765,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             placements = read_sim_object_placements(session) or {}
         else:
             placements = {}
-        environment = session.get("environment") if isinstance(session, dict) else {}
-        if not isinstance(environment, dict):
-            environment = {}
-        session_key = (
-            str(environment.get("kind") or ""),
-            str(environment.get("scene") or ""),
-            str(environment.get("index") or ""),
-            str(session.get("scene_source_basename") or "") if isinstance(session, dict) else "",
-        )
+        from emet.controller.task.tamp.agent_bridge import robot_session_key
+        session_key = robot_session_key(robot_obj)
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
             [active_metadata]
@@ -786,12 +775,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
         if not candidates:
             stable_scene_task_refs(context, [], {}, session_key=session_key)
-            if live_sim:
-                return "No MolmoSpaces metadata matches the active simulation scene."
-            return (
-                "No MolmoSpaces scene metadata installed "
-                "(expected *_physics_metadata.json under ~/.cache/molmospaces/assets/scenes/ithor)."
-            )
+            return response("scene_tasks", code="metadata_unavailable")
         metadata = load_scene_metadata(candidates[0])
         objs = scene_objects(metadata)
         picks = pickable_objects(objs)
@@ -807,59 +791,35 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             session_key=session_key,
         )
 
-        by_obj: Counter = Counter(t.object for t in tasks)
-        lines = [
-            f"Scene: {candidates[0].parent.name}/{candidates[0].stem}",
-            f"Pickable objects ({len(picks)}): {', '.join(sorted({p.category for p in picks}))}",
-            f"Receptacles ({len(recepts)}): {', '.join(sorted({r.category for r in recepts}))}",
-        ]
-        if filt:
-            lines.append(f"Tasks matching {filt!r} ({len(tasks)}):")
-        else:
-            lines.append(f"Task options by object ({len(tasks)} unique object->receptacle pairs):")
-        shown = 0
-        for obj, count in by_obj.most_common(10):
-            lines.append(f"  - {obj}: {count} placement options")
-            shown += 1
-        if len(by_obj) > shown:
-            lines.append(f"  ... and {len(by_obj) - shown} more object categories")
-        if task_refs:
-            lines.append("Semantic task handles (use task_ref with plan_pick_place):")
-            for ref in task_refs[:12]:
-                lines.append(
-                    f"  - {ref.ref}: pick {ref.object_query} from {ref.start_receptacle or 'unknown'} "
-                    f"to {ref.receptacle_query}"
-                )
-        elif tasks:
-            ex = tasks[0]
-            lines.append(f"Example: pick {ex.object} from {ex.start_recep} to {ex.goal_recep}")
+        reachability = None
+        reachability_status = "not_requested"
         rid = (robot or "").strip().lower()
         if rid:
             try:
                 from emet.eval.scene_task_extractor import compute_reachability_priors
-
-                # Prefer real object poses from a connected sim server; fall back to a
-                # documented zero-pose proxy so reachability still exercises the IK path.
-                if placements:
-
-                    def _pose(body: str) -> np.ndarray:
-                        info = placements.get(body)
-                        if info is None and body.endswith("_1_1_0"):
-                            info = placements.get(body[: -len("_1_1_0")] + "_1_0_0")
-                        pos = (info or {}).get("pos")
-                        return np.asarray(pos, dtype=np.float64).reshape(3) if pos is not None else np.zeros(3)
-
-                    priors = compute_reachability_priors(objs, robot_id=rid, arm="left", object_pose_fn=_pose)
-                else:
-                    priors = compute_reachability_priors(objs, robot_id=rid, arm="left")
-                reachable = [r.category for r in priors.values() if r.reachable]
-                src = "sim placements" if placements else "zero-pose proxy (no sim connected)"
-                lines.append(
-                    f"Reachable by {rid} from {src} ({len(reachable)}): {', '.join(sorted(set(reachable))) or 'none'}"
-                )
-            except Exception as e:
-                lines.append(f"(reachability for {rid} unavailable: {e})")
-        return "\n".join(lines)
+                def _pose(body: str) -> np.ndarray:
+                    info = placements.get(body)
+                    if info is None and body.endswith("_1_1_0"):
+                        info = placements.get(body[:-len("_1_1_0")] + "_1_0_0")
+                    pos = (info or {}).get("pos")
+                    return np.asarray(pos, dtype=float).reshape(3) if pos is not None else np.zeros(3)
+                priors = compute_reachability_priors(objs, robot_id=rid, arm="left",
+                                                    **({"object_pose_fn": _pose} if placements else {}))
+                reachability = {"robot": rid,
+                                "source": "sim_placements" if placements else "zero_pose_proxy",
+                                "reachable_categories": sorted({r.category for r in priors.values() if r.reachable})}
+                reachability_status = "evaluated"
+            except Exception:
+                reachability_status = "unavailable"
+        return response("scene_tasks", data={
+            "tasks": [{"task_ref": ref.ref, "object_name": ref.object_query,
+                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle}
+                      for ref in task_refs],
+            "pickable_categories": sorted({p.category for p in picks}),
+            "receptacle_categories": sorted({r.category for r in recepts}),
+            "reachability": reachability,
+            "reachability_status": reachability_status,
+        })
 
     tools.append(
         Tool(

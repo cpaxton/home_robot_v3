@@ -279,3 +279,6 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 - Map frame / snapshot: `uv run emet test src/test/visualization/test_map_snapshot.py`
 - Shared EQA compose: `uv run emet test src/test/eval/test_eval_stack.py`
 - Manual: with sim up, `timeout 15 uv run emet run agent --no-llm -c Q --robot stretch`
+
+TAMP tools return a consistent versioned JSON result on every path. See the
+[canonical TAMP API](apis/tamp.md) for schemas, recovery actions, and simulator limits.

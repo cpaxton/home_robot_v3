@@ -26,6 +26,10 @@ class CommandRuntime:
         """Adapters opt in only when timestamped measurements and correction work."""
         return ()
 
+    def check_base_poses(self, poses):
+        """Optional read-only simulator endpoint query; never a movement command."""
+        raise NotImplementedError("base pose query is not supported by this adapter")
+
     def navigation_policy_measurement(self):
         raise NotImplementedError
 
@@ -127,6 +131,11 @@ class CommandRuntime:
                     if self._navigation_fault:
                         raise RuntimeError("stop could not be confirmed")
                     self.command_tracker.transition(session, sequence, "succeeded")
+                elif "sim_check_base_poses" in payload:
+                    if set(payload) != {"sim_check_base_poses"}:
+                        raise ValueError("base pose query must be a standalone command")
+                    result = self.check_base_poses(payload["sim_check_base_poses"])
+                    self.command_tracker.transition(session, sequence, "succeeded", result=result)
                 elif "xyt" in payload:
                     # Install identity before starting the adapter; dispatch is serialized.
                     self._navigation_command = (session, sequence, None)

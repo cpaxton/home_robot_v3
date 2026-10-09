@@ -32,6 +32,7 @@ class ArmRrtPlanResult:
     waypoints: list[np.ndarray]
     planner: str
     reason: str | None = None
+    detail: str | None = None
 
 
 def joint_limits_from_model(
@@ -95,6 +96,42 @@ def make_arm_validate_fn(
     return validate
 
 
+def arm_config_violation(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    joint_names: Sequence[str],
+    q: np.ndarray,
+    collision: Any | None = None,
+    *,
+    mins: np.ndarray | None = None,
+    maxs: np.ndarray | None = None,
+) -> str | None:
+    """Return a detailed reason *q* is an invalid configuration, or ``None``.
+
+    Distinguishes the two ``invalid_start`` predicates the generic reason hides:
+    an out-of-range joint (``joint_bounds:<name>``) versus a colliding link
+    (``collision``). Writes *q* into ``data`` only when a collision check runs,
+    matching :func:`make_arm_validate_fn`.
+    """
+    qadr = joint_qpos_addrs(model, joint_names)
+    qq = np.asarray(q, dtype=np.float64).reshape(-1)
+    if qq.shape[0] != len(qadr) or not np.isfinite(qq).all():
+        return "nonfinite_configuration"
+    if mins is None or maxs is None:
+        mins, maxs = joint_limits_from_model(model, joint_names)
+    lo = np.asarray(mins, dtype=np.float64).reshape(-1)
+    hi = np.asarray(maxs, dtype=np.float64).reshape(-1)
+    violated = np.flatnonzero((qq < lo - 1e-6) | (qq > hi + 1e-6))
+    if violated.size:
+        i = int(violated[0])
+        return f"joint_bounds:{joint_names[i]}={qq[i]:.4f} in [{lo[i]:.4f},{hi[i]:.4f}]"
+    for a, v in zip(qadr, qq, strict=True):
+        data.qpos[a] = float(v)
+    if collision is not None and collision.configuration_collides(model, data):
+        return "collision"
+    return None
+
+
 def plan_arm_joint_path(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -129,10 +166,12 @@ def plan_arm_joint_path(
     space = make_arm_configuration_space(model, joint_names, step_size=step_size)
     validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs)
 
-    if not validate(q0):
-        return ArmRrtPlanResult(False, [], planner, "invalid_start")
-    if not validate(q1):
-        return ArmRrtPlanResult(False, [], planner, "invalid_goal")
+    start_reason = arm_config_violation(model, data, joint_names, q0, collision, mins=space.mins, maxs=space.maxs)
+    if start_reason is not None:
+        return ArmRrtPlanResult(False, [], planner, "invalid_start", detail=start_reason)
+    goal_reason = arm_config_violation(model, data, joint_names, q1, collision, mins=space.mins, maxs=space.maxs)
+    if goal_reason is not None:
+        return ArmRrtPlanResult(False, [], planner, "invalid_goal", detail=goal_reason)
 
     # Even a short move can cross an obstacle. Validate it before accepting.
     if float(np.linalg.norm(q1 - q0)) < float(goal_tolerance):

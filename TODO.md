@@ -3,6 +3,49 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## TAMP simulator API readiness (2026-10-05)
+
+- [x] Reclaim disposable pip caches; preserve source worktrees, datasets and run evidence.
+- [x] Consistent JSON across all four TAMP tools; boot/pose/clearance guards,
+      partial execution evidence and stale-state checks. Full regression pack: 206 passed.
+- [x] Correct unsupported shoulder-stall diagnosis; retain object-independent failures.
+- [x] Complete gate `20261005_183936_f4b352`: failed CHAT smoke, 1/3 admitted,
+      2/3 scored replays passed. Simulator readiness remains failed.
+- [x] Repair planning snapshots, handle namespaces, and operation-scoped evidence;
+      218 regression tests pass. See `docs/experiments/tamp_api_correctness_20261006.md`.
+- [x] Inspect CHAT smoke `20261006_160739_730b9a`: pickup passed, placement failed;
+      returned handles and operation-scoped partial evidence behaved correctly.
+- [ ] Capture the placement command failure reason with private diagnostic logging.
+      Resolve general motion failures before repeating the nine-trial readiness matrix.
+      See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
+
+## TAMP agent execution follow-up (2026-09-29)
+
+Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).
+
+- [x] Export baseline coverage/success and task-layout figures as PDF/SVG/PNG.
+- [x] Instrument lift outcomes; identify height-only false-positive acceptance and
+      metre-scale attachment offsets. Historical 21/25 is not verified grasp success.
+- [ ] Validate measured-joint arrival and target-distance guards, repair remaining
+      execution failures, then run paired trials across all original admitted tasks.
+- [x] Complete 90-candidate oracle expansion: 19 admitted, 19/19 fresh MCTS passes,
+      five new admitted case IDs and zero startup errors. Updated oracle-only figures saved.
+- [x] Diagnose RBY1 tracking: wall-intersecting approaches and floating-base pose
+      reset artifact; endpoint rejection and solver support validated by 102 tests.
+      See `docs/experiments/tamp_contact_tracking_20260930.md`.
+- [x] Retry repaired execution: kettle relocation passes after reserving IK
+      tracking margin; latest case is 1/3 objects, 0/1 full tasks (latch control).
+- [x] Execute preselected alternative approaches: three fresh-process repeats
+      pass (3/3 full cleanups, 9/9 relocations, 54/54 arm arrivals), assisted latch
+      only. See `docs/experiments/tamp_approach_validation_20261001.md`.
+- [x] Integrate online alternative-approach selection with read-only collision queries:
+      139 regression tests pass; three fresh MCTS repeats score 2/3 full tasks and
+      7/9 relocations. See `docs/experiments/tamp_auto_approaches_20261001.md`.
+- [ ] Diagnose residual apple tracking and kettle invalid-start failures; verify arm
+      collision geometry and payload sweeps before resuming broader latch expansion.
+- [ ] Measure the full shared agent on frozen valid tasks with explicit model,
+      observations and action budgets; do not label scripted/GT controls as agent results.
+
 ## Physical TAMP acceptance (2026-09-26)
 
 Evidence and commands: [physical acceptance](docs/experiments/physical_tamp_acceptance.md).

@@ -190,7 +190,7 @@ def test_plan_pick_place_without_executor():
     assert plan.success
     assert plan.chosen_grasp_index == 0
     assert [s.op for s in plan.steps] == ["approach", "grasp", "place"]
-    assert any("approach@" in n for n in plan.expanded_nodes)
+    assert any("selected@" in n for n in plan.expanded_nodes)
 
 
 def test_plan_pick_place_uses_spec_side_approach():
