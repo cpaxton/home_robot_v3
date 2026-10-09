@@ -30,9 +30,11 @@ benchmarks. Camera stills are sampled after receipts but do not independently
 certify measured success: use the paired JSON tool outcomes. Assisted joint
 teleports are shown as discrete changes, without fabricated interpolation.
 
-Open/close capture queued: job `20261009_173350_a866a0`, implementation `098f2e45`,
-output `/home/cpaxton/runs/emet/capability-media-20261009/`. Do not claim footage
-or success until the job completes and its frames/outcomes have been inspected.
+The original waiting capture `20261009_173350_a866a0` was cancelled and superseded
+by managed job `20261009_175205_1cc9bd` at frozen source `3f9a599a`. It records the
+open/close cycle, full placement regression, RBY1 and Innate Mars controls under
+`/home/cpaxton/runs/emet/placement-refresh-media-20261009/`. It is queued; inspect
+`suite.json`, case logs and actual frames before claiming new footage or success.
 
 ## Task and skill overlays / robot comparisons
 
