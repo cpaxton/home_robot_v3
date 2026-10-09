@@ -20,3 +20,18 @@ recorded images are not synthesized or interpolated. New manipulation recordings
 also save public JSON tool outcomes and before/after camera views. Assisted
 articulation uses simulator joint teleportation and is evaluated separately from
 physical opening and placement.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{figs/stretch_pick_place.pdf}
+    \caption{Native-actuator Stretch table transfers in MuJoCo. Rows show a blue
+    block and a red cylinder; columns show the initial fixture, carried object,
+    and released object after retraction. Scripted ground-truth goals use
+    coupled-joint pose IK and normal arm/gripper actuation, with no object latch,
+    weld, or runtime pose assignment. Both examples pass measured lift,
+    bilateral fingertip contact, carry retention, and stable release checks.
+    Each fixture moves the non-target object aside before execution.
+    These deliberately simple examples demonstrate simulated grasp and release;
+    they do not establish collision-certified planning or full agent/TAMP success.}
+    \label{fig:stretch-pick-place}
+\end{figure}
