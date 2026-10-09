@@ -76,8 +76,10 @@ candidates, at most 64 supplied target centers, 96 total IK calls, 12 IK calls
 per base and 400 RRT iterations per path attempt. Preplace height is 0.12 m and
 collision margin is 0.005 m. These are work limits, not wall-clock guarantees.
 `seed` controls a private generator shared by IK sampling, RRT, and shortcutting.
-Seeded placement does not consume process-global NumPy or Python random state. Surface `budget_exhausted` currently reports region truncation,
-not truncation at the final candidate cap. Neither an empty result nor an unset
+Seeded placement does not consume process-global NumPy or Python random state. Surface `budget_exhausted` reports both region and final-candidate truncation.
+Base candidate truncation appears in `rejections`. RRT iteration exhaustion has
+the stable code `rrt_budget_exhausted`; private `path_failures` records its stage,
+base, target and attempt. Neither an empty result nor an unset
 budget flag proves infeasibility.
 
 Collision checks use conservative world boxes enclosing complete declared robot
