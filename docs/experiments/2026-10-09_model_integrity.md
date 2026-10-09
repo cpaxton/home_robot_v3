@@ -54,3 +54,15 @@ Managed CPU job `20261009_180642_71f2af` at `d029f355` saved video and failed
 found the direct video harness hardcoded front-facing approach yaw even for a
 side-reaching robot. It now uses the shared robot-specific approach helper. This
 is a harness correction, not permission to count the failed run as success.
+
+The rerun `20261009_180909_b5c36b` at `31aac7c0` also saved video and correctly
+refused before grasping: `pregrasp_ik_failed`, now 0.06145 m error instead of
+0.67196 m. No attachment or placement occurred. The new model therefore needs
+reach/approach validation; its old 0.55 m default standoff is not accepted merely
+because the old defective model reported success. Joint-mesh continuity checks
+pass at the corrected home pose and two additional nonzero configurations.
+
+The reproducible Stretch diagnostic also ran successfully and saved measured
+initial/final qpos plus commanded actuators in
+`/tmp/emet-model-review/stretch-repro/manifest.json`. That is native model motion,
+not a successful placement task.

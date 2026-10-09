@@ -18,6 +18,7 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+import pytest
 
 from emet.robots.sourccey import (
     SOURCCEY_CAMERA_NAMES,
@@ -124,13 +125,18 @@ def test_sourccey_left_right_mirror_symmetry():
         assert abs(float(l[2]) - float(r[2])) < 1e-3, f"{link} not mirror-symmetric in z"
 
 
-def test_sourccey_arm_links_connected():
+@pytest.mark.parametrize("arm_angle", [None, -.35, .35])
+def test_sourccey_arm_links_connected(arm_angle):
     """Consecutive arm link meshes must overlap (no visible gaps at the joints)."""
     from scipy.spatial import cKDTree
 
     spec, model = _load()
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
+    if arm_angle is not None:
+        for joint_name in SOURCCEY_JOINT_NAMES:
+            if joint_name.startswith(("left_", "right_")):
+                data.qpos[model.joint(joint_name).qposadr[0]] = arm_angle
     mujoco.mj_forward(model, data)
 
     def mesh_verts(body):
@@ -146,6 +152,7 @@ def test_sourccey_arm_links_connected():
         return np.concatenate(out) if out else np.zeros((0, 3))
 
     chain = [
+        "right_Feetech_Servo_Motor_v1_1",
         "right_Arm-Base-Shoulder",
         "right_Feetech_Servo_Motor_v1_2",
         "right_Arm-Bicep",
