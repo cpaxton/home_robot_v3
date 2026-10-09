@@ -160,7 +160,16 @@ returned detach helper and XY placement check do not provide a current
 attachment observation. These fields help distinguish partial effects, but do
 not authorize blind replay. Evidence resets at each operation and does not leak
 arbitrary planner messages, internal body identities or previous search results.
-### Placement state refresh
+
+## Simulator-assisted articulation
+
+[`set_receptacle_state`](tamp_articulation.md) opens/closes a supported receptacle
+using a current task handle and returns the same JSON envelope. Discovery now
+includes an `access` field. Closed supported fixtures must be opened before
+planning; unsupported articulated goals fail before pickup. This separate action
+is explicitly assisted, invalidates prior plans, and does not certify a door sweep.
+
+## Placement state refresh
 
 Placement waits up to two wall seconds for the state receiver to recover before
 planning or executing a segment. The maximum accepted receive age remains two

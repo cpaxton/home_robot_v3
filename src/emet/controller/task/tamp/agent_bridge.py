@@ -46,6 +46,7 @@ class PlanningSnapshot:
     session_key: tuple[str, ...]
     capabilities_json: str
     placements_json: str
+    articulation_revision: int = 0
 
     def placements(self) -> dict:
         return json.loads(self.placements_json)
@@ -287,7 +288,8 @@ def build_agent_pick_place_plan(
         return AgentPlanBuild(None, None, None, True, 'base_pose_validation_unavailable')
     snapshot = PlanningSnapshot(boot, _session_key(session, boot),
                                 json.dumps(session.get('capabilities') or {}, sort_keys=True),
-                                json.dumps(placements, default=lambda v: v.tolist()))
+                                json.dumps(placements, default=lambda v: v.tolist()),
+                                int(session.get('articulation_revision', 0)))
     if snapshot.session_key != robot_session_key(robot):
         return AgentPlanBuild(None, None, None, True, 'scene_changed_replan')
     task, reason, live_sim = resolve_agent_task(
@@ -311,6 +313,10 @@ def build_agent_pick_place_plan(
     reason = _validate_snapshot(robot, snapshot, task)
     if reason:
         return AgentPlanBuild(task, None, mode, True, reason)
+    from emet.simulation.articulation import access_precondition
+    access_reason = access_precondition(session, task.receptacle_body)
+    if access_reason:
+        return AgentPlanBuild(task, None, mode, True, access_reason)
     grounding_executor = None
     if mode == "kinematic":
         from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
@@ -363,6 +369,12 @@ def _validate_snapshot(robot: Any, snapshot: PlanningSnapshot, task: AgentTaskRe
     session = robot.get_emet_session()
     if json.dumps(session.get('capabilities') or {}, sort_keys=True) != snapshot.capabilities_json:
         return 'scene_changed_replan'
+    from emet.simulation.articulation import access_precondition
+    if int(session.get("articulation_revision", 0)) != snapshot.articulation_revision:
+        return 'scene_changed_replan'
+    access_reason = access_precondition(session, task.receptacle_body)
+    if access_reason:
+        return access_reason
     expected = snapshot.placements()
     current = _read_placements(robot)
     for body in (task.object_body, task.receptacle_body):

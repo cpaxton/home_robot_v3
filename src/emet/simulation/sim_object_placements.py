@@ -623,3 +623,27 @@ def attach_sim_object_placements_to_session(
             session["sim_object_placements_note"] = (
                 "pos is MuJoCo world XYZ; ZMQ gps/compass are episode-relative to navigation_origin_xyt"
             )
+
+
+def refresh_articulated_body_placements(placements, model, data, bodies):
+    """Refresh affected entries in a per-body placement map on private data.
+
+    This deliberately does not handle aggregate fixture maps: those require the
+    fixture-group provider. Avoid full scene scans and dynamics for each joint
+    state publication in per-body scenes such as MolmoSpaces.
+    """
+    mujoco.mj_kinematics(model, data)
+    for name in bodies:
+        entry = placements.get(name)
+        if not isinstance(entry, dict):
+            continue
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if bid < 0:
+            continue
+        ids = _geom_ids_for_bodies(model, [bid], data=data)
+        live = _placement_entry_from_geom_ids(model, data, ids, cat=str(entry.get("cat", name)))
+        if live is not None:
+            placements[name] = _jsonify_placement_entry({**entry, **live})
+        else:
+            placements[name] = {"cat": entry.get("cat", name), "pos": data.xpos[bid].tolist(),
+                                "quat": data.xquat[bid].tolist()}
