@@ -151,6 +151,10 @@ class LazyGraphController(DynagraphController):
 
         Historical views remain evidence, but cannot authorize current geometry.
         No search anchor or instance is created until mask admission succeeds.
+        This admission API is not idempotent: callers must attempt each captured
+        view/query once (the agentic executor enforces this), or capture a fresh
+        observation before retrying. A description requires a configured verifier;
+        detector labels alone cannot establish its constraints.
         """
         self._grounded_query_target = None
         if source_obs_id < 1 or source_obs_id != len(self.voxel_map.observations):
@@ -224,6 +228,12 @@ class LazyGraphController(DynagraphController):
         )
         matches = [d for d in detections if d["instance_id"] in matching_ids]
         if len(matches) != 1 or not any(d is matches[0] for d in admitted):
+            if (
+                target_description
+                and verification["source"] == "unverified"
+                and getattr(self.graph_memory, "eqa_client", None) is None
+            ):
+                return {"ok": False, "reason": "semantic verification unavailable", "cache_path": cache_path}
             if handle is not None:
                 self.query_candidates.reject(
                     handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
@@ -237,13 +247,17 @@ class LazyGraphController(DynagraphController):
                 "verification_source": verification["source"],
             }
         det = matches[0]
+        created_handle = None
         if record is None:
+            previous_handles = set(self.query_candidates.records)
             try:
                 record = self.query_candidates.propose(query, source_obs_id, len(vm.observations), det["xyz"])
             except ValueError as exc:
                 return {"ok": False, "reason": str(exc)}
             record.target_description = target_description
             handle = record.handle
+            if handle not in previous_handles:
+                created_handle = handle
         candidate = GraphDetectionCandidate(
             label=det["label_short"],
             xyz=np.asarray(det["xyz"]),
@@ -255,9 +269,13 @@ class LazyGraphController(DynagraphController):
         )
         obs_id = fusion.apply_detection(self.graph_memory, rgb, candidate)
         if obs_id is None:
+            if created_handle is not None:
+                self.query_candidates.release(created_handle)
             return {"ok": False, "reason": "instance budget exhausted"}
         nodes = [n for n in self.graph_memory.get_nodes() if n.obs_id == obs_id and n.countable_instance]
         if len(nodes) != 1:
+            if created_handle is not None:
+                self.query_candidates.release(created_handle)
             return {"ok": False, "reason": "instance identity unresolved"}
         # Graph node indices are renumbered by maintenance. The object's stable
         # observation ID is the query identity; never persist a node-list index.

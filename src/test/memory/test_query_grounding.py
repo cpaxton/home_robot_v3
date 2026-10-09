@@ -60,6 +60,26 @@ def test_current_view_grounds_without_retrieval_or_camera_anchor():
     assert record.require_grounding(2) == result["obs_id"]
 
 
+def test_current_view_without_verifier_reports_unavailable_not_absent():
+    agent = controller()
+    result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["reason"] == "semantic verification unavailable"
+    assert not agent.query_candidates.records
+    assert not agent.graph_memory.get_nodes()
+
+
+def test_budget_exhaustion_releases_only_new_unadmitted_candidate():
+    agent = controller()
+    existing = agent.propose_query_candidate("plate", [2, 2, 2], {"source_obs_id": 1})
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    with patch("emet.memory.graph_eqa.graph_object_fusion.fusion.GraphObjectFusion.apply_detection", return_value=None):
+        result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
+    assert result["reason"] == "instance budget exhausted"
+    assert list(agent.query_candidates.records) == [existing.handle]
+    assert not agent.graph_memory.get_nodes()
+    assert agent._grounded_query_target is None
+
+
 @pytest.mark.parametrize("failure", ["stale", "relation", "ambiguous", "absent"])
 def test_view_grounding_abstains_without_creating_candidates(failure):
     agent = controller()
