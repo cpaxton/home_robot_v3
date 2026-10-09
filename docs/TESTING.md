@@ -16,6 +16,14 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
   existing message dictionaries is not protected. Track a Qwen-specific
   reset-context regression and reassess deep copying if mutation is introduced.
   The conditional-context style suggestion is optional. No merge performed here.
+- User approved **#180** after comment resolution. Repair `394caa3a` distinguishes
+  missing semantic verification from absent evidence, releases newly proposed
+  candidates after failed instance admission, and documents once-per-view/query
+  admission. Validation: 264 passes plus the known main missing-RGB failure;
+  on current main, 305 passes plus the same failure including TAMP API/bridge
+  checks. Isolated paired EQA on q12/q14/q56/q6 is queued before merging; approval
+  does not waive the regression gate. Direct view admission remains explicitly
+  non-idempotent; the executor owns duplicate-attempt prevention.
 - Frozen `bf8b635d` EQA-12 seed 0 completed with valid metrics for all twelve
   questions: **5/12**, versus **8/12** on frozen main `a9a5f1d1`. Paired losses:
   q12, q14, q56; no gains. Startup is repaired, but accuracy acceptance is **not**
