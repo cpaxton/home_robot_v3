@@ -70,6 +70,16 @@ class GridParams:
         zero = torch.zeros(2, dtype=grid_xy.dtype, device=grid_xy.device)
         return torch.clamp(grid_xy, zero, upper)
 
+    def xy_to_grid_cell(self, xy: torch.Tensor | np.ndarray) -> tuple[int, int] | None:
+        """Nearest cell center, matching voxel insertion; never clamp off-map poses."""
+        coords = self.xy_to_grid_coords(xy)
+        if coords is None or not torch.isfinite(coords).all():
+            return None
+        cell = torch.floor(coords + 0.5).long()
+        if torch.any(cell < 0) or torch.any(cell >= self._grid_size_t):
+            return None
+        return int(cell[0]), int(cell[1])
+
     def grid_coords_to_xy(self, grid_coords: torch.Tensor) -> np.ndarray:
         """convert grid coordinate point to metric world xy point"""
         assert grid_coords.shape[-1] == 2, "grid coords must be an Nx2 or 2d array"

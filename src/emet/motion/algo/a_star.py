@@ -22,13 +22,10 @@ import numpy as np
 from emet.motion import ConfigurationSpace, Planner, PlanResult
 from emet.motion import Node as BaseNode
 from emet.motion.algo.node import TreeNode as Node
+from emet.motion.base_goal_rank import navigable_neighbors
 
 # Soft fallback when skfmm has no zero contour (empty obstacle set in explored).
 _DEFAULT_CLEARANCE_M = 10.0
-
-
-def neighbors(pt: tuple[int, int]) -> list[tuple[int, int]]:
-    return [(pt[0] + dx, pt[1] + dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)]
 
 
 def unwrap_yaw(prev: float, target: float) -> float:
@@ -118,6 +115,7 @@ class AStar(Planner):
         """EDT clearance in meters from obstacles within explored free space."""
         h, w = obs.shape
         clearance = np.full((h, w), _DEFAULT_CLEARANCE_M, dtype=np.float64)
+        self._clearance_known = obs & exp
         if not np.any(exp):
             return clearance
         # Zero contour at obstacles; distance grows into free explored cells.
@@ -141,6 +139,7 @@ class AStar(Planner):
             else:
                 filled = np.asarray(dist_cells, dtype=np.float64)
             clearance = filled * res
+            self._clearance_known = exp & ~np.ma.getmaskarray(dist_cells) & np.isfinite(filled)
             clearance[obs] = 0.0
             clearance[~exp] = 0.0
         except Exception:
@@ -149,6 +148,20 @@ class AStar(Planner):
             clearance[obs] = 0.0
             clearance[~exp] = 0.0
         return clearance
+
+    def measured_clearance_at_xy(self, xy) -> float | None:
+        """Map-derived clearance, or None for unobserved/fallback cells.
+
+        The numerical planning field retains its legacy fallback; tools must not
+        present that sentinel as evidence of measured free space.
+        """
+        if self._clearance_m is None:
+            self.reset()
+        i, j = self.to_pt(xy)
+        h, w = self._clearance_known.shape
+        if not (0 <= i < h and 0 <= j < w) or not self._clearance_known[i, j]:
+            return None
+        return self.clearance_at_pt((i, j))
 
     def clearance_at_xy(self, xy: tuple[float, float] | list[float] | np.ndarray) -> float:
         """Clearance in meters at a world XY (0 if out of map / unexplored)."""
@@ -341,6 +354,9 @@ class AStar(Planner):
         # round-tripping moves it to the cell center, which can make the
         # execution filter stop recognizing a tight-clearance start.
         waypoints_xy[0] = (float(start[0]), float(start[1]))
+        # Search already resolved any unsafe goal to a safe grid endpoint.
+        # Preserve that continuous endpoint rather than round-tripping it again.
+        waypoints_xy[-1] = (float(goal[0]), float(goal[1]))
         traj = []
         prev_yaw = float(start_yaw)
         for i in range(len(waypoints_xy) - 1):
@@ -386,11 +402,13 @@ class AStar(Planner):
         return cleaned_path
 
     def get_unoccupied_neighbor(self, pt: tuple[int, int], goal_pt=None, max_ring: int = 4) -> tuple[int, int] | None:
+        h, w = self._navigable.shape
+        if not (0 <= pt[0] < h and 0 <= pt[1] < w):
+            return None
         if not self.point_is_occupied(*pt):
             return pt
 
         # If the start cell is marked occupied (pose noise / dilation), search outward by Chebyshev ring.
-        h, w = self._navigable.shape
         for ring in range(1, max_ring + 1):
             ring_pts: list[tuple[int, int]] = []
             for di in range(-ring, ring + 1):
@@ -455,10 +473,8 @@ class AStar(Planner):
             if pt in reachable_points:
                 continue
             reachable_points.add(pt)
-            for new_pt in neighbors(pt):
+            for new_pt in navigable_neighbors(pt, lambda p: not self.point_is_occupied(*p)):
                 if new_pt in reachable_points:
-                    continue
-                if self.point_is_occupied(new_pt[0], new_pt[1]):
                     continue
                 to_visit.append(new_pt)
         return reachable_points
@@ -489,9 +505,7 @@ class AStar(Planner):
             if current == end_pt:
                 break
 
-            for nxt in neighbors(current):
-                if self.point_is_occupied(nxt[0], nxt[1]):
-                    continue
+            for nxt in navigable_neighbors(current, lambda p: not self.point_is_occupied(*p)):
                 new_cost = cost_so_far[current] + self.step_cost(current, nxt)
                 if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:
                     cost_so_far[nxt] = new_cost
@@ -521,7 +535,13 @@ class AStar(Planner):
         # Preserve the clearance-safe start escape cell when the measured base
         # pose had to be snapped out of a non-navigable grid cell.
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
-        return [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
+        path_xy = [start_xy] + [self.to_xy(pt) for pt in path[offset:]]
+        if end_pt == self.to_pt(end_xy) and not np.allclose(path_xy[-1], end_xy, rtol=0, atol=1e-9):
+            if len(path_xy) == 1:
+                path_xy.append(tuple(end_xy))
+            else:
+                path_xy[-1] = tuple(end_xy)
+        return path_xy
 
     def run_astar_multi_goal(
         self,
@@ -529,6 +549,7 @@ class AStar(Planner):
         goals_xy: list[tuple[float, float]],
         *,
         stop_at_first: bool = True,
+        candidate_evaluator=None,
     ):
         """One shared A*/Dijkstra search toward a set of goal XYs.
 
@@ -549,7 +570,7 @@ class AStar(Planner):
             start_pt,
             goal_ijs,
             navigable=self._navigable,
-            stop_at_first=stop_at_first,
+            stop_at_first=stop_at_first and candidate_evaluator is None,
         )
         if not result.success or result.goal_index is None:
             return None, None
@@ -559,11 +580,26 @@ class AStar(Planner):
         # into an otherwise valid path, causing the execution safety filter to
         # reject every multi-goal trajectory.
         offset = 1 if self.to_pt(start_xy) == start_pt else 0
-        path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[offset:]]
-        gi = int(result.goal_index)
-        return path_xy, gi
+        candidates = []
+        for gi, reachable, cost in result.goal_scores:
+            if not reachable:
+                continue
+            path_xy = [start_xy] + [self.to_xy(pt) for pt in result.goal_paths[gi][offset:]]
+            goal_xy = goals_xy[gi]
+            if goal_ijs[gi] == self.to_pt(goal_xy) and not np.allclose(path_xy[-1], goal_xy, rtol=0, atol=1e-9):
+                if len(path_xy) == 1:
+                    path_xy.append(tuple(goal_xy))
+                else:
+                    path_xy[-1] = tuple(goal_xy)
+            score = -float(cost) if candidate_evaluator is None else candidate_evaluator(path_xy, gi)
+            if score is not None and np.isfinite(score):
+                candidates.append((float(score), -float(cost), -gi, path_xy))
+        if not candidates:
+            return None, None
+        best = max(candidates, key=lambda item: item[:3])
+        return best[3], -best[2]
 
-    def plan(self, start, goal, verbose: bool = True, goals=None, **kwargs) -> PlanResult:
+    def plan(self, start, goal, verbose: bool = True, goals=None, candidate_evaluator=None, **kwargs) -> PlanResult:
         """Plan from start to ``goal``, or to the nearest of ``goals`` (multi-goal).
 
         When ``goals`` is a non-empty sequence of XY(T) states, runs one shared grid
@@ -578,7 +614,9 @@ class AStar(Planner):
             if not goal_list:
                 return PlanResult(False, reason="no_goals")
             goals_xy = [(float(g[0]), float(g[1])) for g in goal_list]
-            waypoints, gi = self.run_astar_multi_goal(start[:2], goals_xy, stop_at_first=True)
+            waypoints, gi = self.run_astar_multi_goal(
+                start[:2], goals_xy, stop_at_first=True, candidate_evaluator=candidate_evaluator
+            )
             if waypoints is None or gi is None:
                 if verbose:
                     print("A* multi-goal fails, check obstacle map")
@@ -615,4 +653,13 @@ class AStar(Planner):
         # Save the nodes for this planner
         self.nodes = trajectory
 
-        return PlanResult(True, trajectory=trajectory, goal_index=chosen_index)
+        requested = [float(v) for v in chosen_goal[:2]] + [float(goal_yaw)]
+        resolved = trajectory[-1].state.tolist()
+        return PlanResult(
+            True,
+            trajectory=trajectory,
+            goal_index=chosen_index,
+            requested_goal=requested,
+            resolved_goal=resolved,
+            goal_resolution="requested" if np.allclose(requested[:2], resolved[:2], rtol=0, atol=1e-9) else "grid_snap",
+        )

@@ -445,6 +445,12 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         self.get_2d_map()
         return self._physical_map2d
 
+    def get_sensor_observed_cells(self):
+        """Sensor-supported XY coverage, before visited-disk and morphology fill."""
+        self.get_2d_map()
+        cells = getattr(self, "_sensor_observed_cells", None)
+        return cells.clone() if cells is not None else None
+
     def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
         Get 2d map with explored area and frontiers.
@@ -515,6 +521,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         # Multi-meter gaps between Stretch look_front cones stay unexplored.
         explored_soft = torch.sum(voxels, dim=-1)
         explored = explored_soft > 0
+        self._sensor_observed_cells = explored.clone()
         explored = (torch.zeros_like(explored) + self._visited).to(torch.bool) | explored
 
         if self.smooth_kernel_size > 0:

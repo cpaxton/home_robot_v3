@@ -63,6 +63,45 @@ def _agent_from_context(context: dict[str, Any]) -> Any | None:
     return context.get("agent")
 
 
+def navigation_feedback(agent: Any | None) -> dict:
+    """Bounded navigation evidence; never dump full waypoint arrays into prompts."""
+    meta = getattr(agent, "_last_nav_plan", None) or {}
+    keys = (
+        "mode",
+        "outcome",
+        "status_code",
+        "localize_source",
+        "goal_xyt",
+        "requested_goal_xyt",
+        "goal_resolution",
+        "motion_outcome",
+        "new_sensor_cells",
+        "new_sensor_area_m2",
+        "observation_outcome",
+        "n_planned",
+        "min_clearance_m",
+        "min_clearance_required_m",
+        "footprint",
+        "approach_sampling",
+    )
+    result = {key: meta[key] for key in keys if key in meta}
+    candidates = meta.get("view_candidates")
+    if candidates:
+        from collections import Counter
+
+        eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
+        compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
+        result["view_selection"] = {
+            "candidate_count": len(candidates),
+            "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
+            "top_estimated_views": [
+                {key: candidate[key] for key in compact_keys if key in candidate}
+                for candidate in sorted(eligible, key=lambda c: -c["score"])[:3]
+            ],
+        }
+    return result
+
+
 def format_last_nav_plan_summary(agent: Any | None) -> str:
     """Compact last-plan line for explore/find/diagnostics tool returns."""
     if agent is None:
@@ -560,10 +599,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
-        return response("pick_place", code="ok" if task_ok else "controller_failed",
-                        data={"mode": "configured_controller", "assistance": None,
-                              "completed_ops": None, "measurements": None})
-
+        return response(
+            "pick_place",
+            code="ok" if task_ok else "controller_failed",
+            data={"mode": "configured_controller", "assistance": None, "completed_ops": None, "measurements": None},
+        )
 
     def _build_tamp_plan(
         *,
@@ -623,7 +663,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
 
     @json_tool
-
     def plan_pick_place(
         task_ref: str = "",
         object_name: str = "",
@@ -663,6 +702,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
         if build.plan is not None and build.plan.success:
             from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result, store_agent_plan
+
             plan_ref = store_agent_plan(context, _tamp_robot(), build)
             result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
             result["tool"] = "pick_place"
@@ -766,6 +806,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         else:
             placements = {}
         from emet.controller.task.tamp.agent_bridge import robot_session_key
+
         session_key = robot_session_key(robot_obj)
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
@@ -797,29 +838,43 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if rid:
             try:
                 from emet.eval.scene_task_extractor import compute_reachability_priors
+
                 def _pose(body: str) -> np.ndarray:
                     info = placements.get(body)
                     if info is None and body.endswith("_1_1_0"):
-                        info = placements.get(body[:-len("_1_1_0")] + "_1_0_0")
+                        info = placements.get(body[: -len("_1_1_0")] + "_1_0_0")
                     pos = (info or {}).get("pos")
                     return np.asarray(pos, dtype=float).reshape(3) if pos is not None else np.zeros(3)
-                priors = compute_reachability_priors(objs, robot_id=rid, arm="left",
-                                                    **({"object_pose_fn": _pose} if placements else {}))
-                reachability = {"robot": rid,
-                                "source": "sim_placements" if placements else "zero_pose_proxy",
-                                "reachable_categories": sorted({r.category for r in priors.values() if r.reachable})}
+
+                priors = compute_reachability_priors(
+                    objs, robot_id=rid, arm="left", **({"object_pose_fn": _pose} if placements else {})
+                )
+                reachability = {
+                    "robot": rid,
+                    "source": "sim_placements" if placements else "zero_pose_proxy",
+                    "reachable_categories": sorted({r.category for r in priors.values() if r.reachable}),
+                }
                 reachability_status = "evaluated"
             except Exception:
                 reachability_status = "unavailable"
-        return response("scene_tasks", data={
-            "tasks": [{"task_ref": ref.ref, "object_name": ref.object_query,
-                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle}
-                      for ref in task_refs],
-            "pickable_categories": sorted({p.category for p in picks}),
-            "receptacle_categories": sorted({r.category for r in recepts}),
-            "reachability": reachability,
-            "reachability_status": reachability_status,
-        })
+        return response(
+            "scene_tasks",
+            data={
+                "tasks": [
+                    {
+                        "task_ref": ref.ref,
+                        "object_name": ref.object_query,
+                        "receptacle_name": ref.receptacle_query,
+                        "start_receptacle": ref.start_receptacle,
+                    }
+                    for ref in task_refs
+                ],
+                "pickable_categories": sorted({p.category for p in picks}),
+                "receptacle_categories": sorted({r.category for r in recepts}),
+                "reachability": reachability,
+                "reachability_status": reachability_status,
+            },
+        )
 
     tools.append(
         Tool(

@@ -19,9 +19,21 @@ import numpy as np
 from emet.motion.voxel_arm_collision import GridConvention, world_xy_to_grid
 
 
-def _neighbors8(pt: tuple[int, int]) -> list[tuple[int, int]]:
+def navigable_neighbors(pt: tuple[int, int], free: Callable[[tuple[int, int]], bool]):
+    """Eight-connected steps with both side cells free for diagonal motion.
+
+    Search and reachability must obey the same no-corner-cutting rule as path
+    simplification/execution; free endpoints alone do not make a safe edge.
+    """
     i, j = pt
-    return [(i + di, j + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if not (di == 0 and dj == 0)]
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            nxt = (i + di, j + dj)
+            if (di == 0 and dj == 0) or not free(nxt):
+                continue
+            if di and dj and (not free((i + di, j)) or not free((i, j + dj))):
+                continue
+            yield nxt
 
 
 def _euclid(a: tuple[int, int], b: tuple[int, int]) -> float:
@@ -40,6 +52,7 @@ class MultiGoalPlanResult:
     reason: str | None = None
     # Per-goal reachability from the same search (index, reachable, path_cost or None).
     goal_scores: list[tuple[int, bool, float | None]] = field(default_factory=list)
+    goal_paths: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
 
 
 def plan_grid_multi_goal(
@@ -107,9 +120,7 @@ def plan_grid_multi_goal(
                 break
             # Fall through: keep expanding so other goals can be classified.
 
-        for nxt in _neighbors8(current):
-            if not free(nxt):
-                continue
+        for nxt in navigable_neighbors(current, free):
             step = _euclid(current, nxt)
             new_cost = cost_so_far[current] + step
             if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:
@@ -130,12 +141,25 @@ def plan_grid_multi_goal(
         cur = came_from.get(cur)
     path.reverse()
     goal_index = goal_to_indices[reached_goal_pt][0]
+    goal_paths = {}
+    for cell, indices in goal_to_indices.items():
+        if cell in pending:
+            continue
+        candidate_path = []
+        cur = cell
+        while cur is not None:
+            candidate_path.append(cur)
+            cur = came_from.get(cur)
+        candidate_path.reverse()
+        for index in indices:
+            goal_paths[index] = candidate_path
     return MultiGoalPlanResult(
         True,
         goal_index=goal_index,
         path_ij=path,
         cost=float(cost_so_far[reached_goal_pt]),
         goal_scores=scores,
+        goal_paths=goal_paths,
     )
 
 
