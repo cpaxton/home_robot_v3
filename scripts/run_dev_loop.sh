@@ -50,12 +50,17 @@ echo "seed=$SEED phase=$PHASE root=$ROOT sha=$(git rev-parse HEAD)" > "$OUT/mani
 FAILED=()
 
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
+    # Each invocation owns its evidence, even when arms share qids or OUT_DIR.
+    # Keep the marker in OUT so the bundle prefix is discoverable after a crash.
+    DEBUG_TAG="dev$(basename "$(mktemp -d "$OUT/.eqa-evidence.XXXXXXXXXX")")"
+    printf '%s\n' "$DEBUG_TAG" >> "$OUT/diagnostic_tags.txt"
     for q in $EQA_IDS; do
         echo "=== [eqa] q$q seed=$SEED ($(date -Is)) ==="
         rc=0
         LD_LIBRARY_PATH="$HABITAT_ENV/lib:${LD_LIBRARY_PATH:-}" \
             timeout --signal=TERM --kill-after=20s 600 \
             "$HABITAT_BIN" run-episode --question-id "$q" --method lazy_graph --query-driven-memory \
+            --debug-run-tag "${DEBUG_TAG}_s${SEED}_q${q}" \
             --seed "$SEED" --max-planning-steps 20 --max-movement-step 10 \
             --no-hm3d-semantics --no-enrich-labels --output "$OUT/eqa/q$q.jsonl" || rc=$?
         if [[ $rc -ne 0 ]]; then
