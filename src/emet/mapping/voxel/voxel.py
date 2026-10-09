@@ -269,7 +269,8 @@ class SparseVoxelMap:
 
         self._visited_disk = torch.from_numpy(create_disk(self._disk_size, (2 * self._disk_size) + 1)).to(map_2d_device)
 
-        self.grid = GridParams(grid_size=grid_size, resolution=resolution, device=map_2d_device)
+        # Occupancy indices use grid_resolution; the 3D voxel size can differ.
+        self.grid = GridParams(grid_size=grid_size, resolution=grid_resolution, device=map_2d_device)
         self.grid_size = self.grid.grid_size
         self.grid_origin = self.grid.grid_origin
         self.resolution = self.grid.resolution

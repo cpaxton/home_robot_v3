@@ -68,3 +68,30 @@ def test_format_similarity_table_and_render():
     assert "1.000" in table
     text = render_world_raster_ascii(stretch, max_side=16)
     assert "#" in text and "." in text
+
+
+def test_occupancy_world_coordinates_use_grid_resolution_not_voxel_size():
+    """Different 3D/2D resolutions must not shrink mapped obstacle locations."""
+    import torch
+
+    from emet.mapping.voxel.voxel import SparseVoxelMap
+
+    vm = SparseVoxelMap(
+        resolution=0.03,
+        grid_resolution=0.05,
+        grid_size=(100, 100),
+        obs_min_density=0,
+        smooth_kernel_size=0,
+        use_instance_memory=False,
+        add_local_radius_points=False,
+    )
+    point = torch.tensor([[0.52, -0.98, 0.5]])
+    vm.voxel_pcd.add(point, features=None, rgb=torch.ones((1, 3)))
+    obstacles, _ = vm.get_2d_map()
+    coords = vm.grid.xy_to_grid_coords(point[:, :2]).long()[0]
+    assert obstacles[coords[0], coords[1]], "World-to-grid conversion misses the actual obstacle cell"
+    recovered = vm.grid.grid_coords_to_xy(torch.nonzero(obstacles).float())
+    assert len(recovered) == 1
+    np.testing.assert_allclose(recovered.numpy()[0], point.numpy()[0, :2], atol=0.05)
+    assert vm.voxel_resolution == 0.03
+    assert vm.grid.resolution == vm.grid_resolution == 0.05

@@ -37,7 +37,8 @@ class ArmChain:
     executor drives), not the high-level ``RobotSpec.joint_names`` API names.
     ``actuator_names`` are the subset of ``RobotSpec.actuator_names`` that drive the
     arm; when empty, the arm joints are used directly. ``home_arm_q`` overrides the
-    MJCF qpos0 home when non-empty.
+    MJCF qpos0 home when non-empty. ``gripper_open`` / ``gripper_closed`` use
+    native actuator units (meters for slides, radians for hinges).
     """
 
     joint_names: tuple[str, ...]
@@ -51,6 +52,8 @@ class ArmChain:
     base_freejoint_name: str = "base_freejoint"
     gripper_open_configuration: tuple[tuple[str, float], ...] = ()
     """Open-gripper MJCF coordinates, including dependent finger joints."""
+    gripper_open: float = 0.05
+    gripper_closed: float = 0.0
 
 
 @dataclass

@@ -30,10 +30,10 @@ Example mesh-map::
 Run with any Python that has numpy (main venv is fine)::
 
     uv run python scripts/robot_assets/urdf_to_mjcf.py \
-        src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf \
-        --mesh-map src/emet/assets/robot/sourccey/mesh_map.json \
+        /path/to/arm.urdf \
+        --mesh-map /path/to/mesh_map.json \
         --mass-scale 0.30 --recenter-joint shoulder_pan \
-        --out src/emet/assets/robot/sourccey/arm_frag.xml
+        --out /tmp/arm_frag.xml
 """
 
 from __future__ import annotations

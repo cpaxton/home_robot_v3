@@ -253,11 +253,8 @@ def test_execute_task_plan_dumps_stills_per_op():
     assert len(robot.moved) == 1
 
 
-def test_sourccey_side_approach_reaches_default_table_cylinder():
-    """CPU: left-arm IK to the default-table red cylinder from the side standoff.
-
-    The rby1 front pose (yaw=−π/2 at y=+0.55) misses this workspace by >1 m.
-    """
+def test_sourccey_front_approach_reaches_default_table_cylinder():
+    """CPU: official Mk.V left arm reaches the table from a +X-forward standoff."""
     import mujoco
 
     from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
@@ -267,10 +264,10 @@ def test_sourccey_side_approach_reaches_default_table_cylinder():
     from emet.simulation.sim_object_placements import DEFAULT_TABLE_SCENE_PLACEMENTS
 
     spec = SourcceyBackend().get_spec()
-    assert spec.tamp_approach == "side"
+    assert spec.tamp_approach == "front"
     obj = np.asarray(DEFAULT_TABLE_SCENE_PLACEMENTS["object2"]["pos"], dtype=np.float64)
-    approach = approach_pose_for_object_xy(obj[:2], mode="side", arm="left")
-    assert abs(approach[2] - np.pi / 2) < 1e-9
+    approach = approach_pose_for_object_xy(obj[:2], mode=spec.tamp_approach, arm="left")
+    assert abs(approach[2] + np.pi / 2) < 1e-9
 
     model = mujoco.MjModel.from_xml_path(str(spec.mjcf_path))
     data = mujoco.MjData(model)
@@ -288,22 +285,5 @@ def test_sourccey_side_approach_reaches_default_table_cylinder():
         max_iters=80,
         tol_m=0.05,
     )
-    assert res.success, f"side approach IK err={res.pos_error_m:.3f} m (approach={approach.tolist()})"
+    assert res.success, f"front approach IK err={res.pos_error_m:.3f} m (approach={approach.tolist()})"
     assert res.pos_error_m < 0.05
-
-    front = approach_pose_for_object_xy(obj[:2], mode="front", arm="left")
-    write_offline_mjcf_base_xyt(model, data, front, planar_joint_names=spec.planar_base_joint_names)
-    if model.nkey:
-        data.qpos[4:] = model.key_qpos[0][4:]
-    mujoco.mj_forward(model, data)
-    front_res = solve_position_ik_multiseed(
-        model,
-        data,
-        ee_body=prof.ee_body,
-        joint_names=prof.joint_names,
-        target_pos=obj,
-        max_iters=80,
-        tol_m=0.05,
-    )
-    assert not front_res.success
-    assert front_res.pos_error_m > 0.5

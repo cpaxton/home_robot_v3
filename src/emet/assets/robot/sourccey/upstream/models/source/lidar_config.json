@@ -1,0 +1,17 @@
+{
+  "body": "Bottom_Wall_Front_LIDAR_v1_1",
+  "position_body_m": [0.127215581, -0.127215581, 0.205],
+  "quaternion_body_wxyz": [0.923879533, 0.0, 0.0, -0.382683432],
+  "angle_min_deg": -90.0,
+  "angle_max_deg": 90.0,
+  "beam_count": 226,
+  "range_min_m": 0.02,
+  "range_max_m": 12.0,
+  "scan_rate_hz": 10.0,
+  "hardware_scan_deg": 360.0,
+  "measurement_rate_hz": 4500.0,
+  "sensor_model": "FHL-LD19 / LD19",
+  "spec_source": "https://wiki.youyeetoo.com/en/Lidar/D300",
+  "calibration_status": "CAD-derived slit location and full front aperture; real sensor mounting and slit dimensions unverified",
+  "mount_rationale": "At panel-local z=0.205 m, a robot-forward optical origin x=0.17991 m gives a 180.00-degree CAD slit opening at 0.01-degree probe resolution. The +/-90-degree edge-ray clearance threshold is x=0.1798967 m. The optical point is 27.09 mm behind the outer front surface at x=0.207 m. Moving 1 mm inward narrows the opening to about 178.8 degrees; 1 mm outward widens it to about 181.2 degrees. The visible point marks the optical origin, not an external sensor body."
+}

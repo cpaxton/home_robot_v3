@@ -438,7 +438,7 @@ class KinematicPickPlaceExecutor:
     def _set_gripper(self, *, open_: bool) -> None:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
-        val = 0.05 if open_ else 0.0
+        val = self.profile.gripper_open if open_ else self.profile.gripper_closed
         keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
         if not keys:
             keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]

@@ -1,0 +1,381 @@
+{
+  "front_left": {
+    "body": "robot_root",
+    "pos": [
+      0.162502,
+      -0.112159,
+      0.80969
+    ],
+    "device": "/dev/cameraFrontLeft",
+    "resolution_wh": [
+      320,
+      240
+    ],
+    "fovy_deg": 34.23234083220137,
+    "intrinsics_status": "effective pinhole fit at 320x240; conditional on nominal head geometry; physical lens FOV unmeasured",
+    "calibration_status": "provisional single-pose visual fit, 2026-10-01",
+    "position_source": "preserved manual dome placement",
+    "orientation_source": "shared scene correspondences and two floor features; nominal yaw and camera centres fixed",
+    "quat_wxyz": [
+      -0.4267323747282712,
+      -0.27315037559959854,
+      0.4969334360347229,
+      0.7045179293810006
+    ],
+    "nominal_mount": {
+      "body": "robot_root",
+      "pos": [
+        0.162502,
+        -0.112159,
+        0.80969
+      ],
+      "device": "/dev/cameraFrontLeft",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 90,
+      "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+      "calibration_status": "nominal; optical calibration pending",
+      "mount_yaw_deg": 15,
+      "mount_pitch_deg": -20,
+      "roll_deg": 0,
+      "position_source": "preserved manual dome placement",
+      "orientation_source": "user: 15 degrees outward, 20 degrees down; robot forward CAD azimuth -45 degrees",
+      "quat_wxyz": [
+        -0.4095760221444959,
+        -0.2867882181755231,
+        0.4967317648921541,
+        0.7094064799162225
+      ]
+    },
+    "fit_report": "calibration/feature_fit/head_feature_fit.json"
+  },
+  "front_right": {
+    "body": "robot_root",
+    "pos": [
+      0.125593,
+      -0.156471,
+      0.816753
+    ],
+    "device": "/dev/cameraFrontRight",
+    "resolution_wh": [
+      320,
+      240
+    ],
+    "fovy_deg": 34.23234083220137,
+    "intrinsics_status": "effective pinhole fit at 320x240; conditional on nominal head geometry; physical lens FOV unmeasured",
+    "calibration_status": "provisional single-pose visual fit, 2026-10-01",
+    "position_source": "preserved manual dome placement",
+    "orientation_source": "shared scene correspondences and two floor features; nominal yaw and camera centres fixed",
+    "quat_wxyz": [
+      -0.22385225701587727,
+      -0.1393939865349625,
+      0.5496574242720357,
+      0.7926766046058253
+    ],
+    "nominal_mount": {
+      "body": "robot_root",
+      "pos": [
+        0.125593,
+        -0.156471,
+        0.816753
+      ],
+      "device": "/dev/cameraFrontRight",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 90,
+      "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+      "calibration_status": "nominal; optical calibration pending",
+      "mount_yaw_deg": -15,
+      "mount_pitch_deg": -20,
+      "roll_deg": 0,
+      "position_source": "preserved manual dome placement",
+      "orientation_source": "user: 15 degrees outward, 20 degrees down; robot forward CAD azimuth -45 degrees",
+      "quat_wxyz": [
+        -0.21201214989665468,
+        -0.14845250554968456,
+        0.5540322932223234,
+        0.7912401152362238
+      ]
+    },
+    "fit_report": "calibration/feature_fit/head_feature_fit.json"
+  },
+  "wrist_left": {
+    "body": "Gripper_Base_v1_1",
+    "pos": [
+      0.04338443128045364,
+      0.032884299501095955,
+      -0.022742426630190903
+    ],
+    "device": "/dev/cameraWristLeft",
+    "resolution_wh": [
+      320,
+      240
+    ],
+    "fovy_deg": 34.23234083220137,
+    "intrinsics_status": "effective pinhole approximation; physical lens FOV unmeasured",
+    "calibration_status": "provisional stationary fit with explicit fixed-palm constraint",
+    "position_source": "effective fitted optical centre; physical mounting offset remains unverified",
+    "orientation_source": "fixed palm edges, robot silhouette and visible wheel extent",
+    "quat_wxyz": [
+      0.5485273291734866,
+      -0.03073328283971905,
+      -0.8164765776429364,
+      -0.1775928845313722
+    ],
+    "nominal_mount": {
+      "body": "Gripper_Base_v1_1",
+      "pos": [
+        0.021286129870275273,
+        0.050042476152180125,
+        -0.0023622812097335378
+      ],
+      "device": "/dev/cameraWristLeft",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 90,
+      "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+      "calibration_status": "nominal; optical calibration pending",
+      "mount_inward_deg": 16.9,
+      "mount_up_deg": 2.5,
+      "roll_deg": 90,
+      "position_source": "centre of 25 mm CAD camera opening; optical centre depth unmeasured",
+      "orientation_source": "user mount angles; roll chosen by comparing palm side in real feed and rendered view",
+      "roll_status": "coarse visual estimate; fine roll not calibrated",
+      "quat_wxyz": [
+        0.6846661426661184,
+        -0.10614742554168298,
+        -0.7138631067862977,
+        -0.10180600133089567
+      ]
+    },
+    "fit_report": "calibration/gripper_fit/wrist_left_fit.json",
+    "previous_visual_fit": {
+      "body": "Gripper_Base_v1_1",
+      "pos": [
+        0.035178042705305765,
+        0.03685538444390247,
+        -0.013313551614467846
+      ],
+      "device": "/dev/cameraWristLeft",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 34.23234083220137,
+      "intrinsics_status": "effective pinhole fit at 320x240; conditional on nominal head geometry; physical lens FOV unmeasured",
+      "calibration_status": "provisional single-pose visual fit, 2026-10-01",
+      "position_source": "bounded correction to nominal CAD opening; includes model and joint-mapping error",
+      "orientation_source": "stationary robot silhouette and visible wheel extent, shared effective head FOV",
+      "quat_wxyz": [
+        0.5424397828417855,
+        -0.007716257954486954,
+        -0.8136103920238079,
+        -0.20913553343370916
+      ],
+      "nominal_mount": {
+        "body": "Gripper_Base_v1_1",
+        "pos": [
+          0.021286129870275273,
+          0.050042476152180125,
+          -0.0023622812097335378
+        ],
+        "device": "/dev/cameraWristLeft",
+        "resolution_wh": [
+          320,
+          240
+        ],
+        "fovy_deg": 90,
+        "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+        "calibration_status": "nominal; optical calibration pending",
+        "mount_inward_deg": 16.9,
+        "mount_up_deg": 2.5,
+        "roll_deg": 90,
+        "position_source": "centre of 25 mm CAD camera opening; optical centre depth unmeasured",
+        "orientation_source": "user mount angles; roll chosen by comparing palm side in real feed and rendered view",
+        "roll_status": "coarse visual estimate; fine roll not calibrated",
+        "quat_wxyz": [
+          0.6846661426661184,
+          -0.10614742554168298,
+          -0.7138631067862977,
+          -0.10180600133089567
+        ]
+      },
+      "fit_report": "calibration/feature_fit/wrist_left_fov34.2323_fit.json"
+    },
+    "pad_identity_evidence": "calibration/gripper_probe/20261001_165244/result.json"
+  },
+  "wrist_right": {
+    "body": "Gripper_Base_v1_2",
+    "pos": [
+      -0.03374961800654052,
+      -0.043969120596328216,
+      -0.02568182110519546
+    ],
+    "device": "/dev/cameraWristRight",
+    "resolution_wh": [
+      320,
+      240
+    ],
+    "fovy_deg": 34.23234083220137,
+    "intrinsics_status": "effective pinhole approximation; physical lens FOV unmeasured",
+    "calibration_status": "provisional stationary fit with explicit fixed-palm constraint",
+    "position_source": "effective fitted optical centre; physical mounting offset remains unverified",
+    "orientation_source": "fixed palm edges, robot silhouette and visible wheel extent",
+    "quat_wxyz": [
+      -0.26795364359912816,
+      0.6736581387794119,
+      -0.5140133644464121,
+      -0.45844936264400044
+    ],
+    "nominal_mount": {
+      "body": "Gripper_Base_v1_2",
+      "pos": [
+        -0.05004247658346406,
+        -0.021286129871331,
+        -0.0023622810530417437
+      ],
+      "device": "/dev/cameraWristRight",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 90,
+      "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+      "calibration_status": "nominal; optical calibration pending",
+      "mount_inward_deg": 16.9,
+      "mount_up_deg": 2.5,
+      "roll_deg": 270,
+      "position_source": "centre of 25 mm CAD camera opening; optical centre depth unmeasured",
+      "orientation_source": "user mount angles; roll chosen by comparing palm side in real feed and rendered view",
+      "roll_status": "coarse visual estimate; fine roll not calibrated",
+      "quat_wxyz": [
+        -0.41214435842148556,
+        0.5798350080535059,
+        -0.4297198792414693,
+        -0.5561197862346114
+      ]
+    },
+    "fit_report": "calibration/gripper_fit/wrist_right_fit.json",
+    "previous_visual_fit": {
+      "body": "Gripper_Base_v1_2",
+      "pos": [
+        -0.04445408983705581,
+        -0.02275974590278929,
+        -0.014226954599281841
+      ],
+      "device": "/dev/cameraWristRight",
+      "resolution_wh": [
+        320,
+        240
+      ],
+      "fovy_deg": 34.23234083220137,
+      "intrinsics_status": "effective pinhole fit at 320x240; conditional on nominal head geometry; physical lens FOV unmeasured",
+      "calibration_status": "provisional single-pose visual fit, 2026-10-01",
+      "position_source": "bounded correction to nominal CAD opening; includes model and joint-mapping error",
+      "orientation_source": "stationary robot silhouette and visible wheel extent, shared effective head FOV",
+      "quat_wxyz": [
+        -0.28564129677071626,
+        0.6805541293374306,
+        -0.491133685916616,
+        -0.46264762960472866
+      ],
+      "nominal_mount": {
+        "body": "Gripper_Base_v1_2",
+        "pos": [
+          -0.05004247658346406,
+          -0.021286129871331,
+          -0.0023622810530417437
+        ],
+        "device": "/dev/cameraWristRight",
+        "resolution_wh": [
+          320,
+          240
+        ],
+        "fovy_deg": 90,
+        "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+        "calibration_status": "nominal; optical calibration pending",
+        "mount_inward_deg": 16.9,
+        "mount_up_deg": 2.5,
+        "roll_deg": 270,
+        "position_source": "centre of 25 mm CAD camera opening; optical centre depth unmeasured",
+        "orientation_source": "user mount angles; roll chosen by comparing palm side in real feed and rendered view",
+        "roll_status": "coarse visual estimate; fine roll not calibrated",
+        "quat_wxyz": [
+          -0.41214435842148556,
+          0.5798350080535059,
+          -0.4297198792414693,
+          -0.5561197862346114
+        ]
+      },
+      "fit_report": "calibration/feature_fit/wrist_right_fov34.2323_fit.json"
+    },
+    "pad_identity_evidence": "calibration/gripper_probe/20261001_165244/result.json"
+  },
+  "bottom": {
+    "body": "robot_root",
+    "pos": [
+      0.14637110370561532,
+      -0.14637110370561532,
+      0.019
+    ],
+    "device": "/dev/cameraBottom",
+    "resolution_wh": [
+      320,
+      240
+    ],
+    "fovy_deg": 90,
+    "intrinsics_status": "unmeasured; retained previous 90 degree vertical preview FOV",
+    "calibration_status": "manual estimate; base mounting angles unmeasured",
+    "position_source": "CAD base camera opening at exterior shell; optical depth unmeasured",
+    "orientation_source": "preserved manual aim; image-up corrected to world-up using upright real feed",
+    "quat_wxyz": [
+      -0.34875582740801137,
+      -0.3995298873828259,
+      0.6386851596161645,
+      0.5575181690518205
+    ]
+  },
+  "_meta": {
+    "schema_version": 2,
+    "frame": "body",
+    "units": "metres",
+    "camera_convention": "mujoco: +X right, +Y up, -Z forward; quaternion wxyz",
+    "source": "stationary feature fit; captured frames, telemetry and reports in calibration/feature_fit",
+    "calibration_status": "provisional head fit and foreground-constrained wrist fit; bottom uncalibrated",
+    "nominal_camera_model": "Innomaker-U20CAM-720P; verified over SSH on all five devices",
+    "lens_reference": "https://www.inno-maker.com/product/u20cam-720p/",
+    "remaining": [
+      "independent intrinsics and lens distortion calibration",
+      "camera optical centre versus CAD mount",
+      "multi-pose wrist-camera and encoder-to-CAD calibration",
+      "gripper normalized-unit mapping",
+      "bottom camera feature fit"
+    ],
+    "robot_forward_in_root": [
+      0.7071067811865475,
+      -0.7071067811865475,
+      0
+    ],
+    "lens_specification": {
+      "diagonal_fov_deg": 120,
+      "horizontal_fov_deg": 102,
+      "manufacturer_aperture_f_number": 2.2,
+      "user_listing_aperture_f_number": 2.8,
+      "reference": "https://www.inno-maker.com/product/u20cam-720p/"
+    },
+    "capture_mode": {
+      "width": 320,
+      "height": 240,
+      "format": "YUYV",
+      "fps": 30,
+      "application_crop_found": false,
+      "firmware_crop_status": "unverified"
+    }
+  }
+}

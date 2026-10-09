@@ -1,99 +1,170 @@
-# Sourccey (Vulcan Robotics)
+# Sourccey Mk.V (Vulcan Robotics)
 
-Sourccey is an open-source home robot by [Vulcan Robotics](https://vulcanrobotics.ai/specs):
-a wheeled mobile base with a vertical linear lift, a dome head with stereo cameras, and
-dual 5-DOF + gripper arms (6 revolute joints per arm).
+Emet uses the official full-body Mk.V assembly from
+[vulcan-forge/sourccey-simulation-mujoco](https://github.com/vulcan-forge/sourccey-simulation-mujoco).
+Its source URDF matches `URDF/FullBody/SourcceyMkV.urdf` in the
+[hardware repository](https://github.com/vulcan-forge/sourccey-hardware).
+The previous simplified chassis and mirrored standalone arms have been replaced.
 
-| Property | Value |
-|----------|-------|
-| Mobility | 4 mecanum wheels (omnidirectional) |
-| Lift | 12 V 100 N linear actuator |
-| Arms | 2× (`shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`, `wrist_roll`, `gripper`) |
-| Actuation | Feetech STS3215 / STS3250 serial servos |
-| Cameras | `front_left`, `front_right` (dome), `wrist_left`, `wrist_right` |
-| Footprint | 414 mm diameter, 1030 mm tall, 15.88 kg |
-| Hardware | https://github.com/vulcan-forge/sourccey-hardware (STEP CAD) |
-| Software | https://github.com/vulcan-forge/lerobot-vulcan (LeRobot fork) |
+## Pinned sources
 
-## Emet support
+Verified against upstream HEAD on 2026-10-09:
 
-Emet supports **Sourccey in simulation** (no real-hardware ZMQ bridge yet — `create_client`
-returns a `GenericZmqClient` stub so joint/gripper plumbing has a target). The sim model
-uses the **updated official `sourccey-hardware` arm URDF** (`URDF/ArmLeft/ArmLeft.urdf`,
-vendored under `src/emet/assets/robot/sourccey/urdf/`); the right arm is the code-side
-X-mirror of the canonical left arm. Kinematic pick/place (`mcts` manip mode) is advertised.
+| Repository | Commit | Purpose |
+|---|---|---|
+| `sourccey-hardware` | `dbb4bfd72108d7a79b1b27a87619aa260e71a953` | Full-body URDF cross-check |
+| `sourccey-simulation-mujoco` | `c1059b0d15200fb91bd38ac276a7ac47758e4b26` | Native MJCF, full URDF, 171 meshes, camera/lidar metadata |
+| `lerobot-robot-sourccey` | `d4f10db4fdf2786f8c87ec5b3562a812f93b1a9f` | Hardware SDK/protocol reference; installed separately |
+| `lerobot-vulcan` | `330152dc9df45930f9d10ec991f8e6fe9741e5c6` | Vendor diagnostics and setup reference |
 
-| Stack | Status |
-|-------|--------|
-| Vendored MJCF | `src/emet/assets/robot/sourccey/sourccey.xml` (official ArmLeft URDF arm) |
-| Vendored URDF | `src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf` + `ArmRight/` (STL meshes only; no Unity sidecars) |
-| Backend / registry | `emet.robots.sourccey.SourcceyBackend` → `ROBOT_REGISTRY["sourccey"]` |
-| Kinematic model | `create_model` → `SpecRobotModel`; declarative left/right `arm_chains` |
-| Kinematic manip | `advertise_kinematic_manip=True` → `mcts` OVMM pick/place (e.g. `robocasa_sourccey_counter_to_cab_mcts`) |
-| MolmoSpaces | merge + spawn metadata (`molmospaces_spawn.json`) |
-| RoboCasa | strip-replace (`PandaMobile` placeholder → vendored MJCF) |
-| ZMQ serve | `emet serve mujoco --robot sourccey` (RobosuiteZmqServer) |
+The asset `upstream/manifest.json` records source revisions and SHA-256 hashes.
+`upstream/models/sourccey.xml` is the untouched native model; `sourccey.xml` is
+Emet's generated planar adaptation. Regeneration needs no network or vendor SDK.
 
-### Launch examples
+## Emet simulation
+
+| Interface | Convention |
+|---|---|
+| Base | World-aligned `base_x`, `base_y`, `base_yaw`, velocity actuators; robot +X forward, +Y left |
+| Elevator | Emet `lift` aliases upstream `linear_actuator`; meters, −0.315 to −0.0142 (upstream operating upper stop); only shoulder mounts/arms move |
+| Arms | Actual independent left/right chains; five rotational joints plus gripper each; radians |
+| Limits | Arm limits from hardware URDF, including asymmetric shoulder lifts; no upstream simulation-only −135° elbow extension |
+| Grippers | −5° closed, +60° open on both sides, configured through `ArmChain` |
+| IK target | `Gripper_Base_v1_1` / `Gripper_Base_v1_2` wrist-roll origins, independent of gripper opening |
+| Cameras | `front_left`, `front_right`, `bottom`, `wrist_left`, `wrist_right`; upstream poses and individual FOVs |
+| Home | Upstream raised-arm startup, elbows clamped to the hardware URDF limits; not a verified collision-free navigation tuck |
+| Footprint | Conservative 0.50 m square chassis envelope; arm clip guards add clearance |
+| TAMP | Standard `front` approach; kinematic manipulation advertised for simulation |
+
+The adapter freezes wheel joints, replaces the floating base with three planar
+joints, preserves CAD frames/inertials/visuals, and removes robot contact hulls.
+This supports Emet's kinematic pick/place and scene placement; it does not model
+wheel traction or physical grasp forces. The native upstream model retains those
+geometries, but mecanum traction also requires upstream's Python simulation loop.
+The lidar mount and metadata are retained; Emet does not yet publish its ray scans.
+
+Upstream explicitly reports **169.042 kg CAD inertials**, pending corrected material
+properties. We preserve these rather than claiming measured dynamics. Camera poses
+are provisional fits, not physical calibration; the wrist views can be substantially
+occluded by the grippers in the raised-arm pose. The generated model's stable steps
+and matching forward kinematics do not establish sim-to-real accuracy.
 
 ```bash
-# plain MuJoCo serve
-uv run emet serve mujoco --scene ithor --robot sourccey --headless
+# Default table, no downloaded kitchen assets required
+uv run emet serve mujoco --config configs/sim/default_table_sourccey.yaml --headless
 
 # RoboCasa kitchen
 uv run emet serve mujoco --config configs/sim/robocasa_pick_place_sourccey.yaml --headless
 
-# MolmoSpaces merge
-uv run emet serve mujoco --config configs/sim/molmospaces_ithor_train_sourccey_0.yaml --headless
-
-# Agent (connect to the sim server, then run with an LLM endpoint)
-uv run emet serve mujoco --robot sourccey --scene ithor --headless          # terminal 1
+# Connect an agent to the Emet simulation server
 uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
-    --config configs/agent_sourccey.yaml --headless                          # terminal 2
-
-# Scripted TAMP pick-place (side standoff). --record-mp4 writes chase MP4 + stills/
-uv run python scripts/scripted_tamp_pick_place.py --start-sim \
-  --sim configs/sim/default_table_sourccey.yaml --manip-mode kinematic --skip-oracle --record-mp4
+    --config configs/agent_sourccey.yaml --headless
 ```
 
-## Model notes
+## Motion and mapping smoke test
 
-- **Arm kinematics / inertials / meshes** are the exact `URDF/ArmLeft/ArmLeft.urdf`
-  chain from the **updated** `vulcan-forge/sourccey-hardware` repo (joint frames, axes,
-  limits, masses, and Unity-exported meshes). The right arm is the code-side X-mirror
-  of the left (the two official `ArmLeft`/`ArmRight` exports are asymmetric, so one
-  canonical arm is mirrored to keep the robot symmetric).
-- **Arm reach**: the 6-DoF arm reaches outward/sideways (workspace bottoms out around
-  z≈0.36 m below the shoulder), so table/counter-top objects are reachable but **floor
-  objects are not** — use counter-based `mcts` episodes (e.g.
-  `robocasa_sourccey_counter_to_cab_mcts`), not the floor pick/place row. TAMP
-  `plan_pick_place` uses `RobotSpec.tamp_approach="side"` (left yaw=+π/2) rather than
-  the Galaxea front standoff; a front-facing rby1 pose misses by ~0.6–1.2 m.
-- **Base / dome / wheels / lift** are simplified pragmatic geometry assembled from the
-  STEP CAD parts (see `scripts/robot_assets/`). The body is a 3-level pyramidal shell
-  (250 → 207 → 183 mm plates/walls), 4 mecanum wheels with holder brackets at the
-  corners, a vertical linear lift, and a rounded dome head with stereo cameras. Cosmetic
-  detail is trimmed; the base carries a single box collider.
-- **All geoms are visual-only** (contype=0), matching innate_mars: Robocasa planar
-  autoplace stays O(1) (the first-candidate hint is accepted instantly). Spawn safety
-  comes from the planar clip guards + footprint; motion-planning collision is delegated
-  to external planners. Self-collision at the `sourccey_home` keyframe is clean.
-- **Planar base**: `base_x` / `base_y` / `base_yaw` slides + yaw on `base_root` driven by
-  velocity actuators (like innate_mars / xlerobot); a nav P-controller converges to a
-  world goal in a few seconds.
-- **Cameras**: `front_left`/`front_right` are a stereo pair on the dome (forward, 20°
-  down), `wrist_left`/`wrist_right` look outward along the grippers. FOV 70°. Rendered RGB +
-  depth are verified consistent (`assert_zmq_observation_frames_consistent`).
-- **Home keyframe** `sourccey_home` tucks the arms for navigation and is collision-free.
+```bash
+MUJOCO_GL=egl uv run python scripts/smoke_sourccey_mapping.py --out /tmp/sourccey-mapping
+```
 
-## Regeneration
+This runs a full scan and a square driving loop through the production navigation
+controller, without teleporting, and feeds rendered front-camera RGB-D into
+DynaMem's geometric mapper. It checks all waypoints, map growth, and detection of
+the known table in the occupancy grid. Outputs: `drive.mp4`, `map.png`, `map.npz`,
+and `report.json`. The test uses simulator pose/depth and prescribed clear
+waypoints; it does not validate SLAM, autonomous exploration, or hardware sensing.
 
-All assets are generated — never hand-edit `sourccey.xml`, `arm_frag.xml`, or `meshes/`. See
-[`scripts/robot_assets/README.md`](../../scripts/robot_assets/README.md) and the
-asset NOTICE at `src/emet/assets/robot/sourccey/NOTICE.md`.
+## When the robot arrives
 
-## License
+The real host is **not** an Emet ZMQ server. `SourcceyBackend.create_client()` speaks
+Emet's simulation protocol. Pointing it at `sourccey-host` does not provide hardware
+control. The current vendor SDK is
+[`lerobot-robot-sourccey`](https://github.com/vulcan-forge/lerobot-robot-sourccey),
+version `0.2.4.dev14` at the revision above; it requires Python 3.12 or 3.13.
+Keep it in a separate environment from Emet and install matching revisions on
+host and desktop using the vendor's
+[robot setup](https://github.com/vulcan-forge/lerobot-robot-sourccey/blob/d4f10db4fdf2786f8c87ec5b3562a812f93b1a9f/docs/01-setup/robot/README.md)
+and [desktop setup](https://github.com/vulcan-forge/lerobot-robot-sourccey/blob/d4f10db4fdf2786f8c87ec5b3562a812f93b1a9f/docs/01-setup/desktop/README.md).
 
-Sourccey hardware is released under [CERN-OHL-S-2.0](https://github.com/vulcan-forge/sourccey-hardware/blob/main/LICENSE).
-Converted meshes/MJCF preserve upstream notices.
-See `src/emet/assets/robot/sourccey/NOTICE.md`.
+1. Confirm the delivered revision, device names, servo calibration and camera streams
+   using the vendor setup and hardware diagnostics. Start `sourccey-host` on the robot.
+2. Stop teleoperation and other observation clients: the vendor PUSH stream distributes
+   packets between receivers rather than broadcasting each packet to everyone.
+3. From the vendor environment, run this checkout's observation-only check:
+
+   ```bash
+   python /path/to/home_robot_v4/scripts/sourccey_preflight.py \
+       --ip ROBOT_IP --seconds 5
+   ```
+
+   It opens only the PULL observation port (5556), checks the installed protocol
+   version, arm/base submessages, finite values and all five nonblank, changing
+   camera feeds. It exits nonzero for missing data, incompatible protocol, frozen
+   images or timeout. It never opens a command socket. Passing means the observation
+   stream is usable, not that calibration or motion is validated.
+4. Use the vendor SDK/teleop for initial hardware operation. Before Emet autonomous
+   operation, implement and validate a protocol adapter with measured servo zero/sign
+   mapping, lift calibration, base velocity scaling, localization and depth input.
+
+Do not apply a linear URDF-range conversion to vendor commands: the default servo
+mode is normalized, optional degree mode depends on host configuration, lift targets
+are −100…100, and base axes are −1…1 **uncalibrated** commands. The wheels have no
+encoders in the referenced driver. Emet's SI commands require measured mappings;
+simulation base coordinates are not wheel odometry. No hardware motion or calibration
+has been tested by this update.
+
+## Refreshing assets
+
+```bash
+# Use clean local clones; fetch/check out the desired upstream revisions first.
+python scripts/robot_assets/sync_sourccey.py \
+    --simulation /path/to/sourccey-simulation-mujoco \
+    --hardware /path/to/sourccey-hardware
+uv run python scripts/robot_assets/assemble_sourccey.py
+MUJOCO_GL=egl uv run python -m pytest src/test/robots/test_sourccey_robot.py
+```
+
+The sync rejects differing hardware/simulator URDFs and unresolved Git LFS pointers.
+Review the manifest and generated diff; run the RoboCasa/navigation tests when those
+assets are installed. The simulator snapshot includes its MIT license. See the
+asset [NOTICE](../../src/emet/assets/robot/sourccey/NOTICE.md).
+
+### Wave emote and kinematics checks
+
+Sourccey now implements `wave` (left arm), `wave_left`, and `wave_right` through
+its registered emote backend and the shared robot-client joint interface:
+
+```python
+from emet.controller.task.emote.emote_task import EmoteTask
+
+# Existing agent connected to the Emet Sourccey simulation server; base at goal.
+success = EmoteTask(agent).get_task("wave").run()
+```
+
+The gesture raises the selected arm, rotates its wrist through three ±0.5 rad
+waves, and returns to the initial arm configuration. Quintic interpolation limits
+commanded arm speed to 0.8 rad/s. The lift, other arm, and grippers hold their
+initial measured positions; the planar base receives zero velocity commands.
+Small measured joint-limit violations (up to 0.03) are clipped to the model limits.
+Missing/invalid feedback or excessive tracking error fails the operation and
+stops advancing the trajectory. It finishes in manipulation mode. Commands use
+Emet's radians/metres, not the vendor SDK's normalized units.
+
+Reproduce the actuator-driven test and save a video, joint trace, and report:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/smoke_sourccey_wave.py --out /tmp/sourccey-wave
+uv run pytest src/test/robots/test_sourccey_wave.py -q
+```
+
+The smoke test runs `EmoteTask`, `GenericZmqClient` command serialization, the
+production simulation action handler, and MuJoCo dynamics for both arms. Transport
+is in-process and simulator time replaces sleeps; it does not test network delivery.
+The regression tests compare analytic Jacobians against central finite differences,
+check 24 nearby FK→position-IK round trips to 1 mm (including translated/rotated
+base and lowered lift), reject unreachable targets, and check limits, speed,
+held joints, and failure reporting. Position IK does not constrain orientation.
+
+These gestures are simulation-tested, not collision-planned: robot collision
+meshes are disabled in the current adaptation. Use clear space in simulation;
+physical execution still needs the calibrated hardware bridge and commissioning.
