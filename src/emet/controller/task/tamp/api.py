@@ -8,8 +8,9 @@ import math
 from typing import Any
 
 SCHEMA_VERSION = 1
-TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place"})
+TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state"})
 PLACEMENT_CODES = frozenset({
+    "receptacle_requires_open", "articulation_unsupported", "articulation_state_unavailable",
     "no_collision_free_placement", "placement_invalidated", "placement_attachment_changed",
     "placement_geometry_unavailable", "placement_support_geometry_missing",
     "place_approach_failed", "release_execution_error", "retract_execution_error",

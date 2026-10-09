@@ -59,6 +59,7 @@ def test_all_tools_return_json_on_missing_state_and_bad_arguments():
     tools = {t.name: t for t in get_tools({})}
     args = {
         "scene_tasks": {},
+        "set_receptacle_state": {"task_ref": "missing", "state": "open"},
         "plan_pick_place": {},
         "execute_pick_place_plan": {"plan_ref": "missing"},
         "pick_place": {"object_name": "bowl", "receptacle_name": "table"},
