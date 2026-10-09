@@ -172,7 +172,8 @@ def test_voxel_executor_requires_explicit_observed_provider(rig):
         executor._placement_geometry("held", "support")
 
 
-def test_executor_search_accepts_observed_geometry_without_gt_query(rig):
+@pytest.mark.parametrize("query", ["none", "batched", "invalid_second_batch"])
+def test_executor_search_accepts_observed_geometry_without_gt_query(rig, query):
     from unittest.mock import Mock
 
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
@@ -190,7 +191,27 @@ def test_executor_search_accepts_observed_geometry_without_gt_query(rig):
                                     _state={}, move_base_to=Mock())
     scene = PlacementScene.from_voxels(np.empty((0, 3)), resolution=.02, workspace=[[-3]*3, [3]*3])
     executor.placement_geometry_provider = lambda *args: (scene, payload, [[.4, -.3, -.2], [1., .3, -.1]])
-    result, _ = executor._search_placement("held", "support", approach_base=False)
+    batches = []
+
+    def check(poses):
+        assert 1 <= len(poses) <= 32
+        batches.append(np.array(poses))
+        if query == "invalid_second_batch" and len(batches) == 2:
+            return {"clear": [1] * len(poses)}
+        return {"clear": [True] * len(poses)}
+
+    executor.robot._state["sim_base_pose_query"] = query != "none"
+    executor.robot.check_base_poses = check
+    if query == "invalid_second_batch":
+        with pytest.raises(ValueError, match="invalid_placement_clearance_response"):
+            executor._search_placement("held", "support", approach_base=True)
+        executor.robot.move_base_to.assert_not_called()
+        return
+    result, _ = executor._search_placement("held", "support", approach_base=query != "none")
+    if query == "batched":
+        assert [len(batch) for batch in batches] == [32, 17]
+        expected = placement_base_candidates([.7, 0.], current_xyt=np.zeros(3))
+        np.testing.assert_allclose(np.concatenate(batches), expected)
     assert len(result.paths) == 3
     assert result.geometry_source == "observed_voxels"
     executor.robot.move_base_to.assert_not_called()

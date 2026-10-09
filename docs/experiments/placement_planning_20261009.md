@@ -38,3 +38,9 @@ Final managed CHAT smoke: `20261009_073929_9b876c`, frozen source `dbb4cac2`
 in `/tmp/emet-placement-validation-final-20261009`. Artifacts:
 `~/runs/emet/placement-collision-final-20261009/`. At PR submission it is waiting
 for the shared GPU lock; no new full-task success result is available yet.
+
+The initial full CHAT smoke finished **failed**: pickup/lift passed, but placement
+submitted 49 base candidates to a command accepting at most 32. No placement path
+search or base movement occurred. The adapter now queries batches of 32 and 17,
+validating every response before search. Regressions cover order preservation and
+an invalid second response. Placement plus TAMP tests: **65 passed**; Ruff passes.

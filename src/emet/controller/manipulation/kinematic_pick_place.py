@@ -706,9 +706,15 @@ class KinematicPickPlaceExecutor:
         state = getattr(self.robot, "_state", {})
         clear = None
         if state.get("sim_base_pose_query") is True:
-            clear = self.robot.check_base_poses(poses)["clear"]
-            if len(clear) != len(poses) or any(type(value) is not bool for value in clear):
-                raise ValueError("invalid_placement_clearance_response")
+            clear = []
+            # The command protocol bounds each query to 32 endpoints; preserve
+            # candidate order and validate every batch before trusting any result.
+            for start in range(0, len(poses), 32):
+                batch = poses[start:start + 32]
+                evidence = self.robot.check_base_poses(batch)["clear"]
+                if len(evidence) != len(batch) or any(type(value) is not bool for value in evidence):
+                    raise ValueError("invalid_placement_clearance_response")
+                clear.extend(evidence)
         allowed = {tuple(p): ok for p, ok in zip(poses, clear, strict=True)} if clear is not None else None
 
         def set_base(model, data, pose):
