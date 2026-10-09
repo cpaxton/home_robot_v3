@@ -280,12 +280,10 @@ def test_plan_clear_clutter_fails_when_objects_do_not_move(monkeypatch):
     assert out["goal_reached"] is False
     assert out["task_success"] is False
     assert clutter_success_flags({**out, "episode_valid": True})["task_success"] is False
-    probe = out.get("nav_probe_after") or {}
-    # Post-clear route uses the 8-connected planner probe (not the straight-line
-    # chord): when nothing moved, no path around the clutter/furniture disks exists.
-    assert probe.get("probe") in ("nav_path_8conn", "interpolated_nav")
-    assert probe.get("blocked") is True
-    assert int(probe.get("n_disks", 0)) >= 1
+    # Unverified relocation stops before another manipulation or navigation probe.
+    assert out["recovery_required"] is True
+    assert out["unattempted_bodies"] == bodies[1:]
+    assert "nav_probe_after" not in out
 
 
 def test_placement_obstacle_disks_skips_high_bodies():
