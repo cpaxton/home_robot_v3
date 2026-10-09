@@ -43,7 +43,8 @@ def build() -> str:
     limits = {j.get("name"): j.find("limit") for j in urdf.findall("joint") if j.find("limit") is not None}
     root.set("model", "sourccey")
     root.find("compiler").set("meshdir", "upstream/models/source/SourcceyURDF")
-    # Preserve explicit CAD inertials while allowing scene objects to infer theirs.
+    # "auto" preserves explicit CAD <inertial> values and infers inertia only
+    # for bodies without one (e.g. scene objects); "true" would replace CAD values.
     root.find("compiler").set("inertiafromgeom", "auto")
     root.remove(root.find("keyframe"))
     # Namespace upstream floor assets so includes can share an environment floor.

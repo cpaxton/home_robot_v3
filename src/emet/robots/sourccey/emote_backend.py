@@ -45,7 +45,7 @@ def wave_trajectory(q: np.ndarray, side: str = "left", dt: float = 0.05) -> np.n
         raise ValueError("dt must be between 0.01 and 0.1 seconds")
     q = np.asarray(q, dtype=float)
     if q.shape != (spec.dof,) or not np.isfinite(q).all():
-        raise ValueError("Expected a finite Sourccey joint state of length 16")
+        raise ValueError(f"Expected a finite Sourccey joint state of length {spec.dof}")
     limits = _limits()
     if np.any(q[3:] < limits[3:, 0] - 0.03) or np.any(q[3:] > limits[3:, 1] + 0.03):
         raise ValueError("Measured joints are outside Sourccey limits")
@@ -84,6 +84,7 @@ class SourcceyWaveOperation(Operation):
         if side not in ("left", "right"):
             raise ValueError("side must be 'left' or 'right'")
         self.robot: AbstractRobotClient = agent.robot
+        self._spec = SourcceyBackend().get_spec()
         self.side = side
         self.error: str | None = None
         self._success = False
@@ -105,7 +106,7 @@ class SourcceyWaveOperation(Operation):
                 last = target
                 time.sleep(0.05)
                 measured, _, _ = self.robot.get_joint_state(timeout=1.0)
-                if measured is None or np.shape(measured) != (16,) or not np.isfinite(measured).all():
+                if measured is None or np.shape(measured) != (self._spec.dof,) or not np.isfinite(measured).all():
                     raise RuntimeError("Missing or invalid joint feedback during wave")
                 error = np.abs(np.asarray(measured) - target)
                 if error[3] > 0.03 or np.max(error[4:]) > 0.25:
@@ -116,7 +117,7 @@ class SourcceyWaveOperation(Operation):
                     raise RuntimeError("Base moved during wave")
             time.sleep(0.5)
             measured, _, _ = self.robot.get_joint_state(timeout=1.0)
-            if measured is None or np.shape(measured) != (16,) or not np.isfinite(measured).all():
+            if measured is None or np.shape(measured) != (self._spec.dof,) or not np.isfinite(measured).all():
                 raise RuntimeError("Missing final joint feedback")
             error = np.abs(np.asarray(measured) - frames[-1])
             self._success = bool(error[3] < 0.02 and np.max(error[4:]) < 0.08)

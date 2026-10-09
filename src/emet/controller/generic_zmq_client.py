@@ -1343,7 +1343,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True, side: str = "left") -> None:
         """Send a gripper target (Sourccey radians; XLeRobot normalized jaw)."""
         if self._spec.name in ("xlerobot", "sourccey"):
-            if side not in ("left", "right") or not np.isfinite(target):
+            if self._spec.name == "sourccey" and (side not in ("left", "right") or not np.isfinite(target)):
                 raise ValueError("Gripper side must be left/right and target must be finite")
             key = "gripper_right" if side == "right" else "gripper_left"
             action: dict[str, Any] = {key: float(target)}
@@ -1362,7 +1362,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def gripper_both_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
         """Set both dual-arm jaws in their robot-specific units."""
-        if not np.isfinite(target):
+        if self._spec.name == "sourccey" and not np.isfinite(target):
             raise ValueError("Gripper target must be finite")
         if self._spec.name not in ("xlerobot", "sourccey"):
             self.gripper_to(target, blocking=blocking, reliable=reliable)

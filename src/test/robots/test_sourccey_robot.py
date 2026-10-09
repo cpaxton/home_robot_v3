@@ -347,3 +347,23 @@ def test_sourccey_client_gripper_commands_reach_only_selected_actuator(side):
     with pytest.raises(ValueError):
         apply_gripper_action_robosuite(spec, model, data, {"gripper_left": 0.0, "gripper_right": float("nan")})
     np.testing.assert_array_equal(data.ctrl, before)
+
+
+@pytest.mark.parametrize("robot", ["sourccey", "xlerobot"])
+def test_gripper_side_validation_is_sourccey_specific(robot):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+
+    client = object.__new__(GenericZmqClient)
+    client._spec = SimpleNamespace(name=robot)
+    client.send_action = Mock()
+    if robot == "sourccey":
+        with pytest.raises(ValueError, match="side must be"):
+            client.gripper_to(0.4, side="legacy", blocking=False)
+        client.send_action.assert_not_called()
+    else:
+        # Preserve XLeRobot's existing non-right -> left fallback.
+        client.gripper_to(0.4, side="legacy", blocking=False)
+        client.send_action.assert_called_once_with({"gripper_left": 0.4}, reliable=True)
