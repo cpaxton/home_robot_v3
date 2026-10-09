@@ -66,7 +66,15 @@ Implementation and acceptance specification:
       Bounded same-waypoint recovery now runs within investigate/frontier
       navigation: at most two floor observations, replan only after the checked
       footprint is valid, never certify the route from map growth. Live retest
-      remains required; this changes internal work per high-level decision.
+      `20261009_073120_0cb088` resumed/reached after recovery, but still 0/1
+      object + 0/1 receptacle in 603 s. Paired S0/RoboCasa and EQA-12 jobs
+      `20261009_074725_cf590d` / `20261009_074727_8892fd` are queued.
+      Track runtime, not only success; this changes work per decision.
+- [ ] PR closeout: #176 applies to current main and passes 35 focused tests;
+      strongest independent landing candidate. #167/#168 conflict; extract
+      focused repairs. #169 depends on #167. #178 includes #177 plus 23 commits;
+      coordinate stack order with TAMP owner, retain #179 as draft pending
+      placement acceptance. Full review and experiment provenance in plan.
       Automatic collision-checked alternative-viewpoint selection remains open.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.

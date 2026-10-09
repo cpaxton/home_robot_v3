@@ -739,3 +739,50 @@ teleports disabled. Result pending at
 `navigation_floor_recovery` trace events and downstream arrival evidence;
 internal retries are bounded separately and must not be hidden in runtime
 comparisons with the earlier single-attempt pilot.
+
+### October 9: completed recovery pilot and PR integration review
+
+The recovery pilot completed 0/1 object and 0/1 receptacle. The object phase
+cleared a blocker, resumed the same waypoint and reached it (0.382 m recorded
+navigation distance); a later approach also reached (0.482 m). Both phases
+used two investigations and one exploration action. This establishes one live
+recovery continuation, not semantic localization or manipulation acceptance.
+Episode time was 603.5 s versus 389.2 s previously; query time 519.2 s versus
+305.7 s. Initialization/mapping took 18.1/35.5 s. Most elapsed time is in the
+search phase, but this does not yet isolate navigation versus model latency.
+The single stochastic comparison cannot attribute the increase to floor
+recovery alone. Ten minutes without locating either target is not acceptable
+task performance; retain runtime as a gate alongside success.
+
+Queued frozen comparisons (all CPU-safe/GPU-exclusive; no hardware):
+
+- `20261009_074725_cf590d`: baseline `eb1e0890` versus candidate `17d96365`,
+  S0 and RoboCasa, seed 0, four mapping views/six rounds/three navigation
+  decisions. Four serial find episodes, no manipulation. Artifacts:
+  `~/runs/emet/navigation-resume-paired-room-20261009/`.
+- `20261009_074727_8892fd`: the same revisions, paired 12-question EQA dev
+  set, seed 0, existing 20-planning/10-movement budgets. Artifacts:
+  `~/runs/emet/navigation-resume-paired-eqa-20261009/`. A dev comparison,
+  not held-out paper evaluation or a main-versus-stack acceptance claim.
+
+Open PR review against fetched main `a9a5f1d1` (October 9):
+
+| PR | Finding | Integration recommendation |
+| --- | --- | --- |
+| #176 | Three-file synchronous dialogue isolation; applies cleanly to current main in disposable worktree | First standalone landing candidate after focused tests/review; does not require an OVMM accuracy claim |
+| #167 | Draft, conflicts with main; 231 files and unmet learned grounding/EQA gates | Extract independently justified repairs rather than merge accumulated branch wholesale |
+| #169 | Mergeable onto #167, not independently main-ready; 31 files mixing wheel/pregrasp/EQA work | Split mechanical fixes from semantic changes, reconcile shared motion changes with TAMP, validate extracted main-based revisions |
+| #168 | Conflicting 171-file integration branch; PR description still template-only | Reconcile provenance/scope and replace or refresh as an explicit integration sandbox; not a landing candidate |
+| #177 | Large physical-TAMP measurement/control change; admitted fixtures and assisted-control results, known latch limitations | Review reusable motion/evaluation contracts separately from task-success claims; coordinate with TAMP owner |
+| #178 | Contains #177 head as an ancestor plus 23 commits although both target main | Treat as a stack, not independent PRs; review delta after #177 or retarget with owner approval; assisted GT results are not learned physical acceptance |
+| #179 | Draft stacked on #178; collision-aware placement smoke pending | Keep isolated until owner finishes acceptance; no merge based only on unit results |
+
+GitHub reports no status checks or review decisions on these seven PRs.
+For #176, cherry-pick onto current main in `/tmp/emet-review-176-1009`
+passed 35 conversation/dispatch/prompt tests; this is a local integration
+check, not a change to main or to the PR branch.
+Mergeability alone is not approval. No PR was merged or retargeted. The
+experiment branch is not a substitute for testing extracted changes on main.
+Next integration order: narrow dialogue fix; independently reviewed motion/
+grounding repairs; explicit sandbox combining accepted revisions; then paired
+EQA/small-room gates. Do not pull the pending placement stack into these pilots.
