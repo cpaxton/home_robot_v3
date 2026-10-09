@@ -204,6 +204,7 @@ class KinematicPickPlaceExecutor:
         return np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)
 
     def _verify_grasp_lift(self, body: str, lift_xyz: np.ndarray, *, pre_pos: np.ndarray | None) -> bool:
+        """Accept target proximity only; height gain and threshold are diagnostics."""
         after = self._body_pos(body)
         lift = np.asarray(lift_xyz, dtype=np.float64).reshape(3)
         error = None if after is None else float(np.linalg.norm(after - lift))
