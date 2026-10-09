@@ -943,6 +943,10 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 ## Shared-agent review gates (2026-10-09)
 
+- [x] Address #180 review: explicit missing-verifier failure, budget cleanup,
+      once-per-view/query caller contract, added tests and current-main API checks.
+- [ ] Merge approved #180 after isolated paired regression gate; keep active
+      full-stack replay heads frozen and restack dependents afterward.
 - [x] Record user-supplied #176 review: no blockers; independent merge candidate.
 - [ ] Maintainer approval/merge of #176; keep current reset-based shallow snapshot
       limitation explicit. No automatic merge as part of the acceptance work.
