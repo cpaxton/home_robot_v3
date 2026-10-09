@@ -131,6 +131,11 @@ asset [NOTICE](../../src/emet/assets/robot/sourccey/NOTICE.md).
 
 ### Wave emote and kinematics checks
 
+[![Sourccey performs left- and right-arm waves in MuJoCo](media/sourccey-wave.gif)](media/sourccey-wave.mp4)
+
+[Watch or download the full wave recording](media/sourccey-wave.mp4).
+The preview shows both arms executing the emote through the shared robot interface.
+
 Sourccey now implements `wave` (left arm), `wave_left`, and `wave_right` through
 its registered emote backend and the shared robot-client joint interface:
 
