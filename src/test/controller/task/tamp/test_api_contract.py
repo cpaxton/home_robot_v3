@@ -339,7 +339,9 @@ def test_place_exception_cannot_inherit_grasp_evidence(monkeypatch):
     assert result.failed_op == "place"
     assert any("base approach rejected" in message for message in messages)
     assert "base approach rejected" not in result.message
-    assert [m["stage"] for m in result.measurements] == ["grasp"]
+    assert [m["stage"] for m in result.measurements] == ["grasp", "place"]
+    assert result.measurements[-1] == {"stage": "place", "release": {
+        "detach_command": "not_attempted", "placement_verified": None, "held_state": "unknown"}}
     saved = result.measurements[0]["last_ee_verification"]["error_m"]
     ex.begin_operation("next-task")
     assert saved == 0.02 and result.measurements[0]["last_ee_verification"]["error_m"] == 0.02

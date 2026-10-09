@@ -354,6 +354,9 @@ class KinematicPickPlaceExecutor:
         self.operation_id = operation_id
         self.last_ee_verification = None
         self.last_grasp_verification = None
+        self.last_placement_search = None
+        self.last_surface_search = None
+        self.last_release_evidence = {"detach_command": "not_attempted", "placement_verified": None}
 
     def _sync_qpos_from_robot(self) -> bool:
         assert self._model is not None and self._data is not None
@@ -840,7 +843,9 @@ class KinematicPickPlaceExecutor:
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure(stage))
         # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
+        self.last_release_evidence = {"detach_command": "unknown", "placement_verified": None}
         robot_zmq_detach_body(self.robot, body)
+        self.last_release_evidence["detach_command"] = "completed"
         robot_zmq_set_body_pose(self.robot, body, place)
         self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, place[:2])
@@ -849,6 +854,7 @@ class KinematicPickPlaceExecutor:
             robot_zmq_set_body_pose(self.robot, body, place)
             self._sleep(0.2)
             ok_place, p_err = self._verify_place_xy(body, place[:2])
+        self.last_release_evidence["placement_verified"] = bool(ok_place)
         try:
             self._set_gripper(open_=True)
         except Exception:

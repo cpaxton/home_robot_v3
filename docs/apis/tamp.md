@@ -114,9 +114,11 @@ fixtures or pool assisted historical scores with new results.
 ## Current placement and recovery limitations
 
 Placement has no separate public CHAT tool: it runs within execution of the
-existing pick/place tools. Several placement failures currently map to
-`operation_failed`; structured search reasons and verified held/released state
-are pending a separate composition change. `completed_ops` alone cannot tell an
+existing pick/place tools. Placement failures preserve codes including `no_collision_free_placement`,
+`placement_geometry_unavailable`, `placement_invalidated`, and
+`release_execution_error`. Per-place measurements include sanitized
+`placement_search` counts, geometry source, and its sampled collision scope.
+The top-level scope remains conservative for the entire task. `completed_ops` alone cannot tell an
 agent whether release occurred during a failed `place`. Do not infer that a new
 grasp is safe from this response. There is not yet a dedicated recovery tool in
 this four-tool API.
@@ -126,3 +128,17 @@ failed CHAT placement and admitted 0/3 fixtures; repeats did not run. See the
 [merge and metric plan](../plans/2026-10-09_tamp_merge_and_metrics.md) for acceptance
 criteria and the distinction between historical assisted scores and current
 end-to-end readiness.
+
+The clutter benchmark runner now stops after the first execution or relocation
+verification failure. It reports `recovery_required: true` and
+`unattempted_bodies` in its private benchmark JSON, skips navigation, and retains
+all requested objects in the denominator. These body IDs are not public tool
+output. Planning failures before execution can still proceed to another object.
+
+Per-place `release` evidence records `detach_command` as `not_attempted`,
+`unknown` (command attempted but completion unavailable), or `completed`, plus
+`placement_verified` as a boolean or null. `held_state` remains `unknown`: a
+successful detach command and XY placement check do not provide a current
+attachment observation. These fields help distinguish partial effects, but do
+not authorize blind replay. Evidence resets at each operation and does not leak
+arbitrary planner messages, internal body identities or previous search results.

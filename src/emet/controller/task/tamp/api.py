@@ -9,6 +9,54 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place"})
+PLACEMENT_CODES = frozenset({
+    "no_collision_free_placement", "placement_invalidated", "placement_attachment_changed",
+    "placement_geometry_unavailable", "placement_support_geometry_missing",
+    "place_approach_failed", "release_execution_error", "retract_execution_error",
+})
+PLACEMENT_REJECTIONS = frozenset({
+    "base_endpoint_rejected", "unsupported_base", "robot_self_collision",
+    "robot_scene_collision", "payload_scene_collision", "payload_robot_collision",
+    "target_payload_collision", "pose_ik_failed", "invalid_start", "invalid_goal",
+    "arm_path_failed", "arm_edge_collision", "invalid_short_path", "rrt_failed",
+    "rrt_budget_exhausted", "ik_budget_exhausted", "base_ik_budget_reached",
+    "surface_search_budget_exhausted", "no_accepted_surface_candidate",
+    "base_candidate_budget_exhausted",
+})
+
+
+def placement_evidence(executor) -> dict[str, Any]:
+    """Copy semantic diagnostics, never arbitrary planner strings or body identities."""
+    evidence = {}
+    search = getattr(executor, "last_placement_search", None)
+    if search is not None:
+        counts = {}
+        for reason, count in getattr(search, "rejections", {}).items():
+            code = reason if reason in PLACEMENT_REJECTIONS else (
+                "rrt_budget_exhausted" if str(reason).startswith("max_iter reached") else "other"
+            )
+            if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                counts[code] = counts.get(code, 0) + count
+        source = getattr(search, "geometry_source", None)
+        scope = getattr(search, "collision_scope", None)
+        evidence["placement_search"] = {
+            "geometry_source": source if source in {"ground_truth", "observed_voxels"} else None,
+            "collision_scope": scope if scope == "sampled_arm_and_payload;base_endpoint_only" else None,
+            "solutions": len(getattr(search, "paths", [])),
+            "rejections": counts,
+        }
+    release = getattr(executor, "last_release_evidence", None)
+    if isinstance(release, dict):
+        detach = release.get("detach_command")
+        verified = release.get("placement_verified")
+        evidence["release"] = {
+            "detach_command": detach if detach in {"not_attempted", "unknown", "completed"} else "unknown",
+            "placement_verified": verified if type(verified) is bool else None,
+            # A command receipt and XY placement check are not attachment perception.
+            "held_state": "unknown",
+        }
+    return evidence
+
 
 
 def response(
@@ -104,6 +152,8 @@ def failure_code(message: str) -> str:
     }.get(message, message)
     parts = message.split(":")
     for part in reversed(parts):
+        if part in PLACEMENT_CODES:
+            return part
         if part in {"joint_bounds", "collision", "stale_observation"}:
             return part
         for suffix, code in (
