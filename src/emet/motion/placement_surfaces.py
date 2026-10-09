@@ -98,7 +98,8 @@ def free_surface_centers(surfaces, *, scene, payload, ee_rotation, clearance_m=.
         key = tuple(np.round(center, 10))
         if key not in seen:
             seen.add(key)
-            result.centers.append(center)
             if len(result.centers) >= max_centers:
+                result.budget_exhausted = True
                 break
+            result.centers.append(center)
     return result

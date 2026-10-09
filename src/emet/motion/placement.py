@@ -39,6 +39,7 @@ class PlacementSearchResult:
     rejections: dict[str, int] = field(default_factory=dict)
     geometry_source: str = ""
     collision_scope: str = "sampled_arm_and_payload;base_endpoint_only"
+    path_failures: list[dict] = field(default_factory=list)
 
 
 def surface_placement_centers(surface_bounds, *, payload: HeldObject, ee_rotation, clearance_m=.02, grid_size=5):
@@ -130,7 +131,8 @@ def plan_placement_paths(
     if not np.isfinite(preplace_height_m) or preplace_height_m <= 0:
         raise ValueError("Positive finite preplace height required")
     centers = [np.asarray(p, dtype=float) for p in object_centers]
-    poses = [np.asarray(p, dtype=float) for p in base_candidates][:max_candidates]
+    all_poses = [np.asarray(p, dtype=float) for p in base_candidates]
+    poses = all_poses[:max_candidates]
     if any(p.shape != (3,) or not np.isfinite(p).all() for p in centers + poses):
         raise ValueError("Finite 3D placement targets and base poses required")
     if len(centers) > 64:
@@ -150,6 +152,8 @@ def plan_placement_paths(
     low, high = joint_limits_from_model(model, joint_names)
     rng = np.random.default_rng(seed)
     rejects = Counter()
+    if len(all_poses) > max_candidates:
+        rejects["base_candidate_budget_exhausted"] = 1
     result = PlacementSearchResult(geometry_source=scene.source)
     # Reject occupied target volumes before spending IK budget or considering a
     # base move. This checks both preplace and place with the same attachment.
@@ -197,7 +201,7 @@ def plan_placement_paths(
                 probe.qpos[:] = base_state
                 q0 = start_q.copy()
                 segments = []
-                for target in targets:
+                for stage_index, target in enumerate(targets):
                     if base_ik_calls >= max_ik_calls_per_base:
                         break
                     if ik_calls >= max_ik_calls:
@@ -218,9 +222,18 @@ def plan_placement_paths(
                     goal = probe.qpos[qadr].copy()
                     path = plan_arm_joint_path(model, probe, joint_names=joint_names, q_start=q0,
                                                q_goal=goal, collision=checker, max_iter=rrt_max_iter,
-                                               step_size=.025, linear_fallback=False)
+                                               step_size=.025, linear_fallback=False, rng=rng)
                     if not path.success:
-                        rejects[path.reason or 'arm_path_failed'] += 1
+                        reason = path.reason or "arm_path_failed"
+                        if reason.startswith("max_iter reached"):
+                            reason = "rrt_budget_exhausted"
+                        rejects[reason] += 1
+                        result.path_failures.append({
+                            "stage": "preplace" if stage_index == 0 else "place",
+                            "reason": reason, "detail": path.detail,
+                            "base_xyt": pose.tolist(), "object_center": center.tolist(),
+                            "attempt": attempt,
+                        })
                         break
                     dense = validated_dense_path(model, probe, joint_names, path.waypoints, checker)
                     if dense is None:

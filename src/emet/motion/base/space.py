@@ -26,8 +26,9 @@ class Node(ABC):
 class ConfigurationSpace(ABC):
     """class defining a region over which we can sample parameters"""
 
-    def __init__(self, dof: int, mins, maxs, step_size: float = 0.1):
+    def __init__(self, dof: int, mins, maxs, step_size: float = 0.1, *, rng=None):
         self.dof = dof
+        self.rng = rng
         self.step_size = step_size
         self.update_bounds(mins, maxs)
         assert self.step_size > 0.0
@@ -40,7 +41,7 @@ class ConfigurationSpace(ABC):
         self.ranges = maxs - mins
 
     def sample(self) -> np.ndarray:
-        return (np.random.random(self.dof) * self.ranges) + self.mins
+        return ((self.rng if self.rng is not None else np.random).random(self.dof) * self.ranges) + self.mins
 
     def distance(self, q0, q1) -> float:
         """Return distance between q0 and q1."""

@@ -47,3 +47,12 @@ def test_unknown_space_and_candidate_budget():
                                   ee_rotation=np.eye(3), max_centers=1)
     assert len(result.centers) == 1
     assert result.centers[0][0] + .055 < .5
+
+
+def test_candidate_truncation_is_reported_only_when_distinct_centers_are_omitted():
+    scene = PlacementScene([], source="ground_truth")
+    args = dict(scene=scene, payload=payload(), ee_rotation=np.eye(3))
+    small = free_surface_centers([[0, 0, 0], [1, 1, 0]], max_centers=1, **args)
+    exact = free_surface_centers([[0, 0, 0], [1, 1, 0]], max_centers=5, **args)
+    assert len(small.centers) == 1 and small.budget_exhausted
+    assert len(exact.centers) == 5 and not exact.budget_exhausted

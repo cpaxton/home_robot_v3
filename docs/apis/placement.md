@@ -75,10 +75,11 @@ Defaults are three solutions, three IK attempts per target, up to 64 base
 candidates, at most 64 supplied target centers, 96 total IK calls, 12 IK calls
 per base and 400 RRT iterations per path attempt. Preplace height is 0.12 m and
 collision margin is 0.005 m. These are work limits, not wall-clock guarantees.
-Currently `seed` controls IK seed sampling only; RRT also uses global random
-state. Explicitly control all RNGs in isolated experiments until RNG propagation
-is implemented. Surface `budget_exhausted` currently reports region truncation,
-not truncation at the final candidate cap. Neither an empty result nor an unset
+`seed` controls a private generator shared by IK sampling, RRT, and shortcutting.
+Seeded placement does not consume process-global NumPy or Python random state. Surface `budget_exhausted` reports both region and final-candidate truncation.
+Base candidate truncation appears in `rejections`. RRT iteration exhaustion has
+the stable code `rrt_budget_exhausted`; private `path_failures` records its stage,
+base, target and attempt. Neither an empty result nor an unset
 budget flag proves infeasibility.
 
 Collision checks use conservative world boxes enclosing complete declared robot
@@ -120,8 +121,8 @@ still requires simulator placements; the reusable planner above does not.
 The default simulator adapter requires `support_surfaces` for the selected
 receptacle: horizontal top faces of axis-aligned collision boxes, preserved through
 server serialization and the client reader. It never substitutes a semantic or
-visual AABB top. Rotated/mesh supports and interior shelves require an explicit
-geometry provider. Disjoint support patches are not joined across unsupported gaps.
+visual AABB top. Box faces may have arbitrary yaw and up to 1 mrad tilt; larger slopes and mesh
+supports require an explicit geometry provider. Disjoint support patches are not joined across unsupported gaps.
 Full-scene GT meshes and physical release execution remain separate integrations.
 
 ### Refresh and simulator geometry details
@@ -175,3 +176,23 @@ This is a Python API used by the existing TAMP tools, not an additional CHAT
 tool. The [agent API](tamp.md) describes the public JSON interface. The
 [integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks current
 acceptance blockers; the latest full simulator gate failed.
+
+## Exact private search replay
+
+Set `EMET_PLACEMENT_DIAGNOSTICS_DIR` to a writable artifact directory before a
+simulator run. Before each placement search, the executor writes a unique
+snapshot containing the standalone compiled model, full integration state,
+scene boxes, held-object vertices, targets, already-filtered base candidates,
+seed, base writer settings, source commit, runtime versions and checksums.
+These artifacts contain private simulator geometry; public tool output does not.
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/replay_placement.py /path/to/snapshot
+```
+
+The replay never actuates. It checks artifact hashes and MuJoCo version, then
+prints JSON with solutions, rejections, private stage/path failures and timing.
+Zero paths exits 1; a native crash remains a process failure, with faulthandler
+enabled. Archive stderr and exit status as well as JSON. Arbitrary `known_free`
+callbacks are marked non-replayable and refused rather than silently discarded.
+Snapshots preserve the planning input, not a complete dynamic simulator episode.
