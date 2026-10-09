@@ -1299,6 +1299,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:
@@ -1446,6 +1447,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                # Head-camera self masks must not leak into external recordings.
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
@@ -1465,6 +1468,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                # Head-camera self masks must not leak into external recordings.
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)

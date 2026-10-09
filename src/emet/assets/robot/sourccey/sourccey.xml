@@ -40,34 +40,55 @@
     <mesh name="wall_l3_left" file="wall_l3_left.stl" scale="0.001 0.001 0.001"/>
     <mesh name="wall_l3_right" file="wall_l3_right.stl" scale="0.001 0.001 0.001"/>
     <mesh name="arm_l_Bicep_Left_v1_1" file="arm_l_Bicep_Left_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Bicep_Left_v1_1_mirror_x" file="arm_l_Bicep_Left_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Bicep_Right_v1_1" file="arm_l_Bicep_Right_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Bicep_Right_v1_1_mirror_x" file="arm_l_Bicep_Right_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_1" file="arm_l_Feetech_Servo_Motor_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_1_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_2" file="arm_l_Feetech_Servo_Motor_v1_2.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_2_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_2.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_3" file="arm_l_Feetech_Servo_Motor_v1_3.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_3_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_3.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_4" file="arm_l_Feetech_Servo_Motor_v1_4.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_4_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_4.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_5" file="arm_l_Feetech_Servo_Motor_v1_5.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_5_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_5.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Feetech_Servo_Motor_v1_6" file="arm_l_Feetech_Servo_Motor_v1_6.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Feetech_Servo_Motor_v1_6_mirror_x" file="arm_l_Feetech_Servo_Motor_v1_6.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Forearm_v1_1" file="arm_l_Forearm_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Forearm_v1_1_mirror_x" file="arm_l_Forearm_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Gripper_Base_v1_1" file="arm_l_Gripper_Base_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Gripper_Base_v1_1_mirror_x" file="arm_l_Gripper_Base_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Gripper_Finger_v1_1" file="arm_l_Gripper_Finger_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Gripper_Finger_v1_1_mirror_x" file="arm_l_Gripper_Finger_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_1_Support_v1_1" file="arm_l_Motor_1_Support_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_1_Support_v1_1_mirror_x" file="arm_l_Motor_1_Support_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_2_Support_v1_1" file="arm_l_Motor_2_Support_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_2_Support_v1_1_mirror_x" file="arm_l_Motor_2_Support_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_3_support_v1_1" file="arm_l_Motor_3_support_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_3_support_v1_1_mirror_x" file="arm_l_Motor_3_support_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_4_support_v1_1" file="arm_l_Motor_4_support_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_4_support_v1_1_mirror_x" file="arm_l_Motor_4_support_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_5_support_v1_1" file="arm_l_Motor_5_support_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_5_support_v1_1_mirror_x" file="arm_l_Motor_5_support_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_6_cap_v1_1" file="arm_l_Motor_6_cap_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_6_cap_v1_1_mirror_x" file="arm_l_Motor_6_cap_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Motor_6_cap_v2_1" file="arm_l_Motor_6_cap_v2_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Motor_6_cap_v2_1_mirror_x" file="arm_l_Motor_6_cap_v2_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Shoulder_v1_1" file="arm_l_Shoulder_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Shoulder_v1_1_mirror_x" file="arm_l_Shoulder_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_Wrist_v1_1" file="arm_l_Wrist_v1_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_Wrist_v1_1_mirror_x" file="arm_l_Wrist_v1_1.stl" scale="-0.001 0.001 0.001"/>
     <mesh name="arm_l_base_link" file="arm_l_base_link.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="arm_l_base_link_mirror_x" file="arm_l_base_link.stl" scale="-0.001 0.001 0.001"/>
   </asset>
 
   <default>
     <default class="robot_collision">
-      <geom type="mesh" density="80" friction="0.9" group="1" contype="0" conaffinity="0"/>
+      <geom type="mesh" density="80" friction="0.9" group="3" contype="0" conaffinity="0"/>
     </default>
     <default class="arm_collision">
-      <geom type="mesh" density="100" friction="0.9" group="1" contype="0" conaffinity="0"/>
+      <geom type="mesh" density="100" friction="0.9" group="3" contype="0" conaffinity="0"/>
     </default>
     <default class="robot_visual">
       <geom type="mesh" material="plastic_white" group="2" contype="0" conaffinity="0" density="0"/>
@@ -188,225 +209,225 @@
 
       <body name="arm_mount_left" pos="-0.13 0 0.66">
         <body name="arm_left" pos="0 0 0" quat="0.7071068 0 0 -0.7071068">
-        <body name="left_arm_root" pos="-0.29935613 -0.27923323 0.019623148" quat="1 0 0 0">
-            <body name="left_base_link" pos="0 0 0" quat="1 0 0 0">
-              <inertial pos="0.29935613 0.27729323 -0.02083152" mass="0.10518938" fullinertia="3.54e-05 6.06e-05 3.87e-05 -0 0 -0"/>
-              <geom type="mesh" mesh="arm_l_base_link" pos="0 0 0" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-              <geom type="mesh" mesh="arm_l_base_link" pos="0 0 0" quat="1 0 0 0" class="arm_collision"/>
-              <body name="left_Feetech_Servo_Motor_v1_1" pos="0.299356 0.279233 -0.019623" quat="1 0 0 0">
-                <inertial pos="1.2917732e-07 -0.022283132 -0.00050770106" mass="0.083033647" fullinertia="2.13e-05 1.14e-05 1.8e-05 -0 0 -0"/>
-                <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="-0.299356 -0.279233 0.019623" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="-0.299356 -0.279233 0.019623" quat="1 0 0 0" class="arm_collision"/>
-                <joint name="left_shoulder_pan" type="hinge" axis="-0 0 1" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                <body name="left_Arm-Base-Shoulder" pos="0 -0.035 0.243857" quat="1 0 0 0">
-                  <inertial pos="0.003472 -0.043446 -0.24424" mass="0.27352861" fullinertia="0.0003255 0.0002415 0.0001893 3.27e-05 -0 -0"/>
-                  <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="-0.299356 -0.244233 -0.224234" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                  <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="-0.299356 -0.244233 -0.224234" quat="1 0 0 0" class="arm_collision"/>
-                  <body name="left_Feetech_Servo_Motor_v1_2" pos="-0.005407 -0.035 -0.244232" quat="1 0 0 0">
-                    <inertial pos="0.00050720925 -0.022283132 -3.9959974e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="-0.293949 -0.209233 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="-0.293949 -0.209233 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                  </body>
-                  <body name="left_Motor_2_Support_v1_1" pos="-0.003125 -0.055 -0.217857" quat="1 0 0 0">
-                    <inertial pos="-0.0017115176 -0.026377844 -0.0263754" mass="0.25565172" fullinertia="0.0001839 0.0001605 8.37e-05 -6e-07 0 0"/>
-                    <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="-0.296231 -0.189233 -0.006377" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="-0.296231 -0.189233 -0.006377" quat="1 0 0 0" class="arm_collision"/>
-                  </body>
-                  <joint name="left_shoulder_lift" type="hinge" axis="-1 -0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                  <body name="left_Arm-Bicep" pos="0.192873 -0.07 -0.244232" quat="1 0 0 0">
-                    <inertial pos="-0.157842 -0.013002 9.4e-05" mass="0.11545697" fullinertia="0.0001575 4.86e-05 0.0001143 -4.5e-06 0 6e-07"/>
-                    <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="-0.492229 -0.174233 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="-0.492229 -0.174233 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                    <body name="left_Bicep_Right_v1_1" pos="-0.164596 -0.057485 0" quat="1 0 0 0">
-                      <inertial pos="-0.040202015 -0.021685341 -3.8434918e-07" mass="0.29442461" fullinertia="0.000441 0.0002214 0.0006252 0.0001395 0 -0"/>
-                      <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="-0.327633 -0.116748 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                      <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="-0.327633 -0.116748 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                      <body name="left_Feetech_Servo_Motor_v1_3" pos="-0.028802 -0.064625 0" quat="1 0 0 0">
-                        <inertial pos="0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="-0.298831 -0.052123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="-0.298831 -0.052123 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                        <joint name="left_elbow_flex" type="hinge" axis="-1 -0 0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                        <body name="left_Arm-Forearm" pos="0.000375 -0.035 0" quat="1 0 0 0">
-                          <inertial pos="0.0033348511 -0.074201858 -3.0261505e-07" mass="0.2956857" fullinertia="0.0005352 0.0001899 0.0006945 -3.3e-05 0 -0"/>
-                          <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="-0.299206 -0.017123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                          <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="-0.299206 -0.017123 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                          <body name="left_Feetech_Servo_Motor_v1_4" pos="0 -0.126475 0" quat="1 0 0 0">
-                            <inertial pos="0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                            <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="-0.299206 0.109352 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                            <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="-0.299206 0.109352 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                            <joint name="left_wrist_flex" type="hinge" axis="1 0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                            <body name="left_Arm-Wrist" pos="0.000375 -0.035 0" quat="1 0 0 0">
-                              <inertial pos="-0.0017205183 -0.032548326 3.2813481e-05" mass="0.13883267" fullinertia="5.76e-05 0.0001092 0.0001341 -1.05e-05 -0 0"/>
-                              <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="-0.299581 0.144352 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                              <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="-0.299581 0.144352 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                              <body name="left_Motor_5_support_v1_1" pos="-0.000643 -0.0575 0" quat="1 0 0 0">
-                                <inertial pos="-0.013817885 -0.0089087935 -4.2736847e-07" mass="0.015970129" fullinertia="3e-06 7.5e-06 5.1e-06 -0 -0 0"/>
-                                <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="-0.298938 0.201852 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="-0.298938 0.201852 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                                <body name="left_Feetech_Servo_Motor_v1_5" pos="-0.010557 0.005 0" quat="1 0 0 0">
-                                  <inertial pos="-0.00021700953 -0.00013257188 -3.9959954e-07" mass="0.083033647" fullinertia="1.14e-05 1.8e-05 2.13e-05 0 -0 -0"/>
-                                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="-0.288381 0.196852 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="-0.288381 0.196852 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                                  <joint name="left_wrist_roll" type="hinge" axis="0 -1 0" range="-3.14159 3.14159" damping="0.1" frictionloss="0.05"/>
-                                  <body name="left_Gripper-Base" pos="0.0125 -0.01775 0" quat="1 0 0 0">
-                                      <camera name="wrist_left" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="-0.031499969 -0.040175288 -0.017621761" mass="0.41643646" fullinertia="0.0003609 0.0006672 0.0008955 0 -0 -4.53e-05"/>
-                                    <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="-0.300881 0.214602 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                    <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="-0.300881 0.214602 0.019998" quat="1 0 0 0" class="arm_collision"/>
-                                    <body name="left_Feetech_Servo_Motor_v1_6" pos="0 -0.030375 -0.02" quat="1 0 0 0">
-                                      <inertial pos="0.00050743064 -2.7042222e-07 0.022282462" mass="0.083033647" fullinertia="1.8e-05 2.13e-05 1.14e-05 0 -0 0"/>
-                                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="-0.300881 0.244977 0.039998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="-0.300881 0.244977 0.039998" quat="1 0 0 0" class="arm_collision"/>
-                                      <joint name="left_gripper" type="hinge" axis="-1 0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                                      <body name="left_Gripper-Finger" pos="0.000375 0 0.035" quat="1 0 0 0">
-                                        <inertial pos="8.6653417e-07 -0.033519007 0.00076314197" mass="0.13338" fullinertia="6.09e-05 5.16e-05 0.0001026 -0 0 -1.5e-06"/>
-                                        <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="-0.301256 0.244977 0.004998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                        <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="-0.301256 0.244977 0.004998" quat="1 0 0 0" class="arm_collision"/>
+        <body name="left_arm_root" pos="-0.299356 -0.244233 -0.224234" quat="1 0 0 0">
+          <body name="left_base_link" pos="0 0 0" quat="1 0 0 0">
+                <inertial pos="0.29935613 0.27729323 -0.02083152" mass="0.10518938" fullinertia="3.54e-05 6.06e-05 3.87e-05 -0 0 -0"/>
+                <geom type="mesh" mesh="arm_l_base_link" pos="0 0 0" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                <geom type="mesh" mesh="arm_l_base_link" pos="0 0 0" quat="1 0 0 0" class="arm_collision"/>
+                <body name="left_Feetech_Servo_Motor_v1_1" pos="0.299356 0.279233 -0.019623" quat="1 0 0 0">
+                  <inertial pos="1.2917732e-07 -0.022283132 -0.00050770106" mass="0.083033647" fullinertia="2.13e-05 1.14e-05 1.8e-05 -0 0 -0"/>
+                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="-0.299356 -0.279233 0.019623" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="-0.299356 -0.279233 0.019623" quat="1 0 0 0" class="arm_collision"/>
+                  <body name="left_Arm-Base-Shoulder" pos="0 -0.035 0.243857" quat="1 0 0 0">
+                    <inertial pos="0.003472 -0.043446 -0.24424" mass="0.27352861" fullinertia="0.0003255 0.0002415 0.0001893 3.27e-05 -0 -0"/>
+                    <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="-0.299356 -0.244233 -0.224234" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                    <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="-0.299356 -0.244233 -0.224234" quat="1 0 0 0" class="arm_collision"/>
+                    <joint name="left_shoulder_pan" type="hinge" axis="-0 0 1" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                    <body name="left_Feetech_Servo_Motor_v1_2" pos="-0.005407 -0.035 -0.244232" quat="1 0 0 0">
+                      <inertial pos="0.00050720925 -0.022283132 -3.9959974e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
+                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="-0.293949 -0.209233 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="-0.293949 -0.209233 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                    </body>
+                    <body name="left_Motor_2_Support_v1_1" pos="-0.003125 -0.055 -0.217857" quat="1 0 0 0">
+                      <inertial pos="-0.0017115176 -0.026377844 -0.0263754" mass="0.25565172" fullinertia="0.0001839 0.0001605 8.37e-05 -6e-07 0 0"/>
+                      <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="-0.296231 -0.189233 -0.006377" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="-0.296231 -0.189233 -0.006377" quat="1 0 0 0" class="arm_collision"/>
+                    </body>
+                    <body name="left_Arm-Bicep" pos="0.192873 -0.07 -0.244232" quat="1 0 0 0">
+                      <inertial pos="-0.157842 -0.013002 9.4e-05" mass="0.11545697" fullinertia="0.0001575 4.86e-05 0.0001143 -4.5e-06 0 6e-07"/>
+                      <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="-0.492229 -0.174233 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="-0.492229 -0.174233 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                      <joint name="left_shoulder_lift" type="hinge" axis="-1 -0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                      <body name="left_Bicep_Right_v1_1" pos="-0.164596 -0.057485 0" quat="1 0 0 0">
+                        <inertial pos="-0.040202015 -0.021685341 -3.8434918e-07" mass="0.29442461" fullinertia="0.000441 0.0002214 0.0006252 0.0001395 0 -0"/>
+                        <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="-0.327633 -0.116748 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                        <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="-0.327633 -0.116748 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                        <body name="left_Feetech_Servo_Motor_v1_3" pos="-0.028802 -0.064625 0" quat="1 0 0 0">
+                          <inertial pos="0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
+                          <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="-0.298831 -0.052123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                          <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="-0.298831 -0.052123 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                          <body name="left_Arm-Forearm" pos="0.000375 -0.035 0" quat="1 0 0 0">
+                            <inertial pos="0.0033348511 -0.074201858 -3.0261505e-07" mass="0.2956857" fullinertia="0.0005352 0.0001899 0.0006945 -3.3e-05 0 -0"/>
+                            <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="-0.299206 -0.017123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                            <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="-0.299206 -0.017123 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                            <joint name="left_elbow_flex" type="hinge" axis="-1 -0 0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                            <body name="left_Feetech_Servo_Motor_v1_4" pos="0 -0.126475 0" quat="1 0 0 0">
+                              <inertial pos="0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
+                              <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="-0.299206 0.109352 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="-0.299206 0.109352 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                              <body name="left_Arm-Wrist" pos="0.000375 -0.035 0" quat="1 0 0 0">
+                                <inertial pos="-0.0017205183 -0.032548326 3.2813481e-05" mass="0.13883267" fullinertia="5.76e-05 0.0001092 0.0001341 -1.05e-05 -0 0"/>
+                                <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="-0.299581 0.144352 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="-0.299581 0.144352 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                                <joint name="left_wrist_flex" type="hinge" axis="1 0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                                <body name="left_Motor_5_support_v1_1" pos="-0.000643 -0.0575 0" quat="1 0 0 0">
+                                  <inertial pos="-0.013817885 -0.0089087935 -4.2736847e-07" mass="0.015970129" fullinertia="3e-06 7.5e-06 5.1e-06 -0 -0 0"/>
+                                  <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="-0.298938 0.201852 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                  <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="-0.298938 0.201852 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                                  <body name="left_Feetech_Servo_Motor_v1_5" pos="-0.010557 0.005 0" quat="1 0 0 0">
+                                    <inertial pos="-0.00021700953 -0.00013257188 -3.9959954e-07" mass="0.083033647" fullinertia="1.14e-05 1.8e-05 2.13e-05 0 -0 -0"/>
+                                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="-0.288381 0.196852 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="-0.288381 0.196852 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                                    <body name="left_Gripper-Base" pos="0.0125 -0.01775 0" quat="1 0 0 0">
+                                        <camera name="wrist_left" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="-0.031499969 -0.040175288 -0.017621761" mass="0.41643646" fullinertia="0.0003609 0.0006672 0.0008955 0 -0 -4.53e-05"/>
+                                      <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="-0.300881 0.214602 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                      <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="-0.300881 0.214602 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                                      <joint name="left_wrist_roll" type="hinge" axis="0 -1 0" range="-3.141593 3.141593" damping="0.1" frictionloss="0.05"/>
+                                      <body name="left_Feetech_Servo_Motor_v1_6" pos="0 -0.030375 -0.02" quat="1 0 0 0">
+                                        <inertial pos="0.00050743064 -2.7042222e-07 0.022282462" mass="0.083033647" fullinertia="1.8e-05 2.13e-05 1.14e-05 0 -0 0"/>
+                                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="-0.300881 0.244977 0.039998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="-0.300881 0.244977 0.039998" quat="1 0 0 0" class="arm_collision"/>
+                                        <body name="left_Gripper-Finger" pos="0.000375 0 0.035" quat="1 0 0 0">
+                                          <inertial pos="8.6653417e-07 -0.033519007 0.00076314197" mass="0.13338" fullinertia="6.09e-05 5.16e-05 0.0001026 -0 0 -1.5e-06"/>
+                                          <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="-0.301256 0.244977 0.004998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                          <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="-0.301256 0.244977 0.004998" quat="1 0 0 0" class="arm_collision"/>
+                                          <joint name="left_gripper" type="hinge" axis="-1 0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                                        </body>
                                       </body>
-                                    </body>
-                                    <body name="left_Motor_6_cap_v2_1" pos="-0.012 -0.013 0.015" quat="1 0 0 0">
-                                      <inertial pos="0.011838259 -0.016888138 0.0032522491" mass="0.037895306" fullinertia="1.32e-05 8.7e-06 1.35e-05 -0 -0 -3.3e-06"/>
-                                      <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="-0.288881 0.227602 0.004998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                      <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="-0.288881 0.227602 0.004998" quat="1 0 0 0" class="arm_collision"/>
+                                      <body name="left_Motor_6_cap_v2_1" pos="-0.012 -0.013 0.015" quat="1 0 0 0">
+                                        <inertial pos="0.011838259 -0.016888138 0.0032522491" mass="0.037895306" fullinertia="1.32e-05 8.7e-06 1.35e-05 -0 -0 -3.3e-06"/>
+                                        <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="-0.288881 0.227602 0.004998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                        <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="-0.288881 0.227602 0.004998" quat="1 0 0 0" class="arm_collision"/>
+                                      </body>
                                     </body>
                                   </body>
                                 </body>
                               </body>
                             </body>
-                          </body>
-                          <body name="left_Motor_4_support_v1_1" pos="-0.020096 -0.146475 0.015621" quat="1 0 0 0">
-                            <inertial pos="0.02029944 -0.0012891962 -0.0156214" mass="0.037945537" fullinertia="1.83e-05 1.11e-05 1.5e-05 0 -0 0"/>
-                            <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="-0.27911 0.129352 0.004377" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                            <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="-0.27911 0.129352 0.004377" quat="1 0 0 0" class="arm_collision"/>
+                            <body name="left_Motor_4_support_v1_1" pos="-0.020096 -0.146475 0.015621" quat="1 0 0 0">
+                              <inertial pos="0.02029944 -0.0012891962 -0.0156214" mass="0.037945537" fullinertia="1.83e-05 1.11e-05 1.5e-05 0 -0 0"/>
+                              <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="-0.27911 0.129352 0.004377" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="-0.27911 0.129352 0.004377" quat="1 0 0 0" class="arm_collision"/>
+                            </body>
                           </body>
                         </body>
-                      </body>
-                      <body name="left_Motor_3_support_v1_1" pos="-0.028236 -0.059625 0" quat="1 0 0 0">
-                        <inertial pos="0.0004860135 -0.031517928 -4.0234326e-07" mass="0.028210489" fullinertia="1.26e-05 8.1e-06 1.17e-05 0 0 -0"/>
-                        <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="-0.299397 -0.057123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                        <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="-0.299397 -0.057123 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                        <body name="left_Motor_3_support_v1_1" pos="-0.028236 -0.059625 0" quat="1 0 0 0">
+                          <inertial pos="0.0004860135 -0.031517928 -4.0234326e-07" mass="0.028210489" fullinertia="1.26e-05 8.1e-06 1.17e-05 0 0 -0"/>
+                          <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="-0.299397 -0.057123 0.019998" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                          <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="-0.299397 -0.057123 0.019998" quat="1 0 0 0" class="arm_collision"/>
+                        </body>
                       </body>
                     </body>
                   </body>
                 </body>
+                <body name="left_Motor_1_Support_v1_1" pos="0.299356 0.269233 -0.010123" quat="1 0 0 0">
+                  <inertial pos="1.0336428e-07 -0.027148447 -0.010172956" mass="0.15464531" fullinertia="5.97e-05 7.02e-05 8.97e-05 0 -0 3e-07"/>
+                  <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="-0.299356 -0.269233 0.010123" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                  <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="-0.299356 -0.269233 0.010123" quat="1 0 0 0" class="arm_collision"/>
+                </body>
               </body>
-              <body name="left_Motor_1_Support_v1_1" pos="0.299356 0.269233 -0.010123" quat="1 0 0 0">
-                <inertial pos="1.0336428e-07 -0.027148447 -0.010172956" mass="0.15464531" fullinertia="5.97e-05 7.02e-05 8.97e-05 0 -0 3e-07"/>
-                <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="-0.299356 -0.269233 0.010123" quat="1 0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="-0.299356 -0.269233 0.010123" quat="1 0 0 0" class="arm_collision"/>
-              </body>
-            </body>
         </body>
         </body>
       </body>
       <body name="arm_mount_right" pos="0.13 0 0.66">
         <body name="arm_right" pos="0 0 0" quat="0.7071068 0 0 0.7071068">
-        <body name="right_arm_root" pos="0.29935613 -0.27923323 0.019623148" quat="-1 -0 0 0">
-            <body name="right_base_link" pos="-0 0 0" quat="-1 -0 0 0">
-              <inertial pos="-0.29935613 0.27729323 -0.02083152" mass="0.10518938" fullinertia="3.54e-05 6.06e-05 3.87e-05 -0 0 -0"/>
-              <geom type="mesh" mesh="arm_l_base_link" pos="-0 0 0" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-              <geom type="mesh" mesh="arm_l_base_link" pos="-0 0 0" quat="-1 -0 0 0" class="arm_collision"/>
-              <body name="right_Feetech_Servo_Motor_v1_1" pos="-0.299356 0.279233 -0.019623" quat="-1 -0 0 0">
-                <inertial pos="-1.2917732e-07 -0.022283132 -0.00050770106" mass="0.083033647" fullinertia="2.13e-05 1.14e-05 1.8e-05 -0 0 -0"/>
-                <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="0.299356 -0.279233 0.019623" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1" pos="0.299356 -0.279233 0.019623" quat="-1 -0 0 0" class="arm_collision"/>
-                <joint name="right_shoulder_pan" type="hinge" axis="0 0 1" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                <body name="right_Arm-Base-Shoulder" pos="-0 -0.035 0.243857" quat="-1 -0 0 0">
-                  <inertial pos="-0.003472 -0.043446 -0.24424" mass="0.27352861" fullinertia="0.0003255 0.0002415 0.0001893 3.27e-05 -0 -0"/>
-                  <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="0.299356 -0.244233 -0.224234" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                  <geom type="mesh" mesh="arm_l_Shoulder_v1_1" pos="0.299356 -0.244233 -0.224234" quat="-1 -0 0 0" class="arm_collision"/>
-                  <body name="right_Feetech_Servo_Motor_v1_2" pos="0.005407 -0.035 -0.244232" quat="-1 -0 0 0">
-                    <inertial pos="-0.00050720925 -0.022283132 -3.9959974e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="0.293949 -0.209233 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2" pos="0.293949 -0.209233 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                  </body>
-                  <body name="right_Motor_2_Support_v1_1" pos="0.003125 -0.055 -0.217857" quat="-1 -0 0 0">
-                    <inertial pos="0.0017115176 -0.026377844 -0.0263754" mass="0.25565172" fullinertia="0.0001839 0.0001605 8.37e-05 -6e-07 0 0"/>
-                    <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="0.296231 -0.189233 -0.006377" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1" pos="0.296231 -0.189233 -0.006377" quat="-1 -0 0 0" class="arm_collision"/>
-                  </body>
-                  <joint name="right_shoulder_lift" type="hinge" axis="1 -0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                  <body name="right_Arm-Bicep" pos="-0.192873 -0.07 -0.244232" quat="-1 -0 0 0">
-                    <inertial pos="0.157842 -0.013002 9.4e-05" mass="0.11545697" fullinertia="0.0001575 4.86e-05 0.0001143 -4.5e-06 0 6e-07"/>
-                    <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="0.492229 -0.174233 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                    <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1" pos="0.492229 -0.174233 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                    <body name="right_Bicep_Right_v1_1" pos="0.164596 -0.057485 0" quat="-1 -0 0 0">
-                      <inertial pos="0.040202015 -0.021685341 -3.8434918e-07" mass="0.29442461" fullinertia="0.000441 0.0002214 0.0006252 0.0001395 0 -0"/>
-                      <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="0.327633 -0.116748 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                      <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1" pos="0.327633 -0.116748 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                      <body name="right_Feetech_Servo_Motor_v1_3" pos="0.028802 -0.064625 0" quat="-1 -0 0 0">
-                        <inertial pos="-0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="0.298831 -0.052123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3" pos="0.298831 -0.052123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                        <joint name="right_elbow_flex" type="hinge" axis="1 -0 0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                        <body name="right_Arm-Forearm" pos="-0.000375 -0.035 0" quat="-1 -0 0 0">
-                          <inertial pos="-0.0033348511 -0.074201858 -3.0261505e-07" mass="0.2956857" fullinertia="0.0005352 0.0001899 0.0006945 -3.3e-05 0 -0"/>
-                          <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="0.299206 -0.017123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                          <geom type="mesh" mesh="arm_l_Forearm_v1_1" pos="0.299206 -0.017123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                          <body name="right_Feetech_Servo_Motor_v1_4" pos="-0 -0.126475 0" quat="-1 -0 0 0">
-                            <inertial pos="-0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 0 -0 -0"/>
-                            <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="0.299206 0.109352 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                            <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4" pos="0.299206 0.109352 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                            <joint name="right_wrist_flex" type="hinge" axis="-1 0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                            <body name="right_Arm-Wrist" pos="-0.000375 -0.035 0" quat="-1 -0 0 0">
-                              <inertial pos="0.0017205183 -0.032548326 3.2813481e-05" mass="0.13883267" fullinertia="5.76e-05 0.0001092 0.0001341 -1.05e-05 -0 0"/>
-                              <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="0.299581 0.144352 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                              <geom type="mesh" mesh="arm_l_Wrist_v1_1" pos="0.299581 0.144352 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                              <body name="right_Motor_5_support_v1_1" pos="0.000643 -0.0575 0" quat="-1 -0 0 0">
-                                <inertial pos="0.013817885 -0.0089087935 -4.2736847e-07" mass="0.015970129" fullinertia="3e-06 7.5e-06 5.1e-06 -0 -0 0"/>
-                                <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="0.298938 0.201852 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1" pos="0.298938 0.201852 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                                <body name="right_Feetech_Servo_Motor_v1_5" pos="0.010557 0.005 0" quat="-1 -0 0 0">
-                                  <inertial pos="0.00021700953 -0.00013257188 -3.9959954e-07" mass="0.083033647" fullinertia="1.14e-05 1.8e-05 2.13e-05 0 -0 -0"/>
-                                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="0.288381 0.196852 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5" pos="0.288381 0.196852 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                                  <joint name="right_wrist_roll" type="hinge" axis="-0 -1 0" range="-3.14159 3.14159" damping="0.1" frictionloss="0.05"/>
-                                  <body name="right_Gripper-Base" pos="-0.0125 -0.01775 0" quat="-1 -0 0 0">
-                                      <camera name="wrist_right" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="0.031499969 -0.040175288 -0.017621761" mass="0.41643646" fullinertia="0.0003609 0.0006672 0.0008955 0 -0 -4.53e-05"/>
-                                    <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="0.300881 0.214602 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                    <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1" pos="0.300881 0.214602 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
-                                    <body name="right_Feetech_Servo_Motor_v1_6" pos="-0 -0.030375 -0.02" quat="-1 -0 0 0">
-                                      <inertial pos="-0.00050743064 -2.7042222e-07 0.022282462" mass="0.083033647" fullinertia="1.8e-05 2.13e-05 1.14e-05 0 -0 0"/>
-                                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="0.300881 0.244977 0.039998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6" pos="0.300881 0.244977 0.039998" quat="-1 -0 0 0" class="arm_collision"/>
-                                      <joint name="right_gripper" type="hinge" axis="1 0 -0" range="-1.5708 1.5708" damping="0.1" frictionloss="0.05"/>
-                                      <body name="right_Gripper-Finger" pos="-0.000375 0 0.035" quat="-1 -0 0 0">
-                                        <inertial pos="-8.6653417e-07 -0.033519007 0.00076314197" mass="0.13338" fullinertia="6.09e-05 5.16e-05 0.0001026 -0 0 -1.5e-06"/>
-                                        <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="0.301256 0.244977 0.004998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                        <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1" pos="0.301256 0.244977 0.004998" quat="-1 -0 0 0" class="arm_collision"/>
+        <body name="right_arm_root" pos="0.299356 -0.244233 -0.224234" quat="-1 -0 0 0">
+          <body name="right_base_link" pos="-0 0 0" quat="-1 -0 0 0">
+                <inertial pos="-0.29935613 0.27729323 -0.02083152" mass="0.10518938" fullinertia="3.54e-05 6.06e-05 3.87e-05 0 -0 -0"/>
+                <geom type="mesh" mesh="arm_l_base_link_mirror_x" pos="-0 0 0" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                <geom type="mesh" mesh="arm_l_base_link_mirror_x" pos="-0 0 0" quat="-1 -0 0 0" class="arm_collision"/>
+                <body name="right_Feetech_Servo_Motor_v1_1" pos="-0.299356 0.279233 -0.019623" quat="-1 -0 0 0">
+                  <inertial pos="-1.2917732e-07 -0.022283132 -0.00050770106" mass="0.083033647" fullinertia="2.13e-05 1.14e-05 1.8e-05 0 -0 -0"/>
+                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1_mirror_x" pos="0.299356 -0.279233 0.019623" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                  <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_1_mirror_x" pos="0.299356 -0.279233 0.019623" quat="-1 -0 0 0" class="arm_collision"/>
+                  <body name="right_Arm-Base-Shoulder" pos="-0 -0.035 0.243857" quat="-1 -0 0 0">
+                    <inertial pos="-0.003472 -0.043446 -0.24424" mass="0.27352861" fullinertia="0.0003255 0.0002415 0.0001893 -3.27e-05 0 -0"/>
+                    <geom type="mesh" mesh="arm_l_Shoulder_v1_1_mirror_x" pos="0.299356 -0.244233 -0.224234" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                    <geom type="mesh" mesh="arm_l_Shoulder_v1_1_mirror_x" pos="0.299356 -0.244233 -0.224234" quat="-1 -0 0 0" class="arm_collision"/>
+                    <joint name="right_shoulder_pan" type="hinge" axis="0 0 1" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                    <body name="right_Feetech_Servo_Motor_v1_2" pos="0.005407 -0.035 -0.244232" quat="-1 -0 0 0">
+                      <inertial pos="-0.00050720925 -0.022283132 -3.9959974e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 -0 0 -0"/>
+                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2_mirror_x" pos="0.293949 -0.209233 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_2_mirror_x" pos="0.293949 -0.209233 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                    </body>
+                    <body name="right_Motor_2_Support_v1_1" pos="0.003125 -0.055 -0.217857" quat="-1 -0 0 0">
+                      <inertial pos="0.0017115176 -0.026377844 -0.0263754" mass="0.25565172" fullinertia="0.0001839 0.0001605 8.37e-05 6e-07 -0 0"/>
+                      <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1_mirror_x" pos="0.296231 -0.189233 -0.006377" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Motor_2_Support_v1_1_mirror_x" pos="0.296231 -0.189233 -0.006377" quat="-1 -0 0 0" class="arm_collision"/>
+                    </body>
+                    <body name="right_Arm-Bicep" pos="-0.192873 -0.07 -0.244232" quat="-1 -0 0 0">
+                      <inertial pos="0.157842 -0.013002 9.4e-05" mass="0.11545697" fullinertia="0.0001575 4.86e-05 0.0001143 4.5e-06 -0 6e-07"/>
+                      <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1_mirror_x" pos="0.492229 -0.174233 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                      <geom type="mesh" mesh="arm_l_Bicep_Left_v1_1_mirror_x" pos="0.492229 -0.174233 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                      <joint name="right_shoulder_lift" type="hinge" axis="1 -0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                      <body name="right_Bicep_Right_v1_1" pos="0.164596 -0.057485 0" quat="-1 -0 0 0">
+                        <inertial pos="0.040202015 -0.021685341 -3.8434918e-07" mass="0.29442461" fullinertia="0.000441 0.0002214 0.0006252 -0.0001395 -0 -0"/>
+                        <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1_mirror_x" pos="0.327633 -0.116748 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                        <geom type="mesh" mesh="arm_l_Bicep_Right_v1_1_mirror_x" pos="0.327633 -0.116748 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                        <body name="right_Feetech_Servo_Motor_v1_3" pos="0.028802 -0.064625 0" quat="-1 -0 0 0">
+                          <inertial pos="-0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 -0 0 -0"/>
+                          <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3_mirror_x" pos="0.298831 -0.052123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                          <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_3_mirror_x" pos="0.298831 -0.052123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                          <body name="right_Arm-Forearm" pos="-0.000375 -0.035 0" quat="-1 -0 0 0">
+                            <inertial pos="-0.0033348511 -0.074201858 -3.0261505e-07" mass="0.2956857" fullinertia="0.0005352 0.0001899 0.0006945 3.3e-05 -0 -0"/>
+                            <geom type="mesh" mesh="arm_l_Forearm_v1_1_mirror_x" pos="0.299206 -0.017123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                            <geom type="mesh" mesh="arm_l_Forearm_v1_1_mirror_x" pos="0.299206 -0.017123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                            <joint name="right_elbow_flex" type="hinge" axis="1 -0 0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                            <body name="right_Feetech_Servo_Motor_v1_4" pos="-0 -0.126475 0" quat="-1 -0 0 0">
+                              <inertial pos="-0.00050743064 -0.022283132 -3.9959954e-07" mass="0.083033647" fullinertia="1.8e-05 1.14e-05 2.13e-05 -0 0 -0"/>
+                              <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4_mirror_x" pos="0.299206 0.109352 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_4_mirror_x" pos="0.299206 0.109352 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                              <body name="right_Arm-Wrist" pos="-0.000375 -0.035 0" quat="-1 -0 0 0">
+                                <inertial pos="0.0017205183 -0.032548326 3.2813481e-05" mass="0.13883267" fullinertia="5.76e-05 0.0001092 0.0001341 1.05e-05 0 0"/>
+                                <geom type="mesh" mesh="arm_l_Wrist_v1_1_mirror_x" pos="0.299581 0.144352 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                <geom type="mesh" mesh="arm_l_Wrist_v1_1_mirror_x" pos="0.299581 0.144352 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                                <joint name="right_wrist_flex" type="hinge" axis="-1 0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                                <body name="right_Motor_5_support_v1_1" pos="0.000643 -0.0575 0" quat="-1 -0 0 0">
+                                  <inertial pos="0.013817885 -0.0089087935 -4.2736847e-07" mass="0.015970129" fullinertia="3e-06 7.5e-06 5.1e-06 0 0 0"/>
+                                  <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1_mirror_x" pos="0.298938 0.201852 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                  <geom type="mesh" mesh="arm_l_Motor_5_support_v1_1_mirror_x" pos="0.298938 0.201852 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                                  <body name="right_Feetech_Servo_Motor_v1_5" pos="0.010557 0.005 0" quat="-1 -0 0 0">
+                                    <inertial pos="0.00021700953 -0.00013257188 -3.9959954e-07" mass="0.083033647" fullinertia="1.14e-05 1.8e-05 2.13e-05 -0 0 -0"/>
+                                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5_mirror_x" pos="0.288381 0.196852 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                    <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_5_mirror_x" pos="0.288381 0.196852 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                                    <body name="right_Gripper-Base" pos="-0.0125 -0.01775 0" quat="-1 -0 0 0">
+                                        <camera name="wrist_right" pos="0 0.03 0.02" xyaxes="1 0 0 0 0 -1" fovy="70"/><inertial pos="0.031499969 -0.040175288 -0.017621761" mass="0.41643646" fullinertia="0.0003609 0.0006672 0.0008955 -0 0 -4.53e-05"/>
+                                      <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1_mirror_x" pos="0.300881 0.214602 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                      <geom type="mesh" mesh="arm_l_Gripper_Base_v1_1_mirror_x" pos="0.300881 0.214602 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                                      <joint name="right_wrist_roll" type="hinge" axis="-0 -1 0" range="-3.141593 3.141593" damping="0.1" frictionloss="0.05"/>
+                                      <body name="right_Feetech_Servo_Motor_v1_6" pos="-0 -0.030375 -0.02" quat="-1 -0 0 0">
+                                        <inertial pos="-0.00050743064 -2.7042222e-07 0.022282462" mass="0.083033647" fullinertia="1.8e-05 2.13e-05 1.14e-05 -0 0 0"/>
+                                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6_mirror_x" pos="0.300881 0.244977 0.039998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                        <geom type="mesh" mesh="arm_l_Feetech_Servo_Motor_v1_6_mirror_x" pos="0.300881 0.244977 0.039998" quat="-1 -0 0 0" class="arm_collision"/>
+                                        <body name="right_Gripper-Finger" pos="-0.000375 0 0.035" quat="-1 -0 0 0">
+                                          <inertial pos="-8.6653417e-07 -0.033519007 0.00076314197" mass="0.13338" fullinertia="6.09e-05 5.16e-05 0.0001026 0 -0 -1.5e-06"/>
+                                          <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1_mirror_x" pos="0.301256 0.244977 0.004998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                          <geom type="mesh" mesh="arm_l_Gripper_Finger_v1_1_mirror_x" pos="0.301256 0.244977 0.004998" quat="-1 -0 0 0" class="arm_collision"/>
+                                          <joint name="right_gripper" type="hinge" axis="1 0 -0" range="-1.570796 1.570796" damping="0.1" frictionloss="0.05"/>
+                                        </body>
                                       </body>
-                                    </body>
-                                    <body name="right_Motor_6_cap_v2_1" pos="0.012 -0.013 0.015" quat="-1 -0 0 0">
-                                      <inertial pos="-0.011838259 -0.016888138 0.0032522491" mass="0.037895306" fullinertia="1.32e-05 8.7e-06 1.35e-05 -0 -0 -3.3e-06"/>
-                                      <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="0.288881 0.227602 0.004998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                                      <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1" pos="0.288881 0.227602 0.004998" quat="-1 -0 0 0" class="arm_collision"/>
+                                      <body name="right_Motor_6_cap_v2_1" pos="0.012 -0.013 0.015" quat="-1 -0 0 0">
+                                        <inertial pos="-0.011838259 -0.016888138 0.0032522491" mass="0.037895306" fullinertia="1.32e-05 8.7e-06 1.35e-05 0 0 -3.3e-06"/>
+                                        <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1_mirror_x" pos="0.288881 0.227602 0.004998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                                        <geom type="mesh" mesh="arm_l_Motor_6_cap_v2_1_mirror_x" pos="0.288881 0.227602 0.004998" quat="-1 -0 0 0" class="arm_collision"/>
+                                      </body>
                                     </body>
                                   </body>
                                 </body>
                               </body>
                             </body>
-                          </body>
-                          <body name="right_Motor_4_support_v1_1" pos="0.020096 -0.146475 0.015621" quat="-1 -0 0 0">
-                            <inertial pos="-0.02029944 -0.0012891962 -0.0156214" mass="0.037945537" fullinertia="1.83e-05 1.11e-05 1.5e-05 0 -0 0"/>
-                            <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="0.27911 0.129352 0.004377" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                            <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1" pos="0.27911 0.129352 0.004377" quat="-1 -0 0 0" class="arm_collision"/>
+                            <body name="right_Motor_4_support_v1_1" pos="0.020096 -0.146475 0.015621" quat="-1 -0 0 0">
+                              <inertial pos="-0.02029944 -0.0012891962 -0.0156214" mass="0.037945537" fullinertia="1.83e-05 1.11e-05 1.5e-05 -0 0 0"/>
+                              <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1_mirror_x" pos="0.27911 0.129352 0.004377" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                              <geom type="mesh" mesh="arm_l_Motor_4_support_v1_1_mirror_x" pos="0.27911 0.129352 0.004377" quat="-1 -0 0 0" class="arm_collision"/>
+                            </body>
                           </body>
                         </body>
-                      </body>
-                      <body name="right_Motor_3_support_v1_1" pos="0.028236 -0.059625 0" quat="-1 -0 0 0">
-                        <inertial pos="-0.0004860135 -0.031517928 -4.0234326e-07" mass="0.028210489" fullinertia="1.26e-05 8.1e-06 1.17e-05 0 0 -0"/>
-                        <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="0.299397 -0.057123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                        <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1" pos="0.299397 -0.057123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                        <body name="right_Motor_3_support_v1_1" pos="0.028236 -0.059625 0" quat="-1 -0 0 0">
+                          <inertial pos="-0.0004860135 -0.031517928 -4.0234326e-07" mass="0.028210489" fullinertia="1.26e-05 8.1e-06 1.17e-05 -0 -0 -0"/>
+                          <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1_mirror_x" pos="0.299397 -0.057123 0.019998" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                          <geom type="mesh" mesh="arm_l_Motor_3_support_v1_1_mirror_x" pos="0.299397 -0.057123 0.019998" quat="-1 -0 0 0" class="arm_collision"/>
+                        </body>
                       </body>
                     </body>
                   </body>
                 </body>
+                <body name="right_Motor_1_Support_v1_1" pos="-0.299356 0.269233 -0.010123" quat="-1 -0 0 0">
+                  <inertial pos="-1.0336428e-07 -0.027148447 -0.010172956" mass="0.15464531" fullinertia="5.97e-05 7.02e-05 8.97e-05 -0 0 3e-07"/>
+                  <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1_mirror_x" pos="0.299356 -0.269233 0.010123" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
+                  <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1_mirror_x" pos="0.299356 -0.269233 0.010123" quat="-1 -0 0 0" class="arm_collision"/>
+                </body>
               </body>
-              <body name="right_Motor_1_Support_v1_1" pos="-0.299356 0.269233 -0.010123" quat="-1 -0 0 0">
-                <inertial pos="-1.0336428e-07 -0.027148447 -0.010172956" mass="0.15464531" fullinertia="5.97e-05 7.02e-05 8.97e-05 0 -0 3e-07"/>
-                <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="0.299356 -0.269233 0.010123" quat="-1 -0 0 0" material="plastic_white" group="2" contype="0" conaffinity="0"/>
-                <geom type="mesh" mesh="arm_l_Motor_1_Support_v1_1" pos="0.299356 -0.269233 0.010123" quat="-1 -0 0 0" class="arm_collision"/>
-              </body>
-            </body>
         </body>
         </body>
       </body>
@@ -435,6 +456,6 @@
   </actuator>
 
   <keyframe>
-    <key name="sourccey_home" qpos="0 0 0 0.05 0.6 -0.6 1 0 0 0.8 -0.6 0.6 -1 -0 -0 -0.8" ctrl="0 0 0 0.05 0.6 -0.6 1 0 0 0.8 -0.6 0.6 -1 -0 -0 -0.8"/>
+    <key name="sourccey_home" qpos="0 0 0 0.05 0.6 0.6 1 0 0 0.8 -0.6 -0.6 -1 -0 -0 -0.8" ctrl="0 0 0 0.05 0.6 0.6 1 0 0 0.8 -0.6 -0.6 -1 -0 -0 -0.8"/>
   </keyframe>
 </mujoco>

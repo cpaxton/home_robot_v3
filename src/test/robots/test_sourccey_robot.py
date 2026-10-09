@@ -18,6 +18,7 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+import pytest
 
 from emet.robots.sourccey import (
     SOURCCEY_CAMERA_NAMES,
@@ -124,13 +125,18 @@ def test_sourccey_left_right_mirror_symmetry():
         assert abs(float(l[2]) - float(r[2])) < 1e-3, f"{link} not mirror-symmetric in z"
 
 
-def test_sourccey_arm_links_connected():
+@pytest.mark.parametrize("arm_angle", [None, -.35, .35])
+def test_sourccey_arm_links_connected(arm_angle):
     """Consecutive arm link meshes must overlap (no visible gaps at the joints)."""
     from scipy.spatial import cKDTree
 
     spec, model = _load()
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
+    if arm_angle is not None:
+        for joint_name in SOURCCEY_JOINT_NAMES:
+            if joint_name.startswith(("left_", "right_")):
+                data.qpos[model.joint(joint_name).qposadr[0]] = arm_angle
     mujoco.mj_forward(model, data)
 
     def mesh_verts(body):
@@ -146,6 +152,7 @@ def test_sourccey_arm_links_connected():
         return np.concatenate(out) if out else np.zeros((0, 3))
 
     chain = [
+        "right_Feetech_Servo_Motor_v1_1",
         "right_Arm-Base-Shoulder",
         "right_Feetech_Servo_Motor_v1_2",
         "right_Arm-Bicep",
@@ -339,3 +346,28 @@ def test_sourccey_merged_table_home_keeps_object_freejoints():
     pan_after = float(data.qpos[pan_adr])
     assert abs(pan_after - pan_before) > 0.2
     assert abs(pan_after - 0.6) < 0.05
+
+
+def test_mirrored_arm_meshes_follow_mirrored_link_frames():
+    """Reflect CAD vertices too: mirrored origins alone create a detached arm."""
+    from scipy.spatial import cKDTree
+
+    _, model = _load()
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+
+    def vertices(body_name):
+        body = model.body(body_name).id
+        gid = next(g for g in range(model.ngeom) if model.geom_bodyid[g] == body
+                   and model.geom_type[g] == mujoco.mjtGeom.mjGEOM_MESH and model.geom_group[g] == 2)
+        mesh = model.geom_dataid[gid]
+        start, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+        return model.mesh_vert[start:start + count] @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+
+    for link in ("Arm-Base-Shoulder", "Arm-Bicep", "Arm-Forearm", "Gripper-Finger"):
+        left = vertices("left_" + link)
+        left[:, 0] *= -1
+        right = vertices("right_" + link)
+        distances, _ = cKDTree(left).query(right)
+        assert distances.max() < 1e-5, (link, distances.max())
