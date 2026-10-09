@@ -844,3 +844,18 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [ ] **Real-robot manip** (Stretch / Mars): no GT `sim_set_body_pose` — keep visual-servo / AnyGrasp; add a no-LLM tool-sequence test that asserts we **do not** enter teleport when `is_simulation` is false.
 - [x] **`aim_arm_at` → `take_ee_picture` chain**: EE capture gated on successful aim grant (consumed once). Real-robot dogfood after pick failures still open (wrist stream / Mars).
 - [ ] **Paper figures**: keep regenerating `manip_figures` / chase-cam MP4s from scripted TAMP on the scene used in the paper; check in paths under `~/runs/emet/` only (not repo blobs).
+## Extracted shared-agent review stack (2026-10-09)
+
+- [ ] Accept #180 → #181 → #182 → #184 on their actual extracted revisions;
+      see `docs/TESTING.md` and `docs/plans/shared_stack_inventory.json`.
+      Offline checks are not live acceptance. Keep providers opt-in.
+- [ ] Complete serial paired main/candidate EQA and small OVMM; restore at least
+      10 GB disk headroom with authorized cleanup before new simulations.
+- [ ] Track existing main failure `test_voxel_sim_upgrades_full_frame_absent_to_present`
+      separately; do not relax grounding just to turn it green.
+- [ ] Review archived partial CHAT dispatch / arrival hooks separately, coordinating
+      #176; no claim that this extraction delivers full CHAT pick/place.
+- [ ] Reconcile wheel/robot physics and pregrasp residuals in #169 with the separate
+      manipulation/TAMP owners (#177/#178/#179). Preserve source revisions and results.
+- [ ] Habitat OVMM, Sourccey/Galaxea and real robots remain follow-ups; no full sweep
+      required for the current EQA/small-room review gates.
