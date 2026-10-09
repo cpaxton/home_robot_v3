@@ -78,6 +78,7 @@ def response(
                 "ambiguous_object",
                 "ambiguous_receptacle",
                 "metadata_unavailable",
+                "base_pose_validation_unavailable",
                 "object_not_found",
                 "receptacle_not_found",
             }
@@ -154,6 +155,10 @@ def failure_code(message: str) -> str:
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
+        for code in ("placement_stale_observation", "placement_missing_joint_state",
+                     "placement_nonfinite_joint_state", "placement_path_invalidated"):
+            if part == code or part.endswith("_" + code):
+                return code
         if part in {"joint_bounds", "collision", "stale_observation"}:
             return part
         for suffix, code in (
@@ -178,6 +183,7 @@ def failure_code(message: str) -> str:
         "server_identity_missing",
         "approach_changed_replan",
         "approach_validation_failed",
+        "base_pose_validation_unavailable",
         "approach_collision",
         "no_live_scene",
         "object_not_found",
