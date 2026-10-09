@@ -98,10 +98,7 @@ class AgenticEQAExecutor:
             sess = object.__getattribute__(self, "session")
         except AttributeError as exc:
             raise AttributeError(name) from exc
-        try:
-            return getattr(sess, name)
-        except AttributeError as exc:
-            raise AttributeError(name) from exc
+        return getattr(sess, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "session":

@@ -4,6 +4,85 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ## Run from this repo
 
+### Extracted shared-agent stack (October 2026)
+
+#### Startup/telemetry repairs and bottom-up review (2026-10-09)
+
+- Confirmed the extracted EQA crash with a serial one-frame comparison: old
+  `2d8b30b1` imported MuJoCo through A* → `base_goal_rank` → `voxel_arm_collision`
+  and aborted with OpenGL `InvalidValue` (exit 134). Repair `f8d8666a` separates
+  shared grid coordinates from arm FK; `12e4c426` rendered a 480×640 Habitat frame
+  successfully under the same launch environment. Job `20261009_154414_7eb1e7`.
+  The repair is now included in #182 as `1bdb2949`, not only the acceptance tip.
+- Stretch omitted body orientation and actuator targets from its state schema.
+  Repair `12e4c426` samples them in the physics process and carries named controls
+  through IPC/ZMQ. Unknown legacy fields remain unknown. The stationary live
+  retest receives both fields. Route job `20261009_154446_722088` completed all ten
+  waypoints with complete telemetry in all 11 frames: worst receipt errors 0.009731 m
+  and 0.029891 rad (limits 0.02 m / 0.03 rad); minimum body-up dot world-Z 0.999994.
+  This is one diagnostic repeat, not the configured five-repeat navigation gate.
+- Repaired-stack offline result: **732 passed, one existing main failure** (the
+  missing-RGB voxel-upgrade test described below). Focused repair pack: 39 passed.
+- #176 is the independent human-review candidate (three focused restoration tests
+  rerun); #180 has 102 focused grounding/find tests passing. #181 remains opt-in;
+  #182 needs repaired-head navigation/EQA evidence; #184/#185 depend on those gates.
+  No PR has been merged by this review pass. Do not merge #183 wholesale or absorb
+  #169's deferred wheel/pregrasp work into these repairs. The TAMP stack remains
+  separately owned (#177 → #178 → #179 → #186 → #187).
+- Main `a9a5f1d1` EQA-12 scored 8/12. The original extracted run produced no metrics
+  (12 native startup crashes), not 0/12 accuracy. Earlier `eb1e0890`/`17d96365`
+  paired EQA runs both scored 6/12 with identical correctness. A one-frame EGL pass
+  is not an EQA accuracy gate; a repaired paired rerun is still required.
+
+Review order: #180 current-view grounding → #181 opt-in providers → #182 measured
+navigation → #184 bounded inspection/recovery → acceptance tooling. #176 remains
+an independent conversation-state fix. Do not merge the legacy #167/#168 containers
+wholesale. The [frozen source inventory](plans/shared_stack_inventory.json) records
+every changed source file and commit, including partial extractions and explicitly
+deferred work. Blob equality is accounting, not semantic or performance acceptance.
+
+Run `scripts/run_extracted_acceptance.sh eqa` or `room` **only through**
+`emet jobs run --cpu-safe --gpu-exclusive --need-mib 12000`. Set `SOURCE_SHA` to the
+full committed checkout SHA, `OUT_DIR` to a fresh artifact directory, and `EMET_PY`
+and `HABITAT_BIN` to the installed environments when using a frozen worktree.
+The driver rejects dirty/untracked source, records inputs, and never enables nav
+teleports. Do not bypass the runner's 10-GB free-space gate or launch hardware.
+
+The EQA phase uses the existing seeded 12-question development loop; the room phase
+uses S0, RoboCasa and Molmo find diagnostics, not full manipulation acceptance.
+`DEV_SEED` and `FIND_EPISODES` select matched repeats/subsets. The room preset is
+opt-in, uses perfect simulator depth, and keeps cheap YOLOE/SAM2 proposals separate
+from final VLM verification. It is **not** real-perception evidence or a new default.
+
+Acceptance order: offline contracts and minimal TAMP regression → measured
+stationary/known-route smoke on the actual robot/controller → paired main/candidate
+EQA and S0 → RoboCasa/Molmo. Keep model, scene, seed, depth, budgets and physics
+identical within each pair; if testing the provider preset, apply it to both arms.
+Main cannot be assumed to support candidate-only configuration. Diagnose tool/control
+failures separately before attributing differences to models or memory.
+
+Retain per-episode correctness, object/receptacle results, measured pose and head
+feedback, floor recovery events, images/traces, and runtime. Exit zero means the run
+completed, **not** that tasks passed. Missing metrics/native crashes are infrastructure
+failures. A 12-question run is a regression signal, not a paper-quality improvement
+claim. Source-branch results do not validate extracted heads. Room pilots at
+`eb1e0890` and `17d96365` failed both find phases in S0 and RoboCasa; no room acceptance
+is claimed. Full TAMP, manipulation/physics changes, and Habitat OVMM remain separate.
+
+Combined offline check (2026-10-09): **726 passed, one known main failure**,
+`test_voxel_sim_upgrades_full_frame_absent_to_present` (missing RGB; expected
+PRESENT, got ABSENT). Minimal MCTS and TAMP bridge tests are included. Reproduce:
+
+```bash
+mapfile -t checks < <(git diff --name-only a9a5f1d1 2d8b30b1 -- src/test)
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=src \
+.venv/bin/python -m pytest --noconftest -q --tb=short -o addopts='' -p no:cacheprovider \
+  "${checks[@]}" src/test/scripts/test_extracted_acceptance.py \
+  src/test/motion/test_mcts_tamp_planning.py src/test/controller/task/tamp/test_agent_bridge.py \
+  src/test/memory/test_agentic_mixins.py src/test/memory/test_habitat_ovmm_agentic_find.py \
+  src/test/memory/test_ovmm_agentic_routing.py src/test/eval/test_agentic_*.py
+```
+
 Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from the **project root** so commands pick up **this checkout’s** code and virtualenv.
 
 | Symptom | Fix |

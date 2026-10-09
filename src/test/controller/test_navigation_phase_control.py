@@ -3,12 +3,16 @@
 
 import numpy as np
 import pytest
+from omegaconf import OmegaConf
 
-from emet.motion.control.goto_controller import GotoVelocityController
+from emet.motion.control.goto_controller import DEFAULT_CFG_NAME, GotoVelocityController
+from emet.utils.config import CONTROL_CONFIG_DIR
 
 
 def controller(tolerance):
-    control = GotoVelocityController()
+    # Exercise the real controller defaults without owning process-global Hydra.
+    cfg = OmegaConf.load(f"{CONTROL_CONFIG_DIR}/{DEFAULT_CFG_NAME}.yaml")
+    control = GotoVelocityController(cfg=cfg)
     control.update_goal(np.zeros(3))
     control.control.set_linear_error_tolerance(tolerance)
     control.control.set_angular_error_tolerance(0.03)
