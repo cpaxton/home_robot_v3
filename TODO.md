@@ -940,7 +940,14 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
       manipulation/TAMP owners (#177/#178/#179). Preserve source revisions and results.
 - [ ] Habitat OVMM, Sourccey/Galaxea and real robots remain follow-ups; no full sweep
       required for the current EQA/small-room review gates.
-# Shared-agent review gates (2026-10-09)
+
+## Shared-agent review gates (2026-10-09)
+
+- [x] Record user-supplied #176 review: no blockers; independent merge candidate.
+- [ ] Maintainer approval/merge of #176; keep current reset-based shallow snapshot
+      limitation explicit. No automatic merge as part of the acceptance work.
+- [ ] Follow-up: Qwen shared-client reset-context regression; revisit snapshot
+      depth if tools begin mutating existing message dictionaries in place.
 
 - [ ] Resolve repaired-stack EQA losses q12/q14/q56 (5/12 vs frozen-main 8/12);
       paired replay with isolated evidence first, then owning-slice diagnosis.

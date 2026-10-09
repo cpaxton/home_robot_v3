@@ -8,6 +8,14 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 #### Repaired-head pilot and review handoff (2026-10-09)
 
+- User-supplied review of **#176** found no blocking issues: restoring conversation
+  history and iteration count in `finally` covers current serialized reset-based
+  perception calls, including failure and nested contexts. Independent merge
+  candidate after maintainer approval; not blocked by the upper-stack EQA losses.
+  Accept the current shallow snapshot for this scoped fix: in-place mutation of
+  existing message dictionaries is not protected. Track a Qwen-specific
+  reset-context regression and reassess deep copying if mutation is introduced.
+  The conditional-context style suggestion is optional. No merge performed here.
 - Frozen `bf8b635d` EQA-12 seed 0 completed with valid metrics for all twelve
   questions: **5/12**, versus **8/12** on frozen main `a9a5f1d1`. Paired losses:
   q12, q14, q56; no gains. Startup is repaired, but accuracy acceptance is **not**
