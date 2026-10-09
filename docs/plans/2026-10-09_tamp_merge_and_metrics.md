@@ -5,6 +5,38 @@ foundation `2a0c5ec1`, main `a9a5f1d1`. This is a scoped review of integration,
 failure handling, documentation and acceptance evidence, not a complete audit
 of every changed line. No feature PR is approved for merge by this document.
 
+## Implementation update
+
+The review findings below remain as the original audit. Implemented follow-ups:
+
+- #178 now targets the #177 foundation branch and has an API/execution title.
+- #179 has isolated commits for local RNG propagation (`d3235ed3`), accurate
+  truncation/stable reasons (`37025e12`), oriented support patches (`d60d53f4`),
+  exact replay snapshots (`4d96ec66`) and measured carried geometry (`d1c755f7`).
+- Draft #186 (`feat/tamp-placement-recovery`) stops on uncertain execution,
+  retains unattempted objects in the denominator, preserves placement reason
+  codes and exports operation-scoped search/release evidence. A returned detach
+  helper is not verified completion; held state remains unknown. Automatic
+  recovery and observation-based attachment verification remain outstanding.
+- Draft #187 (`feat/tamp-paired-metrics`) adds a comparator over existing ledgers,
+  planner/runtime provenance, paired gains/losses, scene-cluster uncertainty and
+  PDF/SVG export. See [usage](../experiments/tamp_paired_metrics.md). It rejects
+  unpaired/nonterminal runs and does not automatically promote candidates.
+- Combined placement/recovery source `7e20a9b3`: **235 tests pass**. Metrics:
+  **16 tests pass**, including actual vector export. Foundation/integration
+  command, navigation, evaluator and tool tests: **109 pass, 2 skipped**.
+- Diagnostic gate `20261009_121359_46c309` at `6ea3f780` finished failed: CHAT
+  failed, 0/3 admissions, no repeats. It confirmed stop-on-failure and support
+  availability, and exposed stale payload bounds in the exact live snapshot.
+- Corrected full gate `20261009_122159_920b79` at `7e20a9b3` is running with
+  fresh snapshots. Exact pre-fix replay `20261009_122347_8b00fe` is running with
+  CPU affinity. Their terminal results must be recorded before acceptance.
+
+No PR has been merged into main. Full live placement/composition acceptance,
+explicit recovery/held-state observation, native crash attribution, required CI
+configuration and cross-stack navigation integration remain merge work; passing
+unit suites and creating PRs do not complete those gates.
+
 ## State and evidence
 
 | Layer | Evidence | Readiness |
