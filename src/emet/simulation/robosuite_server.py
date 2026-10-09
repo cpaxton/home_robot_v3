@@ -1091,6 +1091,15 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
+            from emet.simulation.sim_object_placements import refresh_moved_body_placements
+
+            with self._mj_lock:
+                dirty = getattr(self, "_placement_geometry_dirty", set())
+                placements = self._emet_session.get("sim_object_placements")
+                if isinstance(placements, dict):
+                    for body in dirty:
+                        refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
+                self._placement_geometry_dirty = set()
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 
@@ -1100,16 +1109,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         pos: list[float],
         quat: list[float] | None = None,
     ) -> None:
-        """Refresh measured pose and geometry after teleport or attachment motion."""
+        """Invalidate moved geometry; rebuild at publication, not every physics tick."""
         if self._emet_session is None:
             return
         placements = self._emet_session.get("sim_object_placements")
         if not isinstance(placements, dict):
             return
-        from emet.simulation.sim_object_placements import refresh_moved_body_placements
-
         with self._mj_lock:
-            refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
+            if not hasattr(self, "_placement_geometry_dirty"):
+                self._placement_geometry_dirty = set()
+            self._placement_geometry_dirty.add(body)
 
     def _snap_kinematic_attachments(self) -> None:
         """Keep attached freejoint bodies glued to their EE (kinematic grasp)."""

@@ -386,6 +386,15 @@ def test_command_refresh_moves_geometry_for_welded_children_and_rotates_bounds()
     server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
     server._emet_session = {"sim_object_placements": placements}
     server._patch_emet_session_body_pos("object_root", [999, 999, 999])
+    np.testing.assert_array_equal(placements["object_root"]["bounds"], old)
+    server._patch_emet_session_body_pos("object_root", [999, 999, 999])
+    assert server._placement_geometry_dirty == {"object_root"}
+    contacts = data.contact.dist.copy()
+    acceleration = data.qacc.copy()
+    server._attach_emet_session({})
+    assert not server._placement_geometry_dirty
+    np.testing.assert_array_equal(data.qacc, acceleration)
+    np.testing.assert_array_equal(data.contact.dist, contacts)
     # The supplied command target must not replace actual measured geometry.
     expected = placements_from_mujoco_model(model, data)
     for body in ("object_root", "object_child"):

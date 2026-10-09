@@ -169,3 +169,18 @@ sharing the moved freejoint ancestor. A regression exercises the actual server
 callback, parent/child motion, rotation and an intentionally wrong command target.
 Metadata/contact suites: 34 passed. This identifies a stale-volume bug; a fresh
 full gate is still required to establish its effect on placement success.
+
+The exact pre-fix snapshot replay (`20261009_122347_8b00fe`) completed normally
+with zero solutions, 22 preplace RRT budget failures and two IK failures. It did
+not reproduce the earlier approximate native crash; this does not prove the
+crash resolved. Diagnostic gate `20261009_121359_46c309` finished with CHAT failure,
+0/3 admissions and no repeats. Support extraction reached IK in scene12 rather
+than failing for missing patches; uncertain-state continuation stopped as intended.
+
+The next gate (`20261009_122159_920b79`, `7e20a9b3`) failed CHAT at lift tracking
+(51.38 mm against the unchanged 35 mm bound), before testing placement. Scene00
+also failed pregrasp tracking. These are not a placement-success measurement.
+Metadata refresh is now deferred from every attachment physics tick to telemetry
+publication and uses kinematics only; tests require contact and acceleration
+buffers to remain unchanged. This removes unnecessary physics-loop work without
+relaxing tolerances; it is not proof of the cause of the tracking failures.
