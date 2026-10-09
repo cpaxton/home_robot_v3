@@ -786,3 +786,41 @@ experiment branch is not a substitute for testing extracted changes on main.
 Next integration order: narrow dialogue fix; independently reviewed motion/
 grounding repairs; explicit sandbox combining accepted revisions; then paired
 EQA/small-room gates. Do not pull the pending placement stack into these pilots.
+
+### Replacement stack for #167/#168 (proposed October 9)
+
+Replace the oversized review units, not the evidence history. Do not close
+#167/#168 until replacement PRs and an explicit deferred-change inventory are
+linked. Preserve their branches; do not force-push away the experimental work.
+The 133 commits after #167 and #168's divergent changes must be mapped too.
+Exact branch names below are proposals, not already-created PRs.
+
+| Order / branch | Scope | Acceptance before landing |
+| --- | --- | --- |
+| Independent #176 | Shared VLM conversation isolation | Current-main integration already passes 35 focused tests |
+| 1: `fix/query-grounding-contract` from main | Current-view grounding lifecycle, search proposals versus admitted object geometry, fresh manipulation reacquisition, rejected/ambiguous evidence handling | Grounding/replay/OVMM-routing tests; negative, stale and multiple-object cases; paired EQA; visible-target find controls |
+| 2: `feat/query-grounding-backends` on 1 | Opt-in Qwen/depth/SAM provider paths and replay artifacts; cheap proposals separate from final grounding | Frozen cached RGB-D positive/negative/occlusion cases, accepted-mask audit, live visible-target checks; no default flip on aggregate accuracy alone |
+| 3: `fix/measured-navigation-contract` from main | Small extracted #169/#167 pose, heading, wheel/control and frame-consistency repairs; reconcile overlapping #177 changes first | Known-route measured endpoint/dwell and continuous-contact checks; calibration/freshness tests; no relaxed safety bounds |
+| 4: `feat/bounded-inspection-recovery` on 3 plus 1 | Shared head capability, measured aiming, targeted floor sensing, bounded same-waypoint continuation and agent-visible reasons | Recovery unit tests; stationary aim/floor controls; same-goal resumption, invalid-floor stop and retry cap; paired EQA/S0/RoboCasa/Molmo |
+| 5: `test/shared-agent-acceptance` combining reviewed heads | Frozen configs, provenance, scoring and reproducible serial runners; replace #168 sandbox | Main and combined-head EQA dev comparison plus small-room find; success, wrong acceptance, runtime, recovery count and useful-view evidence |
+
+Where (4) needs both (1) and (3), use an explicit integration base containing
+their reviewed heads; preferably land the independent foundations first. Do
+not hide one foundation's diff inside the other or claim independence from a
+mergeable flag. Gate each extracted revision, not just its experimental source.
+
+Defer the remaining grasp/aperture/transport/place behavior into an owner-reviewed
+manipulation stack coordinated with #177/#178/#179. Do not quietly discard these
+changes or import them as prerequisites for learned find. Keep experimental
+presets and negative results available; remove obsolete alternatives only with
+documented supersession. Habitat-OVMM full tasks, native robot additions and
+full paper sweeps remain outside this closeout. A passing find test is not a
+passing pick/place or learned-TAMP test.
+
+Test queue now includes current-main `a9a5f1d1` EQA-12 reference
+`20261009_080301_251228`, seed 0, existing 20/10 planning/movement budgets,
+at `~/runs/emet/pr167-main-eqa-20261009/`, in addition to the paired room and
+EQA jobs above. All serialize under the same GPU lock. Replacement-head tests
+cannot be queued honestly until those heads exist; then reuse these fixtures
+and rerun a matched main reference if model/runtime/config provenance changes.
+No new full sweep or parallel high-load simulation is authorized by this plan.
