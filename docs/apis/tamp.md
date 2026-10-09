@@ -126,3 +126,19 @@ failed CHAT placement and admitted 0/3 fixtures; repeats did not run. See the
 [merge and metric plan](../plans/2026-10-09_tamp_merge_and_metrics.md) for acceptance
 criteria and the distinction between historical assisted scores and current
 end-to-end readiness.
+
+### Placement state refresh
+
+Placement waits up to two wall seconds for the state receiver to recover before
+planning or executing a segment. The maximum accepted receive age remains two
+seconds; command targets never replace measured joints. Incomplete or nonfinite
+joint arrays cannot partially overwrite the offline planning model. Logs include
+`Measured state refresh` JSON with `code`, `wait_s`, and `state_age_s`.
+
+Public placement failures retain `placement_stale_observation`,
+`placement_missing_joint_state`, `placement_nonfinite_joint_state`, or
+`placement_path_invalidated`, including nested preplace/place failures. They
+require inspection of the held object and current scene before recovery; a failed
+refresh never causes release. This distinguishes a state-stream failure from
+changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
+that the original live failure was caused by receiver starvation.

@@ -196,7 +196,7 @@ def test_stale_joint_observation_cannot_pass_arrival():
 
 @pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle",
                                      "no_path", "invalidated", "preplace", "place", "runtime", "timeout",
-                                     "move_exception", "attachment_changed"])
+                                     "move_exception", "attachment_changed", "state_search", "state_refresh"])
 def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     from emet.controller.manipulation import kinematic_pick_place as module
 
@@ -218,6 +218,8 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
 
     def search(*args, **kwargs):
         calls.append(kwargs)
+        if failure == "state_search":
+            raise ValueError("placement_stale_observation")
         if failure in {"runtime", "timeout"}:
             raise (RuntimeError if failure == "runtime" else TimeoutError)("query failed")
         if failure == "attachment_changed" and len(calls) > 1:
@@ -226,7 +228,8 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
                                else [selected]), checker
 
     ex._search_placement = search
-    ex._refresh_placement_checker = lambda *args: checker
+    ex._refresh_placement_checker = Mock(return_value=checker, side_effect=ValueError("placement_missing_joint_state")
+                                        if failure == "state_refresh" else None)
     ex.robot.move_base_to = Mock(return_value=failure != "approach",
                                  side_effect=RuntimeError("transport failed") if failure == "move_exception" else None)
     ex._collision = None
@@ -246,8 +249,10 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
         receptacle_gt_body="missing" if failure == "missing_receptacle" else "receptacle_private",
     )
     assert not result.success
+    if failure in {"state_search", "state_refresh"}:
+        assert result.message == ("placement_stale_observation" if failure == "state_search" else "placement_missing_joint_state")
     if failure in {"approach", "missing_receptacle", "no_path", "invalidated", "preplace", "place", "runtime",
-                   "timeout", "move_exception", "attachment_changed"}:
+                   "timeout", "move_exception", "attachment_changed", "state_search", "state_refresh"}:
         assert not detach.called
     if failure in {"no_path", "missing_receptacle", "runtime", "timeout"}:
         ex.robot.move_base_to.assert_not_called()

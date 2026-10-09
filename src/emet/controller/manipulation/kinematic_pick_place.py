@@ -46,6 +46,10 @@ from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
+PLACEMENT_STATE_FAILURES = frozenset({
+    "placement_stale_observation", "placement_missing_joint_state", "placement_nonfinite_joint_state",
+})
+
 
 @dataclass
 class KinematicPickPlaceResult:
@@ -358,28 +362,62 @@ class KinematicPickPlaceExecutor:
         self.last_grasp_verification = None
 
     def _sync_qpos_from_robot(self) -> bool:
+        """Wait briefly for fresh measured joints; never substitute commanded q.
+
+        Planning can temporarily outpace the state receiver. Waiting gives the
+        receiver a chance to recover without relaxing the two-second age limit.
+        Invalid/incomplete samples never partially overwrite the offline model.
+        """
         assert self._model is not None and self._data is not None
-        received = getattr(self.robot, "_state_received_monotonic", None)
-        if isinstance(received, (int, float)) and (not np.isfinite(received) or time.monotonic() - received > 2.0):
-            self._last_motion_failure = "stale_observation"
-            return False
-        self._sync_base_freejoint()
-        q, _, _ = self.robot.get_joint_state(timeout=2.0)
-        names = self._actuator_names()
-        if q is None or len(q) < len(names):
-            mujoco.mj_forward(self._model, self._data)
-            return False
-        observed_joints = set()
-        for i, aname in enumerate(names):
-            jname = self._actuator_to_joint_name(aname)
-            if not jname:
-                continue
-            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jname)
-            if jid >= 0:
-                self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(q[i])
-                observed_joints.add(jname)
-        mujoco.mj_forward(self._model, self._data)
-        return all(name in observed_joints for name in self.joint_names)
+        started = time.monotonic()
+        deadline = started + 2.0
+        self._last_motion_failure = None
+        age = None
+        while True:
+            received = getattr(self.robot, "_state_received_monotonic", None)
+            age = time.monotonic() - received if isinstance(received, (int, float)) else None
+            stale = age is not None and (not np.isfinite(age) or age < 0 or age > 2.0)
+            if stale:
+                reason = "stale_observation"
+            else:
+                q, _, _ = self.robot.get_joint_state(timeout=max(.001, deadline - time.monotonic()))
+                # Recheck after the potentially blocking read, before trusting q.
+                received = getattr(self.robot, "_state_received_monotonic", None)
+                age = time.monotonic() - received if isinstance(received, (int, float)) else None
+                names = self._actuator_names()
+                if age is not None and (not np.isfinite(age) or age < 0 or age > 2.0):
+                    reason = "stale_observation"
+                elif q is None or np.asarray(q).ndim != 1 or len(q) < len(names):
+                    reason = "missing_joint_state"
+                elif not np.all(np.isfinite(q)):
+                    reason = "nonfinite_joint_state"
+                else:
+                    updates = {}
+                    observed_joints = set()
+                    for i, aname in enumerate(names):
+                        jname = self._actuator_to_joint_name(aname)
+                        if not jname:
+                            continue
+                        jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+                        if jid >= 0:
+                            updates[int(self._model.jnt_qposadr[jid])] = float(q[i])
+                            observed_joints.add(jname)
+                    reason = None if all(name in observed_joints for name in self.joint_names) else "missing_joint_state"
+                    if reason is None:
+                        self._sync_base_freejoint()
+                        for address, value in updates.items():
+                            self._data.qpos[address] = value
+                        mujoco.mj_forward(self._model, self._data)
+            if reason is None or time.monotonic() >= deadline:
+                self._last_motion_failure = reason
+                self.last_state_sync = {
+                    "code": reason or "ok", "wait_s": time.monotonic() - started,
+                    "state_age_s": float(age) if age is not None and np.isfinite(age) else None,
+                }
+                if reason or self.last_state_sync["wait_s"] > .1:
+                    logger.info("Measured state refresh: " + json.dumps(self.last_state_sync))
+                return reason is None
+            time.sleep(min(.01, max(0., deadline - time.monotonic())))
 
     def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0) -> tuple[bool, float]:
         """Require measured joint FK to reach the IK target before attaching."""
@@ -658,7 +696,7 @@ class KinematicPickPlaceExecutor:
         from emet.motion.placement_geometry import PlacementCollisionChecker
 
         if not self._sync_qpos_from_robot():
-            raise ValueError("placement_measured_state_missing")
+            raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
         from emet.motion.placement_surfaces import free_surface_centers, support_patches
@@ -728,7 +766,7 @@ class KinematicPickPlaceExecutor:
         from emet.motion.placement_geometry import PlacementCollisionChecker
 
         if not self._sync_qpos_from_robot():
-            raise ValueError("placement_measured_state_missing")
+            raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
         scene, payload, support = self._placement_geometry(body, receptacle)
         if scene.geometry_digest != checker.scene.geometry_digest:
             logger.info("Placement scene changed; revalidating the full segment against refreshed occupancy")
@@ -756,7 +794,7 @@ class KinematicPickPlaceExecutor:
         self._last_motion_failure = None
         self.last_ee_verification = None
         if not self._sync_qpos_from_robot():
-            self._last_motion_failure = "missing_joint_state"
+            self._last_motion_failure = "placement_" + (self._last_motion_failure or "missing_joint_state")
             return False, float("inf")
         q = self._data.qpos[joint_qpos_addrs(self._model, self.joint_names)].copy()
         # Validate the measured-start connector as well as every planned edge.
@@ -844,7 +882,8 @@ class KinematicPickPlaceExecutor:
                 selected = search.paths[0]
         except (ValueError, KeyError, RuntimeError, TimeoutError) as exc:
             logger.warning(f"Placement geometry unavailable: {exc}")
-            return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_geometry_unavailable")
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, None,
+                str(exc) if str(exc) in PLACEMENT_STATE_FAILURES else "placement_geometry_unavailable")
         preplace, place_ee = selected.ee_targets
         place = selected.object_center
         self.last_targets = {"preplace": preplace, "place": place_ee, "object_place": place, "recep": recep_pos}
@@ -853,7 +892,8 @@ class KinematicPickPlaceExecutor:
                 checker = self._refresh_placement_checker(body, recep_body, checker)
             except (ValueError, KeyError, RuntimeError, TimeoutError) as exc:
                 logger.warning(f"Placement snapshot invalidated: {exc}")
-                return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_invalidated")
+                return KinematicPickPlaceResult(False, body, self.ee_body, None, None,
+                    str(exc) if str(exc) in PLACEMENT_STATE_FAILURES else "placement_invalidated")
             ok, p_err = self._execute_placement_segment(path, target, selected.ee_rotation, checker)
             if not ok:
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure(stage))
