@@ -19,7 +19,7 @@ def test_private_search_details_are_not_public():
         paths=[], geometry_source="ground_truth", collision_scope="sampled_arm_and_payload;base_endpoint_only",
         rejections={"private_body_name": 1, "pose_ik_failed": 2,
                     "max_iter reached with nodes fwd = 900": 3}),
-        last_release_evidence={"detach_command": "completed", "placement_verified": True})
+        last_release_evidence={"detach_command": "returned", "placement_verified": True})
     result = placement_evidence(executor)
     assert "private_body_name" not in json.dumps(result)
     assert result["placement_search"]["rejections"] == {
@@ -27,7 +27,7 @@ def test_private_search_details_are_not_public():
     assert result["release"]["held_state"] == "unknown"
 
 
-@pytest.mark.parametrize("detach", ["not_attempted", "unknown", "completed"])
+@pytest.mark.parametrize("detach", ["not_attempted", "unknown", "returned"])
 def test_failed_place_retains_current_operation_release_evidence(detach):
     class Executor:
         def begin_operation(self, operation_id):

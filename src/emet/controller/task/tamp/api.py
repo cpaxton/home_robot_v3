@@ -50,7 +50,7 @@ def placement_evidence(executor) -> dict[str, Any]:
         detach = release.get("detach_command")
         verified = release.get("placement_verified")
         evidence["release"] = {
-            "detach_command": detach if detach in {"not_attempted", "unknown", "completed"} else "unknown",
+            "detach_command": detach if detach in {"not_attempted", "unknown", "returned"} else "unknown",
             "placement_verified": verified if type(verified) is bool else None,
             # A command receipt and XY placement check are not attachment perception.
             "held_state": "unknown",

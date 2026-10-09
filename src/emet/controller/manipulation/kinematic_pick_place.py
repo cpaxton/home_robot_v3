@@ -858,7 +858,7 @@ class KinematicPickPlaceExecutor:
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
         self.last_release_evidence = {"detach_command": "unknown", "placement_verified": None}
         robot_zmq_detach_body(self.robot, body)
-        self.last_release_evidence["detach_command"] = "completed"
+        self.last_release_evidence["detach_command"] = "returned"
         robot_zmq_set_body_pose(self.robot, body, place)
         self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, place[:2])
