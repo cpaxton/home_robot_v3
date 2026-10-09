@@ -12,8 +12,8 @@ are footprint-clear of leftover clutter and furniture.
 
 Each grasp follows the benchmark's latch contract: the end-effector reaches the object's
 grasp frame, the gripper closes, and the sim ``attach`` welds the object to the gripper
-(no physics-grasp requirement). Failures are per-object so a single flaky grasp does not
-abort the whole episode.
+(no physics-grasp requirement). Planning failures are per-object. Execution or relocation-verification failures
+stop the chain because attachment/release state may be uncertain.
 """
 
 from __future__ import annotations
@@ -196,8 +196,10 @@ def plan_clear_clutter(
     plan_wall = 0.0
     manip_wall = 0.0
     execution_trace = []
+    recovery_required = False
+    unattempted = []
 
-    for obj in pending:
+    for object_index, obj in enumerate(pending):
         body = str(obj["object_gt_body"])
         obj_query = str(obj.get("object_query") or body)
         candidates = [
@@ -259,7 +261,9 @@ def plan_clear_clutter(
             if plan.failed_op in ("grasp", "place"):
                 motion_failures += 1
             logger.warning(f"clutter execute failed body={body}: {plan.failed_op}:{plan.message}")
-            continue
+            recovery_required = True
+            unattempted = [str(item["object_gt_body"]) for item in pending[object_index + 1:]]
+            break
         # Re-read live placements and confirm the object reached the bin.
         after = read_sim_object_placements(robot.get_emet_session()) or {}
         bin_xy = after.get(bin_body, {}).get("pos")
@@ -269,12 +273,15 @@ def plan_clear_clutter(
         else:
             failed.append(body)
             logger.warning(f"clutter relocate verify failed body={body}")
+            recovery_required = True
+            unattempted = [str(item["object_gt_body"]) for item in pending[object_index + 1:]]
+            break
 
     goal_reached = False
     nav_success = False
-    nav_path_open = True
+    nav_path_open = not recovery_required
     nav_probe_after: dict[str, Any] | None = None
-    if mode == "nav_goal" and goal_xy is not None:
+    if mode == "nav_goal" and goal_xy is not None and not recovery_required:
         goal_reached, nav_success, nav_path_open, nav_probe_after = nav_to_landmark_if_clear(
             robot,
             goal_xy=goal_xy,
@@ -311,6 +318,8 @@ def plan_clear_clutter(
         "bin_fallback": bool(bin_matched is not None and bin_matched != bin_query),
         "bin_matched_query": bin_matched,
         "failed_bodies": failed,
+        "unattempted_bodies": unattempted,
+        "recovery_required": recovery_required,
         "relocated_bodies": relocated,
         "reference_execution": reference,
         "execution_trace": execution_trace,
