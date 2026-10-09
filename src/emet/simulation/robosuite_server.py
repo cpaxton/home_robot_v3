@@ -1048,6 +1048,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             "sim_set_joint_qpos": True,
             "kinematic_manip": kinematic_ok,
         }
+        from emet.robots.head_capability import mujoco_head_capability
+
+        head = mujoco_head_capability(self._mjmodel, self._spec.look_joint_names)
+        if head is not None:
+            caps["head_motion"] = head.as_dict()
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
             "runtime_kind": "robosuite_sim",

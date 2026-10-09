@@ -52,6 +52,7 @@ def init_executor(
     collect_trace: bool | None = None,
     router: bool | None = None,
     require_verified: bool | None = None,
+    require_grounded_object: bool = False,
     mcq_debias: bool | None = None,
     close_look: bool | None = None,
     no_early_unverified: bool | None = None,
@@ -59,6 +60,7 @@ def init_executor(
     evidence_image: bool | None = None,
 ):
     self.agent = agent
+    self._require_grounded_object = bool(require_grounded_object)
     self.mode = "answer" if question else "explore"
     self.question = question or ""
     self.goal = goal or "explore the environment and update the map"
@@ -350,6 +352,20 @@ def _handle_finish(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._tool_finish(str(args.get("summary") or ""))
 
 
+def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
+    from emet.controller.dynamem.look import observe_floor
+
+    plan = getattr(self.agent, "_last_nav_plan", None)
+    options = {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
+    if args.get("target_blocker"):
+        options["target_blocker"] = True
+    out = observe_floor(self.agent, **options)
+    self._last_floor_observation = out
+    self._floor_observation_nav_plan = plan
+    self._append_trace({"tool": "observe_floor", **out})
+    return out
+
+
 TOOL_HANDLERS: dict[str, Any] = {
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,
@@ -360,6 +376,7 @@ TOOL_HANDLERS: dict[str, Any] = {
     "verify_siglip": _handle_verify_siglip,
     "submit_answer": _handle_submit_answer,
     "finish": _handle_finish,
+    "observe_floor": _handle_observe_floor,
 }
 
 

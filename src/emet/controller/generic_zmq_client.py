@@ -1270,8 +1270,17 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             self._logged_arm_to_nonstretch = True
         return True
 
+    def get_head_capability(self):
+        from emet.robots.head_capability import HeadCapability
+
+        return HeadCapability.from_session(self.get_emet_session())
+
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
         """Send Stretch-compatible ``head_to`` to the ZMQ server (``RobosuiteZmqServer`` maps it for rby1/galaxea)."""
+        capability = self.get_head_capability()
+        if capability is not None:
+            head_pan = float(np.clip(head_pan, *capability.pan))
+            head_tilt = float(np.clip(head_tilt, *capability.tilt))
         next_action: dict[str, Any] = {
             "head_to": [float(head_pan), float(head_tilt)],
         }

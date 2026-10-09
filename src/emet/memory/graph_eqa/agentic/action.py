@@ -440,14 +440,22 @@ def _action_signature(
         )
     pose = self._robot_xyt_world()
     pose_cell = quantized_xy(pose)
-    if tool == "look_around":
+    if tool in {"look_around", "observe_floor"}:
         target = ActionTarget(kind="pose", stable_id=f"pose:{pose_cell}", xyz=None)
         return ActionSignature.build(
             tool_name=tool,
             family="scan_view",
             intent=intent,
             target=target,
-            variant={"pose_cell": pose_cell, "sensor_profile": "head-rgb"},
+            variant={
+                "pose_cell": pose_cell,
+                "sensor_profile": "head-rgb",
+                **(
+                    {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
+                    if tool == "observe_floor"
+                    else {}
+                ),
+            },
         )
     if tool == "submit_answer":
         target = ActionTarget(kind="question", stable_id=self._question_id)

@@ -356,6 +356,58 @@ def _visible_event_ids(snapshot: Any, state_text: str) -> tuple[str, ...]:
 
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
+    """Retain the same routing state, with shared physical-recovery evidence when needed."""
+    import json
+
+    from emet.agent.tools import navigation_feedback
+    from emet.controller.dynamem.look import supports_floor_observation
+
+    text = _build_state_message(executor)
+    failure = getattr(executor, "_last_inspection_failure", None)
+    if failure:
+        text += "\nLast inspection failure (not object absence): " + json.dumps(failure)
+        if failure.get("reason") == "HEAD_LIMIT":
+            text += "\nDo not repeat this look from the same pose; choose another collision-checked viewing location."
+    if getattr(executor, "_require_grounded_object", False):
+        text += (
+            "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
+            "an admitted object position is required. If grounding fails, inspect another view or explore. "
+            "A camera/viewpoint position is not an object position."
+        )
+    agent = getattr(executor, "agent", None)
+    if not supports_floor_observation(agent):
+        return text
+    feedback = navigation_feedback(agent)
+    if feedback.get("approach_sampling"):
+        text += "\nLast approach sampling (no motion executed): " + json.dumps(feedback["approach_sampling"])
+    if feedback.get("outcome") != "rejected_swept_footprint:unobserved_footprint":
+        return text
+
+    observation = getattr(executor, "_last_floor_observation", None)
+    same_attempt = getattr(
+        executor, "_floor_observation_nav_plan", None
+    ) is not None and executor._floor_observation_nav_plan is getattr(agent, "_last_nav_plan", None)
+    current = (observation or {}).get("observation", {}) if same_attempt else {}
+    if (observation or {}).get("ok") and current.get("footprint_after", {}).get("pose_valid"):
+        text += (
+            "\nPrevious navigation attempt was rejected for unknown floor. Fresh sensing has now made "
+            "that checked footprint valid. Retry investigate or explore through the normal planner; "
+            "do not repeat floor captures to resolve this old rejection. The route is NOT certified."
+        )
+        return text + "\nCurrent recovery observation: " + json.dumps(observation)
+    text += "\nNavigation rejection: " + json.dumps(feedback)
+    text += (
+        "\nStationary recovery tool: observe_floor(target_blocker=true) aims at the missing footprint region. "
+        "Use this rather than guessing head angles; "
+        "compare footprint_before/after. Change view or stop if unchanged. Replan before any motion; "
+        "map growth elsewhere does not make the rejected footprint safe."
+    )
+    if observation is not None and same_attempt:
+        text += "\nLast floor observation: " + json.dumps(observation)
+    return text
+
+
+def _build_state_message(executor: AgenticEQAExecutor) -> str:
     """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
         from emet.memory.graph_eqa.agentic_state import (
@@ -586,7 +638,10 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
         "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
     )
-    inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+    from emet.memory.graph_eqa.agentic.place import _investigate_hypotheses
+
+    # Render the same eligible set used by action selection, not stale recall.
+    inv = _investigate_hypotheses(executor)
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
     ledger = getattr(executor, "_place_inspect", {}) or {}
     refresh = getattr(executor, "_refresh_place_coverage", None)
@@ -632,9 +687,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 if cm is not None:
                     d = cm.get("min_cam_m")
                     d_s = "none" if d is None else f"{float(d):.2f}"
-                    cm_bit = (
-                        f" close_map=resolved={cm['resolved']} aimed={cm['aimed']} min_cam={d_s}"
-                    )
+                    cm_bit = f" close_map=resolved={cm['resolved']} aimed={cm['aimed']} min_cam={d_s}"
             rec = ledger.get(oid)
             bits = (
                 rec.card_bits()
