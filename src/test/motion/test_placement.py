@@ -262,3 +262,39 @@ def test_rrt_routes_held_object_around_blocked_direct_path(rig):
         assert validated_dense_path(model, data, ("x", "y", "z"), segment, collision, joint_step=.005) is not None
     assert validated_dense_path(model, data, ("x", "y", "z"),
         [np.zeros(3), result.paths[0].segments[0][-1]], collision) is None
+
+
+def test_collision_checker_preserves_input_pose_fk_and_contact_buffers(rig):
+    model, data, _ = rig
+    collision = checker(rig, [[[.1, -.01, -.01], [.12, .01, .01]]])
+    data.qpos[7] = .3  # intentionally leave FK at the previous state
+    qpos, xpos, geom_xpos = data.qpos.copy(), data.xpos.copy(), data.geom_xpos.copy()
+    ncon, contacts = data.ncon, data.contact.dist.copy()
+    collision.configuration_collides(model, data)
+    np.testing.assert_array_equal(data.qpos, qpos)
+    np.testing.assert_array_equal(data.xpos, xpos)
+    np.testing.assert_array_equal(data.geom_xpos, geom_xpos)
+    assert data.ncon == ncon
+    np.testing.assert_array_equal(data.contact.dist, contacts)
+
+
+def test_refreshed_obstacle_invalidates_previously_clear_segment(rig):
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+    model, data, payload = rig
+    old = checker(rig, [])
+    support = [[-1, -1, -.5], [1, 1, -.4]]
+    new_scene = PlacementScene([[[.58, -.01, -.01], [.62, .01, .01]]], source="ground_truth")
+    assert old.scene.geometry_digest != new_scene.geometry_digest
+    executor = object.__new__(KinematicPickPlaceExecutor)
+    executor._model, executor._data, executor.ee_body = model, data, "tool"
+    executor.robot = SimpleNamespace(_spec=SimpleNamespace(base_link_name="base"))
+    executor.profile = SimpleNamespace(gripper_contact_bodies=lambda: ("tool",))
+    executor._sync_qpos_from_robot = lambda: True
+    executor._placement_support_bounds = np.asarray(support)
+    executor._placement_geometry = lambda *args: (new_scene, payload, support)
+    path = [np.zeros(3), np.array([1., 0, 0])]
+    assert validated_dense_path(model, data, ("x", "y", "z"), path, old) is not None
+    refreshed = executor._refresh_placement_checker("held", "support", old)
+    assert refreshed.scene is new_scene
+    assert validated_dense_path(model, data, ("x", "y", "z"), path, refreshed) is None

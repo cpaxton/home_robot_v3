@@ -61,6 +61,8 @@ def _jsonify_placement_entry(info: dict[str, Any]) -> dict[str, Any]:
             mn = np.asarray(aabb_min, dtype=np.float64).reshape(3)
             mx = np.asarray(aabb_max, dtype=np.float64).reshape(3)
             out["bounds"] = [[float(x) for x in mn], [float(x) for x in mx]]
+    if "collision_bounds" in info:
+        out["collision_bounds"] = np.asarray(info["collision_bounds"], dtype=float).reshape(-1, 2, 3).tolist()
     return out
 
 
@@ -237,11 +239,20 @@ def _placement_entry_from_geom_ids(
     if aabb is None:
         return None
     center, bounds, quat = aabb
+    # Preserve disjoint declared collision components. A visual/semantic AABB
+    # can fill the empty interior of a U-shaped fixture or an entire room shell.
+    paired = set(model.pair_geom1) | set(model.pair_geom2)
+    ids = [g for g in geom_ids if model.geom_contype[g] or model.geom_conaffinity[g] or g in paired]
+    rotations = data.geom_xmat[ids].reshape(-1, 3, 3)
+    centers = np.einsum("nij,nj->ni", rotations, model.geom_aabb[ids, :3]) + data.geom_xpos[ids]
+    half = np.einsum("nij,nj->ni", np.abs(rotations), model.geom_aabb[ids, 3:])
+    collision_bounds = np.stack((centers - half, centers + half), axis=1)
     return {
         "cat": cat,
         "pos": center,
         "quat": quat,
         "bounds": bounds,
+        "collision_bounds": collision_bounds,
     }
 
 

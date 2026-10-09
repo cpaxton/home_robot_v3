@@ -291,3 +291,32 @@ def test_molmospaces_body_scan_labels_and_skips_robot():
     assert "base_link" not in out
     assert "link1" not in out
     assert "Floor" not in out
+
+
+def test_collision_components_preserve_open_interior_and_follow_moving_fixture():
+    import mujoco
+
+    from emet.motion.placement_geometry import PlacementScene
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="fixture"><freejoint/>
+        <geom type="box" size="1 1 1" contype="0" conaffinity="0"/>
+        <geom type="box" pos="-1 0 0" size=".02 1 1"/>
+        <geom type="box" pos="1 0 0" size=".02 1 1"/>
+        <geom type="box" pos="0 1 0" size="1 .02 1"/>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    placements = placements_from_mujoco_model(model, data)
+    serialized = placements_to_session_dict(placements)
+    assert len(serialized["fixture"]["collision_bounds"]) == 3
+    serialized["held"] = {}
+    scene = PlacementScene.from_placements(serialized, held_object="held")
+    assert not scene.collides([[-.1]*3, [.1]*3])
+    assert scene.collides([[.99, -.1, -.1], [1.01, .1, .1]])
+    data.qpos[0] = 3.
+    updated = overlay_live_mujoco_body_poses(placements, model, data)
+    updated["held"] = {}
+    scene = PlacementScene.from_placements(updated, held_object="held")
+    assert not scene.collides([[.99, -.1, -.1], [1.01, .1, .1]])
+    assert scene.collides([[3.99, -.1, -.1], [4.01, .1, .1]])

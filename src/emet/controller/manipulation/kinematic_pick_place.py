@@ -14,7 +14,6 @@ approach standoff but not enforced at the EE.
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from collections.abc import Sequence
@@ -25,7 +24,6 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
 from emet.motion.aabb_arm_collision import AabbArmCollisionChecker
 from emet.motion.arm_manip_profile import (
     ArmManipProfile,
@@ -34,6 +32,7 @@ from emet.motion.arm_manip_profile import (
 )
 from emet.motion.arm_rrt import plan_arm_joint_path, resolve_agent_manip_planner
 from emet.motion.mujoco_arm_ik import pack_arm_into_actuator_dict, solve_position_ik_multiseed
+from emet.motion.placement_geometry import PlacementCollisionChecker
 from emet.motion.voxel_arm_collision import VoxelMapArmCollisionChecker
 from emet.simulation.sim_manipulation import (
     resolve_sim_object_body,
@@ -174,7 +173,7 @@ class KinematicPickPlaceExecutor:
         self.link_bodies = list(self.profile.link_bodies)
         self._model: mujoco.MjModel | None = None
         self._data: mujoco.MjData | None = None
-        self._collision: VoxelMapArmCollisionChecker | AabbArmCollisionChecker | None = None
+        self._collision: VoxelMapArmCollisionChecker | AabbArmCollisionChecker | PlacementCollisionChecker | None = None
         self._last_cmd_q: np.ndarray | None = None
         self.last_plan_waypoints: list[np.ndarray] = []
         self.last_ee_path_world: list[np.ndarray] = []
@@ -613,50 +612,6 @@ class KinematicPickPlaceExecutor:
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "attach_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, g_err, None, "ok")
 
-    def _approach_xy(
-        self,
-        target_xy: np.ndarray,
-        *,
-        standoff_m: float = 0.55,
-        yaw: float | None = None,
-    ) -> bool:
-        """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
-
-        ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
-        :func:`~emet.controller.task.tamp.task_search.approach_pose_for_object_xy`.
-        ``front`` (Galaxea / rby1) stands off radially from the current base.
-        """
-        os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
-        xy = np.asarray(target_xy, dtype=np.float64).reshape(2)
-        spec = getattr(self.robot, "_spec", None)
-        mode = str(spec.tamp_approach or "front").lower().strip() if spec is not None else "front"
-        if mode == "side":
-            approach = approach_pose_for_object_xy(xy, standoff=standoff_m, mode="side", arm=self.arm)
-            if yaw is not None:
-                approach = np.array([approach[0], approach[1], float(yaw)], dtype=np.float64)
-        else:
-            cur = self._world_base_xyt()
-            if cur is not None:
-                delta = np.asarray(cur[:2], dtype=np.float64) - xy
-                n = float(np.linalg.norm(delta))
-                delta = delta / n if n > 1e-3 else np.array([0.0, 1.0], dtype=np.float64)
-            else:
-                delta = np.array([0.0, 1.0], dtype=np.float64)
-            approach_xy = xy + float(standoff_m) * delta
-            if yaw is None:
-                face = xy - approach_xy
-                th = float(np.arctan2(face[1], face[0])) if float(np.linalg.norm(face)) > 1e-3 else -np.pi / 2
-            else:
-                th = float(yaw)
-            approach = np.array([float(approach_xy[0]), float(approach_xy[1]), th], dtype=np.float64)
-        logger.info(f"KinematicPickPlace: approach base -> {approach.tolist()}")
-        result = self.robot.move_base_to(approach, blocking=True, world_frame=True)
-        success = getattr(result, "success", result)
-        if not isinstance(success, (bool, np.bool_)) or not success:
-            return False
-        self._sleep(0.4)
-        return True
-
     def _placement_geometry(self, body, receptacle):
         """Fresh world-frame scene, EE-local payload and explicit support bounds.
 
@@ -715,7 +670,7 @@ class KinematicPickPlaceExecutor:
                 if len(evidence) != len(batch) or any(type(value) is not bool for value in evidence):
                     raise ValueError("invalid_placement_clearance_response")
                 clear.extend(evidence)
-        allowed = {tuple(p): ok for p, ok in zip(poses, clear, strict=True)} if clear is not None else None
+        poses = [pose for index, pose in enumerate(poses) if clear is None or clear[index]]
 
         def set_base(model, data, pose):
             return write_offline_mjcf_base_xyt(model, data, pose,
@@ -725,8 +680,9 @@ class KinematicPickPlaceExecutor:
         result = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,
             ee_body=self.ee_body, robot_body=spec.base_link_name, scene=scene, payload=payload,
             object_centers=centers, base_candidates=poses, set_base=set_base, contact_bodies=contacts,
-            rrt_max_iter=self.rrt_max_iter,
-            endpoint_validator=None if allowed is None else lambda pose: allowed[tuple(pose)])
+            rrt_max_iter=self.rrt_max_iter)
+        if clear is not None and not all(clear):
+            result.rejections["base_endpoint_rejected"] = sum(not value for value in clear)
         self.last_placement_search = result
         self._placement_support_bounds = np.array(support, dtype=float, copy=True)
         logger.info(f"Placement search source={result.geometry_source} paths={len(result.paths)} "
@@ -742,6 +698,8 @@ class KinematicPickPlaceExecutor:
         if not self._sync_qpos_from_robot():
             raise ValueError("placement_measured_state_missing")
         scene, payload, support = self._placement_geometry(body, receptacle)
+        if scene.geometry_digest != checker.scene.geometry_digest:
+            logger.info("Placement scene changed; revalidating the full segment against refreshed occupancy")
         if scene.source != checker.scene.source:
             raise ValueError("placement_geometry_source_changed")
         if not np.allclose(support, self._placement_support_bounds, atol=.01, rtol=0):
@@ -777,6 +735,9 @@ class KinematicPickPlaceExecutor:
         ok, error = self._wait_measured_ee(target)
         actual = self._data.body(self.ee_body).xmat.reshape(3, 3)
         orientation_error = float(Rotation.from_matrix(rotation @ actual.T).magnitude())
+        if not isinstance(self.last_ee_verification, dict):
+            self._last_motion_failure = "missing_pose_evidence"
+            return False, error
         self.last_ee_verification.update({"orientation_error_rad": orientation_error,
             "orientation_tolerance_rad": .1, "accepted": bool(ok and orientation_error <= .1)})
         logger.info("Placement measured pose: " + json.dumps(self.last_ee_verification))
@@ -832,6 +793,7 @@ class KinematicPickPlaceExecutor:
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "no_collision_free_placement")
             selected = search.paths[0]
             if approach_base:
+                transport_offset = checker.payload.vertices_ee.mean(axis=0)
                 moved = self.robot.move_base_to(selected.base_xyt, blocking=True, world_frame=True)
                 success = getattr(moved, "success", moved)
                 if not isinstance(success, (bool, np.bool_)) or not success:
@@ -841,8 +803,10 @@ class KinematicPickPlaceExecutor:
                 search, checker = self._search_placement(body, recep_body, approach_base=False)
                 if not search.paths:
                     return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_invalidated")
+                if not np.allclose(checker.payload.vertices_ee.mean(axis=0), transport_offset, atol=.01, rtol=0):
+                    return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_attachment_changed")
                 selected = search.paths[0]
-        except (ValueError, KeyError) as exc:
+        except (ValueError, KeyError, RuntimeError, TimeoutError) as exc:
             logger.warning(f"Placement geometry unavailable: {exc}")
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_geometry_unavailable")
         preplace, place_ee = selected.ee_targets
@@ -851,7 +815,7 @@ class KinematicPickPlaceExecutor:
         for stage, path, target in zip(("preplace", "place"), selected.segments, selected.ee_targets, strict=True):
             try:
                 checker = self._refresh_placement_checker(body, recep_body, checker)
-            except (ValueError, KeyError) as exc:
+            except (ValueError, KeyError, RuntimeError, TimeoutError) as exc:
                 logger.warning(f"Placement snapshot invalidated: {exc}")
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "placement_invalidated")
             ok, p_err = self._execute_placement_segment(path, target, selected.ee_rotation, checker)

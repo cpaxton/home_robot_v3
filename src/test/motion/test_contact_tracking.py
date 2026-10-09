@@ -211,3 +211,30 @@ def test_rby1_fixed_base_tracks_recorded_targets_without_contact(target, support
         server._passive_base_support = True
         server._hold_stationary_base_freejoint_if_idle()
         assert not data.eq_active[weld]
+
+
+def test_base_teleport_preserves_attachment_offset_without_reregistering():
+    import threading
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base_link"><freejoint/><geom type="sphere" size=".1"/>
+        <body name="tool" pos=".3 0 .5"><geom type="sphere" size=".02"/></body>
+      </body>
+      <body name="load" pos=".4 0 .5"><freejoint/><geom type="box" size=".03 .03 .03"/></body>
+    </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
+    server._teleport_planar_base_world_xyt = lambda *args: False
+    server._base_freejoint_addrs = lambda: (0, 0)
+    server._patch_emet_session_body_pos = lambda *args: None
+    server._kinematic_attachments = {"load": {"ee_body": "tool", "offset_local": [.1, 0., 0.]}}
+    assert server._teleport_base_world_xyt(1., 2., np.pi / 2)
+    mujoco.mj_forward(model, data)
+    ee = data.body("tool")
+    observed_offset = ee.xmat.reshape(3, 3).T @ (data.body("load").xpos - ee.xpos)
+    np.testing.assert_allclose(observed_offset, [.1, 0, 0], atol=1e-9)
+    assert server._kinematic_attachments["load"]["offset_local"] == [.1, 0, 0]

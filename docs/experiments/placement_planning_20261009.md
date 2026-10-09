@@ -44,3 +44,23 @@ submitted 49 base candidates to a command accepting at most 32. No placement pat
 search or base movement occurred. The adapter now queries batches of 32 and 17,
 validating every response before search. Regressions cover order preservation and
 an invalid second response. Placement plus TAMP tests: **65 passed**; Ruff passes.
+
+## Stacked smoke and geometry repair
+
+`20261009_074642_72de9c` at `0b1a34fe` reached placement search, but failed with
+43 simulator endpoint rejections and 6 payload/scene rejections. No placement
+motion was executed. Reconstruction from the saved scene and measured arm state
+(inferred base height 0.300538 m) identified a backsplash's whole visual AABB
+spanning the room interior. Its actual declared collision components are three
+thin boxes. Using individual collision-component bounds leaves clear candidates
+in that reconstruction. This is supporting diagnostic evidence, not a successful
+live execution result.
+
+The simulator now publishes disjoint collision-component bounds alongside semantic
+bounds; placement prefers the components. Regression coverage includes a hollow
+fixture with a room-sized visual box, serialization, and updated component poses.
+No body/category is excluded to obtain clearance.
+
+Review hardening adds runtime/timeout handling, occupancy-change detection with
+fresh-path revalidation, private collision buffers, transport attachment-offset
+verification, and removal of the unused single-approach helper and float-key lookup.

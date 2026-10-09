@@ -109,3 +109,31 @@ The default simulator adapter treats the top face of the selected receptacle's
 bounds as a support candidate. This is a top-surface control, not an inference
 about accessible interior shelves. Use an explicit provider for those surfaces.
 Full-scene GT meshes and physical release execution remain separate integrations.
+
+### Refresh and simulator geometry details
+
+Ground-truth placements may provide `collision_bounds`: one world box per
+MuJoCo collision geom, including explicitly paired geoms. Those components are
+used in preference to the whole semantic/visual `bounds`; visual-only geometry
+must not fill free interiors of fixtures. Legacy entries without components retain
+the conservative whole-box fallback. Observed voxel handling is unchanged.
+
+Each refreshed scene has a digest of its occupancy boxes and workspace. A changed
+obstacle snapshot is logged, then the entire segment (including the measured-start
+connector) is validated against a **new checker using the new snapshot**. Harmless
+obstacle motion need not abort; intersecting motion invalidates the path. Support
+or attachment changes still abort. This is a between-segment refresh contract,
+not continuous dynamic-obstacle monitoring. Known-free predicates are supplied
+anew by the provider and are not encoded by the occupancy digest.
+
+Collision checks use checker-owned scratch `MjData`; caller qpos, FK and contact
+buffers remain unchanged. The executor's model is local, separate from the server,
+and query/transport runtime errors and timeouts return explicit failure results.
+
+The simulator's base teleport snaps attachments immediately using their existing
+EE-local offsets. Placement verifies that the observed center offset remains
+within 1 cm after transport. It refreshes the payload volume after transport and
+does not re-register the attachment to conceal a changed offset. The assisted
+simulator latch preserves the positional offset; it does not enforce a rigid
+object orientation. Physical attachment/orientation estimation remains the
+responsibility of an observed-geometry provider and physical execution controller.

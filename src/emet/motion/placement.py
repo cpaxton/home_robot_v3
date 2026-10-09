@@ -18,6 +18,9 @@ import numpy as np
 from emet.motion.arm_rrt import joint_limits_from_model, make_arm_validate_fn, plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
 from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene, bounds_array
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 
 
 @dataclass
@@ -154,6 +157,8 @@ def plan_placement_paths(
         base_state = probe.qpos.copy()
         if checker.configuration_collides(model, probe):
             rejects[checker.last_reason] += 1
+            logger.info(f"Placement candidate rejected base={pose.tolist()} reason={checker.last_reason} "
+                        f"obstacle_bounds={scene.last_collision_bounds}")
             continue
         for center in centers:
             place = center - center_offset

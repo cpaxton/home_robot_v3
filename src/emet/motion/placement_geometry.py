@@ -8,10 +8,12 @@ known-free-volume predicate to reject occluded/unknown swept volumes.
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import product
 
+import mujoco
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -53,6 +55,13 @@ class PlacementScene:
         self.boxes.setflags(write=False)
         self.source = source
         self.workspace = None if workspace is None else bounds_array(workspace)
+        if self.workspace is not None:
+            self.workspace.setflags(write=False)
+        digest = hashlib.sha256(self.boxes.tobytes())
+        if self.workspace is not None:
+            digest.update(self.workspace.tobytes())
+        self.geometry_digest = digest.hexdigest()
+        self.last_collision_bounds = None
         self.known_free = known_free
         centers = boxes.mean(axis=1)
         self._tree = cKDTree(centers) if len(boxes) else None
@@ -94,19 +103,27 @@ class PlacementScene:
         boxes = []
         for name, entry in placements.items():
             if name != held_object:
-                if "bounds" not in entry:
+                if "collision_bounds" in entry:
+                    # An explicit empty list means no declared collision geometry,
+                    # not permission to drop a missing/unknown occupied volume.
+                    boxes.extend(bounds_array(box) for box in entry["collision_bounds"])
+                elif "bounds" in entry:
+                    boxes.append(bounds_array(entry["bounds"]))
+                else:
                     raise ValueError(f"Missing scene bounds: {name}")
-                boxes.append(bounds_array(entry["bounds"]))
         return cls(boxes, source="ground_truth")
 
     def collides(self, bounds) -> bool:
         lo, hi = bounds_array(bounds)
+        self.last_collision_bounds = None
         if self.workspace is not None and (np.any(lo < self.workspace[0]) or np.any(hi > self.workspace[1])):
             return True
         if self._tree is not None:
             ids = self._tree.query_ball_point((lo + hi) / 2, np.linalg.norm((hi - lo) / 2) + self._max_radius)
             boxes = self.boxes[ids]
-            if np.any(np.all(boxes[:, 1] >= lo, axis=1) & np.all(boxes[:, 0] <= hi, axis=1)):
+            hits = np.flatnonzero(np.all(boxes[:, 1] >= lo, axis=1) & np.all(boxes[:, 0] <= hi, axis=1))
+            if len(hits):
+                self.last_collision_bounds = boxes[hits[0]].tolist()
                 return True
         return self.known_free is not None and not bool(self.known_free(np.stack((lo, hi))))
 
@@ -158,11 +175,18 @@ class PlacementCollisionChecker:
                          and (model.geom_contype[g] or model.geom_conaffinity[g])]
         if not self.geom_ids:
             raise ValueError("Robot collision geometry missing")
+        self._model = model
+        self._probe = mujoco.MjData(model)
         self.self_collision = MujocoSceneCollisionChecker(model, robot_body=robot_body)
         self.last_reason = None
         self.released_bounds = None
 
     def configuration_collides(self, model, data):
+        # Never overwrite the caller's FK/contact buffers, including executor data.
+        if model is not self._model:
+            raise ValueError("Collision checker model mismatch")
+        mujoco.mj_copyData(self._probe, model, data)
+        data = self._probe
         self.last_reason = None
         if self.self_collision.configuration_collides(model, data):
             self.last_reason = "robot_self_collision"
