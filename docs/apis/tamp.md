@@ -73,7 +73,24 @@ resolution and approach grounding share those copied placements. The original
 snapshot is revalidated after planning, before storage and before execution;
 storage never replaces it with newer poses. Unbound builds cannot be stored. Quaternion signs are equivalent. Translation
 changes over 0.01 m or rotation over 5 degrees require replanning. Restarted
-servers invalidate stored plans. The executor queries base endpoint clearance
+servers invalidate stored plans.
+
+Guarded agent planning and stored execution require an advertised
+`sim_base_pose_query: true` endpoint and a callable client `check_base_poses`.
+The in-process Robosuite server provides it; the Stretch MuJoCo server currently
+does not. An unsupported provider returns `base_pose_validation_unavailable`
+before grounding or motion, with `recovery: "rediscover"`: connect to a provider
+with endpoint validation, rediscover its tasks, and request a new plan. Repeating
+the same request on an unsupported provider cannot fix it. Capability loss also
+consumes existing plan handles. There is no pose-only fallback. Advertised queries
+that time out or return malformed evidence still return
+`approach_validation_failed`.
+
+Robosuite agent plans use the online 16-pose approach ring, including rotated
+base yaw. This changes the prior fixed +Y approach baseline; historical scores
+must not be treated as validation of this approach policy.
+
+ The executor queries base endpoint clearance
 again immediately before motion; failed, malformed or unsupported queries stop
 execution. Arm execution uses measured joints and rejects observations whose
 client receive age exceeds two seconds. Missing measurements do not establish

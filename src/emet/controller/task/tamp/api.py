@@ -30,6 +30,7 @@ def response(
                 "ambiguous_object",
                 "ambiguous_receptacle",
                 "metadata_unavailable",
+                "base_pose_validation_unavailable",
                 "object_not_found",
                 "receptacle_not_found",
             }
@@ -128,6 +129,7 @@ def failure_code(message: str) -> str:
         "server_identity_missing",
         "approach_changed_replan",
         "approach_validation_failed",
+        "base_pose_validation_unavailable",
         "approach_collision",
         "no_live_scene",
         "object_not_found",
