@@ -180,7 +180,7 @@ def main() -> int:
             targets = state.get("actuator_targets")
             if targets is not None:
                 report["joint_targets_named"] = dict(
-                    zip(spec.actuator_names, np.asarray(targets).tolist(), strict=True)
+                    zip(state.get("actuator_names") or spec.actuator_names, np.asarray(targets).tolist(), strict=True)
                 )
             gps = np.asarray(getattr(obs, "gps", None), dtype=np.float64).reshape(-1)
             compass = np.asarray(getattr(obs, "compass", None), dtype=np.float64).reshape(-1)

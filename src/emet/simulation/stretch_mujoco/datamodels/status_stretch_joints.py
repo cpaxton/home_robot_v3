@@ -53,6 +53,11 @@ class StatusStretchJoints:
     # Numeric form of sim_to_real_time_ratio_msg: sim seconds per wall-clock second.
     # Optional so older status dicts still deserialize; None until the FPS counter has a sample.
     sim_to_real_ratio: float | None = None
+    # Snapshot from the physics process, not the parent's stale MjData copy.
+    base_xyz: list[float] | None = None
+    base_up_dot_world_z: float | None = None
+    actuator_targets: list[float] | None = None
+    actuator_names: list[str] | None = None
 
     def __getitem__(self, name: str):
         """For backward compatibility: allows access with the square brackets []"""
