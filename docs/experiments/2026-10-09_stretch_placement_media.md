@@ -8,7 +8,7 @@ runtime object/robot poses. It does not certify arm/payload collision-free paths
 
 The two fixtures use the existing blue block and red cylinder in the default
 table scene. Both start at the reachable near edge and target a point 16 cm
-deeper on the same table. For the cylinder fixture, the neighboring block is
+deeper on the same table. In each fixture, the non-target object is
 moved sideways **before simulation starts** to provide open-gripper clearance.
 These are intentionally simple solvable examples, not clutter robustness tests.
 
@@ -25,6 +25,8 @@ contacted the table and did not lift; a higher grasp lifted only 7.2 cm with the
 smaller lift command. The final command gives more lift clearance. The cylinder
 with the neighboring block close by also failed to grasp; increasing fixture
 clearance fixes this simple case without changing the robot model or contacts.
+An initial successful block transfer also disturbed the neighboring cylinder;
+the final recording moves that distractor aside during fixture setup.
 These tuning attempts are not an unbiased success-rate experiment.
 
 ## Reproduction
@@ -58,6 +60,6 @@ The paper appendix includes `paper/figs/stretch_pick_place.pdf`; clean frames,
 contact traces, and a local HTML gallery are in `/tmp/stretch-examples/`.
 The recordings were executed directly in-process on CPU, not through the ZMQ
 agent path. They therefore do not validate stored-plan execution or live-client
-state synchronization. Source base: `b4430601`; media script was uncommitted
-when recorded. The cylinder result includes the executed script hash; the blue
-recording predates that provenance field (its object1 dynamics/checks are the same).
+state synchronization. Source base: `b4430601`, followed by the isolated media changes.
+Both final results include a hash of the executed recording script, which was
+uncommitted when recorded. No changes from `feat/sourccey-mkv-simulation` are used.

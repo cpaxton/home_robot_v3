@@ -34,6 +34,9 @@ def main():
         b = model.jnt_qposadr[model.body("object2").jntadr[0]]
         data.qpos[b : b + 2] = data.qpos[a : a + 2].copy()
         data.qpos[a] = 0.3
+    else:
+        distractor = model.jnt_qposadr[model.body("object2").jntadr[0]]
+        data.qpos[distractor] = 0.3
     mujoco.mj_forward(model, data)
     joints = (
         "joint_lift",
