@@ -75,9 +75,8 @@ Defaults are three solutions, three IK attempts per target, up to 64 base
 candidates, at most 64 supplied target centers, 96 total IK calls, 12 IK calls
 per base and 400 RRT iterations per path attempt. Preplace height is 0.12 m and
 collision margin is 0.005 m. These are work limits, not wall-clock guarantees.
-Currently `seed` controls IK seed sampling only; RRT also uses global random
-state. Explicitly control all RNGs in isolated experiments until RNG propagation
-is implemented. Surface `budget_exhausted` currently reports region truncation,
+`seed` controls a private generator shared by IK sampling, RRT, and shortcutting.
+Seeded placement does not consume process-global NumPy or Python random state. Surface `budget_exhausted` currently reports region truncation,
 not truncation at the final candidate cap. Neither an empty result nor an unset
 budget flag proves infeasibility.
 

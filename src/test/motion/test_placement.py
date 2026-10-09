@@ -244,17 +244,26 @@ def test_refresh_rejects_moved_support_before_execution(rig):
         executor._refresh_placement_checker("held", "support", SimpleNamespace(payload=payload, scene=scene))
 
 
-def test_rrt_routes_held_object_around_blocked_direct_path(rig):
+def test_rrt_routes_held_object_around_blocked_direct_path(rig, monkeypatch):
     model, data, payload = rig
     scene = PlacementScene([[[.45, -.15, -.15], [.55, .15, .15]]], source="ground_truth")
-    state = np.random.get_state()
-    try:
-        np.random.seed(7)
-        result = plan_placement_paths(model, data, joint_names=("x", "y", "z"), ee_body="tool", robot_body="base",
+    def global_rng_forbidden(*args, **kwargs):
+        raise AssertionError("Seeded placement must not consume global RNG")
+
+    monkeypatch.setattr(np.random, "random", global_rng_forbidden)
+    monkeypatch.setattr(np.random, "randint", global_rng_forbidden)
+    monkeypatch.setattr("emet.motion.algo.rrt.random", global_rng_forbidden)
+
+    def search():
+        return plan_placement_paths(model, data, joint_names=("x", "y", "z"), ee_body="tool", robot_body="base",
             scene=scene, payload=payload, object_centers=[[1.09, 0, 0]], base_candidates=[[0, 0, 0]],
-            set_base=set_base, contact_bodies=("tool",), max_solutions=1, ik_attempts=1, rrt_max_iter=500)
-    finally:
-        np.random.set_state(state)
+            set_base=set_base, contact_bodies=("tool",), max_solutions=1, ik_attempts=1, rrt_max_iter=500, seed=7)
+
+    result = search()
+    repeat = search()
+    assert len(repeat.paths) == 1
+    for first, second in zip(result.paths[0].segments, repeat.paths[0].segments, strict=True):
+        np.testing.assert_array_equal(first, second)
     assert len(result.paths) == 1, result.rejections
     collision = PlacementCollisionChecker(model, robot_body="base", ee_body="tool", scene=scene,
         payload=payload, contact_bodies=("tool",))

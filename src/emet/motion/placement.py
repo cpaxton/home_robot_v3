@@ -218,7 +218,7 @@ def plan_placement_paths(
                     goal = probe.qpos[qadr].copy()
                     path = plan_arm_joint_path(model, probe, joint_names=joint_names, q_start=q0,
                                                q_goal=goal, collision=checker, max_iter=rrt_max_iter,
-                                               step_size=.025, linear_fallback=False)
+                                               step_size=.025, linear_fallback=False, rng=rng)
                     if not path.success:
                         rejects[path.reason or 'arm_path_failed'] += 1
                         break
