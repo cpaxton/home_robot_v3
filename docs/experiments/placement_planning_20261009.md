@@ -124,3 +124,28 @@ objects from a countertop.
   `20261009_081232_2f7efa` were cancelled before acquiring the GPU so the full gate
   runs the current code once. They have no simulator result.
 - The full gate still waits for the shared GPU. No full-task success is claimed.
+
+## Completed readiness result (supersedes queued status above)
+
+Job `20261009_081750_e342cc`, code `1335d5d5`, finished with exit 1.
+`results/readiness.json` reports CHAT exit 1, **0/3 admitted fixtures**, and no
+repeat results; `ready=false`. The nine planned repeats were not executed.
+
+- CHAT: pickup/lift passed; placement returned zero paths. Of 49 base candidates,
+  43 failed endpoint checks, three failed robot/scene checks, and one failed
+  payload/scene checks. The remaining search recorded 20 RRT iteration-limit
+  failures, four pose-IK failures, and two per-base budget events. Final object
+  error was 2.2031 m. This is search failure, not proof that rearrangement is needed.
+- Scene00: one placement exhausted 96 pose-IK calls across eight approaches; a
+  later placement had no accepted surface candidate. A grasp also failed joint
+  bounds.
+- Scene02: all three object attempts failed measured grasp/pregrasp tracking.
+- Scene12: placement failed with `Explicit support patches required`; subsequent
+  attempts failed tracking. These later attempts are not independent diagnostics:
+  the clutter runner continues after failure without establishing held state.
+
+Separately, two approximate offline reconstructions exited with SIGSEGV; Python
+faulthandler located one crash at the pose-IK named-joint lookup. An isolated
+96-call IK loop completed. A 90-second gdb attempt ended without a native crash
+trace. These are unresolved diagnostic failures, not the cause established for
+the live gate. See the [merge review](../plans/2026-10-09_tamp_merge_and_metrics.md).

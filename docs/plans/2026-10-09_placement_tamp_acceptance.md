@@ -1,5 +1,7 @@
 # Placement and TAMP acceptance
 
+Current integration review and metric protocol: [merge and evaluation plan](2026-10-09_tamp_merge_and_metrics.md).
+
 ## Scope and PR order
 
 1. **Placement primitive — PR #179**, based on `feat/tamp-agent-execution`.
@@ -53,8 +55,9 @@ Keep immutable run source IDs; docs-only changes do not require replacing a run.
 
 ## Current evidence and next actions
 
-Placement has 182 passing contract/unit tests at `1335d5d5`; full simulation
-acceptance is pending the shared GPU. See
+Placement has 182 passing contract/unit tests at `1335d5d5`; the full simulation
+gate has now failed: CHAT placement failed, all three admissions were rejected,
+and no repeats ran. See
 [experiment history](../experiments/placement_planning_20261009.md) for earlier
 failures and exact run provenance.
 

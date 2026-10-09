@@ -22,8 +22,8 @@ metres. `HeldObject.vertices_ee` is expressed in the end-effector frame.
   bounds and the measured EE pose, or supply conservative EE-local vertices
   directly. Include uncertainty in the supplied volume. Missing geometry fails;
   it is not replaced by a point or a guessed category-specific size.
-- **Support:** supply an explicitly selected horizontal support region to
-  `surface_placement_centers`. Candidates fit the object's full footprint and
+- **Support:** supply explicitly grounded horizontal support patches to
+  `free_surface_centers`. Candidates fit the object's full footprint and
   stay above the support. A receptacle's center is not an interior shelf.
 
 Observed occupancy must have robot and held-object points segmented out by the
@@ -70,6 +70,16 @@ EE targets and rotation, and two densely sampled joint paths. `rejections`
 records why candidates failed. `geometry_source` records observed voxels or GT.
 Search budgets bound base candidates, IK attempts, total IK calls and RRT work.
 No path means failure, with no unchecked fallback.
+
+Defaults are three solutions, three IK attempts per target, up to 64 base
+candidates, at most 64 supplied target centers, 96 total IK calls, 12 IK calls
+per base and 400 RRT iterations per path attempt. Preplace height is 0.12 m and
+collision margin is 0.005 m. These are work limits, not wall-clock guarantees.
+Currently `seed` controls IK seed sampling only; RRT also uses global random
+state. Explicitly control all RNGs in isolated experiments until RNG propagation
+is implemented. Surface `budget_exhausted` currently reports region truncation,
+not truncation at the final candidate cap. Neither an empty result nor an unset
+budget flag proves infeasibility.
 
 Collision checks use conservative world boxes enclosing complete declared robot
 geoms (including meshes), transformed payload volume, and MuJoCo robot self
@@ -160,3 +170,8 @@ IK effort is capped both globally (96 calls by default) and per base endpoint
 (12 calls). An unreachable current base must not exhaust the budget before other
 approaches are considered. Reaching either budget is reported explicitly and
 never treated as proof that the scene requires rearrangement.
+
+This is a Python API used by the existing TAMP tools, not an additional CHAT
+tool. The [agent API](tamp.md) describes the public JSON interface. The
+[integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks current
+acceptance blockers; the latest full simulator gate failed.
