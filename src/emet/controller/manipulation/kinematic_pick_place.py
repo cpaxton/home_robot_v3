@@ -736,6 +736,8 @@ class KinematicPickPlaceExecutor:
         if not self._sync_qpos_from_robot():
             raise ValueError("placement_measured_state_missing")
         scene, payload, support = self._placement_geometry(body, receptacle)
+        if scene.source != checker.scene.source:
+            raise ValueError("placement_geometry_source_changed")
         if not np.allclose(support, self._placement_support_bounds, atol=.01, rtol=0):
             raise ValueError("placement_support_moved")
         if (payload.vertices_ee.shape != checker.payload.vertices_ee.shape or
@@ -751,7 +753,10 @@ class KinematicPickPlaceExecutor:
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
         from emet.motion.placement import validated_dense_path
 
+        self._last_motion_failure = None
+        self.last_ee_verification = None
         if not self._sync_qpos_from_robot():
+            self._last_motion_failure = "missing_joint_state"
             return False, float("inf")
         q = self._data.qpos[joint_qpos_addrs(self._model, self.joint_names)].copy()
         # Validate the measured-start connector as well as every planned edge.
@@ -766,6 +771,9 @@ class KinematicPickPlaceExecutor:
         ok, error = self._wait_measured_ee(target)
         actual = self._data.body(self.ee_body).xmat.reshape(3, 3)
         orientation_error = float(Rotation.from_matrix(rotation @ actual.T).magnitude())
+        self.last_ee_verification.update({"orientation_error_rad": orientation_error,
+            "orientation_tolerance_rad": .1, "accepted": bool(ok and orientation_error <= .1)})
+        logger.info("Placement measured pose: " + json.dumps(self.last_ee_verification))
         if not ok or orientation_error > .1:
             self._last_motion_failure = "tracking_failed"
             return False, error

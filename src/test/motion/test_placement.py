@@ -217,6 +217,27 @@ def test_refresh_rejects_moved_support_before_execution(rig):
     executor = object.__new__(KinematicPickPlaceExecutor)
     executor._sync_qpos_from_robot = lambda: True
     executor._placement_support_bounds = np.array([[0, 0, 0], [1, 1, 1]])
-    executor._placement_geometry = lambda *args: (None, payload, [[0, 0, 0], [2, 1, 1]])
+    scene = PlacementScene([], source="ground_truth")
+    executor._placement_geometry = lambda *args: (scene, payload, [[0, 0, 0], [2, 1, 1]])
     with pytest.raises(ValueError, match="placement_support_moved"):
-        executor._refresh_placement_checker("held", "support", SimpleNamespace(payload=payload))
+        executor._refresh_placement_checker("held", "support", SimpleNamespace(payload=payload, scene=scene))
+
+
+def test_rrt_routes_held_object_around_blocked_direct_path(rig):
+    model, data, payload = rig
+    scene = PlacementScene([[[.45, -.15, -.15], [.55, .15, .15]]], source="ground_truth")
+    state = np.random.get_state()
+    try:
+        np.random.seed(7)
+        result = plan_placement_paths(model, data, joint_names=("x", "y", "z"), ee_body="tool", robot_body="base",
+            scene=scene, payload=payload, object_centers=[[1.09, 0, 0]], base_candidates=[[0, 0, 0]],
+            set_base=set_base, contact_bodies=("tool",), max_solutions=1, ik_attempts=1, rrt_max_iter=500)
+    finally:
+        np.random.set_state(state)
+    assert len(result.paths) == 1, result.rejections
+    collision = PlacementCollisionChecker(model, robot_body="base", ee_body="tool", scene=scene,
+        payload=payload, contact_bodies=("tool",))
+    for segment in result.paths[0].segments:
+        assert validated_dense_path(model, data, ("x", "y", "z"), segment, collision, joint_step=.005) is not None
+    assert validated_dense_path(model, data, ("x", "y", "z"),
+        [np.zeros(3), result.paths[0].segments[0][-1]], collision) is None
