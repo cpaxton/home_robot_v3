@@ -13,7 +13,8 @@ physical opening, and does not certify a collision-free door sweep or access.
 `scene_tasks` response and selects that task's receptacle. Raw body and joint
 names stay private. Use discovery → open → plan → execute → close, checking
 `status` after every action. Open before pickup; close only when the robot and
-payload are clear. There is no automatic close after failure or automatic retry.
+payload are clear. There is no automatic close after failure or automatic retry. This is a separate
+agent-callable action, not yet an operator selected by the internal MCTS search.
 
 An example successful result:
 

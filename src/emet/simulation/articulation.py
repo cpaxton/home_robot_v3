@@ -43,6 +43,7 @@ def scene_articulations(model, data, robot_root_name):
             "supported": False,
             "state": "unknown",
             "convention": "default_limit_is_closed",
+            "joint_positions": {model.joint(j).name: float(data.qpos[model.jnt_qposadr[j]]) for j in scalar},
         }
         if len(joints) == 1 and len(scalar) == 1:
             j = scalar[0]

@@ -168,3 +168,21 @@ def test_closed_access_and_revision_reject_stored_snapshot_before_motion():
     assert bridge._validate_snapshot(robot, snapshot, task) == "receptacle_requires_open"
     robot.server._emet_session["articulation_revision"] = 1
     assert bridge._validate_snapshot(robot, snapshot, task) == "scene_changed_replan"
+
+
+def test_unsupported_joint_movement_still_refreshes_collision_geometry():
+    # A legacy simulator action can move a fixture this tool refuses to actuate.
+    # Unsupported semantics must not make that obstacle permanently stale.
+    server = server_fixture()
+    m = mujoco.MjModel.from_xml_string("""<mujoco><worldbody><body name="fixture">
+        <joint name="first" type="slide" axis="1 0 0" range="0 1"/>
+        <joint name="second" type="slide" axis="0 1 0" range="0 1"/>
+        <geom type="box" size=".1 .1 .1"/></body></worldbody></mujoco>""")
+    server._mjmodel, server._mjdata = m, mujoco.MjData(m)
+    server._refresh_articulation_state()
+    old = np.array(server._emet_session["sim_object_placements"]["fixture"]["bounds"])
+    server._mjdata.qpos[0] = 0.5
+    server._refresh_articulation_state()
+    current = server._emet_session
+    assert access_precondition(current, "fixture") == "articulation_unsupported"
+    np.testing.assert_allclose(current["sim_object_placements"]["fixture"]["bounds"], old + [0.5, 0, 0])
