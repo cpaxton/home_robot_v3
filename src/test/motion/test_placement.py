@@ -313,3 +313,15 @@ def test_occupied_support_targets_rejected_before_ik_or_base_validation(rig):
     assert not result.paths
     assert result.rejections == {"target_payload_collision": 1}
     endpoint.assert_not_called()
+
+
+def test_distant_start_does_not_starve_reachable_alternative_base(rig):
+    model, data, payload = rig
+    result = plan_placement_paths(model, data, joint_names=("x", "y", "z"), ee_body="tool", robot_body="base",
+        scene=PlacementScene([], source="ground_truth"), payload=payload,
+        object_centers=[[3., 0, 0], [3.1, 0, 0]], base_candidates=[[0, 0, 0], [2, 0, 0]],
+        set_base=set_base, contact_bodies=("tool",), max_solutions=1,
+        max_ik_calls=8, max_ik_calls_per_base=3)
+    assert len(result.paths) == 1, result.rejections
+    assert result.rejections["base_ik_budget_reached"] == 1
+    np.testing.assert_allclose(result.paths[0].base_xyt, [2, 0, 0])

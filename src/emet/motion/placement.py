@@ -108,7 +108,7 @@ def plan_placement_paths(
     model, data, *, joint_names: Sequence[str], ee_body: str, robot_body: str,
     scene: PlacementScene, payload: HeldObject, object_centers, base_candidates,
     set_base: Callable, contact_bodies=(), max_solutions=3, ik_attempts=3,
-    max_candidates=64, max_ik_calls=96, rrt_max_iter=400, preplace_height_m=.12, margin_m=.005,
+    max_candidates=64, max_ik_calls=96, max_ik_calls_per_base=12, rrt_max_iter=400, preplace_height_m=.12, margin_m=.005,
     endpoint_validator: Callable | None = None, seed=0, coupled_groups=(),
 ) -> PlacementSearchResult:
     """Search base endpoints, support points, IK seeds and RRT paths before execution.
@@ -121,6 +121,8 @@ def plan_placement_paths(
     """
     if not 1 <= max_solutions <= 16 or not 1 <= ik_attempts <= 16 or not 1 <= max_candidates <= 256:
         raise ValueError("Invalid placement search budget")
+    if not 1 <= max_ik_calls_per_base <= 4096:
+        raise ValueError("Invalid per-base IK budget")
     if not 1 <= max_ik_calls <= 4096:
         raise ValueError("Invalid IK call budget")
     if coupled_groups:
@@ -183,20 +185,28 @@ def plan_placement_paths(
             logger.info(f"Placement candidate rejected base={pose.tolist()} reason={checker.last_reason} "
                         f"obstacle_bounds={scene.last_collision_bounds}")
             continue
+        base_ik_calls = 0
         for center in centers:
+            if base_ik_calls >= max_ik_calls_per_base:
+                break
             place = center - center_offset
             targets = (place + np.array([0., 0., preplace_height_m]), place)
             for attempt in range(ik_attempts):
+                if base_ik_calls >= max_ik_calls_per_base:
+                    break
                 probe.qpos[:] = base_state
                 q0 = start_q.copy()
                 segments = []
                 for target in targets:
+                    if base_ik_calls >= max_ik_calls_per_base:
+                        break
                     if ik_calls >= max_ik_calls:
                         rejects["ik_budget_exhausted"] += 1
                         result.rejections = dict(rejects)
                         result.paths.sort(key=lambda path: path.cost)
                         return result
                     ik_calls += 1
+                    base_ik_calls += 1
                     if attempt:
                         probe.qpos[qadr] = rng.uniform(low, high)
                     ik = solve_pose_ik(model, probe, ee_body=ee_body, joint_names=joint_names,
@@ -227,6 +237,8 @@ def plan_placement_paths(
                     break  # seek a different target or base for the next alternative
             if len(result.paths) >= max_solutions:
                 break
+        if base_ik_calls >= max_ik_calls_per_base and len(result.paths) < max_solutions:
+            rejects["base_ik_budget_reached"] += 1
         if len(result.paths) >= max_solutions:
             break
     result.paths.sort(key=lambda path: path.cost)

@@ -155,3 +155,8 @@ not a minimal blocker set or a claim that an obstacle is movable. Unknown-space
 predicates, full arm paths, measured state and attachment checks remain mandatory.
 A fixed-grid helper remains available for controlled comparisons. Pose orientation
 is still fixed to the measured orientation; failure is not a proof of infeasibility.
+
+IK effort is capped both globally (96 calls by default) and per base endpoint
+(12 calls). An unreachable current base must not exhaust the budget before other
+approaches are considered. Reaching either budget is reported explicitly and
+never treated as proof that the scene requires rearrangement.

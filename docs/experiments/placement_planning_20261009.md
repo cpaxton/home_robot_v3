@@ -104,3 +104,11 @@ collision geoms. Mesh/rotated supports require an explicit geometry provider;
 missing surface geometry fails closed. This prevents treating an appliance's
 whole visual bounding-box top as a measured support surface. Observed providers
 can supply one or multiple explicitly grounded support patches through the same API.
+
+The grounded-surface reconstruction found 35 free payload candidates on interior
+support patches, while its original search spent all 96 IK calls at the first
+base pose. Per-base quotas now prevent that starvation. A regression with an
+unreachable first viewpoint and a reachable later one requires the later solution.
+This distinction matters: free object space, arm reachability and approach-path
+clearance are separate tests; failure of one does not by itself justify clearing
+objects from a countertop.
