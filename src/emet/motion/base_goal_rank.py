@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from emet.motion.voxel_arm_collision import GridConvention, world_xy_to_grid
+from emet.motion.grid_coordinates import GridConvention, world_xy_to_grid
 
 
 def navigable_neighbors(pt: tuple[int, int], free: Callable[[tuple[int, int]], bool]):
