@@ -205,3 +205,9 @@ providers still need coherent observed pose/volume snapshots.
 Geometry refresh runs at telemetry publication after attachment/teleport marks
 its freejoint subtree dirty. It uses kinematics only, preserving contact and
 acceleration buffers and avoiding geometry reconstruction on every physics tick.
+
+Measured EE arrival uses the existing simulator time-ratio multiplier, capped at
+10, for its three-second nominal wait. Hardware/missing ratios retain three wall
+seconds. The 35 mm acceptance threshold is unchanged; blocked motion still fails.
+`timeout_wall_s` is logged with arrival evidence. Comparisons to older fixed-wall
+waits must report this timing-contract change rather than claim equal wall budgets.

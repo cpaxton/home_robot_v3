@@ -383,7 +383,12 @@ class KinematicPickPlaceExecutor:
 
     def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0) -> tuple[bool, float]:
         """Require measured joint FK to reach the IK target before attaching."""
-        deadline = time.monotonic() + timeout_s
+        if not np.isfinite(timeout_s) or timeout_s < 0:
+            raise ValueError("Measured arrival requires a finite nonnegative timeout")
+        # Match trajectory/sleep timing to the advertised simulation rate. Three
+        # wall seconds can be far less than three simulated seconds under load.
+        wall_timeout = self._scaled_dt(timeout_s) if timeout_s else 0.0
+        deadline = time.monotonic() + wall_timeout
         error = float('inf')
         observed = None
         while True:
@@ -401,6 +406,7 @@ class KinematicPickPlaceExecutor:
             'observed_xyz': None if observed is None else observed.tolist(),
             'error_m': error if np.isfinite(error) else None,
             'tolerance_m': self.ik_tol_m, 'accepted': bool(error <= self.ik_tol_m),
+            'timeout_wall_s': wall_timeout,
         }
         self.last_ee_verification.update(self._joint_tracking_evidence())
         logger.info('KinematicPickPlace measured EE: ' + json.dumps(self.last_ee_verification))
