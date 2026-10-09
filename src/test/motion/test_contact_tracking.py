@@ -238,3 +238,26 @@ def test_base_teleport_preserves_attachment_offset_without_reregistering():
     observed_offset = ee.xmat.reshape(3, 3).T @ (data.body("load").xpos - ee.xpos)
     np.testing.assert_allclose(observed_offset, [.1, 0, 0], atol=1e-9)
     assert server._kinematic_attachments["load"]["offset_local"] == [.1, 0, 0]
+
+
+@pytest.mark.parametrize("ratio,blocked,accepted", [(1., False, False), (.2, False, True), (.2, True, False)])
+def test_measured_arrival_scales_slow_sim_budget_without_accepting_blockage(monkeypatch, ratio, blocked, accepted):
+    from types import SimpleNamespace
+
+    from emet.controller.manipulation import kinematic_pick_place as module
+
+    clock = [0.0]
+    monkeypatch.setattr(module, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], sleep=lambda dt: clock.__setitem__(0, clock[0] + dt)))
+    ex = object.__new__(KinematicPickPlaceExecutor)
+    ex.robot = SimpleNamespace(_state={"sim_to_real_ratio": ratio})
+    ex.ee_body, ex.ik_tol_m = "tool", .035
+    ex._data = SimpleNamespace(body=lambda _: SimpleNamespace(
+        xpos=np.array([1. if clock[0] >= 5 and not blocked else 0., 0., 0.])))
+    ex._sync_qpos_from_robot = lambda: True
+    ex._joint_tracking_evidence = lambda: {}
+    ok, error = ex._wait_measured_ee(np.array([1., 0., 0.]))
+    assert ok is accepted
+    assert ex.last_ee_verification["timeout_wall_s"] == 3 / ratio
+    assert clock[0] <= 3 / ratio + .05
+    assert (error <= .035) is accepted
