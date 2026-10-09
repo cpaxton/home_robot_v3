@@ -1079,6 +1079,30 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    def observe_floor(pan_rad=None, tilt_rad=-1.0, target_blocker=False):
+        from emet.agent.tool_outcome import ToolOutcome
+        from emet.controller.dynamem.look import observe_floor as capture_floor
+
+        agent = _agent_from_context(context)
+        if agent is None:
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        return ToolOutcome.from_eqa_dict(
+            "observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker)
+        )
+
+    from emet.agent.skills.specs import CHAT_SKILL_SPECS
+
+    floor_spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == "observe_floor")
+    tools.append(
+        Tool(
+            name=floor_spec.name,
+            description=floor_spec.description,
+            parameters=floor_spec.parameters,
+            func=observe_floor,
+            returns_info=True,
+        )
+    )
+
     def scan_environment() -> str:
         executor = context.get("executor")
         if executor is None:

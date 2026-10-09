@@ -273,6 +273,7 @@ def run_ovmm_agentic_localize(
             max_rounds=max_rounds,
             max_nav_steps=max_nav_steps,
             require_verified=require_verified,
+            require_grounded_object=bool(getattr(agent, "query_driven_memory", False)),
             router=router,
             trace_path=resolved_trace,
             trace_meta=trace_meta,

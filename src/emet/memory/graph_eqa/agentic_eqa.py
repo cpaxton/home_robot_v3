@@ -150,6 +150,7 @@ def build_agentic_eqa_executor(
     trace_meta: dict[str, Any] | None = None,
     router: bool | None = None,
     require_verified: bool | None = None,
+    require_grounded_object: bool = False,
 ) -> AgenticEQAExecutor:
     """Construct the shared agentic executor (HM-EQA and OVMM find both use this)."""
     from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
@@ -181,6 +182,7 @@ def build_agentic_eqa_executor(
         trace_meta=trace_meta,
         router=router,
         require_verified=require_verified,
+        require_grounded_object=require_grounded_object,
     )
 
 
@@ -196,6 +198,7 @@ def run_agentic_eqa_result(
     trace_meta: dict[str, Any] | None = None,
     router: bool | None = None,
     require_verified: bool | None = None,
+    require_grounded_object: bool = False,
 ) -> AgenticEQAResult:
     """Run the unified agentic loop; return the full :class:`AgenticEQAResult`."""
     ex = build_agentic_eqa_executor(
@@ -209,6 +212,7 @@ def run_agentic_eqa_result(
         trace_meta=trace_meta,
         router=router,
         require_verified=require_verified,
+        require_grounded_object=require_grounded_object,
     )
     result = ex.run()
     print(

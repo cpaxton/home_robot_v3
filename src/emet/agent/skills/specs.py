@@ -431,6 +431,45 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         },
     ),
     SkillSpec(
+        name="observe_floor",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "For a rejected unknown footprint, set target_blocker=true to aim at its missing region "
+            "with at most two bounded head captures (overrides pan/tilt). "
+            "Look downward with the head without moving the base; update the map from fresh RGB-D. "
+            "Use for insufficient_floor_coverage, or to check nearby floor after no_reachable_workspace. "
+            "This does not guarantee clearance: replan after observing. Requires a movable head, "
+            "measured pose, and fresh calibrated depth. Optional pan_rad selects an absolute head pan "
+            "in [-1, 1] radians to inspect adjacent floor instead of repeating the same view; "
+            "omit to retain measured pan. Optional tilt_rad in [-1.4, -0.7] defaults to -1.0; "
+            "more negative looks nearer the base. Check footprint_before/after, not total map growth. "
+            "If blocking cells remain, change the view within these bounds or stop. The base stays stationary."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "target_blocker": {
+                    "type": "boolean",
+                    "description": "Aim at a currently unknown rejected-footprint cell.",
+                },
+                "pan_rad": {
+                    "type": "number",
+                    "minimum": -1.0,
+                    "maximum": 1.0,
+                    "description": "Absolute head pan in radians; omit to retain measured pan.",
+                },
+                "tilt_rad": {
+                    "type": "number",
+                    "minimum": -1.4,
+                    "maximum": -0.7,
+                    "description": "Absolute downward tilt; default -1.0, more negative looks nearer the base.",
+                },
+            },
+            "required": [],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="scan_environment",
         modes=frozenset({AgentMode.CHAT}),
         description="Rotate in place through a full ≈360° scan to update the map and save memory. Use for 'look around', 'scan the room', or a full in-place survey — not for a single turn (use rotate_base) or a short drive (use move_forward). After scanning, you may call describe_scene to report the new view.",
