@@ -17,7 +17,10 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 - Stretch omitted body orientation and actuator targets from its state schema.
   Repair `12e4c426` samples them in the physics process and carries named controls
   through IPC/ZMQ. Unknown legacy fields remain unknown. The stationary live
-  retest receives both fields; route job `20261009_154446_722088` is tracked separately.
+  retest receives both fields. Route job `20261009_154446_722088` completed all ten
+  waypoints with complete telemetry in all 11 frames: worst receipt errors 0.009731 m
+  and 0.029891 rad (limits 0.02 m / 0.03 rad); minimum body-up dot world-Z 0.999994.
+  This is one diagnostic repeat, not the configured five-repeat navigation gate.
 - Repaired-stack offline result: **732 passed, one existing main failure** (the
   missing-RGB voxel-upgrade test described below). Focused repair pack: 39 passed.
 - #176 is the independent human-review candidate (three focused restoration tests
