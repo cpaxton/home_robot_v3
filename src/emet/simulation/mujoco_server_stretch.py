@@ -1068,6 +1068,10 @@ class MujocoZmqServer(BaseZmqServer):
             return None
         message = {
             "base_pose": base_pose,
+            "base_xyz": getattr(self._status, "base_xyz", None),
+            "base_up_dot_world_z": getattr(self._status, "base_up_dot_world_z", None),
+            "actuator_targets": getattr(self._status, "actuator_targets", None),
+            "actuator_names": getattr(self._status, "actuator_names", None),
             "ee_pose": ee_pose,
             "joint_positions": q,
             "joint_velocities": dq,
