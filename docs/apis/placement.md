@@ -35,7 +35,8 @@ The callback must account for the full queried volume, not just its center.
 Snapshots must be coherent and refreshed from perception before execution.
 
 ```python
-from emet.motion.placement import plan_placement_paths, surface_placement_centers
+from emet.motion.placement import plan_placement_paths
+from emet.motion.placement_surfaces import free_surface_centers
 from emet.motion.placement_geometry import HeldObject, PlacementScene
 
 scene = PlacementScene.from_voxels(
@@ -46,13 +47,14 @@ payload = HeldObject.from_world_bounds(
     observed_object_bounds, ee_position=measured_ee_position,
     ee_rotation=measured_ee_rotation,
 )
-centers = surface_placement_centers(
-    observed_support_bounds, payload=payload, ee_rotation=measured_ee_rotation,
+surface_search = free_surface_centers(
+    observed_support_patches, scene=scene, payload=payload,
+    ee_rotation=measured_ee_rotation,
 )
 result = plan_placement_paths(
     robot_model, measured_data, joint_names=joint_names,
     robot_body=base_body, ee_body=ee_body, scene=scene, payload=payload,
-    object_centers=centers, base_candidates=candidate_base_poses,
+    object_centers=surface_search.centers, base_candidates=candidate_base_poses,
     set_base=write_private_model_base_pose, contact_bodies=grasp_contact_bodies,
     max_solutions=3,
 )
@@ -105,9 +107,11 @@ state synchronization. Selecting `manip_collision="voxel"` without this provider
 fails instead of falling back to GT. The kinematic task-grounding/release wrapper
 still requires simulator placements; the reusable planner above does not.
 
-The default simulator adapter treats the top face of the selected receptacle's
-bounds as a support candidate. This is a top-surface control, not an inference
-about accessible interior shelves. Use an explicit provider for those surfaces.
+The default simulator adapter requires `support_surfaces` for the selected
+receptacle: horizontal top faces of axis-aligned collision boxes, preserved through
+server serialization and the client reader. It never substitutes a semantic or
+visual AABB top. Rotated/mesh supports and interior shelves require an explicit
+geometry provider. Disjoint support patches are not joined across unsupported gaps.
 Full-scene GT meshes and physical release execution remain separate integrations.
 
 ### Refresh and simulator geometry details
@@ -138,9 +142,16 @@ simulator latch preserves the positional offset; it does not enforce a rigid
 object orientation. Physical attachment/orientation estimation remains the
 responsibility of an observed-geometry provider and physical execution controller.
 
-Support sampling defaults to a bounded 5×5 grid, ordered from the center outward.
-The planner checks the payload volume at both target heights before spending IK
-budget. A target blocked by clutter or another support component is rejected;
-rejection of all sampled points is not proof that every possible placement is
-infeasible. Different orientations or interior appliance placement need explicit
-support/orientation grounding rather than bypassing occupied geometry.
+The executor uses `free_surface_centers` to subtract clutter footprints expanded
+by the payload footprint and margin from each explicit support patch. It checks
+the whole vertical preplace-to-place corridor, ranks remaining regions by area,
+and samples their centers and interior points. This can find off-grid slots missed
+by the earlier 5×5 lattice. It retains bounded region/candidate budgets and reports
+truncation separately from a complete search with no accepted candidates.
+
+`last_surface_search` exposes candidate centers, blocking geometry bounds and the
+budget flag to the caller. These are evidence for a future rearrangement planner,
+not a minimal blocker set or a claim that an obstacle is movable. Unknown-space
+predicates, full arm paths, measured state and attachment checks remain mandatory.
+A fixed-grid helper remains available for controlled comparisons. Pose orientation
+is still fixed to the measured orientation; failure is not a proof of infeasibility.

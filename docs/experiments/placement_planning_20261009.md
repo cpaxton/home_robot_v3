@@ -88,3 +88,19 @@ is removed and no target is silently substituted to obtain a passing score.
   remain failures; missing cases do not become successful trials.
 - Validation before submission: **176 tests passed**, Ruff and whitespace clean.
 - At submission the full gate is queued for the shared GPU; readiness is unproven.
+
+## Free-region placement before rearrangement
+
+Placement now subtracts clutter footprints enlarged by the payload footprint from
+explicit support patches. An off-grid-slot regression demonstrates a feasible
+region missed by the former 5×5 lattice. The full vertical approach volume must
+be clear, not just its endpoints. Separate patches cannot support an object by
+bridging a gap. Region budgets and blocker volumes remain available for future
+rearrangement reasoning; no blocker is automatically removed.
+
+The simulator publishes support patches separately from semantic object bounds.
+The initial supported GT extraction is horizontal top faces of axis-aligned box
+collision geoms. Mesh/rotated supports require an explicit geometry provider;
+missing surface geometry fails closed. This prevents treating an appliance's
+whole visual bounding-box top as a measured support surface. Observed providers
+can supply one or multiple explicitly grounded support patches through the same API.

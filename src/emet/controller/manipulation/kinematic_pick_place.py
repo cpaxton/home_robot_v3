@@ -632,15 +632,20 @@ class KinematicPickPlaceExecutor:
         ee = self._data.body(self.ee_body)
         payload = HeldObject.from_world_bounds(placements[body]["bounds"],
                                               ee_position=ee.xpos, ee_rotation=ee.xmat)
-        # Simulator top-surface control. Interior shelves require an explicit
-        # support observation/provider; appliance COMs are not placement surfaces.
-        return scene, payload, placements[receptacle]["bounds"]
+        # A semantic appliance AABB is not a support surface. New simulators
+        # publish grounded horizontal collision faces; explicit providers can
+        # supply observed patches or interior shelf regions.
+        from emet.motion.placement_surfaces import support_patches
+
+        patches = placements[receptacle].get("support_surfaces")
+        if patches is None:
+            raise ValueError("placement_support_geometry_missing")
+        return scene, payload, support_patches(patches)
 
     def _search_placement(self, body, receptacle, *, approach_base):
         from emet.motion.placement import (
             placement_base_candidates,
             plan_placement_paths,
-            surface_placement_centers,
         )
         from emet.motion.placement_geometry import PlacementCollisionChecker
 
@@ -648,15 +653,20 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_measured_state_missing")
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
-        centers = surface_placement_centers(support, payload=payload, ee_rotation=rotation,
-                                            clearance_m=max(.02, self.place_z_offset_m))
+        from emet.motion.placement_surfaces import free_surface_centers, support_patches
+
+        support = support_patches(support)
+        surface_search = free_surface_centers(support, scene=scene, payload=payload, ee_rotation=rotation,
+                                              clearance_m=max(.02, self.place_z_offset_m))
+        self.last_surface_search = surface_search
+        centers = surface_search.centers
         current = self._world_base_xyt()
         if current is None:
             raise ValueError("placement_base_pose_missing")
         spec = self.robot._spec
         mode = str(getattr(spec, "tamp_approach", "front") or "front")
         offset = (np.pi / 2 if self.arm == "left" else -np.pi / 2) if mode == "side" else 0.
-        poses = placement_base_candidates(np.asarray(support).mean(axis=0)[:2], current_xyt=current,
+        poses = placement_base_candidates(np.asarray(support).mean(axis=(0, 1))[:2], current_xyt=current,
                                            yaw_offset=offset) if approach_base else [current]
         state = getattr(self.robot, "_state", {})
         clear = None
@@ -683,6 +693,9 @@ class KinematicPickPlaceExecutor:
             rrt_max_iter=self.rrt_max_iter)
         if clear is not None and not all(clear):
             result.rejections["base_endpoint_rejected"] = sum(not value for value in clear)
+        if not centers:
+            result.rejections["surface_search_budget_exhausted" if surface_search.budget_exhausted
+                              else "no_accepted_surface_candidate"] = 1
         self.last_placement_search = result
         self._placement_support_bounds = np.array(support, dtype=float, copy=True)
         logger.info(f"Placement search source={result.geometry_source} paths={len(result.paths)} "
@@ -702,7 +715,11 @@ class KinematicPickPlaceExecutor:
             logger.info("Placement scene changed; revalidating the full segment against refreshed occupancy")
         if scene.source != checker.scene.source:
             raise ValueError("placement_geometry_source_changed")
-        if not np.allclose(support, self._placement_support_bounds, atol=.01, rtol=0):
+        from emet.motion.placement_surfaces import support_patches
+
+        support = support_patches(support)
+        expected_support = support_patches(self._placement_support_bounds)
+        if support.shape != expected_support.shape or not np.allclose(support, expected_support, atol=.01, rtol=0):
             raise ValueError("placement_support_moved")
         if (payload.vertices_ee.shape != checker.payload.vertices_ee.shape or
             not np.allclose(payload.vertices_ee, checker.payload.vertices_ee, atol=.01, rtol=0)):

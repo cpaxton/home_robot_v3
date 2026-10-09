@@ -323,3 +323,21 @@ def test_collision_components_preserve_open_interior_and_follow_moving_fixture()
     scene = PlacementScene.from_placements(updated, held_object="held")
     assert not scene.collides([[.99, -.1, -.1], [1.01, .1, .1]])
     assert scene.collides([[3.99, -.1, -.1], [4.01, .1, .1]])
+
+
+def test_support_faces_survive_client_reader_without_visual_aabb_inference():
+    import mujoco
+
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="counter">
+        <geom type="box" size="2 2 2" contype="0" conaffinity="0"/>
+        <geom type="box" size=".5 .3 .02" pos="0 0 .8"/>
+        <geom type="sphere" size=".1" pos="1 0 .8"/>
+    </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    wire = placements_to_session_dict(placements_from_mujoco_model(model, data))
+    entry = read_sim_object_placements({"sim_object_placements": wire})["counter"]
+    np.testing.assert_allclose(entry["support_surfaces"], [[[-.5, -.3, .82], [.5, .3, .82]]])
+    assert entry["bounds"][1, 2] == 2  # semantic bounds deliberately stay separate

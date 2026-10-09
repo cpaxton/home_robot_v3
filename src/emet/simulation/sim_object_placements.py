@@ -61,8 +61,9 @@ def _jsonify_placement_entry(info: dict[str, Any]) -> dict[str, Any]:
             mn = np.asarray(aabb_min, dtype=np.float64).reshape(3)
             mx = np.asarray(aabb_max, dtype=np.float64).reshape(3)
             out["bounds"] = [[float(x) for x in mn], [float(x) for x in mx]]
-    if "collision_bounds" in info:
-        out["collision_bounds"] = np.asarray(info["collision_bounds"], dtype=float).reshape(-1, 2, 3).tolist()
+    for field in ("collision_bounds", "support_surfaces"):
+        if field in info:
+            out[field] = np.asarray(info[field], dtype=float).reshape(-1, 2, 3).tolist()
     return out
 
 
@@ -247,12 +248,23 @@ def _placement_entry_from_geom_ids(
     centers = np.einsum("nij,nj->ni", rotations, model.geom_aabb[ids, :3]) + data.geom_xpos[ids]
     half = np.einsum("nij,nj->ni", np.abs(rotations), model.geom_aabb[ids, 3:])
     collision_bounds = np.stack((centers - half, centers + half), axis=1)
+    support_surfaces = []
+    for gid, rotation, component in zip(ids, rotations, collision_bounds, strict=True):
+        # Explicit horizontal top faces of axis-aligned collision boxes. Do not
+        # infer a surface from a visual mesh AABB or bridge disjoint components.
+        axis_aligned = np.all(np.isclose(np.abs(rotation), 0, atol=1e-6)
+                              | np.isclose(np.abs(rotation), 1, atol=1e-6))
+        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_BOX and axis_aligned:
+            patch = component.copy()
+            patch[0, 2] = patch[1, 2]
+            support_surfaces.append(patch)
     return {
         "cat": cat,
         "pos": center,
         "quat": quat,
         "bounds": bounds,
         "collision_bounds": collision_bounds,
+        "support_surfaces": np.asarray(support_surfaces).reshape(-1, 2, 3),
     }
 
 
