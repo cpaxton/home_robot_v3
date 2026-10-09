@@ -6,6 +6,31 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ### Extracted shared-agent stack (October 2026)
 
+#### Startup/telemetry repairs and bottom-up review (2026-10-09)
+
+- Confirmed the extracted EQA crash with a serial one-frame comparison: old
+  `2d8b30b1` imported MuJoCo through A* → `base_goal_rank` → `voxel_arm_collision`
+  and aborted with OpenGL `InvalidValue` (exit 134). Repair `f8d8666a` separates
+  shared grid coordinates from arm FK; `12e4c426` rendered a 480×640 Habitat frame
+  successfully under the same launch environment. Job `20261009_154414_7eb1e7`.
+  The repair is now included in #182 as `1bdb2949`, not only the acceptance tip.
+- Stretch omitted body orientation and actuator targets from its state schema.
+  Repair `12e4c426` samples them in the physics process and carries named controls
+  through IPC/ZMQ. Unknown legacy fields remain unknown. The stationary live
+  retest receives both fields; route job `20261009_154446_722088` is tracked separately.
+- Repaired-stack offline result: **732 passed, one existing main failure** (the
+  missing-RGB voxel-upgrade test described below). Focused repair pack: 39 passed.
+- #176 is the independent human-review candidate (three focused restoration tests
+  rerun); #180 has 102 focused grounding/find tests passing. #181 remains opt-in;
+  #182 needs repaired-head navigation/EQA evidence; #184/#185 depend on those gates.
+  No PR has been merged by this review pass. Do not merge #183 wholesale or absorb
+  #169's deferred wheel/pregrasp work into these repairs. The TAMP stack remains
+  separately owned (#177 → #178 → #179 → #186 → #187).
+- Main `a9a5f1d1` EQA-12 scored 8/12. The original extracted run produced no metrics
+  (12 native startup crashes), not 0/12 accuracy. Earlier `eb1e0890`/`17d96365`
+  paired EQA runs both scored 6/12 with identical correctness. A one-frame EGL pass
+  is not an EQA accuracy gate; a repaired paired rerun is still required.
+
 Review order: #180 current-view grounding → #181 opt-in providers → #182 measured
 navigation → #184 bounded inspection/recovery → acceptance tooling. #176 remains
 an independent conversation-state fix. Do not merge the legacy #167/#168 containers

@@ -846,6 +846,12 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [ ] **Paper figures**: keep regenerating `manip_figures` / chase-cam MP4s from scripted TAMP on the scene used in the paper; check in paths under `~/runs/emet/` only (not repo blobs).
 ## Extracted shared-agent review stack (2026-10-09)
 
+- [x] Remove MuJoCo/EGL import from A* grid helpers; before/after one-frame probe
+      reproduces exit 134 then successful Habitat rendering. Repair included in #182.
+- [x] Publish Stretch body-up/XYZ and named actuator controls from the physics
+      process through IPC/ZMQ; stationary live telemetry is now present.
+- [ ] Complete repaired-head route acceptance and EQA pairing before promotion;
+      a startup fix is not an accuracy result. See `docs/TESTING.md` for job IDs.
 - [ ] Accept #180 → #181 → #182 → #184 on their actual extracted revisions;
       see `docs/TESTING.md` and `docs/plans/shared_stack_inventory.json`.
       Offline checks are not live acceptance. Keep providers opt-in.
