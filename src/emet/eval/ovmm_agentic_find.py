@@ -273,6 +273,7 @@ def run_ovmm_agentic_localize(
             max_rounds=max_rounds,
             max_nav_steps=max_nav_steps,
             require_verified=require_verified,
+            require_grounded_object=bool(getattr(agent, "query_driven_memory", False)),
             router=router,
             trace_path=resolved_trace,
             trace_meta=trace_meta,
@@ -294,8 +295,13 @@ def run_ovmm_agentic_localize(
     xyz_source = None
     extra_q = None
     extra_stats: dict[str, Any] = {}
+    grounded_oid = getattr(result, "grounded_obs_id", None)
+    if result.verified and grounded_oid is not None:
+        xyz = xyz_from_verified_obs(agent, grounded_oid, phrases=localize_phrases)
+        if xyz is not None:
+            xyz_source = "grounded_object"
     loop_xyz, loop_phrase, loop_from_pin = _xyz_from_loop_voxel(result, localize_phrases)
-    if loop_xyz is not None:
+    if xyz is None and loop_xyz is not None:
         xyz = loop_xyz
         xyz_source = "voxel"
         extra_q = loop_phrase
@@ -322,6 +328,7 @@ def run_ovmm_agentic_localize(
         "budget_hit": bool(result.budget_hit),
         "answer_provenance": str(result.answer_provenance or ""),
         "xyz_source": xyz_source,
+        "grounded_obs_id": grounded_oid,
     }
     if extra_q:
         extra["voxel_query_used"] = extra_q

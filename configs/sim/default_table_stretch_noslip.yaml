@@ -1,0 +1,7 @@
+# Explicit numerical contact-solver ablation; not a hardware claim or default.
+kind: default_mujoco
+robot: stretch
+scene_path: src/emet/assets/robot/scene_noslip.xml
+headless: true
+port_offset: 0
+seed: 0

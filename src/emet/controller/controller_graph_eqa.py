@@ -228,12 +228,13 @@ class GraphEQAController(DynamemController):
         super().update(full_perception=full_perception)
         self._log_graph_eqa_rerun()
 
-    def look_around(self):
+    def look_around(self, *, on_observation=None):
         """Habitat has no head actuators — rotate the base to build coverage."""
         if is_habitat_robot_client(self.robot):
-            habitat_body_scan(self.robot, on_step=self.update)
-            return
-        super().look_around()
+            if on_observation is None:
+                return habitat_body_scan(self.robot, on_step=self.update)
+            return habitat_body_scan(self.robot, on_step=self.update, on_observation=on_observation)
+        return super().look_around(on_observation=on_observation)
 
     def _best_frontier_point_from_graph(self, text: str | None) -> np.ndarray | None:
         """Use graph information gain/risk scoring before the nearest-frontier fallback."""

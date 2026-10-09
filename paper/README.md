@@ -44,6 +44,16 @@ must download that image; generated files remain owned by the invoking user.
 
 ## Benchmarks and results
 
+The September 9 VLM-led query-surface prototype is **not an accepted result row**.
+See the [bounded closeout and artifact index](../docs/experiments/ovmm_grounding_closeout.md):
+EQA smoke 3/3, OVMM localization 0/4, partial navigation acceptance, and an
+oracle-assisted TAMP control. Do not replace existing tables with these numbers.
+Before revising the method/results story, distinguish view evidence, tentative
+voxel search candidates, depth-localized surfaces, and independently verified
+execution. Describe the wrist grasp adapter as Stretch-specific, not a shared
+cross-robot manipulation result. Figures must identify the actual MJCF model,
+show failed as well as successful trajectories, and disclose oracle overlays.
+
 - **Paper experiments (start here):** [docs/experiments/README.md](../docs/experiments/README.md)
 - **Habitat HM-EQA results vs prior art:** [docs/experiments/habitat_eqa_results.md](../docs/experiments/habitat_eqa_results.md)
 - **Classic vs agentic-verify summaries:** [data/hmeqa_agentic_h2h/](data/hmeqa_agentic_h2h/) + [data/README.md](data/README.md)

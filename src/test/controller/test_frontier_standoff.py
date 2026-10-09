@@ -5,15 +5,44 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
 from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
 
 
+@pytest.mark.parametrize(
+    "occupied,seen,reason", [(False, False, "unobserved_footprint"), (True, True, "obstacle"), (False, True, "valid")]
+)
+def test_footprint_diagnostics_distinguish_unknown_from_collision(occupied, seen, reason):
+    from emet.mapping.voxel.voxel_map import SparseVoxelMapNavigationSpace as BaseSpace
+
+    obstacles = torch.full((7, 7), occupied, dtype=torch.bool)
+    explored = torch.full((7, 7), seen, dtype=torch.bool)
+    space = SimpleNamespace(
+        voxel_map=SimpleNamespace(
+            grid_resolution=0.1,
+            xyt_is_safe=lambda xy: True,
+            grid=SimpleNamespace(xy_to_grid_coords=lambda xy: torch.tensor([3, 3])),
+        ),
+        get_oriented_mask=lambda theta: torch.ones((3, 3), dtype=torch.bool),
+    )
+    valid = BaseSpace.is_valid(space, np.zeros(3), obstacles=obstacles, explored=explored)
+    assert valid is (reason == "valid")
+    assert space.last_validity["reason"] == reason
+    if not valid:
+        assert space.last_validity["checked_pose"] == [0, 0, 0]
+        assert space.last_validity["footprint_cells"] == 9
+        assert space.last_validity["unknown_footprint_cells"] == (0 if seen else 9)
+        assert len(space.last_validity["unknown_cell_offsets_m"]) == (0 if seen else 9)
+
+
 def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     obstacles = torch.zeros((6, 2), dtype=torch.bool)
     space = SimpleNamespace(
-        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles)),
+        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles), grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="legacy_padded",
         compute_theta=lambda x, y, px, py: float(np.arctan2(py - y, px - x)),
         is_valid=lambda pose: True,
         _line_of_sight_clear=lambda *args: True,
@@ -36,7 +65,93 @@ def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     excluded = sample(space, start, target, planner, exploration=True, blocked={(0.4, 0.0), (0.5, 0.0)})
     assert excluded[0] < 0.4
     space._line_of_sight_clear = lambda *args: False
-    assert sample(space, start, target, planner) is None
+    assert sample(space, start, target, planner, exploration=True) is None
+    # A tabletop object can be visible above occupied 2D cells. Its approach
+    # does not require a collision-free ray all the way to the object itself.
+    assert sample(space, start, target, planner) is None  # Legacy behavior.
+    assert sample(space, start, target, planner, require_planar_visibility=False) is not None
     space._line_of_sight_clear = lambda *args: True
     space.is_valid = lambda pose: False
     assert sample(space, start, target, planner) is None
+    assert sample(space, start, target, planner, require_planar_visibility=False) is None
+
+
+def test_manipulation_distance_bounds_never_fall_back_to_a_close_viewpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    obstacles = torch.zeros((12, 2), dtype=torch.bool)
+    space = SimpleNamespace(
+        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles), grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="legacy_padded",
+        compute_theta=lambda *args: 0.0,
+        is_valid=lambda pose: True,
+        _line_of_sight_clear=lambda *args: False,
+    )
+    planner = SimpleNamespace(
+        to_pt=lambda pose: (round(float(pose[0]) * 10), 0),
+        to_xy=lambda ij: (ij[0] / 10, 0),
+        get_reachable_points=lambda start: [(i, 0) for i in range(12)],
+    )
+    sample = SparseVoxelMapNavigationSpace.sample_target_point
+    kwargs = {"distance_range": (0.7, 0.8), "require_planar_visibility": False}
+    goal = sample(space, np.array([1, 0, 0]), np.zeros(3), planner, **kwargs)
+    assert goal[0] == 0.8
+    obstacles[8, 0] = True
+    assert sample(space, np.array([1, 0, 0]), np.zeros(3), planner, **kwargs) is None
+    # The unmodified find policy can still use a closer viewing location.
+    assert sample(space, np.ones(3), np.zeros(3), planner, require_planar_visibility=False) is not None
+    obstacles[8, 0] = False
+    space.is_valid = lambda pose: False
+    assert sample(space, np.ones(3), np.zeros(3), planner, **kwargs) is None
+    archives = list((tmp_path / "navigation").glob("failed_approach_*.npz"))
+    assert len(archives) == 2
+    with np.load(archives[0], allow_pickle=False) as evidence:
+        np.testing.assert_allclose(evidence["distance_range"], [0.7, 0.8])
+        assert evidence["reachable_xy"].shape[1] == 2
+
+
+@pytest.mark.parametrize("bounds", [(0.8, 0.7), (-1, 1), (0, np.inf), (np.nan, 1), (0.7,)])
+def test_invalid_manipulation_distance_bounds_fail_before_planning(bounds):
+    with pytest.raises(ValueError, match="distance range"):
+        SparseVoxelMapNavigationSpace.sample_target_point(None, None, None, None, distance_range=bounds)
+
+
+@pytest.mark.parametrize(
+    "reason,status",
+    [("unobserved_footprint", "insufficient_floor_coverage"), ("occupied_footprint", "workspace_obstructed")],
+)
+def test_inspection_failure_retains_replay_and_physical_rejection(tmp_path, monkeypatch, reason, status):
+    import json
+
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    obstacles = torch.zeros((4, 2), dtype=torch.bool)
+    space = SimpleNamespace(
+        voxel_map=SimpleNamespace(grid_resolution=0.1),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
+        obstacle_map_mode="physical",
+        compute_theta=lambda *args: 0.0,
+    )
+
+    def invalid(pose):
+        space.last_validity = {"reason": reason}
+        return False
+
+    space.is_valid = invalid
+    planner = SimpleNamespace(
+        to_pt=lambda pose: (round(float(pose[0]) * 10), 0),
+        to_xy=lambda ij: (ij[0] / 10, 0),
+        get_reachable_points=lambda start: [(0, 0), (1, 0)],
+    )
+    assert (
+        SparseVoxelMapNavigationSpace.sample_target_point(
+            space, np.zeros(3), np.array([0.3, 0, 1]), planner, require_planar_visibility=False
+        )
+        is None
+    )
+    assert space.last_target_sampling["status"] == status
+    (archive,) = (tmp_path / "navigation").glob("failed_approach_*.npz")
+    with np.load(archive, allow_pickle=False) as saved:
+        assert saved["distance_range"].size == 0
+        assert not saved["require_planar_visibility"]
+        np.testing.assert_array_equal(saved["obstacles"], obstacles)
+    assert json.loads(archive.with_suffix(".json").read_text()) == space.last_target_sampling

@@ -375,16 +375,21 @@ def main(
         from emet.simulation.robocasa_assets_check import (
             diagnose_robocasa_assets,
             format_robocasa_assets_incomplete_message,
+            imported_robocasa_package_dir,
             robocasa_kitchen_assets_complete,
         )
         from emet.simulation.robocasa_objaverse_bbox import ensure_objaverse_reg_bbox
         from emet.simulation.robocasa_registry_sync import ensure_robocasa_fixture_registry
 
-        ensure_robocasa_fixture_registry()
-        ensure_objaverse_reg_bbox()
+        robocasa_pkg = imported_robocasa_package_dir()
+        assets_complete = robocasa_kitchen_assets_complete(robocasa_pkg)
+        if not assets_complete:
+            ensure_robocasa_fixture_registry(robocasa_pkg)
+            ensure_objaverse_reg_bbox(robocasa_pkg)
+            assets_complete = robocasa_kitchen_assets_complete(robocasa_pkg)
 
-        if not robocasa_kitchen_assets_complete():
-            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+        if not assets_complete:
+            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets(robocasa_pkg)
             logger.error(
                 format_robocasa_assets_incomplete_message(
                     missing_basic=not basic_ok,
@@ -404,7 +409,7 @@ def main(
                 seed=int(seed) if seed is not None else None,
             )
         except FileNotFoundError as e:
-            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets(robocasa_pkg)
             logger.error(
                 format_robocasa_assets_incomplete_message(
                     detail=f"Missing file: {e.filename}",
@@ -420,7 +425,7 @@ def main(
             is_style = "Did not find style that matches" in err
             is_bbox = isinstance(e, AttributeError) or "reg_bbox" in err
             if is_style or is_bbox:
-                _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+                _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets(robocasa_pkg)
                 logger.error(
                     format_robocasa_assets_incomplete_message(
                         detail=err,

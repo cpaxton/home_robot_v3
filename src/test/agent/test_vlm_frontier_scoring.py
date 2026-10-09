@@ -83,6 +83,9 @@ def test_agentic_explore_prefers_vlm_frontier_candidate():
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
     agent = MagicMock()
+    # Candidates and base pose share the planning frame. An unconstrained
+    # MagicMock transform returns an empty array, not a valid robot pose.
+    agent._planning_base_xyt.side_effect = lambda pose: np.asarray(pose, dtype=float)
     agent.parameters = {"eqa": {"agentic_max_nav_steps": 8}}
     agent.graph_memory = MagicMock()
     agent.graph_memory.get_nodes.return_value = []
@@ -113,6 +116,7 @@ def test_agentic_explore_prefers_vlm_frontier_candidate():
     out = ex._tool_explore_frontier(toward="wall clock")
     assert out["ok"] is True
     agent._vlm_frontier_choice.assert_called()
+    agent._planning_base_xyt.assert_called()
     nav_goal = agent.navigate_to_target_pose.call_args[0][0]
     assert abs(float(nav_goal[0]) - 3.0) < 1e-6
     assert abs(float(nav_goal[1]) - 4.0) < 1e-6

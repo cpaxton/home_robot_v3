@@ -16,7 +16,7 @@ import signal
 import sys
 import threading
 import time
-from multiprocessing import Lock, Manager, Process
+from multiprocessing import Manager, Process
 from typing import Any
 
 import numpy as np
@@ -97,7 +97,7 @@ class StretchMujocoSimulator:
 
         self.data_proxies = MujocoServerProxies.default(self._manager)
 
-        self._command_lock = Lock()
+        self._command_lock = self.data_proxies.command_lock
 
     def start(
         self,
@@ -625,20 +625,21 @@ class StretchMujocoSimulator:
         with self._command_lock:
             command = self.data_proxies.get_command()
             command.teleport_base.trigger = False
-            command.set_base_velocity(CommandBaseVelocity(v_linear=0.0, omega=0.0, trigger=True))
+            command.set_base_velocity(CommandBaseVelocity(v_linear=0.0, omega=0.0, trigger=True, stop=True))
             self.data_proxies.set_command(command)
-            deadline = time.monotonic() + timeout
-            acknowledged_at = None
-            while time.monotonic() < deadline:
-                status = self.data_proxies.get_status()
-                if not self.data_proxies.get_command().base_velocity.trigger:
-                    if acknowledged_at is None:
-                        acknowledged_at = status.time
-                    elif status.time > acknowledged_at:
-                        if abs(status.base.x_vel) < 0.02 and abs(status.base.theta_vel) < 0.05:
-                            return True
-                time.sleep(0.02)
-            return False
+        # The physics process needs the shared lock to consume this stop.
+        deadline = time.monotonic() + timeout
+        acknowledged_at = None
+        while time.monotonic() < deadline:
+            status = self.data_proxies.get_status()
+            if not self.data_proxies.get_command().base_velocity.trigger:
+                if acknowledged_at is None:
+                    acknowledged_at = status.time
+                elif status.time > acknowledged_at:
+                    if abs(status.base.x_vel) < 0.02 and abs(status.base.theta_vel) < 0.05:
+                        return True
+            time.sleep(0.02)
+        return False
 
     @require_connection
     def add_world_frame(

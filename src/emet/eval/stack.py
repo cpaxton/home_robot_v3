@@ -92,9 +92,6 @@ def build_memory_agent(
 
         inst = True if use_instance_graph is None else bool(use_instance_graph)
         sens = False if use_sensor_perception is None else bool(use_sensor_perception)
-        if backend_key == LAZY_GRAPH:
-            inst = False
-            sens = True
         if getattr(embodied_agent, "graph_eqa_memory", None) is not None:
             gcfg = embodied_agent.graph_eqa_memory
             if getattr(gcfg, "enabled", False):
@@ -102,6 +99,12 @@ def build_memory_agent(
                     inst = bool(gcfg.use_instance_graph)
                 if use_sensor_perception is None:
                     sens = bool(gcfg.use_sensor_perception)
+
+        # Backend semantics win over the generic embodied graph preset. Otherwise
+        # interactive lazy_graph silently reloads a streaming instance detector.
+        if backend_key == LAZY_GRAPH:
+            inst = False
+            sens = True
 
         common = {
             "robot": robot,

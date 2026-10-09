@@ -1,0 +1,8 @@
+# Experimental recovery row. Preserve the contact/aperture-only control so
+# proposal recovery can be compared without changing grasp calibration.
+extends: configs/emet/query_geometry_contact_aperture_pilot.yaml
+mapping:
+  query_memory:
+    # One Qwen-box/SAM attempt on empty/overflowing detector geometry, never
+    # a retry of semantic rejection. Final verification remains mandatory.
+    recover_proposals_with_vlm: true

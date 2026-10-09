@@ -19,7 +19,9 @@
       </default>
       <default class="lift">
         <joint type="slide" axis="0 0 1" damping="35" stiffness="0.03" armature="0.01" range="0.0 1.1" frictionloss="1.5"/>
-        <general ctrlrange="0.0 1.1" gainprm="400" biasprm="0 -200 -100" forcerange="-70 70"/>
+        <!-- Position servo must hold a payload inside the 2 cm joint contract.
+             Preserve the 70 N force limit; stronger feedback reduces load sag. -->
+        <position ctrlrange="0.0 1.1" kp="800" kv="140" forcerange="-70 70"/>
       </default>
       <default class="telescope">
         <joint type="slide" axis="0 0 1" damping="50" stiffness="0.02" armature="0.01" range="0 0.13" frictionloss="1.5"/>
@@ -71,6 +73,12 @@
       </default>
       <default class="collision">
         <geom group="3" type="mesh"/>
+        <!-- Keep wheel contact parameters when merging with room materials,
+             just as for the caster and pads. In particular, room torsional
+             friction must not turn a rolling wheel into a high-friction pivot. -->
+        <default class="wheel_collision">
+          <geom condim="6" priority="1"/>
+        </default>
         <default class="caster">
           <geom type="sphere" size=".02" pos="-0.24 0 .02" condim="1" priority="1"/>
         </default>
@@ -287,13 +295,13 @@
         <joint name="joint_right_wheel" class="wheel"/>
         <geom mesh="link_right_wheel_0" material="Wheel_Rubber_Gray" class="visual" mass="0.15"/>
         <geom mesh="link_right_wheel_1" material="Generic_Black" class="visual"/>
-        <geom class="collision" type="cylinder" size=".05 .0125" pos="0 0 0.0125" condim="6"/>
+        <geom class="wheel_collision" type="cylinder" size=".05 .0125" pos="0 0 0.0125"/>
       </body>
       <body name="link_left_wheel" pos="0 0.17035 0.0508" quat="1 -1 0 0">
         <joint name="joint_left_wheel" class="wheel"/>
         <geom mesh="link_left_wheel_0" material="Wheel_Rubber_Gray" class="visual" mass="0.15"/>
         <geom mesh="link_left_wheel_1" material="Generic_Black" class="visual"/>
-        <geom class="collision" type="cylinder" size=".05 .0125" pos="0 0 -0.0125" condim="6"/>
+        <geom class="wheel_collision" type="cylinder" size=".05 .0125" pos="0 0 -0.0125"/>
       </body>
       <body name="link_lift" gravcomp="1" pos="-0.104385 0.134999 0.2" quat="1 0 0 1">
         <joint name="joint_lift" class="lift"/>
@@ -388,7 +396,9 @@
                               </body>
                             </body>
                           </body>
-                          <body name="link_grasp_center" pos="0 0 0.23" euler="-1.5707963267949 -1.5707963267948 0"> </body>
+                          <!-- URDF fixed-axis RPY (-pi/2, -pi/2, 0). MuJoCo's
+                               intrinsic Euler convention would permute axes. -->
+                          <body name="link_grasp_center" pos="0 0 0.23" quat="0.5 -0.5 -0.5 -0.5"> </body>
                           <!-- Gripper Mechanism -->
                             <body name="link_gripper_slider" euler="0 0 0" pos="0 0 0" gravcomp="1">
                               <joint name="joint_gripper_slide" class="finger_slide"/>
@@ -462,7 +472,10 @@
           <geom mesh="link_head_tilt_1" class="collision"/>
           <body name="realsense" pos="0.0406 0.0053 0.0307" euler="0 0 0">
             <camera name="d435i_camera_rgb" pos="0 0.015 0" euler="1.57 -1.57 0" />
-            <camera name="d435i_camera_depth" euler="1.57 -1.57 0"/>
+            <!-- The bridge publishes depth registered to color, using color K
+                 and pose. Render this virtual aligned-depth view at the RGB
+                 optical center, not the raw stereo eye 15 mm away. -->
+            <camera name="d435i_camera_depth" pos="0 0.015 0" euler="1.57 -1.57 0"/>
           </body>
           <body name="link_SE3_head_nav_cam" pos="0.04 -0.0412 -0.0246" euler="0 1.5707963 0">
             <joint name="joint_head_nav_cam" class="head_tilt" stiffness="10"/>

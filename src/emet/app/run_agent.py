@@ -321,6 +321,11 @@ log = Logger(__name__)
     ),
 )
 @click.option(
+    "--visual-servo/--no-visual-servo",
+    default=False,
+    help="Opt into the existing wrist-camera grasp adapter (currently Stretch); no oracle pickup fallback in query mode.",
+)
+@click.option(
     "--share-memory-vllm/--no-share-memory-vllm",
     "share_memory_vllm",
     default=True,
@@ -524,6 +529,7 @@ def main(
     dynamem_eqa: bool = False,
     memory_backend: str = "dynagraph",
     share_memory_vllm: bool = True,
+    visual_servo: bool = False,
     start_sim: bool = False,
     start_habitat: bool = False,
     habitat_question_id: int | None = None,
@@ -886,6 +892,7 @@ def main(
                 vl_include_camera=vl_include_effective,
                 eqa=dynamem_eqa,
                 share_memory_vllm=share_memory_vllm,
+                visual_servo=visual_servo,
                 memory_backend=memory_backend,
                 headless=headless,
                 rerun=rerun,

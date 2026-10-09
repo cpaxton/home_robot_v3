@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-from emet.agent.loop import _call_llm, _format_fast_tool_reply, _should_skip_llm_summarize
+from emet.agent.loop import _call_llm, _format_fast_tool_reply
 from emet.llms.base import AbstractVLLMClient
 
 
@@ -49,20 +49,12 @@ def test_agent_followup_round_uses_reset_context_false():
     assert client.calls[1]["reset_context"] is False
 
 
-def test_fast_tool_reply_skips_summarize_for_describe_scene():
-    tool_calls = [{"name": "describe_scene", "arguments": {}}, {"name": "send_image", "arguments": {}}]
+def test_fallback_reply_preserves_description():
     results = [
         "[describe_scene] From my head camera I can make out: sofa, lamp.",
         "[send_image] Image queued for Discord (attached to the reply).",
     ]
-    assert _should_skip_llm_summarize(tool_calls, results) is True
     msg = _format_fast_tool_reply(results)
     assert msg is not None
     assert "sofa" in msg
     assert "lamp" in msg
-
-
-def test_fast_tool_reply_does_not_skip_query_memory():
-    tool_calls = [{"name": "query_memory", "arguments": {"question": "where?"}}]
-    results = ["[query_memory] Answer: on the table"]
-    assert _should_skip_llm_summarize(tool_calls, results) is False

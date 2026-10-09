@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.agent.tool_outcome import ToolOutcome
 from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
 from emet.mapping.voxel_localize import localize_text_xyz, voxel_map_from_agent
 from emet.memory.graph_eqa.graph_stats import format_graph_size_report
@@ -63,6 +64,45 @@ def _agent_from_context(context: dict[str, Any]) -> Any | None:
     return context.get("agent")
 
 
+def navigation_feedback(agent: Any | None) -> dict:
+    """Bounded navigation evidence; never dump full waypoint arrays into prompts."""
+    meta = getattr(agent, "_last_nav_plan", None) or {}
+    keys = (
+        "mode",
+        "outcome",
+        "status_code",
+        "localize_source",
+        "goal_xyt",
+        "requested_goal_xyt",
+        "goal_resolution",
+        "motion_outcome",
+        "new_sensor_cells",
+        "new_sensor_area_m2",
+        "observation_outcome",
+        "n_planned",
+        "min_clearance_m",
+        "min_clearance_required_m",
+        "footprint",
+        "approach_sampling",
+    )
+    result = {key: meta[key] for key in keys if key in meta}
+    candidates = meta.get("view_candidates")
+    if candidates:
+        from collections import Counter
+
+        eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
+        compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
+        result["view_selection"] = {
+            "candidate_count": len(candidates),
+            "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
+            "top_estimated_views": [
+                {key: candidate[key] for key in compact_keys if key in candidate}
+                for candidate in sorted(eligible, key=lambda c: -c["score"])[:3]
+            ],
+        }
+    return result
+
+
 def format_last_nav_plan_summary(agent: Any | None) -> str:
     """Compact last-plan line for explore/find/diagnostics tool returns."""
     if agent is None:
@@ -97,6 +137,9 @@ def format_last_nav_plan_summary(agent: Any | None) -> str:
     status_code = meta.get("status_code")
     if status_code and status_code != outcome:
         parts.append(f"status={status_code}")
+    footprint = meta.get("footprint") or {}
+    if "unknown_footprint_cells" in footprint:
+        parts.append(f"unknown_footprint_cells={footprint['unknown_footprint_cells']}")
     if meta.get("confirmed") is True:
         parts.append("confirmed=yes")
     elif meta.get("confirmed") is False or outcome == "user_cancelled":
@@ -132,12 +175,19 @@ def format_base_clearance_hint(agent: Any | None) -> str:
     if robot is None or not hasattr(robot, "get_base_pose"):
         return ""
     try:
-        pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
-        if pose.size < 2:
+        xy = _robot_base_xy(robot, agent=agent)
+        if xy is None:
             return ""
         if getattr(planner, "_clearance_m", None) is None:
             planner.reset()
-        c = float(planner.clearance_at_xy(pose[:2]))
+        measured_clearance = getattr(planner, "measured_clearance_at_xy", None)
+        if callable(measured_clearance):
+            value = measured_clearance(xy)
+            if value is None:
+                return "Base clearance unavailable: map distance is unknown or uses a planning fallback; not a clearance certificate."
+            c = float(value)
+        else:
+            c = float(planner.clearance_at_xy(xy))
         req = float(getattr(agent, "_min_clearance_m", getattr(planner, "min_clearance_m", 0.0)) or 0.0)
         if req > 0 and c < req:
             return f"Base clearance {c:.2f}m is below min_clearance_m={req:.2f}m (near obstacle)."
@@ -230,7 +280,7 @@ class Tool:
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 
-def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, float] | None:
+def _robot_base_xy(robot: Any, executor: Any | None = None, *, agent: Any | None = None) -> tuple[float, float] | None:
     """Base XY in the voxel-map world frame (matches visited / explored stamps).
 
     Prefer the controller's ``world_base_xy`` (gps → world via ``navigation_origin_xyt``).
@@ -238,6 +288,7 @@ def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, floa
     """
     if executor is not None:
         agent = getattr(executor, "agent", None)
+    if agent is not None:
         if agent is not None and hasattr(agent, "world_base_xy"):
             try:
                 xy = agent.world_base_xy()
@@ -253,6 +304,13 @@ def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, floa
                     return float(wxyt[0]), float(wxyt[1])
             except Exception:
                 pass
+    if robot is not None and callable(getattr(robot, "get_base_pose_world", None)):
+        try:
+            pose = np.asarray(robot.get_base_pose_world(), dtype=float).reshape(-1)
+            if pose.size >= 2 and np.isfinite(pose[:2]).all():
+                return float(pose[0]), float(pose[1])
+        except (TypeError, ValueError, RuntimeError):
+            pass
     if robot is None or not hasattr(robot, "get_base_pose"):
         return None
     try:
@@ -372,22 +430,41 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def _exec(cmd: str, args: Any = "") -> str:
+    def _exec(cmd: str, args: Any = "") -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([(cmd, args)])
-        return "Done." if ok else "Command was interrupted or failed."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        keep_going = executor([(cmd, args)])
+        ok = bool(keep_going and getattr(executor, "_last_exec_ok", True))
+        return ToolOutcome(ok, note="Done." if ok else "Command was interrupted or failed.")
 
     # -- explore -------------------------------------------------------------
-    def explore() -> str:
+    def _navigation_recovery(result: ToolOutcome) -> ToolOutcome:
+        executor = context.get("executor")
+        if (
+            not result.ok
+            and result.status == "rejected_swept_footprint:unobserved_footprint"
+            and getattr(executor, "_held_query_instance", None) is None
+            and getattr(getattr(executor, "grasp_object", None), "pickup_executed", None) is False
+        ):
+            result.payload["recovery_tools"] = ["observe_floor"]
+            result.payload["suggested_action"] = (
+                "Inspect the unknown footprint area with a stationary head observation. "
+                "Pan changes the side viewed; more negative tilt looks nearer the base. "
+                "Compare blocking-cell counts before/after and change view or stop if unchanged. "
+                "Replan before motion; never treat unknown space as free."
+            )
+        return result
+
+    def explore() -> ToolOutcome:
         executor = context.get("executor")
         robot = context.get("robot")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("explore", "")])
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        result = _exec("explore")
+        ok = result.ok
         agent = _agent_from_context(context)
-        robot_xy = _robot_base_xy(robot)
+        robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=ok)
@@ -395,19 +472,28 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
         head = format_nav_outcome_head(outcome, ok=ok, verb="Explore")
         parts = [head, summary]
+        parts.append("This is a bounded exploration attempt, not a certificate that the room is fully mapped.")
         if plan_line:
             parts.append(plan_line)
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)
             parts.append(f"[{gsize}]")
-        return " ".join(parts)
+        result.note = " ".join(parts)
+        result.status = str(outcome or ("controller_completed" if ok else "navigation_failed"))
+        result.payload["navigation"] = navigation_feedback(agent)
+        attempt = getattr(agent, "_last_nav_attempt", None)
+        distance = getattr(attempt, "dist_m", None)
+        if isinstance(distance, (int, float)) and np.isfinite(distance):
+            result.payload["navigation"]["measured_distance_m"] = float(distance)
+        return _navigation_recovery(result)
 
     tools.append(
         Tool(
             name="explore",
             description=(
-                "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
+                "Take bounded exploration steps to build a map; each may be a useful viewing turn or a translation. "
+                "Completion does not certify full room coverage. "
                 "Use for 'explore', 'map the room', 'go look around the house'. "
                 "For a quick in-place look, prefer scan_environment. "
                 "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "
@@ -555,14 +641,62 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
-    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> str:
+    def _query_manipulation() -> bool:
+        agent = getattr(context.get("executor"), "agent", None)
+        return getattr(agent, "query_driven_memory", False) is True
+
+    def _pick_place_outcome(ok: bool, note: str) -> ToolOutcome:
+        return ToolOutcome(
+            ok=ok,
+            status="controller_completed" if ok else "failed",
+            note=note,
+            tool="pick_place",
+            payload={"physical_success_verified": False},
+        )
+
+    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> ToolOutcome:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
-        return (
+        if task_ok and _query_manipulation():
+            return _pick_place_outcome(
+                True, "Pick/place controller completed; physical success has not been independently verified."
+            )
+        note = (
             f"Pick and place ({object_name} -> {receptacle_name}) done."
             if task_ok
             else "Pick/place failed or interrupted."
         )
+        outcome = _pick_place_outcome(task_ok, note)
+        detail = getattr(executor, "last_query_manipulation", None)
+        if not task_ok and isinstance(detail, dict):
+            outcome.note = str(detail.get("reason") or note)
+            outcome.payload["manipulation"] = detail
+            navigation = detail.get("navigation", {})
+            outcome.status = str(detail.get("status") or navigation.get("status") or "manipulation_failed")
+            if detail.get("payload_state") == "empty" and (
+                (
+                    detail.get("phase") == "pre_grasp"
+                    and detail.get("observed_after_action") is True
+                    and outcome.status in {"insufficient_floor_coverage", "no_reachable_workspace"}
+                )
+                or (
+                    detail.get("phase") == "navigation"
+                    and outcome.status == "rejected_swept_footprint:unobserved_footprint"
+                )
+            ):
+                outcome.payload["recovery_tools"] = ["observe_floor"]
+                outcome.payload["suggested_action"] = (
+                    "Observe floor, then replan if capture succeeds; do not bypass collision checks. "
+                    "No reachable workspace does not establish whether unseen space is clear."
+                )
+                if navigation.get("in_range_center_cells", {}).get("disconnected", 0):
+                    outcome.payload["suggested_action"] = (
+                        "Observed in-range center cells exist but no safe route connects them to the robot. "
+                        "Inspect adjacent/lateral floor with observe_floor pan_rad, then replan; repeating the "
+                        "same forward view may not help. Center clearance does not certify footprint safety. "
+                        "Do not bypass collision checks or increase the grasp reach limit."
+                    )
+        return outcome
 
     def _build_tamp_plan(
         *,
@@ -628,6 +762,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         object_name: str = "",
         receptacle_name: str = "",
     ) -> str:
+        if _query_manipulation():
+            return "TAMP plan unavailable: this planner requires oracle scene geometry. Use pick_place for fresh query grounding."
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
         build = _build_tamp_plan(
@@ -641,6 +777,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return _format_tamp_plan(plan_ref, build)
 
     def execute_pick_place_plan(plan_ref: str) -> str:
+        if _query_manipulation():
+            return "TAMP execution blocked: oracle scene plans are not allowed in query-driven mode."
         from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan
 
         robot = _tamp_robot()
@@ -649,12 +787,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         ok, message = execute_stored_agent_plan(robot, context, str(plan_ref))
         return f"TAMP execution {'succeeded' if ok else 'failed'}: {message}."
 
-    def pick_place(object_name: str, receptacle_name: str) -> str:
+    def pick_place(object_name: str, receptacle_name: str) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
-            return "Robot not connected."
+            return _pick_place_outcome(False, "Robot not connected.")
         if executor is not None and (
-            bool(getattr(executor, "visual_servo", False))
+            _query_manipulation()
+            or bool(getattr(executor, "visual_servo", False))
             or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
         ):
             return _fallback_pick_place(executor, object_name, receptacle_name)
@@ -667,13 +806,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
             plan_ref = store_agent_plan(context, _tamp_robot(), build)
             ok, message = execute_stored_agent_plan(_tamp_robot(), context, plan_ref)
-            return (
-                f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else f"Pick/place failed: {message}."
+            return _pick_place_outcome(
+                ok,
+                f"Pick and place ({object_name} -> {receptacle_name}) done."
+                if ok
+                else f"Pick/place failed: {message}.",
             )
         if build.live_sim:
-            return f"Pick/place not run: {build.reason or 'TAMP planning failed'}."
+            return _pick_place_outcome(False, f"Pick/place not run: {build.reason or 'TAMP planning failed'}.")
         if executor is None:
-            return "Pick/place not run: no configured manipulation controller."
+            return _pick_place_outcome(False, "Pick/place not run: no configured manipulation controller.")
         return _fallback_pick_place(executor, object_name, receptacle_name)
 
     tools.append(
@@ -742,6 +884,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     # -- scene_tasks ----------------------------------------------------------
     def scene_tasks(object_filter: str = "", robot: str = "") -> str:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        if _query_manipulation():
+            return "Scene metadata unavailable in query-driven mode; inspect camera views and query memory instead."
         from collections import Counter
 
         from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
@@ -888,11 +1032,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- find_objects --------------------------------------------------------
-    def find_objects(text: str) -> str:
+    def find_objects(text: str) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         ok = executor([("find", text)])
+        ok = bool(ok) and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
@@ -915,7 +1060,14 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "Do not immediately re-call find_objects; ask the user or use "
                 "navigation_diagnostics / send_map_snapshot / scan_environment first."
             )
-        return " ".join(parts)
+        return _navigation_recovery(
+            ToolOutcome(
+                ok,
+                status=str(outcome or ("controller_completed" if ok else "navigation_failed")),
+                note=" ".join(parts),
+                payload={"navigation": navigation_feedback(agent)},
+            )
+        )
 
     tools.append(
         Tool(
@@ -932,7 +1084,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["text"],
             },
             func=find_objects,
-            executor_commands=lambda args: [("find", args.get("text", ""))],
             returns_info=True,
         )
     )
@@ -1040,18 +1191,62 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def scan_environment() -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok = executor([("rotate_in_place", "")])
-        if not ok:
-            return "Scan interrupted or failed."
+    def observe_floor(
+        pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False
+    ) -> ToolOutcome:
+        from emet.controller.dynamem.look import observe_floor as capture_floor
+
+        agent = _agent_from_context(context)
+        if agent is None:
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        return ToolOutcome.from_eqa_dict(
+            "observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker)
+        )
+
+    tools.append(
+        Tool(
+            name="observe_floor",
+            description=(
+                "Look downward with the head, without moving the base, and update the map from fresh RGB-D. "
+                "Use when an approach reports insufficient_floor_coverage, or to check near-base floor "
+                "after no_reachable_workspace. Does not guarantee clearance; replan after observing. "
+                "Requires a movable head with measured pose and fresh calibrated depth."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "pan_rad": {
+                        "type": "number",
+                        "minimum": -1.0,
+                        "maximum": 1.0,
+                        "description": "Absolute head pan in radians; omit to retain measured pan.",
+                    },
+                    "tilt_rad": {
+                        "type": "number",
+                        "minimum": -1.4,
+                        "maximum": -0.7,
+                        "description": (
+                            "Absolute downward tilt; default -1.0. More negative looks nearer the base. "
+                            "Occluded floor may remain unseen; a capture does not authorize movement."
+                        ),
+                    },
+                },
+                "required": [],
+            },
+            func=observe_floor,
+            returns_info=True,
+        )
+    )
+
+    def scan_environment() -> ToolOutcome:
+        result = _exec("rotate_in_place")
+        if not result.ok:
+            return result
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)
-            return f"Completed in-place ≈360° scan; map/memory updated. [{gsize}]"
-        return "Completed in-place ≈360° scan; map/memory updated."
+        result.note = "Completed in-place ≈360° scan; map/memory updated." + (f" [{gsize}]" if gsize else "")
+        return result
 
     tools.append(
         Tool(
@@ -1068,20 +1263,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def rotate_base(degrees: float = 90.0) -> str:
+    def rotate_base(degrees: float = 90.0) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         try:
             deg = float(degrees)
         except (TypeError, ValueError):
-            return f"Invalid degrees: {degrees!r}."
+            return ToolOutcome(False, status="invalid_argument", note=f"Invalid degrees: {degrees!r}.")
+        if not np.isfinite(deg):
+            return ToolOutcome(False, status="invalid_argument", note="Degrees must be finite.")
         deg = float(np.clip(deg, -360.0, 360.0))
-        ok = executor([("rotate_base", str(deg))])
-        if not ok:
-            return "Rotate failed or interrupted."
+        result = _exec("rotate_base", str(deg))
+        if not result.ok:
+            return result
         context["last_rotate_degrees"] = deg
-        return f"Rotated about {deg:.0f}° in place."
+        result.note = f"Rotated about {deg:.0f}° in place."
+        return result
 
     tools.append(
         Tool(
@@ -1109,7 +1307,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def face_toward(object_label: str) -> str:
+    def face_toward(object_label: str) -> ToolOutcome:
         """Yaw in place to face a scene-graph / voxel object (no XY drive)."""
         import math
 
@@ -1119,37 +1317,41 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         robot = context.get("robot")
         label = (object_label or "").strip()
         if not label:
-            return "Need an object label to face (e.g. 'aquarium', 'shelf')."
+            return ToolOutcome(
+                False, status="invalid_argument", note="Need an object label to face (e.g. 'aquarium', 'shelf')."
+            )
         if executor is None or robot is None or not hasattr(robot, "get_base_pose"):
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         agent = getattr(executor, "agent", None)
         xy, source = resolve_object_xy(agent, label)
         if xy is None:
-            return (
-                f"I don't have a map location for {label!r} yet — "
-                "I can rotate_base blindly or describe_scene from here."
+            return ToolOutcome(
+                False,
+                status="not_localized",
+                note=f"I don't have a map location for {label!r} yet — "
+                "I can rotate_base blindly or describe_scene from here.",
             )
         try:
             pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
         except Exception as e:
-            return f"Could not read base pose: {e}"
+            return ToolOutcome.from_exception("face_toward", e)
         if pose.size < 3:
-            return "Base pose incomplete."
+            return ToolOutcome(False, status="invalid_pose", note="Base pose incomplete.")
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
             msg = f"Already roughly facing {label!r} ({source})."
         else:
             deg = float(np.clip(deg, -180.0, 180.0))
-            ok = executor([("rotate_base", str(deg))])
-            if not ok:
-                return f"Tried to face {label!r} ({source}) but rotate failed."
+            result = _exec("rotate_base", str(deg))
+            if not result.ok:
+                return result
             context["last_rotate_degrees"] = deg
             msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
         hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
         if hint:
             msg = f"{msg} {hint}"
-        return msg
+        return ToolOutcome(True, note=msg)
 
     tools.append(
         Tool(
@@ -1176,33 +1378,40 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def move_forward(meters: float = 0.1) -> str:
+    def move_forward(meters: float = 0.1) -> ToolOutcome:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
         try:
             dist = float(meters)
         except (TypeError, ValueError):
-            return f"Invalid meters: {meters!r}."
+            return ToolOutcome(False, status="invalid_argument", note=f"Invalid meters: {meters!r}.")
+        if not np.isfinite(dist):
+            return ToolOutcome(False, status="invalid_argument", note="Meters must be finite.")
         dist = float(np.clip(dist, 0.0, 1.5))
         # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
         agent = getattr(executor, "agent", None)
         if agent is not None and hasattr(agent, "move_forward_meters"):
             commanded = float(agent.move_forward_meters(dist))
             if commanded < 0.02:
-                return (
-                    "I don't have enough explored map to drive that way yet "
+                return ToolOutcome(
+                    False,
+                    status="blocked",
+                    note="I don't have enough explored map to drive that way yet "
                     "(empty map, local free disk too small, or obstacle too close). "
                     "Want me to scan_environment or rotate_base in place first so I can see "
-                    "what's ahead?"
+                    "what's ahead?",
                 )
             if commanded + 1e-3 < dist:
-                return f"Moved forward {commanded:.2f} m (map-clipped from {dist:.2f} m so I don't hit anything)."
-            return f"Moved forward {commanded:.2f} m (map clear along path)."
-        ok = executor([("move_forward", str(dist))])
-        if not ok:
-            return "Move forward failed or interrupted."
-        return f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
+                return ToolOutcome(
+                    True,
+                    note=f"Moved forward {commanded:.2f} m (map-clipped from {dist:.2f} m so I don't hit anything).",
+                )
+            return ToolOutcome(True, note=f"Moved forward {commanded:.2f} m (map clear along path).")
+        result = _exec("move_forward", str(dist))
+        if result.ok:
+            result.note = f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
+        return result
 
     tools.append(
         Tool(

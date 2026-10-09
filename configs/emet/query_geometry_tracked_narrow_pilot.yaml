@@ -1,0 +1,7 @@
+# Explicit aperture ablation after a neighboring-object fingertip collision.
+# Narrow only at the existing observed safe standoff, with fresh marker/depth
+# checks. This is not collision-aware grasp planning or a hardware default.
+extends: configs/emet/query_geometry_tracked_pilot.yaml
+mapping:
+  grasp:
+    observed_aperture_margin_m: 0.04

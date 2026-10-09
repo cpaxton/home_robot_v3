@@ -392,12 +392,19 @@ class HelloStretchKinematics:
         By default move relative. easier that way.
         """
 
+        # The solver uses nine controlled joints; callers/robot clients use
+        # the full eleven-joint layout. Preserve passive joints in the result
+        # and never reinterpret a solver seed as a full robot configuration.
+        default_q = STRETCH_HOME_Q.copy()
         if q0 is not None:
-            self._to_manip_format(q0)
-            default_q = q0
-        else:
-            # q0 = STRETCH_HOME_Q
-            default_q = STRETCH_HOME_Q
+            q0 = np.asarray(q0, dtype=float)
+            if q0.shape == (self.dof,):
+                default_q = q0.copy()
+                q0 = self._to_manip_format(q0)
+            elif q0.shape == (self._manip_dof,):
+                default_q = self._from_manip_format(q0, default_q)
+            else:
+                raise ValueError("IK seed must use the full robot or controlled manipulation joint layout")
         # Perform IK
         # These should be relative to the robot's base
         if relative:
@@ -455,12 +462,6 @@ class HelloStretchKinematics:
             raise RuntimeError(
                 f"{self.name}: graspable objects should be above the ground, got this target position: {ee_pos}"
             )
-
-        if len(q0) != self._manip_dof:
-            assert len(q0) == self.dof, (
-                f"Joint states size must be either full = {self.dof} or manipulator = {self._manip_dof} dof"
-            )
-            q0 = self._to_manip_format(q0)
 
         target_joint_state, success, info = self.manip_ik((ee_pos, ee_rot), q0=q0)
         return target_joint_state, ee_pos, ee_rot, success, info

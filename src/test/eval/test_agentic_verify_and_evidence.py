@@ -48,6 +48,42 @@ def _executor(question: str = Q_WHERE, *, query_answer: str = "", raw: str = "",
 # --- single-view present-confirm ----------------------------------------------
 
 
+@pytest.mark.parametrize("require_grounded", [False, True])
+@pytest.mark.parametrize("grounded", [False, True])
+def test_find_presence_requires_localization_but_eqa_does_not(monkeypatch, require_grounded, grounded):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    ex, _ = _executor(question="Where is the bowl?", require_grounded_object=require_grounded)
+    ex.agent.query_driven_memory = True
+    ex._target_phrase = "bowl"
+    hypothesis = ex._begin_policy_approach("graph", 1, "bowl")
+    ex._policy_approached(hypothesis, 1)
+    assessment = SimpleNamespace(
+        target="bowl",
+        present=True,
+        answerable=True,
+        need_more_views=False,
+        suggested_answer="on the shelf",
+        reason="visible",
+        raw="{}",
+    )
+    monkeypatch.setattr("emet.eval.agentic_vlm_assess.assess_view_with_vlm", lambda *a, **kw: assessment)
+    monkeypatch.setattr("emet.eval.agentic_vlm_assess.build_inventory_brief", lambda **kw: "")
+
+    def ground(executor, *args):
+        if grounded:
+            executor._grounded_obs_id = 7
+        return {"ok": grounded}
+
+    monkeypatch.setattr("emet.memory.graph_eqa.agentic.views.ground_confirmed_view", ground)
+    result = ex._run_vlm_view_assess(rgb=np.zeros((4, 4, 3), dtype=np.uint8), phrase="bowl", obs_id=1)
+    assert result["verified"] is (grounded or not require_grounded)
+    if require_grounded and not grounded:
+        assert result["answerable_confirm_reason"] == "object_localization_required"
+
+
 def test_single_view_present_confirms():
     """One view that saw the target and offered a letter is enough to verify."""
     ex, _gm = _executor(single_view_confirm=True)

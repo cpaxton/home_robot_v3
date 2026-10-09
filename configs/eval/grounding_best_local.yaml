@@ -1,0 +1,17 @@
+# Experimental offline candidate, NOT the agent/OVMM default or a validated winner.
+extends: configs/emet/default.yaml
+mapping:
+  eqa:
+    backend: qwen_vl
+    vl_family: qwen3_vl
+    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
+    vl_model_size: 8B
+    vl_quantization: int4
+    vl_max_tokens: 512
+    vl_image_max_side: 512
+    vl_image_max_pixels: 0
+eval:
+  grounding:
+    box_ablation: whole_object
+    verifier: context
+    controls: [isolated]

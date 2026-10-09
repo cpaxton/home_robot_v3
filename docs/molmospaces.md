@@ -67,7 +67,7 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
   emet molmospaces list-robots
   ```
 
-  Prints supported robot IDs (rby1, rby1m, stretch, franka_droid, franka_cap, etc.). MolmoSpaces-native assets include rby1; **stretch** is merged from emet’s packaged `stretch.xml` (not an upstream MolmoSpaces asset). Default when `--robot` is omitted on serve is **stretch** (same as table sim).
+  Prints supported robot IDs (rby1, rby1m, stretch, franka_droid, franka_cap, etc.). Upstream MolmoSpaces assets include rby1, but this repository's `rby1` backend currently merges the packaged **Galaxea R1 proxy**. Selecting an iTHOR/MolmoSpaces scene does not switch it to native RB-Y1 geometry. **Stretch** uses packaged `stretch.xml`. Default when `--robot` is omitted on serve is **stretch** (same as table sim). Record the actual MJCF in benchmark manifests; a robot ID alone is insufficient provenance.
 
 - **List scenes** (delegates to wrapper):
 
@@ -171,7 +171,7 @@ Use `--port-offset` on both server and agent if default ZMQ ports are busy. **St
 
 ### Mobile manipulation (sim teleport + kinematic)
 
-For agentic pick/place on MolmoSpaces benches, prefer **`--robot rby1`** (MolmoSpaces-native mobile platform).
+The existing agentic pick/place benches use **`--robot rby1`**, currently the Galaxea R1 compatibility proxy, not native RB-Y1. These results validate the proxy's adapter and geometry only.
 
 | Mode | Config / env | Behavior |
 |------|----------------|----------|

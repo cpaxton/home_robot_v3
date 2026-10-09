@@ -34,8 +34,8 @@ def test_rotate_base_and_move_forward_tools_registered():
     assert tools["move_forward"].returns_info is True
     assert tools["rotate_base"].func is not None
     assert tools["move_forward"].func is not None
-    assert "180" in tools["rotate_base"].func(degrees=180)
-    assert "0.50" in tools["move_forward"].func(meters=0.5)
+    assert "180" in tools["rotate_base"].func(degrees=180).note
+    assert "0.50" in tools["move_forward"].func(meters=0.5).note
     assert calls == [[("rotate_base", "180.0")], [("move_forward", "0.5")]]
 
 
@@ -135,7 +135,9 @@ def test_move_forward_tool_asks_when_cannot_drive():
     executor = MagicMock()
     executor.agent = agent
     tools_ctx = {t.name: t for t in get_tools({"executor": executor})}
-    msg = tools_ctx["move_forward"].func(meters=0.3)
+    result = tools_ctx["move_forward"].func(meters=0.3)
+    assert not result.ok
+    msg = result.note
     assert "scan" in msg.lower() or "rotate" in msg.lower()
     assert "?" in msg
 

@@ -140,7 +140,10 @@ class DynamemTaskExecutor:
 
         # Create semantic sensor if visual servoing is enabled
         logger.debug("- Create semantic sensor if visual servoing is enabled")
-        if self.visual_servo:
+        detector_free = bool(self.parameters.get("query_driven_memory", False)) and (
+            (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "vlm") == "vlm"
+        )
+        if self.visual_servo and not detector_free:
             self.parameters["detection"]["module"] = "yoloe" if self.cpu_only else "owlsam"
             self.semantic_sensor = create_semantic_sensor(
                 parameters=self.parameters,
@@ -148,7 +151,8 @@ class DynamemTaskExecutor:
                 verbose=False,
             )
         else:
-            self.parameters["encoder"] = None
+            if not self.visual_servo:
+                self.parameters["encoder"] = None
             self.semantic_sensor = None
 
         logger.debug("- Start robot agent with data collection")
@@ -201,7 +205,7 @@ class DynamemTaskExecutor:
             embodied_agent=self.embodied_agent,
         )
 
-    def _find(self, target_object: str) -> np.ndarray:
+    def _find(self, target_object: str, *, grounding_purpose="object") -> np.ndarray:
         """Find an object. This is a helper function for the main loop.
 
         Args:
@@ -211,13 +215,41 @@ class DynamemTaskExecutor:
             The point where the object is located.
         """
         self.robot.switch_to_navigation_mode()
-        point = self.agent.navigate(target_object)
+        point = self.agent.navigate(target_object, grounding_purpose=grounding_purpose)
         # `filename` = None means write to default log path (the datetime you started to run the process)
         self.agent.voxel_map.write_to_pickle(filename=None)
         if point is None:
+            if getattr(self.agent, "query_driven_memory", False):
+                # Navigation can fail before the manipulation adapter runs.
+                # Preserve its rejection instead of returning a generic failure
+                # (or leaking a previous manipulation's recovery permission).
+                navigation = dict(getattr(self.agent, "_last_nav_plan", None) or {})
+                reason = navigation.get("outcome") or "navigation_failed"
+                self.last_query_manipulation = {
+                    "ok": False,
+                    "query": target_object,
+                    "phase": "navigation",
+                    "status": reason,
+                    "reason": f"Navigation failed: {reason}",
+                    "navigation": navigation,
+                    "payload_state": "unknown",
+                    "physical_success_verified": False,
+                }
+                if (
+                    grounding_purpose == "object"
+                    and getattr(self, "_held_query_instance", None) is None
+                    and getattr(getattr(self, "grasp_object", None), "pickup_executed", None) is False
+                ):
+                    # No pickup has executed; allow only a stationary observation,
+                    # never an escape motion through the rejected footprint.
+                    self.last_query_manipulation["payload_state"] = "empty"
             logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])
+        if getattr(self.agent, "query_driven_memory", False):
+            # Keep the freshly verified view. Manipulation owns its posture and
+            # reacquisition, not an unconditional legacy quarter-turn in find.
+            return point
         self.robot.switch_to_navigation_mode()
         xyt = self.robot.get_base_pose()
         xyt[2] = xyt[2] + np.pi / 2
@@ -241,6 +273,26 @@ class DynamemTaskExecutor:
         return get_vm() if callable(get_vm) else getattr(agent, "voxel_map", None)
 
     def _query_manipulation(self, query: str, *, place: bool) -> bool:
+        """Run the shared adapter and retain its outcome separately from physics."""
+        try:
+            return self._execute_query_manipulation(query, place=place)
+        finally:
+            import json
+            import os
+            import time
+            from pathlib import Path
+
+            output = os.environ.get("EMET_EQA_EPISODE_DIR")
+            if output and hasattr(self, "last_query_manipulation"):
+                try:
+                    path = Path(output) / "manipulation_outcomes.jsonl"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    with path.open("a") as stream:
+                        stream.write(json.dumps({**self.last_query_manipulation, "wall_time": time.time()}) + "\n")
+                except (OSError, TypeError) as exc:
+                    logger.warning(f"Could not save manipulation outcome: {exc}")
+
+    def _execute_query_manipulation(self, query: str, *, place: bool) -> bool:
         """Learned geometry handoff; never dispatch to simulator oracle adapters."""
         import torch
 
@@ -266,7 +318,11 @@ class DynamemTaskExecutor:
         previous_object = self.agent.current_object
         previous_receptacle = self.agent.current_receptacle
         try:
-            target = self.agent.prepare_query_target(query)
+            if place:
+                operation = PlaceObjectOperation("place_grounded_query", self.agent)
+                target = operation.prepare_query_target(query)
+            else:
+                target = self.agent.prepare_query_target(query)
             self.last_query_manipulation.update(candidate_id=target.candidate_id, instance_id=target.instance_id)
             instance = Instance(
                 global_id=target.instance_id,
@@ -279,25 +335,37 @@ class DynamemTaskExecutor:
             if place:
                 self.agent.current_object = held
                 self.agent.current_receptacle = instance
-                operation = PlaceObjectOperation("place_grounded_query", self.agent)
                 attempted = True
-                ok = bool(operation())
+                try:
+                    ok = bool(operation(held_query=held.name))
+                finally:
+                    # Release can succeed before retreat fails. Do not retain
+                    # an object-in-hand claim after confirmed gripper opening.
+                    if operation.released is True:
+                        self._held_query_instance = None
             else:
                 self.agent.current_object = instance
                 operation = self.grasp_object
                 attempted = True
-                ok = bool(
-                    operation(
-                        target_object=query,
-                        object_xyz=target.xyz,
-                        grounded_target=target,
-                        match_method="class",
-                        show_object_to_grasp=False,
-                        show_servo_gui=False,
-                        delete_object_after_grasp=False,
-                        try_open_loop=False,
+                try:
+                    ok = bool(
+                        operation(
+                            target_object=query,
+                            object_xyz=target.xyz,
+                            grounded_target=target,
+                            match_method="class",
+                            show_object_to_grasp=False,
+                            show_servo_gui=False,
+                            delete_object_after_grasp=False,
+                            try_open_loop=False,
+                        )
                     )
-                )
+                finally:
+                    # A failed carry transition does not undo a completed
+                    # close/lift. Conservatively block a second pickup until
+                    # that potentially held object is resolved.
+                    if operation.pickup_executed is True:
+                        self._held_query_instance = instance
             if ok:
                 self._held_query_instance = None if place else instance
             # This reports the existing adapter's execution outcome, not an
@@ -305,6 +373,16 @@ class DynamemTaskExecutor:
             self.last_query_manipulation.update(ok=ok, reason="executed" if ok else "operation failed")
         except (ValueError, RuntimeError) as exc:
             self.last_query_manipulation["reason"] = str(exc)
+            from emet.controller.navigation_error import GraspWorkspaceError
+
+            if isinstance(exc, GraspWorkspaceError) and not place and self.grasp_object.pickup_executed is False:
+                self.last_query_manipulation.update(
+                    navigation=exc.diagnostics, phase="pre_grasp", payload_state="empty"
+                )
+            from emet.controller.operations.payload_verification import PayloadVerificationError
+
+            if isinstance(exc, PayloadVerificationError):
+                self.last_query_manipulation.update(status="payload_unverified", phase="carry", payload_state="unknown")
             logger.warning(f"Query manipulation rejected: {exc}")
             ok = False
         finally:
@@ -580,7 +658,7 @@ class DynamemTaskExecutor:
         Returns:
             True if we should keep going, False if we should stop (quit).
 
-        Task success for the last batch is in ``_last_exec_ok`` (False if pickup/place
+        Task success for the last batch is in ``_last_exec_ok`` (False if find/pickup/place
         failed). Agent loop uses that for tool summaries without treating failure as quit.
         """
         i = 0
@@ -667,6 +745,7 @@ class DynamemTaskExecutor:
             elif command == "place":
                 logger.info(f"[Pickup task] Place: {args}")
                 target_object = args
+                from emet.controller.operations.payload_verification import PayloadVerificationError
 
                 # Navigation
 
@@ -675,7 +754,22 @@ class DynamemTaskExecutor:
                     self.skip_confirmations
                     or (not self.skip_confirmations and input("Do you want to run navigation? [Y/n]: ").upper() != "N")
                 ):
-                    point = self._find(args)
+                    try:
+                        point = self._find(args, grounding_purpose="placement_surface")
+                    except PayloadVerificationError as exc:
+                        self.last_query_manipulation = {
+                            "ok": False,
+                            "query": args,
+                            "action": "place",
+                            "physical_success_verified": False,
+                            "status": "payload_unverified",
+                            "phase": "carry",
+                            "payload_state": "unknown",
+                            "reason": str(exc),
+                        }
+                        self._last_exec_ok = False
+                        logger.warning(f"Stopping placement navigation: {exc}")
+                        return True
                 # Or the user explicitly tells that he or she does not want to run navigation.
                 else:
                     point = None
@@ -765,12 +859,16 @@ class DynamemTaskExecutor:
                         self.agent.announce_motion_progress(f"Exploring… step {i + 1}/{self.explore_iter}")
                     elif hasattr(self.agent, "announce_action"):
                         self.agent.announce_action(f"Exploring… step {i + 1}/{self.explore_iter}", discord=False)
-                    self.agent.run_exploration()
-                if hasattr(self.agent, "announce_motion_progress"):
+                    if not self.agent.run_exploration():
+                        self._last_exec_ok = False
+                        break
+                if self._last_exec_ok and hasattr(self.agent, "announce_motion_progress"):
                     self.agent.announce_motion_progress("Exploring… done")
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)
+                if point is None:
+                    self._last_exec_ok = False
             elif command == "nod_head":
                 logger.info("[Pickup task] Nodding head.")
                 self.emote_task.get_task("nod_head").run()

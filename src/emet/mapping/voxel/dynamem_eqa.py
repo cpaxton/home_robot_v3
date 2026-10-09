@@ -365,6 +365,10 @@ class DynamemVoxelEQAMixin:
                     max_new_tokens=32,
                 )
                 objects = object_names.split(",")[:5]
+            except TimeoutError:
+                # The timed-out CUDA worker may still be alive. Do not retry
+                # or turn a failed perception update into a successful capture.
+                raise
             except Exception as e:
                 objects = []
                 logger.debug(

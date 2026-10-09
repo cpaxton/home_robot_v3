@@ -1,0 +1,12 @@
+# Native Stretch wheel limits are 2 rad/s at the joint (gear 3, ctrl ±6).
+# Keep feedback braking below the wheel-reference acceleration envelope:
+# a_linear + separation/2 * a_angular < radius * a_wheel.
+# This is a robot adapter profile, not a task-specific arrival tolerance.
+defaults:
+  - noplan_velocity_sim
+  - _self_
+
+v_max: 0.09
+w_max: 0.5
+acc_lin: 0.06
+acc_ang: 0.4

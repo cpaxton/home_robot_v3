@@ -110,6 +110,52 @@ def test_habitat_navmesh_navigate_moves_to_nearby_goal():
     assert res.note.startswith("ok")
 
 
+def test_navmesh_preserves_requested_arrival_heading():
+    robot = _FakeHabitatRobot()
+    res = habitat_navmesh_navigate(robot, [1.0, 0.0], target_theta=math.pi / 2)
+    assert res.finished
+    assert np.isclose(robot.get_base_pose()[2], math.pi / 2)
+
+
+def test_navmesh_can_turn_when_already_at_position():
+    robot = _FakeHabitatRobot()
+    res = habitat_navmesh_navigate(robot, [0.05, 0.05], target_theta=math.pi / 2)
+    assert res.finished
+    assert np.allclose(robot.get_base_pose(), [0.0, 0.0, math.pi / 2])
+
+
+def test_navmesh_checks_actual_heading_not_success_ack():
+    class StuckHeading(_FakeHabitatRobot):
+        def move_base_to(self, xyt, **kwargs):
+            super().move_base_to(xyt, **kwargs)
+            self._pose[2] = 0.0
+            return True
+
+    robot = StuckHeading()
+    res = habitat_navmesh_navigate(robot, [1.0, 0.0], target_theta=math.pi / 2)
+    assert not res.finished and not res.success
+    assert res.note.startswith("heading_error_")
+
+
+def test_navmesh_recomputes_bearing_at_measured_stop():
+    class OffsetArrival(_FakeHabitatRobot):
+        def execute_trajectory(self, trajectory, **kwargs):
+            super().execute_trajectory(trajectory, **kwargs)
+            self._pose[1] += 0.2
+
+    robot = OffsetArrival()
+    res = habitat_navmesh_navigate(robot, [1.0, 0.0], look_at_xy=(2.0, 0.0))
+    assert res.finished
+    assert np.isclose(robot.get_base_pose()[2], math.atan2(-0.2, 1.0))
+
+
+def test_navmesh_heading_wraparound():
+    robot = _FakeHabitatRobot()
+    robot._pose[2] = -math.pi + 0.01
+    res = habitat_navmesh_navigate(robot, [0.0, 0.0], target_theta=math.pi - 0.01)
+    assert res.finished
+
+
 def test_pick_habitat_exploration_target_accepts_nearby_frontier():
     class _Node:
         def __init__(self, obs_id, x, z):

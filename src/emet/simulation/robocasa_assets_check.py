@@ -26,6 +26,17 @@ def robocasa_package_dir(project_root: Path | None = None) -> Path:
     return root / "third_party" / "robocasa" / "robocasa"
 
 
+def imported_robocasa_package_dir() -> Path:
+    """Runtime assets must belong to the package used by scene generation.
+
+    A worktree can use an editable installation from another checkout. Keep
+    the explicit vendored-path helper for installation/maintenance tools.
+    """
+    import robocasa
+
+    return Path(robocasa.__file__).resolve().parent
+
+
 def fixture_registry_layout_ok(robocasa_pkg: Path) -> bool:
     """True when per-type registry YAMLs exist (not wiped by fixtures_lw extract)."""
     from emet.simulation.robocasa_registry_sync import missing_required_registry_stems

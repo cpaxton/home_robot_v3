@@ -56,6 +56,7 @@ def main() -> int:
     parser.add_argument("--stationary", action="store_true", help="Idle-only probe for fixed-base arms.")
     parser.add_argument("--route-config", type=Path, help="Known episode-frame waypoints and policy (simulation only).")
     parser.add_argument("--route-repeats", type=int, help="Override configured repetitions for an initial diagnostic.")
+    parser.add_argument("--safety-config", type=Path, help="Evaluator-only robot/support contact specification.")
     args = parser.parse_args()
     route = None
     policy = None
@@ -84,6 +85,10 @@ def main() -> int:
     env.setdefault("EMET_ZMQ_FULL_HZ", "5")
     env.setdefault("EMET_ZMQ_STATE_HZ", "30")
     env.setdefault("EMET_ZMQ_SERVO_HZ", "10")
+    safety_path = args.output_dir / "navigation_safety.jsonl"
+    if args.safety_config:
+        env["EMET_NAVIGATION_TRACE_CONFIG"] = str(args.safety_config.resolve())
+        env["EMET_NAVIGATION_TRACE"] = str(safety_path.resolve())
 
     sim_cfg = load_sim_launch_config_from_path(args.sim)
     if args.robot:
@@ -139,7 +144,9 @@ def main() -> int:
             robot.move_to_nav_posture()
             robot.look_front(blocking=True)
         time.sleep(2.0)
+        command_window_start = time.time()
         for i in range((len(route) if route is not None else max(1, int(args.poses))) + 1):
+            dwell = None
             try:
                 if i and not args.stationary:
                     if route is not None:
@@ -160,6 +167,26 @@ def main() -> int:
                         )
                     if arrived is not True:
                         raise RuntimeError("navigation did not report command-specific success")
+                    if route is not None:
+                        from emet.eval.navigation_acceptance import score_arrival_dwell
+
+                        samples = []
+                        for _ in range(11):
+                            measured = robot.get_observation()
+                            pose = None
+                            if measured is not None and measured.gps is not None and measured.compass is not None:
+                                pose = np.r_[measured.gps, measured.compass].reshape(-1).tolist()
+                            samples.append(
+                                {
+                                    "time": time.monotonic(),
+                                    "sequence": getattr(measured, "seq_id", None),
+                                    "pose": pose,
+                                }
+                            )
+                            time.sleep(0.1)
+                        dwell = {"samples": samples, **score_arrival_dwell(route[i - 1], samples, policy)}
+                        if dwell["status"] != "passed_endpoint_dwell":
+                            raise RuntimeError(f"independent arrival check: {dwell['reason']}")
             except Exception as e:
                 print(f"pose {i}: move failed: {e}", file=sys.stderr)
                 failures.append(f"pose {i}: move failed: {e}")
@@ -170,6 +197,8 @@ def main() -> int:
             cam_pose = np.asarray(getattr(obs, "camera_pose", None), dtype=np.float64).reshape(-1)
 
             report: dict[str, Any] = {"pose": i}
+            if dwell is not None:
+                report["arrival_dwell"] = dwell
             report["navigation_receipt"] = getattr(robot, "_command_receipt", None)
             q, _, _ = robot.get_joint_state()
             if q is not None:
@@ -242,8 +271,34 @@ def main() -> int:
             if failures:
                 break
 
+        command_window_end = time.time()
         summary = {"robot": robot_kind, "scene": args.sim, "failures": failures, "frames": len(reports)}
+        if route is not None:
+            summary["endpoint_dwell_passes"] = sum(
+                r.get("arrival_dwell", {}).get("status") == "passed_endpoint_dwell" for r in reports
+            )
+            summary["endpoint_dwell_expected"] = len(route)
+            summary["safety_acceptance"] = "not_scored: no independent continuous contact trace"
         missing = any(r.get("base_up_dot_world_z") is None or "joint_targets_named" not in r for r in reports)
+        if args.safety_config:
+            from emet.eval.navigation_safety_trace import score_window
+
+            deadline = time.monotonic() + 5.0
+            safety = {"status": "incomplete_telemetry", "reason": "trace_unavailable"}
+            while time.monotonic() < deadline:
+                time.sleep(0.1)
+                try:
+                    safety = score_window(safety_path, command_window_start, command_window_end)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    continue
+                if safety.get("reason") != "uncovered_command_window":
+                    break
+            summary["command_window_wall_time"] = [command_window_start, command_window_end]
+            summary["safety_acceptance"] = safety
+            if safety["status"] == "physics_contact_window_clear":
+                missing = False  # Evaluator supplies base posture and actuator targets.
+            else:
+                failures.append(f"physics safety: {safety['status']}: {safety.get('reason', 'contact or tipping')}")
         summary["status"] = "failed" if failures else ("incomplete_telemetry" if missing else "completed_probe")
         (args.output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         return 1 if failures else 0

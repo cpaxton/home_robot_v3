@@ -19,10 +19,12 @@ world-meter origin with ``convention="world_offset"``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import mujoco
 import numpy as np
+
+if TYPE_CHECKING:
+    import mujoco
 
 GridConvention = Literal["grid_params", "world_offset"]
 
@@ -86,6 +88,11 @@ def fk_link_xy_samples(
     body_names: Sequence[str],
 ) -> list[tuple[float, float]]:
     """World XY of named bodies after ``mj_forward`` (caller must set qpos)."""
+    # Grid-only navigation (including Habitat EQA) uses this module too.
+    # Importing MuJoCo initializes its GL backend; keep that side effect at
+    # the MuJoCo FK boundary, not in shared planner imports.
+    import mujoco
+
     mujoco.mj_forward(model, data)
     out: list[tuple[float, float]] = []
     for name in body_names:

@@ -13,6 +13,46 @@ from emet.memory.grounded_target import GroundedTarget
 from emet.memory.query_candidates import QueryCandidates
 
 
+@pytest.mark.parametrize("visual_servo", [True, False])
+def test_saved_tool_outcome_does_not_claim_physical_verification(tmp_path, monkeypatch, visual_servo):
+    import json
+
+    task, _ = executor()
+    task.visual_servo = visual_servo
+    monkeypatch.setenv("EMET_EQA_EPISODE_DIR", str(tmp_path))
+    assert task._pickup("mug") is visual_servo
+    result = json.loads((tmp_path / "manipulation_outcomes.jsonl").read_text())
+    assert result["ok"] is visual_servo
+    assert result["physical_success_verified"] is False
+    assert result["wall_time"] > 0
+
+
+@pytest.mark.parametrize("backend,expects_detector", [("vlm", False), ("yoloe", True)])
+def test_visual_servo_constructor_respects_grounding_backend(backend, expects_detector):
+    from emet.core import AbstractRobotClient
+
+    parameters = {
+        "query_driven_memory": True,
+        "query_memory": {"grounding_backend": backend},
+        "detection": {},
+        "encoder": "siglip",
+    }
+    module = "emet.controller.task.dynamem.dynamem_task"
+    with (
+        patch(f"{module}.create_semantic_sensor") as detector,
+        patch.object(DynamemTaskExecutor, "_build_agent", return_value=Mock()),
+        patch(f"{module}.GraspObjectOperation") as grasp,
+        patch(f"{module}.EmoteTask"),
+    ):
+        task = DynamemTaskExecutor(Mock(spec=AbstractRobotClient), parameters, visual_servo=True, cpu_only=True)
+    assert detector.called is expects_detector
+    assert task.grasp_object is grasp.return_value
+    assert parameters["encoder"] == "siglip"
+    if not expects_detector:
+        assert task.semantic_sensor is None
+        assert parameters["detection"] == {}
+
+
 def executor():
     task = object.__new__(DynamemTaskExecutor)
     store = QueryCandidates()
@@ -32,6 +72,71 @@ def executor():
     task.visual_servo = True
     task.grasp_object = Mock(return_value=True)
     return task, target
+
+
+@pytest.mark.parametrize("pickup_executed", [False, True, None])
+@pytest.mark.parametrize("purpose", ["object", "placement_surface"])
+def test_find_failure_preserves_navigation_rejection_and_clears_stale_recovery(pickup_executed, purpose):
+    task, _ = executor()
+    task.robot = Mock()
+    task.grasp_object.pickup_executed = pickup_executed
+    task.agent.navigate = Mock(return_value=None)
+    task.agent.voxel_map.write_to_pickle = Mock()
+    task.agent._last_nav_plan = {"outcome": "rejected_swept_footprint:unobserved_footprint"}
+    task.last_query_manipulation = {"phase": "pre_grasp", "payload_state": "empty", "observed_after_action": True}
+
+    assert task._find("mug", grounding_purpose=purpose) is None
+    detail = task.last_query_manipulation
+    assert detail["status"] == "rejected_swept_footprint:unobserved_footprint"
+    assert detail["navigation"] == task.agent._last_nav_plan
+    assert detail["phase"] == "navigation"
+    assert detail["payload_state"] == ("empty" if pickup_executed is False and purpose == "object" else "unknown")
+    assert "observed_after_action" not in detail
+    task.robot.move_base_to.assert_not_called()
+
+
+@pytest.mark.parametrize("pickup_executed", [False, True])
+def test_workspace_recovery_requires_explicitly_empty_payload(pickup_executed):
+    from emet.controller.navigation_error import GraspWorkspaceError
+
+    task, _ = executor()
+    task.grasp_object.pickup_executed = pickup_executed
+    task.grasp_object.side_effect = GraspWorkspaceError({"status": "insufficient_floor_coverage"})
+    assert not task._pickup("mug")
+    detail = task.last_query_manipulation
+    assert (detail.get("payload_state") == "empty") is (not pickup_executed)
+    assert detail["observed_after_action"]
+
+
+@pytest.mark.parametrize("point,expected", [(None, False), (np.ones(3), True)])
+def test_find_reports_task_outcome_without_quitting(point, expected, monkeypatch):
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task = object.__new__(DynamemTaskExecutor)
+    task._find = Mock(return_value=point)
+    assert task([("find", "cup")]) is True
+    assert task._last_exec_ok is expected
+
+
+@pytest.mark.parametrize("progress", [True, False, None])
+def test_explore_propagates_no_progress_and_stops_repeating(progress, monkeypatch):
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task = object.__new__(DynamemTaskExecutor)
+    task.agent = Mock()
+    task.agent.run_exploration.return_value = progress
+    task.explore_iter = 3
+    assert task([("explore", None)]) is True
+    assert task._last_exec_ok is (progress is True)
+    assert task.agent.run_exploration.call_count == (3 if progress else 1)
+
+
+@pytest.mark.parametrize("status,expected", [(False, False), (None, False), (True, True)])
+def test_navigation_only_returns_confirmed_target(status, expected):
+    from emet.controller.dynamem.navigation import navigate
+
+    point = np.ones(3)
+    agent = SimpleNamespace(maybe_save_rerun_recording=Mock(), execute_action=Mock(return_value=(status, point)))
+    result = navigate(agent, "cup", max_step=1)
+    assert (result is point) is expected
 
 
 def test_pick_handoff_passes_geometry_and_revokes_all_aliases():
@@ -76,11 +181,13 @@ def test_failures_are_not_success(failure):
 
 def test_place_consumes_fresh_receptacle_points_and_observes_after():
     task, target = executor()
-    task._held_query_instance = SimpleNamespace(global_id=99)
+    task._held_query_instance = SimpleNamespace(global_id=99, name="mug")
     with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
         operation.return_value.return_value = True
+        operation.return_value.prepare_query_target.return_value = target
 
-        def place():
+        def place(**kwargs):
+            assert kwargs == {"held_query": "mug"}
             assert task.agent.current_object.global_id == 99
             assert np.allclose(task.agent.current_receptacle.point_cloud.numpy(), target.points)
             return True
@@ -89,6 +196,50 @@ def test_place_consumes_fresh_receptacle_points_and_observes_after():
         assert task._place("table", None)
     assert task._held_query_instance is None
     assert task.last_query_manipulation["observed_after_action"]
+
+
+def test_payload_failure_stops_place_batch_without_forgetting_possible_payload(monkeypatch):
+    from emet.controller.operations.payload_verification import PayloadVerificationError
+
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    task, _ = executor()
+    held = SimpleNamespace(global_id=99, name="mug")
+    task._held_query_instance = held
+    task.manipulation_only = False
+    task.skip_confirmations = True
+    task._find = Mock(side_effect=PayloadVerificationError("payload not visible"))
+    task._place = Mock()
+    assert task([("place", "counter"), ("place", "other counter")]) is True
+    assert task._last_exec_ok is False
+    assert task.last_query_manipulation["status"] == "payload_unverified"
+    assert task.last_query_manipulation["payload_state"] == "unknown"
+    assert task._held_query_instance is held
+    task._place.assert_not_called()
+    task._find.assert_called_once()
+    assert task._find.call_args.kwargs == {"grounding_purpose": "placement_surface"}
+
+
+@pytest.mark.parametrize("released", [False, True])
+def test_failed_place_retains_only_unreleased_object(released):
+    task, target = executor()
+    held = SimpleNamespace(global_id=99, name="mug")
+    task._held_query_instance = held
+    with patch("emet.controller.operations.place_object.PlaceObjectOperation") as operation:
+        operation.return_value.prepare_query_target.return_value = target
+        operation.return_value.return_value = False
+        operation.return_value.released = released
+        assert task._place("table", None) is False
+    assert task._held_query_instance is (None if released else held)
+
+
+def test_failed_carry_transition_retains_potentially_held_instance():
+    task, target = executor()
+    task.grasp_object.pickup_executed = True
+    task.grasp_object.side_effect = RuntimeError("Carry posture did not complete")
+    assert task._pickup("mug") is False
+    assert task._held_query_instance.global_id == target.instance_id
+    assert task._pickup("another object") is False
+    assert task.grasp_object.call_count == 1
 
 
 def test_tracking_rejects_missing_or_ambiguous_geometry():
@@ -124,6 +275,45 @@ def test_visual_servo_operation_uses_geometry_not_centered_distractor():
     world[:] = 10
     with pytest.raises(ValueError, match="absent"):
         operation.get_target_mask(servo, center=(5, 5))
+
+
+def test_vlm_wrist_tracking_requires_shared_semantics_and_world_association():
+    from emet.controller.operations.grasp_object import GraspObjectOperation
+
+    operation = object.__new__(GraspObjectOperation)
+    operation.grounded_target = GroundedTarget(1, 7, 2, np.ones((30, 3)), "vlm_selected_depth_surface")
+    operation.target_object = "mug"
+    masks = np.full((10, 10), -1, dtype=int)
+    masks[:5] = 0
+    operation.agent = SimpleNamespace(
+        ground_vlm_frame=Mock(return_value=(SimpleNamespace(instance=masks), [], [0], {"valid": True}))
+    )
+    operation.get_class_mask = Mock(side_effect=AssertionError("detector must not gate VLM surface"))
+    world = np.ones((10, 10, 3))
+    world[5:] = 10
+    servo = SimpleNamespace(
+        ee_rgb=np.zeros((10, 10, 3), dtype=np.uint8),
+        ee_depth=np.ones((10, 10)),
+        get_ee_xyz_in_world_frame=lambda: world,
+    )
+    selected = operation.get_target_mask(servo, center=(8, 8))
+    assert selected[:5].all() and not selected[5:].any()
+    assert operation.agent.ground_vlm_frame.call_args.kwargs == {
+        "min_depth": 0.0,
+        "tracking_target": operation.grounded_target,
+    }
+    world[:] = 10
+    with pytest.raises(ValueError, match="absent"):
+        operation.get_target_mask(servo, center=(8, 8))
+    world[:] = 1
+    operation.agent.ground_vlm_frame.return_value = (
+        SimpleNamespace(instance=masks),
+        [],
+        [],
+        {"valid": False, "reason": "too many surface candidates"},
+    )
+    with pytest.raises(ValueError, match="identity absent.*too many surface candidates"):
+        operation.get_target_mask(servo, center=(8, 8))
 
 
 def test_placement_sampling_handles_zero_horizontal_offset():

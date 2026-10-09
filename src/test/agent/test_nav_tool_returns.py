@@ -6,13 +6,50 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import numpy as np
 
 from emet.agent.tools import (
+    _robot_base_xy,
+    format_base_clearance_hint,
     format_last_nav_plan_summary,
     format_nav_outcome_head,
     get_tools,
+    navigation_feedback,
 )
+
+
+def test_candidate_trace_is_compact_in_model_feedback_but_retained_for_debug():
+    candidates = [
+        {
+            "index": i,
+            "reason": "eligible",
+            "score": float(i),
+            "resolved_goal": [i, 0, 0],
+            "footprint": {"cells": list(range(1000))},
+        }
+        for i in range(16)
+    ]
+    agent = SimpleNamespace(_last_nav_plan={"goal_xyt": [15, 0, 0], "view_candidates": candidates})
+    result = navigation_feedback(agent)
+    assert "view_candidates" not in result
+    summary = result["view_selection"]
+    assert summary["reason_counts"] == {"eligible": 16}
+    assert [c["index"] for c in summary["top_estimated_views"]] == [15, 14, 13]
+    assert all("footprint" not in candidate for candidate in summary["top_estimated_views"])
+    assert len(agent._last_nav_plan["view_candidates"]) == 16
+
+
+def test_clearance_and_map_marker_use_world_pose_not_local_odometry():
+    robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3), get_base_pose_world=lambda: np.array([-1, -0.3, 0]))
+    planner = SimpleNamespace(_clearance_m=True, min_clearance_m=0.22, clearance_at_xy=Mock(return_value=0.3))
+    agent = SimpleNamespace(robot=robot, planner=planner, world_base_xy=lambda: (-1, -0.3))
+    assert _robot_base_xy(robot, SimpleNamespace(agent=agent)) == (-1, -0.3)
+    assert _robot_base_xy(robot) == (-1, -0.3)
+    assert "0.30m" in format_base_clearance_hint(agent)
+    planner.clearance_at_xy.assert_called_once_with((-1, -0.3))
 
 
 def test_format_nav_outcome_heads():
@@ -20,6 +57,19 @@ def test_format_nav_outcome_heads():
     assert "aborted" in format_nav_outcome_head("aborted_waypoint_timeout", ok=False, verb="Explore").lower()
     assert "rejected_low_clearance" in format_nav_outcome_head("rejected_low_clearance", ok=False, verb="Find")
     assert format_nav_outcome_head(None, ok=True, verb="Find") == "Find finished."
+
+
+def test_clearance_hint_does_not_expose_fallback_as_measurement():
+    robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3))
+    planner = SimpleNamespace(
+        _clearance_m=True,
+        clearance_at_xy=Mock(return_value=10.0),
+        measured_clearance_at_xy=Mock(return_value=None),
+    )
+    hint = format_base_clearance_hint(SimpleNamespace(robot=robot, planner=planner))
+    assert "unavailable" in hint
+    assert "10.00" not in hint
+    planner.clearance_at_xy.assert_not_called()
 
 
 def test_format_last_nav_plan_summary_fields():
@@ -61,10 +111,12 @@ def test_find_objects_surfaces_abort_outcome():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["find_objects"].func(text="aerosol")
-    assert "aborted" in out.lower()
-    assert "Last plan:" in out
-    assert "localize=voxel" in out
-    assert "do not immediately re-call" in out.lower()
+    assert not out.ok
+    assert out.status == "aborted_waypoint_timeout"
+    assert "Last plan:" in out.note
+    assert "localize=voxel" in out.note
+    assert "do not immediately re-call" in out.note.lower()
+    assert by_name["find_objects"].to_executor({"text": "aerosol"}) == []
     assert by_name["find_objects"].returns_info is True
 
 
@@ -98,8 +150,9 @@ def test_explore_surfaces_rejected_clearance():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["explore"].func()
-    assert "rejected_low_clearance" in out
-    assert "Last plan:" in out
+    assert not out.ok
+    assert "rejected_low_clearance" in out.note
+    assert "Last plan:" in out.note
 
 
 def test_list_scene_relations_falls_back_to_graph_eqa():

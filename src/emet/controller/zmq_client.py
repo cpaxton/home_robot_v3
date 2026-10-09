@@ -31,7 +31,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
@@ -54,6 +54,7 @@ from emet.utils.image import align_camera_matrix_to_image_size, pinhole_camera_f
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
+from emet.visualization.null_visualizer import visualizer_is_enabled
 
 logger = Logger(__name__)
 
@@ -77,11 +78,6 @@ def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
 class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
-
-    _head_pan_min = -np.pi
-    _head_pan_max = np.pi / 4
-    _head_tilt_min = -np.pi
-    _head_tilt_max = 0
 
     def _create_recv_socket(
         self,
@@ -559,6 +555,19 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         next_action = {"joint": joint_angles, "manip_blocking": blocking}
         self.send_action(next_action=next_action, timeout=timeout)
 
+    def get_head_capability(self):
+        from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability
+
+        session = self.get_emet_session()
+        # Only the explicit simulator advertisement can expand legacy limits.
+        if (
+            isinstance(session, dict)
+            and session.get("runtime_kind") == "stretch_mujoco_sim"
+            and session.get("is_simulation") is True
+        ):
+            return HeadCapability.from_session(session) or STRETCH_LEGACY_HEAD
+        return STRETCH_LEGACY_HEAD
+
     def head_to(
         self,
         head_pan: float,
@@ -576,16 +585,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             timeout: How long to wait for the motion to complete
             reliable: Whether to resend the action if it is not received
         """
-        if head_pan < self._head_pan_min or head_pan > self._head_pan_max:
-            logger.warning(
-                f"Head pan is restricted to be between {self._head_pan_min} and {self._head_pan_max} for safety: was {head_pan}"
-            )
-        if head_tilt > self._head_tilt_max or head_tilt < self._head_tilt_min:
-            logger.warning(
-                f"Head tilt is restricted to be between {self._head_tilt_min} and {self._head_tilt_max} for safety: was{head_tilt}"
-            )
-        head_pan = np.clip(head_pan, self._head_pan_min, self._head_pan_max)
-        head_tilt = np.clip(head_tilt, -np.pi / 2, 0)
+        capability = self.get_head_capability()
+        if not capability.contains([head_pan, head_tilt]):
+            logger.warning(f"Head request exceeds effective limits: {capability.as_dict()}")
+        head_pan = np.clip(head_pan, *capability.pan)
+        head_tilt = np.clip(head_tilt, *capability.tilt)
         next_action = {"head_to": [float(head_pan), float(head_tilt)], "manip_blocking": blocking}
         sent = self.send_action(next_action, timeout=timeout, reliable=reliable)
 
@@ -706,20 +710,44 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             # In this case, we assume if moving arm you should look at ee
             _next_action["head_to"] = constants.look_at_ee
         _next_action["manip_blocking"] = blocking
-        self.send_action(_next_action, reliable=reliable)
+        sent_action = self.send_action(_next_action, reliable=reliable)
 
         # Handle blocking
         steps = 0
         if blocking:
+            # Match the existing head/nav/posture wait contract. A full arm
+            # retraction still takes physical time when rendering slows the sim;
+            # hardware budgets and the bounded scale cap remain unchanged.
+            timeout = self._scaled_motion_timeout(timeout)
+            stall_timeout = self._scaled_motion_timeout(min_time)
             t0 = timeit.default_timer()
+            settled_since = None
+            last_progress = t0
+            best_residual = float("inf")
+            tolerances = np.array(
+                [
+                    self._arm_joint_tolerance,
+                    self._lift_joint_tolerance,
+                    self._base_x_joint_tolerance,
+                    self._wrist_roll_joint_tolerance,
+                    self._wrist_pitch_joint_tolerance,
+                    self._wrist_yaw_joint_tolerance,
+                ]
+            )
             while not self._finish:
                 if steps % 40 == 39:
                     # Resend the action until we get there
-                    self.send_action(_next_action, reliable=reliable)
+                    # Retry the same command identity. A new send_action would
+                    # restart the embedded base goal and its settling state.
+                    self.send_message(sent_action)
                     if verbose:
                         print("Resending action", joint_angles)
 
                 joint_state, joint_velocities, _ = self.get_joint_state()
+                t1 = timeit.default_timer()
+                if t1 - t0 > timeout:
+                    logger.error("Timeout waiting for arm to move")
+                    break
                 if joint_state is None:
                     time.sleep(0.01)
                     continue
@@ -735,36 +763,47 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                         f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
                     )
 
-                t1 = timeit.default_timer()
-                if (
-                    (arm_diff < self._arm_joint_tolerance)
-                    and (lift_diff < self._lift_joint_tolerance)
-                    and (base_x_diff < self._base_x_joint_tolerance)
-                    and (wrist_roll_diff < self._wrist_roll_joint_tolerance)
-                    and (wrist_pitch_diff < self._wrist_pitch_joint_tolerance)
-                    and (wrist_yaw_diff < self._wrist_yaw_joint_tolerance)
-                ):
-                    # sleep to prevent ros2 streaming latency
-                    time.sleep(0.5)
-                    return True
-                elif t1 - t0 > min_time and np.linalg.norm(joint_velocities) < 0.01:
-                    logger.info("Arm not moving, we are done")
-                    logger.info("Arm joint velocities", joint_velocities)
-                    logger.info(t1 - t0)
-                    # Arm stopped moving but did not reach goal
-                    # sleep to prevent ros2 streaming latency
+                errors = np.array([arm_diff, lift_diff, base_x_diff, wrist_roll_diff, wrist_pitch_diff, wrist_yaw_diff])
+                residual = float(np.max(errors / tolerances))
+                if residual < best_residual:
+                    best_residual = residual
+                    last_progress = t1
+                if np.all(errors < tolerances):
+                    controlled = [
+                        HelloStretchIdx.BASE_X,
+                        HelloStretchIdx.BASE_THETA,
+                        HelloStretchIdx.ARM,
+                        HelloStretchIdx.LIFT,
+                        HelloStretchIdx.WRIST_ROLL,
+                        HelloStretchIdx.WRIST_PITCH,
+                        HelloStretchIdx.WRIST_YAW,
+                    ]
+                    moving = joint_velocities is None or not np.isfinite(joint_velocities[controlled]).all()
+                    moving = moving or np.max(np.abs(joint_velocities[controlled])) >= 0.01
+                    if moving:
+                        settled_since = None
+                    elif settled_since is None:
+                        settled_since = t1
+                    elif t1 - settled_since >= 0.1:
+                        return True
+                elif t1 - last_progress > stall_timeout:
+                    # A fine correction legitimately slows below 1 cm/s before
+                    # reaching its gate. Fail on lack of measured convergence,
+                    # not an instantaneous low-speed sample. The overall
+                    # deadline still bounds noisy or asymptotic feedback.
+                    logger.warning(
+                        f"Arm made no goal progress for {stall_timeout:.1f}s; normalized error={residual:.3f}"
+                    )
                     time.sleep(0.5)
                     return False
                 else:
+                    settled_since = None
                     if verbose:
                         print(
                             f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
                         )
                 time.sleep(0.01)
 
-                if t1 - t0 > timeout:
-                    logger.error("Timeout waiting for arm to move")
-                    break
                 steps += 1
             # sleep to prevent ros2 streaming latency
             time.sleep(0.5)
@@ -915,6 +954,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     print("Opening gripper:", joint_state[HelloStretchIdx.GRIPPER])
                 gripper_err = np.abs(joint_state[HelloStretchIdx.GRIPPER] - gripper_target)
                 if gripper_err < 0.1:
+                    self._carry_configuration = None
                     return True
                 t1 = timeit.default_timer()
                 if t1 - t0 > timeout:
@@ -986,10 +1026,44 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             logger.info("Waiting for manipulation mode")
         self._wait_for_mode("manipulation", verbose=verbose)
 
+    _carry_configuration: np.ndarray | None = None
+
+    def set_carry_configuration(self, joint_positions):
+        """Preserve payload orientation/height until confirmed gripper opening.
+
+        This is a posture constraint, not a claim of independently verified
+        object holding. It uses existing joint commands on older bridges too.
+        """
+        q = np.array(joint_positions, dtype=float, copy=True)
+        if q.shape != constants.STRETCH_NAVIGATION_Q.shape or not np.isfinite(q).all():
+            raise ValueError("Carry posture requires a finite full joint configuration")
+        q[HelloStretchIdx.ARM] = min(q[HelloStretchIdx.ARM], constants.STRETCH_NAVIGATION_Q[HelloStretchIdx.ARM])
+        self._carry_configuration = q
+
+    def _move_to_carry_posture(self, *, navigation):
+        self.switch_to_manipulation_mode()
+        q = self.get_joint_positions().copy()
+        for idx in (
+            HelloStretchIdx.LIFT,
+            HelloStretchIdx.ARM,
+            HelloStretchIdx.WRIST_ROLL,
+            HelloStretchIdx.WRIST_PITCH,
+            HelloStretchIdx.WRIST_YAW,
+        ):
+            q[idx] = self._carry_configuration[idx]
+        head = constants.look_front if navigation else constants.look_at_ee
+        if not self.arm_to(q, head=head, blocking=True):
+            raise RuntimeError("Carry posture did not complete; stopping without folding the payload")
+        if navigation:
+            self.switch_to_navigation_mode()
+
     def move_to_nav_posture(self) -> None:
         """Move the robot to the navigation posture. This is where the head is looking forward and the arm is tucked in."""
         if not self._zmq_manipulation_supported():
             self.switch_to_navigation_mode()
+            return
+        if self._carry_configuration is not None:
+            self._move_to_carry_posture(navigation=True)
             return
         next_action = {"posture": "navigation", "step": self._iter}
         next_action = self.send_action(next_action)
@@ -1001,6 +1075,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def move_to_manip_posture(self):
         """This is the pregrasp posture where the head is looking down and right and the arm is tucked in."""
         if not self._zmq_manipulation_supported():
+            return
+        if self._carry_configuration is not None:
+            self._move_to_carry_posture(navigation=False)
             return
         next_action = {"posture": "manipulation", "step": self._iter}
         self.send_action(next_action)
@@ -1217,6 +1294,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Update observation internally with lock"""
         with self._obs_lock:
             self._obs = obs
+            self._seq_id += 1
             self._last_step = max(self._last_step, int(obs["step"]))
             if self._iter <= 0:
                 self._iter = max(self._last_step, self._iter)
@@ -1367,6 +1445,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
                 emet_session=read_emet_session(self._obs),
+                image_timing=read_image_timing(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1574,7 +1653,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             if output is None:
                 continue
 
-            self._seq_id += 1
             if not decode_zmq_obs_images_inplace(output):
                 logger.warning("Observation missing primary RGB; skipping frame.")
                 continue
@@ -1735,6 +1813,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 ee_xyz=None,
                 joint=joint,
                 emet_session=read_emet_session(message) or read_emet_session(self._state),
+                image_timing=read_image_timing(message),
             )
 
             # We may not have the camera information yet
@@ -1842,7 +1921,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """Use the rerun server so that we can visualize what is going on as the robot takes actions in the world."""
         step_count = 0
         last_debug_t = 0
-        while not self._finish:
+        while not self._finish and visualizer_is_enabled(self._rerun):
             if not self._wait_if_streams_paused():
                 return
             if self._rerun:
@@ -1927,13 +2006,13 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         self._thread = threading.Thread(target=self.blocking_spin, daemon=True)
         self._state_thread = threading.Thread(target=self.blocking_spin_state, daemon=True)
         self._servo_thread = threading.Thread(target=self.blocking_spin_servo, daemon=True)
-        if self._rerun:
+        if visualizer_is_enabled(self._rerun):
             self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)  # type: ignore
         self._finish = False
         self._thread.start()
         self._state_thread.start()
         self._servo_thread.start()
-        if self._rerun:
+        if visualizer_is_enabled(self._rerun):
             self._rerun_thread.start()
 
         t0 = timeit.default_timer()

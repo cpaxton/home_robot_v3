@@ -30,6 +30,8 @@ class CommandBaseVelocity:
     v_linear: float
     omega: float
     trigger: bool
+    # Terminal cancellation, distinct from an ordinary profiled zero velocity.
+    stop: bool = False
 
 
 @dataclass

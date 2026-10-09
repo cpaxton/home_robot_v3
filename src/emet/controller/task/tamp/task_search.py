@@ -12,7 +12,7 @@ Grasp branches are ranked by offline position-IK feasibility before execution.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -185,6 +185,8 @@ def plan_pick_place(
     approach_standoff_m: float = 0.55,
     top_k_grasps: int = 8,
     executor: Any | None = None,
+    approach_pose: Sequence[float] | None = None,
+    approach_validator: Callable[[np.ndarray], bool] | None = None,
 ) -> TaskPlan:
     """Build a grounded approach → grasp → place plan with IK-ranked grasps.
 
@@ -207,7 +209,20 @@ def plan_pick_place(
     obj_xy = np.asarray(pl[object_gt_body]["pos"], dtype=np.float64).reshape(3)[:2]
     mode, arm = _tamp_approach_mode_and_arm(robot, executor)
     approach = approach_pose_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+    if approach_pose is not None:
+        approach = np.asarray(approach_pose, dtype=float)
+        if approach.shape != (3,) or not np.isfinite(approach).all():
+            raise ValueError("Approach pose must be finite XYT")
     expanded.append(f"approach@{approach.tolist()} mode={mode} arm={arm}")
+    if approach_validator is not None and not approach_validator(approach.copy()):
+        return TaskPlan(
+            steps=[],
+            object_body=object_gt_body,
+            receptacle_body=receptacle_gt_body,
+            expanded_nodes=expanded,
+            success=False,
+            message="approach_route_invalid",
+        )
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
@@ -423,6 +438,7 @@ def plan_pick_place_mcts(
     mcts_depth: int = 5,
     mcts_uct_c: float = 1.3,
     seed: int | None = None,
+    approach_validator: Callable[[np.ndarray], bool] | None = None,
 ) -> TaskPlan:
     """MCTS over candidate (object, receptacle) task assignments.
 
@@ -440,6 +456,11 @@ def plan_pick_place_mcts(
     This is the "agent-call-wrapping" TAMP seam: the distance heuristic policy
     stands in for an LLM proposer, and the executor/MuJoCo grounding is the
     simulator. Returns the best reachable plan (or an empty failed TaskPlan).
+
+    For navigation feasibility tests, candidates may supply ``approach_pose``
+    and the evaluator supplies ``approach_validator`` (route + swept footprint).
+    Without that validator, symbolic/IK success does NOT establish a clear route.
+    A failed bounded search is not proof that no physical plan exists.
     """
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
     from emet.motion.agent_mcts import AgentMCTSPlanner, MCTSConfig, PickPlaceDistancePolicy
@@ -536,6 +557,8 @@ def plan_pick_place_mcts(
             approach_standoff_m=approach_standoff_m,
             top_k_grasps=top_k_grasps,
             executor=executor,
+            approach_pose=cand.get("approach_pose"),
+            approach_validator=approach_validator,
         )
         plan.grasp_poses = list(grounding_grasps)
         plan.expanded_nodes = [a.name for a in seq] + list(plan.expanded_nodes or ())

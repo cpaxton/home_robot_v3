@@ -686,7 +686,6 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             if output is None:
                 continue
-            self._seq_id += 1
             with self._obs_lock:
                 servo_msg = self._servo
             sess = read_emet_session(output)
@@ -744,6 +743,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._obs = output
+                self._seq_id += 1
                 if "step" in output:
                     self._last_step = max(self._last_step, int(output["step"]))
                 if "gps" in output and "compass" in output:
@@ -902,6 +902,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             else:
                 decode_zmq_obs_depth_inplace(obs)
             obs = dict(self._obs)
+            sequence = self._seq_id
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")
@@ -948,6 +949,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             overhead_image=obs.get("overhead_image"),
             emet_session=read_emet_session(obs),
             image_timing=read_image_timing(obs),
+            seq_id=sequence,
         )
 
     def peek_emet_robot_id(self) -> str | None:
@@ -1201,17 +1203,18 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         return np.zeros(6, dtype=float)
 
     def get_pan_tilt(self) -> tuple[float, float]:
-        """Head pan/tilt in radians (xlerobot ``head_pan_joint`` / ``head_tilt_joint``)."""
-        if self._spec.name == "xlerobot":
-            q, _, _ = self.get_joint_state(timeout=2.0)
-            if q is None:
-                return (0.0, 0.0)
-            pan_i = self._joint_index.get("head_pan_joint")
-            tilt_i = self._joint_index.get("head_tilt_joint")
-            pan = float(q[pan_i]) if pan_i is not None else 0.0
-            tilt = float(q[tilt_i]) if tilt_i is not None else 0.0
-            return (pan, tilt)
-        return (0.0, 0.0)
+        """Measured adapter look joints; never substitute a fabricated zero pose."""
+        names = self._spec.look_joint_names
+        if names is None:
+            return (float("nan"), float("nan"))
+        q, _, _ = self.get_joint_state(timeout=2.0)
+        if q is None:
+            return (float("nan"), float("nan"))
+        result = []
+        for name in names:
+            index = self._joint_index.get(name) if name is not None else None
+            result.append(0.0 if name is None else float(q[index]) if index is not None else float("nan"))
+        return tuple(result)
 
     def get_gripper_position(self, side: str = "left") -> float:
         if self._spec.name == "xlerobot":
@@ -1243,8 +1246,17 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             self._logged_arm_to_nonstretch = True
         return True
 
+    def get_head_capability(self):
+        from emet.robots.head_capability import HeadCapability
+
+        return HeadCapability.from_session(self.get_emet_session())
+
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
         """Send Stretch-compatible ``head_to`` to the ZMQ server (``RobosuiteZmqServer`` maps it for rby1/galaxea)."""
+        capability = self.get_head_capability()
+        if capability is not None:
+            head_pan = float(np.clip(head_pan, *capability.pan))
+            head_tilt = float(np.clip(head_tilt, *capability.tilt))
         next_action: dict[str, Any] = {
             "head_to": [float(head_pan), float(head_tilt)],
         }

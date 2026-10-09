@@ -1,0 +1,6 @@
+{
+  "object_body": "object2",
+  "support_body": "object1",
+  "ee_body": "link_grasp_center",
+  "gripper_bodies": ["link_gripper_finger_left", "link_gripper_finger_right"]
+}

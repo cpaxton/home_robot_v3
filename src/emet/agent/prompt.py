@@ -42,14 +42,17 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": "<short reply>"}
 Use "tool_calls": [] when no action is needed.
 
-Info tools return text (and sometimes photos) for a follow-up reply. When calling any of
-query_*, describe_scene, explore, scan_environment, rotate_base, face_toward, move_forward,
-navigation_diagnostics, send_map_snapshot, list_scene_relations, send_image, send_object_image,
-set "message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
-message based only on those results (do not invent objects from this prompt).
-
-Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
-go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
+All tools return results for the next round. Prefer "message": "" when calling tools.
+After [Tool results], continue only unfinished parts of the user's request, using those
+results and current observations. Do not repeat completed actions or invent objects.
+Reply with tool_calls [] when finished. Tool failure discards the remaining calls in its batch.
+If a failed result explicitly lists recovery_tools, you may call only those observation tools
+next, using tool_calls JSON (describing a plan does not execute it). After a successful
+observation, replan/retry only the unfinished task within the remaining budget.
+Otherwise stop and report the failure and unfinished work without claiming success.
+Never retry manipulation with an uncertain payload or bypass controller safety checks.
+Respect the remaining tool-round budget. Controller completion does not independently
+verify physical success. Never add unrelated motion to an observation-only request.
 For photos the user should *see*, use send_image or describe_scene (not take_picture alone —
 those only capture locally and produce no Discord reply). Never call take_ee_picture without a
 prior successful aim_arm_at in this session (it will refuse). Prefer moving/reorienting the
@@ -215,6 +218,15 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
         data = _first_json_dict(blob)
         if data is not None:
             break
+
+    # A broken outer tool-call envelope can contain a perfectly valid inner
+    # arguments dict. Do not mistake that salvaged dict for a final response.
+    if (
+        any(blob.lstrip().startswith("{") for blob in candidate_sources)
+        and '"tool_calls"' in response
+        and (data is None or "tool_calls" not in data or not isinstance(data["tool_calls"], list))
+    ):
+        return {"tool_calls": [], "message": "", "format_error": "invalid_tool_call_json"}
 
     tool_calls: list[dict[str, Any]] = []
     message = ""

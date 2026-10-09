@@ -1,0 +1,7 @@
+# Predeclared mirrored-clutter acceptance fixture, not a new default.
+kind: default_mujoco
+robot: stretch
+scene_path: src/emet/assets/robot/scene_right_neighbor.xml
+headless: true
+port_offset: 0
+seed: 0

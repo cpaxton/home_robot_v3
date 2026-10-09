@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="160" viewBox="0 0 900 160" role="img" aria-labelledby="title desc">
+  <title id="title">Shared-agent acceptance progression</title>
+  <desc id="desc">Simple simulation isolates grounding and approach. Bounded RoboCasa tasks add clutter and manipulation. Habitat adds large-world exploration and EQA. This is a conceptual test order, not measured performance.</desc>
+  <rect width="900" height="160" fill="#f8fafc"/>
+  <g fill="#e2e8f0" stroke="#475569">
+    <rect x="15" y="20" width="265" height="90" rx="8"/>
+    <rect x="318" y="20" width="265" height="90" rx="8"/>
+    <rect x="621" y="20" width="265" height="90" rx="8"/>
+  </g>
+  <g font-family="sans-serif" text-anchor="middle" fill="#0f172a">
+    <g font-size="19" font-weight="bold">
+      <text x="147" y="50">Simple simulation</text>
+      <text x="450" y="50">Bounded RoboCasa</text>
+      <text x="753" y="50">Habitat / HM3D</text>
+    </g>
+    <g font-size="15">
+      <text x="147" y="79">Ground → approach → verify</text>
+      <text x="450" y="79">Clutter → search → manipulate</text>
+      <text x="753" y="79">Large-world search + EQA</text>
+      <text x="299" y="70">→</text><text x="602" y="70">→</text>
+      <text x="450" y="142">Same harness; explicit task budgets and robot adapters. Not a results chart.</text>
+    </g>
+  </g>
+</svg>

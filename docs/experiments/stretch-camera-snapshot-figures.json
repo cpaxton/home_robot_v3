@@ -1,0 +1,30 @@
+{
+  "description": "Unmodified diagnostic images; failed and successful executions are not pixel-matched trials.",
+  "figures": [
+    {
+      "file": "stretch-wrist-calibration-before.png",
+      "sha256": "7c61ec8bb15eec9414a0526f31390e56c71ce2509ab540442337fce8007b8e03",
+      "kind": "agent_wrist_rgb",
+      "source_commit": "b7441826",
+      "job_id": "20260913_193318_c4008b",
+      "source": "manipulation-panel-v6-20260913/default_table_stretch_clearance_noslip/repeat_1/hybrid_learned_pick_place/evidence/wrist_tracking/grounding-a29ba1c4f88447e0833765635cc3b992.png"
+    },
+    {
+      "file": "stretch-wrist-calibration-after.png",
+      "sha256": "b208f67e3f83746f0d7cdf6d356e16dc161152262a74844f543192ee4848c558",
+      "kind": "agent_wrist_rgb",
+      "source_commit": "ef533ed3",
+      "job_id": "20260913_195231_e4d996",
+      "source": "clearance-camera-snapshot/hybrid_learned_pick_place/evidence/wrist_tracking/grounding-a58a9e61adeb48519adee072345d647b.png"
+    },
+    {
+      "file": "stretch-camera-snapshot-placement.png",
+      "sha256": "88a1f1d11801c1e3762dc4dcb4147812bd2225d62e38807c24260050c8fe84bc",
+      "kind": "evaluator_qpos_reconstruction",
+      "source_commit": "ef533ed3",
+      "job_id": "20260913_195231_e4d996",
+      "source": "clearance-camera-snapshot/replay/final-object.png"
+    }
+  ],
+  "source_root": "~/runs/emet"
+}

@@ -13,3 +13,9 @@ route:
   - [0.0, 0.0, 0.0]
   - [0.2, 0.0, 0.0]
   - [0.0, 0.0, 0.0]
+  # Coupled position/final-heading moves exercise the approach-to-turn
+  # transition; isolated turns cannot reveal arrival-boundary chatter.
+  - [0.4, 0.0, 1.5707963268]
+  - [0.4, 0.3, 3.1415926536]
+  - [0.0, 0.3, -1.5707963268]
+  - [0.0, 0.0, 0.0]

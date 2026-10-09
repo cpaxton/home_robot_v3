@@ -1,0 +1,6 @@
+<mujoco model="stretch scene">
+  <include file="scene_right_neighbor.xml"/>
+  <!-- Solver-only diagnostic. Preserve geometry, force, friction and policy.
+       Do not pool with the default-solver manipulation acceptance panel. -->
+  <option noslip_iterations="10"/>
+</mujoco>

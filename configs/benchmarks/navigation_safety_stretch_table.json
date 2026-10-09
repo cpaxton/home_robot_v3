@@ -1,0 +1,8 @@
+{
+  "robot_body": "base_link",
+  "allowed_support_contacts": [
+    ["base_link", "floor"],
+    ["link_left_wheel", "floor"],
+    ["link_right_wheel", "floor"]
+  ]
+}

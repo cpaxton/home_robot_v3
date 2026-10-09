@@ -1,0 +1,9 @@
+{
+  "robot_body": "base_link",
+  "allowed_support_contacts": [
+    ["base_link", "floor"],
+    ["wheel_motor_link1", "floor"],
+    ["wheel_motor_link2", "floor"],
+    ["wheel_motor_link3", "floor"]
+  ]
+}

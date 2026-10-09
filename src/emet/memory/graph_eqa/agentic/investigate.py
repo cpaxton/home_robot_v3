@@ -23,6 +23,7 @@ from emet.memory.graph_eqa.agentic.config import (
     NAV_CONSECUTIVE_FAIL_LIMIT,
     PLACE_APPROACH_SAMPLES,
 )
+from emet.memory.graph_eqa.agentic.navigation_recovery import navigate_with_floor_recovery
 from emet.memory.graph_eqa.agentic.types import PlaceInspectRecord
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.utils.logger import Logger
@@ -312,7 +313,18 @@ def _tool_investigate(
                 target_theta = float(np.arctan2(look_y - float(rxy[1]), look_x - float(rxy[0])))
     except (TypeError, ValueError):
         target_theta = None
-    nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid, look_at_xy=look_at_xy)
+
+    def navigate():
+        measured_start = self._robot_xyt_world()
+        return agent.navigate_to_target_pose(
+            target,
+            measured_start if measured_start is not None else start,
+            target_theta,
+            target_obs_id=oid,
+            look_at_xy=look_at_xy,
+        )
+
+    nav_outcome = navigate_with_floor_recovery(self, navigate)
     finished = bool(nav_outcome.finished)
     nav_outcome_str = str(nav_outcome)
     self._n_nav += 1
@@ -423,11 +435,32 @@ def _tool_investigate(
                 **target_in_view(arrival_view, self._hypothesis_nav_anchor_xyz(oid)),
             }
         )
+    from emet.memory.graph_eqa.agentic.view_quality import aim_arrival_view
+
+    cap = aim_arrival_view(self, cap, self._hypothesis_nav_anchor_xyz(oid))
+    if cap.get("status") == "TARGET_OUTSIDE_VIEW":
+        self._last_inspection_failure = {
+            "candidate_id": oid,
+            "reason": cap.get("reason"),
+            "look_at": cap.get("look_at"),
+        }
+        return {
+            "ok": False,
+            "status": "TARGET_OUTSIDE_VIEW",
+            "reason": cap.get("reason"),
+            "obs_id": oid,
+            "nav_outcome": nav_outcome_str,
+            "nav_progress": nav_progress,
+            "capture": cap,
+            "verify": None,
+        }
     grounding = None
+    self._last_inspection_failure = None
     if query_candidate:
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
         self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})
         if grounding["ok"]:
+            self._grounded_obs_id = grounding["obs_id"]
             record = self.agent.query_candidates.records[oid]
             self._record_voxel_score_hit(
                 record.query,

@@ -151,6 +151,7 @@ class XLeRobotBackend(RobotBackend):
             mjcf_path=_MJCF_PATH,
             actuator_names=list(XLEROBOT_ACTUATOR_NAMES),
             base_link_name="chassis",
+            look_joint_names=XLEROBOT_HEAD_JOINTS,
             footprint=Footprint(width=0.45, length=0.45, width_offset=0.0, length_offset=0.0),
             planar_base_joint_names=("slide_joint_x", "slide_joint_y", "hinge_joint_z"),
             planar_spawn_xy_extra_margin_m=0.35,

@@ -60,8 +60,8 @@ episodes:
     success_radius_m: 0.75
     mapping_max_nav_steps: 0
 
-  # Native rby1 validation uses MolmoSpaces; the default-table rby1 row below
-  # remains a separate model-integration diagnostic, not the primary baseline.
+  # The current rby1 backend uses the Galaxea proxy in all scenes, including
+  # MolmoSpaces. These rows do not establish native RB-Y1 acceptance.
   - id: molmo_rby1_ithor_s2_idx0
     tier: S2
     sim: configs/sim/molmospaces_ithor_train_0.yaml

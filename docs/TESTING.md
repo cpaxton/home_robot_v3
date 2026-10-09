@@ -1,5 +1,8 @@
 # Testing index
 
+Choose acceptance gates with the [environment progression](environments/README.md).
+For the broader documentation map, see [docs/README](README.md).
+
 Central map of **how to run tests**, **what each suite validates**, and **where detailed write-ups live**. From the repo root, use **`uv sync`** then **`uv run emet test`** (see [cli.md](cli.md#testing)).
 
 ## Run from this repo
