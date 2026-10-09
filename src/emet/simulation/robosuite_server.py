@@ -1103,11 +1103,20 @@ class RobosuiteZmqServer(BaseZmqServer):
             scratch = mujoco.MjData(self._mjmodel)
             mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
             env = self._emet_session.get("environment") or {}
-            attach_sim_object_placements_to_session(
-                self._emet_session, objects_info=self._objects_info,
-                environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
-                robot_root_name=self._spec.base_link_name,
-            )
+            if env.get("kind") == "molmospaces" and not self._objects_info:
+                from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+                previous = self._emet_session.get("sim_articulations") or []
+                changed = [g for g in groups if g not in previous]
+                bodies = {body for group in changed for body in group["bodies"]}
+                refresh_articulated_body_placements(
+                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+            else:
+                # Aggregate fixture maps need their provider's grouping rules.
+                attach_sim_object_placements_to_session(
+                    self._emet_session, objects_info=self._objects_info,
+                    environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
+                    robot_root_name=self._spec.base_link_name,
+                )
             self._emet_session["sim_articulations"] = groups
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:

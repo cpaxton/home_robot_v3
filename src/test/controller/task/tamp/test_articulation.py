@@ -179,6 +179,11 @@ def test_unsupported_joint_movement_still_refreshes_collision_geometry():
         <joint name="second" type="slide" axis="0 1 0" range="0 1"/>
         <geom type="box" size=".1 .1 .1"/></body></worldbody></mujoco>""")
     server._mjmodel, server._mjdata = m, mujoco.MjData(m)
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model, placements_to_session_dict
+
+    server._emet_session["sim_object_placements"] = placements_to_session_dict(
+        placements_from_mujoco_model(m, server._mjdata)
+    )
     server._refresh_articulation_state()
     old = np.array(server._emet_session["sim_object_placements"]["fixture"]["bounds"])
     server._mjdata.qpos[0] = 0.5
@@ -186,3 +191,27 @@ def test_unsupported_joint_movement_still_refreshes_collision_geometry():
     current = server._emet_session
     assert access_precondition(current, "fixture") == "articulation_unsupported"
     np.testing.assert_allclose(current["sim_object_placements"]["fixture"]["bounds"], old + [0.5, 0, 0])
+
+
+def test_articulation_refresh_does_not_rescan_unaffected_scene(monkeypatch):
+    from emet.simulation import robosuite_server, sim_object_placements
+
+    server = server_fixture()
+    untouched = server._emet_session["sim_object_placements"]["fixture"].copy()
+    # The top-level fixture is affected, but an unrelated object must remain identical.
+    server._emet_session["sim_object_placements"]["unrelated"] = untouched
+    monkeypatch.setattr(
+        robosuite_server, "attach_sim_object_placements_to_session", lambda *a, **kw: pytest.fail("full scene scan")
+    )
+    original = sim_object_placements._placement_entry_from_geom_ids
+    touched = []
+
+    def tracked(model, data, ids, **kwargs):
+        touched.extend(int(model.geom_bodyid[i]) for i in ids)
+        return original(model, data, ids, **kwargs)
+
+    monkeypatch.setattr(sim_object_placements, "_placement_entry_from_geom_ids", tracked)
+    server._mjdata.qpos[-1] = 1.57
+    server._refresh_articulation_state()
+    assert server._emet_session["sim_object_placements"]["unrelated"] is untouched
+    assert set(touched) == {server._mjmodel.body("fixture").id, server._mjmodel.body("door").id}
