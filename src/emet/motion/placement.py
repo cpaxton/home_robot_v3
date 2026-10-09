@@ -41,13 +41,15 @@ class PlacementSearchResult:
     collision_scope: str = "sampled_arm_and_payload;base_endpoint_only"
 
 
-def surface_placement_centers(surface_bounds, *, payload: HeldObject, ee_rotation, clearance_m=.02):
+def surface_placement_centers(surface_bounds, *, payload: HeldObject, ee_rotation, clearance_m=.02, grid_size=5):
     """Candidate object-box centers above an explicitly selected horizontal support.
 
     Bounds must describe the support region, not the center of an appliance or an
     inferred interior shelf. The whole footprint must fit, with clearance.
     """
     lo, hi = bounds_array(surface_bounds)
+    if grid_size not in (1, 3, 5, 7):
+        raise ValueError("Support grid size must be 1, 3, 5 or 7")
     if not np.isfinite(clearance_m) or clearance_m <= 0:
         raise ValueError("Positive finite support clearance required")
     rotated = payload.vertices_ee @ np.asarray(ee_rotation).reshape(3, 3).T
@@ -56,9 +58,11 @@ def surface_placement_centers(surface_bounds, *, payload: HeldObject, ee_rotatio
     if np.any(low > high):
         return []
     center = (low + high) / 2
-    offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)]
-    return [np.r_[center + np.array(offset) * (high - low) / 2, hi[2] + half[2] + clearance_m]
-            for offset in offsets]
+    xs = np.linspace(low[0], high[0], grid_size) if grid_size > 1 else [center[0]]
+    ys = np.linspace(low[1], high[1], grid_size) if grid_size > 1 else [center[1]]
+    xy = np.unique(np.array([(x, y) for x in xs for y in ys]), axis=0)
+    xy = sorted(xy, key=lambda point: float(np.linalg.norm(point - center)))
+    return [np.r_[point, hi[2] + half[2] + clearance_m] for point in xy]
 
 
 def placement_base_candidates(center_xy, *, current_xyt, radii=(.55, .75, .95), count=16, yaw_offset=0.):
@@ -145,6 +149,25 @@ def plan_placement_paths(
     rng = np.random.default_rng(seed)
     rejects = Counter()
     result = PlacementSearchResult(geometry_source=scene.source)
+    # Reject occupied target volumes before spending IK budget or considering a
+    # base move. This checks both preplace and place with the same attachment.
+    available = []
+    for center in centers:
+        occupied = False
+        for height in (preplace_height_m, 0.):
+            shift = center - center_offset + np.array([0., 0., height])
+            bounds = np.stack((rotated.min(axis=0) + shift - margin_m,
+                               rotated.max(axis=0) + shift + margin_m))
+            if scene.collides(bounds):
+                rejects["target_payload_collision"] += 1
+                occupied = True
+                break
+        if not occupied:
+            available.append(center)
+    centers = available
+    if not centers:
+        result.rejections = dict(rejects)
+        return result
     ik_calls = 0
     for pose in poses:
         probe.qpos[:] = original

@@ -296,6 +296,7 @@ def test_molmospaces_body_scan_labels_and_skips_robot():
 def test_collision_components_preserve_open_interior_and_follow_moving_fixture():
     import mujoco
 
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
     from emet.motion.placement_geometry import PlacementScene
     from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
@@ -309,6 +310,8 @@ def test_collision_components_preserve_open_interior_and_follow_moving_fixture()
     data = mujoco.MjData(model)
     placements = placements_from_mujoco_model(model, data)
     serialized = placements_to_session_dict(placements)
+    assert len(serialized["fixture"]["collision_bounds"]) == 3
+    serialized = read_sim_object_placements({"sim_object_placements": serialized})
     assert len(serialized["fixture"]["collision_bounds"]) == 3
     serialized["held"] = {}
     scene = PlacementScene.from_placements(serialized, held_object="held")

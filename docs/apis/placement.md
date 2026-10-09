@@ -137,3 +137,10 @@ does not re-register the attachment to conceal a changed offset. The assisted
 simulator latch preserves the positional offset; it does not enforce a rigid
 object orientation. Physical attachment/orientation estimation remains the
 responsibility of an observed-geometry provider and physical execution controller.
+
+Support sampling defaults to a bounded 5×5 grid, ordered from the center outward.
+The planner checks the payload volume at both target heights before spending IK
+budget. A target blocked by clutter or another support component is rejected;
+rejection of all sampled points is not proof that every possible placement is
+infeasible. Different orientations or interior appliance placement need explicit
+support/orientation grounding rather than bypassing occupied geometry.

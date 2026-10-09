@@ -64,3 +64,16 @@ No body/category is excluded to obtain clearance.
 Review hardening adds runtime/timeout handling, occupancy-change detection with
 fresh-path revalidation, private collision buffers, transport attachment-offset
 verification, and removal of the unused single-approach helper and float-key lookup.
+
+The new collision component field is preserved through the actual session reader
+as well as server serialization; the hollow-fixture test exercises that round trip.
+The queued `20261009_075535_03f90f` run was cancelled before acquiring the GPU to
+include this reader repair.
+
+Additional reconstruction with a 5×5 support grid rejected all 25 sampled targets:
+12 preplace volumes intersected a mug, 8 intersected lettuce, 3 intersected a paper
+towel object, and 2 final placement volumes intersected countertop geometry.
+These counts describe the saved-scene reconstruction and current top-surface
+interpretation, not a proof of task infeasibility or a live success/failure result.
+The planner now checks target occupancy before spending its IK budget. No obstacle
+is removed and no target is silently substituted to obtain a passing score.

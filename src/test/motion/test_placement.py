@@ -113,7 +113,7 @@ def test_gt_only_excludes_held_object_and_requires_bounds():
 def test_surface_targets_fit_whole_payload(rig):
     _, _, payload = rig
     points = surface_placement_centers([[-.3, -.3, -.2], [.3, .3, 0]], payload=payload, ee_rotation=np.eye(3))
-    assert len(points) == 9
+    assert len(points) == 25
     assert all(np.isclose(p[2], .05) for p in points)
     assert surface_placement_centers([[0]*3, [.01]*3], payload=payload, ee_rotation=np.eye(3)) == []
 
@@ -298,3 +298,18 @@ def test_refreshed_obstacle_invalidates_previously_clear_segment(rig):
     refreshed = executor._refresh_placement_checker("held", "support", old)
     assert refreshed.scene is new_scene
     assert validated_dense_path(model, data, ("x", "y", "z"), path, refreshed) is None
+
+
+def test_occupied_support_targets_rejected_before_ik_or_base_validation(rig):
+    from unittest.mock import Mock
+
+    model, data, payload = rig
+    endpoint = Mock(side_effect=AssertionError("should not validate base for an occupied target"))
+    # The current held pose is clear; only the requested destination is occupied.
+    result = plan_placement_paths(model, data, joint_names=("x", "y", "z"), ee_body="tool", robot_body="base",
+        scene=PlacementScene([[[.5, -.2, -.2], [.8, .2, .3]]], source="ground_truth"), payload=payload,
+        object_centers=[[.6, 0, 0]], base_candidates=[[0, 0, 0]], set_base=set_base,
+        contact_bodies=("tool",), endpoint_validator=endpoint)
+    assert not result.paths
+    assert result.rejections == {"target_payload_collision": 1}
+    endpoint.assert_not_called()
