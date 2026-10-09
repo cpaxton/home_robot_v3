@@ -6,6 +6,38 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ### Extracted shared-agent stack (October 2026)
 
+#### Repaired-head pilot and review handoff (2026-10-09)
+
+- Frozen `bf8b635d` EQA-12 seed 0 completed with valid metrics for all twelve
+  questions: **5/12**, versus **8/12** on frozen main `a9a5f1d1`. Paired losses:
+  q12, q14, q56; no gains. Startup is repaired, but accuracy acceptance is **not**
+  cleared. The three losses committed a VLM-suggested answer after one
+  investigation; their traces report successful navigation with displacement.
+  This is not evidence that the selected view was adequate or the answer grounded.
+- The old dev loop reused `cli_episode_qNNNN` diagnostic directories across arms.
+  JSONL scores remain separate, but baseline visual evidence was overwritten or
+  mixed with later output. Do not treat those directories as a trustworthy paired
+  visual comparison. The repaired driver records a unique invocation prefix in
+  `diagnostic_tags.txt` and supplies seed/question-specific bundle tags.
+- The queued replay uses q12/q14/q56 plus unchanged-success q6, paired seed 0,
+  separate diagnostic tags, unchanged model/budgets, and serial execution after
+  the small-OVMM battery. Retain all outcomes; do not select a favorable repeat.
+  If losses repeat, test cumulative stack prefixes to identify the owning slice.
+  If attribution is stochastic, add paired seeds 1 and 2 before making claims.
+- Current main advanced to `a7805b63` with #177/#178. The frozen comparison does
+  not validate those integrations. Reconcile navigation, mapping, simulator and
+  dispatch overlaps in a separate worktree, preserving main's safety contracts.
+- Review #176 and #180 independently now. Land only reviewed slices with their
+  own passing gates; upper slices remain draft if they regress. Review order is
+  #180 → #181 → #182 → #184 → #185. Telemetry is extracted onto current main in
+  **#190** (four focused snapshot/forwarding tests pass); remove its duplicate
+  from #185 when restacking, not while the experiment checkout is active.
+- Before promoting the reconciled stack: offline contracts with no new failures;
+  five unchanged-tolerance navigation repeats; paired current-main EQA-12;
+  matched-provider small-OVMM regression checks; and minimal existing admitted
+  TAMP smoke. Different-provider comparisons are complete-system comparisons,
+  not isolated navigation ablations. Find success is not manipulation acceptance.
+
 #### Startup/telemetry repairs and bottom-up review (2026-10-09)
 
 - Confirmed the extracted EQA crash with a serial one-frame comparison: old
