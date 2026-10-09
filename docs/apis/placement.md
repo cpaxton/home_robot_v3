@@ -196,3 +196,8 @@ Zero paths exits 1; a native crash remains a process failure, with faulthandler
 enabled. Archive stderr and exit status as well as JSON. Arbitrary `known_free`
 callbacks are marked non-replayable and refused rather than silently discarded.
 Snapshots preserve the planning input, not a complete dynamic simulator episode.
+
+For the in-process MuJoCo server, attachment/teleport updates refresh actual
+geometry for every cached body sharing the moved freejoint root. Commanded
+positions alone must not be combined with old bounds. Subprocess geometry
+providers still need coherent observed pose/volume snapshots.

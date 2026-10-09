@@ -450,6 +450,40 @@ def overlay_live_mujoco_body_poses(
     return raw or None
 
 
+def refresh_moved_body_placements(placements, model, data, body):
+    """Refresh actual geometry for every cached body sharing a moved free root.
+
+    A command target is not measured geometry. Parent teleports also move welded
+    children, so refreshing only the named body's position leaves stale volumes.
+    Caller must hold the simulator state lock.
+    """
+    from emet.simulation.sim_manipulation import freejoint_ancestor_body_id
+
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
+    if bid < 0:
+        return
+    root = freejoint_ancestor_body_id(model, bid)
+    if root is None:
+        return
+    _mj_forward(model, data)
+    updated = {}
+    for name, entry in placements.items():
+        if not isinstance(entry, dict):
+            continue
+        child = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if child < 0 or freejoint_ancestor_body_id(model, child) != root:
+            continue
+        ids = _geom_ids_for_bodies(model, [child], data=data)
+        live = _placement_entry_from_geom_ids(model, data, ids, cat=str(entry.get("cat", name)))
+        if live is not None:
+            updated[name] = _jsonify_placement_entry({**entry, **live})
+        else:
+            # Do not retain stale geometry when a current volume is unavailable.
+            updated[name] = {"cat": entry.get("cat", name), "pos": data.xpos[child].tolist(),
+                             "quat": data.xquat[child].tolist()}
+    placements.update(updated)
+
+
 def build_sim_object_placements_for_session(
     *,
     objects_info: dict[str, Any] | None,
