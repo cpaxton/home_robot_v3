@@ -700,3 +700,42 @@ teleports disabled. It is CPU-safe/GPU-exclusive and starts after the diagnostic
 finished. Results pending at `~/runs/emet/navigation-head-molmo-20261006/`.
 Inspect requested/measured head state, failure feedback and resulting RGB
 before claiming useful inspection or semantic success.
+
+### October 9: preserve the waypoint through floor recovery
+
+The October 6 learned Molmo retest finished 0/1 object and 0/1 receptacle,
+389 seconds episode time, with six graph nodes. Three targeted floor captures
+each cleared their checked unknown footprint. The object loop nevertheless
+spent its five actionable turns on graph query, investigate, floor sensing,
+investigate, floor sensing; the sixth round forced an answer. Both phases
+ended with two navigation attempts and zero exploration actions. A receptacle
+approach reached its candidate, but the saved grounding RGB shows a nearby
+cabinet/wall surface and floor, not a microwave. Control recovery is not
+semantic task success.
+
+New shared navigation recovery keeps the chosen waypoint and arrival heading
+for both investigate and frontier navigation. It permits at most two targeted
+floor observations and three ordinary planner calls within one high-level
+navigation decision. Each retry starts at the current measured pose. Only a
+fresh unknown-footprint rejection is eligible; sensing must return a valid
+checked footprint before replanning. Unchanged/invalid footprints, occupancy,
+unsupported sensing, stale attempt records, and the retry cap stop recovery.
+Approach retirement and high-level navigation counters occur after this loop,
+not between its internal retries. The full route is always checked again.
+
+This deliberately changes work per decision: unchanged round/nav settings
+are NOT equal-compute comparisons. Preserve wall time and internal recovery
+traces alongside task scores. The round budget still governs other small
+actions; this is a bounded repair of navigation continuation, not a wholesale
+weighted-budget redesign. Unit and serial simulator acceptance must be
+recorded before claiming a task improvement.
+
+Runtime commit `17d96365`: 178 agentic tests and 62 OVMM find/routing tests
+pass. Serial CPU-safe/GPU-exclusive Molmo pilot `20261009_073120_0cb088`
+uses frozen `/tmp/emet-floor-resume-17d96365`, seed 0, four mapping views,
+six rounds, three high-level navigation decisions, unchanged Qwen/config and
+teleports disabled. Result pending at
+`~/runs/emet/navigation-floor-resume-20261009/`. Inspect
+`navigation_floor_recovery` trace events and downstream arrival evidence;
+internal retries are bounded separately and must not be hidden in runtime
+comparisons with the earlier single-attempt pilot.

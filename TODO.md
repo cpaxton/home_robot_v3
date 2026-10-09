@@ -60,8 +60,13 @@ Implementation and acceptance specification:
       for advertised Stretch simulation; real Stretch retains its safety bounds.
       Stationary +0.756-rad check `20261006_160307_45da38` passes: measured
       +0.686 rad, within existing 0.12-rad tolerance; base drift 0.00000294 m.
-      Fresh Molmo search `20261006_160636_2837e8` is pending; do not conflate
-      command-range validation with object localization or task acceptance.
+      Fresh Molmo search `20261006_160636_2837e8` finished 0/1 object and
+      0/1 receptacle: three specific floor blockers cleared, but recovery
+      consumed router turns and no exploration action was selected.
+      Bounded same-waypoint recovery now runs within investigate/frontier
+      navigation: at most two floor observations, replan only after the checked
+      footprint is valid, never certify the route from map growth. Live retest
+      remains required; this changes internal work per high-level decision.
       Automatic collision-checked alternative-viewpoint selection remains open.
 - [x] Fix/retest repeated-route heading handoff: Stretch passes 28 dwells then
       stalls on command 29. Continuous contact window clear, but no route pass.
