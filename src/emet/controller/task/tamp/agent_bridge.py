@@ -249,6 +249,16 @@ def resolve_agent_task(
     )
 
 
+def _base_pose_validation_available(robot: Any) -> bool:
+    """Require both the advertised server endpoint and its client implementation."""
+    state = getattr(robot, "_state", None)
+    return (
+        isinstance(state, dict)
+        and state.get("sim_base_pose_query") is True
+        and callable(getattr(robot, "check_base_poses", None))
+    )
+
+
 def build_agent_pick_place_plan(
     robot: Any,
     object_query: str,
@@ -274,6 +284,8 @@ def build_agent_pick_place_plan(
         return AgentPlanBuild(None, None, None, False, 'no_live_scene')
     if not boot:
         return AgentPlanBuild(None, None, None, True, 'server_identity_missing')
+    if not _base_pose_validation_available(robot):
+        return AgentPlanBuild(None, None, None, True, 'base_pose_validation_unavailable')
     snapshot = PlanningSnapshot(boot, _session_key(session, boot),
                                 json.dumps(session.get('capabilities') or {}, sort_keys=True),
                                 json.dumps(placements, default=lambda v: v.tolist()),
@@ -442,6 +454,8 @@ def _validate_stored_plan(robot: Any, record: dict[str, Any]) -> str | None:
     reason = _validate_snapshot(robot, snapshot, task)
     if reason:
         return reason
+    if not _base_pose_validation_available(robot):
+        return 'base_pose_validation_unavailable'
     try:
         poses = [step.args['xyt'] for step in record['plan'].steps if step.op == 'approach']
         if not poses:
