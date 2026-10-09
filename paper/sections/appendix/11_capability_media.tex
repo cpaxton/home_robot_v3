@@ -1,0 +1,21 @@
+\section{Qualitative capability recordings}
+\label{app:capability-media}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{figs/capability_media.png}
+    \caption{Recorded simulator examples, not a shared quantitative benchmark.
+    Left: a historical Sourccey table pick/place control with kinematic object
+    latch and placement assistance (September 4). Center and right: camera view
+    and map/trajectory diagnostics from the same Habitat exploration episode
+    (August 4, classic Dynagraph controller, question 15). The map composite
+    includes a ground-truth navigation overlay. These examples illustrate the
+    available visualization channels; they do not establish physical manipulation
+    acceptance or validate the current placement stack.}
+    \label{fig:capability-media}
+\end{figure}
+The companion media manifest records source runs, artifact paths, and assistance
+labels. The gallery generator preserves original videos and writes asset hashes;
+recorded images are not synthesized or interpolated. New manipulation recordings
+also save public JSON tool outcomes and before/after camera views. Assisted
+articulation uses simulator joint teleportation and is evaluated separately from
+physical opening and placement.
