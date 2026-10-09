@@ -46,3 +46,11 @@ would not address the user's complaint and is not presented as a substitute.
 Local review: `/tmp/emet-model-review/index.html`, before/after scene stills and
 `stretch-model-motion.mp4`. These use Mesa llvmpipe, not GPU rendering. The
 Stretch clip is labeled `model motion diagnostic` and `not a placement test`.
+
+## First live corrected-model run
+
+Managed CPU job `20261009_180642_71f2af` at `d029f355` saved video and failed
+`pregrasp_ik_failed` (0.672 m error), before attachment or placement. Inspection
+found the direct video harness hardcoded front-facing approach yaw even for a
+side-reaching robot. It now uses the shared robot-specific approach helper. This
+is a harness correction, not permission to count the failed run as success.
