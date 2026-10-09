@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from emet.memory.graph_eqa.agentic.config import (
     question_has_mcq_options,
     question_is_locate,
 )
+from emet.memory.graph_eqa.agentic.navigation_recovery import navigate_with_floor_recovery
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.memory.graph_eqa.labels import label_matches_relevant_object
 from emet.memory.graph_eqa.spatial.room_clusters import question_target_rooms, room_leave_needed
@@ -48,6 +50,47 @@ FIXTURE_LABEL_TOKENS = frozenset(
         "fridge",
         "microwave",
         "countertop",
+    }
+)
+
+# Room/location words and count quantifiers that the question n-gram heuristic
+# glues onto the object ("rug shower bathroom", "many bedside tables"). They are
+# the answer/context, never part of the object to locate. Dropping them keeps
+# the authoritative target query intact while removing garbage retrieval phrases.
+ROOM_CONTEXT_TOKENS = frozenset(
+    {
+        "bathroom",
+        "bedroom",
+        "kitchen",
+        "living",
+        "room",
+        "shower",
+        "bath",
+        "toilet",
+        "laundry",
+        "garage",
+        "hall",
+        "hallway",
+        "dining",
+        "sunroom",
+        "closet",
+        "office",
+        "den",
+        "patio",
+        "balcony",
+        "stairs",
+        "staircase",
+        "basement",
+        "attic",
+        "porch",
+        "yard",
+        "garden",
+        "many",
+        "some",
+        "several",
+        "few",
+        "each",
+        "both",
     }
 )
 
@@ -126,9 +169,22 @@ def _target_boost_phrases(self) -> list[str]:
         ordered.append(phrase)
     from emet.memory.graph_eqa.labels import heuristic_relevant_phrases
 
+    # The VLM-extracted target is authoritative. Heuristic n-grams are only
+    # alternate phrasings of the same object; drop narrative n-grams that share
+    # no content token with it (e.g. "going shower now" / "now need grab" next
+    # to a "towels" target), and drop object+room/quantifier glue ("rug shower
+    # bathroom", "many bedside tables") that the heuristic builds from the
+    # question's location context. Without a target phrase, keep the heuristic.
+    target_tokens = {t for t in re.findall(r"[a-z0-9]+", phrase.lower()) if len(t) >= 3}
     for raw in heuristic_relevant_phrases(self.query_text):
         val = str(raw or "").strip()
         if val and val not in ordered:
+            val_tokens = re.findall(r"[a-z0-9]+", val.lower())
+            if target_tokens and not target_tokens.intersection(val_tokens):
+                continue
+            extra = [t for t in val_tokens if t not in target_tokens]
+            if extra and any(t in ROOM_CONTEXT_TOKENS for t in extra):
+                continue
             ordered.append(val)
 
     # Expand terse fixture queries ("cab") with matched graph-node labels
@@ -545,10 +601,16 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
             target_theta = None
     if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
         used_nav_target = True
-        try:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta, explore_goal=True)
-        except TypeError:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, explore_goal=True)
+
+        def navigate():
+            measured_start = self._robot_xyt_world()
+            current_start = measured_start if measured_start is not None else start
+            try:
+                return agent.navigate_to_target_pose(frontier_xyz, current_start, target_theta, explore_goal=True)
+            except TypeError:
+                return agent.navigate_to_target_pose(frontier_xyz, current_start, explore_goal=True)
+
+        nav_outcome = navigate_with_floor_recovery(self, navigate)
         nav_outcome_str = str(nav_outcome)
         ok = bool(nav_outcome)
         nav_outcome_str = str(nav_outcome)
@@ -661,6 +723,10 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         if isinstance(look_cap, dict) and look_cap.get("ok"):
             cap = look_cap
     verify_out = None
+    if motion_progress and cap.get("ok"):
+        from emet.memory.graph_eqa.agentic.view_quality import recover_exploration_view
+
+        cap = recover_exploration_view(self, cap)
     if cap.get("ok") and cap.get("obs_id") is not None:
         self._policy_approached(hypothesis_id, int(cap["obs_id"]))
         if self.mode == "answer":

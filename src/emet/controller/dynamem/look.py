@@ -31,6 +31,254 @@ from emet.visualization.null_visualizer import visualizer_is_enabled
 logger = Logger(__name__)
 
 
+def supports_floor_observation(agent) -> bool:
+    """Advertise the shared tool only for adapters with its measured-view contract."""
+    robot = getattr(agent, "robot", None)
+    return isinstance(getattr(robot, "_seq_id", None), int) and all(
+        callable(getattr(robot, name, None)) for name in ("head_to", "get_pan_tilt", "get_observation")
+    )
+
+
+def _rejected_footprint_status(agent, pose):
+    """Recheck a fixed rejected pose, not a route or motion authorization."""
+    space = getattr(agent, "space", None)
+    if pose is None or not callable(getattr(space, "is_valid", None)):
+        return None
+    pose = np.asarray(pose, dtype=float)
+    if pose.shape != (3,) or not np.isfinite(pose).all():
+        return None
+    valid = bool(space.is_valid(pose))
+    detail = getattr(space, "last_validity", {}) or {}
+    return {
+        "pose_valid": valid,
+        "reason": detail.get("reason", "unknown"),
+        "unknown_cells": detail.get("unknown_footprint_cells", 0 if valid else None),
+    }
+
+
+def observe_blocked_floor(agent) -> dict:
+    """At most two bounded head captures aimed at one currently unknown cell.
+
+    The navigation grid uses a Z=0 floor reference. Projection is an aiming
+    hypothesis only: it never marks the cell free or certifies a route.
+    """
+    from emet.memory.graph_eqa.agentic.views import CapturedView, target_in_view
+
+    if not supports_floor_observation(agent):
+        return {"ok": False, "status": "unsupported_head_observation"}
+    plan = getattr(agent, "_last_nav_plan", None) or {}
+    pose = plan.get("footprint", {}).get("checked_pose")
+    checked = _rejected_footprint_status(agent, pose)
+    if checked is None:
+        return {"ok": False, "status": "missing_rejected_footprint"}
+    if checked["pose_valid"]:
+        return {
+            "ok": True,
+            "status": "checked_pose_valid_replan_required",
+            "observation": {
+                "checked_pose": pose,
+                "footprint_before": checked,
+                "footprint_after": checked,
+                "replan_required": True,
+            },
+            "note": "No new capture needed. Replan; route is not certified.",
+        }
+    detail = agent.space.last_validity
+    offsets = detail.get("unknown_cell_offsets_m", [])
+    if detail.get("reason") != "unobserved_footprint" or not offsets:
+        return {"ok": False, "status": "no_unknown_floor_target"}
+    if detail.get("unknown_cell_offsets_frame") != "world_xy_from_checked_pose":
+        return {"ok": False, "status": "unsupported_floor_target_frame"}
+    target = [pose[0] + offsets[0][0], pose[1] + offsets[0][1], 0.0]
+    if not np.isfinite(target).all():
+        return {"ok": False, "status": "invalid_floor_target"}
+    attempts = []
+    result = {"ok": False, "status": "floor_target_unobservable"}
+    for _ in range(2):
+        obs = agent.robot.get_observation()
+        if obs is None or obs.rgb is None:
+            break
+        view = CapturedView(0, 0, obs.rgb, obs.camera_pose, obs.camera_K)
+        projection = target_in_view(view, target)
+        if projection["status"] in {"missing_geometry", "behind_camera"}:
+            attempts.append(projection)
+            break
+        x, y, z = projection["target_camera_xyz"]
+        pan, tilt = agent.robot.get_pan_tilt()
+        pan = float(np.clip(pan + np.arctan2(-x, z), -1.0, 1.0))
+        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), -1.4, -0.7))
+        result = observe_floor(agent, pan_rad=pan, tilt_rad=tilt)
+        if not result.get("ok"):
+            break
+        obs = agent.robot.get_observation()
+        if obs is None or obs.rgb is None:
+            result["ok"] = False
+            result["status"] = "floor_target_projection_unavailable"
+            break
+        view = CapturedView(0, 0, obs.rgb, obs.camera_pose, obs.camera_K)
+        after = target_in_view(view, target)
+        depth = getattr(obs, "depth", None)
+        if after.get("target_in_frame") and depth is not None:
+            u, v = after["target_pixel_xy"]
+            sample = float(depth[int(v), int(u)])
+            after["measured_depth_m"] = sample if np.isfinite(sample) and sample > 0 else None
+            # A nearer return may be an occluder; the assumed floor height can
+            # also be wrong. Expose the measurement, not a free-space claim.
+            after["reference_optical_depth_m"] = float(after["target_camera_xyz"][2])
+        attempts.append({"requested_pan_tilt": [pan, tilt], "before": projection, "after": after})
+        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid") or after.get("target_in_frame"):
+            break
+    result.setdefault("observation", {})["targeted_floor"] = {
+        "target_world_xyz": target,
+        "floor_height_source": "navigation_zero_height_reference_not_measured_free_space",
+        "attempts": attempts,
+    }
+    result["note"] = (
+        result.get("note", "") + " Target projection is not clearance. If the footprint remains invalid, "
+        "choose another already-safe viewing pose or stop; do not repeat the same unhelpful view."
+    )
+    return result
+
+
+def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False) -> dict:
+    """Stationary head-only observation; never interpret unknown floor as free.
+
+    Reject adapters without measured head pose and a fresh-frame sequence. A
+    successful capture updates the map, but does not guarantee a safe approach.
+    """
+    if target_blocker:
+        return observe_blocked_floor(agent)
+    if pan_rad is not None and (
+        isinstance(pan_rad, bool)
+        or not isinstance(pan_rad, (int, float))
+        or not np.isfinite(pan_rad)
+        or abs(pan_rad) > 1.0
+    ):
+        return {"ok": False, "status": "invalid_head_pan"}
+    if (
+        isinstance(tilt_rad, bool)
+        or not isinstance(tilt_rad, (int, float))
+        or not np.isfinite(tilt_rad)
+        or not -1.4 <= tilt_rad <= -0.7
+    ):
+        return {"ok": False, "status": "invalid_head_tilt"}
+    robot = agent.robot
+    if not all(callable(getattr(robot, method, None)) for method in ("head_to", "get_pan_tilt")):
+        return {"ok": False, "status": "unsupported_head_observation"}
+    if not isinstance(getattr(robot, "_seq_id", None), int):
+        return {"ok": False, "status": "observation_freshness_unavailable"}
+    pan, _ = robot.get_pan_tilt()
+    if pan_rad is not None:
+        pan = float(pan_rad)
+    if not np.isfinite(pan):
+        return {"ok": False, "status": "head_pose_unconfirmed"}
+    tilt = float(tilt_rad)
+    moved = robot.head_to(float(pan), tilt, blocking=True)
+    if moved is False:
+        return {"ok": False, "status": "head_motion_failed"}
+    sequence = robot._seq_id  # Require a frame received after motion completion.
+    wait_post_motion_obs(robot, timeout=5.0)
+    if robot._seq_id <= sequence:
+        return {"ok": False, "status": "stale_observation"}
+    measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+    deadline = time.monotonic() + 5.0
+    # Some adapters acknowledge head_to before the mechanism arrives. Close
+    # the observation loop on measured pose, without widening its tolerance.
+    while np.isfinite(measured).all() and np.max(np.abs(measured - [pan, tilt])) > 0.12:
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+        measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+    if not np.isfinite(measured).all() or np.max(np.abs(measured - [pan, tilt])) > 0.12:
+        return {
+            "ok": False,
+            "status": "head_pose_unconfirmed",
+            "observation": {
+                "requested_head_pan_tilt_rad": [pan, tilt],
+                "measured_head_pan_tilt_rad": measured.tolist(),
+            },
+        }
+    # Waiting for joint arrival may have consumed the first fresh image. Require
+    # another frame after the verified pose before mapping that view.
+    sequence = robot._seq_id
+    wait_post_motion_obs(robot, timeout=5.0)
+    if robot._seq_id <= sequence:
+        return {"ok": False, "status": "stale_observation"}
+    obs = robot.get_observation()
+    if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
+        return {"ok": False, "status": "calibrated_depth_unavailable"}
+    before = len(agent.voxel_map.observations)
+    plan = getattr(agent, "_last_nav_plan", None) or {}
+    checked_pose = plan.get("footprint", {}).get("checked_pose")
+    footprint_before = _rejected_footprint_status(agent, checked_pose)
+    obstacles_before, explored_before = agent.voxel_map.get_2d_map()
+    agent.update(full_perception=True)
+    if len(agent.voxel_map.observations) <= before:
+        return {"ok": False, "status": "map_update_missing"}
+    obstacles_after, explored_after = agent.voxel_map.get_2d_map()
+    observed_delta = int(explored_after.sum()) - int(explored_before.sum())
+    footprint_after = _rejected_footprint_status(agent, checked_pose)
+    # Capture success and recovery success are different contracts. Map growth
+    # elsewhere must not look like progress on this particular rejected pose.
+    recovery_status = "not_evaluated"
+    if footprint_before is not None and footprint_after is not None:
+        if footprint_after["pose_valid"]:
+            recovery_status = "checked_pose_valid_replan_required"
+        elif footprint_after["reason"] != "unobserved_footprint":
+            recovery_status = "checked_pose_still_invalid"
+        else:
+            old_count = footprint_before["unknown_cells"]
+            new_count = footprint_after["unknown_cells"]
+            recovery_status = (
+                "unknown_footprint_reduced"
+                if isinstance(old_count, int) and isinstance(new_count, int) and new_count < old_count
+                else "unknown_footprint_not_reduced"
+            )
+    # Keep the exact captured view and map changes for offline inspection.
+    # A larger observed map is not proof of clearance or successful navigation.
+    evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
+    if evidence_dir:
+        from pathlib import Path
+
+        from PIL import Image
+
+        directory = Path(evidence_dir) / "navigation"
+        directory.mkdir(parents=True, exist_ok=True)
+        stem = directory / f"floor_observation_{time.time_ns()}"
+        Image.fromarray(np.asarray(obs.rgb, dtype=np.uint8)).save(stem.with_suffix(".png"))
+        np.savez_compressed(
+            stem.with_suffix(".npz"),
+            depth=obs.depth,
+            camera_K=obs.camera_K,
+            camera_pose=obs.camera_pose,
+            head_pan_tilt=measured,
+            base_pose=agent._planning_base_xyt(robot.get_base_pose()),
+            obstacles_before=obstacles_before.cpu().numpy(),
+            explored_before=explored_before.cpu().numpy(),
+            obstacles_after=obstacles_after.cpu().numpy(),
+            explored_after=explored_after.cpu().numpy(),
+        )
+    return {
+        "ok": True,
+        "status": "floor_observed",
+        "observation": {
+            "measured_head_pan_tilt_rad": measured.tolist(),
+            "observed_cell_change": observed_delta,
+            "checked_pose": checked_pose,
+            "footprint_before": footprint_before,
+            "footprint_after": footprint_after,
+            "recovery_status": recovery_status,
+            "replan_required": True,
+        },
+        "note": (
+            f"Fresh downward RGB-D added to map; base stationary; observed-cell change={observed_delta}. "
+            "Compare footprint_before/after: map growth elsewhere does not resolve the rejection. "
+            "If unknown cells remain, choose a different bounded pan/tilt or stop; do not repeat an unhelpful view. "
+            "Replan before movement even if this checked pose becomes valid; the route is not certified."
+        ),
+    }
+
+
 def wait_post_motion_obs(robot, timeout: float) -> None:
     """Wait for a camera frame newer than the one cached at end of motion.
 
@@ -98,33 +346,28 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
         return
     # Non-blocking; reliable=False avoids extra resends while we soft-wait.
     head_to(float(pan), float(tilt), blocking=False, reliable=False)
-    get_js = getattr(self.robot, "get_joint_state", None)
-    if not callable(get_js):
-        time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
-        return
-    try:
-        from emet.motion.kinematics import HelloStretchIdx
-    except Exception:
+    get_pan_tilt = getattr(self.robot, "get_pan_tilt", None)
+    if not callable(get_pan_tilt):
         time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
         return
 
-    t0 = time.time()
+    t0 = time.monotonic()
     stopped_since: float | None = None
     last_pan: float | None = None
     last_tilt: float | None = None
-    while time.time() - t0 < DYNAMEM_HEAD_SWEEP_MAX_WAIT_S:
+    last_time: float | None = None
+    while time.monotonic() - t0 < DYNAMEM_HEAD_SWEEP_MAX_WAIT_S:
         try:
-            joints, vels, _ = get_js()
+            measured = np.asarray(get_pan_tilt(), dtype=float)
         except Exception:
-            joints, vels = None, None
-        now = time.time()
+            measured = np.array([np.nan, np.nan])
+        now = time.monotonic()
         elapsed = now - t0
-        if joints is None or len(joints) <= HelloStretchIdx.HEAD_TILT:
+        if measured.shape != (2,) or not np.isfinite(measured).all():
             time.sleep(0.04)
             continue
 
-        cur_pan = float(joints[HelloStretchIdx.HEAD_PAN])
-        cur_tilt = float(joints[HelloStretchIdx.HEAD_TILT])
+        cur_pan, cur_tilt = measured
         pan_err = abs(cur_pan - float(pan))
         tilt_err = abs(cur_tilt - float(tilt))
         near_goal = pan_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD and tilt_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD
@@ -133,12 +376,12 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
             break
 
         speed = 0.0
-        if vels is not None and len(vels) > HelloStretchIdx.HEAD_TILT:
-            speed = abs(float(vels[HelloStretchIdx.HEAD_PAN])) + abs(float(vels[HelloStretchIdx.HEAD_TILT]))
         pos_delta = 0.0
         if last_pan is not None and last_tilt is not None:
             pos_delta = abs(cur_pan - last_pan) + abs(cur_tilt - last_tilt)
+            speed = pos_delta / max(now - last_time, 1e-6)
         last_pan, last_tilt = cur_pan, cur_tilt
+        last_time = now
 
         # Loose: slow creep counts as stopped so we do not burn max wait every pan.
         moving = speed > DYNAMEM_HEAD_SWEEP_SPEED_TOL or pos_delta > DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL
@@ -154,7 +397,7 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
         time.sleep(0.04)
 
 
-def look_around(self):
+def look_around(self, *, on_observation=None):
     """Look around for mapping / agentic capture.
 
     Policy: :func:`look_around_should_sweep` (robot overlay
@@ -162,6 +405,10 @@ def look_around(self):
     Stretch as well as rby1 (single capture at look_front) — hardware 4-pan
     is opt-in. Paper coverage: ``EMET_FORCE_HEAD_SWEEP=1`` or
     ``--set mapping.look_around_head_sweep=true``.
+
+    Optional ``on_observation`` checks each captured view after a blocking head
+    move and post-motion frame wait. A true result stops scanning and preserves
+    that gaze; callers must still validate observation freshness.
     """
     skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
@@ -175,7 +422,7 @@ def look_around(self):
     if skip_sweep:
         self.announce_action("Look around: single capture (no head sweep)")
         self.update(full_perception=True)
-        return
+        return bool(on_observation()) if on_observation is not None else None
 
     self.announce_action("Look around: sweeping head")
     tilt = float(motion_constants.look_front[1])
@@ -192,13 +439,23 @@ def look_around(self):
     t_sweep = time.time()
     for i, pan in enumerate(pans):
         self.announce_motion_progress(f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})")
-        self._head_to_sweep(pan, tilt)
-        time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
+        if on_observation is not None:
+            # A mapping sweep may sample mid-pan. Verification cannot hand that
+            # transient view to manipulation while the head keeps moving.
+            self.robot.head_to(pan, tilt, blocking=True)
+            wait_post_motion_obs(self.robot, timeout=DYNAMEM_POST_MOTION_OBS_WAIT_S)
+        else:
+            self._head_to_sweep(pan, tilt)
+            time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
         self.update(full_perception=True)
+        if on_observation is not None and on_observation():
+            # Preserve the verified view for the next operation.
+            return True
     self.announce_motion_progress(f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)")
     # Return to look_front without a long blocking wait.
     self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
     time.sleep(DYNAMEM_HEAD_SETTLE_S)
+    return False if on_observation is not None else None
 
 
 def _find_phase_nav_timeout(self, default: float = 10.0) -> float:
