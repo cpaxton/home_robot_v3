@@ -206,6 +206,9 @@ def main() -> int:
         action="store_true",
         help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1).",
     )
+    parser.add_argument("--video-overlay", choices=("none", "banner", "border"), default="banner",
+                        help="Optional task/active skill labels; border preserves the full camera view.")
+    parser.add_argument("--video-flags", default="", help="Visible assistance/geometry legend for the recording.")
     parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument(
         "--video-out",
@@ -363,6 +366,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
+                    overlay_style=args.video_overlay, flags=args.video_flags,
                     title="kinematic pick-place",
                 )
                 video.set_status(
@@ -405,6 +409,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
+                    overlay_style=args.video_overlay, flags=args.video_flags,
                     title="ASSISTED joint teleport (no door-sweep check)" if args.articulation_cycle else f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
@@ -421,7 +426,7 @@ def main() -> int:
                 video_recorder=video,
             )
             if video is not None:
-                video.set_status("done")
+                video.set_status("done" if ok else "failed", detail="success" if ok else "see paired JSON failure outcome")
                 video.capture_once()
                 mp4 = video.stop()
                 video = None

@@ -33,3 +33,18 @@ teleports are shown as discrete changes, without fabricated interpolation.
 Open/close capture queued: job `20261009_173350_a866a0`, implementation `098f2e45`,
 output `/home/cpaxton/runs/emet/capability-media-20261009/`. Do not claim footage
 or success until the job completes and its frames/outcomes have been inspected.
+
+## Task and skill overlays / robot comparisons
+
+Both smoke runners accept `--video-overlay none|banner|border` and optional
+`--video-flags TEXT`. Border mode places task, active skill/tool and flags outside
+the camera view; none preserves clean video. The stepwise TAMP runner labels
+approach/grasp/place with semantic object and receptacle names. The CHAT runner
+labels the active public tool; it does not claim visibility into internal skill
+transitions. `GT` means ground-truth geometry; `ASSISTED` flags enumerate simulator
+help rather than claiming physical manipulation.
+
+`run_capability_media_suite.py` records independent open/close, full placement,
+RBY1 and Innate Mars cases under a managed GPU job. RBY1 currently uses the Galaxea
+R1 model. Each case keeps its log and process outcome even when another fails.
+A zero process exit is not an independent physical-success certificate.
