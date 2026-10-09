@@ -870,11 +870,10 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 - [x] Address #180 review: explicit missing-verifier failure, budget cleanup,
       once-per-view/query caller contract, added tests and current-main API checks.
-- [ ] Merge approved #180 after isolated paired regression gate; keep active
-      full-stack replay heads frozen and restack dependents afterward.
+- [x] Merge #176 and #180 on explicit user direction; isolated #180 paired EQA
+      remains post-merge evidence, not a passed gate. Keep frozen replay heads.
 - [x] Record user-supplied #176 review: no blockers; independent merge candidate.
-- [ ] Maintainer approval/merge of #176; keep current reset-based shallow snapshot
-      limitation explicit. No automatic merge as part of the acceptance work.
+- [x] Maintainer approved #176 merge; retain reset-based shallow snapshot limitation.
 - [ ] Follow-up: Qwen shared-client reset-context regression; revisit snapshot
       depth if tools begin mutating existing message dictionaries in place.
 
