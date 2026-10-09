@@ -119,6 +119,19 @@ def robot_planar_xy(robot: Any) -> tuple[float, float]:
     return float(pose[0]), float(pose[1])
 
 
+def exploration_planar_xy(agent: Any) -> tuple[float, float]:
+    """Base XY in the same planning frame as exploration candidates."""
+    robot = getattr(agent, "robot", None)
+    if robot is None:
+        return (0.0, 0.0)
+    pose = robot.get_base_pose()
+    transform = getattr(agent, "_planning_base_xyt", None)
+    if callable(transform):
+        pose = transform(pose)
+    pose = np.asarray(pose, dtype=np.float64).reshape(-1)
+    return float(pose[0]), float(pose[1])
+
+
 def _planar_dist(a: tuple[float, float] | np.ndarray, b: tuple[float, float] | np.ndarray) -> float:
     return float(math.hypot(float(a[0]) - float(b[0]), float(a[1]) - float(b[1])))
 
@@ -313,7 +326,7 @@ def pick_uncovered_explore_target(
     habitat = robot is not None and is_habitat_robot_client(robot)
     if min_travel_m <= 0.0:
         min_travel_m = explore_min_travel_m(agent)
-    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+    robot_xy = exploration_planar_xy(agent)
 
     for cand in candidates or []:
         if cand is None:
@@ -352,7 +365,7 @@ def pick_uncovered_explore_target(
     gm = getattr(agent, "graph_memory", None)
     if gm is not None:
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
-        robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+        robot_xy = exploration_planar_xy(agent)
         nodes.sort(
             key=lambda n: _frontier_explore_sort_key(
                 n,
@@ -391,7 +404,7 @@ def pick_uncovered_explore_target(
     return None
 
 
-def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None) -> None:
+def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None, on_observation=None):
     """Rotate in place on Habitat (head stubs are no-ops; body turns build the map)."""
     sim = getattr(robot, "_sim", None)
     if sim is None or not hasattr(sim, "step"):
@@ -402,6 +415,9 @@ def habitat_body_scan(robot: Any, *, turns: int = 6, on_step: Any | None = None)
             robot._sync_pose_from_sim()
         if on_step is not None:
             on_step()
+        if on_observation is not None and on_observation():
+            return True
+    return False if on_observation is not None else None
 
 
 def habitat_perfect_nav_enabled(parameters: Any) -> bool:
@@ -561,6 +577,7 @@ def habitat_navmesh_navigate(
     *,
     start_xyt: np.ndarray | None = None,
     target_theta: float | None = None,
+    look_at_xy: tuple[float, float] | None = None,
     max_waypoints: int = 24,
     min_success_dist_m: float = 0.08,
     finish_radius_m: float = 0.28,
@@ -590,7 +607,7 @@ def habitat_navmesh_navigate(
     before = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3].copy()
     start_goal_m = float(np.hypot(eff_x - before[0], eff_z - before[1]))
     finish_tol = max(min_success_dist_m, finish_radius_m)
-    if start_goal_m <= finish_tol:
+    if start_goal_m <= finish_tol and target_theta is None and look_at_xy is None:
         return NavAttemptResult(
             success=False,
             finished=False,
@@ -601,11 +618,20 @@ def habitat_navmesh_navigate(
             effective_goal_xy=(eff_x, eff_z),
         )
     yaw = float(target_theta if target_theta is not None else before[2])
+    if look_at_xy is not None:
+        yaw = math.atan2(look_at_xy[1] - eff_z, look_at_xy[0] - eff_x)
+    require_heading = target_theta is not None or look_at_xy is not None
     path_pts = sim.find_path_to_xy(eff_x, eff_z)
     path_xy: list[list[float]] | None = None
-    if path_pts is not None and len(path_pts) >= 2:
+    if start_goal_m <= finish_tol:
+        if look_at_xy is not None:
+            yaw = math.atan2(look_at_xy[1] - before[1], look_at_xy[0] - before[0])
+        robot.move_base_to(np.array([before[0], before[1], yaw]), blocking=True)
+    elif path_pts is not None and len(path_pts) >= 2:
         path_xy = [[float(p[0]), float(p[2])] for p in np.asarray(path_pts)]
         waypoints = navmesh_waypoints_to_xyt(path_pts, max_waypoints=max_waypoints)
+        if require_heading and waypoints:
+            waypoints[-1][2] = yaw
         if len(waypoints) >= 2 and hasattr(robot, "execute_trajectory"):
             robot.execute_trajectory(waypoints[1:], blocking=True)
         else:
@@ -613,15 +639,30 @@ def habitat_navmesh_navigate(
     else:
         robot.move_base_to(np.array([eff_x, eff_z, yaw], dtype=np.float64), blocking=True)
     after = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
+    # Recompute the bearing from the measured stop, not the planned waypoint.
+    # One bounded orientation command closes residual error; readback, not a
+    # command acknowledgment, decides whether the arrival heading was achieved.
+    if look_at_xy is not None:
+        yaw = math.atan2(look_at_xy[1] - after[1], look_at_xy[0] - after[0])
+    heading_error = abs((yaw - after[2] + math.pi) % (2 * math.pi) - math.pi)
+    if require_heading and np.hypot(after[0] - eff_x, after[1] - eff_z) <= finish_tol and heading_error > 0.1:
+        robot.move_base_to(np.array([after[0], after[1], yaw]), blocking=True)
+        after = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
+        if look_at_xy is not None:
+            yaw = math.atan2(look_at_xy[1] - after[1], look_at_xy[0] - after[0])
+        heading_error = abs((yaw - after[2] + math.pi) % (2 * math.pi) - math.pi)
     dist_m = float(np.hypot(after[0] - before[0], after[1] - before[1]))
     goal_dist = float(np.hypot(after[0] - eff_x, after[1] - eff_z))
     req_dist = float(np.hypot(after[0] - goal_x, after[1] - goal_z))
     at_goal = goal_dist <= finish_tol
     moved_enough = dist_m >= min_success_dist_m or (at_goal and start_goal_m > min_success_dist_m)
-    finished = moved_enough and at_goal
+    heading_ok = not require_heading or heading_error <= 0.1
+    finished = at_goal and heading_ok and (moved_enough or require_heading)
     success = finished
     if finished:
         note = f"ok_{resolved.mode}"
+    elif at_goal and not heading_ok:
+        note = f"heading_error_{heading_error:.3f}rad"
     elif at_goal and not moved_enough:
         note = f"already_at_goal_{start_goal_m:.2f}m"
     else:

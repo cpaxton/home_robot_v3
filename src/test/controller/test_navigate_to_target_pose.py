@@ -63,6 +63,34 @@ def test_navigate_to_target_pose_returns_false_on_planner_failure(nav_agent):
     nav_agent.robot.execute_trajectory.assert_not_called()
 
 
+def test_manipulation_approach_bounds_reach_sampler_without_bypassing_plan_failure(nav_agent):
+    assert not nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0], distance_range=(0.7, 0.8))
+    assert nav_agent.space.sample_navigation.call_args.kwargs == {
+        "mode": "navigation",
+        "distance_range": (0.7, 0.8),
+        "require_planar_visibility": False,
+    }
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
+@pytest.mark.parametrize("explore", [False, True])
+def test_inspection_visibility_is_not_ground_plane_clearance(nav_agent, explore):
+    assert not nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0], explore_goal=explore)
+    assert nav_agent.space.sample_navigation.call_args.kwargs["require_planar_visibility"] is explore
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
+def test_failed_approach_retains_sampling_evidence_in_tool_feedback(nav_agent):
+    from emet.agent.tools import navigation_feedback
+
+    evidence = {"status": "no_reachable_workspace", "rejected": {"visibility": 17, "footprint": 4}}
+    nav_agent.space.sample_navigation.return_value = None
+    nav_agent.space.last_target_sampling = evidence
+    nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0])
+    assert navigation_feedback(nav_agent)["approach_sampling"] == evidence
+    nav_agent.robot.execute_trajectory.assert_not_called()
+
+
 def test_navigate_to_target_pose_uses_navmesh_when_enabled(monkeypatch):
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)
@@ -125,6 +153,26 @@ class _LongChunkPlanner:
 
     def clearance_at_xy(self, xy):
         return 1.0
+
+
+def test_target_rejection_preserves_footprint_for_recovery(nav_agent):
+    from emet.visualization.null_visualizer import NullVisualizer
+
+    nav_agent.rerun_visualizer = NullVisualizer()
+    nav_agent.planner = _LongChunkPlanner()
+    reason = "rejected_swept_footprint:unobserved_footprint"
+    footprint = {"unobserved_cells": 9, "blocked_xyt": [0.1, 0.0, 0.0]}
+    nav_agent._last_nav_sweep_failure = footprint
+    nav_agent._filter_unsafe_nav_traj = MagicMock(return_value=([], reason, None))
+    nav_agent._habitat_blocked_goals = {(9.0, 9.0)}
+    nav_agent._habitat_recent_goals = [(9.0, 9.0)]
+    result = nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0])
+    assert result == NavOutcome.SAFETY_REJECTED
+    assert nav_agent._last_nav_plan["footprint"] == footprint
+    assert nav_agent._last_nav_attempt.status_code == reason
+    assert nav_agent._habitat_blocked_goals == {(9.0, 9.0)}
+    assert nav_agent._habitat_recent_goals == [(9.0, 9.0)]
+    nav_agent.robot.execute_trajectory.assert_not_called()
 
 
 def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch):
@@ -296,7 +344,7 @@ def test_navigate_to_target_pose_explore_goal_executes_into_unexplored_frontier(
     assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
 
 
-@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None])
+@pytest.mark.parametrize("log_plan", [None, lambda *a, **k: None, lambda *a, **k: {}])
 def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch, log_plan):
     def _boom(*_a, **_k):
         raise AssertionError("empty-text explore must not pick a new frontier while leftover exists")
@@ -324,12 +372,73 @@ def test_process_text_empty_continues_saved_explore_traj(nav_agent, monkeypatch,
         log_arrow3D=MagicMock(),
     )
     nav_agent._rerun_refresh_monologue_panel = lambda: None  # type: ignore[method-assign]
-    traj = nav_agent.process_text("", np.array([0.0, 0.0, 0.0]))
-    assert len(traj) >= 2
-    assert np.isnan(np.asarray(traj[-2], dtype=np.float64)).all()
-    goal = np.asarray(traj[-1], dtype=np.float64).reshape(-1)
+    # Surface XYZ after the NaN marker is not a driven base waypoint. Preserve
+    # the safety filter's clearance instead of recomputing over that marker.
+    nav_agent._filter_unsafe_nav_traj = lambda traj, **kw: (traj, None, 0.37)
+    route = nav_agent.process_text("", np.array([0.0, 0.0, 0.0]))
+    traj = route.waypoints
+    assert nav_agent._last_nav_plan["min_clearance_m"] == 0.37
+    assert traj and np.isfinite(traj).all()
+    assert route.finished
+    goal = np.asarray(route.target_xyz, dtype=np.float64).reshape(-1)
     assert abs(float(goal[0]) - 3.0) < 1e-6
     assert abs(float(goal[1]) - 4.0) < 1e-6
     assert nav_agent._last_nav_plan["object_xyz"] == [3.0, 4.0, 1.5]
     assert nav_agent.space.sample_navigation.call_args.kwargs["mode"] == "exploration"
     np.testing.assert_allclose(nav_agent._last_nav_plan["goal_xyt"][:2], [3.0, 4.0])
+
+
+@pytest.mark.parametrize("visible_target", [False, True])
+def test_query_find_never_uses_legacy_localization(nav_agent, visible_target):
+    nav_agent.query_driven_memory = True
+    nav_agent.retrieve_query_candidate = MagicMock(return_value=(np.array([1.0, 2.0, 3.0]), {"source_obs_id": 1}))
+    nav_agent.propose_query_candidate = MagicMock(return_value=SimpleNamespace(handle=7))
+    nav_agent.voxel_map = MagicMock()
+    nav_agent._localize_point_from_graph_memory = MagicMock(side_effect=AssertionError("legacy graph path"))
+    nav_agent.voxel_map.localize_text.side_effect = AssertionError("legacy detector path")
+    nav_agent._rerun_refresh_monologue_panel = lambda: None
+    nav_agent.obs_count = 0
+    if visible_target:
+        nav_agent._grounded_query_target = SimpleNamespace(candidate_id=7, xyz=np.array([1.0, 2.0, 3.0]))
+        nav_agent.query_candidates = SimpleNamespace(
+            records={7: SimpleNamespace(handle=7, query="cup", rejected_revision=None)}
+        )
+    nav_agent.process_text("cup", np.zeros(3))
+    if visible_target:
+        nav_agent.retrieve_query_candidate.assert_not_called()
+    else:
+        nav_agent.retrieve_query_candidate.assert_called_once_with("cup")
+    nav_agent.voxel_map.localize_text.assert_not_called()
+    nav_agent.voxel_map.verify_point.assert_not_called()
+
+
+def test_physical_frontier_offers_guarded_stationary_view(nav_agent, monkeypatch):
+    from emet.motion.algo.a_star import AStar
+
+    start = np.array([-1.002, -0.280, 0.018])
+    frontier = np.array([-1.3, -0.2, 1.0])
+    monkeypatch.setattr("emet.controller.dynamem.navigation.pick_uncovered_explore_target", lambda *a, **kw: frontier)
+    monkeypatch.setattr("emet.motion.frontier_goals.collect_explore_frontier_candidates", lambda *a, **kw: [frontier])
+    monkeypatch.setattr("emet.motion.viewpoint_selection.make_frontier_evaluator", lambda *a: lambda *args: 1.0)
+    planner = object.__new__(AStar)
+    planner.plan = MagicMock(
+        return_value=SimpleNamespace(success=True, goal_index=0, trajectory=[SimpleNamespace(state=start.copy())])
+    )
+    planner.clean_path_for_xy = lambda points, **kw: points
+    planner.clearance_at_xy = lambda xy: 0.4
+    nav_agent.planner = planner
+    nav_agent.space.traj = None
+    nav_agent.space.obstacle_map_mode = "physical"
+    nav_agent.space.sample_navigation.return_value = np.array([-1.1, -0.3, 2.678])
+    nav_agent._filter_unsafe_nav_traj = lambda path, **kw: (path, None, 0.4)
+    nav_agent.rerun_visualizer = SimpleNamespace(
+        clear_nav_plan=lambda: None, clear_identity=lambda _: None, log_arrow3D=lambda *args: None
+    )
+    nav_agent._rerun_refresh_monologue_panel = lambda: None
+    nav_agent.obs_count = 0
+    nav_agent.process_text("", start)
+    goals = planner.plan.call_args.kwargs["goals"]
+    assert len(goals) == 2
+    np.testing.assert_allclose(goals[0][:2], start[:2])
+    assert goals[0][2] > 0  # Counterclockwise view; translation initially turns clockwise.
+    np.testing.assert_allclose(goals[1][:2], [-1.1, -0.3])

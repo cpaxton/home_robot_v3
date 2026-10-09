@@ -281,6 +281,10 @@ def _log_nav_attempt(
         if recent is not None:
             recent.append(key)
             del recent[:-8]
+    elif str(nav_res.note or "") == "rejected_swept_footprint:unobserved_footprint":
+        # The safety filter already invalidated the route. Missing coverage
+        # must not become an episode-long blacklist in this reporting path.
+        return
     elif (
         str(nav_res.note or "").startswith("already_at_goal")
         or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
@@ -312,6 +316,7 @@ def navigate_to_target_pose(
     _hop: int = 0,
     explore_goal: bool = False,
     look_at_xy: tuple[float, float] | None = None,
+    distance_range: tuple[float, float] | None = None,
 ):
     if target_pose is None:
         nav_res = NavAttemptResult(
@@ -332,10 +337,13 @@ def navigate_to_target_pose(
     goal_xy = np.array([float(tp_arr[0]), float(tp_arr[1])], dtype=np.float64)
 
     if habitat_perfect_nav_enabled(self.parameters) and is_habitat_robot_client(self.robot):
+        if distance_range is not None:
+            raise ValueError("Manipulation approach bounds require the voxel navigation planner")
         nav_res = habitat_navmesh_navigate(
             self.robot,
             goal_xy,
             target_theta=target_theta,
+            look_at_xy=look_at_xy,
         )
         nav_res.target_obs_id = target_obs_id
         self._last_nav_attempt = nav_res
@@ -366,9 +374,22 @@ def navigate_to_target_pose(
             return NavOutcome.PROGRESS
         return NavOutcome.STUCK
 
+    # A collision-free ground-plane ray is not a camera-visibility test for
+    # object inspection (e.g. a jar above its supporting counter). Retain that
+    # heuristic for free-space frontiers; inspection verifies the arrival RGB.
+    approach_options = {"require_planar_visibility": bool(explore_goal)}
+    if distance_range is not None:
+        # Raised targets use fresh visual reacquisition, not 2D line-of-sight
+        # through the supporting counter. Footprint/path checks still apply.
+        approach_options = {"distance_range": distance_range, "require_planar_visibility": False}
     target_pose = self.space.sample_navigation(
-        start_pose, self.planner, original_target_pose, mode="exploration" if explore_goal else "navigation"
+        start_pose,
+        self.planner,
+        original_target_pose,
+        mode="exploration" if explore_goal else "navigation",
+        **approach_options,
     )
+    self._last_approach_sampling = dict(getattr(self.space, "last_target_sampling", {})) if target_pose is None else {}
     # A projected base goal can differ substantially from the requested approach.
     # Recompute bearing there, not at the original waypoint.
     if target_pose is not None and look_at_xy is not None:
@@ -431,6 +452,8 @@ def navigate_to_target_pose(
                 "outcome": reject_reason or "rejected_low_clearance",
             }
             reason = reject_reason or "rejected_low_clearance"
+            if reason.startswith("rejected_swept_footprint:"):
+                self._last_nav_plan["footprint"] = dict(getattr(self, "_last_nav_sweep_failure", {}) or {})
             self._mark_nav_goal_blocked(reason=reason)
             nav_res = NavAttemptResult(
                 success=False,
@@ -439,6 +462,7 @@ def navigate_to_target_pose(
                 method="voxel_astar",
                 note=reason,
                 target_obs_id=target_obs_id,
+                status_code=reason,
             )
             self._last_nav_attempt = nav_res
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
@@ -556,6 +580,7 @@ def navigate_to_target_pose(
             "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), 0.0],
             "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
             "outcome": str(note),
+            "approach_sampling": dict(self._last_approach_sampling),
         }
         self._mark_nav_goal_blocked(reason=str(note))
         nav_res = NavAttemptResult(
@@ -595,6 +620,7 @@ def navigate_to_target_pose(
             _hop=_hop + 1,
             explore_goal=explore_goal,
             look_at_xy=look_at_xy,
+            distance_range=distance_range,
         )
     if progressed:
         return NavOutcome.PROGRESS

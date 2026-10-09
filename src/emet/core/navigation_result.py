@@ -8,6 +8,30 @@ import math
 from dataclasses import dataclass
 
 
+@dataclass
+class NavigationRoute:
+    """Base motion only; semantic target and chunk completion are not waypoints."""
+
+    waypoints: list
+    target_xyz: object = None
+    finished: bool = False
+
+    def __bool__(self):
+        return bool(self.waypoints) or self.finished
+
+    @classmethod
+    def from_value(cls, value):
+        """Compatibility boundary for old stored routes and controller adapters."""
+        if isinstance(value, cls):
+            return value
+        import numpy as np
+
+        points = list(value)
+        if len(points) >= 2 and np.isnan(np.asarray(points[-2], dtype=float)).all():
+            return cls(points[:-2], points[-1], True)
+        return cls(points)
+
+
 @dataclass(frozen=True)
 class NavigationPolicy:
     xy_tolerance: float
@@ -107,9 +131,10 @@ class ArrivalMonitor:
             self.progress = (now, xy, yaw)
         elif now - self.progress[0] >= policy.progress_seconds:
             _, old_xy, old_yaw = self.progress
-            improved = (old_xy > policy.xy_tolerance and old_xy - xy >= 0.01) or (
-                old_yaw > policy.yaw_tolerance and old_yaw - yaw >= 0.02
-            )
+            # Controllers may approach inside the acceptance radius before
+            # switching to final heading. That motion is still progress;
+            # gating it on old_xy being outside rejects valid phase handoffs.
+            improved = old_xy - xy >= 0.01 or old_yaw - yaw >= 0.02
             if not improved and not inside:
                 return "failed", {**result, "reason": "navigation stalled"}
             self.progress = (now, xy, yaw)
