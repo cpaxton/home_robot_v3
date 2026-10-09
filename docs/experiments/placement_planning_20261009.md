@@ -149,3 +149,13 @@ faulthandler located one crash at the pose-IK named-joint lookup. An isolated
 96-call IK loop completed. A 90-second gdb attempt ended without a native crash
 trace. These are unresolved diagnostic failures, not the cause established for
 the live gate. See the [merge review](../plans/2026-10-09_tamp_merge_and_metrics.md).
+
+## Follow-up repairs
+
+The scene12 missing-support failure was reproduced from its saved MJCF. Its bin
+has five collision boxes, but measured rotation entries around 1.6e-5 exceeded
+the old exact-axis 1e-6 test. Support extraction now inscribes a conservative
+rectangle in a box face's XY projection, with arbitrary yaw and at most 1 mrad
+tilt. Sloped/mesh faces remain unsupported. Tests check every rectangle corner
+against the oriented face and reject larger tilt; 18 metadata tests pass. This
+repairs support availability, not a claim of successful live placement.

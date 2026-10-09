@@ -121,8 +121,8 @@ still requires simulator placements; the reusable planner above does not.
 The default simulator adapter requires `support_surfaces` for the selected
 receptacle: horizontal top faces of axis-aligned collision boxes, preserved through
 server serialization and the client reader. It never substitutes a semantic or
-visual AABB top. Rotated/mesh supports and interior shelves require an explicit
-geometry provider. Disjoint support patches are not joined across unsupported gaps.
+visual AABB top. Box faces may have arbitrary yaw and up to 1 mrad tilt; larger slopes and mesh
+supports require an explicit geometry provider. Disjoint support patches are not joined across unsupported gaps.
 Full-scene GT meshes and physical release execution remain separate integrations.
 
 ### Refresh and simulator geometry details

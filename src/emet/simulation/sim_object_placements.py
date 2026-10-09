@@ -229,6 +229,32 @@ def _world_aabb_for_geom_ids(
     return np.asarray(center, dtype=np.float64).reshape(3), bounds, quat
 
 
+def _box_support_patch(position, rotation, half_size):
+    """Axis-aligned rectangle inside a nearly horizontal oriented-box top face.
+
+    Projected corners remain inside the face footprint; height uses its highest
+    corner. Tilt is limited to 1 mrad, independent of yaw. This tolerates measured
+    numerical pose drift without treating an arbitrary sloped face as support.
+    """
+    rotation = np.asarray(rotation).reshape(3, 3)
+    half_size = np.asarray(half_size)
+    normal_axis = int(np.argmax(np.abs(rotation[2])))
+    normal = rotation[:, normal_axis] * np.sign(rotation[2, normal_axis])
+    if np.linalg.norm(normal[:2]) > 1e-3:
+        return None
+    tangent_axes = [axis for axis in range(3) if axis != normal_axis]
+    edges = rotation[:, tangent_axes] * half_size[tangent_axes]
+    center = np.asarray(position) + normal * half_size[normal_axis]
+    projected = edges[:2]
+    # A point is inside the parallelogram iff abs(inv(projected) @ delta) <= 1.
+    # Bound this over all four corners of an axis-aligned centered rectangle.
+    half = np.abs(projected).sum(axis=1)
+    scale = 1.0 / np.max(np.abs(np.linalg.inv(projected)) @ half)
+    half *= scale
+    top = center[2] + np.abs(edges[2]).sum()
+    return np.array([np.r_[center[:2] - half, top], np.r_[center[:2] + half, top]])
+
+
 def _placement_entry_from_geom_ids(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -249,15 +275,11 @@ def _placement_entry_from_geom_ids(
     half = np.einsum("nij,nj->ni", np.abs(rotations), model.geom_aabb[ids, 3:])
     collision_bounds = np.stack((centers - half, centers + half), axis=1)
     support_surfaces = []
-    for gid, rotation, component in zip(ids, rotations, collision_bounds, strict=True):
-        # Explicit horizontal top faces of axis-aligned collision boxes. Do not
-        # infer a surface from a visual mesh AABB or bridge disjoint components.
-        axis_aligned = np.all(np.isclose(np.abs(rotation), 0, atol=1e-6)
-                              | np.isclose(np.abs(rotation), 1, atol=1e-6))
-        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_BOX and axis_aligned:
-            patch = component.copy()
-            patch[0, 2] = patch[1, 2]
-            support_surfaces.append(patch)
+    for gid, rotation in zip(ids, rotations, strict=True):
+        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_BOX:
+            patch = _box_support_patch(data.geom_xpos[gid], rotation, model.geom_size[gid])
+            if patch is not None:
+                support_surfaces.append(patch)
     return {
         "cat": cat,
         "pos": center,

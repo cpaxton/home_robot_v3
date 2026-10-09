@@ -341,3 +341,23 @@ def test_support_faces_survive_client_reader_without_visual_aabb_inference():
     entry = read_sim_object_placements({"sim_object_placements": wire})["counter"]
     np.testing.assert_allclose(entry["support_surfaces"], [[[-.5, -.3, .82], [.5, .3, .82]]])
     assert entry["bounds"][1, 2] == 2  # semantic bounds deliberately stay separate
+
+
+def test_box_support_tolerates_small_tilt_and_stays_inside_rotated_face():
+    from scipy.spatial.transform import Rotation
+
+    from emet.simulation.sim_object_placements import _box_support_patch
+
+    for yaw in (0, .3, 1.2):
+        rotation = Rotation.from_euler("xyz", [1.6e-5, 0, yaw]).as_matrix()
+        half = np.array([.3, .2, .01])
+        patch = _box_support_patch([0, 0, 1], rotation, half)
+        assert patch is not None
+        center = np.array([0, 0, 1]) + rotation[:, 2] * half[2]
+        projected = rotation[:2, :2] * half[:2]
+        for x in patch[:, 0]:
+            for y in patch[:, 1]:
+                assert np.all(np.abs(np.linalg.solve(projected, [x, y] - center[:2])) <= 1 + 1e-12)
+        assert patch[0, 2] == patch[1, 2]
+    tilted = Rotation.from_euler("x", .01).as_matrix()
+    assert _box_support_patch([0, 0, 1], tilted, half) is None
