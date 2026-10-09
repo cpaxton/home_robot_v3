@@ -77,6 +77,24 @@ def test_collect_skips_habitat_robot_client():
     assert collect_explore_frontier_candidates(agent, k=4, seeds=[np.array([1.0, 0.0, 1.0])]) == []
 
 
+def test_frontier_distance_uses_planning_frame_not_local_odometry():
+    from emet.controller.habitat_nav import pick_uncovered_explore_target
+
+    agent = SimpleNamespace(
+        robot=_FakeRobot(),
+        graph_memory=None,
+        space=None,
+        planner=None,
+        _planning_base_xyt=lambda pose: np.asarray(pose) + [10.0, -2.0, 0.0],
+    )
+    near = np.array([10.1, -2.0, 1.0])
+    far = np.array([11.0, -2.0, 1.0])
+    out = collect_explore_frontier_candidates(agent, seeds=[near, far], min_travel_m=0.5)
+    assert len(out) == 1
+    np.testing.assert_allclose(out[0], far)
+    np.testing.assert_allclose(pick_uncovered_explore_target(agent, candidates=[near, far], min_travel_m=0.5), far)
+
+
 def test_collect_respects_blocked_and_k():
     graph = _Graph([_Node(float(i), 0.0) for i in range(1, 12)])
     agent = SimpleNamespace(

@@ -93,6 +93,16 @@ def _filter_unsafe_nav_traj(
             object_tail = body[-2:]
             body = body[:-2]
 
+    if getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
+        from emet.motion.navigation_sweep import validate_navigation_sweep
+
+        if start_xyt is None:
+            return [], "missing_sweep_start", None
+        valid, reason = validate_navigation_sweep(self.space, start_xyt, body)
+        if not valid:
+            self._last_nav_sweep_failure = dict(getattr(self.space, "last_validity", {}) or {})
+            return [], f"rejected_swept_footprint:{reason}", None
+
     start_xy = None
     if start_xyt is not None:
         s = np.asarray(start_xyt, dtype=np.float64).reshape(-1)
@@ -141,8 +151,9 @@ def _filter_unsafe_nav_traj(
     min_along = float(min(clearances)) if clearances else None
     if not kept:
         return [], reject or "rejected_low_clearance", min_along
-    if reject is not None and len(kept) <= 1 and start_xy is not None:
-        # Only start survived → nothing useful to execute.
+    if reject is not None:
+        # Do not label a truncated prefix as a complete route or attach its
+        # original arrival marker. Replan instead of repeating the same prefix.
         return [], reject, min_along
     if object_tail:
         kept.extend(object_tail)
@@ -156,6 +167,13 @@ def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") ->
     space = getattr(self, "space", None)
     if space is not None:
         space.traj = None
+    if reason == "rejected_swept_footprint:unobserved_footprint":
+        # Missing sensor coverage is not evidence that the destination is
+        # unreachable. Keep the failed route invalidated, but let a new plan
+        # recheck it after sensing rather than blacklisting it for the episode.
+        # Full swept-footprint validation and the caller's retry budget remain.
+        self._record_nav_plan_fields(outcome=reason, blocked_after_abort=False)
+        return
     blocked = getattr(self, "_habitat_blocked_goals", None)
     if blocked is None:
         self._habitat_blocked_goals = set()
@@ -195,10 +213,123 @@ def _record_nav_plan_fields(self, **fields: Any) -> None:
     self._last_nav_plan = meta
 
 
-def execute_action(
-    self,
-    text: str,
-) -> tuple[bool | None, np.ndarray | None]:
+def _save_exploration_evidence(self, before, after):
+    """Retain each bounded attempt, not only the last step shown in chat."""
+    import json
+    import os
+    from pathlib import Path
+
+    directory = os.environ.get("EMET_EQA_EPISODE_DIR")
+    if not directory:
+        return
+    from PIL import Image
+
+    def array(value):
+        return value.detach().cpu().numpy() if hasattr(value, "detach") else np.asarray(value)
+
+    root = Path(directory) / "navigation"
+    root.mkdir(parents=True, exist_ok=True)
+    stem = root / f"explore_{time.time_ns()}"
+    obs = self.robot.get_observation()
+    obstacles, explored = self.space.get_navigation_map()
+    fields = {
+        "obstacles": array(obstacles),
+        "explored": array(explored),
+        "sensor_observed": array(self.voxel_map.get_sensor_observed_cells()),
+        "grid_resolution_m": self.voxel_map.grid_resolution,
+        "grid_origin_cells": array(self.voxel_map.grid_origin),
+        "before_xyt": before,
+        "after_xyt": after,
+    }
+    if obs is not None:
+        for name in ("depth", "camera_K", "camera_pose"):
+            if getattr(obs, name, None) is not None:
+                fields[name] = array(getattr(obs, name))
+        if obs.rgb is not None:
+            Image.fromarray(array(obs.rgb).astype(np.uint8)).save(stem.with_suffix(".png"))
+    np.savez_compressed(stem.with_suffix(".npz"), **fields)
+    command = getattr(self.robot, "_last_navigation_command", None)
+    receipt = None
+    if command is not None:
+        from emet.core.command_client import command_receipt
+
+        receipt = command_receipt(self.robot, command)
+    payload = {
+        "plan": getattr(self, "_last_nav_plan", None),
+        "navigation_receipt": receipt,
+        "map_mode": self.space.obstacle_map_mode,
+        "view_capture": "after_attempt; not independently synchronized to map ingestion",
+        "image_timing": getattr(obs, "image_timing", None),
+    }
+    stem.with_suffix(".json").write_text(json.dumps(payload, default=lambda v: array(v).tolist()) + "\n")
+
+
+def _sensor_coverage(self):
+    if getattr(getattr(self, "space", None), "obstacle_map_mode", None) != "physical":
+        return None
+    capture = getattr(self.voxel_map, "get_sensor_observed_cells", None)
+    return capture() if callable(capture) else None
+
+
+def _record_arrival_coverage(self, before):
+    after = _sensor_coverage(self)
+    count = None
+    if before is not None and after is not None and before.shape == after.shape:
+        count = int((after & ~before).sum())
+    if before is not None or after is not None:
+        self._record_nav_plan_fields(
+            new_sensor_cells=count,
+            new_sensor_area_m2=None if count is None else count * self.voxel_map.grid_resolution**2,
+            observation_outcome="unavailable" if count is None else ("gain" if count else "no_gain"),
+        )
+
+
+def _execute_validated_waypoints(self, waypoints, timeout):
+    """Use server-owned arrival; recheck physical segments from measured poses."""
+    physical = getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
+    segments = [[waypoint] for waypoint in waypoints] if physical else [waypoints]
+    for index, segment in enumerate(segments):
+        if physical:
+            self.planner.reset()
+            _, reason, _ = self._filter_unsafe_nav_traj(
+                segment, start_xyt=self._current_planning_xyt(), explore_goal=True
+            )
+            if reason:
+                self._record_nav_plan_fields(
+                    outcome=reason,
+                    footprint=dict(getattr(self, "_last_nav_sweep_failure", {}) or {}),
+                )
+                return False, reason
+        ok = self.robot.execute_trajectory(
+            segment,
+            pos_err_threshold=self.pos_err_threshold,
+            rot_err_threshold=self.rot_err_threshold,
+            per_waypoint_timeout=timeout,
+            final_timeout=max(timeout, 30.0) if index == len(segments) - 1 else timeout,
+            blocking=True,
+            world_frame=True,
+        )
+        if ok is False:
+            return False, "aborted_waypoint_execution"
+        if ok is None:
+            return False, "ambiguous_navigation_result"
+        if physical:
+            from emet.controller.dynamem.look import wait_post_motion_obs
+
+            sequence = getattr(self.robot, "_seq_id", None)
+            if not isinstance(sequence, int):
+                return False, "navigation_observation_freshness_unavailable"
+            wait_post_motion_obs(self.robot, timeout=timeout)
+            if self.robot._seq_id <= sequence:
+                return False, "stale_navigation_observation"
+            before = len(self.voxel_map.observations)
+            self.update(full_perception=False)
+            if len(self.voxel_map.observations) <= before:
+                return False, "navigation_map_update_missing"
+    return True, None
+
+
+def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
     """
     This function is used to navigate the robot give text query.
     It will call the process_text function to get the trajectory for the robot to follow.
@@ -213,6 +344,8 @@ def execute_action(
         The second element is the location of the target object, useful used to tell the robot how to orient itself and prepare pregrasp pose for manipulation.
             If it is None, it means the navigation has some problem.
     """
+    from emet.core.navigation_result import NavigationRoute
+
     if not self._realtime_updates:
         self.robot.look_front()
         self.look_around()
@@ -226,10 +359,10 @@ def execute_action(
     # execute_action("") once per "explore step", drop leftover, and pick a new
     # frontier — so long kitchen paths never finished and look-at never ran.
     for hop in range(DYNAMEM_NAV_MAX_HOPS):
-        res = self.process_text(text, start)
-        if len(res) == 0 and text != "" and text is not None:
-            res = self.process_text("", start)
-        if len(res) == 0:
+        route = NavigationRoute.from_value(self.process_text(text, start))
+        if not route and text != "" and text is not None:
+            route = NavigationRoute.from_value(self.process_text("", start))
+        if not route:
             if hop == 0:
                 logger.warning("No plan from process_text; try again.")
                 return None, None
@@ -240,9 +373,8 @@ def execute_action(
         if not str(announce).lower().startswith("navigat"):
             announce = f"Navigating… {announce}"
         # Confirm before posture/exec so operators can reject wall-hugging plans.
-        object_xyz = None
-        if len(res) >= 2 and np.isnan(np.asarray(res[-2], dtype=np.float64)).all():
-            object_xyz = res[-1]
+        res = route.waypoints
+        object_xyz = route.target_xyz
         from emet.controller.nav_confirm import confirm_navigation_plan
 
         if not confirm_navigation_plan(self, res, meta=plan_meta, object_xyz=object_xyz):
@@ -273,48 +405,41 @@ def execute_action(
         self.robot.move_to_nav_posture()
         self.robot.look_front(blocking=True)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
-        # This means that the robot has already finished all of its trajectories and should stop to manipulate the object.
-        # We will append a nan and point coordinates of the target object on the trajectory to denote that the robot is reaching the target point
-        if len(res) >= 2 and np.isnan(res[-2]).all():
-            if len(res) > 2:
-                exec_ok = self.robot.execute_trajectory(
-                    res[:-2],
-                    pos_err_threshold=self.pos_err_threshold,
-                    rot_err_threshold=self.rot_err_threshold,
-                    per_waypoint_timeout=nav_timeout,
-                    final_timeout=max(nav_timeout, 30.0),
-                    blocking=True,
-                    world_frame=True,
-                )
+        before_motion_coverage = _sensor_coverage(self)
+        if route.finished:
+            if res:
+                exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
                 if exec_ok is False:
-                    self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
-                    self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
-                    logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+                    self._record_nav_plan_fields(outcome=failure_reason)
+                    self._mark_nav_goal_blocked(reason=failure_reason)
+                    logger.warning("Navigation aborted during execute_trajectory: %s", failure_reason)
                     return None, None
 
             self.robot.look_front()
             self.update()
+            _record_arrival_coverage(self, before_motion_coverage)
+            if text and plan_meta.get("mode") == "exploration":
+                self._record_nav_plan_fields(outcome="ok_chunk")
+                return False, None
             self._record_nav_plan_fields(outcome="ok")
-            return True, res[-1]
+            return True, route.target_xyz
         # Chunk: execute, grow the voxel/graph at this pose, resume leftover.
-        exec_ok = self.robot.execute_trajectory(
-            res,
-            pos_err_threshold=self.pos_err_threshold,
-            rot_err_threshold=self.rot_err_threshold,
-            per_waypoint_timeout=nav_timeout,
-            final_timeout=max(nav_timeout, 30.0),
-            blocking=True,
-            world_frame=True,
-        )
+        exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
         if exec_ok is False:
-            self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
-            self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
-            logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+            self._record_nav_plan_fields(outcome=failure_reason)
+            self._mark_nav_goal_blocked(reason=failure_reason)
+            logger.warning("Navigation aborted during execute_trajectory: %s", failure_reason)
             return None, None
         self.robot.look_front()
         self.update()
+        _record_arrival_coverage(self, before_motion_coverage)
+        next_start = self._current_planning_xyt()
+        if np.linalg.norm(np.asarray(next_start)[:2] - np.asarray(start)[:2]) < 0.01:
+            self._mark_nav_goal_blocked(reason="navigation_no_progress")
+            logger.warning("Navigation chunk completed without measured translation; stopping continuation")
+            return None, None
         self._record_nav_plan_fields(outcome="ok_chunk")
-        start = self._current_planning_xyt()
+        start = next_start
     logger.info("execute_action: still chunked after %d hops", DYNAMEM_NAV_MAX_HOPS)
     return False, None
 
@@ -327,11 +452,22 @@ def run_exploration(self):
 
     self.announce_action("Exploring…")
     # "" means the robot has not received any text query from the user and should conduct exploration just to better know the environment
-    before = np.asarray(self._current_planning_xyt(), dtype=float)[:2].copy()
+    before = np.asarray(self._current_planning_xyt(), dtype=float).copy()
+    physical = getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
     status, target = self.execute_action("")
-    after = np.asarray(self._current_planning_xyt(), dtype=float)[:2]
-    distance = float(np.linalg.norm(after - before))
+    after = np.asarray(self._current_planning_xyt(), dtype=float)
+    distance = float(np.linalg.norm(after[:2] - before[:2]))
     progressed = status is not None and distance >= 0.10
+    if physical:
+        new_cells = (getattr(self, "_last_nav_plan", None) or {}).get("new_sensor_cells")
+        # A validated turn can reveal space; driving alone is not evidence of
+        # coverage. Failed motion remains a failure even if startup sensing grew
+        # the map. Legacy tasks retain their old progress contract for now.
+        progressed = status is not None and new_cells is not None and new_cells > 0
+        self._record_nav_plan_fields(
+            measured_distance_m=distance,
+            motion_outcome="failed" if status is None else ("reached" if status else "partial"),
+        )
     goal = tuple(float(v) for v in np.asarray(target).reshape(-1)[:2]) if target is not None else None
     self._last_nav_attempt = NavAttemptResult(
         success=progressed,
@@ -342,7 +478,16 @@ def run_exploration(self):
         goal_xy=goal,
     )
     if status is not None and not progressed:
-        self._mark_nav_goal_blocked(reason="exploration_no_progress")
+        if physical:
+            from emet.motion.viewpoint_selection import remember_unhelpful_view
+
+            if new_cells == 0:
+                remember_unhelpful_view(self)
+            self._record_nav_plan_fields(outcome="exploration_no_progress")
+        else:
+            self._mark_nav_goal_blocked(reason="exploration_no_progress")
+    if physical:
+        _save_exploration_evidence(self, before, after)
     if status is None:
         self.announce_action("Exploring… no valid frontier right now")
         logger.warning("Exploration failed (no valid plan or frontier).")
@@ -355,6 +500,8 @@ def process_text(self, text, start_pose):
     """
     Process the text query and return the trajectory for the robot to follow.
     """
+
+    from emet.core.navigation_result import NavigationRoute
 
     logger.debug("process_text: %r", text)
 
@@ -377,9 +524,32 @@ def process_text(self, text, start_pose):
     localized_point = None
     waypoints = None
 
-    if text is not None and text != "" and self.space.traj is not None:
+    query_mode = bool(getattr(self, "query_driven_memory", False)) and bool(text)
+    query_candidate_handle = None
+    if query_mode:
+        # Retrieval provides approach candidates only. Never invoke the legacy
+        # detector/localize_text acceptance path for query-driven memory.
+        target = getattr(self, "_grounded_query_target", None)
+        record = self.query_candidates.records.get(target.candidate_id) if target is not None else None
+        if record is not None and record.query == " ".join(text.lower().split()) and record.rejected_revision is None:
+            localized_point = target.xyz
+            query_candidate_handle = record.handle
+            localize_source = "query_grounded_approach"
+        else:
+            localized_point, stats = self.retrieve_query_candidate(text)
+        if localized_point is not None and query_candidate_handle is None:
+            record = self.propose_query_candidate(text, localized_point, stats)
+            if record is None:
+                localized_point = None
+            else:
+                record.target_description = text
+                query_candidate_handle = record.handle
+                localize_source = "query_candidate"
+                debug_text += "## Approaching unverified query candidate; fresh arrival grounding required.\n"
+
+    if not query_mode and text is not None and text != "" and self.space.traj is not None:
         logger.debug("Reusing saved trajectory target: %s", self.space.traj)
-        traj_target_point = self.space.traj[-1]
+        traj_target_point = NavigationRoute.from_value(self.space.traj).target_xyz
         if hasattr(self.encoder, "feature_matching_threshold") and self.voxel_map.verify_point(
             text,
             traj_target_point,
@@ -398,7 +568,7 @@ def process_text(self, text, start_pose):
     # sampling a new one (leftover was only reused for nonempty object queries).
     continue_saved = False
     if localized_point is None and (text is None or text == "") and self.space.traj is not None:
-        traj_target_point = self.space.traj[-1]
+        traj_target_point = NavigationRoute.from_value(self.space.traj).target_xyz
         if _finite_xyz_traj_target(traj_target_point):
             localized_point = traj_target_point
             localize_source = "saved_traj"
@@ -408,7 +578,7 @@ def process_text(self, text, start_pose):
 
     logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
-    if text is not None and text != "" and localized_point is None:
+    if not query_mode and text is not None and text != "" and localized_point is None:
         graph_point = self._localize_point_from_graph_memory(text)
         if graph_point is not None:
             localized_point = graph_point
@@ -417,7 +587,7 @@ def process_text(self, text, start_pose):
             mode = "navigation"
             logger.info("Localized %r from graph memory at %s", text, np.asarray(graph_point).reshape(-1)[:3])
 
-    if text is not None and text != "" and localized_point is None:
+    if not query_mode and text is not None and text != "" and localized_point is None:
         det = getattr(self.voxel_map, "detection_model", None)
         if det is not None or self.encoder is not None:
             try:
@@ -497,6 +667,7 @@ def process_text(self, text, start_pose):
     n_planned = 0
     res = None
     point = None
+    candidate_diagnostics = []
 
     # Exploration: top-K frontiers → one multi-goal A* (skip sealed / unreachable).
     # Object nav stays single-goal. Leftover chunks keep the same frontier.
@@ -514,7 +685,15 @@ def process_text(self, text, start_pose):
         )
         object_xys: list[np.ndarray] = []
         nav_goals: list[np.ndarray] = []
+        physical_views = getattr(self.space, "obstacle_map_mode", None) == "physical"
         for cand in cands:
+            if physical_views:
+                # A frontier can be revealed from here without driving to its
+                # sampled approach. These are guarded SE(2) goals, not a raw scan.
+                # At most two views per each of the eight frontier candidates.
+                bearing = np.arctan2(float(cand[1]) - start_pose[1], float(cand[0]) - start_pose[0])
+                object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
+                nav_goals.append(np.array([*start_pose[:2], bearing]))
             g = self.space.sample_navigation(
                 start_pose,
                 self.planner,
@@ -527,8 +706,13 @@ def process_text(self, text, start_pose):
             object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
             nav_goals.append(np.asarray(g, dtype=np.float64).reshape(-1))
 
-        if len(nav_goals) >= 2:
-            res = self.planner.plan(start_pose, nav_goals[0], goals=nav_goals)
+        if nav_goals and (len(nav_goals) >= 2 or physical_views):
+            evaluator = None
+            if physical_views:
+                from emet.motion.viewpoint_selection import make_frontier_evaluator
+
+                evaluator = make_frontier_evaluator(self, start_pose, nav_goals, candidate_diagnostics)
+            res = self.planner.plan(start_pose, nav_goals[0], goals=nav_goals, candidate_evaluator=evaluator)
             gi = getattr(res, "goal_index", None) if res is not None else None
             if res is not None and res.success and gi is not None and 0 <= int(gi) < len(nav_goals):
                 gi_i = int(gi)
@@ -549,6 +733,16 @@ def process_text(self, text, start_pose):
                 )
             elif res is not None and not res.success:
                 logger.warning("Multi-goal explore plan failed: %s", res.reason)
+                if physical_views:
+                    failure = next((d for d in candidate_diagnostics if d.get("footprint")), {})
+                    self._last_nav_plan = {
+                        "mode": mode,
+                        "localize_source": "frontier_view_selection",
+                        "outcome": failure.get("reason", "no_useful_executable_view"),
+                        "footprint": failure.get("footprint", {}),
+                        "view_candidates": candidate_diagnostics,
+                    }
+                    return []
                 res = None
         elif len(nav_goals) == 1:
             point = nav_goals[0]
@@ -558,12 +752,16 @@ def process_text(self, text, start_pose):
             res = self.planner.plan(start_pose, point)
 
     if point is None and res is None:
+        # Query arrival has an actual RGB-D visibility gate; legacy callers keep
+        # their existing planar heuristic until they adopt that contract.
+        visibility = {"require_planar_visibility": False} if query_mode and mode == "navigation" else {}
         point = self.space.sample_navigation(
             start_pose,
             self.planner,
             localized_point,
             mode=mode,
             blocked=getattr(self, "_habitat_blocked_goals", None) if mode == "exploration" else None,
+            **visibility,
         )
 
     logger.info(
@@ -601,21 +799,17 @@ def process_text(self, text, start_pose):
         if finished:
             self.space.traj = None
         else:
-            self.space.traj = waypoints[DYNAMEM_NAV_CHUNK_WPS:] + [[np.nan, np.nan, np.nan], localized_point]
+            self.space.traj = NavigationRoute(waypoints[DYNAMEM_NAV_CHUNK_WPS:], localized_point, True)
         if not finished:
             waypoints = waypoints[:DYNAMEM_NAV_CHUNK_WPS]
         traj = self.planner.clean_path_for_xy(waypoints, start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0)
-        if finished:
-            traj.append([np.nan, np.nan, np.nan])
-            if isinstance(localized_point, torch.Tensor):
-                localized_point = localized_point.tolist()
-            traj.append(localized_point)
         traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(
             traj,
             start_xyt=start_pose,
             explore_goal=(mode == "exploration"),
         )
         if reject_reason is not None or not traj:
+            self.space.traj = None
             logger.warning(
                 "Nav plan rejected after safety filter: %s (min_clearance=%s)",
                 reject_reason,
@@ -632,6 +826,8 @@ def process_text(self, text, start_pose):
                 "announce": f"Plan rejected ({reject_reason or 'unsafe'})",
                 "traj": [],
             }
+            if reject_reason and reject_reason.startswith("rejected_swept_footprint:"):
+                self._last_nav_plan["footprint"] = dict(getattr(self, "_last_nav_sweep_failure", {}) or {})
             return []
         logger.info(
             "Planned trajectory: %d exec / %d planned waypoints (finished_chunk=%s min_clearance=%.3f)",
@@ -676,13 +872,10 @@ def process_text(self, text, start_pose):
         # Attach clearance / safety fields for agent tools.
         try:
             clr = self.planner.clearance_at_xy(start_pose[:2])
-            path_clrs = [
-                self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
-                for p in traj
-                if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
-            ]
             self._record_nav_plan_fields(
-                min_clearance_m=float(min(path_clrs)) if path_clrs else None,
+                # The safety filter excludes the trailing object-XYZ marker.
+                # It is not a base waypoint (and can be inside an obstacle).
+                min_clearance_m=min_clr,
                 base_clearance_m=float(clr),
                 min_clearance_required_m=float(getattr(self, "_min_clearance_m", 0.0)),
                 traj=list(traj),
@@ -702,18 +895,13 @@ def process_text(self, text, start_pose):
             vectors.append([float(b[0] - a[0]), float(b[1] - a[1]), 0.0])
         if origins:
             self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
-        path_clrs = [
-            self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
-            for p in traj
-            if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
-        ]
         self._last_nav_plan = {
             "mode": mode,
             "localize_source": localize_source,
             "n_planned": n_planned,
             "chunked": chunked,
             "path_m": 0.0,
-            "min_clearance_m": float(min(path_clrs)) if path_clrs else None,
+            "min_clearance_m": min_clr,
             "min_clearance_required_m": float(getattr(self, "_min_clearance_m", 0.0)),
             "announce": f"Navigating via {localize_source or mode}: {n_planned} wps",
             "traj": list(traj),
@@ -722,14 +910,19 @@ def process_text(self, text, start_pose):
     if traj:
         # Planner provenance must not depend on whether a visualizer returns
         # metadata (NullVisualizer deliberately returns None).
+        resolved_goal = getattr(res, "resolved_goal", None)
         self._record_nav_plan_fields(
             mode=mode,
             localize_source=localize_source,
-            goal_xyt=list(point),
+            goal_xyt=list(resolved_goal) if resolved_goal is not None else list(point),
+            requested_goal_xyt=list(point),
+            goal_resolution=getattr(res, "goal_resolution", None),
             object_xyz=[ox, oy, oz],
+            query_candidate_handle=query_candidate_handle,
+            view_candidates=candidate_diagnostics,
             traj=list(traj),
         )
-    return traj
+    return NavigationRoute(traj, localized_point, bool(traj) and not chunked)
 
 
 def navigate(self, text, max_step=10):
@@ -748,4 +941,6 @@ def navigate(self, text, max_step=10):
         if finished is None:
             logger.warning("Navigation failed (blocked or no progress).")
             return None
-    return end_point
+    # An intermediate exploration endpoint is not a localized target. Budget
+    # exhaustion must not let callers proceed to manipulation with that point.
+    return end_point if finished is True else None

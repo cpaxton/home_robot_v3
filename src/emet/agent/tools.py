@@ -63,6 +63,45 @@ def _agent_from_context(context: dict[str, Any]) -> Any | None:
     return context.get("agent")
 
 
+def navigation_feedback(agent: Any | None) -> dict:
+    """Bounded navigation evidence; never dump full waypoint arrays into prompts."""
+    meta = getattr(agent, "_last_nav_plan", None) or {}
+    keys = (
+        "mode",
+        "outcome",
+        "status_code",
+        "localize_source",
+        "goal_xyt",
+        "requested_goal_xyt",
+        "goal_resolution",
+        "motion_outcome",
+        "new_sensor_cells",
+        "new_sensor_area_m2",
+        "observation_outcome",
+        "n_planned",
+        "min_clearance_m",
+        "min_clearance_required_m",
+        "footprint",
+        "approach_sampling",
+    )
+    result = {key: meta[key] for key in keys if key in meta}
+    candidates = meta.get("view_candidates")
+    if candidates:
+        from collections import Counter
+
+        eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
+        compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
+        result["view_selection"] = {
+            "candidate_count": len(candidates),
+            "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
+            "top_estimated_views": [
+                {key: candidate[key] for key in compact_keys if key in candidate}
+                for candidate in sorted(eligible, key=lambda c: -c["score"])[:3]
+            ],
+        }
+    return result
+
+
 def format_last_nav_plan_summary(agent: Any | None) -> str:
     """Compact last-plan line for explore/find/diagnostics tool returns."""
     if agent is None:

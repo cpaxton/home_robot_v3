@@ -40,7 +40,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         dilate_frontier_size: int = 12,
         dilate_obstacle_size: int = 2,
         extend_mode: str = "separate",
+        obstacle_map_mode: str = "legacy_padded",
+        footprint: Footprint | None = None,
     ):
+        if obstacle_map_mode not in {"legacy_padded", "physical"}:
+            raise ValueError("obstacle_map_mode must be legacy_padded or physical")
+        self.obstacle_map_mode = obstacle_map_mode
+        self._navigation_footprint = footprint
         super().__init__(
             voxel_map=voxel_map,
             robot=None,
@@ -55,19 +61,79 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         self.create_collision_masks(orientation_resolution)
         self.traj = None
 
+    def get_navigation_map(self):
+        if self.obstacle_map_mode == "physical":
+            return self.voxel_map.get_navigation_map()
+        return self.voxel_map.get_2d_map()
+
+    def is_valid(self, state, is_safe_threshold=1.0, debug=False, verbose=False, obstacles=None, explored=None):
+        if self.obstacle_map_mode != "physical":
+            return super().is_valid(state, is_safe_threshold, debug, verbose, obstacles, explored)
+        # Physical mode always requires the entire measured footprint to be known.
+        self.last_validity = {"reason": "invalid_navigation_pose"}
+        try:
+            origin = self.voxel_map.grid.grid_origin
+            if hasattr(origin, "cpu"):
+                origin = origin.cpu().numpy()
+            pose = state.detach().cpu().numpy() if hasattr(state, "detach") else state
+            cells = self._footprint.grid_cells(self.voxel_map.grid_resolution, pose, origin)
+        except (TypeError, ValueError):
+            return False
+        if obstacles is None or explored is None:
+            obstacles, explored = self.get_navigation_map()
+        if hasattr(obstacles, "cpu"):
+            obstacles = obstacles.cpu().numpy()
+        if hasattr(explored, "cpu"):
+            explored = explored.cpu().numpy()
+        if not len(cells) or np.any(cells < 0) or np.any(cells >= np.asarray(obstacles.shape)):
+            self.last_validity = {"reason": "footprint_out_of_map"}
+            return False
+        occupied = np.asarray(obstacles)[cells[:, 0], cells[:, 1]].astype(bool)
+        observed = np.asarray(explored)[cells[:, 0], cells[:, 1]].astype(bool)
+        self.last_validity = {
+            "reason": "occupied_footprint"
+            if occupied.any()
+            else ("unobserved_footprint" if not observed.all() else "ok"),
+            "coverage": float(observed.mean()),
+            "unknown_cells": cells[~observed].tolist(),
+            "occupied_cells": cells[occupied].tolist(),
+            "checked_pose": np.asarray(pose).tolist(),
+            "footprint_cells": len(cells),
+            "unknown_footprint_cells": int((~observed).sum()),
+            "unknown_cell_offsets_frame": "world_xy_from_checked_pose",
+            "unknown_cell_offsets_m": (
+                (cells[~observed][:16] - np.asarray(origin)[:2]) * self.voxel_map.grid_resolution - np.asarray(pose)[:2]
+            ).tolist(),
+        }
+        return bool(not occupied.any() and observed.all())
+
+    def get_oriented_mask(self, theta):
+        if self.obstacle_map_mode == "physical":
+            return torch.from_numpy(
+                self._footprint.get_conservative_rotated_mask(self.voxel_map.grid_resolution, float(theta))
+            )
+        return super().get_oriented_mask(theta)
+
     def create_collision_masks(self, orientation_resolution: int):
         """Create a set of orientation masks
 
         Args:
             orientation_resolution: number of bins to break it into
         """
-        self._footprint = Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1)
-        self._orientation_resolution = 64
+        self._footprint = self._navigation_footprint or Footprint(
+            width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1
+        )
+        self._orientation_resolution = orientation_resolution
         self._oriented_masks = []
 
         for i in range(orientation_resolution):
             theta = i * 2 * np.pi / orientation_resolution
-            mask = self._footprint.get_rotated_mask(self.voxel_map.grid_resolution, angle_radians=theta)
+            rasterize = (
+                self._footprint.get_conservative_rotated_mask
+                if self.obstacle_map_mode == "physical"
+                else self._footprint.get_rotated_mask
+            )
+            mask = rasterize(self.voxel_map.grid_resolution, angle_radians=theta)
             # Footprint returns numpy; store as tensor for get_oriented_mask / collision checks
             mask_t = torch.from_numpy(np.asarray(mask)).bool() if not hasattr(mask, "cuda") else mask
             self._oriented_masks.append(mask_t)
@@ -109,7 +175,15 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         return True
 
     def sample_target_point(
-        self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False, blocked=None
+        self,
+        start: torch.Tensor,
+        point: torch.Tensor,
+        planner,
+        exploration: bool = False,
+        blocked=None,
+        *,
+        require_planar_visibility: bool = True,
+        distance_range: tuple[float, float] | None = None,
     ) -> np.ndarray | None:
         """Sample a position near the mask and return.
 
@@ -117,7 +191,14 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             look_at_any_point(bool): robot should look at the closest point on target mask instead of average pt
         """
 
-        obstacles, explored = self.voxel_map.get_2d_map()
+        if distance_range is not None:
+            if exploration or len(distance_range) != 2 or not np.isfinite(distance_range).all():
+                raise ValueError("A finite object-approach distance range is required")
+            if not 0 <= distance_range[0] < distance_range[1]:
+                raise ValueError("Object-approach distance range must be ordered and nonnegative")
+
+        self.last_target_sampling = {"status": "no_reachable_workspace", "reachable_cells": 0}
+        obstacles, explored = self.get_navigation_map()
 
         # Extract edges from our explored mask
         start_pt = planner.to_pt(start)
@@ -132,7 +213,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         reachable = torch.empty(obstacles.shape, dtype=torch.bool).fill_(False)
         reachable[reachable_xs, reachable_ys] = True
 
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         reachable = reachable & ~obstacles
 
         target_x, target_y = planner.to_pt(point)
@@ -152,21 +233,37 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         # Frontiers are coverage goals, not objects to stand away from. Pick the
         # nearest valid reachable cell; retain footprint and visibility checks.
         standoffs = [0.0] if exploration else [0.35, 0.24, 0.14, 0.08]
+        if distance_range is not None:
+            # A manipulation workspace is a hard constraint, not a preference
+            # that may fall back to successively closer viewing locations.
+            standoffs = [distance_range[0]]
         obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
+        rejected = {"blocked": 0, "outside_range": 0, "footprint": 0, "visibility": 0}
+        nearest_reachable_m = float("inf")
+        footprint_reasons = {}
 
         for min_standoff in standoffs:
             for selected_target in selected_targets:
                 sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
                 selected_x, selected_y = planner.to_xy([sx_i, sy_i])
+                dist_xy = float(np.hypot(selected_x - px, selected_y - py))
+                nearest_reachable_m = min(nearest_reachable_m, dist_xy)
                 if blocked and (round(float(selected_x), 2), round(float(selected_y), 2)) in blocked:
+                    rejected["blocked"] += 1
                     continue
                 theta = self.compute_theta(selected_x, selected_y, px, py)
 
-                if not self.is_valid(np.array([selected_x, selected_y, theta])):
-                    continue
-
-                dist_xy = float(np.hypot(selected_x - px, selected_y - py))
                 if not exploration and dist_xy <= min_standoff:
+                    rejected["outside_range"] += 1
+                    continue
+                if distance_range is not None and dist_xy > distance_range[1]:
+                    rejected["outside_range"] += 1
+                    continue
+                self.last_validity = {}
+                if not self.is_valid(np.array([selected_x, selected_y, theta])):
+                    rejected["footprint"] += 1
+                    reason = self.last_validity.get("reason", "unknown")
+                    footprint_reasons[reason] = footprint_reasons.get(reason, 0) + 1
                     continue
 
                 ok = True
@@ -177,16 +274,96 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                     if 0 <= ni < obs_h and 0 <= nj < obs_w and bool(obstacles[ni, nj]):
                         ok = False
 
-                # The goal theta already faces the predicted position; make sure the
-                # predicted position is actually visible from the reachable pose.
-                if ok and not self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y):
+                # A 2D collision map cannot establish camera visibility of a
+                # raised object: its supporting table projects into the same
+                # cells. Object approaches retain footprint/path safety, while
+                # the caller must verify the target from the resulting view.
+                # Keep this planar visibility heuristic for free-space frontiers.
+                if (
+                    (exploration or require_planar_visibility)
+                    and ok
+                    and not self._line_of_sight_clear(obstacles, sx_i, sy_i, target_x, target_y)
+                ):
                     ok = False
 
                 if ok:
+                    self.last_target_sampling = {"status": "ok"}
                     return np.array([selected_x, selected_y, theta])
+                rejected["visibility"] += 1
 
         # No useful approach exists in the currently reachable map. Let the caller
         # explore; do not silently bypass footprint/visibility checks to claim arrival.
+        # Do not infer obstacles (or missing floor) from a reachability failure.
+        # Only label missing coverage when the actual footprint checks prove it.
+        status = "no_reachable_workspace"
+        if footprint_reasons and set(footprint_reasons) == {"unobserved_footprint"}:
+            status = "insufficient_floor_coverage"
+        elif footprint_reasons and set(footprint_reasons) <= {"obstacle", "occupied_footprint"}:
+            status = "workspace_obstructed"
+        self.last_target_sampling = {
+            "status": status,
+            "reachable_cells": len(xs),
+            "nearest_reachable_m": nearest_reachable_m,
+            "distance_range_m": list(distance_range) if distance_range is not None else None,
+            "rejected": rejected,
+            "footprint_reasons": footprint_reasons,
+        }
+        if distance_range is not None:
+            # Distinguish missing observations from disconnected approach space.
+            # These are center-cell diagnostics, NOT full-footprint certificates.
+            counts = {"unknown": 0, "occupied": 0, "below_clearance": 0, "disconnected": 0, "reachable": 0}
+            radius = int(np.ceil(distance_range[1] / self.voxel_map.grid_resolution)) + 1
+            clearance = getattr(planner, "_clearance_m", None)
+            for i in range(max(0, target_x - radius), min(obs_h, target_x + radius + 1)):
+                for j in range(max(0, target_y - radius), min(obs_w, target_y + radius + 1)):
+                    x, y = planner.to_xy([i, j])
+                    if not distance_range[0] < np.hypot(x - px, y - py) <= distance_range[1]:
+                        continue
+                    if bool(obstacles[i, j]):
+                        key = "occupied"
+                    elif not bool(explored[i, j]):
+                        key = "unknown"
+                    elif clearance is not None and clearance[i, j] < getattr(planner, "min_clearance_m", 0):
+                        key = "below_clearance"
+                    else:
+                        key = "reachable" if bool(reachable[i, j]) else "disconnected"
+                    counts[key] += 1
+            self.last_target_sampling["in_range_center_cells"] = counts
+            self.last_target_sampling["obstacle_map_mode"] = self.obstacle_map_mode
+            logger.warning(
+                f"Grasp approach sampling failed: target_xy=({px:.3f},{py:.3f}) "
+                f"range={distance_range} reachable_cells={len(xs)} "
+                f"nearest_reachable_m={nearest_reachable_m:.3f} rejected={rejected}"
+            )
+        # Sensor-map replay inputs for inspection as well as manipulation.
+        # Unique files preserve repeated failures; no private simulator state.
+        import json
+        import os
+        import time
+        from pathlib import Path
+
+        evidence_dir = os.environ.get("EMET_EQA_EPISODE_DIR")
+        if evidence_dir:
+            directory = Path(evidence_dir) / "navigation"
+            directory.mkdir(parents=True, exist_ok=True)
+            stem = directory / f"failed_approach_{time.time_ns()}"
+            np.savez_compressed(
+                stem.with_suffix(".npz"),
+                obstacles=obstacles.detach().cpu().numpy(),
+                explored=explored.detach().cpu().numpy(),
+                reachable=reachable.detach().cpu().numpy(),
+                reachable_ij=selected_targets.detach().cpu().numpy(),
+                reachable_xy=np.asarray([planner.to_xy([int(i), int(j)]) for i, j in selected_targets]),
+                grid_resolution_m=float(self.voxel_map.grid_resolution),
+                target_xy=np.asarray([px, py]),
+                start_xy=np.asarray([float(start[0]), float(start[1])]),
+                distance_range=np.asarray(distance_range if distance_range is not None else [], dtype=float),
+                require_planar_visibility=bool(require_planar_visibility),
+                exploration=bool(exploration),
+                clearance_m=np.asarray(getattr(planner, "_clearance_m", None), dtype=float),
+                min_clearance_m=float(getattr(planner, "min_clearance_m", 0.0)),
+            )
+            stem.with_suffix(".json").write_text(json.dumps(self.last_target_sampling) + "\n")
         return None
 
     def sample_exploration(self, xyt, planner, text=None, debug=False, blocked=None):
@@ -391,6 +568,11 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         """
         # # type: ignore to bypass mypy checking
         xy = np.array([xy[0], xy[1]], dtype=float)  # type: ignore
+        if self.obstacle_map_mode == "physical":
+            cell = self.voxel_map.grid.xy_to_grid_cell(xy)
+            # A* treats an out-of-bounds index as occupied. Do not snap a pose
+            # outside the allocated map into a seemingly reachable edge cell.
+            return cell if cell is not None else (-1, -1)
         pt = self.voxel_map.xy_to_grid_coords(xy)  # type: ignore
         if pt is None:
             # Base pose can be outside the allocated grid (world vs map frame); snap for planning.
@@ -412,12 +594,30 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         xy = self.voxel_map.grid_coords_to_xy(pt)  # type: ignore
         return float(xy[0]), float(xy[1])
 
-    def sample_navigation(self, start, planner, point, mode="navigation", *, blocked=None):
+    def sample_navigation(
+        self,
+        start,
+        planner,
+        point,
+        mode="navigation",
+        *,
+        blocked=None,
+        require_planar_visibility=True,
+        distance_range=None,
+    ):
         plt.clf()
         if point is None:
             start_pt = self.to_pt(start)
             return None
-        goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation", blocked=blocked)
+        goal = self.sample_target_point(
+            start,
+            point,
+            planner,
+            exploration=mode != "navigation",
+            blocked=blocked,
+            require_planar_visibility=require_planar_visibility,
+            distance_range=distance_range,
+        )
         logger.debug("sample_navigation point=%s goal=%s", point, goal)
         obstacles, explored = self.voxel_map.get_2d_map()
         plt.imshow(obstacles)
