@@ -142,6 +142,7 @@ def test_stale_receipt_cannot_verify_and_uncertain_command_invalidates_plan():
 @pytest.mark.parametrize(
     "joint",
     [
+        '<joint type="hinge" range="0 1"/>',  # unnamed: cannot address it through the wire
         '<joint type="hinge" range="-1 1"/>',
         '<joint type="hinge" limited="false"/>',
         '<joint type="hinge" range="0 1"/><joint type="slide" range="0 1"/>',

@@ -45,7 +45,7 @@ def scene_articulations(model, data, robot_root_name):
             "convention": "default_limit_is_closed",
             "joint_positions": {model.joint(j).name: float(data.qpos[model.jnt_qposadr[j]]) for j in scalar},
         }
-        if len(joints) == 1 and len(scalar) == 1:
+        if len(joints) == 1 and len(scalar) == 1 and model.joint(scalar[0]).name:
             j = scalar[0]
             lo, hi = model.jnt_range[j]
             ref = float(model.qpos0[model.jnt_qposadr[j]])

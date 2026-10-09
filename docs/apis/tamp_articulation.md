@@ -33,7 +33,7 @@ Server articulation revisions also invalidate plans in other tool contexts.
 ## Supported geometry and conservative preflight
 
 The simulator groups scene bodies by top-level fixture, excluding the robot.
-A fixture is actionable only when it has exactly one bounded hinge or slide,
+A fixture is actionable only when it has exactly one named bounded hinge or slide,
 with its model default position at one endpoint. That endpoint is called closed;
 the opposite endpoint is called open. This convention is an explicit approximation,
 not semantic proof that a real mechanism opens that way. State tolerance is 2%
@@ -50,7 +50,8 @@ This conservatively gates the entire fixture, including its exterior support top
 It does not establish access to the object being picked up.
 
 Joint-state publication refreshes affected scene geometry using private MuJoCo
-data; live contact/acceleration buffers are not overwritten by metadata refresh.
+data. MolmoSpaces refreshes only affected fixture bodies; aggregate fixture maps
+use their full grouping provider; live contact/acceleration buffers are not overwritten by metadata refresh.
 The existing joint teleport itself still calls MuJoCo forward dynamics. Door
 motion can cause contacts or subsequent settling: no swept collision protection,
 attachment verification, containment guarantee or stable-open latch is claimed.
