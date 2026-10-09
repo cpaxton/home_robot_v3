@@ -940,3 +940,15 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
       manipulation/TAMP owners (#177/#178/#179). Preserve source revisions and results.
 - [ ] Habitat OVMM, Sourccey/Galaxea and real robots remain follow-ups; no full sweep
       required for the current EQA/small-room review gates.
+# Shared-agent review gates (2026-10-09)
+
+- [ ] Resolve repaired-stack EQA losses q12/q14/q56 (5/12 vs frozen-main 8/12);
+      paired replay with isolated evidence first, then owning-slice diagnosis.
+- [ ] Finish serial S0/RoboCasa/Molmo find comparison; report infrastructure,
+      object and receptacle outcomes separately from manipulation acceptance.
+- [ ] Reconcile #180/#181/#182/#184/#185 against main after #177/#178; preserve
+      reviewed heads during active experiments and coordinate TAMP overlaps.
+- [ ] Review standalone telemetry #190 and remove its duplicate from #185 on
+      restack; retain legacy unknown-field compatibility.
+- [ ] Complete five-repeat navigation and paired current-main acceptance gates.
+      Land validated lower slices independently; no new defaults or main push.
