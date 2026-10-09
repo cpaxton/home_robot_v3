@@ -184,3 +184,10 @@ Metadata refresh is now deferred from every attachment physics tick to telemetry
 publication and uses kinematics only; tests require contact and acceleration
 buffers to remain unchanged. This removes unnecessary physics-loop work without
 relaxing tolerances; it is not proof of the cause of the tracking failures.
+
+Arrival-clock review found that trajectory sleeps used the simulator rate but
+`_wait_measured_ee` used a fixed three-wall-second deadline. The wait now uses the
+same existing capped ratio scaling and logs its actual wall budget. Clear delayed
+tracking can finish within its simulated-time allowance; a blocked joint still
+fails at the deadline. Contact/lift evidence suites: 23 passed. This is a timing
+contract change, not a relaxed distance bound or an equal-wall-budget comparison.
