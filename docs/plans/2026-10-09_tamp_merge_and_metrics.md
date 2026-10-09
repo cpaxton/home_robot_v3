@@ -22,22 +22,41 @@ The review findings below remain as the original audit. Implemented follow-ups:
   planner/runtime provenance, paired gains/losses, scene-cluster uncertainty and
   PDF/SVG export. See [usage](../experiments/tamp_paired_metrics.md). It rejects
   unpaired/nonterminal runs and does not automatically promote candidates.
-- Combined placement/recovery source `7e20a9b3`: **235 tests pass**. Metrics:
-  **16 tests pass**, including actual vector export. Foundation/integration
+- Integrated source `2fcbfbd1`: **259 tests pass**, including the 16 metrics
+  tests and actual vector export. Foundation/integration
   command, navigation, evaluator and tool tests: **109 pass, 2 skipped**.
 - Diagnostic gate `20261009_121359_46c309` at `6ea3f780` finished failed: CHAT
   failed, 0/3 admissions, no repeats. It confirmed stop-on-failure and support
   availability, and exposed stale payload bounds in the exact live snapshot.
-- Corrected full gate `20261009_122159_920b79` at `7e20a9b3` is running with
-  fresh snapshots. Exact pre-fix replay `20261009_122347_8b00fe` is running with
-  CPU affinity. Their terminal results must be recorded before acceptance.
+- Gate `20261009_122159_920b79` at `7e20a9b3` finished failed: CHAT failed
+  before placement at lift tracking, 0/3 admissions, no repeats. Exact pre-fix
+  replay `20261009_122347_8b00fe` terminated normally with zero solutions
+  (exit 1), not a native crash. Earlier approximate crashes remain unattributed.
+- Placement now refreshes carried geometry at telemetry publication (`fbaf6df7`)
+  and scales the measured-arrival deadline with the existing capped simulator
+  time ratio (`20a82165`); distance tolerance remains 35 mm. This changes the
+  wall-time budget and is recorded in metric provenance.
+- Integrated gate `20261009_123154_9bfdbc`, source `2fcbfbd1`, is still running
+  admissions. CHAT passed pickup/lift but failed placement: 18 IK and 18 RRT
+  budget failures, no release attempted. No terminal admission score yet.
+- Exact CHAT scene boxes match all 15 closed dishwasher-door box components.
+  A diagnostic removal of those components changes payload connectivity from
+  zero to 31/35 preplace targets for every start. This isolates an access
+  precondition in the represented geometry; it is not an executable opening
+  plan or evidence of full arm feasibility. Preserve this failed task and add
+  explicit accessibility/articulation handling, rather than silently replacing
+  the goal or increasing RRT budgets. See the experiment record below.
+- A read-only three-way merge against navigation #182 (`7bd46c8f`) found seven
+  conflict files: navigation results, three voxel-map modules, robot footprint,
+  navigation sweep implementation and its tests. An integration branch with
+  explicit contract reconciliation remains necessary.
 
 No PR has been merged into main. Full live placement/composition acceptance,
 explicit recovery/held-state observation, native crash attribution, required CI
 configuration and cross-stack navigation integration remain merge work; passing
 unit suites and creating PRs do not complete those gates.
 
-## State and evidence
+## Original review evidence (superseded by implementation update)
 
 | Layer | Evidence | Readiness |
 | --- | --- | --- |
@@ -49,7 +68,7 @@ unit suites and creating PRs do not complete those gates.
 The scoped 182-test placement/TAMP/motion suite was rerun during this review:
 **182 passed in 14.82 s**. Documentation whitespace checks passed.
 
-The latest full gate is `20261009_081750_e342cc` at `1335d5d5`:
+At the original review, the latest full gate was `20261009_081750_e342cc` at `1335d5d5`:
 CHAT failed, admission **0/3**, repeats **not run**. Its authoritative summary is
 `~/runs/emet/placement-fair-search-20261009/results/readiness.json`.
 The [experiment record](../experiments/placement_planning_20261009.md) details
@@ -218,3 +237,19 @@ manifest. Current placement failures belong in diagnostics, not a success figure
 4. Repair seed/budget/reason reporting so paired trials are interpretable.
 5. Rerun placement canaries, then composition and broader held-out evaluation.
    Open-ended MCTS rearrangement follows a working placement/recovery interface.
+
+## Next atomic changes after this implementation
+
+1. Preserve the current gate's terminal admission outcomes and exact snapshots.
+   Its CHAT task is already failed; successful subpaths do not make it ready.
+2. Add generic task-access preconditions and an explicit fixture goal contract.
+   The current smoke passes `--receptacle microwave` but its `scene_tasks` JSON
+   filters only the object and selects the first task (dishwasher). Discovery
+   must not imply constructive solvability. Keep the original closed-appliance
+   task as a negative/precondition case; any new solvable smoke needs its own
+   declared fixture and baseline, not a retroactive score replacement.
+3. Evaluate opening/accessibility and held-state recovery in a separate TAMP
+   composition change. Removing a door in a diagnostic is not opening it safely.
+4. Resolve the seven navigation conflicts in isolation and run both stacks'
+   suites. Add required CI only after choosing a real supported runner/runtime.
+5. Merge in dependency order only when each declared acceptance gate is met.

@@ -191,3 +191,44 @@ same existing capped ratio scaling and logs its actual wall budget. Clear delaye
 tracking can finish within its simulated-time allowance; a blocked joint still
 fails at the deadline. Contact/lift evidence suites: 23 passed. This is a timing
 contract change, not a relaxed distance bound or an equal-wall-budget comparison.
+
+
+## Integrated gate and closed-appliance diagnosis
+
+Integrated code `2fcbfbd1` passed 259 focused CPU tests. Managed job
+`20261009_123154_9bfdbc` runs that immutable source. Its CHAT phase passed
+pickup/lift, then returned zero placement paths (18 pose-IK failures, 18 RRT
+budget failures). Detach was not attempted. Admission phases are still running
+at this checkpoint; no full-task success is claimed.
+
+The command line requests bowl → microwave, but its explicit CHAT calls filter
+`scene_tasks` only by bowl and select the first result. The actual selected goal
+is dishwasher. The verification correctly checks that selected goal; this is a
+fixture-intent mismatch, not a false positive in the final success check.
+
+Exact snapshot:
+`~/runs/emet/tamp-integrated-20261009/snapshots/daa7e5efe0e74d27a6c680c45360056a`.
+Its 15 door-component AABBs exactly match the asset's default closed dishwasher
+door (box indices 57–71). A bounded, six-connected voxel diagnostic inflated
+scene boxes by the fixed measured-orientation payload half extents plus the
+5 mm planner margin and half a cell. Results:
+
+| Diagnostic | Resolution | Targets connected to each of six starts |
+| --- | --- | --- |
+| Full payload, original scene | 20 mm | 0/35 |
+| Point payload, original scene | 10 mm | 0/35 |
+| Full payload, only door boxes removed | 20 mm | 31/35 |
+
+The four remaining targets intersect conservative occupied cells. Bounds extend
+0.6 m beyond starts/targets. Voxel discretization and bounded search can reject
+real paths; no arm collision checks are included. Door removal is a diagnostic
+ablation, not a valid opening action or new benchmark outcome. Nevertheless,
+matching the closed-door geometry and changing only those components provides
+strong evidence that access, rather than just sampling budget, blocks this CHAT
+placement. Automatic articulation is not part of the current three-operation
+approach/grasp/place plan. No planner obstacle was removed in production.
+
+The same ongoing gate's scene00 admission has found three placement paths both
+before and after base transport. That is search evidence only; release, retreat
+and complete cleanup must finish before reporting task success. The gate remains
+not ready because CHAT failed regardless of later admission results.
