@@ -161,6 +161,9 @@ def main() -> int:
         action="store_true",
         help="Record kitchen-orbit chase MP4 + clean stills (chase, overhead, head/wrist POV) per TAMP step.",
     )
+    parser.add_argument("--video-overlay", choices=("none", "banner", "border"), default="banner",
+                        help="Optional task/active skill labels; border preserves the full camera view.")
+    parser.add_argument("--video-flags", default="", help="Visible assistance/geometry legend for the recording.")
     parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument("--verbose-sim", action="store_true")
     parser.add_argument(
@@ -344,12 +347,13 @@ def main() -> int:
                 robot,
                 fig_dir / "third_person.mp4",
                 fps=float(args.video_fps),
-                title="tamp pick-place",
+                overlay_style=args.video_overlay, flags=args.video_flags,
+                title=f"{getattr(getattr(robot, '_spec', None), 'name', args.robot)} | TAMP pick/place",
             )
             video.stills_dir = fig_dir
             video.set_status(
                 "plan",
-                goal=f"{body} → {recep_body}",
+                goal=f"{args.object} -> {args.receptacle}",
                 detail=f"chosen_grasp={plan.chosen_grasp_index}",
             )
             video.start()
