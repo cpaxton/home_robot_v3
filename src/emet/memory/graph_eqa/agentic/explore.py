@@ -25,6 +25,7 @@ from emet.memory.graph_eqa.agentic.config import (
     question_has_mcq_options,
     question_is_locate,
 )
+from emet.memory.graph_eqa.agentic.navigation_recovery import navigate_with_floor_recovery
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.memory.graph_eqa.labels import label_matches_relevant_object
 from emet.memory.graph_eqa.spatial.room_clusters import question_target_rooms, room_leave_needed
@@ -600,10 +601,16 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
             target_theta = None
     if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
         used_nav_target = True
-        try:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, target_theta, explore_goal=True)
-        except TypeError:
-            nav_outcome = agent.navigate_to_target_pose(frontier_xyz, start, explore_goal=True)
+
+        def navigate():
+            measured_start = self._robot_xyt_world()
+            current_start = measured_start if measured_start is not None else start
+            try:
+                return agent.navigate_to_target_pose(frontier_xyz, current_start, target_theta, explore_goal=True)
+            except TypeError:
+                return agent.navigate_to_target_pose(frontier_xyz, current_start, explore_goal=True)
+
+        nav_outcome = navigate_with_floor_recovery(self, navigate)
         nav_outcome_str = str(nav_outcome)
         ok = bool(nav_outcome)
         nav_outcome_str = str(nav_outcome)

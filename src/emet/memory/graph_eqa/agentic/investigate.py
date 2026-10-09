@@ -23,6 +23,7 @@ from emet.memory.graph_eqa.agentic.config import (
     NAV_CONSECUTIVE_FAIL_LIMIT,
     PLACE_APPROACH_SAMPLES,
 )
+from emet.memory.graph_eqa.agentic.navigation_recovery import navigate_with_floor_recovery
 from emet.memory.graph_eqa.agentic.types import PlaceInspectRecord
 from emet.memory.graph_eqa.graph_memory import NavHypothesis
 from emet.utils.logger import Logger
@@ -312,7 +313,18 @@ def _tool_investigate(
                 target_theta = float(np.arctan2(look_y - float(rxy[1]), look_x - float(rxy[0])))
     except (TypeError, ValueError):
         target_theta = None
-    nav_outcome = agent.navigate_to_target_pose(target, start, target_theta, target_obs_id=oid, look_at_xy=look_at_xy)
+
+    def navigate():
+        measured_start = self._robot_xyt_world()
+        return agent.navigate_to_target_pose(
+            target,
+            measured_start if measured_start is not None else start,
+            target_theta,
+            target_obs_id=oid,
+            look_at_xy=look_at_xy,
+        )
+
+    nav_outcome = navigate_with_floor_recovery(self, navigate)
     finished = bool(nav_outcome.finished)
     nav_outcome_str = str(nav_outcome)
     self._n_nav += 1
