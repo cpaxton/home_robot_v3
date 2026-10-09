@@ -33,3 +33,8 @@ and rechecks the returned path at 0.005 joint-coordinate spacing. RRT constructi
 and final validation now both use at most 0.025 spacing. A superseded smoke
 (`20261009_073710_72783d`, source `91f29ef6`) was cancelled while waiting for the GPU;
 it produced no simulator result.
+
+Final managed CHAT smoke: `20261009_073929_9b876c`, frozen source `dbb4cac2`
+in `/tmp/emet-placement-validation-final-20261009`. Artifacts:
+`~/runs/emet/placement-collision-final-20261009/`. At PR submission it is waiting
+for the shared GPU lock; no new full-task success result is available yet.
