@@ -112,3 +112,15 @@ unreachable first viewpoint and a reachable later one requires the later solutio
 This distinction matters: free object space, arm reachability and approach-path
 clearance are separate tests; failure of one does not by itself justify clearing
 objects from a countertop.
+
+## Current validation queue
+
+- Final code source: `1335d5d5` in `/tmp/emet-placement-fair-search-20261009`.
+- Full stacked readiness job: `20261009_081750_e342cc`.
+- Artifacts: `~/runs/emet/placement-fair-search-20261009/`.
+- **182 tests pass** across the placement and existing TAMP/motion contract suites;
+  Ruff and whitespace checks pass.
+- Earlier queued jobs `20261009_080207_3f0e72` and
+  `20261009_081232_2f7efa` were cancelled before acquiring the GPU so the full gate
+  runs the current code once. They have no simulator result.
+- The full gate still waits for the shared GPU. No full-task success is claimed.
