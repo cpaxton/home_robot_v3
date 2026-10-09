@@ -1,0 +1,444 @@
+{
+  "status": "success",
+  "error": null,
+  "scope": "scripted native-actuator table transfer; not full TAMP acceptance",
+  "object": "object1",
+  "events": [
+    {
+      "stage": "settle / open",
+      "time": 2.0159999999999996,
+      "object": [
+        -0.02,
+        -0.55,
+        0.5198922445797832
+      ],
+      "ee": [
+        -0.019663354866662312,
+        -0.5145286057390746,
+        0.7085101122810976
+      ],
+      "object_in_ee": [
+        -0.18839625552526493,
+        -0.03662901379075044,
+        -0.00044655316194671063
+      ],
+      "object_speed_m_s": 1.446267413327775e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    },
+    {
+      "stage": "pregrasp",
+      "time": 5.039999999999667,
+      "object": [
+        -0.02,
+        -0.55,
+        0.5198922445797832
+      ],
+      "ee": [
+        -0.020021288544926696,
+        -0.4705532285510907,
+        0.586539509668865
+      ],
+      "object_in_ee": [
+        -0.06572766508473206,
+        -0.08020906682643739,
+        -0.00016592785521341513
+      ],
+      "object_speed_m_s": 1.4466226846957303e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    },
+    {
+      "stage": "grasp approach",
+      "time": 8.063999999999362,
+      "object": [
+        -0.020008020235191853,
+        -0.549995936829684,
+        0.5198922445797831
+      ],
+      "ee": [
+        -0.019592823048651863,
+        -0.547359728516389,
+        0.5458067071734085
+      ],
+      "object_in_ee": [
+        -0.025883526074616428,
+        -0.0029377404119765153,
+        0.00030677957510033663
+      ],
+      "object_speed_m_s": 1.506086686164403e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    },
+    {
+      "stage": "close gripper",
+      "time": 10.080000000000036,
+      "object": [
+        -0.019901360978700326,
+        -0.5526401675612688,
+        0.519868477189344
+      ],
+      "ee": [
+        -0.019525541962047754,
+        -0.5385112255557525,
+        0.5472796739048027
+      ],
+      "object_in_ee": [
+        -0.02732104745729507,
+        -0.014303984588807264,
+        0.00031358925601345633
+      ],
+      "object_speed_m_s": 2.959485501000511e-05,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "lift",
+      "time": 13.104000000001045,
+      "object": [
+        -0.0211518735706555,
+        -0.5572786626157199,
+        0.651268549818118
+      ],
+      "ee": [
+        -0.019903312550857966,
+        -0.5488650187637831,
+        0.6853215766379286
+      ],
+      "object_in_ee": [
+        -0.03370618397951969,
+        -0.009727715741168248,
+        0.0011052832559704903
+      ],
+      "object_speed_m_s": 0.010992913086132533,
+      "contacts": [
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "transfer",
+      "time": 16.12800000000194,
+      "object": [
+        -0.02044527985632311,
+        -0.7097435617222846,
+        0.645882722015159
+      ],
+      "ee": [
+        -0.01998469353483089,
+        -0.7065111168957954,
+        0.6880270261405115
+      ],
+      "object_in_ee": [
+        -0.041988602590750684,
+        -0.004866873432285004,
+        0.00027203859317474343
+      ],
+      "object_speed_m_s": 0.0031441253167436476,
+      "contacts": [
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "lower onto table",
+      "time": 19.152000000000264,
+      "object": [
+        -0.02080701313598699,
+        -0.7047473186585266,
+        0.5283261894406868
+      ],
+      "ee": [
+        -0.0208645311341702,
+        -0.6977068423541718,
+        0.569436808650906
+      ],
+      "object_in_ee": [
+        -0.041198181703524496,
+        -0.006504033613624057,
+        -0.00024899364683641395
+      ],
+      "object_speed_m_s": 0.0012288918006823255,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_left"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ],
+        [
+          "object1",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "release",
+      "time": 21.167999999999147,
+      "object": [
+        -0.02079149930168156,
+        -0.6931985904914526,
+        0.5198922445797831
+      ],
+      "ee": [
+        -0.02020100051885802,
+        -0.7097320729808488,
+        0.5519018171831973
+      ],
+      "object_in_ee": [
+        -0.03220818181928139,
+        0.016148104377240846,
+        0.0004349933456743531
+      ],
+      "object_speed_m_s": 1.6774291327282847e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    },
+    {
+      "stage": "retract",
+      "time": 24.19199999999747,
+      "object": [
+        -0.02079149930168156,
+        -0.6931985904914526,
+        0.5198922445797831
+      ],
+      "ee": [
+        -0.020039690831180835,
+        -0.6114101476888884,
+        0.6263341466770164
+      ],
+      "object_in_ee": [
+        -0.10548882290759512,
+        -0.08301689637964293,
+        0.0003102759791236017
+      ],
+      "object_speed_m_s": 1.674128895462459e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    },
+    {
+      "stage": "settle / verify",
+      "time": 27.215999999995795,
+      "object": [
+        -0.02079149930168156,
+        -0.6931985904914526,
+        0.5198922445797831
+      ],
+      "ee": [
+        -0.020029255494796335,
+        -0.6114081220652227,
+        0.6272495796063324
+      ],
+      "object_in_ee": [
+        -0.10640409475324329,
+        -0.08302967065702176,
+        0.0003186460972962843
+      ],
+      "object_speed_m_s": 1.6730688750562567e-14,
+      "contacts": [
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ],
+        [
+          "table",
+          "object1"
+        ]
+      ]
+    }
+  ],
+  "criteria": {
+    "lift_min_m": 0.08,
+    "sustained_bilateral_contact_s": 1.0,
+    "retention_translation_m": 0.025,
+    "placement_xy_m": 0.04,
+    "placement_z_m": 0.015,
+    "release_speed_m_s": 0.01,
+    "release_stable_s": 2.0
+  },
+  "assistance": "ground-truth scripted goals; no latch, weld, or runtime pose writes",
+  "planning_scope": "coupled-joint pose IK; no collision-certified path or agent planning",
+  "source_sha": "b44306014d97c6632d89e6eb3da57eede2dd6291"
+}
