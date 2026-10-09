@@ -77,3 +77,14 @@ These counts describe the saved-scene reconstruction and current top-surface
 interpretation, not a proof of task infeasibility or a live success/failure result.
 The planner now checks target occupancy before spending its IK budget. No obstacle
 is removed and no target is silently substituted to obtain a passing score.
+
+## Full stacked readiness submission
+
+- Source: `f743caf2`; checkout `/tmp/emet-placement-full-stack-20261009`.
+- Managed job: `20261009_080207_3f0e72`.
+- Artifacts: `~/runs/emet/placement-full-readiness-20261009/`.
+- Protocol: actual CHAT smoke, fresh admission of the original scene00/02/12
+  fixtures, then three fresh-process repeats for admitted cases. Failed admissions
+  remain failures; missing cases do not become successful trials.
+- Validation before submission: **176 tests passed**, Ruff and whitespace clean.
+- At submission the full gate is queued for the shared GPU; readiness is unproven.
