@@ -19,7 +19,15 @@ def search_protocol():
     names = ("max_solutions", "ik_attempts", "max_candidates", "max_ik_calls",
              "max_ik_calls_per_base", "rrt_max_iter", "preplace_height_m", "margin_m", "seed")
     parameters = inspect.signature(plan_placement_paths).parameters
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.core.zmq_protocol import EMET_ZMQ_SIM_WAIT_SCALE_MAX
+
+    arrival = inspect.signature(KinematicPickPlaceExecutor._wait_measured_ee).parameters
+    executor = inspect.signature(KinematicPickPlaceExecutor).parameters
+
     return {"placement": {name: parameters[name].default for name in names},
+            "arrival": {"nominal_seconds": arrival["timeout_s"].default, "time_basis": "sim_ratio_scaled_wall",
+                        "max_scale": EMET_ZMQ_SIM_WAIT_SCALE_MAX, "ee_tolerance_m": executor["ik_tol_m"].default},
             "runtime": {name: version(name) for name in ("mujoco", "numpy", "scipy")}}
 
 
