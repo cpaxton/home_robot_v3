@@ -73,7 +73,24 @@ resolution and approach grounding share those copied placements. The original
 snapshot is revalidated after planning, before storage and before execution;
 storage never replaces it with newer poses. Unbound builds cannot be stored. Quaternion signs are equivalent. Translation
 changes over 0.01 m or rotation over 5 degrees require replanning. Restarted
-servers invalidate stored plans. The executor queries base endpoint clearance
+servers invalidate stored plans.
+
+Guarded agent planning and stored execution require an advertised
+`sim_base_pose_query: true` endpoint and a callable client `check_base_poses`.
+The in-process Robosuite server provides it; the Stretch MuJoCo server currently
+does not. An unsupported provider returns `base_pose_validation_unavailable`
+before grounding or motion, with `recovery: "rediscover"`: connect to a provider
+with endpoint validation, rediscover its tasks, and request a new plan. Repeating
+the same request on an unsupported provider cannot fix it. Capability loss also
+consumes existing plan handles. There is no pose-only fallback. Advertised queries
+that time out or return malformed evidence still return
+`approach_validation_failed`.
+
+Robosuite agent plans use the online 16-pose approach ring, including rotated
+base yaw. This changes the prior fixed +Y approach baseline; historical scores
+must not be treated as validation of this approach policy.
+
+ The executor queries base endpoint clearance
 again immediately before motion; failed, malformed or unsupported queries stop
 execution. Arm execution uses measured joints and rejects observations whose
 client receive age exceeds two seconds. Missing measurements do not establish
@@ -143,3 +160,18 @@ returned detach helper and XY placement check do not provide a current
 attachment observation. These fields help distinguish partial effects, but do
 not authorize blind replay. Evidence resets at each operation and does not leak
 arbitrary planner messages, internal body identities or previous search results.
+### Placement state refresh
+
+Placement waits up to two wall seconds for the state receiver to recover before
+planning or executing a segment. The maximum accepted receive age remains two
+seconds; command targets never replace measured joints. Incomplete or nonfinite
+joint arrays cannot partially overwrite the offline planning model. Logs include
+`Measured state refresh` JSON with `code`, `wait_s`, and `state_age_s`.
+
+Public placement failures retain `placement_stale_observation`,
+`placement_missing_joint_state`, `placement_nonfinite_joint_state`, or
+`placement_path_invalidated`, including nested preplace/place failures. They
+require inspection of the held object and current scene before recovery; a failed
+refresh never causes release. This distinguishes a state-stream failure from
+changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
+that the original live failure was caused by receiver starvation.

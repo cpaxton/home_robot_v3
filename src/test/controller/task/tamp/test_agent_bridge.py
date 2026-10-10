@@ -16,10 +16,13 @@ from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep, execut
 
 class _Robot:
     def __init__(self, placements: dict, *, capabilities: dict | None = None, is_simulation: bool = True):
-        self._state = {"command_protocol": {"version": 2, "server_boot_id": "test-boot"}}
+        self._state = {"sim_base_pose_query": True, "command_protocol": {"version": 2, "server_boot_id": "test-boot"}}
         self.placements = placements
         self.capabilities = capabilities or {"sim_set_body_pose": True}
         self.is_simulation = is_simulation
+
+    def check_base_poses(self, poses):
+        return {"poses": poses, "clear": [True] * len(poses)}
 
     def get_emet_session(self):
         return {

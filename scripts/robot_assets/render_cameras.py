@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -45,17 +46,22 @@ def render_cameras(mjcf: Path, out_dir: Path, width: int = 640, height: int = 48
     import numpy as np
     from PIL import Image
 
-    robot_xml = Path(mjcf).read_text(encoding="utf-8")
-    scene_xml = robot_xml.replace(
-        '<geom type="plane" size="4 4 0.02" material="plastic_dark"/>',
-        '<geom type="plane" size="4 4 0.02" material="plastic_dark"/>'
-        + "".join(
-            f'<body name="{name}" pos="{pos[0]} {pos[1]} {pos[2]}">'
-            f'<geom type="box" size="{size[0] / 2} {size[1] / 2} {size[2] / 2}" mass="{size[3]}" '
-            f'rgba="{rgba[0]} {rgba[1]} {rgba[2]} {rgba[3]}"/></body>'
-            for name, pos, size, rgba in _SCENE_OBJECTS
-        ),
-    )
+    root = ET.parse(mjcf).getroot()
+    world = root.find("worldbody")
+    for name, pos, size, rgba in _SCENE_OBJECTS:
+        # Mk.V follows the standard +X-forward robot convention.
+        if root.get("model") == "sourccey":
+            pos = (pos[1], -pos[0], pos[2])
+        body = ET.SubElement(world, "body", name="camera_check_" + name, pos=" ".join(map(str, pos)))
+        ET.SubElement(
+            body,
+            "geom",
+            type="box",
+            size=" ".join(str(v / 2) for v in size[:3]),
+            mass=str(size[3]),
+            rgba=" ".join(map(str, rgba)),
+        )
+    scene_xml = ET.tostring(root, encoding="unicode")
 
     cwd = Path.cwd()
     os.chdir(Path(mjcf).resolve().parent)
@@ -71,7 +77,7 @@ def render_cameras(mjcf: Path, out_dir: Path, width: int = 640, height: int = 48
     finally:
         os.chdir(cwd)
 
-    renderer = mujoco.Renderer(model, width, height)
+    renderer = mujoco.Renderer(model, height=height, width=width)
     out_dir.mkdir(parents=True, exist_ok=True)
     saved: list[Path] = []
     for i in range(model.ncam):
