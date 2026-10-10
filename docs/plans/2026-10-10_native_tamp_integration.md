@@ -5,18 +5,23 @@ native-observed and native-debug presets; existing defaults unchanged. Privilege
 inputs remain available for debugging and independent scoring. They must not leak
 into observed execution or be represented as real robot sensors.
 
-## Baseline and disposition
+## Current PR map — October 10 consolidation
 
-- Main `c9dd742f` contains #177, #178, and the official Sourccey Mk.V model (#192).
-- Isolated integration branch: `feat/tamp-native-integration`. The placement,
-  containment, and articulation stack merged onto main without textual conflicts.
-- #179 remains blocked by live placement acceptance. #186 follows its failure
-  containment gate. #187 can merge its paired accounting independently of score
-  improvements. #188 has standalone assisted open/close evidence, not placement.
-- #189 media, #191 generic rendering/floor repairs, and #193 Stretch recordings
-  must be reconciled with #192; obsolete Sourccey assembly changes must not return.
-- #190 is an independent measured-telemetry review dependency. Navigation #181–185
-  is separately owned; do not rewrite or blindly merge those branches.
+This table supersedes earlier stack dispositions in this and the September/
+October planning notes. Main includes #177, #178, #192, and #196. Historical
+run evidence below is retained and is not rescored by consolidation.
+
+| Review unit | Base | Includes | Merge gate |
+| --- | --- | --- | --- |
+| #179 Placement and assisted TAMP execution | main | #179, #186 recovery, #187 metrics, #188 assisted articulation, #194 feedback | Resolve placement timeout; pass live placement and containment gates |
+| #193 Capability media and model utilities | #179 | #189 gallery/runner, #191 generic model utilities, #193 Stretch examples | Review final diff and fixture labels; recordings remain scoped controls |
+| #195 Native input contracts | #179 | #195 provenance, measured joint evidence, native guards | Review contract tests; native execution remains explicitly unavailable |
+
+#193 and #195 are sibling PRs. The superseded PRs are closed after their
+commits are preserved in these branches; no branch history is deleted or
+force-pushed. Consolidation does not confer acceptance or relax any gate.
+The #192 official Sourccey model and generator remain authoritative.
+#190 and the separately owned navigation #181–185 remain outside this cleanup.
 
 The previously queued `20261009_175205_1cc9bd` is terminal. Open/close passed.
 Placement found paths, completed grasp, then returned `placement_stale_observation`

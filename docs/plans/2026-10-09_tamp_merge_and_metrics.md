@@ -1,5 +1,9 @@
 # TAMP integration review and metric improvement plan
 
+**Historical review:** current PR ownership and merge gates are in the
+[October 10 consolidation ledger](2026-10-10_native_tamp_integration.md#current-pr-map--october-10-consolidation).
+Earlier draft/queued/merge statements below describe their recorded dates.
+
 Review date: 2026-10-09. Placement head `1cb803bc`, parent `046a4eae`,
 foundation `2a0c5ec1`, main `a9a5f1d1`. This is a scoped review of integration,
 failure handling, documentation and acceptance evidence, not a complete audit
