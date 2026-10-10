@@ -2670,7 +2670,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             EMET_ZMQ_SIM_TIME_RATIO_KEY: self._physics_fps_counter.sim_to_real_ratio,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
-        return self._attach_emet_session(message)
+        # Scene geometry is published on the full observation stream. Rebuilding
+        # it here couples fast feedback to mesh scans and can starve physics.
+        # Omit the session rather than stamp cached geometry with a new step.
+        return message
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
@@ -2730,7 +2733,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self._at_goal,
         }
-        return self._attach_emet_session(message)
+        # Scene geometry is published on the full observation stream. Rebuilding
+        # it here couples fast feedback to mesh scans and can starve physics.
+        # Omit the session rather than stamp cached geometry with a new step.
+        return message
 
     def _step_physics_tick(self) -> None:
         """Keep each integrator step atomic, allowing feedback between substeps.
